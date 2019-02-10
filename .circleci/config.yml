@@ -1,0 +1,151 @@
+version: 2
+
+defaults: &defaults
+  working_directory: ~/project/leon-ai/leon
+  docker:
+    - image: leonai/ci:latest
+  environment:
+    LC_ALL: C.UTF-8 # Fix https://click.palletsprojects.com/en/7.x/python3/#python-3-surrogate-handling
+    LANG: C.UTF-8 # Fix https://click.palletsprojects.com/en/7.x/python3/#python-3-surrogate-handling
+    PIPENV_PIPFILE: bridges/python/Pipfile
+
+jobs:
+  check-stack:
+    <<: *defaults
+    steps:
+      - checkout
+      - run:
+          name: Checking Node.js
+          command: node --version
+      - run:
+          name: Checking npm
+          command: npm --version
+      - run:
+          name: Checking Python
+          command: python3 --version
+      - run:
+          name: Checking Pipenv
+          command: pipenv --version
+      - persist_to_workspace:
+          root: ~/project/leon-ai
+          paths:
+            - leon
+
+  install-npm-dep:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/project/leon-ai
+      - restore_cache:
+          keys:
+            - v1-leon-ai-leon-{{ .Branch }}-{{ checksum "package-lock.json" }}
+            - v1-leon-ai-leon-{{ .Branch }}-
+            - v1-leon-ai-leon-
+      - run:
+          name: Installing npm dependencies
+          command: npm install
+      - save_cache:
+          key: v1-leon-ai-leon-{{ .Branch }}-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+      - persist_to_workspace:
+          root: ~/project/leon-ai
+          paths:
+            - leon
+
+  init:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/project/leon-ai
+      - restore_cache:
+          keys:
+            - v1-leon-ai-leon-{{ .Branch }}-{{ checksum "bridges/python/Pipfile.lock" }}
+            - v1-leon-ai-leon-{{ .Branch }}-
+            - v1-leon-ai-leon-
+      - run:
+          name: Setting up
+          command: npm run postinstall
+      - save_cache:
+          key: v1-leon-ai-leon-{{ .Branch }}-{{ checksum "bridges/python/Pipfile.lock" }}
+          paths:
+            - bridges/python/.venv
+      - persist_to_workspace:
+          root: ~/project/leon-ai
+          paths:
+            - leon
+
+  lint:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/project/leon-ai
+      - run:
+          name: Linting
+          command: npm run lint
+
+  test-json:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/project/leon-ai
+      - run:
+          name: JSON testing
+          command: npm run test:json
+
+  test-e2e:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/project/leon-ai
+      - run:
+          name: End-to-end testing
+          command: npm run test:e2e
+
+  test-unit:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: ~/project/leon-ai
+      - run:
+          name: Installing offline STT
+          command: npm run setup:offline-stt
+      - run:
+          name: Installing offline TTS
+          command: npm run setup:offline-tts
+      - run:
+          name: Unit testing
+          command: npm run test:unit
+
+workflows:
+  version: 2
+  install-test:
+    jobs:
+      - check-stack
+      - install-npm-dep:
+          requires:
+            - check-stack
+      - init:
+          requires:
+            - check-stack
+            - install-npm-dep
+      - lint:
+          requires:
+            - check-stack
+            - install-npm-dep
+            - init
+      - test-json:
+          requires:
+            - check-stack
+            - install-npm-dep
+            - init
+      - test-e2e:
+          requires:
+            - check-stack
+            - install-npm-dep
+            - init
+      - test-unit:
+          requires:
+            - check-stack
+            - install-npm-dep
+            - init

@@ -1,0 +1,14 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+requests = "==2.21.0"
+pytube = "==9.2.2"
+tinydb = "==3.9.0"
+
+[dev-packages]
+
+[requires]
+python_version = "3.6"

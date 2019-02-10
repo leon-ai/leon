@@ -1,0 +1,61 @@
+{
+	"whoami": [
+    "Qui es-tu ?",
+    "Comment t'appelles-tu ?",
+    "Comment tu t'appelles ?",
+    "Dis-moi qui tu es",
+		"Présente-toi"
+	],
+	"joke": [
+    "Raconte-moi une blague",
+    "Dis-moi une blague",
+    "Donne-moi une blague",
+    "Je veux rire",
+    "As-tu des blagues à raconter ?"
+	],
+	"greeting": [
+    "Salut",
+    "Bonjour",
+    "Bonsoir",
+    "Salutations",
+    "Hello",
+    "Coucou"
+	],
+	"welcome": [
+    "Merci",
+    "Merci bien",
+    "Merci beaucoup",
+    "Merci mille fois",
+    "Merci infiniment",
+    "Merci à toi",
+    "Tu es le meilleur",
+    "Mes remerciements"
+	],
+	"meaningoflife": [
+    "Quel est le but de la vie ?",
+    "Quel est l'objectif de la vie ?"
+	],
+	"randomnumber": [
+    "Donne-moi un nombre aléatoire",
+    "Donne-moi un nombre",
+    "Dis-moi un nombre aléatoire",
+    "Choisis un nombre",
+    "Pioche un nombre"
+	],
+	"bye": [
+    "Au revoir",
+    "Aurevoir",
+    "Bye",
+    "A la prochaine"
+	],
+  "partnerassistant": [
+    "Connais-tu quelque chose sur Alexa ?",
+    "Dis-moi quelque chose sur l'assistant personnel Alexa",
+    "Connais-tu quelque chose sur Cortana ?",
+    "Dis-moi quelque chose sur l'assistant personnel Cortana",
+    "Connais-tu quelque chose sur Siri ?",
+    "Dis-moi quelque chose sur l'assistant personnel Siri",
+    "Connais-tu quelque chose sur le Google Assistant ?",
+    "Dis-moi quelque chose sur l'assistant personnel Google Assistant"
+  ]
+}

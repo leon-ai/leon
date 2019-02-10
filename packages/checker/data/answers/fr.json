@@ -1,0 +1,27 @@
+{
+	"isitdown": {
+		"up": [
+			"%website_name% tourne correctement.",
+			"%website_name% fonctionne correctement.",
+			"%website_name% est en ligne."
+		],
+		"down": [
+			"%website_name% ne tourne pas correctement.",
+			"%website_name% rencontre des difficultés.",
+			"%website_name% est hors ligne."
+		],
+		"checking": [
+			"Je suis en train de vérifier l'état de %website_name%.",
+			"J'essaye d'atteindre %website_name%.",
+			"Je suis maintenant en train de requêter %website_name%."
+		],
+		"errors": [
+			"Il y a un problème avec la requête HTTP pour %website_name%. Merci de vérifier votre réseau local ou de vérifier si le nom de domaine est correct.",
+			"Mauvaise nouvelle, la requête HTTP rencontre des problèmes pour %website_name%. Vous devriez vérifier si le nom de domaine est valide."
+		],
+    "invalid_domain_name": [
+      "Merci de fournir au moins un nom de domaine valide.",
+      "Vous ne m'avez pas donné de nom de domaine valide."
+    ]
+	}
+}

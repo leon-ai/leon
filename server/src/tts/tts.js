@@ -1,0 +1,121 @@
+'use strict'
+
+import events from 'events'
+import fs from 'fs'
+
+import log from '@/helpers/log'
+
+class Tts {
+  constructor (socket, provider) {
+    this.socket = socket
+    this.provider = provider
+    this.providers = [
+      'flite',
+      'google-cloud-tts',
+      'amazon-polly',
+      'watson-tts'
+    ]
+    this.synthesizer = { }
+    this.em = new events.EventEmitter()
+    this.speeches = []
+
+    log.title('TTS')
+    log.success('New instance')
+  }
+
+  /**
+   * Initialize the TTS provider
+   */
+  init () {
+    log.info('Initializing TTS...')
+
+    if (!this.providers.includes(this.provider)) {
+      log.error(`The TTS provider "${this.provider}" does not exist or is not yet supported`)
+
+      return false
+    }
+
+    /* istanbul ignore next */
+    if (this.provider === 'google-cloud-tts' && typeof process.env.GOOGLE_APPLICATION_CREDENTIALS === 'undefined') {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = `${__dirname}/../config/voice/google-cloud.json`
+    } else if (typeof process.env.GOOGLE_APPLICATION_CREDENTIALS !== 'undefined' &&
+      process.env.GOOGLE_APPLICATION_CREDENTIALS.indexOf('config/voice/google-cloud.json') === -1) {
+      log.warning(`The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`)
+    }
+
+    /* istanbul ignore if */
+    if (process.env.LEON_NODE_ENV !== 'testing') {
+      // Dynamically attribute the synthesizer
+      this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`) // eslint-disable-line global-require
+      this.synthesizer.default.init(this.synthesizer.default.conf)
+    }
+
+    this.onSaved()
+
+    log.title('TTS')
+    log.success('TTS initialized')
+
+    return true
+  }
+
+  /**
+   * Forward buffer audio file to the client
+   * and delete audio file once it has been forwarded
+   */
+  forward (speech) {
+    this.synthesizer.default.save(speech, this.em, (file) => {
+      /* istanbul ignore next */
+      const bitmap = fs.readFileSync(file)
+      /* istanbul ignore next */
+      this.socket.emit('audio-forwarded', Buffer.from(bitmap), (confirmation) => {
+        if (confirmation === 'audio-received') {
+          fs.unlinkSync(file)
+        }
+      })
+    })
+  }
+
+  /**
+   * When the synthesizer saved a new audio file
+   * then shift the queue according to the audio file duration
+   */
+  onSaved () {
+    return new Promise((resolve) => {
+      this.em.on('saved', (duration) => {
+        setTimeout(() => {
+          this.speeches.shift()
+
+          if (this.speeches[0]) {
+            this.forward(this.speeches[0])
+          }
+
+          resolve()
+        }, duration)
+      })
+    })
+  }
+
+  /**
+   * Add speeches to the queue
+   */
+  add (speech) {
+    /**
+     * Flite fix. When the string is only one word,
+     * Flite cannot save to a file. So we add a space at the end of the string
+     */
+    if (this.provider === 'flite' && speech.indexOf(' ') === -1) {
+      speech += ' '
+    }
+
+    if (this.speeches.length > 0) {
+      this.speeches.push(speech)
+    } else {
+      this.speeches.push(speech)
+      this.forward(speech)
+    }
+
+    return this.speeches
+  }
+}
+
+export default Tts

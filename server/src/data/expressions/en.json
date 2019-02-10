@@ -1,0 +1,48 @@
+{
+	"answers": {
+		"success": {
+
+		},
+		"errors": {
+			"not_found": "Sorry, it seems I cannot find that",
+			"nlu": "It might come from my natural language understanding, the error returned is: \"%error%\""
+		},
+    "synchronizer": {
+      "syncing_direct": "I will now synchronize the downloaded content on your current device. Don't worry, I will let you know once I'm done",
+      "synced_direct": "The new content has been synchronized on your device",
+      "syncing_google_drive": "I will now synchronize the downloaded content on Google Drive. Don't worry, I will let you know once I'm done",
+      "synced_google_drive": "The new content is now available on Google Drive"
+    },
+		"random_errors": [
+			"Sorry, there is a problem with my system",
+			"Sorry, I don't work correctly",
+			"Sorry, you need to fix me",
+			"Sorry, I cannot do that because I'm broken"
+		],
+		"random_package_module_errors": [
+			"Sorry, it seems I have a problem with the %module_name% module of my %package_name% package",
+			"Sorry, I have an issue with the %module_name% module of my %package_name% package",
+			"Sorry, I've got an error with the %module_name% module of my %package_name% package",
+			"Sorry, the %module_name% module of my %package_name% package is broken"
+		],
+		"random_unknown_queries": [
+			"Sorry, I still don't know this, but you can help me to understand by creating a pull request",
+			"Sorry, you should teach me this request. You can teach me by creating a pull request",
+			"Sorry, I cannot answer that. Let me answer you in the future by creating a pull request",
+			"Sorry, you have to educate me more. You can help me with that by contributing to my code",
+			"Sorry, I don't understand your query",
+      "Sorry, I'm still very young, I didn't got your point"
+		],
+		"random_not_sure": [
+			"Sorry, you may repeat",
+			"Sorry, I'm not sure to understand",
+			"Sorry, I'm not sure for what you asked, please repeat",
+			"Sorry, please repeat again",
+			"Sorry, I didn't correctly clean my ears today! Oh wait, I'm your personal assistant then repeat please"
+		],
+    "random_not_able": [
+      "Sorry, I'm not able to answer. I understand what you said, but please repeat in another way",
+      "Sorry, I have a blackout, I cannot answer that. I understand what you said, but try to repeat in another way"
+    ]
+	}
+}

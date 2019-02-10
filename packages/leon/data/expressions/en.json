@@ -1,0 +1,60 @@
+{
+	"whoami": [
+    "Who are you?",
+    "How they call you?",
+		"What's your name?",
+    "Tell me who you are",
+		"Introduce yourself"
+	],
+	"joke": [
+		"Tell me a joke",
+		"Give me a joke",
+		"Make me laugh",
+		"Do you have jokes to tell me?"
+	],
+	"greeting": [
+		"Hi",
+    "Hey",
+		"Hello",
+		"Good morning",
+		"Good afternoon",
+		"Good evening",
+		"What's up?",
+		"How are you?",
+		"How are you doing?"
+	],
+	"welcome": [
+		"Thank you",
+		"Thanks",
+		"Thanks a lot",
+		"You are the best"
+	],
+	"meaningoflife": [
+		"What is the meaning of life?",
+		"Tell me what is the meaning of life"
+	],
+	"randomnumber": [
+		"Give me a random number",
+		"Give me a number",
+		"Tell me a random number",
+		"Choose a number",
+		"Pickup a number"
+	],
+	"bye": [
+		"Bye",
+    "Goodbye",
+		"Good bye",
+		"See you later",
+		"Bye bye"
+	],
+  "partnerassistant": [
+    "Do you have something to say about Alexa?",
+    "Tell me about the personal assistant Alexa",
+    "Tell me about the personal assistant Cortana",
+    "Do you have something to say about Cortana?",
+    "Tell me about the personal assistant Siri",
+    "Do you have something to say about Siri?",
+    "Tell me about the personal assistant Google Assistant",
+    "Do you have something to say about Google Assistant?"
+  ]
+}

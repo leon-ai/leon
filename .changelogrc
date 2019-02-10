@@ -1,0 +1,25 @@
+{
+  "app_name": "Leon",
+  "sections": [
+    {
+      "title": "BREAKING CHANGES",
+      "grep": "BREAKING"
+    },
+    {
+      "title": "Features",
+      "grep": "^feat"
+    },
+    {
+      "title": "Bug Fixes",
+      "grep": "^fix"
+    },
+    {
+      "title": "Performance Improvements",
+      "grep": "^perf"
+    },
+    {
+      "title": "Documentation Changes",
+      "grep": "^docs"
+    }
+  ]
+}

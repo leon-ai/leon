@@ -1,0 +1,21 @@
+{
+	"langs": {
+    "en-US": {
+      "short": "en",
+      "min_confidence": 0.8,
+      "fallbacks": [
+      ]
+    },
+    "fr-FR": {
+      "short": "fr",
+      "min_confidence": 0.6,
+      "fallbacks": [
+        {
+          "words": ["merci"],
+          "package": "leon",
+          "module": "welcome"
+        }
+      ]
+    }
+	}
+}

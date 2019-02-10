@@ -1,0 +1,26 @@
+{
+  "whoami": {
+    "options": {}
+  },
+  "joke": {
+    "options": {}
+  },
+  "greeting": {
+    "options": {}
+  },
+  "bye": {
+    "options": {}
+  },
+  "welcome": {
+    "options": {}
+  },
+  "meaningoflife": {
+    "options": {}
+  },
+  "randomnumber": {
+    "options": {}
+  },
+  "partnerassistant": {
+    "options": {}
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "bail": true,
+  "verbose": true,
+  "notify": true,
+  "collectCoverage": false,
+  "rootDir": "../..",
+  "testMatch": [
+    "<rootDir>/test/json/**/*.spec.js"
+  ],
+  "setupFiles": [
+    "<rootDir>/test/paths.setup.js"
+  ]
+}

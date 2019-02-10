@@ -1,0 +1,26 @@
+{
+  "bail": true,
+  "verbose": true,
+  "notify": true,
+  "collectCoverage": true,
+  "rootDir": "../..",
+  "testMatch": [
+    "<rootDir>/test/unit/**/*.spec.js"
+  ],
+  "setupFiles": [
+    "<rootDir>/test/paths.setup.js"
+  ],
+  "setupTestFrameworkScriptFile": "<rootDir>/test/unit/unit.setup.js",
+  "coverageDirectory": "<rootDir>/test/coverage",
+  "collectCoverageFrom": [
+    "<rootDir>/server/src/**/*.js",
+    "!<rootDir>/server/src/api/**/*.js",
+    "!<rootDir>/server/src/middleware/**/*.js",
+    "!<rootDir>/server/src/stt/google-cloud-stt/**/*.js",
+    "!<rootDir>/server/src/stt/watson-stt/**/*.js",
+    "!<rootDir>/server/src/tts/amazon-polly/**/*.js",
+    "!<rootDir>/server/src/tts/google-cloud-tts/**/*.js",
+    "!<rootDir>/server/src/tts/watson-tts/**/*.js",
+    "!<rootDir>/server/src/index.js"
+  ]
+}

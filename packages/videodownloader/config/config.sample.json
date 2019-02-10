@@ -1,0 +1,13 @@
+{
+	"youtube": {
+		"api_key": "YOUR_GOOGLE_API_KEY",
+		"playlist_id": "PLAYLIST_ID",
+		"options": {
+			"synchronization": {
+				"enabled": true,
+				"method": "direct",
+        "email": ""
+			}
+		}
+	}
+}

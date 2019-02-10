@@ -1,0 +1,22 @@
+{
+  "name": "leon-hotword",
+  "version": "0.1.0",
+  "description": "Hotword detection for Leon",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://twitter.com/louistiti_fr"
+  },
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "node-record-lpcm16": "^0.3.0",
+    "snowboy": "^1.2.0",
+    "socket.io": "^2.0.2",
+    "socket.io-client": "^2.1.1",
+    "superagent": "^3.5.2"
+  }
+}
