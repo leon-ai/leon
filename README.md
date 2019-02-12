@@ -81,7 +81,7 @@ npm install
 
 ```sh
 # build
-npm run docker:builc
+npm run docker:build
 
 # run 
 npm run docker:run
