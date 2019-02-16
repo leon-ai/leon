@@ -35,8 +35,8 @@ describe('no punctuation', () => {
        const way = path.join(dir, entities[i])
        if (fs.statSync(way).isDirectory()) {
          list(way)
-       } else if (entities[i].indexOf('.json') !== -1 &&
-         entities[i].indexOf('classifier.json') === -1) {
+       } else if (entities[i].indexOf('.json') !== -1
+         && entities[i].indexOf('classifier.json') === -1) {
          const jsonFile = path.join(global.paths.root, dir, entities[i])
          const json = JSON.parse(fs.readFileSync(jsonFile, 'utf8'))
 

@@ -6,10 +6,10 @@ import parser from '@/stt/deepspeech/parser'
 
 describe('DeepSpeech STT parser', () => {
   // Only run these tests if the models exist
-  if (fs.existsSync(`${global.paths.root}/bin/deepspeech/output_graph.pb`) &&
-    fs.existsSync(`${global.paths.root}/bin/deepspeech/alphabet.txt`) &&
-    fs.existsSync(`${global.paths.root}/bin/deepspeech/lm.binary`) &&
-    fs.existsSync(`${global.paths.root}/bin/deepspeech/trie`)) {
+  if (fs.existsSync(`${global.paths.root}/bin/deepspeech/output_graph.pb`)
+    && fs.existsSync(`${global.paths.root}/bin/deepspeech/alphabet.txt`)
+    && fs.existsSync(`${global.paths.root}/bin/deepspeech/lm.binary`)
+    && fs.existsSync(`${global.paths.root}/bin/deepspeech/trie`)) {
     describe('init()', () => {
       test('returns error cannot find model', () => {
         expect(parser.init({

@@ -47,12 +47,12 @@ export default () => new Promise(async (resolve, reject) => {
     ])).forEach((p) => {
       log.info(p.cmd)
 
-      if (p.cmd.indexOf('node --version') !== -1 &&
-        !semver.satisfies(semver.clean(p.stdout), `>=${nodeMinRequiredVersion}`)) {
+      if (p.cmd.indexOf('node --version') !== -1
+        && !semver.satisfies(semver.clean(p.stdout), `>=${nodeMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe Node.js version must be >=${nodeMinRequiredVersion}. Please install it: https://nodejs.org (or use nvm)\n`)
-      } else if (p.cmd.indexOf('npm --version') !== -1 &&
-        !semver.satisfies(semver.clean(p.stdout), `>=${npmMinRequiredVersion}`)) {
+      } else if (p.cmd.indexOf('npm --version') !== -1
+        && !semver.satisfies(semver.clean(p.stdout), `>=${npmMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe npm version must be >=${npmMinRequiredVersion}. Please install it: https://www.npmjs.com/get-npm (or use nvm)\n`)
       } else {
@@ -66,8 +66,8 @@ export default () => new Promise(async (resolve, reject) => {
     ])).forEach((p) => {
       log.info(p.cmd)
 
-      if (p.cmd.indexOf('pipenv run python --version') !== -1 &&
-        !semver.satisfies(p.stdout.split(' ')[1], pythonRequiredVersion)) {
+      if (p.cmd.indexOf('pipenv run python --version') !== -1
+        && !semver.satisfies(p.stdout.split(' ')[1], pythonRequiredVersion)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe Python version must be ${pythonRequiredVersion}.x. Please install it: https://www.python.org/downloads\n`)
       } else {
