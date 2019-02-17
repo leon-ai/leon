@@ -66,7 +66,7 @@ def output(type, code, speech = ''):
 def finddomains(string):
 	"""Find a domain name substring from a string"""
 
-	return findall('[a-z0-9\-]{,63}\.[a-z0-9\-\.]{2,191}', string)
+	return findall('[a-z0-9\-]{,63}\.[a-z0-9\-\.]{2,191}', string.lower())
 
 def http(method, url):
 	"""Send HTTP request with the Leon user agent"""
