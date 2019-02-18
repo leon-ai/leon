@@ -17,7 +17,8 @@
   <a href="https://getleon.ai">Website</a> ::
   <a href="https://docs.getleon.ai">Documentation</a> ::
   <a href="https://roadmap.getleon.ai">Roadmap</a> ::
-  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md">Contributing</a>
+  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md">Contributing</a> ::
+  <a href="https://blog.getleon.ai/the-story-behind-leon/">Story</a>
 </p>
 
 ---
@@ -106,6 +107,10 @@ To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai
 If you have an idea about improving Leon, do not hesitate.
 
 **Leon needs open-source to live**, the more modules he has, the more skillful he becomes.
+
+## The Story Behind Leon
+
+You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-behind-leon/).
 
 ## Stay Tuned
 - [Newsletter](https://getleon.ai)
