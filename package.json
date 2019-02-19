@@ -58,6 +58,7 @@
     "cross-env": "^5.2.0",
     "deepspeech": "^0.4.1",
     "dotenv": "^4.0.0",
+    "envify": "^4.1.0",
     "execa": "^0.10.0",
     "express": "^4.15.3",
     "fluent-ffmpeg": "^2.1.2",
