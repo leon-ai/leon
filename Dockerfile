@@ -17,7 +17,8 @@ RUN pip3 install --upgrade pip \
 # Install Leon
 RUN npm install
 RUN npm run build
-RUN npm run postinstall
+
+RUN cd ./bridges/python/ && pipenv install && cd /app
 
 # Let's run it 
 CMD ["npm", "run", "start"]
