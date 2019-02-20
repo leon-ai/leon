@@ -34,7 +34,7 @@ try {
 // Beam width used in the CTC decoder when building candidate transcriptions
 const BEAM_WIDTH = 500
 // The alpha hyperparameter of the CTC decoder. Language Model weight
-const LM_WEIGHT = 1.50
+const LM_ALPHA = 0.75
 // The beta hyperparameter of the CTC decoder. Word insertion weight (penalty)
 // const WORD_COUNT_WEIGHT = 1.00;
 /**
@@ -42,7 +42,7 @@ const LM_WEIGHT = 1.50
  * This is used to lessen the word insertion penalty
  * When the inserted word is part of the vocabulary
  */
-const VALID_WORD_COUNT_WEIGHT = 2.10
+const LM_BETA = 1.85
 
 /**
  * These constants are tied to the shape of the graph used (changing them changes
@@ -115,7 +115,7 @@ parser.init = (args) => {
     /* istanbul ignore if */
     if (process.env.LEON_NODE_ENV !== 'testing') {
       model.enableDecoderWithLM(args.alphabet, args.lm, args.trie,
-        LM_WEIGHT, VALID_WORD_COUNT_WEIGHT)
+        LM_ALPHA, LM_BETA)
     }
 
     log.success('Language model loaded')

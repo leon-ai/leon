@@ -12,7 +12,7 @@ export default () => new Promise(async (resolve, reject) => {
 
   const destDeepSpeechFolder = 'bin/deepspeech'
   const tmpDir = 'scripts/tmp'
-  const archiveName = 'deepspeech-0.4.0-models.tar.gz'
+  const archiveName = 'deepspeech-0.4.1-models.tar.gz'
   let downloader = 'wget'
   if (os.get().type === 'macos') {
     downloader = 'curl -L -O'
@@ -21,7 +21,7 @@ export default () => new Promise(async (resolve, reject) => {
   if (!fs.existsSync(`${destDeepSpeechFolder}/lm.binary`)) {
     try {
       log.info('Downloading pre-trained model...')
-      await shell(`cd ${tmpDir} && ${downloader} https://github.com/mozilla/DeepSpeech/releases/download/v0.4.0/${archiveName}`)
+      await shell(`cd ${tmpDir} && ${downloader} https://github.com/mozilla/DeepSpeech/releases/download/v0.4.1/${archiveName}`)
       log.success('Pre-trained model download done')
       log.info('Unpacking...')
       await shell(`cd ${tmpDir} && tar xvfz ${archiveName}`)
