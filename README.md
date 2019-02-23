@@ -27,7 +27,7 @@
 
 Leon is an **open-source personal assistant** who can live **on your server**.
 
-He **does stuff** when you **ask for it**.
+He **does stuff** when you **ask him for**.
 
 You can **talk to him** and he can **talk to you**.
 You can also **text him** and he can also **text you**.
@@ -104,7 +104,7 @@ To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai
 
 ## Contributing
 
-If you have an idea about improving Leon, do not hesitate.
+If you have an idea for improving Leon, do not hesitate.
 
 **Leon needs open-source to live**, the more modules he has, the more skillful he becomes.
 
