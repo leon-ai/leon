@@ -17,7 +17,8 @@
   <a href="https://getleon.ai">Website</a> ::
   <a href="https://docs.getleon.ai">Documentation</a> ::
   <a href="https://roadmap.getleon.ai">Roadmap</a> ::
-  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md">Contributing</a>
+  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md">Contributing</a> ::
+  <a href="https://blog.getleon.ai/the-story-behind-leon/">Story</a>
 </p>
 
 ---
@@ -36,8 +37,8 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > 1. If you are a developer (or not), you may want to build many things that could help in your daily life.
 > Instead of building a dedicated project for each of those ideas, Leon can help you with his
 > packages/modules (skills) structure.
-> 2. With this generic structure, everyone can create his own modules and share them with others.
-> Therefore there is only one core (to govern all of them).
+> 2. With this generic structure, everyone can create their own modules and share them with others.
+> Therefore there is only one core (to rule them all).
 > 3. Leon uses AI concepts, which is cool.
 > 4. Privacy matters, you can configure Leon to talk with him offline. You can already text with him without any third party services.
 > 5. Open-source is great.
@@ -117,6 +118,10 @@ To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai
 If you have an idea about improving Leon, do not hesitate.
 
 **Leon needs open-source to live**, the more modules he has, the more skillful he becomes.
+
+## The Story Behind Leon
+
+You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-behind-leon/).
 
 ## Stay Tuned
 - [Newsletter](https://getleon.ai)
