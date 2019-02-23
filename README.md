@@ -78,17 +78,6 @@ cd leon
 npm install
 ```
 
-### Docker Installation
-
-```sh
-# build
-npm run docker:build
-
-# run 
-npm run docker:run
-# Leon should run on http://localhost:1337/
-```
-
 ### Usage
 
 ```sh
@@ -100,6 +89,19 @@ npm run build
 
 # Run
 npm start
+
+# Go to http://localhost:1337
+# Hooray! Leon is running
+```
+
+### Docker Installation
+
+```sh
+# Build
+npm run docker:build
+
+# Run 
+npm run docker:run
 
 # Go to http://localhost:1337
 # Hooray! Leon is running

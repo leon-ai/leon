@@ -43,8 +43,8 @@
     "prepare-release": "babel-node scripts/release/prepare-release.js",
     "commitmsg": "babel-node scripts/commit-message.js && npm run lint",
     "check": "babel-node scripts/run-check.js",
-    "docker:build":"docker build -t leonai/leon . --force-rm;",
-    "docker:run":"docker run -d -p 1337:1337 -it leonai/leon;"
+    "docker:build": "docker build -t leonai/leon . --force-rm",
+    "docker:run": "docker run -e TZ=`cat /etc/timezone` -d -p 1337:1337 -it leonai/leon"
   },
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.0.17",

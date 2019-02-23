@@ -8,17 +8,20 @@ RUN apk update --no-cache \
     ca-certificates \
     build-base \
     python3 \
-    git
+    git \
+    tzdata
 
 # Upgrade pip and install Pipenv
 RUN pip3 install --upgrade pip \
 	&& pip install pipenv
 
 # Install Leon
+# Need to explicitly run the npm preinstall and npm posinstall scripts
+# because npm tries to downgrade its privileges, and these scripts are not executed
+RUN npm run preinstall
 RUN npm install
+RUN npm run postinstall
 RUN npm run build
 
-RUN cd ./bridges/python/ && pipenv install && cd /app
-
-# Let's run it 
-CMD ["npm", "run", "start"]
+# Let's run it
+CMD ["npm", "start"]
