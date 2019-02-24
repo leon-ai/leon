@@ -1,2 +1,7 @@
 node_modules/
 bridges/python/.venv/*
+
+.git/
+.circleci/
+.github/
+test/

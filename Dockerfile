@@ -1,25 +1,26 @@
 FROM node:10-alpine
-WORKDIR /app
-COPY . .
 
 # Install system packages
-RUN apk update --no-cache \
-  && apk add --no-cache \
-    ca-certificates \
-    build-base \
-    python3 \
-    git \
-    tzdata
+# and upgrade pip and install Pipenv
+RUN apk update --no-cache && \
+    apk add --no-cache \
+      ca-certificates \
+      build-base \
+      python3 \
+      git \
+      tzdata && \
+    pip3 install --upgrade pip && \
+    pip install pipenv
 
-# Upgrade pip and install Pipenv
-RUN pip3 install --upgrade pip \
-	&& pip install pipenv
+# Handle Node dependancies
+WORKDIR /app
+COPY package.json /app
+RUN npm install
 
 # Install Leon
 # Need to explicitly run the npm preinstall and npm posinstall scripts
 # because npm tries to downgrade its privileges, and these scripts are not executed
-RUN npm run preinstall
-RUN npm install
+COPY . /app
 RUN npm run postinstall
 RUN npm run build
 
