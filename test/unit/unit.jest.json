@@ -10,7 +10,9 @@
   "setupFiles": [
     "<rootDir>/test/paths.setup.js"
   ],
-  "setupTestFrameworkScriptFile": "<rootDir>/test/unit/unit.setup.js",
+  "setupFilesAfterEnv": [
+    "<rootDir>/test/unit/unit.setup.js"
+  ],
   "coverageDirectory": "<rootDir>/test/coverage",
   "collectCoverageFrom": [
     "<rootDir>/server/src/**/*.js",

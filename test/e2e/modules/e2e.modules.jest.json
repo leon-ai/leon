@@ -10,5 +10,7 @@
   "setupFiles": [
     "<rootDir>/test/paths.setup.js"
   ],
-  "setupTestFrameworkScriptFile": "<rootDir>/test/e2e/modules/e2e.modules.setup.js"
+  "setupFilesAfterEnv": [
+    "<rootDir>/test/e2e/modules/e2e.modules.setup.js"
+  ]
 }
