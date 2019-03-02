@@ -109,8 +109,9 @@ class Brain {
            * Execute a module in a standalone way (CLI):
            *
            * 1. Need to be at the root of the project
-           * 2. PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
-           *    python bridges/python/main.py en leon whoami "Who are you?" "[]"
+           * 2. Edit: server/src/query-object.sample.json
+           * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
+           *    python bridges/python/main.py server/src/query-object.sample.json
            */
           const queryObj = {
             id: queryId,
