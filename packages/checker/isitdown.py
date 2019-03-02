@@ -4,10 +4,10 @@
 import requests
 import utils
 
-def isitdown(string):
+def isitdown(string, entities):
 	"""Check if a website is down or not"""
 
-	domains = utils.finddomains(string)
+	domains = utils.finddomains(string, entities)
 	output = ''
 
 	for i, domain in enumerate(domains):

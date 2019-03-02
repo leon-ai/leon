@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 from json import loads, dumps
-from os import path
+from os import path, environ
 from pathlib import Path
 from random import choice
 from sys import argv, stdout
@@ -14,10 +14,18 @@ import sqlite3
 import requests
 
 dirname = path.dirname(path.realpath(__file__))
-lang = argv[1]
-package = argv[2]
-module = argv[3]
-istring = argv[4]
+
+queryid = argv[1]
+
+serversrc = 'dist' if environ.get('LEON_NODE_ENV') == 'production' else 'src'
+queryobjfile = open(dirname + '/../../server/' + serversrc + '/tmp/' + queryid + '.json', 'r', encoding = 'utf8')
+queryobj = loads(queryobjfile.read())
+queryobjfile.close()
+
+def getqueryobj():
+	"""Return query object"""
+
+	return queryobj
 
 def translate(key, d = { }):
 	"""Pickup the language file according to the cmd arg
@@ -25,11 +33,11 @@ def translate(key, d = { }):
 
 	output = ''
 
-	file = open(dirname + '/../../packages/' + package + '/' + 'data/answers/' + lang + '.json', 'r', encoding = 'utf8')
+	file = open(dirname + '/../../packages/' + queryobj['package'] + '/' + 'data/answers/' + queryobj['lang'] + '.json', 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
-	prop = obj[module][key]
+	prop = obj[queryobj['module']][key]
 	if isinstance(prop, list):
 		output = choice(prop)
 	else:
@@ -48,10 +56,11 @@ def output(type, code, speech = ''):
 	"""Communicate with the Core"""
 
 	print(dumps({
-		'package': package,
-		'module': module,
-		'lang': lang,
-		'input': istring,
+		'package': queryobj['package'],
+		'module': queryobj['module'],
+		'lang': queryobj['lang'],
+		'input': queryobj['query'],
+		'entities': queryobj['entities'],
 		'output': {
 			'type': type,
 			'code': code,
@@ -63,7 +72,7 @@ def output(type, code, speech = ''):
 	if (type == 'inter'):
 		stdout.flush()
 
-def finddomains(string):
+def finddomains(string, entities):
 	"""Find a domain name substring from a string"""
 
 	return findall('[a-z0-9\-]{,63}\.[a-z0-9\-\.]{2,191}', string.lower())
@@ -79,11 +88,11 @@ def http(method, url):
 def config(key):
 	"""Get a package configuration value"""
 
-	file = open(dirname + '/../../packages/' + package + '/config/config.json', 'r', encoding = 'utf8')
+	file = open(dirname + '/../../packages/' + queryobj['package'] + '/config/config.json', 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
-	return obj[module][key]
+	return obj[queryobj['module']][key]
 
 def info():
 	"""Get information from the current query"""
@@ -94,7 +103,7 @@ def createdldir():
 	"""Create the downloads folder of a current module"""
 
 	dldir = path.dirname(path.realpath(__file__)) + '/../../downloads/'
-	moduledldir = dldir + package + '/' + module
+	moduledldir = dldir + queryobj['package'] + '/' + queryobj['module']
 
 	Path(moduledldir).mkdir(parents = True, exist_ok = True)
 
@@ -105,6 +114,6 @@ def db(dbtype = 'tinydb'):
 	for a specific package"""
 
 	if dbtype == 'tinydb':
-		db = TinyDB(dirname + '/../../packages/' + package + '/data/db/' + package + '.json')
+		db = TinyDB(dirname + '/../../packages/' + queryobj['package'] + '/data/db/' + queryobj['package'] + '.json')
 		return { 'db': db, 'query': Query, 'operations': operations }
 

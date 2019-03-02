@@ -35,6 +35,17 @@ class Brain {
   }
 
   /**
+   * Delete query object file
+   */
+  static deleteQueryObjFile (queryId) {
+    try {
+      fs.unlinkSync(`${__dirname}/../tmp/${queryId}.json`)
+    } catch (e) {
+      log.error(`Failed to delete query object file: ${e}`)
+    }
+  }
+
+  /**
    * Make Leon talk
    */
   talk (speech) {
@@ -82,9 +93,12 @@ class Brain {
    */
   execute (obj) {
     return new Promise((resolve, reject) => {
+      let queryId = ''
+
       // Ask to repeat if Leon is not sure about the request
       if (obj.classification.confidence < langs[process.env.LEON_LANG].min_confidence) {
         this.talk(`${this.wernicke('random_not_sure')}.`)
+        Brain.deleteQueryObjFile(queryId)
         this.socket.emit('is-typing', false)
 
         resolve()
@@ -97,9 +111,24 @@ class Brain {
          *
          * 1. Need to be at the root of the project
          * 2. PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
-         *    python bridges/python/main.py en leon whoami "Who are you?"
+         *    python bridges/python/main.py en leon whoami "Who are you?" "[]"
          */
-        this.process = spawn(`pipenv run python bridges/python/main.py ${langs[process.env.LEON_LANG].short} ${obj.classification.package} ${obj.classification.module} "${obj.query}"`, { shell: true })
+        queryId = `${Date.now()}-${string.random(4)}`
+        const queryObj = {
+          id: queryId,
+          lang: langs[process.env.LEON_LANG].short,
+          package: obj.classification.package,
+          module: obj.classification.module,
+          query: obj.query,
+          entities: obj.entities
+        }
+
+        try {
+          fs.writeFileSync(`${__dirname}/../tmp/${queryId}.json`, JSON.stringify(queryObj))
+          this.process = spawn(`pipenv run python bridges/python/main.py ${queryId}`, { shell: true })
+        } catch (e) {
+          log.error(`Failed to save query object: ${e}`)
+        }
       }
 
       const packageName = string.ucfirst(obj.classification.package)
@@ -130,6 +159,7 @@ class Brain {
       this.process.stderr.on('data', (data) => {
         this.talk(`${this.wernicke('random_package_module_errors', '',
           { '%module_name%': moduleName, '%package_name%': packageName })}!`)
+        Brain.deleteQueryObjFile(queryId)
         this.socket.emit('is-typing', false)
 
         log.title(packageName)
@@ -165,6 +195,7 @@ class Brain {
           }
         }
 
+        Brain.deleteQueryObjFile(queryId)
         this.socket.emit('is-typing', false)
         resolve()
       })
