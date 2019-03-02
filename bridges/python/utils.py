@@ -72,11 +72,6 @@ def output(type, code, speech = ''):
 	if (type == 'inter'):
 		stdout.flush()
 
-def finddomains(string, entities):
-	"""Find a domain name substring from a string"""
-
-	return findall('[a-z0-9\-]{,63}\.[a-z0-9\-\.]{2,191}', string.lower())
-
 def http(method, url):
 	"""Send HTTP request with the Leon user agent"""
 

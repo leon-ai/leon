@@ -7,8 +7,12 @@ import utils
 def isitdown(string, entities):
 	"""Check if a website is down or not"""
 
-	domains = utils.finddomains(string, entities)
+	domains = []
 	output = ''
+
+	for item in entities:
+		if item['entity'] == 'url':
+			domains.append(item['resolution']['value'].lower())
 
 	for i, domain in enumerate(domains):
 		state = 'up'
