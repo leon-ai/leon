@@ -34,11 +34,11 @@
       "Désolé, je suis encore très jeune, je n'ai pas compris votre demande"
 		],
 		"random_not_sure": [
-			"Désolé, vous pouvez répéter",
+			"Désolé, vous pouvez répéter d'une autre façon",
 			"Désolé, je ne suis pas sûr de comprendre",
-			"Désolé, je ne suis pas certain de votre demande, merci de répéter",
-			"Désolé, merci de répéter à nouveau",
-			"Désolé, je n'ai pas nettoyé mes oreilles correctement ! Attendez-voir, je suis votre assistant personnel, je vous prie donc de répéter"
+			"Désolé, je ne suis pas certain de votre demande, merci de répéter d'une manière différente",
+			"Désolé, merci de répéter à nouveau en formulant différemment",
+			"Désolé, je n'ai pas nettoyé mes oreilles correctement ! Attendez-voir, je suis votre assistant personnel, je vous prie donc de répéter d'une nouvelle façon"
 		],
     "random_not_able": [
       "Désolé, je ne suis pas capable de répondre. J'ai compris ce que vous avez dit, mais je vous prie de répéter d'une autre façon",

@@ -15,10 +15,10 @@ import requests
 
 dirname = path.dirname(path.realpath(__file__))
 
-queryid = argv[1]
+queryobjectpath = argv[1]
 
 serversrc = 'dist' if environ.get('LEON_NODE_ENV') == 'production' else 'src'
-queryobjfile = open(dirname + '/../../server/' + serversrc + '/tmp/' + queryid + '.json', 'r', encoding = 'utf8')
+queryobjfile = open(queryobjectpath, 'r', encoding = 'utf8')
 queryobj = loads(queryobjfile.read())
 queryobjfile.close()
 
