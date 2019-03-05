@@ -118,7 +118,7 @@ class Nlu {
       await this.brain.execute(obj)
     } catch (e) {
       /* istanbul ignore next */
-      log[e.type](e.obj.message || e.obj)
+      log[e.type](e.obj.message)
     }
 
     return true

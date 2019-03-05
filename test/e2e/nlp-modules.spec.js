@@ -64,7 +64,7 @@ describe('NLU modules', () => {
                   // Need to redefine the NLU brain execution to update the mocking
                   nlu.brain.execute = jest.fn()
 
-                  nlu.process(exprs[l])
+                  await nlu.process(exprs[l])
                   const [obj] = nlu.brain.execute.mock.calls
 
                   // Execute/test each module one time (otherwise this test would be slow)
