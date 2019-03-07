@@ -5,8 +5,8 @@ describe('leon:greeting', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Hello')
 
-    const [obj] = await global.nlu.brain.execute.mock.calls
-    await global.nlu.brain.execute(obj[0])
+    const [obj] = global.nlu.brain.execute.mock.calls
+    await global.brain.execute(obj[0])
 
     expect([
       'morning_good_day',
