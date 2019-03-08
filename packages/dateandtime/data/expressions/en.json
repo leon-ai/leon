@@ -1,0 +1,27 @@
+{
+	"saycurrenttime": [
+		"Could you tell me the time, please?",
+		"can I get the time?",
+		"Do you have the time?",
+		"Do you know what time it is?",
+		"Have you got time?",
+		"Have you got the time on you?",
+		"may I know what time it is right now?",
+		"What time do you have?",
+		"What time do you make it?",
+		"What time is it now?",
+		"what time is it, please?",
+		"What time is it?",
+    "What’s the time?",
+    "What time have we got?",
+    "You got the time?"
+  ]
+  ,"guessdate": [
+    "What day was yesterday",
+    "What day is it?",
+    "What day is it today?",
+    "What’s the date today?",
+    "What date is it?",
+    "What’s today’s date?"
+  ]
+}

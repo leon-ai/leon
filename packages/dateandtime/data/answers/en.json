@@ -1,0 +1,20 @@
+{
+  "saycurrenttime": {
+    "time": [
+      "It's %time%"
+    ],
+    "error": [
+      "Couldn't get the current time, maybe you should try again",
+      "I am having a hard time getting the current time, try again..."
+    ]
+  },
+  "guessdate": {
+    "guess": [
+      "%guess%"
+    ],
+    "error": [
+      "Couldn't guess the date, maybe you should try again",
+      "I am having a hard time guessing the date, try again..."
+    ]
+  }
+}
