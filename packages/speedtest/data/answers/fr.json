@@ -1,0 +1,14 @@
+{
+  "speedtest": {
+    "start": [
+      "Bien, je démarre l'analyse.\nLes résultats du test vous seront donnés dans quelques instants...",
+      "Je démarre l'analyse de votre vitesse réseau.\nLes résultats du test vous seront donnés dans quelques instants..."
+    ],
+    "end": [
+      "Analyse terminée. Voici vos résultats :"
+    ],
+    "error": [
+      "Mince, une erreur est survenue durant mes recherches... Désolé, mais je ne parviens pas à analyser votre réseau."
+    ]
+  }
+}
