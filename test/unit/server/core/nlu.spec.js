@@ -56,7 +56,7 @@ describe('NLU', () => {
       Nlu.fallback = jest.fn(() => fallbackObj)
 
       await nlu.loadModel(global.paths.classifier)
-      expect(await nlu.process('This is a query example to test fallbacks')).toBeTruthy()
+      expect(await nlu.process('Thisisaqueryexampletotestfallbacks')).toBeTruthy()
       expect(nlu.brain.execute.mock.calls[0][0]).toBe(fallbackObj)
       Nlu.fallback = nluFallbackTmp // Need to give back the real fallback method
     })
