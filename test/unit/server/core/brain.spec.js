@@ -67,6 +67,7 @@ describe('brain', () => {
 
       const obj = {
         query: 'Hello',
+        entities: [],
         classification: {
           package: 'leon',
           module: 'greeting',
@@ -85,6 +86,14 @@ describe('brain', () => {
 
       const obj = {
         query: 'Is github.com up?',
+        entities: [{
+          sourceText: 'github.com',
+          utteranceText: 'github.com',
+          entity: 'url',
+          resolution: {
+            value: 'github.com'
+          }
+        }],
         classification: {
           package: 'checker',
           module: 'isitdown',
@@ -103,6 +112,7 @@ describe('brain', () => {
 
       const obj = {
         query: 'Hello',
+        entities: [],
         classification: {
           package: 'leon',
           module: 'greeting',
