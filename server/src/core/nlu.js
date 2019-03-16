@@ -33,13 +33,16 @@ class Nlu {
         try {
           const data = fs.readFileSync(classifierFile, 'utf8')
           const manager = new NlpManager()
+
           manager.import(data)
           this.classifier = manager
+
           log.success('Classifier loaded')
           resolve()
         } catch (err) {
           this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
           this.brain.socket.emit('is-typing', false)
+
           reject({ type: 'error', obj: err })
         }
       }

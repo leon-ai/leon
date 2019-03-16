@@ -22,6 +22,17 @@ describe('NLU', () => {
       }
     })
 
+    test('rejects because of a broken classifier', async () => {
+      const nlu = new Nlu()
+      nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
+
+      try {
+        await nlu.loadModel(global.paths.broken_classifier)
+      } catch (e) {
+        expect(e.type).toBe('error')
+      }
+    })
+
     test('loads the classifier', async () => {
       const nlu = new Nlu()
 
