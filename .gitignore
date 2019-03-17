@@ -13,6 +13,7 @@ bin/flite/*
 
 *.pyc
 .DS_Store
+*.sublime-workspace
 npm-debug.log
 debug.log
 .env

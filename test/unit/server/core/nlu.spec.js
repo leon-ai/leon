@@ -22,6 +22,17 @@ describe('NLU', () => {
       }
     })
 
+    test('rejects because of a broken classifier', async () => {
+      const nlu = new Nlu()
+      nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
+
+      try {
+        await nlu.loadModel(global.paths.broken_classifier)
+      } catch (e) {
+        expect(e.type).toBe('error')
+      }
+    })
+
     test('loads the classifier', async () => {
       const nlu = new Nlu()
 
@@ -45,7 +56,7 @@ describe('NLU', () => {
       nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
 
       await nlu.loadModel(global.paths.classifier)
-      expect(await nlu.process('This is a query example to test unknown queries')).toBeFalsy()
+      expect(await nlu.process('Unknown query')).toBeFalsy()
       expect(nlu.brain.talk).toHaveBeenCalledTimes(1)
     })
 
@@ -56,7 +67,7 @@ describe('NLU', () => {
       Nlu.fallback = jest.fn(() => fallbackObj)
 
       await nlu.loadModel(global.paths.classifier)
-      expect(nlu.process('This is a query example to test fallbacks')).toBeTruthy()
+      expect(await nlu.process('Thisisaqueryexampletotestfallbacks')).toBeTruthy()
       expect(nlu.brain.execute.mock.calls[0][0]).toBe(fallbackObj)
       Nlu.fallback = nluFallbackTmp // Need to give back the real fallback method
     })
@@ -66,7 +77,7 @@ describe('NLU', () => {
       nlu.brain = { execute: jest.fn() }
 
       await nlu.loadModel(global.paths.classifier)
-      expect(nlu.process('Hello')).toBeTruthy()
+      expect(await nlu.process('Hello')).toBeTruthy()
       expect(nlu.brain.execute).toHaveBeenCalledTimes(1)
     })
   })

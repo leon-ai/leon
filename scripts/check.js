@@ -78,7 +78,7 @@ export default () => new Promise(async (resolve, reject) => {
     // Module execution checking
 
     try {
-      const p = await shell('pipenv run python bridges/python/main.py en leon randomnumber "Give me a random number"')
+      const p = await shell('pipenv run python bridges/python/main.py scripts/assets/query-object.json')
       log.info(p.cmd)
       log.success(`${p.stdout}\n`)
     } catch (e) {

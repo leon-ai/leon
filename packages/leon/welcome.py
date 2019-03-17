@@ -3,7 +3,7 @@
 
 import utils
 
-def welcome(string):
+def welcome(string, entities):
 	"""Leon welcomes you"""
 
 	return utils.output('end', 'welcome', utils.translate('welcome'))

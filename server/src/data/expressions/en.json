@@ -34,11 +34,11 @@
       "Sorry, I'm still very young, I didn't got your point"
 		],
 		"random_not_sure": [
-			"Sorry, you may repeat",
+			"Sorry, you may repeat in an another way",
 			"Sorry, I'm not sure to understand",
-			"Sorry, I'm not sure for what you asked, please repeat",
-			"Sorry, please repeat again",
-			"Sorry, I didn't correctly clean my ears today! Oh wait, I'm your personal assistant then repeat please"
+			"Sorry, I'm not sure for what you asked, please repeat with a different way",
+			"Sorry, please repeat again by formulating differently",
+			"Sorry, I didn't correctly clean my ears today! Oh wait, I'm your personal assistant then please try again with a new way"
 		],
     "random_not_able": [
       "Sorry, I'm not able to answer. I understand what you said, but please repeat in another way",

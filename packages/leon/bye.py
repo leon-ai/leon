@@ -3,7 +3,7 @@
 
 import utils
 
-def bye(string):
+def bye(string, entities):
 	"""Leon says good bye"""
 
 	return utils.output('end', 'good_bye', utils.translate('good_bye'))

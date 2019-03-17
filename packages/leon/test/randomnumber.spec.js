@@ -3,7 +3,7 @@
 describe('leon:randomnumber', async () => {
   test('gives a random number between 0 and 100', async () => {
     global.nlu.brain.execute = jest.fn()
-    global.nlu.process('Give me a random number')
+    await global.nlu.process('Give me a random number')
 
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
