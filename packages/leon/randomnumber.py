@@ -4,7 +4,7 @@
 import utils
 from random import randint
 
-def randomnumber(string):
+def randomnumber(string, entities):
 	"""Leon gives a random number"""
 
 	return utils.output('end', 'success', randint(0, 100))

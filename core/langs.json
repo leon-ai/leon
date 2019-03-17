@@ -2,7 +2,7 @@
 	"langs": {
     "en-US": {
       "short": "en",
-      "min_confidence": 0.8,
+      "min_confidence": 0.6,
       "fallbacks": [
       ]
     },

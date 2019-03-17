@@ -3,7 +3,7 @@
 describe('leon:greeting', async () => {
   test('greets', async () => {
     global.nlu.brain.execute = jest.fn()
-    global.nlu.process('Hello')
+    await global.nlu.process('Hello')
 
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])

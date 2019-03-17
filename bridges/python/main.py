@@ -3,7 +3,7 @@
 
 import utils
 from sys import argv, path
-from json import dumps
+from json import dumps, loads
 from importlib import import_module
 
 def main():
@@ -11,13 +11,10 @@ def main():
 
 	path.append('.')
 
-	lang = argv[1]
-	package = argv[2]
-	module = argv[3]
-	string = argv[4]
-	m = import_module('packages.' + package + '.' + module)
+	queryobj = utils.getqueryobj()
+	m = import_module('packages.' + queryobj['package'] + '.' + queryobj['module'])
 
-	return getattr(m, module)(string)
+	return getattr(m, queryobj['module'])(queryobj['query'], queryobj['entities'])
 
 if __name__ == '__main__':
 	main()

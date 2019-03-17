@@ -1,0 +1,32 @@
+{
+  "lang": "en",
+  "package": "checker",
+  "module": "isitdown",
+  "query": "Check if github.com, mozilla.org and twitter.com are up",
+  "entities": [
+    {
+      "sourceText": "github.com",
+      "utteranceText": "github.com",
+      "entity": "url",
+      "resolution": {
+        "value": "github.com"
+      }
+    },
+    {
+      "sourceText": "mozilla.org",
+      "utteranceText": "mozilla.org",
+      "entity": "url",
+      "resolution": {
+        "value": "mozilla.org"
+      }
+    },
+    {
+      "sourceText": "twitter.com",
+      "utteranceText": "twitter.com",
+      "entity": "url",
+      "resolution": {
+        "value": "twitter.com"
+      }
+    }
+  ]
+}
