@@ -7,6 +7,9 @@
       "GitHub is unreachable for the moment, please retry later.",
       "I'm having difficulties to reach GitHub, please retry later.",
       "GitHub seems to be down, please try again later."
+    ],
+    "test": [
+      "Here it is: <a href=\"%url%\">%name%</a>"
     ]
 	},
   "producthunt": {

@@ -46,9 +46,11 @@ def github(string, entities):
 		reponames = soup.select('.repo-list h3', limit=limit)
 		authornames = ''
 
-		print('reponames', reponames)
-		print('authornames', authornames)
+		# print('reponames', reponames)
+		# print('authornames', authornames)
 	except requests.exceptions.RequestException as e:
 		return utils.output('end', 'unreachable', utils.translate('unreachable'))
+
+	utils.output('inter', 'test', utils.translate('test', { 'url': 'https://getleon.ai', 'name': 'getleon.ai' }))
 
 	return utils.output('end', 'done')
