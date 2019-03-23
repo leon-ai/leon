@@ -1,5 +1,13 @@
 {
   "github": {
+    "reaching": [
+
+    ],
+    "unreachable": [
+      "GitHub est inaccessible pour le moment, merci de réessayer plus tard.",
+      "Je rencontre des difficultés pour atteindre GitHub, merci de réessayer plus tard.",
+      "GitHub semble ne pas fonctionner correctement, veuillez retenter plus tard"
+    ]
   },
   "producthunt": {
   }
