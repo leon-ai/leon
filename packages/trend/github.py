@@ -45,21 +45,26 @@ def github(string, entities):
 		limit = 5
 		elements = soup.select('.repo-list li', limit=limit)
 		authors = soup.select('.repo-list img')
+		result = ''
 
 		for i, element in enumerate(elements):
 			repository = element.h3.get_text(strip=True).replace(' ', '')
 			author = element.img.get('alt')[1:]
 
-			utils.output('inter', 'simple', utils.translate('simple', {
-					'rank': i + 1,
-					'repository_url': 'https://github.com/' + repository,
-					'repository_name': repository,
-					'author_url': 'https://github.com/' + author,
-					'author_username': author
+			result += utils.translate('list_element', {
+						'rank': i + 1,
+						'repository_url': 'https://github.com/' + repository,
+						'repository_name': repository,
+						'author_url': 'https://github.com/' + author,
+						'author_username': author
 					}
 				)
+
+		utils.output('end', 'done', utils.translate('today', {
+					'limit': limit,
+					'result': result
+				}
 			)
+		)
 	except requests.exceptions.RequestException as e:
 		return utils.output('end', 'unreachable', utils.translate('unreachable'))
-
-	return utils.output('end', 'done')
