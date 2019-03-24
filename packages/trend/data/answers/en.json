@@ -32,7 +32,7 @@
       "GitHub seems to be down, please try again later."
     ],
     "list_element": [
-      "<li>#%rank%. <a href=\"%repository_url%\" target=\"_blank\">%repository_name%</a> created by <a href=\"%author_url%\" target=\"_blank\">%author_username%</a>.</li>"
+      "<li>#%rank%. <a href=\"%repository_url%\" target=\"_blank\">%repository_name%</a> created by <a href=\"%author_url%\" target=\"_blank\">%author_username%</a> with %stars_nb% new stars.</li>"
     ]
 	},
   "producthunt": {
