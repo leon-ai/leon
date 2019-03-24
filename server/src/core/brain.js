@@ -48,16 +48,19 @@ class Brain {
   /**
    * Make Leon talk
    */
-  talk (speech) {
+  talk (rawSpeech) {
     log.title('Leon')
     log.info('Talking...')
 
-    if (speech !== '') {
+    if (rawSpeech !== '') {
       if (process.env.LEON_TTS === 'true') {
+        // Stripe HTML
+        const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, '')
+
         this.tts.add(speech)
       }
 
-      this.socket.emit('answer', speech)
+      this.socket.emit('answer', rawSpeech)
     }
   }
 
