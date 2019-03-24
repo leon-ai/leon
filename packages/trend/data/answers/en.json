@@ -1,11 +1,11 @@
 {
 	"github": {
+    "limit_max": [
+      "You've asked for too many GitHub trends, I'll give you 25 trends instead.",
+      "%limit% GitHub trends are a lot, let me tell you the 25 trends instead."
+    ],
     "reaching": [
-      "I'm on it...",
-      "I'm reaching GitHub...",
-      "Wait a second please...",
-      "Let me find it for you...",
-      "Let me tell you in a second...",
+      "I'm reaching GitHub, please wait a second...",
       "Let me reach GitHub..."
     ],
     "today": [

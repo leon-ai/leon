@@ -37,12 +37,31 @@ def github(string, entities):
 	# link? {REPO NAME} by {AUTHOR NAME}
 	# ...
 
+	# Number of repositories
+	limit = 5
+	# Range string
+	since = 'daily'
+
+	for item in entities:
+		if item['entity'] == 'number':
+			limit = item['resolution']['value']
+		if item['entity'] == 'daterange':
+			if item['resolution']['timex'].find('W') != -1:
+				since = 'weekly'
+			else:
+				since = 'monthly'
+
+	if limit > 25:
+		utils.output('inter', 'limit_max', utils.translate('limit_max'))
+		limit = 25
+	elif limit == 0:
+		limit = 5
+
 	utils.output('inter', 'reaching', utils.translate('reaching'))
 
 	try:
-		r = utils.http('GET', 'https://github.com/trending')
+		r = utils.http('GET', 'https://github.com/trending?since=' + since)
 		soup = BeautifulSoup(r.text, features='html.parser')
-		limit = 5
 		elements = soup.select('.repo-list li', limit=limit)
 		authors = soup.select('.repo-list img')
 		result = ''
