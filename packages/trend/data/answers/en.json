@@ -1,15 +1,18 @@
 {
 	"github": {
     "reaching": [
-      "I'm reaching the GitHub trends..."
+      "I'm reaching the GitHub trends...",
+      "I'm finding what's trending on GitHub...",
+      "Let me find it for you...",
+      "Let me tell you in a second..."
     ],
     "unreachable": [
       "GitHub is unreachable for the moment, please retry later.",
       "I'm having difficulties to reach GitHub, please retry later.",
       "GitHub seems to be down, please try again later."
     ],
-    "test": [
-      "Here it is: <a href=\"%url%\">%name%</a>"
+    "simple": [
+      "%rank%. <a href=\"%repository_url%\" target=\"_blank\">%repository_name%</a> created by <a href=\"%author_url%\" target=\"_blank\">%author_username%</a>."
     ]
 	},
   "producthunt": {
