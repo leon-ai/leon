@@ -8,6 +8,6 @@ describe('leon:whoami', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.finalOutput.code).toBe('introduction')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers(['introduction'])
   })
 })

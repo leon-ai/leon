@@ -16,6 +16,7 @@ import re
 dirname = path.dirname(path.realpath(__file__))
 
 queryobjectpath = argv[1]
+codes = []
 
 serversrc = 'dist' if environ.get('LEON_NODE_ENV') == 'production' else 'src'
 queryobjfile = open(queryobjectpath, 'r', encoding = 'utf8')
@@ -49,11 +50,13 @@ def translate(key, d = { }):
 
 	# "Temporize" for the data buffer ouput on the core
 	sleep(0.1)
-				
+
 	return output
 
 def output(type, code, speech = ''):
 	"""Communicate with the Core"""
+
+	codes.append(code)
 
 	print(dumps({
 		'package': queryobj['package'],
@@ -63,7 +66,7 @@ def output(type, code, speech = ''):
 		'entities': queryobj['entities'],
 		'output': {
 			'type': type,
-			'code': code,
+			'codes': codes,
 			'speech': speech,
 			'options': config('options')
 		}
@@ -111,4 +114,3 @@ def db(dbtype = 'tinydb'):
 	if dbtype == 'tinydb':
 		db = TinyDB(dirname + '/../../packages/' + queryobj['package'] + '/data/db/' + queryobj['package'] + '.json')
 		return { 'db': db, 'query': Query, 'operations': operations }
-

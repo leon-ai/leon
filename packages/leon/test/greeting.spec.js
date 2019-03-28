@@ -16,6 +16,6 @@ describe('leon:greeting', async () => {
       'night',
       'too_late',
       'default'
-    ]).toContain(global.brain.finalOutput.code)
+    ]).toIncludeAnyMembers(global.brain.finalOutput.codes)
   })
 })
