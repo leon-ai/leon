@@ -8,7 +8,7 @@ describe('checker:isitdown', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.finalOutput.code).toBe('invalid_domain_name')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers(['invalid_domain_name'])
   })
 
   test('detects down domain name', async () => {
@@ -18,8 +18,11 @@ describe('checker:isitdown', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.interOutput.code).toBe('down')
-    expect(global.brain.finalOutput.code).toBe('done')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers([
+      'checking',
+      'down',
+      'done'
+    ])
   })
 
   test('detects up domain name', async () => {
@@ -29,8 +32,11 @@ describe('checker:isitdown', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.interOutput.code).toBe('up')
-    expect(global.brain.finalOutput.code).toBe('done')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers([
+      'checking',
+      'up',
+      'done'
+    ])
   })
 
   test('detects up domain names', async () => {
@@ -40,7 +46,12 @@ describe('checker:isitdown', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.interOutput.code).toBe('up')
-    expect(global.brain.finalOutput.code).toBe('done')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers([
+      'checking',
+      'up',
+      'checking',
+      'up',
+      'done'
+    ])
   })
 })

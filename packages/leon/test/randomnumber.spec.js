@@ -8,7 +8,7 @@ describe('leon:randomnumber', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.finalOutput.code).toBe('success')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers(['success'])
     expect(parseInt(global.brain.finalOutput.speech, 10)).toBeGreaterThanOrEqual(0)
     expect(parseInt(global.brain.finalOutput.speech, 10)).toBeLessThanOrEqual(100)
   })
