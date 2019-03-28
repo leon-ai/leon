@@ -16,8 +16,14 @@ def github(string, entities):
 	# Range string
 	since = 'daily'
 
-	# Language slug
-	langslug = ''
+	# Technology slug
+	techslug = ''
+
+	# Technology name
+	tech = ''
+
+	# Answer key
+	answerkey = 'today'
 
 	for item in entities:
 		if item['entity'] == 'number':
@@ -25,17 +31,23 @@ def github(string, entities):
 		if item['entity'] == 'daterange':
 			if item['resolution']['timex'].find('W') != -1:
 				since = 'weekly'
+				answerkey = 'week'
 			else:
 				since = 'monthly'
+				answerkey = 'month'
 
 	# Feed the languages list based on the GitHub languages list
 	for i, language in enumerate(github_lang.getall()):
 		# Find the asked language
 		if search(r'\b' + escape(language.lower()) + r'\b', string.lower()):
-			langslug = language.lower()
+			answerkey += '_with_tech'
+			tech = language
+			techslug = language.lower()
 
 	if limit > 25:
-		utils.output('inter', 'limit_max', utils.translate('limit_max'))
+		utils.output('inter', 'limit_max', utils.translate('limit_max', {
+		  'limit': limit
+		}))
 		limit = 25
 	elif limit == 0:
 		limit = 5
@@ -43,7 +55,7 @@ def github(string, entities):
 	utils.output('inter', 'reaching', utils.translate('reaching'))
 
 	try:
-		r = utils.http('GET', 'https://github.com/trending/' + langslug + '?since=' + since)
+		r = utils.http('GET', 'https://github.com/trending/' + techslug + '?since=' + since)
 		soup = BeautifulSoup(r.text, features='html.parser')
 		elements = soup.select('.repo-list li', limit=limit)
 		result = ''
@@ -68,8 +80,9 @@ def github(string, entities):
 					}
 				)
 
-		utils.output('end', 'done', utils.translate('today', {
+		utils.output('end', 'done', utils.translate(answerkey, {
 					'limit': limit,
+					'tech': tech,
 					'result': result
 				}
 			)

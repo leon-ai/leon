@@ -2,7 +2,7 @@
 	"github": {
     "limit_max": [
       "You've asked for too many GitHub trends, I'll give you 25 trends instead.",
-      "%limit% GitHub trends are a lot, let me tell you the 25 trends instead."
+      "%limit% GitHub trends is a lot, let me tell you the 25 trends instead."
     ],
     "reaching": [
       "I'm reaching GitHub, please wait a second...",
@@ -12,19 +12,19 @@
       "Here are the %limit% latest GitHub trends of today:<br><br><ul>%result%</ul>"
     ],
     "week": [
-      "Here are the %limit% latest GitHub trends of this week:"
+      "Here are the %limit% latest GitHub trends of this week:<br><br><ul>%result%</ul>"
     ],
     "month": [
-      "Here are the %limit% latest GitHub trends of this month:"
+      "Here are the %limit% latest GitHub trends of this month:<br><br><ul>%result%</ul>"
     ],
     "today_with_tech": [
-      "Here are the %limit% latest GitHub trends of today for the %tech% technology:"
+      "Here are the %limit% latest GitHub trends of today for the %tech% technology:<br><br><ul>%result%</ul>"
     ],
     "week_with_tech": [
-      "Here are the %limit% latest GitHub trends of this week for the %tech% technology:"
+      "Here are the %limit% latest GitHub trends of this week for the %tech% technology:<br><br><ul>%result%</ul>"
     ],
     "month_with_tech": [
-      "Here are the %limit% latest GitHub trends of this month for the %tech% technology:"
+      "Here are the %limit% latest GitHub trends of this month for the %tech% technology:<br><br><ul>%result%</ul>"
     ],
     "unreachable": [
       "GitHub is unreachable for the moment, please retry later.",
