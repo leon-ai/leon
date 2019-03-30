@@ -41,7 +41,7 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > Therefore there is only one core (to rule them all).
 > 3. Leon uses AI concepts, which is cool.
 > 4. Privacy matters, you can configure Leon to talk with him offline. You can already text with him without any third party services.
-> 5. Open-source is great.
+> 5. Open source is great.
 
 ### What is this repository for?
 > This repository contains the following nodes of Leon:
@@ -119,7 +119,7 @@ To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai
 
 If you have an idea for improving Leon, do not hesitate.
 
-**Leon needs open-source to live**, the more modules he has, the more skillful he becomes.
+**Leon needs open source to live**, the more modules he has, the more skillful he becomes.
 
 ## The Story Behind Leon
 

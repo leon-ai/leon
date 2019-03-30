@@ -2,7 +2,7 @@
 
 Thanks a lot for your interest in contributing to Leon! :heart:
 
-**Leon needs open-source to live**, the more modules he has, the more skillful he becomes.
+**Leon needs open source to live**, the more modules he has, the more skillful he becomes.
 
 **Before submitting your contribution**, please take a moment to review this document.
 
