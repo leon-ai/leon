@@ -80,7 +80,7 @@ def github(string, entities):
 					}
 				)
 
-		utils.output('end', answerkey, utils.translate(answerkey, {
+		return utils.output('end', answerkey, utils.translate(answerkey, {
 					'limit': limit,
 					'tech': tech,
 					'result': result
