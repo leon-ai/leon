@@ -7,7 +7,7 @@ describe('punctuation', () => {
   const rootFolders = [
     'packages'
   ]
-  const punctuations = ['.', ';', ':', '?', '!']
+  const punctuations = ['.', ';', ':', '?', '!', '>']
   const findPunctuation = s => punctuations.includes(s[s.length - 1])
   const findString = (iterable) => {
     const keys = Object.keys(iterable)
