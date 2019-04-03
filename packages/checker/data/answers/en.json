@@ -23,5 +23,26 @@
       "Please provide me at least one valid domain name.",
       "You did not gave me a valid domain name."
     ]
+	},
+	"haveibeenpwned": {
+		"no-pwnage": [
+			"Great news, you haven't been pwned."
+		],
+		"pwned": {
+			"multiple": [
+				"More than one email has been compromised. They are;  %email% "
+			],
+			"single": [
+				"Uh oh, it seems %email% has been compromised.",
+				"Unfortunately, it looks like %email% has been exposed in a data breach."
+			]
+		},
+		"checking": [
+			"I'm checking for a compromised email.",
+			"Trying to verify pwnage status"
+		],
+		"no-email": [
+			"Please provide one or more email addresses you need me to check."
+		]
 	}
 }
