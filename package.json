@@ -88,7 +88,7 @@
     "git-changelog": "git+https://git@github.com/louistiti/git-changelog.git",
     "husky": "^0.14.3",
     "inquirer": "^5.1.0",
-    "jest": "^24.1.0",
+    "jest": "^24.7.1",
     "jest-canvas-mock": "^2.0.0-alpha.3",
     "jest-extended": "^0.11.1",
     "json": "^9.0.6",
