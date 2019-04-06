@@ -92,7 +92,7 @@ export default class Chatbot {
 
     container.className = `bubble-container ${who}`
     bubble.className = 'bubble'
-    bubble.textContent = string
+    bubble.innerHTML = string
 
     this.feed.appendChild(container).appendChild(bubble)
 

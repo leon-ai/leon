@@ -34,6 +34,7 @@ You can also **text him** and he can also **text you**.
 If you want to, Leon can communicate with you by being **offline to protect your privacy**.
 
 ### Why?
+
 > 1. If you are a developer (or not), you may want to build many things that could help in your daily life.
 > Instead of building a dedicated project for each of those ideas, Leon can help you with his
 > packages/modules (skills) structure.
@@ -41,14 +42,20 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > Therefore there is only one core (to rule them all).
 > 3. Leon uses AI concepts, which is cool.
 > 4. Privacy matters, you can configure Leon to talk with him offline. You can already text with him without any third party services.
-> 5. Open-source is great.
+> 5. Open source is great.
 
 ### What is this repository for?
+
 > This repository contains the following nodes of Leon:
 > - The server
 > - The packages/modules
 > - The web app
 > - The hotword node
+
+### What is Leon able to do?
+
+> Today, the most interesting part is about his core and the way he can scale up. He is pretty young but can easily scale to have new features (packages/modules).
+> You can find what he is able to do by browsing the [packages list](https://github.com/leon-ai/leon/tree/develop/packages).
 
 Sounds good for you? Then let's get started!
 
@@ -119,7 +126,7 @@ To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai
 
 If you have an idea for improving Leon, do not hesitate.
 
-**Leon needs open-source to live**, the more modules he has, the more skillful he becomes.
+**Leon needs open source to live**, the more modules he has, the more skillful he becomes.
 
 ## The Story Behind Leon
 

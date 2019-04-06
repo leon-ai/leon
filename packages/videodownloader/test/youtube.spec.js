@@ -8,12 +8,12 @@ describe('videodownloader:youtube', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    await expect(global.brain.interOutput.code).toBe('reaching_playlist')
-    await expect([
+    expect(global.brain.interOutput.codes).toIncludeSameMembers(['reaching_playlist'])
+    expect([
       'settings_error',
       'request_error',
       'nothing_to_download',
       'success'
-    ]).toContain(global.brain.finalOutput.code)
+    ]).toIncludeAnyMembers(global.brain.finalOutput.codes)
   })
 })

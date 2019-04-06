@@ -8,7 +8,7 @@ describe('leon:partnerassistant', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.finalOutput.code).toBe('unknown')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers(['unknown'])
   })
 
   test('talks about the personal assistant Alexa', async () => {
@@ -18,6 +18,6 @@ describe('leon:partnerassistant', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.finalOutput.code).toBe('success')
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers(['success'])
   })
 })
