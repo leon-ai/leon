@@ -11,7 +11,8 @@ describe('trend:producthunt', async () => {
     expect([
       'reaching',
       'today',
-      'unreachable'
+      'unreachable',
+      'invalid_developer_token'
     ]).toIncludeAnyMembers(global.brain.finalOutput.codes)
   })
 })

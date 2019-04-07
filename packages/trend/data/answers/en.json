@@ -65,6 +65,10 @@
     "not_found": [
       "There is no product on that date.",
       "I did not find any product on that date."
+    ],
+    "invalid_developer_token": [
+      "Your Product Hunt developer token is invalid. Please provide a valid one by <a href=\"https://github.com/leon-ai/leon/blob/develop/packages/trend/README.md#product-hunt\" target=\"_blank\">reading this</a>.",
+      "You did not set a valid Product Hunt developer token. Please set a valid one by <a href=\"https://github.com/leon-ai/leon/blob/develop/packages/trend/README.md#product-hunt\" target=\"_blank\">reading this</a>."
     ]
   }
 }

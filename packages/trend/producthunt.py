@@ -38,7 +38,12 @@ def producthunt(string, entities):
 			url = url + '?day=' + daydate
 
 		r = utils.http('GET', url, { 'Authorization': 'Bearer ' + developertoken })
-		posts = list(enumerate(r.json()['posts']))
+		response = r.json()
+
+		if 'error' in response and response['error'] == 'unauthorized_oauth':
+			return utils.output('end', 'invalid_developer_token', utils.translate('invalid_developer_token'))
+
+		posts = list(enumerate(response['posts']))
 		result = ''
 
 		if len(posts) == 0:
