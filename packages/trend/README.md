@@ -33,10 +33,9 @@ Grab the Product Hunt trends products
 
 ```
 (en-US) "What's trending on Product Hunt?"
-(en-US) "Give me the 4 GitHub trends of this week for the JavaScript language"
-(en-US) "What's the three GitHub trends of this month?"
-(fr-FR) "Quelles sont les tendances sur GitHub ?"
-(fr-FR) "Donne-moi les 4 tendances GitHub de cette semaine pour le langage JavaScript"
-(fr-FR) "Donne-moi les trois tendances GitHub de ce mois"
+(en-US) "What were the four first Product Hunt trends on the 7th of October 2018?"
+(en-US) "What were the Product Hunt trends of yesterday?"
+(fr-FR) "Quelles sont les tendances sur Product Hunt ?"
+(fr-FR) "Donne-moi les 4 tendances Product Hunt du 7 octobre 2018"
 ...
 ```

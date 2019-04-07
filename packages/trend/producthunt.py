@@ -16,16 +16,33 @@ def producthunt(string, entities):
 	# Answer key
 	answerkey = 'today'
 
+	# Day date
+	daydate = ''
+
 	for item in entities:
 		if item['entity'] == 'number':
 			limit = item['resolution']['value']
+		if item['entity'] == 'date':
+			answerkey = 'specific_day'
+
+			if 'strPastValue' in item['resolution']:
+				daydate = item['resolution']['strPastValue']
+			else:
+				daydate = item['resolution']['strValue']
 
 	utils.output('inter', 'reaching', utils.translate('reaching'))
 
 	try:
-		r = utils.http('GET', 'https://api.producthunt.com/v1/posts', { 'Authorization': 'Bearer ' + developertoken })
+		url = 'https://api.producthunt.com/v1/posts'
+		if (daydate != ''):
+			url = url + '?day=' + daydate
+
+		r = utils.http('GET', url, { 'Authorization': 'Bearer ' + developertoken })
 		posts = list(enumerate(r.json()['posts']))
 		result = ''
+
+		if len(posts) == 0:
+			return utils.output('end', 'not_found', utils.translate('not_found'))
 
 		if limit > len(posts):
 			utils.output('inter', 'limit_max', utils.translate('limit_max', {
@@ -37,16 +54,23 @@ def producthunt(string, entities):
 			limit = 5
 
 		for i, post in posts:
-			author = { 'profile_url': '?', 'name': '?' }
+			# If the product maker is known
 			if post['maker_inside']:
 				author = list(reversed(post['makers']))[0]
-
-			result += utils.translate('list_element', {
+				result += utils.translate('list_element', {
 						'rank': i + 1,
 						'post_url': post['discussion_url'],
 						'product_name': post['name'],
 						'author_url': author['profile_url'],
 						'author_name': author['name'],
+						'votes_nb': post['votes_count']
+					}
+				)
+			else:
+				result += utils.translate('list_element_with_unknown_maker', {
+						'rank': i + 1,
+						'post_url': post['discussion_url'],
+						'product_name': post['name'],
 						'votes_nb': post['votes_count']
 					}
 				)
@@ -56,7 +80,8 @@ def producthunt(string, entities):
 
 		return utils.output('end', answerkey, utils.translate(answerkey, {
 					'limit': limit,
-					'result': result
+					'result': result,
+					'date': daydate
 				}
 			)
 		)

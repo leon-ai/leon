@@ -47,6 +47,9 @@
     "today": [
       "Here are the %limit% Product Hunt trends of the day:<br><br><ul>%result%</ul>"
     ],
+    "specific_day": [
+      "Here are the %limit% Product Hunt trends for the %date%:<br><br><ul>%result%</ul>"
+    ],
     "unreachable": [
       "Product Hunt is unreachable for the moment, please retry later.",
       "I'm having difficulties to reach Product Hunt, please retry later.",
@@ -54,6 +57,14 @@
     ],
     "list_element": [
       "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> created by <a href=\"%author_url%\" target=\"_blank\">%author_name%</a> with %votes_nb% votes.</li>"
+    ],
+    "list_element_with_unknown_maker": [
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> with %votes_nb% votes. There is no information about the maker.</li>",
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> with %votes_nb% votes. I did not find any information about the maker.</li>"
+    ],
+    "not_found": [
+      "There is no product on that date.",
+      "I did not find any product on that date."
     ]
   }
 }

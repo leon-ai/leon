@@ -47,6 +47,9 @@
     "today": [
       "Voici les %limit% dernières tendances Product Hunt du jour :<br><br><ul>%result%</ul>"
     ],
+    "specific_day": [
+      "Voici les %limit% dernières tendances Product Hunt du %date% :<br><br><ul>%result%</ul>"
+    ],
     "unreachable": [
       "Product Hunt est inaccessible pour le moment, merci de réessayer plus tard.",
       "Je rencontre des difficultés pour atteindre Product Hunt, merci de réessayer plus tard.",
@@ -54,6 +57,14 @@
     ],
     "list_element": [
       "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> créé par <a href=\"%author_url%\" target=\"_blank\">%author_name%</a> avec %votes_nb% votes.</li>"
+    ],
+    "list_element_with_unknown_maker": [
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> avec %votes_nb% votes. Il n'y a pas d'information à propos du créateur.</li>",
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> avec %votes_nb% votes. Je n'ai trouvé aucune information à propos du créateur.</li>"
+    ],
+    "not_found": [
+      "Il n'y a pas de produit à cette date.",
+      "Je n'ai trouvé aucun produit à cette date."
     ]
   }
 }
