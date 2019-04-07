@@ -1,31 +1,15 @@
 {
   "lang": "en",
-  "package": "checker",
-  "module": "isitdown",
-  "query": "Check if github.com, mozilla.org and twitter.com are up",
+  "package": "trend",
+  "module": "producthunt",
+  "query": "What's the 50 latest trends on Product Hunt?",
   "entities": [
     {
-      "sourceText": "github.com",
-      "utteranceText": "github.com",
-      "entity": "url",
+      "entity": "number",
       "resolution": {
-        "value": "github.com"
-      }
-    },
-    {
-      "sourceText": "mozilla.org",
-      "utteranceText": "mozilla.org",
-      "entity": "url",
-      "resolution": {
-        "value": "mozilla.org"
-      }
-    },
-    {
-      "sourceText": "twitter.com",
-      "utteranceText": "twitter.com",
-      "entity": "url",
-      "resolution": {
-        "value": "twitter.com"
+        "strValue": "50",
+        "value": 50,
+        "subtype": "integer"
       }
     }
   ]

@@ -9,22 +9,22 @@
       "Let me reach GitHub..."
     ],
     "today": [
-      "Here are the %limit% latest GitHub trends of today:<br><br><ul>%result%</ul>"
+      "Here are the %limit% GitHub trends of the day:<br><br><ul>%result%</ul>"
     ],
     "week": [
-      "Here are the %limit% latest GitHub trends of this week:<br><br><ul>%result%</ul>"
+      "Here are the %limit% GitHub trends of the week:<br><br><ul>%result%</ul>"
     ],
     "month": [
-      "Here are the %limit% latest GitHub trends of this month:<br><br><ul>%result%</ul>"
+      "Here are the %limit% GitHub trends of the month:<br><br><ul>%result%</ul>"
     ],
     "today_with_tech": [
-      "Here are the %limit% latest GitHub trends of today for the %tech% technology:<br><br><ul>%result%</ul>"
+      "Here are the %limit% GitHub trends of the day for the %tech% technology:<br><br><ul>%result%</ul>"
     ],
     "week_with_tech": [
-      "Here are the %limit% latest GitHub trends of this week for the %tech% technology:<br><br><ul>%result%</ul>"
+      "Here are the %limit% GitHub trends of the week for the %tech% technology:<br><br><ul>%result%</ul>"
     ],
     "month_with_tech": [
-      "Here are the %limit% latest GitHub trends of this month for the %tech% technology:<br><br><ul>%result%</ul>"
+      "Here are the %limit% GitHub trends of the month for the %tech% technology:<br><br><ul>%result%</ul>"
     ],
     "unreachable": [
       "GitHub is unreachable for the moment, please retry later.",
@@ -36,5 +36,24 @@
     ]
 	},
   "producthunt": {
+    "limit_max": [
+      "You've asked for too many Product Hunt trends, I'll give you %new_limit% trends instead.",
+      "%limit% Product Hunt trends is a lot, let me tell you the %new_limit% trends instead."
+    ],
+    "reaching": [
+      "I'm reaching Product Hunt, please wait a second...",
+      "Let me reach Product Hunt..."
+    ],
+    "today": [
+      "Here are the %limit% Product Hunt trends of the day:<br><br><ul>%result%</ul>"
+    ],
+    "unreachable": [
+      "Product Hunt is unreachable for the moment, please retry later.",
+      "I'm having difficulties to reach Product Hunt, please retry later.",
+      "Product Hunt seems to be down, please try again later."
+    ],
+    "list_element": [
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> created by <a href=\"%author_url%\" target=\"_blank\">%author_name%</a> with %votes_nb% votes.</li>"
+    ]
   }
 }

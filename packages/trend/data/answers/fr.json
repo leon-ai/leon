@@ -36,5 +36,24 @@
     ]
   },
   "producthunt": {
+    "limit_max": [
+      "Vous demandez beaucoup trop de tendances, laissez moi plutôt vous donner les %new_limit% tendances.",
+      "%limit% tendances Product Hunt c'est beaucoup, permettez moi de vous donner les %new_limit% tendances à la place."
+    ],
+    "reaching": [
+      "Je suis en train d'atteindre Product Hunt, veuille patienter une seconde...",
+      "Laissez moi atteindre Product Hunt..."
+    ],
+    "today": [
+      "Voici les %limit% dernières tendances Product Hunt du jour :<br><br><ul>%result%</ul>"
+    ],
+    "unreachable": [
+      "Product Hunt est inaccessible pour le moment, merci de réessayer plus tard.",
+      "Je rencontre des difficultés pour atteindre Product Hunt, merci de réessayer plus tard.",
+      "Product Hunt semble ne pas fonctionner correctement, veuillez retenter plus tard."
+    ],
+    "list_element": [
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> créé par <a href=\"%author_url%\" target=\"_blank\">%author_name%</a> avec %votes_nb% votes.</li>"
+    ]
   }
 }
