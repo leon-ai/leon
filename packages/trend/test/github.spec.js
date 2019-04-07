@@ -8,8 +8,6 @@ describe('trend:github', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    console.log(global.brain.finalOutput)
-
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(25)
     expect(global.brain.finalOutput.codes).toIncludeSameMembers([
       'limit_max',
@@ -25,8 +23,6 @@ describe('trend:github', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    console.log(global.brain.finalOutput)
-
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(16)
     expect(global.brain.finalOutput.codes).toIncludeSameMembers([
       'reaching',
@@ -40,8 +36,6 @@ describe('trend:github', async () => {
 
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
-
-    console.log(global.brain.finalOutput)
 
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(5)
     expect(global.brain.finalOutput.codes).toIncludeSameMembers([
@@ -57,8 +51,6 @@ describe('trend:github', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    console.log(global.brain.finalOutput)
-
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(5)
     expect(global.brain.finalOutput.codes).toIncludeSameMembers([
       'reaching',
@@ -72,8 +64,6 @@ describe('trend:github', async () => {
 
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
-
-    console.log(global.brain.finalOutput)
 
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(7)
     expect(global.brain.finalOutput.speech.indexOf('Python')).not.toBe(-1)
@@ -90,8 +80,6 @@ describe('trend:github', async () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    console.log(global.brain.finalOutput)
-
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(14)
     expect(global.brain.finalOutput.speech.indexOf('JavaScript')).not.toBe(-1)
     expect(global.brain.finalOutput.codes).toIncludeSameMembers([
@@ -106,8 +94,6 @@ describe('trend:github', async () => {
 
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
-
-    console.log(global.brain.finalOutput)
 
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(5)
     expect(global.brain.finalOutput.speech.indexOf('CSS')).not.toBe(-1)
