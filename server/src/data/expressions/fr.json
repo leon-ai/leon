@@ -26,10 +26,10 @@
 			"Désolé, le module %module_name% de mon paquet %package_name% est cassé"
 		],
 		"random_unknown_queries": [
-			"Désolé, je ne connais pas encore ça, mais vous pouvez m'aider à comprendre en créant une pull request",
-			"Désolé, vous devriez m'apprendre cette requête. Vous pouvez m'apprendre en créant une pull request",
-			"Désolé, je ne peux pas répondre à ça. Laissez moi vous répondre à l'avenir en créant une pull request",
-			"Désolé, vous devez m'éduquer un peu plus. Vous pouvez m'aider avec ça en contribuant à mon code",
+			"Désolé, je ne connais pas encore ça, mais vous pouvez m'aider à comprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
+			"Désolé, vous devriez m'apprendre cette requête. Vous pouvez m'apprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
+			"Désolé, je ne peux pas répondre à ça. Laissez moi vous répondre à l'avenir en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
+			"Désolé, vous devez m'éduquer un peu plus. Vous pouvez m'aider avec ça en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">contribuant à mon code</a>",
 			"Désolé, je ne comprends pas votre requête",
       "Désolé, je suis encore très jeune, je n'ai pas compris votre demande"
 		],
