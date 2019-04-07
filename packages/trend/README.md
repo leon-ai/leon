@@ -22,7 +22,7 @@ Grab the GitHub trends repositories according to several options.
 
 ### Product Hunt
 
-Grab the Product Hunt trends products
+Grab the Product Hunt trends.
 
 #### Usage
 
