@@ -1,0 +1,9 @@
+{
+  "github": {
+    "options": {}
+  },
+  "producthunt": {
+    "developer_token": "YOUR_DEVELOPER_TOKEN",
+    "options": {}
+  }
+}

@@ -165,7 +165,7 @@ class Brain {
           this.socket.emit('is-typing', false)
 
           log.title(packageName)
-          reject({ type: 'error', obj: data })
+          reject({ type: 'error', obj: new Error(data) })
         })
 
         // Catch the end of the module execution
