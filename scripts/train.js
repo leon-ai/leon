@@ -53,7 +53,7 @@ export default () => new Promise(async (resolve, reject) => {
             manager.addDocument(lang, exprs[k], `${packages[i]}:${modules[j]}`)
           }
 
-          log.success(`"${string.ucfirst(modules[j])}" module expressions loaded«`)
+          log.success(`"${string.ucfirst(modules[j])}" module expressions loaded`)
         }
       }
 
