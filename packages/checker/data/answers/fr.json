@@ -45,6 +45,10 @@
 			"Je pense que %website_name% est en panne pour le moment, veuillez réessayer plus tard.",
 			"J'ai du mal à joindre %website_name%. Veuillez vérifier que votre connexion Internet est active.",
 			"Mauvaise nouvelle, %website_name% ne répond pas. Peut-être essayer plus tard?"
+		],
+		"blocked": [
+			"Il y avait un problème d'accès au service de %website_name%.",
+			"Malheureusement, %website_name% ne me donne pas accès à son service."
 		]
 	}
 }

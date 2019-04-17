@@ -45,6 +45,10 @@
 			"I think %website_name% is down at the moment, please try again later.",
 			"I'm having trouble reaching %website_name%. Please check that your internet connection is active.",
 			"Bad news, %website_name% is not responding. Maybe try at a later time?"
+		],
+		"blocked": [
+			"There was an issue acessing %website_name%'s service.",
+			"Unfortunate news, %website_name% isn't granting me access to its service."
 		]
 	}
 }

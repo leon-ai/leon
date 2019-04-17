@@ -25,7 +25,10 @@ def haveibeenpwned(string, entities):
         breached = checkForBreach(email)
         data = { 'email': email }
 
-        if not breached:
+        # HaveIBeenPwned API returns a 403 when accessed by unauthorized/banned clients
+        if breached == 403:
+            return utils.output('end', 'blocked', utils.translate('blocked', { 'website_name': 'HaveIBeenPwned' }))
+        elif not breached:
             if isLastEmail:
                 return utils.output('end', 'no-pwnage', utils.translate('no-pwnage', data))
             else:
@@ -48,7 +51,9 @@ def checkForBreach(email):
 
         if response.status_code == 404:
             return None
+        elif response.status_code == 200:
+            return response.json
         
-        return response.json()
+        return response.status_code
     except exceptions.RequestException as e:
         return utils.output('end', 'down', utils.translate('errors', { 'website_name': 'HaveIBeenPwned' }))
