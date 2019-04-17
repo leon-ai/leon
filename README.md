@@ -120,7 +120,7 @@ For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
 
 ## Roadmap
 
-To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai).
+To know what is going on, follow [roadmap.getleon.ai](http://roadmap.getleon.ai).
 
 ## Contributing
 
