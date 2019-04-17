@@ -75,11 +75,14 @@ def output(type, code, speech = ''):
 	if (type == 'inter'):
 		stdout.flush()
 
-def http(method, url):
+def http(method, url, headers = None):
 	"""Send HTTP request with the Leon user agent"""
 
 	session = requests.Session()
 	session.headers.update({ 'User-Agent': useragent, 'Cache-Control': 'no-cache' })
+
+	if headers != None:
+	  session.headers.update(headers)
 
 	return session.request(method, url)
 

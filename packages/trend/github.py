@@ -62,7 +62,10 @@ def github(string, entities):
 
 		for i, element in enumerate(elements):
 			repository = element.h3.get_text(strip=True).replace(' ', '')
-			author = element.img.get('alt')[1:]
+			if (element.img != None):
+				author = element.img.get('alt')[1:]
+			else:
+				author = '?'
 			stars = element.select('span.d-inline-block.float-sm-right')[0].get_text(strip=True).split(' ')[0]
 			separators = [' ', ',', '.']
 
