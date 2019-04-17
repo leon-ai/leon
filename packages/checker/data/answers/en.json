@@ -30,13 +30,13 @@
 			"%email% looks good to me!"
 		],
 		"pwned": [
-			"Oops, looks like %email% has been compromised in a breach involving %breach%",
+			"Oops, looks like %email% has been compromised in a breach involving %breach%.",
 			"%breach% was involved in a breach. Sadly, %email% was affected.",
 			"Unfortunately, %email% has been exposed in a data breach affecting %breach%."
 		],
 		"checking": [
 			"I'm checking for a compromised email.",
-			"Trying to verify pwnage status"
+			"Trying to verify pwnage status."
 		],
 		"no-email": [
 			"Please provide one or more email addresses you need me to check."
