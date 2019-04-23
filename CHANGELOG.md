@@ -1,4 +1,4 @@
-# [1.0.0-beta.2](https://github.com/leon-ai/leon/compare/1.0.0-beta.1...v1.0.0-beta.2) (2019-04-24)
+# [1.0.0-beta.2](https://github.com/leon-ai/leon/compare/1.0.0-beta.1...1.0.0-beta.2) (2019-04-24)
 ### Features
  - can send custom HTTP headers
   ([2685cdab](https://github.com/leon-ai/leon/commit/2685cdab07cc1a9ea418eab812e5163d2dd0da90))
@@ -46,7 +46,7 @@
 
 
 
-# [1.0.0-beta.1](https://github.com/leon-ai/leon/compare/1.0.0-beta.0...v1.0.0-beta.1) (2019-02-24)
+# [1.0.0-beta.1](https://github.com/leon-ai/leon/compare/1.0.0-beta.0...1.0.0-beta.1) (2019-02-24)
 ### Features
  - add Docker support
   ([209760db](https://github.com/leon-ai/leon/commit/209760dba747001300692fb6a6af97543de584d6))
@@ -74,6 +74,6 @@
   ([08a68e37](https://github.com/leon-ai/leon/commit/08a68e376b6a9367425947380564120943376500))
 
 
-# [1.0.0-beta.0](https://github.com/leon-ai/leon/compare/https://github.com/leon-ai/leon.git...v1.0.0-beta.0) (2019-02-10)
+# [1.0.0-beta.0](https://github.com/leon-ai/leon/compare/https://github.com/leon-ai/leon.git...1.0.0-beta.0) (2019-02-10)
 
 Initial release.
