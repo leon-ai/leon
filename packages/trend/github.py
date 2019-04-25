@@ -66,12 +66,17 @@ def github(string, entities):
 				author = element.img.get('alt')[1:]
 			else:
 				author = '?'
-			stars = element.select('span.d-inline-block.float-sm-right')[0].get_text(strip=True).split(' ')[0]
-			separators = [' ', ',', '.']
 
-			# Replace potential separators number
-			for j, separator in enumerate(separators):
-				stars = stars.replace(separator, '')
+			hasstars = element.select('span.d-inline-block.float-sm-right')
+			stars = 0
+
+			if hasstars:
+				stars = element.select('span.d-inline-block.float-sm-right')[0].get_text(strip=True).split(' ')[0]
+				separators = [' ', ',', '.']
+
+				# Replace potential separators number
+				for j, separator in enumerate(separators):
+					stars = stars.replace(separator, '')
 
 			result += utils.translate('list_element', {
 						'rank': i + 1,
