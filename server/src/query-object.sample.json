@@ -1,31 +1,31 @@
 {
   "lang": "en",
   "package": "checker",
-  "module": "haveibeenpwned",
-  "query": "Check if louis.grenard@gmail.com and louistiti42@gmail.com have been pwned",
+  "module": "isitdown",
+  "query": "Check if github.com, mozilla.org and twitter.com are up",
   "entities": [
     {
-      "start": 12,
-      "end": 33,
-      "len": 22,
-      "accuracy": 0.95,
-      "sourceText": "something@somehost.com",
-      "utteranceText": "something@somehost.com",
-      "entity": "email",
+      "sourceText": "github.com",
+      "utteranceText": "github.com",
+      "entity": "url",
       "resolution": {
-        "value": "louis.grenard@gmail.com"
+        "value": "github.com"
       }
     },
     {
-      "start": 12,
-      "end": 33,
-      "len": 22,
-      "accuracy": 0.95,
-      "sourceText": "something@somehost.com",
-      "utteranceText": "something@somehost.com",
-      "entity": "email",
+      "sourceText": "mozilla.org",
+      "utteranceText": "mozilla.org",
+      "entity": "url",
       "resolution": {
-        "value": "louistiti42@gmail.com"
+        "value": "mozilla.org"
+      }
+    },
+    {
+      "sourceText": "twitter.com",
+      "utteranceText": "twitter.com",
+      "entity": "url",
+      "resolution": {
+        "value": "twitter.com"
       }
     }
   ]
