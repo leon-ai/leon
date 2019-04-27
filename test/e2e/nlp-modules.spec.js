@@ -56,7 +56,6 @@ describe('NLU modules', () => {
             // eslint-disable-next-line no-loop-func
             describe(`${modules[k]} module`, () => {
               const exprs = expressions[modules[k]]
-              let isModuleExecutedOnce = false
 
               for (let l = 0; l < exprs.length; l += 1) {
                 // eslint-disable-next-line no-loop-func
@@ -66,19 +65,6 @@ describe('NLU modules', () => {
 
                   await nlu.process(exprs[l])
                   const [obj] = nlu.brain.execute.mock.calls
-
-                  // Execute/test each module one time (otherwise this test would be slow)
-                  if (isModuleExecutedOnce === false) {
-                    try {
-                      await brain.execute(obj[0]) // eslint-disable-line no-await-in-loop
-                      expect(brain.talk).toHaveBeenCalled()
-                    } catch (e) {
-                      // expect() just to break the test if the module execution fails
-                      expect(brain.talk).toBe(false)
-                    }
-
-                    isModuleExecutedOnce = true
-                  }
 
                   expect(obj[0].classification.package).toBe(packages[j])
                   expect(obj[0].classification.module).toBe(modules[k])
