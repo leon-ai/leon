@@ -1,5 +1,6 @@
 __pycache__/
 .idea/
+.vscode/
 **/dist/
 **/node_modules/
 test/coverage/
@@ -25,3 +26,4 @@ packages/**/data/db/*.json
 server/src/data/expressions/classifier.json
 app/js/main.js
 package.json.backup
+.python-version

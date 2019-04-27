@@ -12,5 +12,18 @@
 		"Check if nodejs.org is up",
 		"Check if nodejs.org is working",
 		"Check if amazon.com is up or down"
+	],
+	"haveibeenpwned": [
+		"Has iifeoluwa.ao@gmail.com been pwned?",
+		"Has iifeoluwa.ao@gmail.com been compromised?",
+		"Has iifeoluwa.ao@gmail.com been exposed in a breach?",
+		"Is iifeoluwa.ao@gmail.com still uncompromised?",
+		"Is iifeoluwa.ao@gmail.com compromised?",
+    "Have my email address been pwned?",
+		"Check that iifeoluwa.ao@gmail.com and louis.grenard@gmail.com haven't been compromised",
+		"Check that iifeoluwa.ao@gmail.com and louis.grenard@gmail.com haven't been pwned",
+		"Check that iifeoluwa.ao@gmail.com and louis.grenard@gmail.com haven't been exposed in a breach",
+		"Verify the pwnage status of iifeoluwa.ao@gmail.com",
+		"Verify the pwnage status of iifeoluwa.ao@gmail.com and louis.grenard@gmail.com"
 	]
 }

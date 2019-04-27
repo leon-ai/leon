@@ -1,5 +1,9 @@
 {
 	"isitdown": {
 		"options": {}
-	}
+	},
+  "haveibeenpwned": {
+    "emails": [],
+    "options": {}
+  }
 }

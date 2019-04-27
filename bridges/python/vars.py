@@ -8,4 +8,4 @@ packagejsonfile = open(path.dirname(path.realpath(__file__)) + '/../../package.j
 packagejson = loads(packagejsonfile.read())
 packagejsonfile.close()
 
-useragent = 'Leon/' + packagejson['version']
+useragent = 'Leon-Personal-Assistant/' + packagejson['version']
