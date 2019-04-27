@@ -28,7 +28,7 @@ export default version => new Promise(async (resolve, reject) => {
     const repoUrl = sh.stdout.substr(0, sh.stdout.lastIndexOf('.git'))
     const previousTag = sh.stdout.substr(sh.stdout.indexOf('\n') + 1).trim()
     const changelogData = fs.readFileSync(changelog, 'utf8')
-    const compareUrl = `${repoUrl}/compare/${previousTag}...v${version}`
+    const compareUrl = `${repoUrl}/compare/${previousTag}...${version}`
     let tmpData = fs.readFileSync(`scripts/tmp/${tmpChangelog}`, 'utf8')
 
     log.success(`Remote origin URL gotten: ${repoUrl}.git`)
