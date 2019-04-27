@@ -12,5 +12,16 @@
 		"Vérifies si nodejs.org en ligne",
 		"Vérifies si nodejs.org fonctionne",
 		"Vérifies si amazon.com en ligne ou hors ligne"
+	],
+	"haveibeenpwned": [
+		"iifeoluwa.ao@gmail.com a-t-ele été pwned ?",
+		"iifeoluwa.ao@gmail.com a-t-elle été compromise ?",
+		"iifeoluwa.ao@gmail.com a-t-elle été exposée à une brèche ?",
+		"iifeoluwa.ao@gmail.com est-elle toujours non compromise ?",
+		"Est-ce que iifeoluwa.ao@gmail.com est compromise ?",
+    "Est-ce que mon adresse email a été compromise ?",
+		"Vérifies que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été compromise",
+		"Vérifies que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été pwned",
+		"Vérifies que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été exposées à une brèche"
 	]
 }
