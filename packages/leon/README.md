@@ -12,6 +12,7 @@ Leon says good bye.
 
 ```
 (en-US) "Bye"
+
 (fr-FR) "Au revoir"
 ...
 ```
@@ -24,6 +25,7 @@ Leon greets you.
 
 ```
 (en-US) "Hello"
+
 (fr-FR) "Salut"
 ...
 ```
@@ -36,6 +38,7 @@ Leon says some jokes.
 
 ```
 (en-US) "Tell me a joke"
+
 (fr-FR) "Raconte-moi une blague"
 ...
 ```
@@ -48,6 +51,7 @@ Leon says what's the meaning of life.
 
 ```
 (en-US) "What is the meaning of life?"
+
 (fr-FR) "Quel est le but de la vie ?"
 ...
 ```
@@ -60,6 +64,7 @@ Leon tells you about other personal assistants.
 
 ```
 (en-US) "Do you have something to say about Alexa?"
+
 (fr-FR) "Connais-tu quelque chose sur Alexa ?"
 ...
 ```
@@ -72,6 +77,7 @@ Leon gives a random number.
 
 ```
 (en-US) "Give me a random number"
+
 (fr-FR) "Donne-moi un nombre aléatoire"
 ...
 ```
@@ -84,6 +90,7 @@ Leon welcomes you.
 
 ```
 (en-US) "Thank you"
+
 (fr-FR) "Merci"
 ...
 ```
@@ -96,6 +103,7 @@ Leon introduces himself.
 
 ```
 (en-US) "Who are you?"
+
 (fr-FR) "Qui es-tu ?"
 ...
 ```

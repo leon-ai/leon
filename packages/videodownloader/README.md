@@ -16,6 +16,7 @@ Download new video(s) from a YouTube playlist.
 
 ```
 (en-US) "Download new videos from YouTube"
+
 (fr-FR) "Télécharges les nouvelles vidéos depuis YouTube"
 ...
 ```
