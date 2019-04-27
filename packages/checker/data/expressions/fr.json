@@ -14,15 +14,13 @@
 		"Vérifies si amazon.com en ligne ou hors ligne"
 	],
 	"haveibeenpwned": [
-		"iifeoluwa.ao@gmail.com a-t-il été pwned?",
-		"iifeoluwa.ao@gmail.com a-t-il été compromis?",
-		"iifeoluwa.ao@gmail.com a-t-il été exposé à une brèche?",
-		"iifeoluwa.ao@gmail.com est-il toujours sans compromis?",
-		"Est-ce que iifeoluwa.ao@gmail.com est compromis?",
-		"Vérifiez que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été compromis.",
-		"Vérifiez que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été pwned.",
-		"Vérifiez que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été exposés à une brèche.",
-		"Vérifier le statut de iifeoluwa.ao@gmail.com",
-		"Vérifiez le statut de iifeoluwa.ao@gmail.com et louis.grenard@gmail.com"
+		"iifeoluwa.ao@gmail.com a-t-il été pwned ?",
+		"iifeoluwa.ao@gmail.com a-t-il été compromis ?",
+		"iifeoluwa.ao@gmail.com a-t-il été exposée à une brèche ?",
+		"iifeoluwa.ao@gmail.com est-il toujours non compromis ?",
+		"Est-ce que iifeoluwa.ao@gmail.com est compromis ?",
+		"Vérifies que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été compromis",
+		"Vérifies que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été pwned",
+		"Vérifies que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été exposées à une brèche"
 	]
 }
