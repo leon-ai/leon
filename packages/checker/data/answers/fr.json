@@ -23,5 +23,32 @@
       "Merci de fournir au moins un nom de domaine valide.",
       "Vous ne m'avez pas donné de nom de domaine valide."
     ]
+	},
+	"haveibeenpwned": {
+		"no-pwnage": [
+			"Bonne nouvelle, %email% n'a pas été compromis par une violation de données.",
+			"%email% cela me semble correct!"
+		],
+		"pwned": [
+			"Oups, on dirait que %email% a été compromis par une infraction impliquant %breach%.",
+			"%breach% a été impliqué dans une brèche. Malheureusement, %email% a été touché.",
+			"Malheureusement, %email% a été exposé à une violation de données affectant %breach%."
+		],
+		"checking": [
+			"Je cherche un email compromis.",
+			"Essayer de vérifier le statut de pwnage."
+		],
+		"no-email": [
+			"Veuillez fournir une ou plusieurs adresses électroniques que vous devez vérifier.."
+		],
+		"errors": [
+			"Je pense que %website_name% est en panne pour le moment, veuillez réessayer plus tard.",
+			"J'ai du mal à joindre %website_name%. Veuillez vérifier que votre connexion Internet est active.",
+			"Mauvaise nouvelle, %website_name% ne répond pas. Peut-être essayer plus tard?"
+		],
+		"blocked": [
+			"Il y avait un problème d'accès au service de %website_name%.",
+			"Malheureusement, %website_name% ne me donne pas accès à son service."
+		]
 	}
 }
