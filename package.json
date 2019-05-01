@@ -75,7 +75,7 @@
     "babel-plugin-module-resolver": "^3.1.1",
     "babel-preset-env": "^1.6.1",
     "babelify": "^7.3.0",
-    "browser-sync": "^2.26.3",
+    "browser-sync": "^2.26.5",
     "browserify": "^14.4.0",
     "cli-spinner": "^0.2.8",
     "dev-ip": "^1.0.1",
