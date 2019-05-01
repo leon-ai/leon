@@ -11,7 +11,6 @@ import Brain from '@/core/brain'
  * This test will test the Leon's NLP (Natural Language Processing):
  * 1. Browse every expression for each module
  * 2. Check if it matches its respective module
- * 3. Execute the module at least once
  *
  * Do not forget to train your expressions after this test (already included in e2e npm script)
  */

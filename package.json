@@ -19,10 +19,10 @@
   "scripts": {
     "lint": "babel-node scripts/lint.js",
     "test": "npm run test:json && npm run test:unit && npm run test:e2e",
-    "test:unit": "cross-env PIPENV_PIPFILE=bridges/python/Pipfile jest --silent --projects test/unit/unit.jest.json",
+    "test:unit": "npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile jest --silent --projects test/unit/unit.jest.json && npm run train expressions",
     "test:e2e": "npm run test:e2e:nlp-modules && npm run test:e2e:modules",
     "test:e2e:modules": "npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile jest --silent --verbose --projects test/e2e/modules/e2e.modules.jest.json && npm run train expressions",
-    "test:e2e:nlp-modules": "cross-env PIPENV_PIPFILE=bridges/python/Pipfile jest --silent --verbose --setupTestFrameworkScriptFile=./test/paths.setup.js test/e2e/nlp-modules.spec.js && npm run train expressions",
+    "test:e2e:nlp-modules": "npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile jest --silent --verbose --setupTestFrameworkScriptFile=./test/paths.setup.js test/e2e/nlp-modules.spec.js && npm run train expressions",
     "test:json": "jest --silent --projects test/json/json.jest.json",
     "test:module": "babel-node scripts/test-module.js",
     "setup:offline": "babel-node scripts/setup-offline/setup-offline.js",
