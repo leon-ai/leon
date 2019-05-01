@@ -52,6 +52,10 @@
 		"blocked": [
 			"There was an issue acessing %website_name%'s service.",
 			"Unfortunate news, %website_name% isn't granting me access to its service."
-		]
+		],
+    "unavailable": [
+      "It looks like Cloudflare is defending %website_name%, please retry in a few moments.",
+      "Unfortunately, Cloudflare is temporarily blocking your access to %website_name%, please retry in a while."
+    ]
 	}
 }
