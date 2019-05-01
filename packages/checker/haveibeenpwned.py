@@ -29,6 +29,8 @@ def haveibeenpwned(string, entities):
         # Have I Been Pwned API returns a 403 when accessed by unauthorized/banned clients
         if breached == 403:
             return utils.output('end', 'blocked', utils.translate('blocked', { 'website_name': 'Have I Been Pwned' }))
+        elif breached == 503:
+            return utils.output('end', 'blocked', utils.translate('unavailable', { 'website_name': 'Have I Been Pwned' }))
         elif not breached:
             if isLastEmail:
                 return utils.output('end', 'no-pwnage', utils.translate('no-pwnage', data))

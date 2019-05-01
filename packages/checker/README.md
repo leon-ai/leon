@@ -19,7 +19,7 @@ Ping domain names and give you the online state.
 
 ### Have I Been Pwned
 
-Verify if a or several email addresses have been pwned.
+Verify if one or several email addresses have been pwned (thanks to [Have I Been Pwned](https://haveibeenpwned.com/).
 
 #### Usage
 
