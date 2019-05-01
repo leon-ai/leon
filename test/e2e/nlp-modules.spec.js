@@ -36,13 +36,13 @@ describe('NLU modules', () => {
       brain.talk = jest.fn()
 
       beforeAll(async () => {
+        process.env.LEON_LANG = langKeys[i]
+
         // Generate new classifier for the tested language
         await execa.shell(`npm run train expressions:${lang.short}`)
         // Load the new classifier
         await nlu.loadModel(global.paths.classifier)
       })
-
-      process.env.LEON_LANG = langKeys[i]
 
       for (let j = 0; j < packages.length; j += 1) {
         // eslint-disable-next-line no-loop-func
