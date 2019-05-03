@@ -155,4 +155,4 @@ You can also contribute by [buying me a fruit juice](https://donate.getleon.ai).
 Copyright (c) 2019-present, Louis Grenard <louis.grenard@gmail.com>
 
 ## Cheers!
-![Cheers!](https://assets-cdn.github.com/images/icons/emoji/unicode/1f37b.png?v6 "Cheers!")
+![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f37b.png "Cheers!")
