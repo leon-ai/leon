@@ -1,0 +1,13 @@
+{
+	"todolist": {
+    "list_created": [
+      "I created the %list% list."
+    ],
+    "todo_added": [
+      "I added %todo% to your %list% list."
+    ],
+    "todo_deleted": [
+      "I deleted %todo% from your %list% list."
+    ]
+	}
+}

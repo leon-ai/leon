@@ -6,7 +6,7 @@ from time import sleep
 from urllib import parse
 from requests import codes, exceptions
 
-def haveibeenpwned(string, entities):
+def run(string, entities):
     emails = []
       
     for item in entities:

@@ -121,6 +121,7 @@ class Brain {
             lang: langs[process.env.LEON_LANG].short,
             package: obj.classification.package,
             module: obj.classification.module,
+            action: obj.classification.action,
             query: obj.query,
             entities: obj.entities
           }

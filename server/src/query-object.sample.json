@@ -2,6 +2,7 @@
   "lang": "en",
   "package": "checker",
   "module": "isitdown",
+  "action": "run",
   "query": "Check if github.com, mozilla.org and twitter.com are up",
   "entities": [
     {

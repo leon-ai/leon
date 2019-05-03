@@ -1,0 +1,10 @@
+{
+  "todolist": {
+    "added": [
+      "J'ai ajouté %thing% à votre liste %list%."
+    ],
+    "deleted": [
+      "J'ai retiré %thing% de votre liste %list%."
+    ]
+  }
+}

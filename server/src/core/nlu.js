@@ -70,15 +70,15 @@ class Nlu {
     }
 
     const result = await this.classifier.process(langs[process.env.LEON_LANG].short, query)
-    const { intent, score, entities } = result
-    const packageName = intent.substr(0, intent.indexOf(':'))
-    const moduleName = intent.substr(intent.indexOf(':') + 1)
+    const { domain, intent, score, entities } = result
+    const [moduleName, actionName] = intent.split('.')
     let obj = {
       query,
       entities,
       classification: {
-        package: packageName,
+        package: domain,
         module: moduleName,
+        action: actionName,
         confidence: score
       }
     }

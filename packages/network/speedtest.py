@@ -12,7 +12,7 @@ import sys
 import subprocess
 import re
 
-def speedtest(string, entities):
+def run(string, entities):
     """The SpeedTest package will give you information about your network speed """
 
     utils.output('inter', 'testing', utils.translate('testing'))

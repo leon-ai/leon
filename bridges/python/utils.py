@@ -61,6 +61,7 @@ def output(type, code, speech = ''):
 	print(dumps({
 		'package': queryobj['package'],
 		'module': queryobj['module'],
+		'action': queryobj['action'],
 		'lang': queryobj['lang'],
 		'input': queryobj['query'],
 		'entities': queryobj['entities'],

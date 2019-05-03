@@ -1,0 +1,26 @@
+{
+  "todolist": {
+    "create_list": {
+      "expressions": [
+        "Create the named list"
+      ]
+    },
+    "add_todo": {
+      "expressions": [
+        "Add something to my named list"
+      ],
+      "conditions": {
+        "between": [
+          {
+            "test": ""
+          }
+        ]
+      }
+    },
+    "delete_todo": {
+      "expressions": [
+        "Delete something from my named list"
+      ]
+    }
+  }
+}
