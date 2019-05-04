@@ -1,13 +1,25 @@
 {
 	"todolist": {
     "list_created": [
-      "I created the %list% list."
+      "I created the \"%list%\" list."
+    ],
+    "list_already_exists": [
+      "You already have a list named \"%list%\"."
+    ],
+    "list_renamed": [
+      "I renamed the \"%old_list%\" list to \"%new_list%\" list."
+    ],
+    "list_deleted": [
+      "I deleted the \"%list%\" list and all the todos it contained."
     ],
     "todo_added": [
-      "I added %todo% to your %list% list."
+      "I added \"%todo%\" to your \"%list%\" list."
     ],
-    "todo_deleted": [
-      "I deleted %todo% from your %list% list."
+    "todo_completed": [
+      "I completed \"%todo%\" from your \"%list%\" list, congrats!"
+    ],
+    "todo_archived": [
+      "I archived \"%todo%\" from your \"%list%\" list."
     ]
 	}
 }
