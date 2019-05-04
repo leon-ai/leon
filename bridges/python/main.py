@@ -14,7 +14,7 @@ def main():
 	queryobj = utils.getqueryobj()
 	m = import_module('packages.' + queryobj['package'] + '.' + queryobj['module'])
 
-	return getattr(m, queryobj['module'])(queryobj['query'], queryobj['entities'])
+	return getattr(m, queryobj['action'])(queryobj['query'], queryobj['entities'])
 
 if __name__ == '__main__':
 	main()

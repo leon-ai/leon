@@ -1,0 +1,40 @@
+{
+  "todolist": {
+    "create_list": {
+      "expressions": [
+        "Create the list",
+        "Create a list"
+      ]
+    },
+    "rename_list": {
+      "expressions": [
+        "Rename the list to list",
+        "Rename my list to list"
+      ]
+    },
+    "delete_list": {
+      "expressions": [
+        "Delete the list",
+        "Delete my list"
+      ]
+    },
+    "add_todo": {
+      "expressions": [
+        "Add to the list",
+        "Add to my list"
+      ]
+    },
+    "complete_todo": {
+      "expressions": [
+        "Complete from the list",
+        "Complete from my list"
+      ]
+    },
+    "archive_todo": {
+      "expressions": [
+        "Archive from the list",
+        "Archive from my list"
+      ]
+    }
+  }
+}

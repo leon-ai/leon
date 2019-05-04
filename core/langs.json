@@ -13,7 +13,8 @@
         {
           "words": ["merci"],
           "package": "leon",
-          "module": "welcome"
+          "module": "welcome",
+          "action": "run"
         }
       ]
     }

@@ -1,5 +1,9 @@
 {
-	"youtube": [
-		"Download new videos from YouTube"
-	]
+	"youtube": {
+    "run": {
+      "expressions": [
+        "Download new videos from YouTube"
+      ]
+    }
+  }
 }

@@ -4,7 +4,7 @@
 import requests
 import utils
 
-def isitdown(string, entities):
+def run(string, entities):
 	"""Check if a website is down or not"""
 
 	domains = []

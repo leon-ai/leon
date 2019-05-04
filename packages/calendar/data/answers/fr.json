@@ -1,0 +1,25 @@
+{
+  "todolist": {
+    "list_created": [
+      "J'ai créé la liste \"%list%\"."
+    ],
+    "list_already_exists": [
+      "Vous avez déjà une liste nommée \"%list%\"."
+    ],
+    "list_renamed": [
+      "J'ai renommé la liste \"%old_list%\" en liste \"%new_list%\"."
+    ],
+    "list_deleted": [
+      "J'ai supprimé la liste \"%list%\" et toutes les tâches qu'elle contenait."
+    ],
+    "todo_added": [
+      "J'ai ajouté la tâche \"%todo%\" à votre liste \"%list%\"."
+    ],
+    "todo_completed": [
+      "J'ai complété la tâche \"%todo%\" de votre liste \"%list%\", bravo !"
+    ],
+    "todo_archived": [
+      "J'ai archivé la tâche \"%todo%\" de votre liste \"%list%\"."
+    ]
+  }
+}

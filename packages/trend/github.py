@@ -7,7 +7,7 @@ import packages.trend.github_lang as github_lang
 from re import search, escape
 from bs4 import BeautifulSoup
 
-def github(string, entities):
+def run(string, entities):
 	"""Grab the GitHub trends"""
 	
 	# Number of repositories
