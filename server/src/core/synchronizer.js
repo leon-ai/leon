@@ -43,7 +43,8 @@ class Synchronizer {
     return new Promise((resolve) => {
       this.brain.socket.emit('download', {
         package: this.classification.package,
-        module: this.classification.module
+        module: this.classification.module,
+        action: this.classification.action
       })
 
       resolve()
