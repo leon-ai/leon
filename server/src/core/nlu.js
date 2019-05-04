@@ -148,6 +148,7 @@ class Nlu {
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i].words)) {
           obj.classification.package = fallbacks[i].package
           obj.classification.module = fallbacks[i].module
+          obj.classification.action = fallbacks[i].action
           obj.classification.confidence = 1
 
           log.success('Fallback found')

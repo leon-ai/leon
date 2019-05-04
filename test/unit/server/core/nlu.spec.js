@@ -94,8 +94,8 @@ describe('NLU', () => {
       }
 
       expect(Nlu.fallback(obj, [
-        { words: ['query', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module' }
-      ]).classification).toContainEntries([['package', 'fake-pkg'], ['module', 'fake-module'], ['confidence', 1]])
+        { words: ['query', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module', action: 'fake-action' }
+      ]).classification).toContainEntries([['package', 'fake-pkg'], ['module', 'fake-module'], ['action', 'fake-action'], ['confidence', 1]])
     })
   })
 })
