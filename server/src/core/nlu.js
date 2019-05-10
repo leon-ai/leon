@@ -1,8 +1,9 @@
 'use strict'
 
-import { NlpManager } from 'node-nlp'
+import { NlpManager, NerManager } from 'node-nlp'
 import request from 'superagent'
 import fs from 'fs'
+import path from 'path'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
@@ -14,6 +15,7 @@ class Nlu {
     this.brain = brain
     this.request = request
     this.classifier = { }
+    this.nerManager = new NerManager()
 
     log.title('NLU')
     log.success('New instance')
@@ -32,10 +34,10 @@ class Nlu {
 
         try {
           const data = fs.readFileSync(classifierFile, 'utf8')
-          const manager = new NlpManager()
+          const nlpManager = new NlpManager()
 
-          manager.import(data)
-          this.classifier = manager
+          nlpManager.import(data)
+          this.classifier = nlpManager
 
           log.success('Classifier loaded')
           resolve()
@@ -69,7 +71,8 @@ class Nlu {
       return false
     }
 
-    const result = await this.classifier.process(langs[process.env.LEON_LANG].short, query)
+    const lang = langs[process.env.LEON_LANG].short
+    const result = await this.classifier.process(lang, query)
     const { domain, intent, score, entities } = result
     const [moduleName, actionName] = intent.split('.')
     let obj = {
@@ -83,6 +86,48 @@ class Nlu {
       }
     }
 
+    /**
+     * TODO: split into another method or class "Ner"
+     * TODO: write tests
+     * TODO: add to the docs
+     */
+    const expressionsFilePath = path.join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`)
+    const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
+    const { module, action } = obj.classification
+
+    for (let i = 0; i < expressionsObj[module][action].entities.length; i += 1) {
+      const entity = expressionsObj[module][action].entities[i]
+
+      // TODO: dynamic entity matching
+      if (entity.type === 'regex') {
+        //
+      } else if (entity.type === 'trim') {
+        const e = this.nerManager.addNamedEntity(entity.name, entity.type)
+
+        for (let j = 0; j < entity.conditions.length; j += 1) {
+          const condition = entity.conditions[j]
+          /**
+           * TODO: parse "_" conditions and do PascalCase (e.g. after_last = AfterLast)
+           * TODO: check every condition do the right job
+           */
+          const conditionMethod = `add${string.ucfirst(condition.type)}Condition`
+
+          // TODO: dynamic matching
+          if (condition.type === 'between') {
+            e[conditionMethod](lang, condition.from, condition.to)
+          }
+        }
+      }
+    }
+
+    const nerEntities = await this.nerManager.findEntities(obj.query, lang)
+    if (nerEntities.length > 0) {
+      // TODO: do not push existing entities (otherwise entities will be double)
+      obj.entities.push(nerEntities)
+    }
+
+    console.log('entities', obj.entities)
+
     /* istanbul ignore next */
     if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
       this.request
@@ -91,7 +136,7 @@ class Nlu {
         .send({
           version,
           query,
-          lang: langs[process.env.LEON_LANG].short,
+          lang,
           classification: obj.classification
         })
         .then(() => { /* */ })

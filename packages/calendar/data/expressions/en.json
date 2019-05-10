@@ -4,6 +4,51 @@
       "expressions": [
         "Create the list",
         "Create a list"
+      ],
+      "entities": [
+        {
+          "type": "regex",
+          "name": "",
+          "regex": ""
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "create the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "create a",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "create an",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "create my",
+              "to": "list"
+            },
+            {
+              "type": "after",
+              "from": ""
+            },
+            {
+              "type": "before",
+              "to": ""
+            },
+            {
+              "type": "after_last",
+              "from": ""
+            }
+          ]
+        }
       ]
     },
     "rename_list": {
