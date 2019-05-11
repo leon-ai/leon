@@ -116,7 +116,7 @@ class Nlu {
 
       obj = fallback
     }
-
+    
     log.title('NLU')
     log.success('Query found')
 
@@ -158,6 +158,7 @@ class Nlu {
         }
 
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i].words)) {
+          obj.entities = []
           obj.classification.package = fallbacks[i].package
           obj.classification.module = fallbacks[i].module
           obj.classification.action = fallbacks[i].action
