@@ -46,10 +46,9 @@ class Ner {
             for (let j = 0; j < entity.conditions.length; j += 1) {
               const condition = entity.conditions[j]
               /**
-               * TODO: parse "_" conditions and do PascalCase (e.g. after_last = AfterLast)
                * TODO: check every condition do the right job
                */
-              const conditionMethod = `add${string.ucfirst(condition.type)}Condition`
+              const conditionMethod = `add${string.snakeToPascalCase(condition.type)}Condition`
 
               // TODO: dynamic matching
               if (condition.type === 'between') {

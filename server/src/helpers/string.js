@@ -13,6 +13,11 @@ string.pnr = (s, obj) => s.replace(new RegExp(Object.keys(obj).join('|'), 'gi'),
 string.ucfirst = s => s.charAt(0).toUpperCase() + s.substr(1)
 
 /**
+ * Transform snake_case string to PascalCase
+ */
+string.snakeToPascalCase = s => s.split('_').map(chunk => string.ucfirst(chunk)).join('')
+
+/**
  * Random string
  */
 string.random = n => Math.random().toString(36).slice(-n)
