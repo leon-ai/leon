@@ -1,12 +1,12 @@
 'use strict'
 
-import { NlpManager, NerManager } from 'node-nlp'
+import { NlpManager } from 'node-nlp'
 import request from 'superagent'
 import fs from 'fs'
-import path from 'path'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
+import Ner from '@/core/ner'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 
@@ -15,7 +15,7 @@ class Nlu {
     this.brain = brain
     this.request = request
     this.classifier = { }
-    this.nerManager = new NerManager()
+    this.ner = new Ner()
 
     log.title('NLU')
     log.success('New instance')
@@ -86,52 +86,6 @@ class Nlu {
       }
     }
 
-    /**
-     * TODO: split into another method or class "Ner"
-     * TODO: write tests
-     * TODO: add to the docs
-     */
-    const expressionsFilePath = path.join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`)
-    const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
-    const { module, action } = obj.classification
-
-    console.log(expressionsObj[module][action])
-
-
-    if (typeof expressionsObj[module][action].entities !== 'undefined') {
-      for (let i = 0; i < expressionsObj[module][action].entities.length; i += 1) {
-        const entity = expressionsObj[module][action].entities[i]
-
-        // TODO: dynamic entity matching
-        if (entity.type === 'regex') {
-          //
-        } else if (entity.type === 'trim') {
-          const e = this.nerManager.addNamedEntity(entity.name, entity.type)
-
-          for (let j = 0; j < entity.conditions.length; j += 1) {
-            const condition = entity.conditions[j]
-            /**
-             * TODO: parse "_" conditions and do PascalCase (e.g. after_last = AfterLast)
-             * TODO: check every condition do the right job
-             */
-            const conditionMethod = `add${string.ucfirst(condition.type)}Condition`
-
-            // TODO: dynamic matching
-            if (condition.type === 'between') {
-              e[conditionMethod](lang, condition.from, condition.to)
-            }
-          }
-        }
-      }
-
-      const nerEntities = await this.nerManager.findEntities(obj.query, lang)
-      if (nerEntities.length > 0) {
-        obj.entities = nerEntities
-      }
-    }
-
-    console.log('entities', obj.entities)
-
     /* istanbul ignore next */
     if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
       this.request
@@ -165,6 +119,9 @@ class Nlu {
 
     log.title('NLU')
     log.success('Query found')
+
+    // Inject action entities with the others if there is
+    obj.entities = await this.ner.extractActionEntities(lang, obj)
 
     try {
       await this.brain.execute(obj)
