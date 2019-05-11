@@ -9,7 +9,7 @@ import string from '@/helpers/string'
 
 class Ner {
   constructor () {
-    this.nerManager = new NerManager()
+    this.nerManager = { }
     this.supportedEntityTypes = [
       'regex',
       'trim'
@@ -17,6 +17,10 @@ class Ner {
 
     log.title('NER')
     log.success('New instance')
+  }
+
+  static logExtraction (entities) {
+    entities.forEach(ent => log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`))
   }
 
   /**
@@ -27,47 +31,38 @@ class Ner {
       log.title('NER')
       log.info('Searching for entities...')
 
+      // Need to instanciate on the fly to flush entities
+      this.nerManager = new NerManager()
       const { query, entities, classification } = obj
       const expressionsFilePath = path.join(__dirname, '../../../packages', classification.package, `data/expressions/${lang}.json`)
       const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
       const { module, action } = classification
+      const promises = []
 
       // Verify the action has entities
       if (typeof expressionsObj[module][action].entities !== 'undefined') {
         const actionEntities = expressionsObj[module][action].entities
 
-        // Browse action entities
+        /**
+         * Browse action entities
+         * Dynamic injection of the action entities depending of the entity type
+         */
         for (let i = 0; i < actionEntities.length; i += 1) {
           const entity = actionEntities[i]
 
-          // TODO: dynamic entity matching
           if (!this.supportedEntityTypes.includes(entity.type)) {
             reject({ type: 'warning', obj: new Error(`"${entity.type}" action entity type not supported`), code: 'random_ner_type_not_supported', data: { '%entity_type%': entity.type } })
-          } else {
-            // Dynamic injection of the action entities depending of the entity type
-            // eslint-disable-next-line
-            if (entity.type === 'regex') {
-              //
-            } else if (entity.type === 'trim') {
-              const e = this.nerManager.addNamedEntity(entity.name, entity.type)
-
-              for (let j = 0; j < entity.conditions.length; j += 1) {
-                const condition = entity.conditions[j]
-                /**
-                 * TODO: check every condition do the right job
-                 */
-                const conditionMethod = `add${string.snakeToPascalCase(condition.type)}Condition`
-
-                // TODO: dynamic matching
-                if (condition.type === 'between') {
-                  e[conditionMethod](lang, condition.from, condition.to)
-                }
-              }
-            }
+          } else if (entity.type === 'regex') {
+            // TODO: regex case
+          } else if (entity.type === 'trim') {
+            promises.push(this.injectTrimEntity(lang, entity))
           }
         }
 
+        await Promise.all(promises)
+
         const nerEntities = await this.nerManager.findEntities(query, lang)
+        console.log('ner', nerEntities)
         Ner.logExtraction(nerEntities)
 
         resolve(nerEntities)
@@ -83,8 +78,30 @@ class Ner {
     })
   }
 
-  static logExtraction (entities) {
-    entities.forEach(ent => log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`))
+  /**
+   * Inject trim type entities
+   */
+  injectTrimEntity (lang, entity) {
+    return new Promise((resolve) => {
+      console.log('addnamedentity', entity.name, entity.type)
+      const e = this.nerManager.addNamedEntity(entity.name, entity.type)
+
+      for (let j = 0; j < entity.conditions.length; j += 1) {
+        const condition = entity.conditions[j]
+        const conditionMethod = `add${string.snakeToPascalCase(condition.type)}Condition`
+
+        if (condition.type === 'between') {
+          // e.g. list.addBetweenCondition('en', 'create a', 'list')
+          e[conditionMethod](lang, condition.from, condition.to)
+        } else if (condition.type.indexOf('after') !== -1) {
+          e[conditionMethod](lang, condition.from)
+        } else if (condition.type.indexOf('before') !== -1) {
+          e[conditionMethod](lang, condition.to)
+        }
+      }
+
+      resolve()
+    })
   }
 }
 

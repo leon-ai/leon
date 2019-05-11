@@ -34,18 +34,6 @@
               "type": "between",
               "from": "create my",
               "to": "list"
-            },
-            {
-              "type": "after",
-              "from": ""
-            },
-            {
-              "type": "before",
-              "to": ""
-            },
-            {
-              "type": "after_last",
-              "from": ""
             }
           ]
         }
