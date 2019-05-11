@@ -120,14 +120,20 @@ class Nlu {
     log.title('NLU')
     log.success('Query found')
 
-    // Inject action entities with the others if there is
-    obj.entities = await this.ner.extractActionEntities(lang, obj)
+    try {
+      obj.entities = await this.ner.extractActionEntities(lang, obj)
+    } catch (e) {
+      log[e.type](e.obj.message)
+      this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
+    }
 
     try {
+      // Inject action entities with the others if there is
       await this.brain.execute(obj)
     } catch (e) {
       /* istanbul ignore next */
       log[e.type](e.obj.message)
+      this.brain.socket.emit('is-typing', false)
     }
 
     return true
