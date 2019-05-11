@@ -1,0 +1,12 @@
+{
+  "speedtest": {
+    "run": {
+      "expressions": [
+        "Qual è la velocità della mia connessione?",
+        "Puoi fare uno speedtest?",
+        "Fai uno speedtest",
+        "Com'è la mia connessione?",
+      ]
+    }
+  }
+}

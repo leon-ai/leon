@@ -1,0 +1,15 @@
+{
+  "speedtest": {
+    "testing": [
+      "Comincio l'analisi. I risultati del test saranno disponibili a breve...",
+      "Ok comincio l'analisi. Per favore attendi."
+    ],
+    "done": [
+      "Analisi completata. Ecco il risultato:<ul><br><li>Ping: %ping%</li><li>Download: %download%</li><li>Upload: %upload%</li></ul>"
+    ],
+    "error": [
+      "Si è verificato un errore. Non ho potuto eseguire il test.",
+      "Per qualche motivo non sono riuscito ad eseguire lo speedtest."
+    ]
+  }
+}

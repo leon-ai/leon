@@ -1,0 +1,48 @@
+{
+	"answers": {
+		"success": {
+
+		},
+		"errors": {
+			"not_found": "Mi dispiace, non riesco a trovare quel che cerchi",
+			"nlu": "Potrebbe essere dovuto alla compressione della tua lingua, l'errore è: \"%error%\""
+		},
+    "synchronizer": {
+      "syncing_direct": "Sincronizzo il contenuto scaricato sul tuo dispositivo. Ti faccio sapere appena finisco",
+      "synced_direct": "I nuovi contenuti sono stati sincronizzati sul tuo dispositivo",
+      "syncing_google_drive": "Sincronizzo il contenuto scaricato su Google Drive. Ti faccio sapere appena finisco",
+      "synced_google_drive": "I nuovi contenuti sono stati sincronizzati su Google Drive"
+    },
+		"random_errors": [
+			"Mi dispiace ma c'è un problema nel mio sistema",
+			"Mi dispiace ma c'è qualcosa che non va",
+			"Mi dispiace ma mi devi aggiustare",
+			"Mi dispiace ma non posso farlo; credo di aver qualcosa di rotto"
+		],
+		"random_package_module_errors": [
+			"Sembra che io abbia un problema con il modulo %module_name% del pacchetto %package_name%",
+			"Ho un problema con il modulo %module_name% del pacchetto %package_name%",
+			"C'è un errore nel modulo %module_name% del pacchetto %package_name%",
+			"Mi dispiace ma il modulo %module_name% del pacchetto %package_name% è rotto"
+		],
+		"random_unknown_queries": [
+			"Mi dispiace ma ancora non lo so. Però potresti aiutarmi a capirlo: <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
+			"Dovresti insegnarmi questo tipo di richiesta. Puoi farlo qui: <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
+			"Mi dispiace ma non posso risponderti. Lascia che ti risponda in futuro: <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
+			"Mi dispiace ma mi devi educare un po' di più. Potresti aiutarmi qui: <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">contributing to my code</a>",
+			"Mi dispiace ma non capisco la tua richiesta",
+      "Mi dispiace ma sono ancora giovane"
+		],
+		"random_not_sure": [
+			"Potresti ripetere per favore?",
+			"Mi dispiace ma non credo di aver capito",
+			"Mi dispiace ma non sono sicuro di aver capito. Potresti ripetere?",
+			"Scusa ma potresti ripetere",
+			"Mi dispiace ma non mi sono lavato le orecchie questa mattina! Potresti ripetere per favore?"
+		],
+    "random_not_able": [
+      "Mi dispiace ma non so risponderti. Ho capito quel che dici però prova a ripeterlo in un altro modo",
+      "Mi dispiace ma ho un blackout. Non ti posso rispondere ora. Credo di aver capito quel che vuoi dire ma prova a dirmelo in un altro modo"
+    ]
+	}
+}
