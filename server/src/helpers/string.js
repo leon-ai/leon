@@ -27,4 +27,17 @@ string.random = n => Math.random().toString(36).slice(-n)
  */
 string.removeAccents = s => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 
+/**
+ * Remove end-punctuation
+ */
+string.removeEndPunctuation = (s) => {
+  const punctuations = ['.', ';', ':', '?', '!']
+
+  if (punctuations.includes(s[s.length - 1])) {
+    return s.substr(s, s.length - 1)
+  }
+
+  return s
+}
+
 export default string

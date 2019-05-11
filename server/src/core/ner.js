@@ -33,7 +33,9 @@ class Ner {
 
       // Need to instanciate on the fly to flush entities
       this.nerManager = new NerManager()
-      const { query, entities, classification } = obj
+      const { entities, classification } = obj
+      // Remove end-punctuation and add an end-whitespace
+      const query = `${string.removeEndPunctuation(obj.query)} `
       const expressionsFilePath = path.join(__dirname, '../../../packages', classification.package, `data/expressions/${lang}.json`)
       const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
       const { module, action } = classification
@@ -62,7 +64,6 @@ class Ner {
         await Promise.all(promises)
 
         const nerEntities = await this.nerManager.findEntities(query, lang)
-        console.log('ner', nerEntities)
         Ner.logExtraction(nerEntities)
 
         resolve(nerEntities)

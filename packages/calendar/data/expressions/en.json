@@ -7,32 +7,27 @@
       ],
       "entities": [
         {
-          "type": "regex",
-          "name": "color",
-          "regex": "red|blue|green"
-        },
-        {
           "type": "trim",
           "name": "list",
           "conditions": [
             {
               "type": "between",
-              "from": "create the",
+              "from": "the",
               "to": "list"
             },
             {
               "type": "between",
-              "from": "create a",
+              "from": "a",
               "to": "list"
             },
             {
               "type": "between",
-              "from": "create an",
+              "from": "an",
               "to": "list"
             },
             {
               "type": "between",
-              "from": "create my",
+              "from": "my",
               "to": "list"
             }
           ]
