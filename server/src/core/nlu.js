@@ -3,6 +3,7 @@
 import { NlpManager } from 'node-nlp'
 import request from 'superagent'
 import fs from 'fs'
+import path from 'path'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
@@ -121,8 +122,12 @@ class Nlu {
     log.success('Query found')
 
     try {
-      obj.entities = await this.ner.extractActionEntities(lang, obj)
-    } catch (e) {
+      obj.entities = await this.ner.extractActionEntities(
+        lang,
+        path.join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
+        obj
+      )
+    } catch (e) /* istanbul ignore next */ {
       log[e.type](e.obj.message)
       this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
     }
@@ -130,8 +135,7 @@ class Nlu {
     try {
       // Inject action entities with the others if there is
       await this.brain.execute(obj)
-    } catch (e) {
-      /* istanbul ignore next */
+    } catch (e) /* istanbul ignore next */ {
       log[e.type](e.obj.message)
       this.brain.socket.emit('is-typing', false)
     }

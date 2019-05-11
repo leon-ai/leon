@@ -2,7 +2,6 @@
 
 import { NerManager } from 'node-nlp'
 import fs from 'fs'
-import path from 'path'
 
 import log from '@/helpers/log'
 import string from '@/helpers/string'
@@ -26,17 +25,17 @@ class Ner {
   /**
    * Grab action entities and match them with the query
    */
-  extractActionEntities (lang, obj) {
+  extractActionEntities (lang, expressionsFilePath, obj) {
     return new Promise(async (resolve, reject) => {
       log.title('NER')
       log.info('Searching for entities...')
 
       // Need to instanciate on the fly to flush entities
       this.nerManager = new NerManager()
+
       const { entities, classification } = obj
       // Remove end-punctuation and add an end-whitespace
       const query = `${string.removeEndPunctuation(obj.query)} `
-      const expressionsFilePath = path.join(__dirname, '../../../packages', classification.package, `data/expressions/${lang}.json`)
       const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
       const { module, action } = classification
       const promises = []
@@ -64,6 +63,15 @@ class Ner {
         await Promise.all(promises)
 
         const nerEntities = await this.nerManager.findEntities(query, lang)
+
+        // Trim whitespace at the beginning and the end of the entity value
+        nerEntities.map((e) => {
+          e.sourceText = e.sourceText.trim()
+          e.utteranceText = e.utteranceText.trim()
+
+          return e
+        })
+
         Ner.logExtraction(nerEntities)
 
         resolve(nerEntities)
@@ -94,7 +102,7 @@ class Ner {
           // e.g. list.addBetweenCondition('en', 'create a', 'list')
           e[conditionMethod](lang, condition.from, condition.to)
         } else if (condition.type.indexOf('after') !== -1) {
-          e[conditionMethod](lang, condition.from)
+          console.log('eee', e[conditionMethod](lang, condition.from))
         } else if (condition.type.indexOf('before') !== -1) {
           e[conditionMethod](lang, condition.to)
         }
