@@ -116,7 +116,7 @@ class Nlu {
 
       obj = fallback
     }
-    
+
     log.title('NLU')
     log.success('Query found')
 
