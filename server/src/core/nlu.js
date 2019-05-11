@@ -95,35 +95,39 @@ class Nlu {
     const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
     const { module, action } = obj.classification
 
-    for (let i = 0; i < expressionsObj[module][action].entities.length; i += 1) {
-      const entity = expressionsObj[module][action].entities[i]
+    console.log(expressionsObj[module][action])
 
-      // TODO: dynamic entity matching
-      if (entity.type === 'regex') {
-        //
-      } else if (entity.type === 'trim') {
-        const e = this.nerManager.addNamedEntity(entity.name, entity.type)
 
-        for (let j = 0; j < entity.conditions.length; j += 1) {
-          const condition = entity.conditions[j]
-          /**
-           * TODO: parse "_" conditions and do PascalCase (e.g. after_last = AfterLast)
-           * TODO: check every condition do the right job
-           */
-          const conditionMethod = `add${string.ucfirst(condition.type)}Condition`
+    if (typeof expressionsObj[module][action].entities !== 'undefined') {
+      for (let i = 0; i < expressionsObj[module][action].entities.length; i += 1) {
+        const entity = expressionsObj[module][action].entities[i]
 
-          // TODO: dynamic matching
-          if (condition.type === 'between') {
-            e[conditionMethod](lang, condition.from, condition.to)
+        // TODO: dynamic entity matching
+        if (entity.type === 'regex') {
+          //
+        } else if (entity.type === 'trim') {
+          const e = this.nerManager.addNamedEntity(entity.name, entity.type)
+
+          for (let j = 0; j < entity.conditions.length; j += 1) {
+            const condition = entity.conditions[j]
+            /**
+             * TODO: parse "_" conditions and do PascalCase (e.g. after_last = AfterLast)
+             * TODO: check every condition do the right job
+             */
+            const conditionMethod = `add${string.ucfirst(condition.type)}Condition`
+
+            // TODO: dynamic matching
+            if (condition.type === 'between') {
+              e[conditionMethod](lang, condition.from, condition.to)
+            }
           }
         }
       }
-    }
 
-    const nerEntities = await this.nerManager.findEntities(obj.query, lang)
-    if (nerEntities.length > 0) {
-      // TODO: do not push existing entities (otherwise entities will be double)
-      obj.entities.push(nerEntities)
+      const nerEntities = await this.nerManager.findEntities(obj.query, lang)
+      if (nerEntities.length > 0) {
+        obj.entities = nerEntities
+      }
     }
 
     console.log('entities', obj.entities)
