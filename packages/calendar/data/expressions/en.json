@@ -8,8 +8,8 @@
       "entities": [
         {
           "type": "regex",
-          "name": "",
-          "regex": ""
+          "name": "color",
+          "regex": "red|blue|green"
         },
         {
           "type": "trim",

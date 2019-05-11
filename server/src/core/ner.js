@@ -53,7 +53,7 @@ class Ner {
           if (!this.supportedEntityTypes.includes(entity.type)) {
             reject({ type: 'warning', obj: new Error(`"${entity.type}" action entity type not supported`), code: 'random_ner_type_not_supported', data: { '%entity_type%': entity.type } })
           } else if (entity.type === 'regex') {
-            // TODO: regex case
+            promises.push(this.injectRegexEntity(lang, entity))
           } else if (entity.type === 'trim') {
             promises.push(this.injectTrimEntity(lang, entity))
           }
@@ -83,7 +83,6 @@ class Ner {
    */
   injectTrimEntity (lang, entity) {
     return new Promise((resolve) => {
-      console.log('addnamedentity', entity.name, entity.type)
       const e = this.nerManager.addNamedEntity(entity.name, entity.type)
 
       for (let j = 0; j < entity.conditions.length; j += 1) {
@@ -99,6 +98,19 @@ class Ner {
           e[conditionMethod](lang, condition.to)
         }
       }
+
+      resolve()
+    })
+  }
+
+  /**
+   * Inject regex type entities
+   */
+  injectRegexEntity (lang, entity) {
+    return new Promise((resolve) => {
+      const e = this.nerManager.addNamedEntity(entity.name, entity.type)
+
+      e.addRegex(lang, new RegExp(entity.regex, 'g'))
 
       resolve()
     })
