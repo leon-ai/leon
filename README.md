@@ -111,7 +111,7 @@ npm run docker:build
 npm run docker:run
 
 # Run on Windows (you can replace "UTC" by your time zone)
-docker run -e TZ=UTC -d -p 1337:1337 -it leonai/leon
+docker run -e TZ=UTC -p 1337:1337 -it leonai/leon
 
 # Go to http://localhost:1337
 # Hooray! Leon is running
