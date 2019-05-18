@@ -61,7 +61,7 @@ class Nlu {
     log.title('NLU')
     log.info('Processing...')
 
-    query = string.removeAccents(string.ucfirst(query))
+    query = string.ucfirst(query)
 
     if (Object.keys(this.classifier).length === 0) {
       this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
