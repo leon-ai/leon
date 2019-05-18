@@ -102,7 +102,7 @@ class Ner {
           // e.g. list.addBetweenCondition('en', 'create a', 'list')
           e[conditionMethod](lang, condition.from, condition.to)
         } else if (condition.type.indexOf('after') !== -1) {
-          console.log('eee', e[conditionMethod](lang, condition.from))
+          e[conditionMethod](lang, condition.from)
         } else if (condition.type.indexOf('before') !== -1) {
           e[conditionMethod](lang, condition.to)
         }
