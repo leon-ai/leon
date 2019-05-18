@@ -20,10 +20,10 @@
 			"Désolé, je ne peux aboutir à votre demande parce que je suis cassé"
 		],
 		"random_package_module_errors": [
-			"Désolé, il semblerait y avoir un problème avec le module %module_name% de mon paquet %package_name%",
-			"Désolé, j'ai un problème avec le module %module_name% de mon paquet %package_name%",
-			"Désolé, j'ai une erreur avec le module %module_name% de mon paquet %package_name%",
-			"Désolé, le module %module_name% de mon paquet %package_name% est cassé"
+			"Désolé, il semblerait y avoir un problème avec le module \"%module_name%\" de mon paquet \"%package_name%\"",
+			"Désolé, j'ai un problème avec le module \"%module_name%\" de mon paquet \"%package_name%\"",
+			"Désolé, j'ai une erreur avec le module \"%module_name%\" de mon paquet \"%package_name%\"",
+			"Désolé, le module \"%module_name%\" de mon paquet \"%package_name%\" est cassé"
 		],
 		"random_unknown_queries": [
 			"Désolé, je ne connais pas encore ça, mais vous pouvez m'aider à comprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
@@ -43,6 +43,10 @@
     "random_not_able": [
       "Désolé, je ne suis pas capable de répondre. J'ai compris ce que vous avez dit, mais je vous prie de répéter d'une autre façon",
       "Désolé, j'ai un trou de mémoire, je ne peux pas répondre à ça. J'ai compris ce que vous disiez, mais essayez voir d'une autre façon s'il vous plaît"
+    ],
+    "random_ner_type_not_supported": [
+      "Désolé, le type \"%entity_type%\" d'entité d'action n'est pas supporté par ma reconnaissance d'entité. Merci d'<a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">ouvrir une issue</a> afin de reporter ce cas, ce sera très apprécié",
+      "Désolé, ma reconnaissance d'entité ne reconnaît pas le type \"%entity_type%\" d'entité d'action. Merci d'<a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">ouvrir une issue</a> afin de reporter ce cas, ce serait très appréciable"
     ]
 	}
 }

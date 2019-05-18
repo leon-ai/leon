@@ -15,6 +15,13 @@ describe('string helper', () => {
     })
   })
 
+  describe('snakeToPascalCase()', () => {
+    test('transforms snake_case string to PascalCase', () => {
+      expect(string.snakeToPascalCase('leon')).toBe('Leon')
+      expect(string.snakeToPascalCase('this_is_leon')).toBe('ThisIsLeon')
+    })
+  })
+
   describe('random()', () => {
     test('generates a random string with a length defined by a given number', () => {
       const s = string.random(6)
@@ -26,6 +33,14 @@ describe('string helper', () => {
   describe('removeAccents()', () => {
     test('removes accents', () => {
       expect(string.removeAccents('àâèéêëîïôöûüùÛÜç')).toBe('aaeeeeiioouuuUUc')
+    })
+  })
+
+  describe('removeEndPunctuation()', () => {
+    test('removes end-punctuation', () => {
+      expect(string.removeEndPunctuation('Who are you?')).toBe('Who are you')
+      expect(string.removeEndPunctuation('This is great.')).toBe('This is great')
+      expect(string.removeEndPunctuation('This string has no punctuation')).toBe('This string has no punctuation')
     })
   })
 })
