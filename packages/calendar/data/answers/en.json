@@ -4,11 +4,15 @@
       "Alright, I've created the \"%list%\" list.",
       "Done, I created your \"%list%\" list."
     ],
-    "list_name_not_provided": [
+    "list_not_provided": [
       "Please provide me a list name.",
       "Please provide the name of the list you wish to create."
     ],
-    "new_or_old_list_name_not_provided": [
+    "todos_not_provided": [
+      "Please provide me items I should add to your list.",
+      "Please provide elements you want to add to the list."
+    ],
+    "new_or_old_list_not_provided": [
       "Please make sure you provide the list name to rename and its new list name.",
       "Please provide the list name to rename and its new list name."
     ],
@@ -29,18 +33,25 @@
     "list_deleted": [
       "I deleted the \"%list%\" list and all the todos it was contained."
     ],
-    "list_list": [
+    "lists_listed": [
       "You have %lists_nb% lists. Please let me list them below for you:<br><br><ul>%result%</ul>"
     ],
     "list_list_element": [
       "<li>\"%list%\", with %todos_nb% elements in it.</li>",
       "<li>\"%list%\", that contains %todos_nb% items.</li>"
     ],
-    "todo_added": [
-      "I added \"%todo%\" to your \"%list%\" list."
+    "list_todo_element": [
+      "<li>%todo%.</li>"
     ],
-    "todo_completed": [
-      "I completed \"%todo%\" from your \"%list%\" list, congrats!",
+    "todos_added": [
+      "Alright, I added the following to your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "Good luck! The following have been added to your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
+    "todos_uncompleted": [
+      "I uncompleted \"%todo%\" from your \"%list%\" list."
+    ],
+    "todos_completed": [
+      "I completed \"%todo%\" from your \"%list%\" list, keep going!",
       "Well done! I completed \"%todo%\" from your \"%list%\" list."
     ]
 	}

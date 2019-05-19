@@ -27,7 +27,7 @@ def create_list(string, entities):
 
 	# Verify if a list name has been provided
 	if not listname:
-		return utils.output('end', 'list_name_not_provided', utils.translate('list_name_not_provided'))
+		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
 
 	# Verify if list already exists or not
 	if lists.count(List.name == listname) > 0:
@@ -62,7 +62,7 @@ def view_lists(string, entities):
 			'todos_nb': len(listelement['todos'])
 		})
 
-	return utils.output('end', 'list_list', utils.translate('list_list', {
+	return utils.output('end', 'lists_listed', utils.translate('list_list', {
 				'lists_nb': lists_nb,
 				'result': result
 			}
@@ -87,7 +87,7 @@ def rename_list(string, entities):
 
 	# Verify if an old and new list name have been provided
 	if not old_listname or not new_listname:
-		return utils.output('end', 'new_or_old_list_name_not_provided', utils.translate('new_or_old_list_name_not_provided'))
+		return utils.output('end', 'new_or_old_list_not_provided', utils.translate('new_or_old_list_not_provided'))
 
 	# Verify if the old list exists
 	if lists.count(List.name == old_listname) == 0:
@@ -121,7 +121,7 @@ def delete_list(string, entities):
 
 	# Verify if a list name has been provided
 	if not listname:
-		return utils.output('end', 'list_name_not_provided', utils.translate('list_name_not_provided'))
+		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
 
 	# Verify if the list exists
 	if lists.count(List.name == listname) == 0:
@@ -133,17 +133,69 @@ def delete_list(string, entities):
 	return utils.output('end', 'list_deleted', utils.translate('list_deleted', { 'list': listname }))
 
 def add_todos(string, entities):
-	"""WIP"""
+	"""Add todos to a to-do list"""
 
-	return utils.output('end', 'todo_added', utils.translate('todo_added', {
-	  'list': 'fake',
-	  'todo': 'todo 1'
+	# List name
+	listname = ''
+
+	# Todos
+	todos = []
+
+	# Find entities
+	for item in entities:
+		if item['entity'] == 'list':
+			listname = item['sourceText'].lower()
+		elif item['entity'] == 'todos':
+			# Split todos into array and trim start/end-whitespaces
+			todos = [chunk.strip() for chunk in item['sourceText'].lower().split(',')]
+
+	# Verify if a list name has been provided
+	if not listname:
+		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
+
+	# Verify the list exists
+	if lists.count(List.name == listname) == 0:
+		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': listname }))
+
+	# Verify todos have been provided
+	if len(todos) == 0:
+		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
+
+	# Grab existing todos of the list
+	existing_todos = lists.get(List.name == listname)['todos']
+
+	# Add todos to the to-do list
+	lists.update({
+		'todos': todos + existing_todos,
+		'updated_at': int(time())
+	}, List.name == listname)
+
+	result = ''
+	# Fill end result
+	for todo in todos:
+		result += utils.translate('list_todo_element', { 'todo': todo })
+
+	return utils.output('end', 'todos_added', utils.translate('todos_added', {
+	  'list': listname,
+	  'result': result
 	}))
 
 def view_todos(string, entities):
 	"""WIP"""
 
 	# TODO
+
+def uncomplete_todos(string, entities):
+	"""WIP"""
+
+	# Complete potatoes from my list
+	# TODO: look in all lists first, if several then ask to specify from which list
+	# Complete potatoes from the shopping list
+
+	return utils.output('end', 'todo_uncompleted', utils.translate('todo_uncompleted', {
+	  'list': 'fake',
+	  'todo': 'todo 1'
+	}))
 
 def complete_todos(string, entities):
 	"""WIP"""

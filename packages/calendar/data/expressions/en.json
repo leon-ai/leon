@@ -104,6 +104,33 @@
       "expressions": [
         "Add to the list",
         "Add to my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "add",
+              "to": "to"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "the"
+            },
+            {
+              "type": "after_mast",
+              "from": "my"
+            }
+          ]
+        }
       ]
     },
     "complete_todos": {

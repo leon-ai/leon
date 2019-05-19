@@ -4,11 +4,15 @@
       "Entendu, j'ai créé la liste \"%list%\".",
       "C'est fait, j'ai créé votre liste \"%list%\"."
     ],
-    "list_name_not_provided": [
+    "list_not_provided": [
       "Merci de me fournir un nom de liste.",
       "Merci de fournir le nom de la liste que vous souhaitez créer."
     ],
-    "new_or_old_list_name_not_provided": [
+    "todos_not_provided": [
+      "Merci de me fournir les éléments que je dois ajouter à votre liste.",
+      "Merci de fournir les éléments que vous souhaitez ajouter à la liste."
+    ],
+    "new_or_old_list_not_provided": [
       "Merci de vous assurer d'avoir fourni le nom de la liste à renommer et son nouveau nom.",
       "Merci de fournir le nom de la liste à renommer ainsi que son nouveau nom."
     ],
@@ -29,18 +33,25 @@
     "list_deleted": [
       "J'ai supprimé la liste \"%list%\" et tous les éléments qu'elle contenait."
     ],
-    "list_list": [
+    "lists_listed": [
       "Vous avez %lists_nb% listes. Permettez-moi de vous les lister :<br><br><ul>%result%</ul>"
     ],
     "list_list_element": [
       "<li>\"%list%\", avec %todos_nb% éléments.</li>",
       "<li>\"%list%\", contenant %todos_nb% éléments.</li>"
     ],
-    "todo_added": [
-      "J'ai ajouté l'élément \"%todo%\" à votre liste \"%list%\"."
+    "list_todo_element": [
+      "<li>%todo%.</li>"
     ],
-    "todo_completed": [
-      "J'ai complété l'élément \"%todo%\" de votre liste \"%list%\", bravo !",
+    "todos_added": [
+      "Entendu, j'ai ajouté ceci à votre liste \"%list%\" :<br><br><ul>%result%</ul>",
+      "Bonne chance ! Ce qui suit vient d'être ajouté à votre liste \"%list%\" :<br><br><ul>%result%</ul>"
+    ],
+    "todos_uncompleted": [
+      "J'ai décompléter l'élément \"%todo%\" de votre liste \"%list%\"."
+    ],
+    "todos_completed": [
+      "J'ai complété l'élément \"%todo%\" de votre liste \"%list%\", continue ainsi !",
       "Bien joué ! J'ai complété l'élément \"%todo%\" de votre liste \"%list%\"."
     ]
   }
