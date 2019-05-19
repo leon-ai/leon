@@ -55,7 +55,7 @@ def view_lists(string, entities):
 		return utils.output('end', 'no_list', utils.translate('no_list'))
 
 	result = ''
-	# Fill end result
+	# Fill end-result
 	for listelement in lists:
 		result += utils.translate('list_list_element', {
 			'list': listelement['name'],
@@ -164,16 +164,18 @@ def add_todos(string, entities):
 	# Grab existing todos of the list
 	existing_todos = lists.get(List.name == listname)['todos']
 
+	result = ''
+	# Transform todo to a dict for DB and fill end-result
+	for i, todo in enumerate(todos):
+		todo = { 'name': todo, 'is_completed': False }
+		todos[i] = todo
+		result += utils.translate('list_todo_element', { 'todo': todo['name'] })
+
 	# Add todos to the to-do list
 	lists.update({
 		'todos': todos + existing_todos,
 		'updated_at': int(time())
 	}, List.name == listname)
-
-	result = ''
-	# Fill end result
-	for todo in todos:
-		result += utils.translate('list_todo_element', { 'todo': todo })
 
 	return utils.output('end', 'todos_added', utils.translate('todos_added', {
 	  'list': listname,
