@@ -153,10 +153,6 @@ def add_todos(string, entities):
 	if not listname:
 		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
 
-	# Verify the list exists
-	if lists.count(List.name == listname) == 0:
-		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': listname }))
-
 	# Verify todos have been provided
 	if len(todos) == 0:
 		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
@@ -171,21 +167,79 @@ def add_todos(string, entities):
 		todos[i] = todo
 		result += utils.translate('list_todo_element', { 'todo': todo['name'] })
 
-	# Add todos to the to-do list
-	lists.update({
-		'todos': todos + existing_todos,
-		'updated_at': int(time())
-	}, List.name == listname)
+	# Verify the list exists
+	if lists.count(List.name == listname) == 0:
+		# Create the to-do list
+		lists.insert({
+			'name': listname,
+			'todos': todos,
+			'created_at': timestamp,
+			'updated_at': timestamp
+		})
+	else:
+		# Add todos to the to-do list
+		lists.update({
+			'todos': todos + existing_todos,
+			'updated_at': int(time())
+		}, List.name == listname)
 
 	return utils.output('end', 'todos_added', utils.translate('todos_added', {
 	  'list': listname,
 	  'result': result
 	}))
 
-def view_todos(string, entities):
-	"""WIP"""
+def complete_todos(string, entities):
+	"""Complete todos"""
 
-	# TODO
+	# List name
+	listname = ''
+
+	# Todos
+	todos = []
+
+	# Find entities
+	for item in entities:
+		if item['entity'] == 'list':
+			listname = item['sourceText'].lower()
+		elif item['entity'] == 'todos':
+			# Split todos into array and trim start/end-whitespaces
+			todos = [chunk.strip() for chunk in item['sourceText'].lower().split(',')]
+
+	# Verify if a list name has been provided
+	if not listname:
+		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
+
+	# Verify the list exists
+	if lists.count(List.name == listname) == 0:
+		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': listname }))
+
+	# Verify todos have been provided
+	if len(todos) == 0:
+		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
+
+	result = ''
+	updated_todos = []
+	db_todos = lists.get(List.name == listname)['todos']
+
+	# 	# Verify same word in todo. Allow to not give the exact same todo (e.g. 1kg of rice = rice)
+	# 	if db_todo['name'].find(todo) != -1:
+
+	# result += utils.translate('list_todo_element', { 'todo': db_todo['name'] })
+
+	# Complete todos
+	# lists.update({
+	# 	'todos': updated_todos,
+	# 	'updated_at': int(time())
+	# }, List.name == listname)
+
+	# return utils.output('end', 'todos_completed', utils.translate('todos_completed', {
+	#   'list': listname,
+	#   'result': result
+	# }))
+
+	# Complete potatoes from my list
+	# TODO: look in all lists first, if several then ask to specify from which list
+	# Complete potatoes from the shopping list
 
 def uncomplete_todos(string, entities):
 	"""WIP"""
@@ -199,14 +253,8 @@ def uncomplete_todos(string, entities):
 	  'todo': 'todo 1'
 	}))
 
-def complete_todos(string, entities):
+def view_todos(string, entities):
 	"""WIP"""
 
-	# Complete potatoes from my list
-	# TODO: look in all lists first, if several then ask to specify from which list
-	# Complete potatoes from the shopping list
+	# TODO
 
-	return utils.output('end', 'todo_completed', utils.translate('todo_completed', {
-	  'list': 'fake',
-	  'todo': 'todo 1'
-	}))

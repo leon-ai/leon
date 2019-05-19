@@ -114,6 +114,16 @@
               "type": "between",
               "from": "add",
               "to": "to"
+            },
+            {
+              "type": "between",
+              "from": "add",
+              "to": "and"
+            },
+            {
+              "type": "between",
+              "from": "and",
+              "to": "to"
             }
           ]
         },

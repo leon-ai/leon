@@ -48,11 +48,12 @@
       "Good luck! The following have been added to your \"%list%\" list:<br><br><ul>%result%</ul>"
     ],
     "todos_uncompleted": [
-      "I uncompleted \"%todo%\" from your \"%list%\" list."
+      "I uncompleted the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "The following have been uncompleted from your \"%list%\" list:<br><br><ul>%result%</ul>"
     ],
     "todos_completed": [
-      "I completed \"%todo%\" from your \"%list%\" list, keep going!",
-      "Well done! I completed \"%todo%\" from your \"%list%\" list."
+      "Keep going! I completed the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "Well done! The following have been completed from your \"%list%\" list:<br><br><ul>%result%</ul>"
     ]
 	}
 }

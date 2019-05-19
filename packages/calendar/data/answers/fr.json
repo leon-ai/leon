@@ -48,11 +48,12 @@
       "Bonne chance ! Ce qui suit vient d'être ajouté à votre liste \"%list%\" :<br><br><ul>%result%</ul>"
     ],
     "todos_uncompleted": [
-      "J'ai décompléter l'élément \"%todo%\" de votre liste \"%list%\"."
+      "J'ai décomplété ceci de votre liste \"%list%\" :<br><br><ul>%result%</ul>",
+      "Ce qui suit vient d'être décomplété de votre liste \"%list%\" :<br><br><ul>%result%</ul>"
     ],
     "todos_completed": [
-      "J'ai complété l'élément \"%todo%\" de votre liste \"%list%\", continue ainsi !",
-      "Bien joué ! J'ai complété l'élément \"%todo%\" de votre liste \"%list%\"."
+      "Continue ainsi ! J'ai complété ceci de votre liste \"%list%\" :<br><br><ul>%result%</ul>",
+      "Bien joué ! Ce qui suit vient d'être complété de votre liste \"%list%\" :<br><br><ul>%result%</ul>"
     ]
   }
 }
