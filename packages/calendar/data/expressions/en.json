@@ -59,16 +59,6 @@
             },
             {
               "type": "between",
-              "from": "a",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "an",
-              "to": "list"
-            },
-            {
-              "type": "between",
               "from": "my",
               "to": "list"
             }
@@ -90,6 +80,24 @@
       "expressions": [
         "Delete the list",
         "Delete my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
       ]
     },
     "add_todos": {
