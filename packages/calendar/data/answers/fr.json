@@ -3,6 +3,10 @@
     "list_created": [
       "J'ai créé la liste \"%list%\"."
     ],
+    "list_name_not_provided": [
+      "Merci de me fournir un nom de liste.",
+      "Merci de fournir le nom de la liste que vous souhaitez créer."
+    ],
     "list_already_exists": [
       "Vous avez déjà une liste nommée \"%list%\"."
     ],
