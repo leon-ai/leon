@@ -6,6 +6,14 @@
         "Crée une liste"
       ]
     },
+    "view_lists": {
+      "expressions": [
+        "Montre les listes",
+        "Montre mes listes",
+        "Quelles sont les listes ?",
+        "Quelles sont mes listes ?"
+      ]
+    },
     "rename_list": {
       "expressions": [
         "Renomme la liste en liste",
@@ -18,22 +26,16 @@
         "Supprime ma liste"
       ]
     },
-    "add_todo": {
+    "add_todos": {
       "expressions": [
         "Ajoute à la liste",
         "Ajoute à ma liste"
       ]
     },
-    "complete_todo": {
+    "complete_todos": {
       "expressions": [
         "Complète de la liste",
         "Complete de ma liste"
-      ]
-    },
-    "archive_todo": {
-      "expressions": [
-        "Archive de la liste",
-        "Archive de ma liste"
       ]
     }
   }

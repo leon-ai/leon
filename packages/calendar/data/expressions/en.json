@@ -34,6 +34,14 @@
         }
       ]
     },
+    "view_lists": {
+      "expressions": [
+        "Show the lists",
+        "Show my lists",
+        "What are the lists?",
+        "What are my lists?"
+      ]
+    },
     "rename_list": {
       "expressions": [
         "Rename the list to list",
@@ -84,22 +92,16 @@
         "Delete my list"
       ]
     },
-    "add_todo": {
+    "add_todos": {
       "expressions": [
         "Add to the list",
         "Add to my list"
       ]
     },
-    "complete_todo": {
+    "complete_todos": {
       "expressions": [
         "Complete from the list",
         "Complete from my list"
-      ]
-    },
-    "archive_todo": {
-      "expressions": [
-        "Archive from the list",
-        "Archive from my list"
       ]
     }
   }

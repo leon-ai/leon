@@ -1,7 +1,8 @@
 {
 	"todolist": {
     "list_created": [
-      "I created the \"%list%\" list."
+      "Alright, I've created the \"%list%\" list.",
+      "Done, I created your \"%list%\" list."
     ],
     "list_name_not_provided": [
       "Please provide me a list name.",
@@ -10,6 +11,10 @@
     "new_or_old_list_name_not_provided": [
       "Please make sure you provide the list name to rename and its new list name.",
       "Please provide the list name to rename and its new list name."
+    ],
+    "no_list": [
+      "You do not have any list.",
+      "There is no list to show."
     ],
     "list_does_not_exists": [
       "Sorry I can't because the \"%list%\" does not exist.",
@@ -23,6 +28,13 @@
     ],
     "list_deleted": [
       "I deleted the \"%list%\" list and all the todos it contained."
+    ],
+    "list_list": [
+      "You have %lists_nb% lists. Please let me list them below for you:<br><br><ul>%result%</ul>"
+    ],
+    "list_list_element": [
+      "<li>\"%list%\", with %todos_nb% elements in it.</li>",
+      "<li>\"%list%\", that contains %todos_nb% items.</li>"
     ],
     "todo_added": [
       "I added \"%todo%\" to your \"%list%\" list."

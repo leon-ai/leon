@@ -47,7 +47,27 @@ def create_list(string, entities):
 def view_lists(string, entities):
 	"""View to-do lists"""
 
-	# TODO
+	# Lists number
+	lists_nb = len(lists)
+
+	# Verify if a list exists
+	if lists_nb == 0:
+		return utils.output('end', 'no_list', utils.translate('no_list'))
+
+	result = ''
+	# Fill end result
+	for listelement in lists:
+		result += utils.translate('list_list_element', {
+			'list': listelement['name'],
+			'todos_nb': len(listelement['todos'])
+		})
+
+	return utils.output('end', 'list_list', utils.translate('list_list', {
+				'lists_nb': lists_nb,
+				'result': result
+			}
+		)
+	)
 
 def rename_list(string, entities):
 	"""Rename a to-do list"""
@@ -93,7 +113,7 @@ def delete_list(string, entities):
 
 	return utils.output('end', 'list_deleted', utils.translate('list_deleted', { 'list': 'fake' }))
 
-def add_todo(string, entities):
+def add_todos(string, entities):
 	"""WIP"""
 
 	return utils.output('end', 'todo_added', utils.translate('todo_added', {
@@ -106,7 +126,7 @@ def view_todos(string, entities):
 
 	# TODO
 
-def complete_todo(string, entities):
+def complete_todos(string, entities):
 	"""WIP"""
 
 	# Complete potatoes from my list

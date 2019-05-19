@@ -1,7 +1,8 @@
 {
   "todolist": {
     "list_created": [
-      "J'ai créé la liste \"%list%\"."
+      "Entendu, j'ai créé la liste \"%list%\".",
+      "C'est fait, j'ai créé votre liste \"%list%\"."
     ],
     "list_name_not_provided": [
       "Merci de me fournir un nom de liste.",
@@ -10,6 +11,10 @@
     "new_or_old_list_name_not_provided": [
       "Merci de vous assurer d'avoir fourni le nom de la liste à renommer et son nouveau nom.",
       "Merci de fournir le nom de la liste à renommer ainsi que son nouveau nom."
+    ],
+    "no_list": [
+      "Je n'ai trouvé aucune liste.",
+      "Il n'y a pas de liste à montrer."
     ],
     "list_does_not_exists": [
       "Désolé je ne peux pas car la liste \"%list%\" n'éxiste pas.",
@@ -23,6 +28,13 @@
     ],
     "list_deleted": [
       "J'ai supprimé la liste \"%list%\" et toutes les tâches qu'elle contenait."
+    ],
+    "list_list": [
+      "Vous avez %lists_nb% listes. Permettez-moi de vous les lister :<br><br><ul>%result%</ul>"
+    ],
+    "list_list_element": [
+      "<li>\"%list%\", avec %todos_nb% éléments.</li>",
+      "<li>\"%list%\", contenant %todos_nb% éléments.</li>"
     ],
     "todo_added": [
       "J'ai ajouté la tâche \"%todo%\" à votre liste \"%list%\"."
