@@ -7,6 +7,14 @@
       "Merci de me fournir un nom de liste.",
       "Merci de fournir le nom de la liste que vous souhaitez créer."
     ],
+    "new_or_old_list_name_not_provided": [
+      "Merci de vous assurer d'avoir fourni le nom de la liste à renommer et son nouveau nom.",
+      "Merci de fournir le nom de la liste à renommer ainsi que son nouveau nom."
+    ],
+    "list_does_not_exists": [
+      "Désolé je ne peux pas car la liste \"%list%\" n'éxiste pas.",
+      "Je ne peux pas parce que la liste \"%list%\" n'éxiste pas."
+    ],
     "list_already_exists": [
       "Vous avez déjà une liste nommée \"%list%\"."
     ],
@@ -21,9 +29,6 @@
     ],
     "todo_completed": [
       "J'ai complété la tâche \"%todo%\" de votre liste \"%list%\", bravo !"
-    ],
-    "todo_archived": [
-      "J'ai archivé la tâche \"%todo%\" de votre liste \"%list%\"."
     ]
   }
 }

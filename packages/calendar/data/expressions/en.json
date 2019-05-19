@@ -38,6 +38,44 @@
       "expressions": [
         "Rename the list to list",
         "Rename my list to list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "old_list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "a",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "an",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "new_list",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "to"
+            }
+          ]
+        }
       ]
     },
     "delete_list": {

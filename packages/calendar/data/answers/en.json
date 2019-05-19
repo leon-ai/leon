@@ -7,6 +7,14 @@
       "Please provide me a list name.",
       "Please provide the name of the list you wish to create."
     ],
+    "new_or_old_list_name_not_provided": [
+      "Please make sure you provide the list name to rename and its new list name.",
+      "Please provide the list name to rename and its new list name."
+    ],
+    "list_does_not_exists": [
+      "Sorry I can't because the \"%list%\" does not exist.",
+      "I cannot do that because the \"%list%\" does not exist."
+    ],
     "list_already_exists": [
       "You already have a list named \"%list%\"."
     ],
@@ -21,9 +29,6 @@
     ],
     "todo_completed": [
       "I completed \"%todo%\" from your \"%list%\" list, congrats!"
-    ],
-    "todo_archived": [
-      "I archived \"%todo%\" from your \"%list%\" list."
     ]
 	}
 }
