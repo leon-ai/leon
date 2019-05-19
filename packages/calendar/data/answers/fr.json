@@ -16,7 +16,7 @@
       "Je n'ai trouvé aucune liste.",
       "Il n'y a pas de liste à montrer."
     ],
-    "list_does_not_exists": [
+    "list_does_not_exist": [
       "Désolé je ne peux pas car la liste \"%list%\" n'éxiste pas.",
       "Je ne peux pas parce que la liste \"%list%\" n'éxiste pas."
     ],
@@ -27,7 +27,7 @@
       "J'ai renommé la liste \"%old_list%\" en liste \"%new_list%\"."
     ],
     "list_deleted": [
-      "J'ai supprimé la liste \"%list%\" et toutes les tâches qu'elle contenait."
+      "J'ai supprimé la liste \"%list%\" et tous les éléments qu'elle contenait."
     ],
     "list_list": [
       "Vous avez %lists_nb% listes. Permettez-moi de vous les lister :<br><br><ul>%result%</ul>"
@@ -37,10 +37,11 @@
       "<li>\"%list%\", contenant %todos_nb% éléments.</li>"
     ],
     "todo_added": [
-      "J'ai ajouté la tâche \"%todo%\" à votre liste \"%list%\"."
+      "J'ai ajouté l'élément \"%todo%\" à votre liste \"%list%\"."
     ],
     "todo_completed": [
-      "J'ai complété la tâche \"%todo%\" de votre liste \"%list%\", bravo !"
+      "J'ai complété l'élément \"%todo%\" de votre liste \"%list%\", bravo !",
+      "Bien joué ! J'ai complété l'élément \"%todo%\" de votre liste \"%list%\"."
     ]
   }
 }

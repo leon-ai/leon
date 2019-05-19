@@ -16,7 +16,7 @@
       "You do not have any list.",
       "There is no list to show."
     ],
-    "list_does_not_exists": [
+    "list_does_not_exist": [
       "Sorry I can't because the \"%list%\" does not exist.",
       "I cannot do that because the \"%list%\" does not exist."
     ],
@@ -27,7 +27,7 @@
       "I renamed the \"%old_list%\" list to \"%new_list%\" list."
     ],
     "list_deleted": [
-      "I deleted the \"%list%\" list and all the todos it contained."
+      "I deleted the \"%list%\" list and all the todos it was contained."
     ],
     "list_list": [
       "You have %lists_nb% lists. Please let me list them below for you:<br><br><ul>%result%</ul>"
@@ -40,7 +40,8 @@
       "I added \"%todo%\" to your \"%list%\" list."
     ],
     "todo_completed": [
-      "I completed \"%todo%\" from your \"%list%\" list, congrats!"
+      "I completed \"%todo%\" from your \"%list%\" list, congrats!",
+      "Well done! I completed \"%todo%\" from your \"%list%\" list."
     ]
 	}
 }

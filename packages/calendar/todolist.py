@@ -23,7 +23,7 @@ def create_list(string, entities):
 	# Find entities
 	for item in entities:
 		if item['entity'] == 'list':
-			listname = item['sourceText']
+			listname = item['sourceText'].lower()
 
 	# Verify if a list name has been provided
 	if not listname:
@@ -81,9 +81,9 @@ def rename_list(string, entities):
 	# Find entities
 	for item in entities:
 		if item['entity'] == 'old_list':
-			old_listname = item['sourceText']
+			old_listname = item['sourceText'].lower()
 		elif item['entity'] == 'new_list':
-			new_listname = item['sourceText']
+			new_listname = item['sourceText'].lower()
 
 	# Verify if an old and new list name have been provided
 	if not old_listname or not new_listname:
@@ -91,7 +91,7 @@ def rename_list(string, entities):
 
 	# Verify if the old list exists
 	if lists.count(List.name == old_listname) == 0:
-		return utils.output('end', 'list_does_not_exists', utils.translate('list_does_not_exists', { 'list': old_listname }))
+		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': old_listname }))
 
 	# Verify if the new list name already exists
 	if lists.count(List.name == new_listname) > 0:
@@ -109,9 +109,28 @@ def rename_list(string, entities):
 	}))
 
 def delete_list(string, entities):
-	"""WIP"""
+	"""Delete a to-do list"""
 
-	return utils.output('end', 'list_deleted', utils.translate('list_deleted', { 'list': 'fake' }))
+	# List name
+	listname = ''
+
+	# Find entities
+	for item in entities:
+		if item['entity'] == 'list':
+			listname = item['sourceText'].lower()
+
+	# Verify if a list name has been provided
+	if not listname:
+		return utils.output('end', 'list_name_not_provided', utils.translate('list_name_not_provided'))
+
+	# Verify if the list exists
+	if lists.count(List.name == listname) == 0:
+		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': listname }))
+
+	# Delete the to-do list
+	lists.remove(List.name == listname)
+
+	return utils.output('end', 'list_deleted', utils.translate('list_deleted', { 'list': listname }))
 
 def add_todos(string, entities):
 	"""WIP"""
