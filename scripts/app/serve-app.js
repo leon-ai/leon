@@ -32,7 +32,7 @@ export default () => new Promise((resolve) => {
 
   bs.init({
     host: devip(),
-    port: process.env.LEON_WEBAPP_PORT,
+    port: 4242,
     open: true,
     server: {
       baseDir: 'app/',

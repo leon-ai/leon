@@ -8,7 +8,7 @@ export default class Client {
     this.host = host
     this.port = port
     this._input = input
-    this.socket = io.connect(`http://${this.host}:${this.port}`)
+    this.socket = io.connect(`${this.host}:${this.port}`)
     this.history = localStorage.getItem('history')
     this.parsedHistory = []
     this.info = res
@@ -58,7 +58,7 @@ export default class Client {
     })
 
     this.socket.on('download', (data) => {
-      window.location = `http://${config.server_host}:${config.server_port}/v1/downloads?package=${data.package}&module=${data.module}`
+      window.location = `${config.server_host}:${config.server_port}/v1/downloads?package=${data.package}&module=${data.module}`
     })
 
     if (this.history !== null) {
