@@ -21,7 +21,7 @@ socket.on('connect', () => {
   console.log('Waiting for hotword...')
 })
 
-request.get(`${url}/v1/info`)
+request.get('/v1/info')
   .end((err, res) => {
     if (err || !res.ok) {
       if (!err.response) {
