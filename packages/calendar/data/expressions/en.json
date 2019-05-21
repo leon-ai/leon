@@ -132,12 +132,14 @@
           "name": "list",
           "conditions": [
             {
-              "type": "after_last",
-              "from": "the"
+              "type": "between",
+              "from": "the",
+              "to": "list"
             },
             {
-              "type": "after_mast",
-              "from": "my"
+              "type": "between",
+              "from": "my",
+              "to": "list"
             }
           ]
         }

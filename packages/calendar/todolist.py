@@ -4,6 +4,7 @@
 import requests
 import utils
 from time import time
+from tinydb import where
 
 # Package database
 db = utils.db()['db']
@@ -33,14 +34,7 @@ def create_list(string, entities):
 	if lists.count(List.name == listname) > 0:
 		return utils.output('end', 'list_already_exists', utils.translate('list_already_exists', { 'list': listname }))
 
-	timestamp = int(time())
-	# Create the new to-do list
-	lists.insert({
-		'name': listname,
-		'todos': [],
-		'created_at': timestamp,
-		'updated_at': timestamp
-	})
+	dbCreateList(listname)
 
 	return utils.output('end', 'list_created', utils.translate('list_created', { 'list': listname }))
 
@@ -157,8 +151,16 @@ def add_todos(string, entities):
 	if len(todos) == 0:
 		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
 
-	# Grab existing todos of the list
-	existing_todos = lists.get(List.name == listname)['todos']
+	# Grab list
+	db_list = lists.get(List.name == listname)
+	existing_todos = []
+
+	# Verify the list exists
+	if db_list == None:
+		# Create the new to-do list
+		dbCreateList(listname)
+	else:
+		existing_todos = lists.get(List.name == listname)['todos']
 
 	result = ''
 	# Transform todo to a dict for DB and fill end-result
@@ -167,21 +169,11 @@ def add_todos(string, entities):
 		todos[i] = todo
 		result += utils.translate('list_todo_element', { 'todo': todo['name'] })
 
-	# Verify the list exists
-	if lists.count(List.name == listname) == 0:
-		# Create the to-do list
-		lists.insert({
-			'name': listname,
-			'todos': todos,
-			'created_at': timestamp,
-			'updated_at': timestamp
-		})
-	else:
-		# Add todos to the to-do list
-		lists.update({
-			'todos': todos + existing_todos,
-			'updated_at': int(time())
-		}, List.name == listname)
+	# Add todos to the to-do list
+	lists.update({
+		'todos': todos + existing_todos,
+		'updated_at': int(time())
+	}, List.name == listname)
 
 	return utils.output('end', 'todos_added', utils.translate('todos_added', {
 	  'list': listname,
@@ -190,6 +182,8 @@ def add_todos(string, entities):
 
 def complete_todos(string, entities):
 	"""Complete todos"""
+
+	"""WIP"""
 
 	# List name
 	listname = ''
@@ -209,17 +203,67 @@ def complete_todos(string, entities):
 	if not listname:
 		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
 
-	# Verify the list exists
-	if lists.count(List.name == listname) == 0:
-		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': listname }))
-
 	# Verify todos have been provided
 	if len(todos) == 0:
 		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
 
+	# Grab list
+	db_list = lists.get(List.name == listname)
+	existing_todos = []
+
+	# Verify the list exists
+	if db_list == None:
+		# Create the new to-do list
+		dbCreateList(listname)
+	else:
+		existing_todos = lists.get(List.name == listname)['todos']
+
 	result = ''
 	updated_todos = []
+	tmp_todos = []
 	db_todos = lists.get(List.name == listname)['todos']
+
+	# Is there todos in the list
+	if len(db_todos) == 0:
+		updated_todos.append({ 'name': todo, 'is_completed': True })
+
+		for todo in todos:
+			result += utils.translate('list_todo_element', { 'todo': todo })
+	else:
+		for todo in todos:
+			for db_todo in db_todos:
+				# Rough matching (e.g. 1kg of rice = rice)
+				if db_todo['name'].find(todo) != -1:
+					updated_todos.append(db_todo['name'])
+				elif todo not in tmp_todos:
+					tmp_todos.append(todo)
+
+		for updated_todo in updated_todos:
+			for tmp_todo in tmp_todos:
+				if updated_todo.find(tmp_todo) != -1:
+					tmp_todos.remove(tmp_todo)
+				elif tmp_todo not in updated_todos:
+					updated_todos.append(tmp_todo)
+
+		# Set DB existing todos
+		for db_todo in db_todos:
+			if db_todo['name'] not in updated_todos:
+				updated_todos.append(db_todo)
+
+		for i, updated_todo in enumerate(updated_todos):
+			if type(updated_todo) == str:
+				updated_todos[i] = { 'name': updated_todo, 'is_completed': True }
+				result += utils.translate('list_todo_element', { 'todo': updated_todo })
+
+	return utils.output('end', 'todos_completed', utils.translate('todos_completed', {
+	  'list': listname,
+	  'result': result
+	}))
+	# Update todos
+	# lists.update({
+	# 	'todos': updated_todos,
+	# 	'updated_at': int(time())
+	# }, List.name == listname)
 
 	# 	# Verify same word in todo. Allow to not give the exact same todo (e.g. 1kg of rice = rice)
 	# 	if db_todo['name'].find(todo) != -1:
@@ -258,3 +302,14 @@ def view_todos(string, entities):
 
 	# TODO
 
+def dbCreateList(listname):
+	"""Create list in DB"""
+
+	timestamp = int(time())
+
+	lists.insert({
+		'name': listname,
+		'todos': [],
+		'created_at': timestamp,
+		'updated_at': timestamp
+	})
