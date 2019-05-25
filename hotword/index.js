@@ -10,9 +10,9 @@ const record = require('node-record-lpcm16')
 const { Detector, Models } = require('snowboy')
 const io = require('socket.io-client')
 
-process.env.LEON_SERVER_HOST = process.env.LEON_SERVER_HOST || 'http://localhost'
-process.env.LEON_SERVER_PORT = process.env.LEON_SERVER_PORT || 1337
-const url = `${process.env.LEON_SERVER_HOST}:${process.env.LEON_SERVER_PORT}`
+process.env.LEON_HOST = process.env.LEON_HOST || 'http://localhost'
+process.env.LEON_PORT = process.env.LEON_PORT || 1337
+const url = `${process.env.LEON_HOST}:${process.env.LEON_PORT}`
 const socket = io(url)
 
 socket.on('connect', () => {
@@ -21,7 +21,7 @@ socket.on('connect', () => {
   console.log('Waiting for hotword...')
 })
 
-request.get('/v1/info')
+request.get(`${url}/v1/info`)
   .end((err, res) => {
     if (err || !res.ok) {
       if (!err.response) {

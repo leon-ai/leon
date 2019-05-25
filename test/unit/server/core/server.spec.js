@@ -55,8 +55,8 @@ describe('server', () => {
         Server.server.close()
       })
 
-      await Server.listen(process.env.LEON_SERVER_PORT)
-      server.listen(process.env.LEON_SERVER_PORT)
+      await Server.listen(process.env.LEON_PORT)
+      server.listen(process.env.LEON_PORT)
     })
   })
 

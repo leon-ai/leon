@@ -10,18 +10,19 @@ import { onkeydowndocument, onkeydowninput } from './onkeydown.es6'
 
 const config = {
   app: 'webapp',
-  server_host: process.env.LEON_SERVER_HOST,
-  server_port: process.env.LEON_SERVER_PORT,
+  server_host: process.env.LEON_HOST,
+  server_port: process.env.LEON_PORT,
   min_decibels: -40, // Noise detection sensitivity
   max_blank_time: 1000 // Maximum time to consider a blank (ms)
 }
+const serverUrl = process.env.LEON_NODE_ENV === 'production' ? '' : `${config.server_host}:${config.server_port}`
 
 document.addEventListener('DOMContentLoaded', () => {
   const loader = new Loader()
 
   loader.start()
 
-  request.get('/v1/info')
+  request.get(`${serverUrl}/v1/info`)
     .end((err, res) => {
       if (err || !res.ok) {
         console.error(err.response.error.message)
@@ -30,8 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const mic = document.querySelector('button')
         const v = document.querySelector('#version small')
         const logger = document.querySelector('#logger small')
-        const client = new Client(config.app, config.server_host,
-          config.server_port, input, res.body)
+        const client = new Client(config.app, serverUrl, input, res.body)
         let rec = { }
         let chunks = []
         let enabled = false
@@ -47,7 +47,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         logger.innerHTML += sLogger
 
-        client.init(config)
+        client.init()
 
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
