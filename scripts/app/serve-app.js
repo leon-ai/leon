@@ -1,5 +1,4 @@
 import browserSync from 'browser-sync'
-import devip from 'dev-ip'
 
 import buildApp from './build-app'
 
@@ -30,10 +29,11 @@ export default () => new Promise((resolve) => {
     }
   }
 
+  const [, host] = process.env.LEON_HOST.split('//')
   bs.init({
-    host: devip(),
-    port: process.env.LEON_WEBAPP_PORT,
-    open: true,
+    host,
+    port: 4242,
+    open: host !== 'localhost' ? 'external' : true,
     server: {
       baseDir: 'app/',
       index: 'index.html'
