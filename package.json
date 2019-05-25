@@ -50,7 +50,7 @@
   "dependencies": {
     "@ffmpeg-installer/ffmpeg": "^1.0.17",
     "@ffprobe-installer/ffprobe": "^1.0.9",
-    "@google-cloud/speech": "^2.1.1",
+    "@google-cloud/speech": "^3.0.0",
     "@google-cloud/text-to-speech": "^0.3.0",
     "archiver": "^2.1.1",
     "async": "^2.6.0",
