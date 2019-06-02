@@ -3,9 +3,11 @@
 import { NlpManager } from 'node-nlp'
 import request from 'superagent'
 import fs from 'fs'
+import path from 'path'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
+import Ner from '@/core/ner'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 
@@ -14,6 +16,7 @@ class Nlu {
     this.brain = brain
     this.request = request
     this.classifier = { }
+    this.ner = new Ner()
 
     log.title('NLU')
     log.success('New instance')
@@ -32,10 +35,10 @@ class Nlu {
 
         try {
           const data = fs.readFileSync(classifierFile, 'utf8')
-          const manager = new NlpManager()
+          const nlpManager = new NlpManager()
 
-          manager.import(data)
-          this.classifier = manager
+          nlpManager.import(data)
+          this.classifier = nlpManager
 
           log.success('Classifier loaded')
           resolve()
@@ -58,7 +61,7 @@ class Nlu {
     log.title('NLU')
     log.info('Processing...')
 
-    query = string.removeAccents(string.ucfirst(query))
+    query = string.ucfirst(query)
 
     if (Object.keys(this.classifier).length === 0) {
       this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
@@ -69,7 +72,8 @@ class Nlu {
       return false
     }
 
-    const result = await this.classifier.process(langs[process.env.LEON_LANG].short, query)
+    const lang = langs[process.env.LEON_LANG].short
+    const result = await this.classifier.process(lang, query)
     const { domain, intent, score, entities } = result
     const [moduleName, actionName] = intent.split('.')
     let obj = {
@@ -91,7 +95,7 @@ class Nlu {
         .send({
           version,
           query,
-          lang: langs[process.env.LEON_LANG].short,
+          lang,
           classification: obj.classification
         })
         .then(() => { /* */ })
@@ -118,10 +122,22 @@ class Nlu {
     log.success('Query found')
 
     try {
-      await this.brain.execute(obj)
-    } catch (e) {
-      /* istanbul ignore next */
+      obj.entities = await this.ner.extractActionEntities(
+        lang,
+        path.join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
+        obj
+      )
+    } catch (e) /* istanbul ignore next */ {
       log[e.type](e.obj.message)
+      this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
+    }
+
+    try {
+      // Inject action entities with the others if there is
+      await this.brain.execute(obj)
+    } catch (e) /* istanbul ignore next */ {
+      log[e.type](e.obj.message)
+      this.brain.socket.emit('is-typing', false)
     }
 
     return true
@@ -146,6 +162,7 @@ class Nlu {
         }
 
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i].words)) {
+          obj.entities = []
           obj.classification.package = fallbacks[i].package
           obj.classification.module = fallbacks[i].module
           obj.classification.action = fallbacks[i].action

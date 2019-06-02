@@ -4,6 +4,34 @@
       "expressions": [
         "Create the list",
         "Create a list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "a",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "an",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
       ]
     },
     "rename_list": {

@@ -20,10 +20,10 @@
 			"Sorry, I cannot do that because I'm broken"
 		],
 		"random_package_module_errors": [
-			"Sorry, it seems I have a problem with the %module_name% module of my %package_name% package",
-			"Sorry, I have an issue with the %module_name% module of my %package_name% package",
-			"Sorry, I've got an error with the %module_name% module of my %package_name% package",
-			"Sorry, the %module_name% module of my %package_name% package is broken"
+			"Sorry, it seems I have a problem with the \"%module_name%\" module of my \"%package_name%\" package",
+			"Sorry, I have an issue with the \"%module_name%\" module of my \"%package_name%\" package",
+			"Sorry, I've got an error with the \"%module_name%\" module of my \"%package_name%\" package",
+			"Sorry, the \"%module_name%\" module of my \"%package_name%\" package is broken"
 		],
 		"random_unknown_queries": [
 			"Sorry, I still don't know this, but you can help me to understand by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
@@ -43,6 +43,10 @@
     "random_not_able": [
       "Sorry, I'm not able to answer. I understand what you said, but please repeat in another way",
       "Sorry, I have a blackout, I cannot answer that. I understand what you said, but try to repeat in another way"
+    ],
+    "random_ner_type_not_supported": [
+      "Sorry, the \"%entity_type%\" action entity type is not supported by my NER. Please <a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">open an issue</a> to report, that will be much appreciated",
+      "Sorry, my NER does not recognize the \"%entity_type%\" action entity type. Please <a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">open an issue</a> to report, it'll be highly appreciated"
     ]
 	}
 }

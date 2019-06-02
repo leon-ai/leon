@@ -9,7 +9,7 @@ describe('loader helper', () => {
     test('starts spinner', () => {
       expect(loader.start()).toBeObject()
       jest.runTimersToTime(60000)
-      expect(setInterval).toHaveBeenCalledTimes(2)
+      expect(setInterval).toHaveBeenCalledTimes(1)
     })
   })
 

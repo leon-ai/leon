@@ -1,18 +1,17 @@
 FROM node:10-alpine
 WORKDIR /app
-COPY . .
 
 # Install system packages
-RUN apk add --no-cache \
+RUN apk add --no-cache --no-progress \
     ca-certificates \
-    build-base \
     python3 \
     git \
     tzdata
 
 # Upgrade pip and install Pipenv
-RUN pip3 install --upgrade pip \
-	&& pip install pipenv
+RUN pip3 install --no-cache-dir --progress-bar off pipenv
+
+COPY . .
 
 # Install Leon
 # Need to explicitly run the npm preinstall and npm posinstall scripts
