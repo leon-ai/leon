@@ -1,0 +1,20 @@
+{
+	"weather" :{
+	  "weather": [
+		 "The weather in %cit% is %sky% and the temperature is %t% °C.",
+		 "In %cit% we have %t% and %sky%."
+	 ],
+		"error":[
+			"Something get wrong in leonweather package."
+		],
+		"404_city_not_found":[
+			"I can't found this city ! Maybe if you add the country code after the name, like this <b>\"london,uk\"</b> it's will work better !"
+		],
+		"ezy":[
+			"Easy, easy, too many people ask weather in this minute, wait 60 seconds please."
+		],
+		"town" :[
+			"City : %cit%."
+		]
+	}
+}

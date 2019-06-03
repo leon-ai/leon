@@ -1,0 +1,23 @@
+{
+  "weather": {
+      "weather" :{
+        "expressions":[
+          "What's the weather in Paris ?",
+          "Can you tell me the weather in Paris ?"
+        ],
+          "entities": [
+        	{
+            "type": "trim",
+            "name": "city",
+            "conditions": [
+              {
+                "type": "between",
+                "from": "in",
+                "to":  "?"
+              }
+            ]
+          }
+        ]
+      }
+  }
+}

@@ -1,0 +1,20 @@
+{
+	"weather" :{
+	  "weather": [
+		 "La météo de %cit% est %sky% et la température est de %t% °C.",
+		 "A %cit% nous avons %t% et un temps %sky%."
+	 ],
+		"error":[
+			"Quelque chose a posé soucis dans le paquet."
+		],
+		"404_city_not_found":[
+			"je ne trouve pas la ville ! Essayez d'ajouter le code du pays derrière de cette façon : <b>\"london,uk\"</b> ça marchera peut être mieux !"
+		],
+		"ezy":[
+			"Doucement, je reçois trop de demande de trop de gens. Je suis limité à 60 par minutes."
+		],
+		"town" :[
+			"City : %cit%."
+		]
+	}
+}

@@ -1,0 +1,29 @@
+{
+  "weather": {
+      "weather" :{
+        "expressions":[
+          "Quelle est la météo à Paris ?",
+          "Quel temps fait-il à Paris ?",
+          "Peut-tu me donne la météo de Paris ?"
+        ],
+          "entities": [
+        	{
+            "type": "trim",
+            "name": "city",
+            "conditions": [
+              {
+                "type": "between",
+                "from": "à",
+                "to":  "?"
+              },
+              {
+                "type": "between",
+                "from": "de",
+                "to":  "?"
+              }
+            ]
+          }
+        ]
+      }
+  }
+}
