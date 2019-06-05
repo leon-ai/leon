@@ -1,4 +1,4 @@
-![Logo](http://zupimages.net/viewer.php?id=19/23/fn36.png)
+![Logo](https://zupimages.net/up/19/23/fn36.png)
 # Leon Weather
 
 The Leon Weather Package contains modules related with the weather.
