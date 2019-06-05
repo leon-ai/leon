@@ -1,5 +1,7 @@
 {
 	"weather": {
+		"API_key": "0000",
+		"Measure":"C",
 		"options": {}
 	}
 }

@@ -12,6 +12,18 @@ The Leon Weather Package contains modules related with the weather.
   Leon : The weather in paris is clear andthe temperature is 28°C.
   ```
 
-  
+- Ask for the weather and temperatures for 5 days in future :
 
-As you can see answers are not really grammar nazi valid. I work on it !
+  ```
+  User : Can you tell me the weather in Paris tomorrow?
+  Leon : The weather in Paris on 2019-06-06 at 12:00:00 is rain and the temperature is 18.4 °C.
+  ```
+
+  Default hour is 12:00:00
+
+## Future features 
+
+- Average temperature for each day
+- Better answer grammar
+- Ask for the weather for a specific time
+- Some frills such as wind speed etc...
