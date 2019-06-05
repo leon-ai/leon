@@ -1,8 +1,7 @@
 {
 	"weather" :{
 	  "weather": [
-		 "The weather in %cit% is %sky% and the temperature is %t% °C.",
-		 "In %cit% we have %t% and %sky%."
+		 "The weather in %cit% on %date% at %hour% is %sky% and the temperature is %t% °C."
 	 ],
 		"error":[
 			"Something get wrong in leonweather package."
@@ -13,8 +12,8 @@
 		"ezy":[
 			"Easy, easy, too many people ask weather in this minute, wait 60 seconds please."
 		],
-		"town" :[
-			"City : %cit%."
+		"test" :[
+			"City : %cit% %date_ref%."
 		]
 	}
 }
