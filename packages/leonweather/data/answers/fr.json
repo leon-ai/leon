@@ -1,9 +1,11 @@
 {
 	"weather" :{
-	  "weather": [
-		 "La météo de %cit% est %sky% et la température est de %t% °C.",
-		 "A %cit% nous avons %t% et un temps %sky%."
+	  "weather_t": [
+		 "La météo de %cit% le %date% à %hour% est <b>%sky%</b> et la température est de <b>%t%</b>.",
 	 ],
+	 "weather_f": [
+		"La météo de %cit% le %date% à %hour% sera <b>%sky%</b> et la température sera de <b>%t%</b>.",
+	],
 		"error":[
 			"Quelque chose a posé soucis dans le paquet."
 		],

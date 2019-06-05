@@ -1,8 +1,11 @@
 {
 	"weather" :{
-	  "weather": [
-		 "The weather in %cit% on %date% at %hour% is %sky% and the temperature is %t% °C."
+	  "weather_t": [
+		 "The weather in %cit% on <em>%date%</em> at <em>%hour%</em> is <b>%sky%</b> and the temperature is <b>%t%</b>."
 	 ],
+	 "weather_f": [
+		"The weather in %cit% on <em>%date%</em> at <em>%hour%</em> will be <b>%sky%</b> and the temperature will be <b>%t%</b>."
+	],
 		"error":[
 			"Something get wrong in leonweather package."
 		],

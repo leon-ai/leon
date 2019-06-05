@@ -15,6 +15,7 @@ def weather(string, entities):
 	date_flag = 0
 	timex_ref = 'EMPTY_REF'
 	date_ref = 'EMPTY_REF'
+	date_mem = 'EMPTY_REF'
 	# We init API Key & check it
 	API_key = utils.config('API_key')
 	if API_key == '0000':
@@ -32,8 +33,24 @@ def weather(string, entities):
 			timex_ref = item['resolution']['timex']
 			date_ref = date_ref.replace('00:00:00.000', '12:00:00.000')
 		if item['entity'] == 'datetime':
-			date_flag = 1
-			timex_ref = item['values']['timex']
+			if item['resolution']['values'][0]['timex'] != 'PRESENT_REF':
+				date_flag = 1
+			date_ref = item['resolution']['values'][0]['value']
+			date_mem = date_ref
+			hour = int(date_ref[11:13])
+			if hour % 3 != 0:
+				if hour % 3 == 1:
+					hour = hour - 1
+					if hour <= 0:
+						hour = 3
+				elif hour % 3 == 2:
+					hour = hour + 1
+					if hour >= 24:
+						hour = 21
+			if hour < 10:
+				date_ref = date_ref[:11] + '0'+str(hour)+':00:00'
+			else:
+				date_ref = date_ref[:11] + str(hour)+':00:00'
 
 	# If he don't found any city
 	if city == 'vide0':
@@ -79,6 +96,7 @@ def weather(string, entities):
 
 		date = time.strftime("%d-%m-%Y", time.localtime())
 		hour = time.strftime("%H:%M:%S", time.localtime())
+
 	elif date_flag != 0:
 		url = "http://api.openweathermap.org/data/2.5/forecast?appid="+API_key+"&q=" + city
 		content = requests.get(url)
@@ -115,6 +133,8 @@ def weather(string, entities):
 				t = data['list'][i]['main']['temp']
 				sky = data['list'][i]['weather'][0]['main']
 				datetmp = data['list'][i]['dt_txt']
+				if date_mem != 'EMPTY_REF':
+					datetmp = date_mem
 				date = datetmp[:10]
 				hour = datetmp[10:]
 			i = i + 1
@@ -139,11 +159,11 @@ def weather(string, entities):
 
 	city = city.capitalize()
 	sky = sky.lower()
+	t = str(t)+'°'+measure
 
-	return utils.output('end', 'weather', utils.translate('weather', {
-	'cit': city,
-	'sky': sky,
-	't': t,
-	'date': date,
-	'hour': hour
-	}))
+	if date_flag != 0:
+		time_indic = '_f'
+	else:
+		time_indic = '_t'
+
+	return utils.output('end', 'weather', utils.translate('weather'+time_indic, {'cit': city, 'sky': sky, 't': t, 'date': date, 'hour': hour}))
