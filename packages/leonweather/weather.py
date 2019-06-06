@@ -169,4 +169,4 @@ def weather(string, entities):
 	else:
 		time_indic = '_t'
 
-	return utils.output('end', 'weather', utils.translate('weather'+time_indic, {'cit': city, 'sky': sky, 't': t, 'date': date, 'hour': hour}))
+	return utils.output('end', 'weather'+time_indic, utils.translate('weather'+time_indic, {'cit': city, 'sky': sky, 't': t, 'date': date, 'hour': hour}))
