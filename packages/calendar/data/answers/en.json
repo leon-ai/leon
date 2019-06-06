@@ -20,6 +20,10 @@
       "You do not have any list.",
       "There is no list to show."
     ],
+    "empty_list": [
+      "Your \"%list%\" list is empty.",
+      "There is nothing in your \"%list%\" list."
+    ],
     "list_does_not_exist": [
       "Sorry I can't because the \"%list%\" does not exist.",
       "I cannot do that because the \"%list%\" does not exist."
@@ -28,10 +32,10 @@
       "You already have a list named \"%list%\"."
     ],
     "list_renamed": [
-      "I renamed the \"%old_list%\" list to \"%new_list%\" list."
+      "I renamed the \"%old_list%\" list to \"%new_list%\"."
     ],
     "list_deleted": [
-      "I deleted the \"%list%\" list and all the todos it was contained."
+      "I deleted the \"%list%\" list and all the todos it was containing."
     ],
     "lists_listed": [
       "You have %lists_nb% lists. Please let me list them below for you:<br><br><ul>%result%</ul>"
@@ -40,8 +44,25 @@
       "<li>\"%list%\", with %todos_nb% elements in it.</li>",
       "<li>\"%list%\", that contains %todos_nb% items.</li>"
     ],
+    "no_uncompleted_todo": [
+      "You do not have in progress element in your \"%list%\" list.",
+      "You don't have any in progress element in your \"%list%\" list."
+    ],
+    "no_completed_todo": [
+      "And you do not have completed element in your \"%list%\" list.",
+      "And you don't have any completed element in your \"%list%\" list."
+    ],
+    "uncompleted_todos_listed": [
+      "Here are the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br><br>Stay motivated!"
+    ],
+    "completed_todos_listed": [
+      "And here are the completed elements of your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
     "list_todo_element": [
       "<li>%todo%.</li>"
+    ],
+    "list_completed_todo_element": [
+      "<li><strike>%todo%</strike>.</li>"
     ],
     "todos_added": [
       "Alright, I added the following to your \"%list%\" list:<br><br><ul>%result%</ul>",

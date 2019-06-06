@@ -36,16 +36,40 @@
     },
     "view_lists": {
       "expressions": [
-        "Show the lists",
-        "Show my lists",
+        "Show all the lists",
+        "Show all my lists",
         "What are the lists?",
         "What are my lists?"
       ]
     },
+    "view_list": {
+      "expressions": [
+        "What is in my list?",
+        "What is in the list?"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
+      ]
+    },
     "rename_list": {
       "expressions": [
-        "Rename the list to list",
-        "Rename my list to list"
+        "Rename the list to",
+        "Rename my list to"
       ],
       "entities": [
         {
@@ -114,16 +138,6 @@
               "type": "between",
               "from": "add",
               "to": "to"
-            },
-            {
-              "type": "between",
-              "from": "add",
-              "to": "and"
-            },
-            {
-              "type": "between",
-              "from": "and",
-              "to": "to"
             }
           ]
         },
@@ -149,6 +163,70 @@
       "expressions": [
         "Complete from the list",
         "Complete from my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "complete",
+              "to": "from"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
+      ]
+    },
+    "uncomplete_todos": {
+      "expressions": [
+        "Unomplete from the list",
+        "Uncomplete from my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "uncomplete",
+              "to": "from"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
       ]
     }
   }
