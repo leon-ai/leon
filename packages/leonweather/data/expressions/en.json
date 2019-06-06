@@ -12,7 +12,7 @@
             "name": "city",
             "conditions": [
               {
-                "type": "after",
+                "type": "after_first",
                 "from": "in"
               }
             ]

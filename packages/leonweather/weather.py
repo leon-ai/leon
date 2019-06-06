@@ -16,6 +16,8 @@ def weather(string, entities):
 	timex_ref = 'EMPTY_REF'
 	date_ref = 'EMPTY_REF'
 	date_mem = 'EMPTY_REF'
+
+	number_of_cities = 0
 	# We init API Key & check it
 	API_key = utils.config('API_key')
 	if API_key == '0000':
@@ -25,8 +27,9 @@ def weather(string, entities):
 
 	# We search in 'entities' the name of the city
 	for item in entities:
-		if item['entity'] == 'city':
+		if item['entity'] == 'city' and number_of_cities == 0:
 			city = item['sourceText'].lower()
+			number_of_cities = 1
 		if item['entity'] == 'date':
 			date_flag = 1
 			date_ref = item['resolution']['date']
