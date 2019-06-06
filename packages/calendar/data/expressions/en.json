@@ -161,8 +161,10 @@
     },
     "complete_todos": {
       "expressions": [
-        "Complete from the list",
-        "Complete from my list"
+        "Check from the list",
+        "Check from my list",
+        "Complete from my list",
+        "Tick from my list"
       ],
       "entities": [
         {
@@ -171,7 +173,17 @@
           "conditions": [
             {
               "type": "between",
+              "from": "check",
+              "to": "from"
+            },
+            {
+              "type": "between",
               "from": "complete",
+              "to": "from"
+            },
+            {
+              "type": "between",
+              "from": "tick",
               "to": "from"
             }
           ]
@@ -196,8 +208,9 @@
     },
     "uncomplete_todos": {
       "expressions": [
-        "Unomplete from the list",
-        "Uncomplete from my list"
+        "Uncheck from the list",
+        "Uncheck from my list",
+        "Untick from my list"
       ],
       "entities": [
         {
@@ -206,7 +219,12 @@
           "conditions": [
             {
               "type": "between",
-              "from": "uncomplete",
+              "from": "uncheck",
+              "to": "from"
+            },
+            {
+              "type": "between",
+              "from": "untick",
               "to": "from"
             }
           ]

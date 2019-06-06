@@ -44,7 +44,7 @@
       "<li>\"%list%\", with %todos_nb% elements in it.</li>",
       "<li>\"%list%\", that contains %todos_nb% items.</li>"
     ],
-    "no_uncompleted_todo": [
+    "no_unchecked_todo": [
       "You do not have in progress element in your \"%list%\" list.",
       "You don't have any in progress element in your \"%list%\" list."
     ],
@@ -52,8 +52,9 @@
       "And you do not have completed element in your \"%list%\" list.",
       "And you don't have any completed element in your \"%list%\" list."
     ],
-    "uncompleted_todos_listed": [
-      "Here are the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br><br>Stay motivated!"
+    "unchecked_todos_listed": [
+      "Here are the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br>Stay motivated!",
+      "Please find the in progress elements of your \"%list%\" list below:<br><br><ul>%result%</ul><br>Keep going!"
     ],
     "completed_todos_listed": [
       "And here are the completed elements of your \"%list%\" list:<br><br><ul>%result%</ul>"
@@ -66,11 +67,11 @@
     ],
     "todos_added": [
       "Alright, I added the following to your \"%list%\" list:<br><br><ul>%result%</ul>",
-      "Good luck! The following have been added to your \"%list%\" list:<br><br><ul>%result%</ul>"
+      "The following have been added to your \"%list%\" list:<br><br><ul>%result%</ul>"
     ],
-    "todos_uncompleted": [
-      "I uncompleted the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
-      "The following have been uncompleted from your \"%list%\" list:<br><br><ul>%result%</ul>"
+    "todos_unchecked": [
+      "I unchecked the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "The following have been unchecked from your \"%list%\" list:<br><br><ul>%result%</ul>"
     ],
     "todos_completed": [
       "Keep going! I completed the following from your \"%list%\" list:<br><br><ul>%result%</ul>",

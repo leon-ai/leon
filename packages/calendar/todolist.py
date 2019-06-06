@@ -88,23 +88,23 @@ def view_list(string, entities):
 	if len(todos) == 0:
 		return utils.output('end', 'empty_list', utils.translate('empty_list', { 'list': listname }))
 
-	uncompleted_todos = db_todos.search((Query.list == listname) & (Query.is_completed == False))
+	unchecked_todos = db_todos.search((Query.list == listname) & (Query.is_completed == False))
 	completed_todos = db_todos.search((Query.list == listname) & (Query.is_completed == True))
 
-	result_uncompleted_todos = ''
+	result_unchecked_todos = ''
 	result_completed_todos = ''
 
-	if len(uncompleted_todos) == 0:
-		utils.output('inter', 'no_uncompleted_todo', utils.translate('no_uncompleted_todo', { 'list': listname }))
+	if len(unchecked_todos) == 0:
+		utils.output('inter', 'no_unchecked_todo', utils.translate('no_unchecked_todo', { 'list': listname }))
 	else:
-		for todo in uncompleted_todos:
-			result_uncompleted_todos += utils.translate('list_todo_element', {
+		for todo in unchecked_todos:
+			result_unchecked_todos += utils.translate('list_todo_element', {
 				'todo': todo['name']
 			})
 
-		utils.output('inter', 'uncompleted_todos_listed', utils.translate('uncompleted_todos_listed', {
+		utils.output('inter', 'unchecked_todos_listed', utils.translate('unchecked_todos_listed', {
 					'list': listname,
-					'result': result_uncompleted_todos
+					'result': result_unchecked_todos
 				}
 			)
 		)
@@ -323,7 +323,7 @@ def uncomplete_todos(string, entities):
 
 				result += utils.translate('list_todo_element', { 'todo': db_todo['name'] })
 
-	return utils.output('end', 'todo_uncompleted', utils.translate('todos_uncompleted', {
+	return utils.output('end', 'todo_unchecked', utils.translate('todos_unchecked', {
 	  'list': listname,
 	  'result': result
 	}))

@@ -62,7 +62,9 @@ class Ner {
 
         await Promise.all(promises)
 
-        const nerEntities = await this.nerManager.findEntities(query, lang)
+        const nerEntities = (
+          await this.nerManager.findBuiltinEntities(query, lang)
+        ).concat(await this.nerManager.findNamedEntities(query, lang))
 
         // Trim whitespace at the beginning and the end of the entity value
         nerEntities.map((e) => {
