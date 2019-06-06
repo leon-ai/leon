@@ -44,7 +44,7 @@
       "<li>\"%list%\", avec %todos_nb% éléments.</li>",
       "<li>\"%list%\", contenant %todos_nb% éléments.</li>"
     ],
-    "no_uncompleted_todo": [
+    "no_unchecked_todo": [
       "Vous n'avez pas d'élément en attente dans votre liste \"%list%\".",
       "Vous n'avez aucun élément en attente dans votre liste \"%list%\"."
     ],
@@ -52,12 +52,12 @@
       "Et vous n'avez pas d'élément complété dans votre liste \"%list%\".",
       "Et vous n'avez aucun élément complété dans votre liste \"%list%\"."
     ],
-    "uncompleted_todos_listed": [
-      "Voici les éléments en attente de votre liste \"%list\" :<br><br><ul>%result%</ul><br>Restez motivé !",
-      "Voici les éléments en attente de votre liste \"%list\" :<br><br><ul>%result%</ul><br>Continuez ainsi !"
+    "unchecked_todos_listed": [
+      "Voici les éléments en attente de votre liste \"%list%\" :<br><br><ul>%result%</ul><br>Restez motivé !",
+      "Voici les éléments en attente de votre liste \"%list%\" :<br><br><ul>%result%</ul><br>Continuez ainsi !"
     ],
     "completed_todos_listed": [
-      "Et voici les éléments complétés de votre liste \"%list\" :<br><br><ul>%result%</ul>"
+      "Et voici les éléments complétés de votre liste \"%list%\" :<br><br><ul>%result%</ul>"
     ],
     "list_todo_element": [
       "<li>%todo%.</li>"
@@ -69,7 +69,7 @@
       "Entendu, j'ai ajouté ceci à votre liste \"%list%\" :<br><br><ul>%result%</ul>",
       "Ce qui suit vient d'être ajouté à votre liste \"%list%\" :<br><br><ul>%result%</ul>"
     ],
-    "todos_uncompleted": [
+    "todos_unchecked": [
       "J'ai décomplété ceci de votre liste \"%list%\" :<br><br><ul>%result%</ul>",
       "Ce qui suit vient d'être décomplété de votre liste \"%list%\" :<br><br><ul>%result%</ul>"
     ],

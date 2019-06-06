@@ -44,6 +44,8 @@
     },
     "view_list": {
       "expressions": [
+        "Show my list",
+        "Show the list",
         "What is in my list?",
         "What is in the list?"
       ],
@@ -206,7 +208,7 @@
         }
       ]
     },
-    "uncomplete_todos": {
+    "uncheck_todos": {
       "expressions": [
         "Uncheck from the list",
         "Uncheck from my list",

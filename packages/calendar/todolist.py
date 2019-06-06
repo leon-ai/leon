@@ -282,8 +282,8 @@ def complete_todos(string, entities):
 	  'result': result
 	}))
 
-def uncomplete_todos(string, entities):
-	"""Complete todos"""
+def uncheck_todos(string, entities):
+	"""Uncheck todos"""
 
 	# List name
 	listname = ''
