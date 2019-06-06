@@ -275,7 +275,7 @@ def complete_todos(string, entities):
 					'updated_at': timestamp
 				}, (Query.list == listname) & (Query.name == db_todo['name']))
 
-				result += utils.translate('list_todo_element', { 'todo': db_todo['name'] })
+				result += utils.translate('list_completed_todo_element', { 'todo': db_todo['name'] })
 
 	return utils.output('end', 'todos_completed', utils.translate('todos_completed', {
 	  'list': listname,
