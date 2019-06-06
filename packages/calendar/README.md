@@ -1,6 +1,6 @@
 # Calendar Package
 
-The calendar package contains module related to your plans (what's next, schedule, things need to be done, etc.).
+The calendar package contains modules related to your plans (what's next, schedule, things need to be done, etc.).
 
 ## Modules
 
