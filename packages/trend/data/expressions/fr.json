@@ -1,7 +1,8 @@
 {
   "github": {
     "run": {
-      "expressions": ["Quelles sont les tendances sur GitHub ?",
+      "expressions": [
+        "Quelles sont les tendances sur GitHub ?",
         "Donne-moi les tendances GitHub",
         "Qu'est-ce qu'il y a en tendance sur GitHub ?",
         "Quelles sont les tendances sur GH ?",
