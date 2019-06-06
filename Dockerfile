@@ -1,4 +1,5 @@
 FROM node:10-alpine
+ENV IS_DOCKER true
 WORKDIR /app
 
 # Install system packages

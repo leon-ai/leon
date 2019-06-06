@@ -20,6 +20,8 @@ export default () => new Promise(async (resolve) => {
     createDotenv()
 
     resolve()
+  } else if (process.env.IS_DOCKER === 'true') {
+    resolve()
   } else {
     const answer = await prompt({
       type: 'confirm',
