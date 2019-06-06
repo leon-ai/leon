@@ -51,3 +51,6 @@ The Leon Weather Package contains modules related with the weather.
 
 - Average temperature for each day
 - Some frills such as wind speed etc...
+
+## Credit
+Open Weather API : [Go](https://openweathermap.org/api)
