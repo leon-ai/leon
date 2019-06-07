@@ -5,7 +5,7 @@ name = "pypi"
 
 [packages]
 requests = "==2.21.0"
-pytube = "==9.2.2"
+pytube = "==9.5.0"
 tinydb = "==3.9.0"
 beautifulsoup4 = "==4.7.1"
 

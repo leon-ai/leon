@@ -61,7 +61,7 @@
     "execa": "^0.10.0",
     "express": "^4.15.3",
     "fluent-ffmpeg": "^2.1.2",
-    "googleapis": "^25.0.0",
+    "googleapis": "^40.0.0",
     "moment-timezone": "^0.5.14",
     "node-nlp": "^3.1.1",
     "node-wav": "0.0.2",
