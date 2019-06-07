@@ -84,7 +84,7 @@
     "eslint-import-resolver-babel-module": "^4.0.0",
     "eslint-plugin-import": "^2.12.0",
     "eslint-plugin-jest": "^21.17.0",
-    "git-changelog": "git+https://git@github.com/louistiti/git-changelog.git",
+    "git-changelog": "git+https://github.com/leon-ai/git-changelog.git",
     "husky": "^0.14.3",
     "inquirer": "^5.1.0",
     "jest": "^24.7.1",
