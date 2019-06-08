@@ -39,7 +39,7 @@ export default class Chatbot {
 
   isTyping (who, value) {
     if (who === 'leon') {
-      if (value === true) {
+      if (value) {
         this.enableTyping()
       } else if (value === false) {
         this.disableTyping()
@@ -96,7 +96,7 @@ export default class Chatbot {
 
     this.feed.appendChild(container).appendChild(bubble)
 
-    if (save === true) {
+    if (save) {
       this.saveBubble(who, string)
     }
   }

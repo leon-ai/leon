@@ -8,6 +8,10 @@ export default class Recorder {
     this.audioOff = new Audio('../sounds/off.mp3')
     this.playSound = true
     this.info = info
+    this.enabled = false
+    this.hotwordTriggered = false
+    this.noiseDetected = false
+    this.countSilenceAfterTalk = 0
   }
 
   start (playSound = true) {
@@ -30,7 +34,7 @@ export default class Recorder {
 
   onstart (cb) {
     this.recorder.onstart = (e) => {
-      if (this.playSound === true) {
+      if (this.playSound) {
         this.audioOn.play()
       }
       this.el.classList.add('enabled')
@@ -41,7 +45,7 @@ export default class Recorder {
 
   onstop (cb) {
     this.recorder.onstop = (e) => {
-      if (this.playSound === true) {
+      if (this.playSound) {
         this.audioOff.play()
       }
       this.el.classList.remove('enabled')

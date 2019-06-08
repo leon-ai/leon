@@ -31,7 +31,7 @@ describe('TTS', () => {
       tts.synthesizer = { default: { save: jest.fn() } }
       tts.socket = { emit: jest.fn() }
 
-      tts.forward('Hello')
+      tts.forward({ text: 'Hello', isFinalAnswer: true })
       expect(tts.synthesizer.default.save.mock.calls[0][0]).toBe('Hello')
     })
   })
@@ -58,7 +58,7 @@ describe('TTS', () => {
       const tts = new Tts({ }, 'flite')
       tts.forward = jest.fn()
 
-      expect(tts.add('Hello')[0].substr('Hello'.length)).toBe(' ')
+      expect(tts.add('Hello', true)[0].text.substr('Hello'.length)).toBe(' ')
     })
 
     test('adds speech to the queue ', async () => {

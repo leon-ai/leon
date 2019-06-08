@@ -12,12 +12,21 @@ export default class Client {
     this.parsedHistory = []
     this.info = res
     this.chatbot = new Chatbot()
+    this._recorder = { }
   }
 
   set input (newInput) {
     if (typeof newInput !== 'undefined') {
       this._input.value = newInput
     }
+  }
+
+  set recorder (recorder) {
+    this._recorder = recorder
+  }
+
+  get recorder () {
+    return this._recorder
   }
 
   init () {
@@ -46,11 +55,42 @@ export default class Client {
       const ctx = new AudioContext()
       const source = ctx.createBufferSource()
 
-      ctx.decodeAudioData(data, (buffer) => {
+      ctx.decodeAudioData(data.buffer, (buffer) => {
         source.buffer = buffer
 
         source.connect(ctx.destination)
         source.start(0)
+
+        /**
+         * When the after speech option is enabled and
+         * the answer is a final one
+         */
+        if (this.info.after_speech && data.is_final_answer) {
+          // Enable recording after the speech + 500ms
+          setTimeout(() => {
+            this._recorder.start(false)
+            this._recorder.enabled = true
+
+            // Check every second if the recorder is enabled to stop it
+            const id = setInterval(() => {
+              if (this._recorder.enabled) {
+                if (this._recorder.countSilenceAfterTalk <= 8) {
+                  // Stop recording if there was no noise for 8 seconds
+                  if (this._recorder.countSilenceAfterTalk === 8) {
+                    this._recorder.stop(false)
+                    this._recorder.enabled = false
+                    this._recorder.countSilenceAfterTalk = 0
+                    clearInterval(id)
+                  } else if (!this._recorder.noiseDetected) {
+                    this._recorder.countSilenceAfterTalk += 1
+                  } else {
+                    clearInterval(id)
+                  }
+                }
+              }
+            }, 1000)
+          }, data.duration + 500)
+        }
       })
 
       cb('audio-received')

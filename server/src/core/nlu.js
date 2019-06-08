@@ -106,7 +106,7 @@ class Nlu {
       const fallback = Nlu.fallback(obj, langs[process.env.LEON_LANG].fallbacks)
 
       if (fallback === false) {
-        this.brain.talk(`${this.brain.wernicke('random_unknown_queries')}.`)
+        this.brain.talk(`${this.brain.wernicke('random_unknown_queries')}.`, true)
         this.brain.socket.emit('is-typing', false)
 
         log.title('NLU')

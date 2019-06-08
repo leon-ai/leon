@@ -48,7 +48,7 @@ class Brain {
   /**
    * Make Leon talk
    */
-  talk (rawSpeech) {
+  talk (rawSpeech, end = false) {
     log.title('Leon')
     log.info('Talking...')
 
@@ -57,7 +57,7 @@ class Brain {
         // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
         const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, ' ')
 
-        this.tts.add(speech)
+        this.tts.add(speech, end)
       }
 
       this.socket.emit('answer', rawSpeech)
@@ -101,7 +101,7 @@ class Brain {
 
       // Ask to repeat if Leon is not sure about the request
       if (obj.classification.confidence < langs[process.env.LEON_LANG].min_confidence) {
-        this.talk(`${this.wernicke('random_not_sure')}.`)
+        this.talk(`${this.wernicke('random_not_sure')}.`, true)
         this.socket.emit('is-typing', false)
 
         resolve()
@@ -179,7 +179,7 @@ class Brain {
           // Check if there is an output (no module error)
           if (this.finalOutput !== '') {
             this.finalOutput = JSON.parse(this.finalOutput).output
-            this.talk(this.finalOutput.speech.toString())
+            this.talk(this.finalOutput.speech.toString(), true)
 
             /* istanbul ignore next */
             // Synchronize the downloaded content if enabled

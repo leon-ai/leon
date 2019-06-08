@@ -38,7 +38,7 @@
       "I deleted the \"%list%\" list and all the todos it was containing."
     ],
     "lists_listed": [
-      "You have %lists_nb% lists. Please let me list them below for you:<br><br><ul>%result%</ul>"
+      "You have %lists_nb% lists. Please let me list them for you:<br><br><ul>%result%</ul>"
     ],
     "list_list_element": [
       "<li>\"%list%\", with %todos_nb% elements in it.</li>",
@@ -54,7 +54,7 @@
     ],
     "unchecked_todos_listed": [
       "Here are the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br>Stay motivated!",
-      "Please find the in progress elements of your \"%list%\" list below:<br><br><ul>%result%</ul><br>Keep going!"
+      "Please find the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br>Keep going!"
     ],
     "completed_todos_listed": [
       "And here are the completed elements of your \"%list%\" list:<br><br><ul>%result%</ul>"
