@@ -54,8 +54,8 @@ class Brain {
 
     if (rawSpeech !== '') {
       if (process.env.LEON_TTS === 'true') {
-        // Stripe HTML
-        const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, '')
+        // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
+        const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, ' ')
 
         this.tts.add(speech)
       }
