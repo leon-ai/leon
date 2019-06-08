@@ -87,9 +87,9 @@ def sunrise(payload):
     Get when the sun rises.
     """
 
-    time = datetime.fromtimestamp(payload["wtr"].get_sunrise_time())
+    dt = payload["wtr"].get_sunrise_time("date")
 
-    return utils.output("end", "sunrise", utils.translate("sunrise", {"time": time, "city": payload["city"]}))
+    return utils.output("end", "sunrise", utils.translate("sunrise", {"time": dt.strftime("%H:%M:%S"), "city": payload["city"]}))
 
 @load_config
 @acquire_weather
@@ -98,6 +98,6 @@ def sunset(payload):
     Get when the sun sets.
     """
 
-    time = datetime.fromtimestamp(payload["wtr"].get_sunset_time())
+    dt = payload["wtr"].get_sunset_time("date")
 
-    return utils.output("end", "sunset", utils.translate("sunset", {"time": time, "city": payload["city"]}))
+    return utils.output("end", "sunset", utils.translate("sunset", {"time": dt.strftime("%H:%M:%S"), "city": payload["city"]}))
