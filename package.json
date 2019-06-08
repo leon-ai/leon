@@ -63,12 +63,12 @@
     "express": "^4.15.3",
     "fluent-ffmpeg": "^2.1.2",
     "googleapis": "^40.0.0",
+    "ibm-watson": "^4.1.3",
     "moment-timezone": "^0.5.14",
     "node-nlp": "^3.1.1",
     "node-wav": "0.0.2",
     "socket.io": "^2.0.2",
-    "superagent": "^3.5.2",
-    "watson-developer-cloud": "^3.16.0"
+    "superagent": "^3.5.2"
   },
   "devDependencies": {
     "@babel/cli": "^7.4.4",

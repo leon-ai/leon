@@ -1,6 +1,6 @@
 'use strict'
 
-import Tts from 'watson-developer-cloud/text-to-speech/v1'
+import Tts from 'ibm-watson/text-to-speech/v1'
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
@@ -55,18 +55,17 @@ synthesizer.save = (speech, em, cb) => {
 
   synthesizer.conf.text = speech
 
-  client.synthesize(synthesizer.conf, (err, audio) => {
+  client.synthesize(synthesizer.conf, (err, result) => {
     if (err) {
       log.error(`Watson TTS: ${err}`)
       return
     }
 
-    fs.writeFile(file, audio, 'binary', (err) => {
-      if (err) {
-        log.error(`Watson TTS: ${err}`)
-        return
-      }
+    const wStream = fs.createWriteStream(file)
 
+    result.pipe(wStream)
+
+    wStream.on('finish', () => {
       const ffmpeg = new Ffmpeg()
       ffmpeg.setFfmpegPath(ffmpegPath)
       ffmpeg.setFfprobePath(ffprobePath)
@@ -79,6 +78,10 @@ synthesizer.save = (speech, em, cb) => {
           cb(file)
         }
       })
+    })
+
+    wStream.on('error', (err) => {
+      log.error(`Watson TTS: ${err}`)
     })
   })
 }
