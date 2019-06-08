@@ -68,7 +68,7 @@ export default class Client {
         if (this.info.after_speech && data.is_final_answer) {
           // Enable recording after the speech + 500ms
           setTimeout(() => {
-            this._recorder.start(false)
+            this._recorder.start()
             this._recorder.enabled = true
 
             // Check every second if the recorder is enabled to stop it
@@ -77,7 +77,7 @@ export default class Client {
                 if (this._recorder.countSilenceAfterTalk <= 8) {
                   // Stop recording if there was no noise for 8 seconds
                   if (this._recorder.countSilenceAfterTalk === 8) {
-                    this._recorder.stop(false)
+                    this._recorder.stop()
                     this._recorder.enabled = false
                     this._recorder.countSilenceAfterTalk = 0
                     clearInterval(id)
