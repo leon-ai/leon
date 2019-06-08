@@ -25,6 +25,7 @@
     "test:e2e:nlp-modules": "npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile jest --silent --verbose --setupTestFrameworkScriptFile=./test/paths.setup.js test/e2e/nlp-modules.spec.js && npm run train expressions",
     "test:json": "jest --silent --projects test/json/json.jest.json",
     "test:module": "babel-node scripts/test-module.js",
+    "setup:offline": "babel-node scripts/setup-offline/setup-offline.js",
     "setup:offline-stt": "babel-node scripts/setup-offline/run-setup-stt.js",
     "setup:offline-tts": "babel-node scripts/setup-offline/run-setup-tts.js",
     "setup:offline-hotword": "babel-node scripts/setup-offline/run-setup-hotword.js",
