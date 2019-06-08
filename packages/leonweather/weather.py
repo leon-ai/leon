@@ -25,6 +25,9 @@ def weather(string, entities):
 	# We init and check the measure ID (C or F or K)
 	measure = utils.config('Measure')
 
+	# We init "lang"
+	language = utils.info()
+	language = language['lang']
 	# We search in 'entities' the name of the city
 	for item in entities:
 		if item['entity'] == 'city' and number_of_cities == 0:
@@ -63,7 +66,7 @@ def weather(string, entities):
 	date_ref = date_ref[:19]
 
 	if date_flag == 0 or timex_ref == 'PRESENT_REF':
-		url = "http://api.openweathermap.org/data/2.5/weather?appid="+API_key+"&q=" + city
+		url = "http://api.openweathermap.org/data/2.5/weather?appid="+API_key+"&q=" + city + "&lang=" + language
 		content = requests.get(url)
 		data = content.json()
 
@@ -83,7 +86,7 @@ def weather(string, entities):
 				elif pt != -1:
 					city = city[:pt]
 
-				url = "http://api.openweathermap.org/data/2.5/weather?appid="+API_key+"&q=" + city
+				url = "http://api.openweathermap.org/data/2.5/weather?appid="+API_key+"&q=" + city + "&lang=" + language
 				content = requests.get(url)
 				data = content.json()
 				if data['cod'] == "404":
@@ -101,7 +104,7 @@ def weather(string, entities):
 		hour = time.strftime("%H:%M:%S", time.localtime())
 
 	elif date_flag != 0:
-		url = "http://api.openweathermap.org/data/2.5/forecast?appid="+API_key+"&q=" + city
+		url = "http://api.openweathermap.org/data/2.5/forecast?appid="+API_key+"&q=" + city + "&lang=" + language
 		content = requests.get(url)
 		data = content.json()
 
@@ -118,7 +121,7 @@ def weather(string, entities):
 					city = city[:es]
 				elif pt != -1:
 					city = city[:pt]
-				url = "http://api.openweathermap.org/data/2.5/forecast?appid="+API_key+"&q=" + city
+				url = "http://api.openweathermap.org/data/2.5/forecast?appid="+API_key+"&q=" + city + "&lang=" + language
 				content = requests.get(url)
 				data = content.json()
 				if data['cod'] == "404":
