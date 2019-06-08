@@ -1,7 +1,7 @@
 import { shell } from 'execa'
 
 import log from '@/helpers/log'
-import loader from '@/helpers/loader';
+import loader from '@/helpers/loader'
 
 /**
  * Specific module testing script
@@ -17,7 +17,7 @@ import loader from '@/helpers/loader';
   try {
     loader.start()
     await shell('npm run train expressions:en')
-    const cmd = await shell(`cross-env PIPENV_PIPFILE=bridges/python/Pipfile jest --silent --config=./test/e2e/modules/e2e.modules.jest.json packages/${pkg}/test/${module}.spec.js && npm run train expressions`)
+    const cmd = await shell(`cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --silent --config=./test/e2e/modules/e2e.modules.jest.json packages/${pkg}/test/${module}.spec.js && npm run train expressions`)
 
     log.default(cmd.stdout)
     log.default(cmd.stderr)

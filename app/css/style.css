@@ -50,6 +50,10 @@ a {
   color: inherit;
 }
 
+ul li {
+  margin-left: 20px;
+}
+
 body {
   color: #FFF;
   background-color: #151718;
