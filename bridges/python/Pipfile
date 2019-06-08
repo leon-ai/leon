@@ -10,6 +10,3 @@ tinydb = "==3.9.0"
 beautifulsoup4 = "==4.7.1"
 
 [dev-packages]
-
-[requires]
-python_version = "3.6"

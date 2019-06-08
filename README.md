@@ -65,7 +65,7 @@ Sounds good for you? Then let's get started!
 
 - [Node.js](https://nodejs.org/) 10 or 11
 - npm >= 5
-- [Python](https://www.python.org/downloads/) 3.6.x
+- [Python](https://www.python.org/downloads/) >= 3
 - [Pipenv](https://docs.pipenv.org)
 - Supported OSes: Linux, macOS and Windows
 
