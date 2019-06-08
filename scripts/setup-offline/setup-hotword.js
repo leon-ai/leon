@@ -40,7 +40,6 @@ export default () => new Promise(async (resolve, reject) => {
       resolve()
     } catch (e) {
       log.error(`Failed to install offline hotword detection: ${e}`)
-      log.warning('Please run the process again with Node.js 8. Tips: use nvm to easily manage your Node.js versions')
       reject(e)
     }
   }

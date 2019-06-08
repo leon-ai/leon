@@ -1,6 +1,6 @@
 'use strict'
 
-import Stt from 'watson-developer-cloud/speech-to-text/v1'
+import Stt from 'ibm-watson/speech-to-text/v1'
 import fs from 'fs'
 import { Duplex } from 'stream'
 

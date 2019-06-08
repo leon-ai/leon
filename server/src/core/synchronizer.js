@@ -1,6 +1,6 @@
 'use strict'
 
-import google from 'googleapis'
+import { google } from 'googleapis'
 import fs from 'fs'
 import { waterfall } from 'async'
 
