@@ -1,0 +1,8 @@
+{
+  "OpenWeatherMap": {
+    "api_key": "YOUR_OPEN_WEATHER_MAP_TOKEN",
+    "pro": false,
+    "temperature_units": "celsius",
+    "options": {}
+  }
+}

@@ -1,0 +1,41 @@
+# Weather Package
+
+The weather package contains modules which include getting the latest weather forecast.
+
+## Modules
+
+### OpenWeatherMap
+
+#### Requirements
+- PyOWM
+
+#### Usage
+
+1. Register a new account on [OpenWeatherMap Sign Up](https://openweathermap.org/sign_up) unless you already have one.
+2. Generate a new API key on [OpenWeatherMap API keys](https://home.openweathermap.org/api_keys).
+3. Duplicate the file `packages/weather/config/config.sample.json` and rename it `config.json`.
+4. Copy the API key in `packages/weather/config/config.json` and set the other options to your liking.
+5. This package uses PyOWM. To install it `cd bridges/python`
+6. pipenv install pyowm`
+7. Done!
+
+```
+(en-US)
+- "What's the weather like in Milan?"
+- "When is the sun going to set in Rome?"
+
+(it-IT)
+- "Che tempo fa a Milano?"
+- "Quando tramonta il sole a Roma?"
+...
+```
+
+#### Options
+- `pro`: Set this to `true` if you have a premium subscription.
+- `temperature_units`: Choose which temperature scale to use. ["celsius", "fahrenheit"]
+
+#### Links
+
+- [OpenWeatherMap API](https://developers.google.com/youtube/v3/getting-started)
+- [PyOWM GitHub](https://github.com/csparpa/pyowm)
+- [PyOWM Docs](https://pyowm.readthedocs.io/en/latest/)

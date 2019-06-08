@@ -1,0 +1,29 @@
+{
+  "OpenWeatherMap": {
+    "acquiring": [
+      "I'll take a look.",
+      "Let me see..."
+    ],
+    "current_weather": [
+      "%detailed_status% over %city%. It's %temperature% degree %temperature_units%. Humidity is %humidity% percent."
+    ],
+    "sunrise": [
+      "Today the sun rises at %time% in %city%."
+    ],
+    "sunset": [
+      "Today the sun sets set at %time% in %city%."
+    ],
+    "invalid_temperature_units": [
+      "Invalid temperature unit. Check your config.json file."
+    ],
+    "settings_error": [
+      "Please check your settings. An error occured because %reason%. The message is: %message%."
+    ],
+    "request_error": [
+      "I could not understand your request."
+    ],
+    "connection_error": [
+      "I'm having issuse reaching the server."
+    ]
+  }
+}
