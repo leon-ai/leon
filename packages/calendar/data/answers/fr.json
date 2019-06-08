@@ -6,11 +6,11 @@
     ],
     "list_not_provided": [
       "Merci de me fournir un nom de liste.",
-      "Merci de fournir le nom de la liste que vous souhaitez créer."
+      "Merci de fournir le nom d'une liste."
     ],
     "todos_not_provided": [
-      "Merci de me fournir les éléments que je dois ajouter à votre liste.",
-      "Merci de fournir les éléments que vous souhaitez ajouter à la liste."
+      "Merci de me fournir des éléments.",
+      "Merci de fournir des éléments."
     ],
     "new_or_old_list_not_provided": [
       "Merci de vous assurer d'avoir fourni le nom de la liste à renommer et son nouveau nom.",

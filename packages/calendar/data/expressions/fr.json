@@ -170,7 +170,9 @@
     "uncheck_todos": {
       "expressions": [
         "Décoche de la liste",
-        "Décoche de ma liste"
+        "Décoche de ma liste",
+        "Invalide de ma liste",
+        "Remet sur la liste"
       ],
       "entities": [
         {
@@ -186,6 +188,16 @@
               "type": "between",
               "from": "decoche",
               "to": "de"
+            },
+            {
+              "type": "between",
+              "from": "invalide",
+              "to": "de"
+            },
+            {
+              "type": "between",
+              "from": "remet",
+              "to": "sur"
             }
           ]
         },

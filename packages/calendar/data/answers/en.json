@@ -6,11 +6,11 @@
     ],
     "list_not_provided": [
       "Please provide me a list name.",
-      "Please provide the name of the list you wish to create."
+      "Please provide the name of a list."
     ],
     "todos_not_provided": [
-      "Please provide me items I should add to your list.",
-      "Please provide elements you want to add to the list."
+      "Please provide me items.",
+      "Please provide elements."
     ],
     "new_or_old_list_not_provided": [
       "Please make sure you provide the list name to rename and its new list name.",
