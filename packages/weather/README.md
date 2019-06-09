@@ -23,6 +23,7 @@ The weather package contains modules which include getting the latest weather fo
 (en-US)
 - "What's the weather like in Milan?"
 - "When is the sun going to set in Rome?"
+- "Is it windy in Chicago?"
 
 (it-IT)
 - "Che tempo fa a Milano?"
@@ -33,6 +34,7 @@ The weather package contains modules which include getting the latest weather fo
 #### Options
 - `pro`: Set this to `true` if you have a premium subscription.
 - `temperature_units`: Choose which temperature scale to use. ["celsius", "fahrenheit"]
+- `wind_speed_units`: Choose which units to use for the wind speed. ["meters per second", "miles per hour"] More units coming soon.
 
 #### Links
 
