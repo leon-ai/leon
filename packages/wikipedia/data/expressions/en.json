@@ -1,0 +1,47 @@
+{
+  "wikipedia": {
+    "summary": {
+      "expressions": [
+        "Search on Wikipedia",
+        "Search on Wikipedia for",
+        "Search",
+        "On wikipedia look for"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "page",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "wikipedia"
+            },
+            {
+              "type": "between",
+              "from": "wikipedia",
+              "to": "?"
+            },
+            {
+              "type": "after_last",
+              "from": "for"
+            },
+            {
+              "type": "between",
+              "from": "for",
+              "to": "?"
+            },
+            {
+              "type": "between",
+              "from": "search",
+              "to": "on"
+            },
+            {
+              "type": "after_last",
+              "from": "search"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
