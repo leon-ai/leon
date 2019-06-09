@@ -22,6 +22,34 @@
         }
       ]
     },
+    "temperature": {
+      "expressions": [
+        "Is it cold in",
+        "How cold is it in",
+        "Is it hot in",
+        "How hot is it in",
+        "Is it warm in",
+        "How warm is it in",
+        "What's the temperature like in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    },
     "sunrise": {
       "expressions": [
         "When is the sun going to rise in",

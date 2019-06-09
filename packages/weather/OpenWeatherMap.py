@@ -81,6 +81,28 @@ def current_weather(payload):
 
 @load_config
 @acquire_weather
+def temperature(payload):
+    """
+    Get the current temperature.
+    """
+
+    temperatures = payload["wtr"].get_temperature(payload["temperature_units"])   # {"temp_max": 10.5, "temp": 9.7, "temp_min": 9.0}
+
+    return utils.output(
+        "end",
+        "temperature",
+        utils.translate(
+            "temperature",
+            {
+                "city": payload["city"],
+                "temperature": temperatures["temp"],
+                "temperature_units": payload["temperature_units"].capitalize()
+            }
+        )
+    )
+
+@load_config
+@acquire_weather
 def sunrise(payload):
     """
     Get when the sun rises.

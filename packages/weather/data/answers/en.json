@@ -7,6 +7,9 @@
     "current_weather": [
       "%detailed_status% over %city%. It's %temperature% degree %temperature_units%. Humidity is %humidity% percent."
     ],
+    "temperature": [
+      "It's %temperature% degree %temperature_units% in %city%."
+    ],
     "sunrise": [
       "Today the sun rises at %time% in %city%."
     ],
