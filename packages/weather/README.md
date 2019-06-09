@@ -15,8 +15,8 @@ The weather package contains modules which include getting the latest weather fo
 2. Generate a new API key on [OpenWeatherMap API keys](https://home.openweathermap.org/api_keys).
 3. Duplicate the file `packages/weather/config/config.sample.json` and rename it `config.json`.
 4. Copy the API key in `packages/weather/config/config.json` and set the other options to your liking.
-5. This package uses PyOWM. To install it `cd bridges/python`
-6. pipenv install pyowm`
+5. This package uses PyOWM. To install it: from inside leon directory `cd bridges/python`
+6. `pipenv install pyowm`
 7. Done!
 
 ```
