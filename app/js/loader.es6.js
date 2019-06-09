@@ -8,7 +8,7 @@ export default class Loader {
     this.body = document.querySelector('body')
 
     this.load.on('settingup', (state) => {
-      if (state === true) {
+      if (state) {
         this.body.classList.add('settingup')
       } else {
         this.body.classList.remove('settingup')

@@ -34,34 +34,219 @@
         }
       ]
     },
+    "view_lists": {
+      "expressions": [
+        "Show all the lists",
+        "Show all my lists",
+        "What are the lists?",
+        "What are my lists?"
+      ]
+    },
+    "view_list": {
+      "expressions": [
+        "Show my list",
+        "Show the list",
+        "What is in my list?",
+        "What is in the list?"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
+      ]
+    },
     "rename_list": {
       "expressions": [
-        "Rename the list to list",
-        "Rename my list to list"
+        "Rename the list to",
+        "Rename my list to"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "old_list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "new_list",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "to"
+            }
+          ]
+        }
       ]
     },
     "delete_list": {
       "expressions": [
         "Delete the list",
         "Delete my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
       ]
     },
-    "add_todo": {
+    "add_todos": {
       "expressions": [
         "Add to the list",
         "Add to my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "add",
+              "to": "to"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
       ]
     },
-    "complete_todo": {
+    "complete_todos": {
       "expressions": [
-        "Complete from the list",
-        "Complete from my list"
+        "Check from the list",
+        "Check from my list",
+        "Complete from my list",
+        "Tick from my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "check",
+              "to": "from"
+            },
+            {
+              "type": "between",
+              "from": "complete",
+              "to": "from"
+            },
+            {
+              "type": "between",
+              "from": "tick",
+              "to": "from"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
       ]
     },
-    "archive_todo": {
+    "uncheck_todos": {
       "expressions": [
-        "Archive from the list",
-        "Archive from my list"
+        "Uncheck from the list",
+        "Uncheck from my list",
+        "Untick from my list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "uncheck",
+              "to": "from"
+            },
+            {
+              "type": "between",
+              "from": "untick",
+              "to": "from"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "the",
+              "to": "list"
+            },
+            {
+              "type": "between",
+              "from": "my",
+              "to": "list"
+            }
+          ]
+        }
       ]
     }
   }

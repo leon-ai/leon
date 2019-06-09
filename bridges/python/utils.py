@@ -96,11 +96,6 @@ def config(key):
 
 	return obj[queryobj['module']][key]
 
-def info():
-	"""Get information from the current query"""
-
-	return { 'lang': lang, 'package': package, 'module': module }
-
 def createdldir():
 	"""Create the downloads folder of a current module"""
 
@@ -116,5 +111,6 @@ def db(dbtype = 'tinydb'):
 	for a specific package"""
 
 	if dbtype == 'tinydb':
-		db = TinyDB(dirname + '/../../packages/' + queryobj['package'] + '/data/db/' + queryobj['package'] + '.json')
+		ext = '.json' if environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
+		db = TinyDB(dirname + '/../../packages/' + queryobj['package'] + '/data/db/' + queryobj['package'] + ext)
 		return { 'db': db, 'query': Query, 'operations': operations }

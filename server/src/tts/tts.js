@@ -59,15 +59,19 @@ class Tts {
   }
 
   /**
-   * Forward buffer audio file to the client
+   * Forward buffer audio file and duration to the client
    * and delete audio file once it has been forwarded
    */
   forward (speech) {
-    this.synthesizer.default.save(speech, this.em, (file) => {
+    this.synthesizer.default.save(speech.text, this.em, (file, duration) => {
       /* istanbul ignore next */
       const bitmap = fs.readFileSync(file)
       /* istanbul ignore next */
-      this.socket.emit('audio-forwarded', Buffer.from(bitmap), (confirmation) => {
+      this.socket.emit('audio-forwarded', {
+        buffer: Buffer.from(bitmap),
+        is_final_answer: speech.isFinalAnswer,
+        duration
+      }, (confirmation) => {
         if (confirmation === 'audio-received') {
           fs.unlinkSync(file)
         }
@@ -98,14 +102,16 @@ class Tts {
   /**
    * Add speeches to the queue
    */
-  add (speech) {
+  add (text, isFinalAnswer) {
     /**
      * Flite fix. When the string is only one word,
      * Flite cannot save to a file. So we add a space at the end of the string
      */
-    if (this.provider === 'flite' && speech.indexOf(' ') === -1) {
-      speech += ' '
+    if (this.provider === 'flite' && text.indexOf(' ') === -1) {
+      text += ' '
     }
+
+    const speech = { text, isFinalAnswer }
 
     if (this.speeches.length > 0) {
       this.speeches.push(speech)

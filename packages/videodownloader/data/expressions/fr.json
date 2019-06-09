@@ -2,7 +2,7 @@
 	"youtube": {
     "run": {
       "expressions": [
-        "Télécharges les nouvelles vidéos depuis YouTube"
+        "Télécharge les nouvelles vidéos depuis YouTube"
       ]
     }
   }

@@ -72,8 +72,9 @@ synthesizer.save = (speech, em, cb) => {
       /* istanbul ignore if */
       if (err) log.error(err)
       else {
-        em.emit('saved', data.streams[0].duration * 1000)
-        cb(file)
+        const duration = data.streams[0].duration * 1000
+        em.emit('saved', duration)
+        cb(file, duration)
       }
     })
   })

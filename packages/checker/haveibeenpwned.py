@@ -7,6 +7,8 @@ from urllib import parse
 from requests import codes, exceptions
 
 def run(string, entities):
+    """Verify if one or several email addresses have been pwned"""
+    
     emails = []
       
     for item in entities:
