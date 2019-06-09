@@ -1,0 +1,28 @@
+{
+	"youtube": {
+		"success": [
+			"Tutti i nuovi video sono stati scaricati"
+		],
+		"downloading": [
+			"Sto scaricando %video_title%.",
+			"Comincio a scaricare %video_title%."
+		],
+		"reaching_playlist": [
+			"Sto cominciando a scaricare i video dalla playlist."
+		],
+		"nb_to_download": [
+			"Scaricherò %nb% video.",
+			"Ci sono %nb% new video da scaricare."
+		],
+		"nothing_to_download": [
+			"Non c'è nessun nuovo video da scaricare. Aggiungi un nuovo video alla playlist.",
+			"Non ho video da scaricare."
+		],
+		"settings_errors": [
+			"Per favore controlla le mie impostazioni. C'è un errore per questa ragione: %reason%, che include il messaggio: %message%."
+		],
+		"request_errors": [
+			"Non riesco a raggiungere YouTube al momento. Controlla che le impostazioni siano corrette e che la connessione sia funzioante"
+		]
+	}
+}

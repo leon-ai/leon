@@ -17,6 +17,12 @@
           "action": "run"
         }
       ]
+    },
+    "it-IT": {
+      "short": "it",
+      "min_confidence": 0.5,
+      "fallbacks": [
+      ]
     }
 	}
 }
