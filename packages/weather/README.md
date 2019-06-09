@@ -39,3 +39,8 @@ The weather package contains modules which include getting the latest weather fo
 - [OpenWeatherMap API](https://developers.google.com/youtube/v3/getting-started)
 - [PyOWM GitHub](https://github.com/csparpa/pyowm)
 - [PyOWM Docs](https://pyowm.readthedocs.io/en/latest/)
+
+#### TODO
+- Implement some sort of caching mechanism. PyOWM does support caching, but it's a bit messy. It might be easier to implement it from scratch, perhaps with some sort of db like TinyDb which is already supported by leon.
+- Implement `pro` functionality for OWM.
+- Add more weather services and related (UV, pollution, sky events, etc.).
