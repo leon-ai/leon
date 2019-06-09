@@ -4,7 +4,9 @@
       "expressions": [
         "Search on Wikipedia",
         "Search on Wikipedia for",
+        "Search for ",
         "Search",
+        "Look for",
         "On wikipedia look for"
       ],
       "entities": [
