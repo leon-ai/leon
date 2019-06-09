@@ -4,8 +4,7 @@
 import functools
 from datetime import datetime
 
-import pyowm
-from pyowm.caches.lrucache import LRUCache
+from pyowm import OWM
 
 import utils
 
@@ -27,9 +26,9 @@ def load_config(func):
             return utils.output("end", "invalid_temperature_units", utils.translate("invalid_temperature_units"))
 
         if pro:
-            payload["owm"] = pyowm.OWM(api_key, subscription_type="pro")
+            payload["owm"] = OWM(api_key, subscription_type="pro")
         else:
-            payload["owm"] = pyowm.OWM(api_key)
+            payload["owm"] = OWM(api_key)
 
         return func(payload)
     return wrapper_load_config
