@@ -103,6 +103,27 @@ def temperature(payload):
 
 @load_config
 @acquire_weather
+def humidity(payload):
+    """
+    Get the current humidity.
+    """
+
+    humidity = payload["wtr"].get_humidity()
+
+    return utils.output(
+        "end",
+        "humidity",
+        utils.translate(
+            "humidity",
+            {
+                "city": payload["city"],
+                "humidity": humidity
+            }
+        )
+    )
+
+@load_config
+@acquire_weather
 def sunrise(payload):
     """
     Get when the sun rises.

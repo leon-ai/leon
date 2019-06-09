@@ -50,6 +50,29 @@
         }
       ]
     },
+    "humidity": {
+      "expressions": [
+        "Is it humid in",
+        "What is the humidity in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    },
     "sunrise": {
       "expressions": [
         "When is the sun going to rise in",

@@ -10,6 +10,9 @@
     "temperature": [
       "It's %temperature% degree %temperature_units% in %city%."
     ],
+    "humidity": [
+      "The humidity in %city% is %humidity% percent."
+    ],
     "sunrise": [
       "Today the sun rises at %time% in %city%."
     ],
