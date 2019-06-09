@@ -18,7 +18,7 @@ def summary(string, entities):
             utils.output("inter", "acquiring", utils.translate("acquiring"))
 
             try:
-                summary = wikipedia.summary(entity["sourceText"])
+                summary = wikipedia.summary(entity["sourceText"], sentences=utils.config("sentences"))
                 return utils.output("end", "summary", utils.translate("summary", {"summary": summary}))
 
             except DisambiguationError as pages:
