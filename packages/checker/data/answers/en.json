@@ -50,7 +50,7 @@
 			"Bad news, %website_name% is not responding. Maybe try at a later time?"
 		],
 		"blocked": [
-			"There was an issue acessing %website_name%'s service.",
+			"There was an issue accessing %website_name%'s service.",
 			"Unfortunate news, %website_name% isn't granting me access to its service."
 		],
     "unavailable": [
