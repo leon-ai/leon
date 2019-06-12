@@ -44,6 +44,13 @@
           ]
         }
       ]
+    },
+    "random": {
+      "expressions": [
+        "Search a random page on Wikipedia",
+        "Search a random Wikipedia page",
+        "Give me a random page on Wikipedia"
+      ]
     }
   }
 }

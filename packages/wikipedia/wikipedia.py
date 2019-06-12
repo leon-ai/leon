@@ -11,7 +11,7 @@ wikipedia.set_lang(utils.config("lang"))
 
 def summary(string, entities):
     """
-    Get the summary of the requested wikipedia page.
+    Get the summary of the requested Wikipedia page.
     """
 
     for entity in entities:
@@ -55,4 +55,26 @@ def summary(string, entities):
         "end",
         "no_entities_error",
         utils.translate("no_entities_error")
+    )
+
+
+def random(string, entities):
+    """
+    Get the summary of a random Wikipedia page.
+    """
+    utils.output(
+        "inter",
+        "acquiring",
+        utils.translate("acquiring")
+    )
+
+    summary = wikipedia.summary(title=wikipedia.random())
+
+    return utils.output(
+        "end",
+        "summary",
+        utils.translate(
+            "summary",
+            {"summary": summary}
+        )
     )
