@@ -1,0 +1,18 @@
+{
+  "wolframalpha": {
+    "acquiring": [
+      "Right away!",
+      "One second please.",
+      "Just a second..."
+    ],
+    "result": [
+      "%result%"
+    ],
+    "no_query": [
+      "Please, specify a query."
+    ],
+    "connection_error": [
+      "I'm having issuse reaching the server."
+    ]
+  }
+}

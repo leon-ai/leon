@@ -1,0 +1,41 @@
+{
+  "wolframalpha": {
+    "query": {
+      "expressions": [
+        "On Wolfram Alpha",
+        "On Wolfram Alpha search for",
+        "On Wolfram Alpha search for the",
+        "Search for this on Wolfram Alpha"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "query",
+          "conditions": [
+            {
+              "type": "before_first",
+              "from": "on"
+            },
+            {
+              "type": "after_last",
+              "from": "Alpha"
+            },
+            {
+              "type": "after_last",
+              "from": "for"
+            },
+            {
+              "type": "after_last",
+              "from": "the"
+            },
+            {
+              "type": "between",
+              "from": "for",
+              "to": "on"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
