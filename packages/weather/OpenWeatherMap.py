@@ -2,11 +2,10 @@
 # -*- coding:utf-8 -*-
 
 import functools
-from datetime import datetime
-
-from pyowm import OWM
 
 import utils
+
+from pyowm import OWM
 
 
 # Decorators
@@ -23,8 +22,15 @@ def load_config(func):
         payload["temperature_units"] = utils.config("temperature_units")
         payload["wind_speed_units"] = utils.config("wind_speed_units")
 
-        if (payload["temperature_units"] != "celsius") and (payload["temperature_units"] != "fahrenheit"):
-            return utils.output("end", "invalid_temperature_units", utils.translate("invalid_temperature_units"))
+        if (
+            (payload["temperature_units"] != "celsius")
+            and (payload["temperature_units"] != "fahrenheit")
+        ):
+            return utils.output(
+                "end",
+                "invalid_temperature_units",
+                utils.translate("invalid_temperature_units")
+            )
 
         if payload["wind_speed_units"] == "meters per seconds":
             payload["wind_speed_units_response"] = payload["wind_speed_units"]
@@ -33,7 +39,11 @@ def load_config(func):
             payload["wind_speed_units_response"] = payload["wind_speed_units"]
             payload["wind_speed_units"] = "miles_hour"
         else:
-            return utils.output("end", "invalid_wind_speed_units", utils.translate("invalid_wind_speed_units"))
+            return utils.output(
+                "end",
+                "invalid_wind_speed_units",
+                utils.translate("invalid_wind_speed_units")
+            )
 
         if pro:
             payload["owm"] = OWM(api_key, subscription_type="pro")
@@ -43,19 +53,28 @@ def load_config(func):
         return func(payload)
     return wrapper_load_config
 
+
 def acquire_weather(func):
     @functools.wraps(func)
     def wrapper_acquire_weather(payload):
         for item in payload["entities"]:
             if item["entity"] == "city":
-                utils.output("inter", "acquiring", utils.translate("acquiring"))
+                utils.output(
+                    "inter",
+                    "acquiring",
+                    utils.translate("acquiring")
+                )
 
                 payload["city"] = item["sourceText"].title()
                 payload["observation"] = payload["owm"].weather_at_place(payload["city"])
                 payload["wtr"] = payload["observation"].get_weather()
 
                 return func(payload)
-        return utils.output("end", "request_error", utils.translate("request_error"))
+        return utils.output(
+            "end",
+            "request_error",
+            utils.translate("request_error")
+        )
 
     return wrapper_acquire_weather
 
@@ -70,9 +89,8 @@ def current_weather(payload):
     """
 
     detailed_status = payload["wtr"].get_detailed_status()
-    temperatures = payload["wtr"].get_temperature(payload["temperature_units"])   # {"temp_max": 10.5, "temp": 9.7, "temp_min": 9.0}
+    temperatures = payload["wtr"].get_temperature(payload["temperature_units"])
     humidity = payload["wtr"].get_humidity()
-    #wind = payload["wtr"].get_wind(payload["wind_speed_units"])   # {"speed": 4.6, "deg": 330}
 
     return utils.output(
         "end",
@@ -89,6 +107,7 @@ def current_weather(payload):
         )
     )
 
+
 @load_config
 @acquire_weather
 def temperature(payload):
@@ -96,7 +115,7 @@ def temperature(payload):
     Get the current temperature.
     """
 
-    temperatures = payload["wtr"].get_temperature(payload["temperature_units"])   # {"temp_max": 10.5, "temp": 9.7, "temp_min": 9.0}
+    temperatures = payload["wtr"].get_temperature(payload["temperature_units"])
 
     return utils.output(
         "end",
@@ -110,6 +129,7 @@ def temperature(payload):
             }
         )
     )
+
 
 @load_config
 @acquire_weather
@@ -131,6 +151,7 @@ def humidity(payload):
             }
         )
     )
+
 
 @load_config
 @acquire_weather
@@ -155,6 +176,7 @@ def wind(payload):
         )
     )
 
+
 @load_config
 @acquire_weather
 def sunrise(payload):
@@ -164,7 +186,15 @@ def sunrise(payload):
 
     dt = payload["wtr"].get_sunrise_time("date")
 
-    return utils.output("end", "sunrise", utils.translate("sunrise", {"time": dt.strftime("%H:%M:%S"), "city": payload["city"]}))
+    return utils.output(
+        "end",
+        "sunrise",
+        utils.translate(
+            "sunrise",
+            {"time": dt.strftime("%H:%M:%S"), "city": payload["city"]}
+        )
+    )
+
 
 @load_config
 @acquire_weather
@@ -175,4 +205,11 @@ def sunset(payload):
 
     dt = payload["wtr"].get_sunset_time("date")
 
-    return utils.output("end", "sunset", utils.translate("sunset", {"time": dt.strftime("%H:%M:%S"), "city": payload["city"]}))
+    return utils.output(
+        "end",
+        "sunset",
+        utils.translate(
+            "sunset",
+            {"time": dt.strftime("%H:%M:%S"), "city": payload["city"]}
+        )
+    )
