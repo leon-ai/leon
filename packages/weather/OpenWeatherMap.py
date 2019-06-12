@@ -5,6 +5,7 @@ import functools
 
 import utils
 
+from tzlocal import get_localzone
 from pyowm import OWM
 
 
@@ -185,6 +186,7 @@ def sunrise(payload):
     """
 
     dt = payload["wtr"].get_sunrise_time("date")
+    dt = dt.astimezone(get_localzone())
 
     return utils.output(
         "end",
@@ -204,6 +206,7 @@ def sunset(payload):
     """
 
     dt = payload["wtr"].get_sunset_time("date")
+    dt = dt.astimezone(get_localzone())
 
     return utils.output(
         "end",

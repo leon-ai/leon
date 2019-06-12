@@ -7,6 +7,7 @@ The weather package contains modules which include getting the latest weather fo
 ### OpenWeatherMap
 
 #### Requirements
+- tzlocal
 - PyOWM
 
 #### Usage
@@ -16,7 +17,7 @@ The weather package contains modules which include getting the latest weather fo
 3. Duplicate the file `packages/weather/config/config.sample.json` and rename it `config.json`.
 4. Copy the API key in `packages/weather/config/config.json` and set the other options to your liking.
 5. This package uses PyOWM. To install it: from inside leon directory `cd bridges/python`
-6. `pipenv install pyowm`
+6. `pipenv install tzlocal pyowm`
 7. Done!
 
 ```
