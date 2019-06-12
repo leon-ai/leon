@@ -3,15 +3,40 @@
 The Knowledge package aims at answering general questions.
 
 #### Requirements
+- wikipedia
 - wolframalpha
 
 #### Usage
 
-1. Duplicate the file `packages/knowledge/config/config.sample.json` and rename it `config.json`.
-2. Set your language and other settings.
-3. This package needs a few libraries to work properly. To install it, from inside leon directory, `cd bridges/python`
-4. `pipenv install wolframalpha`
-5. Done!
+1. Set up and account at [Wolfram Alpha API](http://developer.wolframalpha.com) and create an `app_id`.
+2. Duplicate the file `packages/knowledge/config/config.sample.json` and rename it `config.json`.
+3. Set your language and other settings.
+4. This package needs a few libraries to work properly. To install it, from inside leon directory, `cd bridges/python`
+5. `pipenv install wikipedia wolframalpha`
+6. Done!
+
+
+### Wikipedia
+
+```
+(en-US)
+- "Search on Wikipedia GitHub"
+```
+
+#### Options
+
+- `lang`: Choose your language. Default: `en`
+- `sentences`: Number of sentences to report. No greater than 10.
+
+
+#### Links
+
+- [MediaWiki API](https://www.mediawiki.org/wiki/API:Main_page)
+- [Wikipedia GitHub](https://github.com/goldsmith/Wikipedia)
+- [Wikipedia Docs](https://wikipedia.readthedocs.io/en/latest/)
+
+
+### Wolfram Alpha
 
 ```
 (en-US)
@@ -21,6 +46,7 @@ The Knowledge package aims at answering general questions.
 ```
 
 #### Options
+- `app_id`: Your app id.
 - `lang`: Choose your language. Default: `en`
 
 #### Links

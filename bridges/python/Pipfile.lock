@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "d42d4f9d305742c1a8c5f33e2ac31bd3a80854e6098a39fb1aef05a4b2f4fb86"
+            "sha256": "ea28410fac73af53495df76106e2b7aed0292f3d0f81e8b3c151932e133dceac"
         },
         "pipfile-spec": 6,
         "requires": {},
@@ -109,6 +109,13 @@
                 "sha256:a637e5fae88995b256e3409dc4d52c2e2e0ba32c42a6365fee8bbd2238de3cfb"
             ],
             "version": "==1.24.3"
+        },
+        "wikipedia": {
+            "hashes": [
+                "sha256:db0fad1829fdd441b1852306e9856398204dc0786d2996dd2e0c8bb8e26133b2"
+            ],
+            "index": "pypi",
+            "version": "==1.4.0"
         },
         "wolframalpha": {
             "hashes": [

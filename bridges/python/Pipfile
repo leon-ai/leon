@@ -9,5 +9,6 @@ pytube = "==9.5.0"
 tinydb = "==3.9.0"
 beautifulsoup4 = "==4.7.1"
 wolframalpha = "*"
+wikipedia = "*"
 
 [dev-packages]
