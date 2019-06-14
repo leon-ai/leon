@@ -3,6 +3,7 @@
 
 import wikipedia
 from wikipedia.exceptions import DisambiguationError, PageError
+from requests.exceptions import ConnectionError
 
 import utils
 
@@ -51,6 +52,13 @@ def summary(string, entities):
                     utils.translate("page_error")
                 )
 
+            except ConnectionError:
+                return utils.output(
+                    "end",
+                    "connection_error",
+                    utils.translate("connection_error")
+                )
+
     return utils.output(
         "end",
         "no_entities_error",
@@ -67,8 +75,14 @@ def random(string, entities):
         "acquiring",
         utils.translate("acquiring")
     )
-
-    summary = wikipedia.summary(title=wikipedia.random())
+    try:
+        summary = wikipedia.summary(title=wikipedia.random())
+    except ConnectionError:
+        return utils.output(
+            "end",
+            "connection_error",
+            utils.translate("connection_error")
+        )
 
     return utils.output(
         "end",

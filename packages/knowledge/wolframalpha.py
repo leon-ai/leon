@@ -3,6 +3,8 @@
 
 import utils
 
+from urllib.error import URLError
+
 import wolframalpha
 
 client = wolframalpha.Client(utils.config("app_id"))
@@ -17,7 +19,14 @@ def query(strings, entities):
 
     for entity in entities:
         if entity["entity"] == "query":
-            res = client.query(entity["sourceText"])
+            try:
+                res = client.query(entity["sourceText"])
+            except URLError:
+                return utils.output(
+                    "end",
+                    "connection_error",
+                    utils.translate("connection_error")
+                )
 
             return utils.output(
                 "end",
