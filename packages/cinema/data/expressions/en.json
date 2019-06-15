@@ -1,0 +1,10 @@
+{
+	"cinema": {
+    "recommend":{
+      "expressions":[
+        "Leon, can you recommend a movie ?",
+        "Can you recommend a film ?"
+      ]
+    }
+  }
+}

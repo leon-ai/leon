@@ -1,0 +1,11 @@
+{
+	"cinema": {
+		"recommend": [
+      "I advise you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :<p><i>\n %summarize%</i></p>",
+      "I recommend you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :<p><i>\n %summarize%</i></p>"
+    ],
+    "test":[
+      "%test%"
+    ]
+  }
+}
