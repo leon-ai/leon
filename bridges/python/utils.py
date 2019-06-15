@@ -96,11 +96,6 @@ def config(key):
 
 	return obj[queryobj['module']][key]
 
-def info():
-	"""Get information from the current query"""
-
-	return { 'lang': lang, 'package': package, 'module': module }
-
 def createdldir():
 	"""Create the downloads folder of a current module"""
 
