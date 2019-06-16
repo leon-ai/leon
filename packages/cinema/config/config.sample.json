@@ -1,6 +1,6 @@
 {
   "cinema": {
-    "API_KEY": "EMPTY",
+    "API_KEY": "YOUR_API_KEY",
     "options": {}
   }
 }
