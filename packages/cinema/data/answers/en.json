@@ -6,6 +6,9 @@
     ],
     "test":[
       "%test%"
-    ]
+    ],
+		"nit_list":[
+			"%nit_title%"
+		]
   }
 }

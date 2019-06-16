@@ -5,6 +5,11 @@
         "Leon, can you recommend a movie ?",
         "Can you recommend a film ?"
       ]
-    }
+    },
+		"now_theatres":{
+			"expressions":[
+				"What movies are in theatres?"	
+			]
+		}
   }
 }

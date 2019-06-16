@@ -5,6 +5,7 @@ import utils
 import tmdbsimple as tmdb
 import functools
 import random as ran
+import datetime as dt
 
 # Package database
 db = utils.db()['db']
@@ -21,6 +22,7 @@ def load_config(func):
         payload["entities"] = entities
         #  ISO 639-1 language code
         payload["lang"] = utils.getqueryobj()["lang"][:2]
+        payload["today"] = dt.date.today()
 
         payload["API_KEY"] = utils.config('API_KEY')
         tmdb.API_KEY = payload["API_KEY"]
@@ -56,3 +58,18 @@ def recommend(payload):
     "movie_title": movie_title,
     "release_date": movie_rdate,
     "summarize": movie_sum}))
+
+
+@load_config
+def now_theatres(payload):
+    now_in_theatres = tmdb.Discover().movie(
+    primary_release_date=payload["today"],
+    language=payload["lang"])
+    res = 'The films currently in the cinema are: <br/><ul>'
+    for title in now_in_theatres["results"]:
+        res = res+"<li>"+title["title"]+"</li>"+"<br/>"
+    res = res + "</ul>"
+
+    return utils.output("end", "nit_title_list", utils.translate('nit_list', {
+    "nit_title": res
+    }))
