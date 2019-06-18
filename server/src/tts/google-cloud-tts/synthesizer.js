@@ -15,13 +15,13 @@ const synthesizer = { }
 const voices = {
   'en-US': {
     languageCode: 'en-US',
-    name: 'en-US-Wavenet-A', // WaveNet
+    name: 'en-US-Wavenet-A',
     // name: 'en-GB-Standard-B', // Standard
     ssmlGender: 'MALE'
   },
   'fr-FR': {
     languageCode: 'fr-FR',
-    name: 'fr-FR-Standard-D',
+    name: 'fr-FR-Wavenet-B',
     ssmlGender: 'MALE'
   }
 }
