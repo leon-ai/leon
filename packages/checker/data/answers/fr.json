@@ -39,7 +39,7 @@
 			"Essayer de vérifier le statut de pwnage."
 		],
 		"no-email": [
-			"Veuillez fournir une ou plusieurs adresses électroniques que vous devez vérifier.."
+			"Veuillez fournir une ou plusieurs adresses électroniques que vous devez vérifier..."
 		],
 		"errors": [
 			"Je pense que %website_name% est en panne pour le moment, veuillez réessayer plus tard.",
@@ -49,6 +49,10 @@
 		"blocked": [
 			"Il y avait un problème d'accès au service de %website_name%.",
 			"Malheureusement, %website_name% ne me donne pas accès à son service."
-		]
+		],
+    "unavailable": [
+      "Il semblerait que Cloudflare protège %website_name%, veuillez réessayer dans un petit instant.",
+      "Malheureusement, Cloudflare a temporairement bloqué votre accès à %website_name%, merci de retenter dans un moment."
+    ]
 	}
 }

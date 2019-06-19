@@ -4,7 +4,7 @@
 import requests
 import utils
 
-def producthunt(string, entities):
+def run(string, entities):
 	"""Grab the Product Hunt trends"""
 
 	# Developer token

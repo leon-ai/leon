@@ -61,13 +61,18 @@ describe('NLU', () => {
     })
 
     test('executes brain with the fallback value (object)', async () => {
-      const fallbackObj = { foo: 'bar' }
+      const query = 'Thisisaqueryexampletotestfallbacks'
+      const fallbackObj = {
+        query,
+        entities: [],
+        classification: { package: 'leon', module: 'randomnumber', action: 'run' }
+      }
       const nlu = new Nlu()
       nlu.brain = { execute: jest.fn() }
       Nlu.fallback = jest.fn(() => fallbackObj)
 
       await nlu.loadModel(global.paths.classifier)
-      expect(await nlu.process('Thisisaqueryexampletotestfallbacks')).toBeTruthy()
+      expect(await nlu.process(query)).toBeTruthy()
       expect(nlu.brain.execute.mock.calls[0][0]).toBe(fallbackObj)
       Nlu.fallback = nluFallbackTmp // Need to give back the real fallback method
     })
@@ -94,8 +99,8 @@ describe('NLU', () => {
       }
 
       expect(Nlu.fallback(obj, [
-        { words: ['query', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module' }
-      ]).classification).toContainEntries([['package', 'fake-pkg'], ['module', 'fake-module'], ['confidence', 1]])
+        { words: ['query', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module', action: 'fake-action' }
+      ]).classification).toContainEntries([['package', 'fake-pkg'], ['module', 'fake-module'], ['action', 'fake-action'], ['confidence', 1]])
     })
   })
 })

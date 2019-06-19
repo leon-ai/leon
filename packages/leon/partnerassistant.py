@@ -3,7 +3,7 @@
 
 import utils
 
-def partnerassistant(string, entities):
+def run(string, entities):
 	"""Leon tells you about other personal assistants"""
 
 	string = string.lower()

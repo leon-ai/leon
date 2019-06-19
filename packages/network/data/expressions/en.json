@@ -1,10 +1,14 @@
 {
-  "speedtest": [
-    "What is my current Internet speed?",
-    "Can you make me a speedtest?",
-    "Make a speedtest",
-    "Start a speed test",
-    "Is my Internet network good?",
-    "Is my Internet connection good?"
-  ]
+  "speedtest": {
+    "run": {
+      "expressions": [
+        "What is my current Internet speed?",
+        "Can you make me a speedtest?",
+        "Make a speedtest",
+        "Start a speed test",
+        "Is my Internet network good?",
+        "Is my Internet connection good?"
+      ]
+    }
+  }
 }

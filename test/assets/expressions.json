@@ -1,0 +1,57 @@
+{
+  "color": {
+    "run": {
+      "expressions": [
+        "I like that color"
+      ],
+      "entities": [
+        {
+          "type": "regex",
+          "name": "color",
+          "regex": "blue|white|red"
+        }
+      ]
+    }
+  },
+  "unittest": {
+    "do_not_support_entity": {
+      "expressions": [
+        "Just an expression"
+      ],
+      "entities": [
+        {
+          "type": "not_supported_entity"
+        }
+      ]
+    }
+  },
+  "mockingbird": {
+    "test": {
+      "expressions": [
+        "Whistle as a bird"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "start",
+          "conditions": [
+            {
+              "type": "before",
+              "to": "bird"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "animal",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "a"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

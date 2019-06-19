@@ -30,7 +30,7 @@ const onkeydowninput = (e, client) => {
 }
 
 const onkeydowndocument = (e, cb) => {
-  if (e.altKey === true && e.key === 't') {
+  if (e.altKey && e.key === 't') {
     cb()
   }
 }

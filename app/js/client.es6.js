@@ -3,16 +3,16 @@
 import Chatbot from './chatbot.es6'
 
 export default class Client {
-  constructor (client, host, port, input, res) {
+  constructor (client, serverUrl, input, res) {
     this.client = client
-    this.host = host
-    this.port = port
     this._input = input
-    this.socket = io.connect(`http://${this.host}:${this.port}`)
+    this.serverUrl = serverUrl
+    this.socket = io.connect(this.serverUrl)
     this.history = localStorage.getItem('history')
     this.parsedHistory = []
     this.info = res
     this.chatbot = new Chatbot()
+    this._recorder = { }
   }
 
   set input (newInput) {
@@ -21,7 +21,15 @@ export default class Client {
     }
   }
 
-  init (config) {
+  set recorder (recorder) {
+    this._recorder = recorder
+  }
+
+  get recorder () {
+    return this._recorder
+  }
+
+  init () {
     this.chatbot.init()
 
     this.socket.on('connect', () => {
@@ -47,18 +55,49 @@ export default class Client {
       const ctx = new AudioContext()
       const source = ctx.createBufferSource()
 
-      ctx.decodeAudioData(data, (buffer) => {
+      ctx.decodeAudioData(data.buffer, (buffer) => {
         source.buffer = buffer
 
         source.connect(ctx.destination)
         source.start(0)
+
+        /**
+         * When the after speech option is enabled and
+         * the answer is a final one
+         */
+        if (this.info.after_speech && data.is_final_answer) {
+          // Enable recording after the speech + 500ms
+          setTimeout(() => {
+            this._recorder.start()
+            this._recorder.enabled = true
+
+            // Check every second if the recorder is enabled to stop it
+            const id = setInterval(() => {
+              if (this._recorder.enabled) {
+                if (this._recorder.countSilenceAfterTalk <= 8) {
+                  // Stop recording if there was no noise for 8 seconds
+                  if (this._recorder.countSilenceAfterTalk === 8) {
+                    this._recorder.stop()
+                    this._recorder.enabled = false
+                    this._recorder.countSilenceAfterTalk = 0
+                    clearInterval(id)
+                  } else if (!this._recorder.noiseDetected) {
+                    this._recorder.countSilenceAfterTalk += 1
+                  } else {
+                    clearInterval(id)
+                  }
+                }
+              }
+            }, 1000)
+          }, data.duration + 500)
+        }
       })
 
       cb('audio-received')
     })
 
     this.socket.on('download', (data) => {
-      window.location = `http://${config.server_host}:${config.server_port}/v1/downloads?package=${data.package}&module=${data.module}`
+      window.location = `${this.serverUrl}/v1/downloads?package=${data.package}&module=${data.module}`
     })
 
     if (this.history !== null) {

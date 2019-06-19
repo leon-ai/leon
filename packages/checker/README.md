@@ -19,13 +19,13 @@ Ping domain names and give you the online state.
 
 ### Have I Been Pwned
 
-Verify if a or several email addresses have been pwned.
+Verify if one or several email addresses have been pwned (thanks to [Have I Been Pwned](https://haveibeenpwned.com/).
 
 #### Usage
 
 ```
 (en-US) "Has louis.grenard@gmail.com been pwned?"
-(en-US) "Have iifeoluwa.ao@gmail.com, louis.grenard@gmail.com, and supercleanemail@test.com have been pwned?"
+(en-US) "Have iifeoluwa.ao@gmail.com, louis.grenard@gmail.com, and supercleanemail@test.com been pwned?"
 
 (fr-FR) "Est-ce que louis.grenard@gmail.com est compromis ?"
 (fr-FR) "Est-ce que iifeoluwa.ao@gmail.com, louis.grenard@gmail.com, et supercleanemail@test.com ont été compromis ?"

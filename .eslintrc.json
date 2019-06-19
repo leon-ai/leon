@@ -7,8 +7,7 @@
     "jest/globals": true
   },
   "globals": {
-    "io": true,
-    "webkitSpeechRecognition": true
+    "io": true
   },
   "plugins": [
     "import",
@@ -16,7 +15,12 @@
   ],
   "settings": {
     "import/resolver": {
-      "babel-module": { }
+      "babel-module": {
+        "alias": {
+          "@@": ".",
+          "@": "./server/src"
+        }
+      }
     }
   },
   "rules": {

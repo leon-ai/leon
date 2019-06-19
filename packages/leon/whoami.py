@@ -3,7 +3,7 @@
 
 import utils
 
-def whoami(string, entities):
+def run(string, entities):
 	"""Leon introduces himself"""
 
 	return utils.output('end', 'introduction', utils.translate('introduction'))

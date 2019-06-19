@@ -9,7 +9,7 @@
 
 <p align="center">
   <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat"/></a>
-  <a href="https://circleci.com/gh/leon-ai/leon/tree/develop"><img src="https://img.shields.io/circleci/project/github/leon-ai/leon.svg?style=flat"/></a>
+  <a href="https://circleci.com/gh/leon-ai/leon/tree/develop"><img src="https://img.shields.io/circleci/project/github/leon-ai/leon/develop.svg?style=flat"/></a>
   <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat"/></a>
 </p>
 
@@ -63,9 +63,9 @@ Sounds good for you? Then let's get started!
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 10 or 11.
+- [Node.js](https://nodejs.org/) >= 10
 - npm >= 5
-- [Python](https://www.python.org/downloads/) 3.6.x
+- [Python](https://www.python.org/downloads/) >= 3
 - [Pipenv](https://docs.pipenv.org)
 - Supported OSes: Linux, macOS and Windows
 
@@ -107,8 +107,11 @@ npm start
 # Build
 npm run docker:build
 
-# Run 
+# Run on Linux or macOS
 npm run docker:run
+
+# Run on Windows (you can replace "UTC" by your time zone)
+docker run -e TZ=UTC -p 1337:1337 -it leonai/leon
 
 # Go to http://localhost:1337
 # Hooray! Leon is running
@@ -152,4 +155,4 @@ You can also contribute by [buying me a fruit juice](https://donate.getleon.ai).
 Copyright (c) 2019-present, Louis Grenard <louis.grenard@gmail.com>
 
 ## Cheers!
-![Cheers!](https://assets-cdn.github.com/images/icons/emoji/unicode/1f37b.png?v6 "Cheers!")
+![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f37b.png "Cheers!")

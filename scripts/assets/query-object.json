@@ -1,1 +1,1 @@
-{"lang":"en","package":"leon","module":"randomnumber","query":"Give me a random number","entities":[]}
+{"lang":"en","package":"leon","module":"randomnumber","action":"run","query":"Give me a random number","entities":[]}

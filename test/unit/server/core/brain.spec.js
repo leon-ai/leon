@@ -71,6 +71,7 @@ describe('brain', () => {
         classification: {
           package: 'leon',
           module: 'greeting',
+          action: 'run',
           confidence: 0.9
         }
       }
@@ -97,6 +98,7 @@ describe('brain', () => {
         classification: {
           package: 'checker',
           module: 'isitdown',
+          action: 'run',
           confidence: 0.9
         }
       }
@@ -116,6 +118,7 @@ describe('brain', () => {
         classification: {
           package: 'leon',
           module: 'greeting',
+          action: 'run',
           confidence: 0.9
         }
       }
