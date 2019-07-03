@@ -9,6 +9,12 @@
     ],
 		"nit_list":[
 			"%nit_title%"
+		],
+		"info":[
+			"<b>%title%</b> can be summarized as follows : %overview% "
+		],
+		"error":[
+			"Error"
 		]
   }
 }
