@@ -7,15 +7,9 @@
       ],
 			"entities": [
 				{
-					"type": "trim",
+					"type": "regex",
 					"name": "Serie_Or_Movie",
-					"conditions": [
-						{
-							"type": "between",
-							"from": "a",
-							"to": "?"
-						}
-					]
+					"regex": "film|movie|serie"
 				}
 			]
     },
