@@ -1,9 +1,9 @@
 {
 	"cinema": {
 		"recommend": [
-      "I advise you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :<p><i>\n %summarize%</i></p>",
-      "I recommend you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :<p><i>\n %summarize%</i></p>",
-			"One day, you should watch %movie_title% released on %release_date%, I tought it was a nice movie, I can summarize it as follows :\n %summarize%  "
+      "I advise you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :\n %summarize%",
+      "I recommend you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :\n %summarize%",
+			"One day, you should watch <b>%movie_title%</b> released on %release_date%, I tought it was a nice movie, I can summarize it as follows :\n %summarize%  "
     ],
     "test":[
       "%test%"
@@ -15,14 +15,14 @@
 			"<b>%title%</b> can be summarized as follows : %overview% "
 		],
 		"info-m":[
-			"%title% was released on %release_date%, it can be summarized as follows :\n %overview%.",
-			"I can summarize %title% as follows:\n %overview% \n did you know that it released on %release_date% ? Now you know. "
+			"<b>%title%</b> was released on %release_date%, it can be summarized as follows :\n %overview%.",
+			"I can summarize <b>%title%</b> as follows:\n %overview% \n did you know that it released on %release_date% ? Now you know. "
 		],
 		"info-t":[
-			"%title% was released on %release_date%, it can be summarized as follows :\n %overview%."
+			"<b>%title%</b> was released on %release_date%, it can be summarized as follows :\n %overview%."
 		],
 		"info-p":[
-			"%name% was know for %maj-movie-title% it released on %release_date%."
+			"<b>%name%</b> was know for %maj-movie-title% it released on %release_date%."
 		],
 		"wrong_key":[
 			"You have not entered any API key. If you don't have one yet you can go <a href=\"https://www.themoviedb.org/documentation/api\">here</a> and once retrieved go modify the configuration file."

@@ -10,7 +10,7 @@
 				{
 					"type": "regex",
 					"name": "Serie_Or_Movie",
-					"regex": "film|movie|serie"
+					"regex": "film|movie|serie|show"
 				}
 			]
     },
