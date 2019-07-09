@@ -10,8 +10,20 @@
 		"nit_list":[
 			"%nit_title%"
 		],
-		"info":[
+		"info-c":[
 			"<b>%title%</b> can be summarized as follows : %overview% "
+		],
+		"info-m":[
+
+		],
+		"info-t":[
+
+		],
+		"info-p":[
+
+		],
+		"wrong_key":[
+			"You have not entered any API key. If you don't have one yet you can go <a href=\"https://www.themoviedb.org/documentation/api\">here</a> and once retrieved go modify the configuration file."
 		],
 		"error":[
 			"Error"
