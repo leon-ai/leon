@@ -3,25 +3,20 @@
     "recommend":{
       "expressions":[
         "Leon, can you recommend a ?",
-        "Can you recommend a ?"
+        "Can you recommend a ?",
+				"Do you have a to recommend ?"
       ],
 			"entities": [
 				{
-					"type": "trim",
+					"type": "regex",
 					"name": "Serie_Or_Movie",
-					"conditions": [
-						{
-							"type": "between",
-							"from": "a",
-							"to": "?"
-						}
-					]
+					"regex": "movie|film|serie"
 				}
 			]
     },
 		"now_theatres":{
 			"expressions":[
-				"What movies are in theatres?"
+				"What movies are in theatres ?"
 			]
 		},
 		"info":{
