@@ -24,7 +24,7 @@
 ---
 
 **Note**
-> <sub>I'm focusing on another project, so the progress of this repo might slow down for a while. You can [subscribe here](https://www.producthunt.com/upcoming/2aud-io) to know when this project is up.</sub>
+> I'm focusing on another project, so the progress of this repo might slow down for a while. You can [subscribe here](https://www.producthunt.com/upcoming/2aud-io) to be part of the first ones.
 
 ## Introduction
 
