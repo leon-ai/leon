@@ -30,7 +30,7 @@ Leon random choose an movie or an serie.
 What movies are in theatres ?
 ```
 
-Leon tell you which movies are actually in theatres. It's the **internationnal** box office, if your country have a specific day in the week for movie release he doesn't take it into account.
+Leon tell you which movies are actually in theatres. It's the **international** box office, if your country have a specific day in the week for movie release he doesn't take it into account.
 
 ```
 Can you provide information about Star Wars/Capitain Marvel/Game of Thrones/ Tom Cruz with moviedb ?
@@ -40,7 +40,7 @@ It's going to give you some information about movies collection, movie, serie or
 
 ## Dev part
 
-As you can see on the last sentence we can specify the API, default API is c but the entity actually exist, you can use it.
+As you can see on the last sentence we can specify the API, default API is The Movie DB (TMDB) but the entity actually exist, you can use it.
 
 
 
