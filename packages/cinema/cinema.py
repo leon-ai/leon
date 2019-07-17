@@ -46,30 +46,35 @@ def load_config(func):
 
 @load_config
 def recommend(payload):
+    """
+    Recommend Series or Movies. (random movies/series on movieDB with > 7 stars)
+    """
+    # Init flags for movie and serie
     flag_movie = 0
     flag_serie = 0
+
+    # Search the type of requested data (movie or serie) with regex (translate it)
     for item in payload["entities"]:
-        if item["entity"] == "Serie_Or_Movie":
-            word = item["sourceText"]
-            i = 0
-            wflag = 0
-            while i < 92 and wflag == 0:
-                if payload["trl_movie"][i]["string"] == word:
-                    flag_movie = 1
-                    wflag = 1
-                elif payload["trl_serie"][i]["string"] == word:
-                    flag_serie = 1
-                    wflag = 1
-                i = i + 1
+        if item["entity"] == "Movie":
+            flag_movie = 1
+        elif item["entity"] == "Serie":
+            flag_serie = 1
         else:
             return utils.output('end', 'Error', utils.translate('Error'))
 
-    if flag_movie == 1:
+    # In case of the user ask strange things.
+    if flag_serie == 0 and flag_movie == 0 :
+        return utils.output("end", "not_found", utils.translate("not_found"))
+
+    # If user request a movie
+    elif flag_movie == 1:
+        # If database exist he don't request
         if db.search(Query.type == 'rmovie_request'):
             payload["movie"] = db.search(Query.type == 'rmovie_request')[0]['content']
             o_id = db.search(Query.type == 'rmovie_request')[0]['old_id']
             o_id = o_id + 1
             db.update({"old_id": o_id}, Query.type == 'rmovie_request')
+            # Remove information from database after 10 utilisations
             db.remove(Query.type == 'rmovie_request' and Query.old_id > 10)
         else:
             # Get an random movie with user's language
@@ -77,19 +82,21 @@ def recommend(payload):
             page=ran.randint(0, 1000),
             language=payload["lang"],
             vote_average_gte=7.00)
+            # Insert JSON file in the database
             db.insert({'type': 'rmovie_request','old_id': 0, 'content': payload["movie"]})
 
+        # Reach some information
         movie_nO = ran.randint(0, 20)
         movie = payload["movie"]["results"][movie_nO]
         movie_title = movie["title"]
         movie_rdate = movie["release_date"]
         movie_sum = movie["overview"]
 
-        return utils.output('end', 'recommend', utils.translate('recommend', {
+        return utils.output('end', 'recommend-m', utils.translate('recommend-m', {
         "movie_title": movie_title,
         "release_date": movie_rdate,
         "summarize": movie_sum}))
-
+    # same here but with serie
     elif flag_serie == 1:
         if db.search(Query.type == 'rserie_request'):
             payload["serie"] = db.search(Query.type == 'rserie_request')[0]['content']
@@ -111,8 +118,8 @@ def recommend(payload):
         serie_rdate = serie["first_air_date"]
         serie_sum = serie["overview"]
 
-        return utils.output('end', 'recommend', utils.translate('recommend', {
-        "movie_title": serie_title,
+        return utils.output('end', 'recommend-t', utils.translate('recommend-t', {
+        "serie_title": serie_title,
         "release_date": serie_rdate,
         "summarize": serie_sum}))
 
@@ -126,25 +133,34 @@ def now_theatres(payload):
     now_in_theatres = tmdb.Discover().movie(
     primary_release_date=payload["today"],
     language=payload["lang"])
-    res = 'The films currently in the cinema are: <br/><ul>'
+    res = '<ul>'
     for title in now_in_theatres["results"]:
         res = res+"<li>"+title["title"]+"</li>"+"<br/>"
     res = res + "</ul>"
 
-    return utils.output("end", "nit_title_list", utils.translate('nit_list', {
+    return utils.output("end", "nit_list", utils.translate('nit_list', {
     "nit_title": res
     }))
 
 @load_config
 def info(payload):
+    """
+    Give information about movies, collections, series and peoples.
+    """
     for item in payload["entities"]:
         if item["entity"] == "title":
             data_title = item["sourceText"]
 
+    # Search if it's an collection
     data_info = tmdb.Search().collection(query=data_title, language=payload["lang"])
+    # If not re-ask API with multi research
     if data_info["total_results"] == 0:
             data_info = tmdb.Search().multi(query=data_title, language=payload["lang"])
-            if data_info["results"][0]["media_type"] == "movie":
+            if data_info["total_results"] == 0:
+                return utils.output('end', 'not_found_title', utils.translate('not_found_title',{
+                "idk_request": data_title
+                }))
+            elif data_info["results"][0]["media_type"] == "movie":
                 movie_overview = data_info["results"][0]["overview"]
                 movie_rdate = data_info["results"][0]["release_date"]
                 movie_title = data_info["results"][0]["title"]
@@ -174,9 +190,9 @@ def info(payload):
                 "release_date": rdate_know_for,
                 "maj-movie-title": title_know_for
                 }))
+    else:
+        data_overview = data_info["results"][0]["overview"]
 
-    data_overview = data_info["results"][0]["overview"]
-
-    return utils.output("end", "info-c", utils.translate('info', {
+    return utils.output("end", "info-c", utils.translate('info-c', {
     "title": data_title.title(),
     "overview": data_overview}))
