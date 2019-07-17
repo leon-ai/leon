@@ -23,6 +23,9 @@
 
 ---
 
+**Note**
+> I'm focusing on another project, so the progress of this repo might slow down for a while. You can [subscribe here](https://www.producthunt.com/upcoming/2aud-io) to be part of the first ones.
+
 ## Introduction
 
 Leon is an **open-source personal assistant** who can live **on your server**.
@@ -63,7 +66,7 @@ Sounds good for you? Then let's get started!
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 10 or 11
+- [Node.js](https://nodejs.org/) >= 10
 - npm >= 5
 - [Python](https://www.python.org/downloads/) >= 3
 - [Pipenv](https://docs.pipenv.org)
