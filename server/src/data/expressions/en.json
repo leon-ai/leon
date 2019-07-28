@@ -31,11 +31,11 @@
 			"Sorry, I cannot answer that. Let me answer you in the future by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
 			"Sorry, you have to educate me more. You can help me with that by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">contributing to my code</a>",
 			"Sorry, I don't understand your query",
-      "Sorry, I'm still very young, I didn't got your point"
+      "Sorry, I'm still very young, I didn't get your point"
 		],
 		"random_not_sure": [
 			"Sorry, you may repeat in an another way",
-			"Sorry, I'm not sure to understand",
+			"Sorry, I'm not sure I understood correctly",
 			"Sorry, I'm not sure for what you asked, please repeat with a different way",
 			"Sorry, please repeat again by formulating differently",
 			"Sorry, I didn't correctly clean my ears today! Oh wait, I'm your personal assistant then please try again with a new way"
