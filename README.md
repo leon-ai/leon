@@ -30,7 +30,7 @@
 
 Leon is an **open-source personal assistant** who can live **on your server**.
 
-He **does stuff** when you **ask him for**.
+He **does stuff** when you **ask him to**.
 
 You can **talk to him** and he can **talk to you**.
 You can also **text him** and he can also **text you**.
@@ -44,7 +44,7 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > 2. With this generic structure, everyone can create their own modules and share them with others.
 > Therefore there is only one core (to rule them all).
 > 3. Leon uses AI concepts, which is cool.
-> 4. Privacy matters, you can configure Leon to talk with him offline. You can already text with him without any third party services.
+> 4. Privacy matters, you can configure Leon to talk with him offline. You can already interact with him without any third party services.
 > 5. Open source is great.
 
 ### What is this repository for?
