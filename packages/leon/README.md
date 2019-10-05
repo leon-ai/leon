@@ -111,7 +111,7 @@ Leon introduces himself.
 
 ### How old
 
-Leon tells when he has been created.
+Leon tells when it has been created.
 
 #### Usage
 
