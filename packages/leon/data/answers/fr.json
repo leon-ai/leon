@@ -113,5 +113,10 @@
       "Je ne connais pas cet assistant personnel.",
       "Je n'ai jamais rencontré cet assistant personnel."
     ]
+  },
+  "howold": {
+  	"age": [
+  		"J'ai été créé le 10 Février 2019."
+  	]
   }
 }

@@ -22,5 +22,8 @@
   },
   "partnerassistant": {
     "options": {}
+  },
+  "howold": {
+    "options": {}
   }
 }

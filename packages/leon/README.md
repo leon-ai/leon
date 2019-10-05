@@ -107,3 +107,17 @@ Leon introduces himself.
 (fr-FR) "Qui es-tu ?"
 ...
 ```
+
+
+### How old
+
+Leon tells when he has been created.
+
+#### Usage
+
+```
+(en-US) "How old are you?"
+
+(fr-FR) "Quel âge as-tu?"
+...
+```

@@ -89,5 +89,15 @@
         "Do you have something to say about Google Assistant?"
       ]
     }
+  },
+  "howold": {
+    "run": {
+      "expressions": [
+        "How old are you",
+        "Are you old",
+        "Are you young",
+        "When have you been created"
+      ]
+    }
   }
 }

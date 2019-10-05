@@ -89,5 +89,15 @@
         "Dis-moi quelque chose sur l'assistant personnel Google Assistant"
       ]
     }
+  },
+  "howold": {
+    "run": {
+      "expressions": [
+        "Quel âge as-tu ?",
+        "Es-tu vieux ?",
+        "Es-tu jeune ?",
+        "Quand as-tu créé ?"
+      ]
+    }
   }
 }
