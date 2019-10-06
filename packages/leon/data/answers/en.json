@@ -110,7 +110,7 @@
   },
   "howold": {
   	"age": [
-  		"I have been created on February 10, 2019."
+  		"I have been created on February 10, 2019. Therefore, I am %years% years and %days% days old."
   	]
   }
 }

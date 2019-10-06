@@ -116,7 +116,7 @@
   },
   "howold": {
   	"age": [
-  		"J'ai été créé le 10 Février 2019."
+  		"J'ai été créé le 10 Février 2019. J'ai donc %years% ans et %days% jours!"
   	]
   }
 }
