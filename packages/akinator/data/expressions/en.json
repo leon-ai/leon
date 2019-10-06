@@ -1,0 +1,23 @@
+{
+  "akinator": {
+    "new_game": {
+      "expressions": [
+        "Open Akinator",
+        "Launch Akinator",
+        "Play Akinator"
+      ],
+      "answer": {
+        "expressions": [
+          "Yes",
+          "No",
+          "I don't know"
+        ]
+      },
+      "back": {
+        "expressions": [
+          "Go back to the previous question"
+        ]
+      }
+    }
+  }
+}

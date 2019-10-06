@@ -1,0 +1,16 @@
+{
+  "akinator": {
+    "question": [
+      "%question%"
+    ],
+    "result": [
+      "It's %name%. %description%. <img src='%picture'>
+    ],
+    "cant_go_back_any_further": [
+      "There are no previous questions."
+    ],
+    "invalid_answer": [
+      "Please answer either yes or no."
+    ]
+  }
+}
