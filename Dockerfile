@@ -1,16 +1,15 @@
-FROM node:10-alpine
+FROM nikolaik/python-nodejs:python3.6-nodejs10-alpine
 ENV IS_DOCKER true
 WORKDIR /app
 
 # Install system packages
 RUN apk add --no-cache --no-progress \
     ca-certificates \
-    python3 \
     git \
     tzdata
 
 # Upgrade pip and install Pipenv
-RUN pip3 install --no-cache-dir --progress-bar off pipenv
+RUN pip install --no-cache-dir --progress-bar off pipenv
 
 COPY . .
 
