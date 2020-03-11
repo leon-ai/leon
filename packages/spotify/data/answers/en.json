@@ -1,0 +1,30 @@
+{
+  "spotify": {
+    "now_playing": [
+      "now playing the %type% %name% by %artist%"
+    ],
+    "resume_playing": [
+      "playing"
+    ],
+    "no_search_result": [
+      "No search result",
+      "Didn't find anything on Spotify with that name"
+    ],
+    "no_device": [
+      "Spotify is not running",
+      "Please open Spotify first"
+    ],
+    "not_logged_in": [
+      "Please login to Spotify first",
+      "You are not logged in to Spotify"
+    ],
+    "login": [
+      "Please sign in and then give me the whole URL to which you were redirected."
+    ]
+  },
+  "authorize": {
+    "logged_in": [
+      "You are logged in to Spotify!"
+    ]
+  }
+}

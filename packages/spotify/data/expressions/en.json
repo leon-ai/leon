@@ -1,0 +1,92 @@
+{
+  "spotify": {
+    "play": {
+      "expressions": [
+        "Play the song stairway to heaven by led zeppelin",
+        "Play the track lucy in the sky with diamonds by the beatles",
+        "Play me the song roxanne by the police",
+        "Play the artist Prince"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "track",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "song"
+            },
+            {
+              "type": "between",
+              "from": "song",
+              "to": "by"
+            },
+            {
+              "type": "between",
+              "from": "track",
+              "to": "by"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "artist",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "artist"
+            },
+            {
+              "type": "after",
+              "from": "group"
+            },
+            {
+              "type": "after",
+              "from": "by"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "playlist",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "playlist"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "album",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "album"
+            }
+          ]
+        }
+      ]
+    },
+    "login" : {
+      "expressions": [
+        "spotify login",
+        "login to spotify"
+      ]
+    }
+  },
+  "authorize" : {
+    "run" : {
+      "expressions": [
+        "http://localhost:1337/callback?code= "
+      ],
+      "entities": [
+        {
+          "type": "regex",
+          "name": "auth_url",
+          "regex": "^http://localhost:1337/callback?code="
+        }
+      ]
+    }
+  }
+}
