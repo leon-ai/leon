@@ -27,7 +27,7 @@ def run(string, entities):
         isLastEmail = index == len(emails) - 1
         breached = checkForBreach(email)
         data = { 'email': email }
-
+        print("breached: ", breached)
         # Have I Been Pwned API returns a 403 when accessed by unauthorized/banned clients
         if breached == 403:
             return utils.output('end', 'blocked', utils.translate('blocked', { 'website_name': 'Have I Been Pwned' }))

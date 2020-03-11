@@ -6,7 +6,7 @@
 # Date: 2019-03-09
 # Based on the package https://github.com/sivel/speedtest-cli
 
-import utils
+from bridges.python import utils
 import os
 import sys
 import subprocess

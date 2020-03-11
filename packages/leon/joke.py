@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
-import utils
+from bridges.python import utils
 
 def run(string, entities):
 	"""Leon says some jokes"""
