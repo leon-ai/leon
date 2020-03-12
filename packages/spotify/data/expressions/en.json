@@ -133,6 +133,14 @@
         }
       ]
     },
+    "pause": {
+      "expressions": [
+        "pause",
+        "stop",
+        "pause track",
+        "pause music"
+      ]
+    },
     "login" : {
       "expressions": [
         "spotify login",

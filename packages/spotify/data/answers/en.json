@@ -6,7 +6,10 @@
     "now_playing_artist": [
       "Now playing the %type% \"%name%\""
     ],
-    "resume_playing": [
+    "playing_paused": [
+      "Paused"
+    ],
+    "playing_resumed": [
       "Playing"
     ],
     "no_search_result": [

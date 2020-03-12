@@ -54,9 +54,18 @@ def can_play(device):
   return True
 
 
+def pause(string, entities):
+  device_id = get_device()
+  if not can_play(device_id):
+    return
+
+  spotify_request('PUT', 'me/player/pause', {'device_id': device_id})
+  utils.output('end', 'success', utils.translate('playing_paused'))
+
+
 def play_current_track(device_id):
   spotify_request('PUT', 'me/player/play', {'device_id': device_id})
-  utils.output('end', 'success', utils.translate('resume_playing'))
+  utils.output('end', 'success', utils.translate('playing_resumed'))
 
 
 def play_track(string, entities):
