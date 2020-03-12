@@ -36,9 +36,10 @@ def run(string, entities):
   token['url_base'] = utils.config('url_base')
   token['scope'] = utils.config('scope')
 
+  # in case new login because of expired token
+  if len(db.all()) > 0:
+    db.purge()
+
   db.insert(token)
 
   utils.output('end', 'success', utils.translate('logged_in'))
-
-
-

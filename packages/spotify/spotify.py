@@ -87,10 +87,7 @@ def play(string, entities):
       play_current_track(device)
 
 
-def play_current_track(string, entities):
-  device_id = get_device()
-  if not can_play(device_id):
-    return
+def play_current_track(device_id):
   spotify_request('PUT', 'me/player/play', {'device_id': device_id})
   utils.output('end', 'success', utils.translate('resume_playing'))
 
@@ -110,7 +107,7 @@ def play_track(string, entities):
       artist_name = item['sourceText']
 
   if not track_name:
-    return utils.output('end', 'info', "no track name....faaan!")
+    play_current_track(device_id)
 
   params = {
     'q': track_name,

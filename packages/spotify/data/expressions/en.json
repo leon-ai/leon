@@ -1,14 +1,10 @@
 {
   "spotify": {
-    "play_current_track": {
+     "play_track": {
       "expressions": [
         "Play",
         "Resume",
-        "Resume playing"
-      ]
-    },
-     "play_track": {
-      "expressions": [
+        "Play maiden voayage",
         "Play smells like teen spirit",
         "Play the song stairway to heaven",
         "Play the track lucy in the sky with diamonds by the beatles",
