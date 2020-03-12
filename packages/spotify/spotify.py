@@ -53,39 +53,6 @@ def can_play(device):
 
   return True
 
-def play(string, entities):
-  device = get_device()
-  if not can_play(device):
-    return
-
-  track=''
-  album=''
-  artist=''
-  playlist=''
-
-  # which search parameters are specified
-  for item in entities:
-    if item['entity'] == 'track':
-      track=item['sourceText']
-    if item['entity'] == 'artist':
-      artist = item['sourceText']
-    if item['entity'] == 'album':
-      album = item['sourceText']
-    if item['entity'] == 'playlist':
-      playlist = item['sourceText']
-
-  if device:
-    if album:
-      play_album(device, album, artist)
-    elif playlist:
-      play_playlist(device, playlist)
-    elif track:
-      play_track(device, track, artist)
-    elif artist:
-      play_artist(device, artist)
-    else:
-      play_current_track(device)
-
 
 def play_current_track(device_id):
   spotify_request('PUT', 'me/player/play', {'device_id': device_id})
@@ -106,8 +73,11 @@ def play_track(string, entities):
     if item['entity'] == 'artist':
       artist_name = item['sourceText']
 
-  if not track_name:
-    play_current_track(device_id)
+  # in case the nlu has misunderstood
+  if not track_name and not artist_name:
+    return play_current_track(device_id)
+  if artist_name and not track_name:
+    return play_artist(string, entities)
 
   params = {
     'q': track_name,
@@ -183,6 +153,7 @@ def play_album(string, entities):
   }
 
   if artist_name:
+    params['q'] += ' artist:' + artist_name
     params['artist'] = artist_name
 
   results = spotify_request('GET', 'search', params)
@@ -194,14 +165,17 @@ def play_album(string, entities):
   if not results['albums']['total'] > 0:
     return utils.output('end', 'info', utils.translate('no_search_result'))
 
+  file = open("play_album.txt", 'a')
   chosen_album = None
   if artist_name:
     for alb in results['albums']['items']:
       if alb['name'].lower() == album_name.lower():
         for art in alb['artists']:
+          file.write("\nAlbum: " + alb['name'] + '\t' + "Artist: " + art['name'] + '\n')
           if art['name'].lower() == artist_name.lower():
-            chosen_album= alb
+            chosen_album = alb
             break
+  file.close()
 
   if not chosen_album:
     chosen_album = results['albums']['items'][0]  # choose first match
@@ -225,12 +199,59 @@ def play_album(string, entities):
   utils.output('end', 'success', utils.translate('now_playing', info))
 
 
-def play_artist(device, artist):
-  pass
+def play_artist(string, entities):
+  device_id = get_device()
+  if not can_play(device_id):
+    return
 
+  artist_name = ''
 
-def play_playlist(device, playlist):
-  pass
+  for item in entities:
+    if item['entity'] == 'artist':
+      artist_name = item['sourceText']
+
+  if not artist_name:
+    play_current_track(device_id)
+
+  params = {
+    'q': artist_name,
+    'type': 'artist'
+  }
+
+  results = spotify_request('GET', 'search', params)
+
+  file = open("play_artist.txt", 'w')
+  file.write(json.dumps(results))
+  file.close()
+
+  if not results['artists']['total'] > 0:
+    return utils.output('end', 'info', utils.translate('no_search_result'))
+
+  file = open("play_album.txt", 'a')
+
+  chosen_artist = None
+  for art in results['artists']['items']:
+    file.write("\nArtist: " + art['name'] + '\n')
+    if art['name'].lower() == artist_name.lower():
+      chosen_artist = art
+      break
+
+  file.close()
+
+  if not chosen_artist:
+    chosen_artist = results['artists']['items'][0]  # choose first match
+
+  data = {}
+  data["context_uri"] = chosen_artist["uri"]
+
+  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
+
+  info = {
+    "name": chosen_artist['name'],
+    "type": 'artist'
+  }
+
+  utils.output('end', 'success', utils.translate('now_playing_artist', info))
 
 
 def token_expired(expires_at):

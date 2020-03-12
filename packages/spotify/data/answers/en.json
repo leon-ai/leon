@@ -3,6 +3,9 @@
     "now_playing": [
       "now playing the %type% \"%name%\" by %artist%"
     ],
+    "now_playing_artist": [
+      "now playing the %type% \"%name%\""
+    ],
     "resume_playing": [
       "playing"
     ],

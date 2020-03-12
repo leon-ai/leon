@@ -110,19 +110,24 @@
         }
       ]
     },
-     "play_playlist": {
+     "play_artist": {
       "expressions": [
-        "Play playlist foo",
-        "Play the playlist derp"
+        "Play artist Prince",
+        "Play the artist Foo Fighters",
+        "Play something by the group Weezer"
       ],
       "entities": [
         {
           "type": "trim",
-          "name": "playlist",
+          "name": "artist",
           "conditions": [
             {
               "type": "after",
-              "from": "playlist"
+              "from": "artist"
+            },
+            {
+              "type": "after",
+              "from": "group"
             }
           ]
         }
