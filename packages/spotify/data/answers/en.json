@@ -1,13 +1,13 @@
 {
   "spotify": {
     "now_playing": [
-      "now playing the %type% \"%name%\" by %artist%"
+      "Now playing the %type% \"%name%\" by %artist%"
     ],
     "now_playing_artist": [
-      "now playing the %type% \"%name%\""
+      "Now playing the %type% \"%name%\""
     ],
     "resume_playing": [
-      "playing"
+      "Playing"
     ],
     "no_search_result": [
       "No search result",
@@ -25,12 +25,17 @@
       "You are already logged in to Spotify"
     ],
     "login": [
-      "Please sign in and then give me the whole URL to which you were redirected."
+      "Please sign in and then give me the whole URL to which you were redirected.",
+      "Please log in using the opened tab in your browser and then paste the whole URL to which you are redirected."
     ]
   },
   "authorize": {
     "logged_in": [
-      "You are logged in to Spotify!"
+      "Great, you are now logged in to Spotify!",
+      "Great, you are now logged in to Spotify!\nTry playing a track!",
+      "Great, you are now logged in to Spotify!\nTry playing an album!",
+      "Great, you are now logged in to Spotify!\nTry playing an artist!",
+      "You have successfully logged in to Spotify!"
     ]
   }
 }

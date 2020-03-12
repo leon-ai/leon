@@ -17,19 +17,19 @@
           "name": "track",
           "conditions": [
             {
-              "type": "after",
+              "type": "after_first",
               "from": "play"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "song"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "track"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "tune"
             },
             {
@@ -54,15 +54,15 @@
           "name": "artist",
           "conditions": [
             {
-              "type": "after",
+              "type": "after_first",
               "from": "artist"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "group"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "by"
             }
           ]
@@ -85,7 +85,7 @@
               "to": "by"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "album"
             }
           ]
@@ -95,15 +95,15 @@
           "name": "artist",
           "conditions": [
             {
-              "type": "after",
+              "type": "after_first",
               "from": "artist"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "group"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "by"
             }
           ]
@@ -122,11 +122,11 @@
           "name": "artist",
           "conditions": [
             {
-              "type": "after",
+              "type": "after_first",
               "from": "artist"
             },
             {
-              "type": "after",
+              "type": "after_first",
               "from": "group"
             }
           ]
