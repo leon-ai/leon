@@ -18,6 +18,9 @@
       "Please login to Spotify first",
       "You are not logged in to Spotify"
     ],
+    "already_logged_in": [
+      "You are already logged in to Spotify"
+    ],
     "login": [
       "Please sign in and then give me the whole URL to which you were redirected."
     ]

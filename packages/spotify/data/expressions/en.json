@@ -1,11 +1,18 @@
 {
   "spotify": {
-    "play": {
+    "play_current_track": {
       "expressions": [
-        "Play the song stairway to heaven by led zeppelin",
+        "Play",
+        "Resume",
+        "Resume playing"
+      ]
+    },
+     "play_track": {
+      "expressions": [
+        "Play smells like teen spirit",
+        "Play the song stairway to heaven",
         "Play the track lucy in the sky with diamonds by the beatles",
-        "Play me the song roxanne by the police",
-        "Play the artist Prince"
+        "Play me the song roxanne by the police"
       ],
       "entities": [
         {
@@ -14,7 +21,15 @@
           "conditions": [
             {
               "type": "after",
+              "from": "play"
+            },
+            {
+              "type": "after",
               "from": "song"
+            },
+            {
+              "type": "after",
+              "from": "track"
             },
             {
               "type": "between",
@@ -45,10 +60,18 @@
               "from": "by"
             }
           ]
-        },
+        }
+      ]
+    },
+    "play_album": {
+      "expressions": [
+        "Play album foo",
+        "Play the album derp by foo fighters"
+      ],
+      "entities": [
         {
           "type": "trim",
-          "name": "playlist",
+          "name": "album",
           "conditions": [
             {
               "type": "after",
@@ -56,13 +79,39 @@
             }
           ]
         },
-        {
+         {
           "type": "trim",
-          "name": "album",
+          "name": "artist",
           "conditions": [
             {
               "type": "after",
-              "from": "album"
+              "from": "artist"
+            },
+            {
+              "type": "after",
+              "from": "group"
+            },
+            {
+              "type": "after",
+              "from": "by"
+            }
+          ]
+        }
+      ]
+    },
+     "play_playlist": {
+      "expressions": [
+        "Play playlist foo",
+        "Play the playlist derp"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "playlist",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "playlist"
             }
           ]
         }

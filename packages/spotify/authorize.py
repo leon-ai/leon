@@ -1,4 +1,5 @@
 import base64
+import json
 import time
 
 import requests
@@ -23,6 +24,12 @@ def run(string, entities):
   results = requests.post('https://accounts.spotify.com/api/token', data=payload, headers=headers)
 
   token = results.json()
+
+  file = open("access_token.txt", 'w')
+  file.write(json.dumps(token))
+  file.close()
+
+  # add info fields to token object
   token['expires_at'] = int(time.time()) + token['expires_in']
   token['client_id'] = utils.config('client_id')
   token['client_secret'] = utils.config('client_secret')

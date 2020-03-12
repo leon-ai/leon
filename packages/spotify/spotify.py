@@ -13,9 +13,12 @@ auth_base = 'https://accounts.spotify.com/authorize?'
 def logged_in():
   db = utils.db()['db'].all()
   if len(db) > 0:
-    db = get_database_content()
+    db = get_database_content()  # token info
     now = int(time.time())
-    return int(db['expires_at']) > now
+    file = open("isloggedin.txt", 'w')
+    file.write("Expires at: " + str(db['expires_at']) + '\t' + "Now: " + str(now))
+    file.close()
+    return now < db['expires_at']
 
   return False
 
@@ -23,6 +26,9 @@ def get_database_content():
   return utils.db()['db'].all()[0]
 
 def login(string, entities):
+  if logged_in():
+    return utils.output('end', 'message', utils.translate('already_logged_in'))
+
   config = {
     'redirect_uri': utils.config('redirect_uri'),
     'response_type': 'code',
@@ -36,13 +42,21 @@ def login(string, entities):
 
   utils.output('end', 'success', utils.translate('login'))
 
-def play(string, entities):
+def can_play(device):
   if not logged_in():
-    return utils.output('end', 'error', utils.translate('not_logged_in'))
+    utils.output('end', 'error', utils.translate('not_logged_in'))
+    return False
 
-  device = get_device()
   if not device:
-    return utils.output('end', 'error', utils.translate('no_device'))
+    utils.output('end', 'error', utils.translate('no_device'))
+    return False
+
+  return True
+
+def play(string, entities):
+  device = get_device()
+  if not can_play(device):
+    return
 
   track=''
   album=''
@@ -73,19 +87,38 @@ def play(string, entities):
       play_current_track(device)
 
 
-def play_current_track(device):
-  spotify_request('PUT', 'me/player/play', {'device_id': device})
+def play_current_track(string, entities):
+  device_id = get_device()
+  if not can_play(device_id):
+    return
+  spotify_request('PUT', 'me/player/play', {'device_id': device_id})
   utils.output('end', 'success', utils.translate('resume_playing'))
 
 
-def play_track(device_id, track_name, artist=None):
+def play_track(string, entities):
+  device_id = get_device()
+  if not can_play(device_id):
+    return
+
+  track_name = ''
+  artist_name = ''
+
+  for item in entities:
+    if item['entity'] == 'track':
+      track_name=item['sourceText']
+    if item['entity'] == 'artist':
+      artist_name = item['sourceText']
+
+  if not track_name:
+    return utils.output('end', 'info', "no track name....faaan!")
+
   params = {
     'q': track_name,
     'type': 'track'
   }
 
-  if artist:
-    params['artist'] = artist
+  if artist_name:
+    params['artist'] = artist_name
 
   results = spotify_request('GET', 'search', params)
 
@@ -97,10 +130,10 @@ def play_track(device_id, track_name, artist=None):
     return utils.output('end', 'info', utils.translate('no_search_result'))
 
   chosen_track = None
-  if artist:
+  if artist_name:
     for t in results['tracks']['items']:
       for a in t['artists']:
-        if a['name'].lower() == artist.lower():
+        if a['name'].lower() == artist_name.lower():
           chosen_track = t
           break
 
