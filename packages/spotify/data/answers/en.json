@@ -1,7 +1,7 @@
 {
   "spotify": {
     "now_playing": [
-      "now playing the %type% %name% by %artist%"
+      "now playing the %type% \"%name%\" by %artist%"
     ],
     "resume_playing": [
       "playing"

@@ -8,7 +8,8 @@
         "Play smells like teen spirit",
         "Play the song stairway to heaven",
         "Play the track lucy in the sky with diamonds by the beatles",
-        "Play me the song roxanne by the police"
+        "Play me the song roxanne by the police",
+        "Play the tune fly me to the moon by Frank Sinatra"
       ],
       "entities": [
         {
@@ -28,6 +29,10 @@
               "from": "track"
             },
             {
+              "type": "after",
+              "from": "tune"
+            },
+            {
               "type": "between",
               "from": "song",
               "to": "by"
@@ -35,6 +40,11 @@
             {
               "type": "between",
               "from": "track",
+              "to": "by"
+            },
+            {
+              "type": "between",
+              "from": "tune",
               "to": "by"
             }
           ]
@@ -70,8 +80,13 @@
           "name": "album",
           "conditions": [
             {
+              "type": "between",
+              "from": "album",
+              "to": "by"
+            },
+            {
               "type": "after",
-              "from": "playlist"
+              "from": "album"
             }
           ]
         },

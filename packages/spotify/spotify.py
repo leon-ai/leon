@@ -160,18 +160,83 @@ def play_track(string, entities):
   utils.output('end', 'success', utils.translate('now_playing', info))
 
 
-def play_album(device, album, artist=None):
-  pass
+def play_album(string, entities):
+  device_id = get_device()
+  if not can_play(device_id):
+    return
+
+  album_name = ''
+  artist_name = ''
+
+  for item in entities:
+    if item['entity'] == 'album':
+      album_name = item['sourceText']
+    if item['entity'] == 'artist':
+      artist_name = item['sourceText']
+
+  if not album_name:
+    play_current_track(device_id)
+
+  params = {
+    'q': album_name,
+    'type': 'album'
+  }
+
+  if artist_name:
+    params['artist'] = artist_name
+
+  results = spotify_request('GET', 'search', params)
+
+  file = open("play_album.txt", 'w')
+  file.write(json.dumps(results))
+  file.close()
+
+  if not results['albums']['total'] > 0:
+    return utils.output('end', 'info', utils.translate('no_search_result'))
+
+  chosen_album = None
+  if artist_name:
+    for alb in results['albums']['items']:
+      if alb['name'].lower() == album_name.lower():
+        for art in alb['artists']:
+          if art['name'].lower() == artist_name.lower():
+            chosen_album= alb
+            break
+
+  if not chosen_album:
+    chosen_album = results['albums']['items'][0]  # choose first match
+
+  artists = []
+
+  for artist in chosen_album['artists']:
+    artists.append(artist['name'])
+
+  data = {}
+  data["context_uri"] = chosen_album["uri"]
+
+  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
+
+  info = {
+    "name": chosen_album['name'],
+    "artist": ', '.join(artists),
+    "type": 'album'
+  }
+
+  utils.output('end', 'success', utils.translate('now_playing', info))
+
 
 def play_artist(device, artist):
   pass
 
+
 def play_playlist(device, playlist):
   pass
+
 
 def token_expired(expires_at):
   now = int(time.time())
   return expires_at - now < 60
+
 
 def get_access_token():
   data = get_database_content()
