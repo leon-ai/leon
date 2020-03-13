@@ -1,4 +1,5 @@
 import base64
+import json
 import socket
 import time
 from urllib.parse import urlencode
@@ -146,6 +147,38 @@ def display_album(album):
   info["artist"] = ', '.join(artists)
 
   utils.output('end', 'success', utils.translate('display_info', {"info": album_to_html_table(info)}))
+
+
+def playlist_to_html_table(playlist):
+  tracks_table = '<table><thead style="border-bottom:1px solid black"><tr><th>Track name</th><th>Artist</th><th>Playing time</th></tr></thead><tbody>'
+  for track in playlist['tracks']:
+    tracks_table += '<tr><td>{}</td><td>{}</td><td style="text-align:right">{}</td></tr>'.format(track['name'], track['artist'], track['duration'])
+  tracks_table += '</tbody></table>'
+
+  return "<p><strong>{}</strong><p>" \
+         "<ul style=\"list-style-type:none;\">" \
+         "{}" \
+         .format(playlist['name'], tracks_table)
+
+
+def display_playlist(playlist):
+  info = {
+    "name": playlist['name']
+  }
+
+  result = spotify_request('GET', 'playlists/' + playlist['id'] + '/tracks', {})
+
+  file = open("playlist_tracks.txt", 'w')
+  file.write(json.dumps(result))
+  file.close()
+
+  tracks = []
+  for tr in result['items']:
+    tracks.append({"name": tr['track']['name'], "duration": format_time(tr['track']['duration_ms']), "artist": tr['track']['artists'][0]['name']})
+
+  info['tracks'] = tracks
+
+  utils.output('end', 'success', utils.translate('display_info', {"info": playlist_to_html_table(info)}))
 
 
 def get_database_content():

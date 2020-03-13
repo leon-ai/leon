@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from bridges.python import utils
 
 from packages.spotify.spotify_utils import parse_entities, get_device, spotify_request, logged_in, can_play, \
-  display_track, display_album
+  display_track, display_album, format_time, album_to_html_table
 
 from packages.spotify.spotify_utils import track, album, artist, playlist
 
@@ -87,10 +87,6 @@ def play_current_track(device_id):
   utils.output('end', 'success', utils.translate('playing_resumed'))
 
 
-def display_playlist(playlist):
-  pass
-
-
 def show_my_playlists(string, entities):
   if not logged_in():
     return utils.output('end', 'error', utils.translate('not_logged_in'))
@@ -131,3 +127,5 @@ def display_info(string, entities):
     display_track(first_result_item)
   if search_query.get_type() == album:
     display_album(first_result_item)
+  if search_query.get_type() == playlist:
+    display_playlist(first_result_item)
