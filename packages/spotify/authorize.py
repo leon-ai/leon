@@ -25,10 +25,6 @@ def run(string, entities):
 
   token = results.json()
 
-  file = open("access_token.txt", 'w')
-  file.write(json.dumps(token))
-  file.close()
-
   # add info fields to token object
   token['expires_at'] = int(time.time()) + token['expires_in']
   token['client_id'] = utils.config('client_id')

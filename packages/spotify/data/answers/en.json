@@ -33,6 +33,9 @@
       "Please login to Spotify first",
       "You are not logged in to Spotify"
     ],
+    "no_search_term": [
+      "Please provide a search term"
+    ],
     "already_logged_in": [
       "You are already logged in to Spotify"
     ],

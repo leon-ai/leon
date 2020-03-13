@@ -1,5 +1,4 @@
 import base64
-import json
 import socket
 import time
 from urllib.parse import urlencode
@@ -102,7 +101,7 @@ def display_track(track):
 
   info["artist"] = ', '.join(artists)
 
-  utils.output('end', 'success', utils.translate('display_info', {"info": track_to_html_list(info)}))
+  return utils.output('end', 'success', utils.translate('display_info', {"info": track_to_html_list(info)}))
 
 
 def album_to_html_table(album):
@@ -130,10 +129,6 @@ def display_album(album):
 
   result = spotify_request('GET', 'albums/' + album['id'] + '/tracks', {})
 
-  file = open("album_tracks.txt", 'w')
-  file.write(json.dumps(result))
-  file.close()
-
   tracks = []
   for tr in result['items']:
     tracks.append({"name": tr['name'], "duration": format_time(tr['duration_ms'])})
@@ -146,7 +141,7 @@ def display_album(album):
 
   info["artist"] = ', '.join(artists)
 
-  utils.output('end', 'success', utils.translate('display_info', {"info": album_to_html_table(info)}))
+  return utils.output('end', 'success', utils.translate('display_info', {"info": album_to_html_table(info)}))
 
 
 def playlist_to_html_table(playlist):
@@ -156,29 +151,29 @@ def playlist_to_html_table(playlist):
   tracks_table += '</tbody></table>'
 
   return "<p><strong>{}</strong><p>" \
+         "<p><i>{}</i><p>" \
          "<ul style=\"list-style-type:none;\">" \
          "{}" \
-         .format(playlist['name'], tracks_table)
+         .format(playlist['name'], playlist['description'], tracks_table)
 
 
 def display_playlist(playlist):
   info = {
-    "name": playlist['name']
+    "name": playlist['name'],
+    "description": playlist['description']
   }
 
-  result = spotify_request('GET', 'playlists/' + playlist['id'] + '/tracks', {})
-
-  file = open("playlist_tracks.txt", 'w')
-  file.write(json.dumps(result))
-  file.close()
+  result = spotify_request('GET', 'playlists/' + playlist['id'] + '/tracks', {"limit": 20})
 
   tracks = []
   for tr in result['items']:
-    tracks.append({"name": tr['track']['name'], "duration": format_time(tr['track']['duration_ms']), "artist": tr['track']['artists'][0]['name']})
+    # tracks may be null if not available anymore
+    if tr:
+      tracks.append({"name": tr['track']['name'], "duration": format_time(tr['track']['duration_ms']), "artist": tr['track']['artists'][0]['name']})
 
   info['tracks'] = tracks
 
-  utils.output('end', 'success', utils.translate('display_info', {"info": playlist_to_html_table(info)}))
+  return utils.output('end', 'success', utils.translate('display_info', {"info": playlist_to_html_table(info)}))
 
 
 def get_database_content():
@@ -195,9 +190,6 @@ def logged_in():
   if len(db) > 0:
     db = get_database_content()  # token info
     now = int(time.time())
-    file = open("isloggedin.txt", 'w')
-    file.write("Expires at: " + str(db['expires_at']) + '\t' + "Now: " + str(now))
-    file.close()
     return now < db['expires_at']
 
   return False
@@ -264,8 +256,7 @@ def get_device():
   access_token = get_access_token()
   url_base = get_database_content()['url_base']
   url = url_base + 'me/player/devices'
-  devices = requests.get(
-    url=url, headers={'Authorization': 'Bearer {0}'.format(access_token)}).json()
+  devices = requests.get(url=url, headers={'Authorization': 'Bearer {0}'.format(access_token)}).json()
   current_device_name = socket.gethostname()
 
   device_id = False

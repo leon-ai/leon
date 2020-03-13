@@ -4,7 +4,7 @@ from urllib.parse import urlencode
 from bridges.python import utils
 
 from packages.spotify.spotify_utils import parse_entities, get_device, spotify_request, logged_in, can_play, \
-  display_track, display_album, format_time, album_to_html_table
+  display_track, display_album, display_playlist
 
 from packages.spotify.spotify_utils import track, album, artist, playlist
 
@@ -24,7 +24,7 @@ def login(string, entities):
 
   webbrowser.open(url)
 
-  utils.output('end', 'success', utils.translate('login'))
+  return utils.output('end', 'success', utils.translate('login'))
 
 
 def play(string, entities):
@@ -70,7 +70,7 @@ def play(string, entities):
 
     return utils.output('end', 'success', utils.translate('now_playing_by', info))
 
-  utils.output('end', 'success', utils.translate('now_playing', info))
+  return utils.output('end', 'success', utils.translate('now_playing', info))
 
 
 def pause(string, entities):
@@ -84,7 +84,7 @@ def pause(string, entities):
 
 def play_current_track(device_id):
   spotify_request('PUT', 'me/player/play', {'device_id': device_id})
-  utils.output('end', 'success', utils.translate('playing_resumed'))
+  return utils.output('end', 'success', utils.translate('playing_resumed'))
 
 
 def show_my_playlists(string, entities):
@@ -107,15 +107,21 @@ def show_my_playlists(string, entities):
     "num_playlists": results['total']
   }
 
-  utils.output('inter', 'success', utils.translate('show_my_playlists', info))
+  return utils.output('inter', 'success', utils.translate('show_my_playlists', info))
 
 
 def display_info(string, entities):
   search_query = parse_entities(entities)
 
+  if not search_query.get_type():
+    return utils.output('end', 'message', utils.translate('no_search_term'))
+
   params = search_query.get_search_parameters()
+  params['limit'] = 1
 
   results = spotify_request('GET', 'search', params)
+
+  utils.output('inter', 'message', utils.translate('contacting_spotify'))
 
   result_type = search_query.get_type() + 's'
   if not results[result_type]['total'] > 0:
@@ -125,7 +131,9 @@ def display_info(string, entities):
 
   if search_query.get_type() == track:
     display_track(first_result_item)
-  if search_query.get_type() == album:
+  elif search_query.get_type() == album:
     display_album(first_result_item)
-  if search_query.get_type() == playlist:
+  elif search_query.get_type() == playlist:
     display_playlist(first_result_item)
+
+  return
