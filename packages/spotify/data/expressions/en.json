@@ -86,6 +86,16 @@
               "from": "album"
             }
           ]
+        },
+        {
+          "type": "trim",
+          "name": "playlist",
+          "conditions": [
+            {
+              "type": "after_first",
+              "from": "playlist"
+            }
+          ]
         }
       ]
     },

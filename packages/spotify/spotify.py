@@ -48,7 +48,7 @@ class SearchQuery:
       return self.playlist
     return ''
 
-  def get_parameters(self):
+  def get_search_parameters(self):
     return {
       'q': self.get_query_string(),
       'type': self.get_type()
@@ -116,6 +116,7 @@ def parse_entities(entities):
 
   return query
 
+
 def play(string, entities):
   device_id = get_device()
   # is spotify running and user logged in?
@@ -152,7 +153,7 @@ def play_current_track(device_id):
 
 
 def play_track(device_id, search_query):
-  params = search_query.get_parameters()
+  params = search_query.get_search_parameters()
 
   results = spotify_request('GET', 'search', params)
 
@@ -177,11 +178,11 @@ def play_track(device_id, search_query):
     "type": track
   }
 
-  utils.output('end', 'success', utils.translate('now_playing', info))
+  utils.output('end', 'success', utils.translate('now_playing_by', info))
 
 
 def play_album(device_id, search_query):
-  params = search_query.get_parameters()
+  params = search_query.get_search_parameters()
 
   results = spotify_request('GET', 'search', params)
 
@@ -206,11 +207,11 @@ def play_album(device_id, search_query):
     "type": album
   }
 
-  utils.output('end', 'success', utils.translate('now_playing', info))
+  utils.output('end', 'success', utils.translate('now_playing_by', info))
 
 
 def play_artist(device_id, search_query):
-  params = search_query.get_parameters()
+  params = search_query.get_search_parameters()
 
   results = spotify_request('GET', 'search', params)
 
@@ -229,11 +230,30 @@ def play_artist(device_id, search_query):
     "type": artist
   }
 
-  utils.output('end', 'success', utils.translate('now_playing_artist', info))
+  utils.output('end', 'success', utils.translate('now_playing', info))
 
 
 def play_playlist(device_id, search_query):
-  pass
+  params = search_query.get_search_parameters()
+
+  results = spotify_request('GET', 'search', params)
+
+  if not results['playlists']['total'] > 0:
+    return utils.output('end', 'info', utils.translate('no_search_result'))
+
+  chosen_artist = results['playlists']['items'][0]  # choose first match
+
+  data = {}
+  data["context_uri"] = chosen_artist["uri"]
+
+  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
+
+  info = {
+    "name": chosen_artist['name'],
+    "type": playlist
+  }
+
+  utils.output('end', 'success', utils.translate('now_playing', info))
 
 
 def token_expired(expires_at):
@@ -280,10 +300,6 @@ def spotify_request(method, endpoint, query_params, body_params={}):
   result = requests.request(method=method, url=url, headers={'Authorization': 'Bearer {0}'.format(
     access_token), 'Content-Type': 'application/json'}, data=body_params)
 
-  file = open("putresult.txt", 'w')
-  file.write(result.text)
-  file.close()
-
   if result.text and len(result.text) > 0 and result.text != 'null':
     return result.json()
   else:
@@ -297,10 +313,6 @@ def get_device():
   devices = requests.get(
     url=url, headers={'Authorization': 'Bearer {0}'.format(access_token)}).json()
   current_device_name = socket.gethostname()
-
-  file = open('logfile.txt', 'w')
-  file.write(json.dumps(devices))
-  file.close()
 
   device_id = False
   for device in devices['devices']:

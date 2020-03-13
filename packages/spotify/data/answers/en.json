@@ -1,9 +1,9 @@
 {
   "spotify": {
-    "now_playing": [
+    "now_playing_by": [
       "Now playing the %type% \"%name%\" by %artist%"
     ],
-    "now_playing_artist": [
+    "now_playing": [
       "Now playing the %type% \"%name%\""
     ],
     "playing_paused": [
