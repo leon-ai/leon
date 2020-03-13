@@ -75,6 +75,9 @@ class Server {
       app.get('/', (req, res) => {
         res.sendFile(path.resolve(`${__dirname}/../../../app/index.html`))
       })
+      app.get('/spotify_auth', (req, res) => {
+        res.sendFile(path.resolve(`${__dirname}/../../../app/spotify_auth.html`))
+      })
 
       app.use(`/${apiVersion}/info`, infoRouter)
       app.use(`/${apiVersion}/downloads`, downloadRouter)
