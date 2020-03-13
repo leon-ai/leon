@@ -37,7 +37,7 @@ class SearchQuery:
     if self.track and self.artist:
       return '{} artist:{}'.format(self.track, self.artist)
     if self.album and self.artist:
-      return '{} album:{}'.format(self.album, self.artist)
+      return '{} artist:{}'.format(self.album, self.artist)
     if self.track:
       return self.track
     if self.album:
@@ -156,23 +156,10 @@ def play_track(device_id, search_query):
 
   results = spotify_request('GET', 'search', params)
 
-  file = open("mylog.txt", 'w')
-  file.write(json.dumps(results))
-  file.close()
-
   if not results['tracks']['total'] > 0:
     return utils.output('end', 'info', utils.translate('no_search_result'))
 
-  chosen_track = None
-  if search_query.artist:
-    for t in results['tracks']['items']:
-      for a in t['artists']:
-        if a['name'].lower() == search_query.artist.lower():
-          chosen_track = t
-          break
-
-  if not chosen_track:
-    chosen_track = results['tracks']['items'][0]  # choose first match
+  chosen_track = results['tracks']['items'][0]  # choose first match
 
   artists = []
 
@@ -182,16 +169,12 @@ def play_track(device_id, search_query):
   data = {}
   data["uris"] = [chosen_track["uri"]]
 
-  file = open("chosentrack_uri.txt", 'w')
-  file.write(chosen_track["uri"])
-  file.close()
-
   spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
 
   info = {
     "name": chosen_track['name'],
     "artist": ', '.join(artists),
-    "type": 'track'
+    "type": track
   }
 
   utils.output('end', 'success', utils.translate('now_playing', info))
@@ -202,27 +185,10 @@ def play_album(device_id, search_query):
 
   results = spotify_request('GET', 'search', params)
 
-  file = open("play_album.txt", 'w')
-  file.write(json.dumps(results))
-  file.close()
-
   if not results['albums']['total'] > 0:
     return utils.output('end', 'info', utils.translate('no_search_result'))
 
-  file = open("play_album.txt", 'a')
-  chosen_album = None
-  if search_query.artist:
-    for alb in results['albums']['items']:
-      if alb['name'].lower() == search_query.album.lower():
-        for art in alb['artists']:
-          file.write("\nAlbum: " + alb['name'] + '\t' + "Artist: " + art['name'] + '\n')
-          if art['name'].lower() == search_query.artist.lower():
-            chosen_album = alb
-            break
-  file.close()
-
-  if not chosen_album:
-    chosen_album = results['albums']['items'][0]  # choose first match
+  chosen_album = results['albums']['items'][0]  # choose first match
 
   artists = []
 
@@ -237,7 +203,7 @@ def play_album(device_id, search_query):
   info = {
     "name": chosen_album['name'],
     "artist": ', '.join(artists),
-    "type": 'album'
+    "type": album
   }
 
   utils.output('end', 'success', utils.translate('now_playing', info))
@@ -248,26 +214,10 @@ def play_artist(device_id, search_query):
 
   results = spotify_request('GET', 'search', params)
 
-  file = open("play_artist.txt", 'w')
-  file.write(json.dumps(results))
-  file.close()
-
   if not results['artists']['total'] > 0:
     return utils.output('end', 'info', utils.translate('no_search_result'))
 
-  file = open("play_album.txt", 'a')
-
-  chosen_artist = None
-  for art in results['artists']['items']:
-    file.write("\nArtist: " + art['name'] + '\n')
-    if art['name'].lower() == search_query.artist.lower():
-      chosen_artist = art
-      break
-
-  file.close()
-
-  if not chosen_artist:
-    chosen_artist = results['artists']['items'][0]  # choose first match
+  chosen_artist = results['artists']['items'][0]  # choose first match
 
   data = {}
   data["context_uri"] = chosen_artist["uri"]
@@ -276,7 +226,7 @@ def play_artist(device_id, search_query):
 
   info = {
     "name": chosen_artist['name'],
-    "type": 'artist'
+    "type": artist
   }
 
   utils.output('end', 'success', utils.translate('now_playing_artist', info))
