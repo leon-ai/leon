@@ -1,6 +1,6 @@
 {
   "spotify": {
-     "play_track": {
+     "play": {
       "expressions": [
         "Play",
         "Resume",
@@ -9,7 +9,12 @@
         "Play the song stairway to heaven",
         "Play the track lucy in the sky with diamonds by the beatles",
         "Play me the song roxanne by the police",
-        "Play the tune fly me to the moon by Frank Sinatra"
+        "Play the tune fly me to the moon by Frank Sinatra",
+        "Play album foo",
+        "Play the album derp by foo fighters",
+        "Play artist Prince",
+        "Play the artist Foo Fighters",
+        "Play something by the group Weezer"
       ],
       "entities": [
         {
@@ -18,7 +23,7 @@
           "conditions": [
             {
               "type": "after_first",
-              "from": "play"
+              "from": "music"
             },
             {
               "type": "after_first",
@@ -66,15 +71,7 @@
               "from": "by"
             }
           ]
-        }
-      ]
-    },
-    "play_album": {
-      "expressions": [
-        "Play album foo",
-        "Play the album derp by foo fighters"
-      ],
-      "entities": [
+        },
         {
           "type": "trim",
           "name": "album",
@@ -87,47 +84,6 @@
             {
               "type": "after_first",
               "from": "album"
-            }
-          ]
-        },
-         {
-          "type": "trim",
-          "name": "artist",
-          "conditions": [
-            {
-              "type": "after_first",
-              "from": "artist"
-            },
-            {
-              "type": "after_first",
-              "from": "group"
-            },
-            {
-              "type": "after_first",
-              "from": "by"
-            }
-          ]
-        }
-      ]
-    },
-     "play_artist": {
-      "expressions": [
-        "Play artist Prince",
-        "Play the artist Foo Fighters",
-        "Play something by the group Weezer"
-      ],
-      "entities": [
-        {
-          "type": "trim",
-          "name": "artist",
-          "conditions": [
-            {
-              "type": "after_first",
-              "from": "artist"
-            },
-            {
-              "type": "after_first",
-              "from": "group"
             }
           ]
         }

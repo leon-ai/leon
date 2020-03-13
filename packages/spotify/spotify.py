@@ -10,6 +10,51 @@ import requests
 
 auth_base = 'https://accounts.spotify.com/authorize?'
 
+track = 'track'
+artist = 'artist'
+album = 'album'
+playlist = 'playlist'
+
+class SearchQuery:
+  def __init__(self, track=None, artist=None, album=None, playlist=None):
+    self.track = track
+    self.artist = artist
+    self.album = album
+    self.playlist = playlist
+
+  def get_type(self):
+    if self.track:
+      return track
+    if self.album:
+      return album
+    if self.artist:
+      return artist
+    if self.playlist:
+      return playlist
+    return None
+
+  def get_query_string(self):
+    if self.track and self.artist:
+      return '{} artist:{}'.format(self.track, self.artist)
+    if self.album and self.artist:
+      return '{} album:{}'.format(self.album, self.artist)
+    if self.track:
+      return self.track
+    if self.album:
+      return self.album
+    if self.artist:
+      return self.artist
+    if self.playlist:
+      return self.playlist
+    return ''
+
+  def get_parameters(self):
+    return {
+      'q': self.get_query_string(),
+      'type': self.get_type()
+    }
+
+
 def logged_in():
   db = utils.db()['db'].all()
   if len(db) > 0:
@@ -22,8 +67,10 @@ def logged_in():
 
   return False
 
+
 def get_database_content():
   return utils.db()['db'].all()[0]
+
 
 def login(string, entities):
   if logged_in():
@@ -42,6 +89,7 @@ def login(string, entities):
 
   utils.output('end', 'success', utils.translate('login'))
 
+
 def can_play(device):
   if not logged_in():
     utils.output('end', 'error', utils.translate('not_logged_in'))
@@ -52,6 +100,41 @@ def can_play(device):
     return False
 
   return True
+
+
+def parse_entities(entities):
+  query = SearchQuery()
+  for item in entities:
+    if item['entity'] == track:
+      query.track = item['sourceText']
+    if item['entity'] == artist:
+      query.artist = item['sourceText']
+    if item['entity'] == album:
+      query.album = item['sourceText']
+    if item['entity'] == playlist:
+      query.playlist = item['sourceText']
+
+  return query
+
+def play(string, entities):
+  device_id = get_device()
+  # is spotify running and user logged in?
+  if not can_play(device_id):
+    return
+
+  # create search query object from entities retrieved from the nlu
+  search_query = parse_entities(entities)
+
+  if search_query.get_type() == track:
+    play_track(device_id, search_query)
+  elif search_query.get_type() == album:
+    play_album(device_id, search_query)
+  elif search_query.get_type() == artist:
+    play_artist(device_id, search_query)
+  elif search_query.get_type() == playlist:
+    play_playlist(device_id, search_query)
+  else:
+    play_current_track(device_id)
 
 
 def pause(string, entities):
@@ -68,33 +151,8 @@ def play_current_track(device_id):
   utils.output('end', 'success', utils.translate('playing_resumed'))
 
 
-def play_track(string, entities):
-  device_id = get_device()
-  if not can_play(device_id):
-    return
-
-  track_name = ''
-  artist_name = ''
-
-  for item in entities:
-    if item['entity'] == 'track':
-      track_name=item['sourceText']
-    if item['entity'] == 'artist':
-      artist_name = item['sourceText']
-
-  # in case the nlu has misunderstood
-  if not track_name and not artist_name:
-    return play_current_track(device_id)
-  if artist_name and not track_name:
-    return play_artist(string, entities)
-
-  params = {
-    'q': track_name,
-    'type': 'track'
-  }
-
-  if artist_name:
-    params['artist'] = artist_name
+def play_track(device_id, search_query):
+  params = search_query.get_parameters()
 
   results = spotify_request('GET', 'search', params)
 
@@ -106,10 +164,10 @@ def play_track(string, entities):
     return utils.output('end', 'info', utils.translate('no_search_result'))
 
   chosen_track = None
-  if artist_name:
+  if search_query.artist:
     for t in results['tracks']['items']:
       for a in t['artists']:
-        if a['name'].lower() == artist_name.lower():
+        if a['name'].lower() == search_query.artist.lower():
           chosen_track = t
           break
 
@@ -139,31 +197,8 @@ def play_track(string, entities):
   utils.output('end', 'success', utils.translate('now_playing', info))
 
 
-def play_album(string, entities):
-  device_id = get_device()
-  if not can_play(device_id):
-    return
-
-  album_name = ''
-  artist_name = ''
-
-  for item in entities:
-    if item['entity'] == 'album':
-      album_name = item['sourceText']
-    if item['entity'] == 'artist':
-      artist_name = item['sourceText']
-
-  if not album_name:
-    play_current_track(device_id)
-
-  params = {
-    'q': album_name,
-    'type': 'album'
-  }
-
-  if artist_name:
-    params['q'] += ' artist:' + artist_name
-    params['artist'] = artist_name
+def play_album(device_id, search_query):
+  params = search_query.get_parameters()
 
   results = spotify_request('GET', 'search', params)
 
@@ -176,12 +211,12 @@ def play_album(string, entities):
 
   file = open("play_album.txt", 'a')
   chosen_album = None
-  if artist_name:
+  if search_query.artist:
     for alb in results['albums']['items']:
-      if alb['name'].lower() == album_name.lower():
+      if alb['name'].lower() == search_query.album.lower():
         for art in alb['artists']:
           file.write("\nAlbum: " + alb['name'] + '\t' + "Artist: " + art['name'] + '\n')
-          if art['name'].lower() == artist_name.lower():
+          if art['name'].lower() == search_query.artist.lower():
             chosen_album = alb
             break
   file.close()
@@ -208,24 +243,8 @@ def play_album(string, entities):
   utils.output('end', 'success', utils.translate('now_playing', info))
 
 
-def play_artist(string, entities):
-  device_id = get_device()
-  if not can_play(device_id):
-    return
-
-  artist_name = ''
-
-  for item in entities:
-    if item['entity'] == 'artist':
-      artist_name = item['sourceText']
-
-  if not artist_name:
-    play_current_track(device_id)
-
-  params = {
-    'q': artist_name,
-    'type': 'artist'
-  }
+def play_artist(device_id, search_query):
+  params = search_query.get_parameters()
 
   results = spotify_request('GET', 'search', params)
 
@@ -241,7 +260,7 @@ def play_artist(string, entities):
   chosen_artist = None
   for art in results['artists']['items']:
     file.write("\nArtist: " + art['name'] + '\n')
-    if art['name'].lower() == artist_name.lower():
+    if art['name'].lower() == search_query.artist.lower():
       chosen_artist = art
       break
 
@@ -261,6 +280,10 @@ def play_artist(string, entities):
   }
 
   utils.output('end', 'success', utils.translate('now_playing_artist', info))
+
+
+def play_playlist(device_id, search_query):
+  pass
 
 
 def token_expired(expires_at):
