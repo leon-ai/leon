@@ -46,9 +46,7 @@
     "contacting_spotify": [
       "Checking with spotify...",
       "Let me check with Spotify"
-    ]
-  },
-  "authorize": {
+    ],
     "logged_in": [
       "Great, you are now logged in to Spotify!",
       "Great, you are now logged in to Spotify!\nTry playing a track!",

@@ -1,6 +1,6 @@
 {
   "spotify": {
-     "play": {
+    "play": {
       "expressions": [
         "Play",
         "Resume",
@@ -213,10 +213,8 @@
         "spotify login",
         "login to spotify"
       ]
-    }
-  },
-  "authorize" : {
-    "run" : {
+    },
+    "authorize" : {
       "expressions": [
         "http://localhost:1337/callback?code= "
       ],

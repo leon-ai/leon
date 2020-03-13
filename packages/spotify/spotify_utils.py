@@ -1,4 +1,5 @@
 import base64
+import json
 import socket
 import time
 from urllib.parse import urlencode
@@ -144,11 +145,18 @@ def display_album(album):
   return utils.output('end', 'success', utils.translate('display_info', {"info": album_to_html_table(info)}))
 
 
-def playlist_to_html_table(playlist):
+def create_tracks_table(tracks):
   tracks_table = '<table><thead style="border-bottom:1px solid black"><tr><th>Track name</th><th>Artist</th><th>Playing time</th></tr></thead><tbody>'
-  for track in playlist['tracks']:
-    tracks_table += '<tr><td>{}</td><td>{}</td><td style="text-align:right">{}</td></tr>'.format(track['name'], track['artist'], track['duration'])
+  for track in tracks:
+    tracks_table += '<tr><td>{}</td><td>{}</td><td style="text-align:right">{}</td></tr>'.format(track['name'],
+                                                                                                 track['artist'],
+                                                                                                 track['duration'])
   tracks_table += '</tbody></table>'
+  return tracks_table
+
+
+def playlist_to_html_table(playlist):
+  tracks_table = create_tracks_table(playlist['tracks'])
 
   return "<p><strong>{}</strong><p>" \
          "<p><i>{}</i><p>" \
@@ -174,6 +182,53 @@ def display_playlist(playlist):
   info['tracks'] = tracks
 
   return utils.output('end', 'success', utils.translate('display_info', {"info": playlist_to_html_table(info)}))
+
+
+def artist_to_html_list(info):
+  return "<p><strong>{}</strong><p>" \
+         "<ul style=\"list-style-type:none;\">" \
+         "<li>popularity: {}%</li>" \
+         "<li>followers: {}</li>" \
+         "<li>genres: {}</li></ul>" \
+         "<p><u>Top tracks</u></p> {}".format(info['name'], info['popularity'], info['num_followers'], info['genres'], info['top_tracks'])
+
+
+def display_artist(artist):
+  info = {
+    "name": artist['name'],
+    "num_followers":  artist['followers']['total'],
+    "popularity": artist['popularity']
+  }
+
+  user_info = spotify_request('GET', 'me', {})
+
+  file = open("me.txt", 'w')
+  file.write(json.dumps(user_info))
+  file.close()
+
+  result = spotify_request('GET', 'artists/' + artist['id'] + '/top-tracks', {'country': user_info['country']})
+
+  file = open("toptracks.txt", 'w')
+  file.write(json.dumps(result))
+  file.close()
+
+  top_tracks = []
+  for tr in result['tracks']:
+    top_tracks.append({"name": tr['name'], "duration": format_time(tr['duration_ms']), "artist": artist['name']})
+
+  info['tracks'] = top_tracks
+
+  top_tracks_table = create_tracks_table(top_tracks)
+
+  info['top_tracks'] = top_tracks_table
+
+  genres = []
+  for genre in artist['genres']:
+    genres.append(genre)
+
+  info["genres"] = ', '.join(genres)
+
+  return utils.output('end', 'success', utils.translate('display_info', {"info": artist_to_html_list(info)}))
 
 
 def get_database_content():

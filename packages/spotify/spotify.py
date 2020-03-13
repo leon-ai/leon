@@ -1,10 +1,15 @@
+import base64
 import json
+import time
 import webbrowser
 from urllib.parse import urlencode
+
+import requests
+
 from bridges.python import utils
 
 from packages.spotify.spotify_utils import parse_entities, get_device, spotify_request, logged_in, can_play, \
-  display_track, display_album, display_playlist
+  display_track, display_album, display_playlist, display_artist
 
 from packages.spotify.spotify_utils import track, album, artist, playlist
 
@@ -25,6 +30,41 @@ def login(string, entities):
   webbrowser.open(url)
 
   return utils.output('end', 'success', utils.translate('login'))
+
+
+def authorize(string, entities):
+  db = utils.db()['db']
+
+  # parse url containing access code (pasted by user)
+  code = string.split('?code=')[1].split("&")[0]
+
+  payload = {'redirect_uri': utils.config('redirect_uri'),
+             'code': code,
+             'grant_type': 'authorization_code',
+             'scope': utils.config('scope')}
+
+  data = utils.config('client_id') + ':' + utils.config('client_secret')
+  auth_header = base64.urlsafe_b64encode(data.encode('utf-8'))
+  headers = {'Authorization': 'Basic %s' % auth_header.decode('utf-8')}
+
+  results = requests.post('https://accounts.spotify.com/api/token', data=payload, headers=headers)
+
+  token = results.json()
+
+  # add info fields to token object
+  token['expires_at'] = int(time.time()) + token['expires_in']
+  token['client_id'] = utils.config('client_id')
+  token['client_secret'] = utils.config('client_secret')
+  token['url_base'] = utils.config('url_base')
+  token['scope'] = utils.config('scope')
+
+  # in case new login because of expired token
+  if len(db.all()) > 0:
+    db.purge()
+
+  db.insert(token)
+
+  utils.output('end', 'success', utils.translate('logged_in'))
 
 
 def play(string, entities):
@@ -135,5 +175,7 @@ def display_info(string, entities):
     display_album(first_result_item)
   elif search_query.get_type() == playlist:
     display_playlist(first_result_item)
+  elif search_query.get_type() == artist:
+    display_artist(first_result_item)
 
   return

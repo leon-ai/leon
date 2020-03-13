@@ -6,13 +6,5 @@
     "redirect_uri": "http://localhost:1337/callback",
     "scope": "user-read-playback-state,user-modify-playback-state",
     "options": {}
-		},
-  "authorize": {
-		"client_id": "PASTE CLIENT ID HERE",
-		"client_secret": "PASTE CLIENT SECRET HERE",
-    "url_base" : "https://api.spotify.com/v1/",
-    "redirect_uri": "http://localhost:1337/callback",
-    "scope": "user-read-playback-state,user-modify-playback-state",
-    "options": {}
 		}
 }
