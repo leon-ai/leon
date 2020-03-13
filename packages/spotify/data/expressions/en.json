@@ -107,6 +107,103 @@
         "pause music"
       ]
     },
+    "show_my_playlists": {
+      "expressions": [
+        "Show my playlists",
+        "Display my playlists"
+      ]
+    },
+    "display_info": {
+      "expressions": [
+        "Show album the white album",
+        "Show track Everlong by the Foo Fighters",
+        "Show artist Cardi B",
+        "Show popular playlists",
+        "Show playlist Discover Weekly"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "track",
+          "conditions": [
+            {
+              "type": "after_first",
+              "from": "music"
+            },
+            {
+              "type": "after_first",
+              "from": "song"
+            },
+            {
+              "type": "after_first",
+              "from": "track"
+            },
+            {
+              "type": "after_first",
+              "from": "tune"
+            },
+            {
+              "type": "between",
+              "from": "song",
+              "to": "by"
+            },
+            {
+              "type": "between",
+              "from": "track",
+              "to": "by"
+            },
+            {
+              "type": "between",
+              "from": "tune",
+              "to": "by"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "artist",
+          "conditions": [
+            {
+              "type": "after_first",
+              "from": "artist"
+            },
+            {
+              "type": "after_first",
+              "from": "group"
+            },
+            {
+              "type": "after_first",
+              "from": "by"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "album",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "album",
+              "to": "by"
+            },
+            {
+              "type": "after_first",
+              "from": "album"
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "playlist",
+          "conditions": [
+            {
+              "type": "after_first",
+              "from": "playlist"
+            }
+          ]
+        }
+      ]
+    },
     "login" : {
       "expressions": [
         "spotify login",

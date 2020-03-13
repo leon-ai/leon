@@ -20,6 +20,15 @@
       "Spotify is not running",
       "Please open Spotify first"
     ],
+    "no_playlists": [
+      "You do not have any playlists"
+    ],
+    "show_my_playlists": [
+      "You currently have %num_playlists% playlists%playlists%"
+    ],
+    "display_info": [
+      "%info%"
+    ],
     "not_logged_in": [
       "Please login to Spotify first",
       "You are not logged in to Spotify"
@@ -30,6 +39,10 @@
     "login": [
       "Please sign in and then give me the whole URL to which you were redirected.",
       "Please log in using the opened tab in your browser and then paste the whole URL to which you are redirected."
+    ],
+    "contacting_spotify": [
+      "Checking with spotify...",
+      "Let me check with Spotify"
     ]
   },
   "authorize": {
