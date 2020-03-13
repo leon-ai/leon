@@ -126,17 +126,41 @@ def play(string, entities):
   # create search query object from entities retrieved from the nlu
   search_query = parse_entities(entities)
 
-  if search_query.get_type() == track:
-    play_track(device_id, search_query)
-  elif search_query.get_type() == album:
-    play_album(device_id, search_query)
-  elif search_query.get_type() == artist:
-    play_artist(device_id, search_query)
-  elif search_query.get_type() == playlist:
-    play_playlist(device_id, search_query)
-  else:
-    play_current_track(device_id)
+  if not search_query.get_type():
+    return play_current_track(device_id)
 
+  params = search_query.get_search_parameters()
+
+  results = spotify_request('GET', 'search', params)
+
+  result_type = search_query.get_type() + 's'
+  if not results[result_type]['total'] > 0:
+    return utils.output('end', 'info', utils.translate('no_search_result'))
+
+  first_result_item= results[result_type]['items'][0]  # choose first match
+
+  data = {}
+  if (search_query.get_type() == track):
+    data["uris"] = [first_result_item["uri"]]
+  else:
+    data["context_uri"] = first_result_item["uri"]
+
+  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
+
+  info = {
+    "name": first_result_item['name'],
+    "type": search_query.get_type()
+  }
+
+  if search_query.get_type() == track or search_query.get_type() == album:
+    artists = []
+    for artist in first_result_item['artists']:
+      artists.append(artist['name'])
+      info["artist"] = ', '.join(artists)
+
+    return utils.output('end', 'success', utils.translate('now_playing_by', info))
+
+  utils.output('end', 'success', utils.translate('now_playing', info))
 
 def pause(string, entities):
   device_id = get_device()
@@ -150,110 +174,6 @@ def pause(string, entities):
 def play_current_track(device_id):
   spotify_request('PUT', 'me/player/play', {'device_id': device_id})
   utils.output('end', 'success', utils.translate('playing_resumed'))
-
-
-def play_track(device_id, search_query):
-  params = search_query.get_search_parameters()
-
-  results = spotify_request('GET', 'search', params)
-
-  if not results['tracks']['total'] > 0:
-    return utils.output('end', 'info', utils.translate('no_search_result'))
-
-  chosen_track = results['tracks']['items'][0]  # choose first match
-
-  artists = []
-
-  for artist in chosen_track['artists']:
-    artists.append(artist['name'])
-
-  data = {}
-  data["uris"] = [chosen_track["uri"]]
-
-  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
-
-  info = {
-    "name": chosen_track['name'],
-    "artist": ', '.join(artists),
-    "type": track
-  }
-
-  utils.output('end', 'success', utils.translate('now_playing_by', info))
-
-
-def play_album(device_id, search_query):
-  params = search_query.get_search_parameters()
-
-  results = spotify_request('GET', 'search', params)
-
-  if not results['albums']['total'] > 0:
-    return utils.output('end', 'info', utils.translate('no_search_result'))
-
-  chosen_album = results['albums']['items'][0]  # choose first match
-
-  artists = []
-
-  for artist in chosen_album['artists']:
-    artists.append(artist['name'])
-
-  data = {}
-  data["context_uri"] = chosen_album["uri"]
-
-  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
-
-  info = {
-    "name": chosen_album['name'],
-    "artist": ', '.join(artists),
-    "type": album
-  }
-
-  utils.output('end', 'success', utils.translate('now_playing_by', info))
-
-
-def play_artist(device_id, search_query):
-  params = search_query.get_search_parameters()
-
-  results = spotify_request('GET', 'search', params)
-
-  if not results['artists']['total'] > 0:
-    return utils.output('end', 'info', utils.translate('no_search_result'))
-
-  chosen_artist = results['artists']['items'][0]  # choose first match
-
-  data = {}
-  data["context_uri"] = chosen_artist["uri"]
-
-  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
-
-  info = {
-    "name": chosen_artist['name'],
-    "type": artist
-  }
-
-  utils.output('end', 'success', utils.translate('now_playing', info))
-
-
-def play_playlist(device_id, search_query):
-  params = search_query.get_search_parameters()
-
-  results = spotify_request('GET', 'search', params)
-
-  if not results['playlists']['total'] > 0:
-    return utils.output('end', 'info', utils.translate('no_search_result'))
-
-  chosen_artist = results['playlists']['items'][0]  # choose first match
-
-  data = {}
-  data["context_uri"] = chosen_artist["uri"]
-
-  spotify_request('PUT', 'me/player/play', {'device_id': device_id}, json.dumps(data))
-
-  info = {
-    "name": chosen_artist['name'],
-    "type": playlist
-  }
-
-  utils.output('end', 'success', utils.translate('now_playing', info))
 
 
 def token_expired(expires_at):
