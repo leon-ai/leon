@@ -2,16 +2,15 @@ import base64
 import json
 import socket
 import time
-from urllib.parse import urlencode
-
 import requests
+from urllib.parse import urlencode
 
 from bridges.python import utils
 
-track = 'track'
-artist = 'artist'
-album = 'album'
-playlist = 'playlist'
+track_str = 'track'
+artist_str = 'artist'
+album_str = 'album'
+playlist_str = 'playlist'
 
 
 class SearchQuery:
@@ -23,13 +22,13 @@ class SearchQuery:
 
   def get_type(self):
     if self.track:
-      return track
+      return track_str
     if self.album:
-      return album
+      return album_str
     if self.artist:
-      return artist
+      return artist_str
     if self.playlist:
-      return playlist
+      return playlist_str
     return None
 
   def get_query_string(self):
@@ -67,13 +66,13 @@ def format_time(millis):
 def parse_entities(entities):
   query = SearchQuery()
   for item in entities:
-    if item['entity'] == track:
+    if item['entity'] == track_str:
       query.track = item['sourceText']
-    if item['entity'] == artist:
+    if item['entity'] == artist_str:
       query.artist = item['sourceText']
-    if item['entity'] == album:
+    if item['entity'] == album_str:
       query.album = item['sourceText']
-    if item['entity'] == playlist:
+    if item['entity'] == playlist_str:
       query.playlist = item['sourceText']
 
   return query
@@ -159,7 +158,7 @@ def playlist_to_html_table(playlist):
   tracks_table = create_tracks_table(playlist['tracks'])
 
   return "<p><strong>{}</strong><p>" \
-         "<p><i>{}</i><p>" \
+         "<p class='italic'>{}<p>" \
          "<ul style=\"list-style-type:none;\">" \
          "{}" \
          .format(playlist['name'], playlist['description'], tracks_table)
@@ -251,12 +250,12 @@ def logged_in():
 
 
 def can_play(device):
-  if not logged_in():
-    utils.output('end', 'error', utils.translate('not_logged_in'))
-    return False
-
   if not device:
     utils.output('end', 'error', utils.translate('no_device'))
+    return False
+
+  if device and not device['is_active']:
+    utils.output('end', 'error', utils.translate('device_not_active'))
     return False
 
   return True
@@ -314,11 +313,15 @@ def get_device():
   devices = requests.get(url=url, headers={'Authorization': 'Bearer {0}'.format(access_token)}).json()
   current_device_name = socket.gethostname()
 
-  device_id = False
-  for device in devices['devices']:
-    if (device['name'].lower() == current_device_name):
-      device_id = device['id']
-  return device_id
+  file = open("devices.txt", 'w')
+  file.write(json.dumps(devices))
+  file.close()
+
+  device = None
+  for dev in devices['devices']:
+    if (dev['name'].lower() == current_device_name):
+      device = dev
+  return device
 
 
 def get_current_track():

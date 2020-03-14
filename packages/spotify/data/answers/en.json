@@ -20,6 +20,9 @@
       "Spotify is not running",
       "Please open Spotify first"
     ],
+    "device_not_active": [
+      "Spotify is not active, please activate it first by playing a track"
+    ],
     "no_playlists": [
       "You do not have any playlists"
     ],

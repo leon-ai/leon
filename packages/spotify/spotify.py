@@ -2,16 +2,13 @@ import base64
 import json
 import time
 import webbrowser
+import requests
 from urllib.parse import urlencode
 
-import requests
-
 from bridges.python import utils
-
 from packages.spotify.spotify_utils import parse_entities, get_device, spotify_request, logged_in, can_play, \
   display_track, display_album, display_playlist, display_artist
-
-from packages.spotify.spotify_utils import track, album, artist, playlist
+from packages.spotify.spotify_utils import track_str, album_str, artist_str, playlist_str
 
 
 def login(string, entities):
@@ -45,11 +42,19 @@ def authorize(string, entities):
 
   data = utils.config('client_id') + ':' + utils.config('client_secret')
   auth_header = base64.urlsafe_b64encode(data.encode('utf-8'))
-  headers = {'Authorization': 'Basic %s' % auth_header.decode('utf-8')}
+  headers = {'Authorization': 'Basic %s' % str(auth_header, 'utf-8')}
+
+  file = open("headers.txt", 'w')
+  file.write(json.dumps(payload))
+  file.close()
 
   results = requests.post('https://accounts.spotify.com/api/token', data=payload, headers=headers)
 
   token = results.json()
+
+  file = open("token.txt", 'w')
+  file.write(json.dumps(token))
+  file.close()
 
   # add info fields to token object
   token['expires_at'] = int(time.time()) + token['expires_in']
@@ -68,10 +73,15 @@ def authorize(string, entities):
 
 
 def play(string, entities):
-  device_id = get_device()
+  if not logged_in():
+    return utils.output('end', 'error', utils.translate('not_logged_in'))
+
+  device = get_device()
   # is spotify running and user logged in?
-  if not can_play(device_id):
+  if not can_play(device):
     return
+
+  device_id = device['id']
 
   # create search query object from entities retrieved from the nlu
   search_query = parse_entities(entities)
@@ -90,7 +100,7 @@ def play(string, entities):
   first_result_item = results[result_type]['items'][0]  # choose first match
 
   data = {}
-  if (search_query.get_type() == track):
+  if (search_query.get_type() == track_str):
     data["uris"] = [first_result_item["uri"]]
   else:
     data["context_uri"] = first_result_item["uri"]
@@ -102,7 +112,7 @@ def play(string, entities):
     "type": search_query.get_type()
   }
 
-  if search_query.get_type() == track or search_query.get_type() == album:
+  if search_query.get_type() == track_str or search_query.get_type() == album_str:
     artists = []
     for artist in first_result_item['artists']:
       artists.append(artist['name'])
@@ -114,10 +124,13 @@ def play(string, entities):
 
 
 def pause(string, entities):
-  device_id = get_device()
-  if not can_play(device_id):
-    return
+  if not logged_in():
+    return utils.output('end', 'error', utils.translate('not_logged_in'))
 
+  device = get_device()
+  if not can_play(device):
+    return
+  device_id = device['id']
   spotify_request('PUT', 'me/player/pause', {'device_id': device_id})
   utils.output('end', 'success', utils.translate('playing_paused'))
 
@@ -169,13 +182,13 @@ def display_info(string, entities):
 
   first_result_item = results[result_type]['items'][0]
 
-  if search_query.get_type() == track:
+  if search_query.get_type() == track_str:
     display_track(first_result_item)
-  elif search_query.get_type() == album:
+  elif search_query.get_type() == album_str:
     display_album(first_result_item)
-  elif search_query.get_type() == playlist:
+  elif search_query.get_type() == playlist_str:
     display_playlist(first_result_item)
-  elif search_query.get_type() == artist:
+  elif search_query.get_type() == artist_str:
     display_artist(first_result_item)
 
   return
