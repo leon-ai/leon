@@ -201,15 +201,7 @@ def display_artist(artist):
 
   user_info = spotify_request('GET', 'me', {})
 
-  file = open("me.txt", 'w')
-  file.write(json.dumps(user_info))
-  file.close()
-
   result = spotify_request('GET', 'artists/' + artist['id'] + '/top-tracks', {'country': user_info['country']})
-
-  file = open("toptracks.txt", 'w')
-  file.write(json.dumps(result))
-  file.close()
 
   top_tracks = []
   for tr in result['tracks']:
@@ -312,10 +304,6 @@ def get_device():
   url = url_base + 'me/player/devices'
   devices = requests.get(url=url, headers={'Authorization': 'Bearer {0}'.format(access_token)}).json()
   current_device_name = socket.gethostname()
-
-  file = open("devices.txt", 'w')
-  file.write(json.dumps(devices))
-  file.close()
 
   device = None
   for dev in devices['devices']:

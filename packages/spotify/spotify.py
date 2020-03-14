@@ -44,17 +44,9 @@ def authorize(string, entities):
   auth_header = base64.urlsafe_b64encode(data.encode('utf-8'))
   headers = {'Authorization': 'Basic %s' % str(auth_header, 'utf-8')}
 
-  file = open("headers.txt", 'w')
-  file.write(json.dumps(payload))
-  file.close()
-
   results = requests.post('https://accounts.spotify.com/api/token', data=payload, headers=headers)
 
   token = results.json()
-
-  file = open("token.txt", 'w')
-  file.write(json.dumps(token))
-  file.close()
 
   # add info fields to token object
   token['expires_at'] = int(time.time()) + token['expires_in']

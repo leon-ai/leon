@@ -12,8 +12,8 @@ Use Leon to start|stop|search tracks|albums|artists on Spotify.
 
 This package requires a Spotify Premium (:moneybag:) account. Once you have [signed up](https://www.spotify.com) please
 follow these steps in order to start using Spotify via Leon
-1. Login at the [Spotify web api for developers](https://developer.spotify.com/dashboard/login)
-2. Create a client id (suitable app name: "Leon")
+1. Login to [Spotify web api for developers](https://developer.spotify.com/dashboard/login)
+2. Create a new client id (suitable app name: "Leon")
 3. Make sure you have 
   - a client id
   - a client secret
@@ -27,6 +27,11 @@ follow these steps in order to start using Spotify via Leon
         "Play artist Led Zeppelin"
         "Pause"
         "Resume"
+        "Spotify Login"
+        "Show artist Cardi B",
+        "Show playlist Discover Weekly",
+        "Display album Rubber Soul",
+        "Display track War Pigs by Black Sabbath",
 
 (fr-FR) ""
 ...
