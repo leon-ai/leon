@@ -1,5 +1,7 @@
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+
 import base64
-import json
 import socket
 import time
 import requests
