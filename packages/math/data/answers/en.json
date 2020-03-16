@@ -1,3 +1,8 @@
 {
-
+    "calculator": {
+        "result": [
+            "Here is the results %results%",
+            "These are the results of my calculations %results%"
+        ]
+    }
 }

@@ -2,14 +2,44 @@
 	"calculator": {
     "run": {
       "expressions": [
-
+        "Calculate ",
+        "Can you calculate "
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "equation",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "Calculate "
+            },
+            {
+              "type": "after",
+              "from": "calculate "
+            }
+          ]
+        }
       ]
     }
   },
 	"percentages": {
     "run": {
       "expressions": [
-
+        "Give me the percentage of ",
+        "What is the percentage of "
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "equation",
+          "conditions": [
+            {
+              "type": "after",
+              "from": "of "
+            }
+          ]
+        }
       ]
     }
   }
