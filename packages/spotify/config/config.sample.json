@@ -3,6 +3,7 @@
 		"client_id": "PASTE CLIENT ID HERE",
 		"client_secret": "PASTE CLIENT SECRET HERE",
     "url_base" : "https://api.spotify.com/v1/",
+    "auth_base": "https://accounts.spotify.com/authorize?",
     "redirect_uri": "http://localhost:1337/spotify_auth",
     "scope": "user-read-playback-state,user-modify-playback-state",
     "options": {}
