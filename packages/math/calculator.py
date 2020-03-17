@@ -10,10 +10,13 @@ def run(string, entities):
     for x in entities:
       numberText.append(x['sourceText'])
 
+    temp = -1
+
     #looks for operators and takes them out
     for x in range(len(numberText)-1):
-      number1 = string.find(entities[x]['sourceText'])
-      number2 = string.find(entities[x+1]['sourceText'], number1+1)
+      number1 = string.find(entities[x]['sourceText'], temp+1)
+      temp = number1
+      number2 = string.find(entities[x+1]['sourceText'], temp+1)
       operator = string[number1+len(entities[x]['sourceText']):number2]
       operatorList.append(operator.strip())
 
