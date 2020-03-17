@@ -1,5 +1,8 @@
 {
-	"calculation": {
+	"calculator": {
 		"options": {}
-	}
+	},
+    "percentage": {
+        "options": {}
+    }
 }

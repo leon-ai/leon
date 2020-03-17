@@ -1,8 +1,22 @@
 {
     "calculator": {
         "result": [
-            "Here is the results %results%",
-            "These are the results of my calculations %results%"
+            "Here is the results %equation% = %results%",
+            "These are the results of my calculations %equation% = %results%"
+        ],
+        "error": [
+            "I don't understand the equation that I was given",
+            "I don't fully understand what I'm suppose to calculate. Please try again"
+        ]
+    },
+    "percentage": {
+        "result": [
+            "From my calculations this is the result %result%",
+            "Here is the result %result%"
+        ],
+        "error": [
+            "I can't check the percentage of this. Please try again",
+            "I don't fully understand what percentage I'm supposed to calculate. Please check your input"
         ]
     }
 }

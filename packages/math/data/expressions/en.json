@@ -23,19 +23,29 @@
       ]
     }
   },
-	"percentages": {
+	"percentage": {
     "run": {
       "expressions": [
-        "Give me the percentage of ",
-        "What is the percentage of "
+        "What is % of ",
+        "What is the percent of of "
       ],
       "entities": [
         {
           "type": "trim",
-          "name": "equation",
+          "name": "number",
           "conditions": [
             {
-              "type": "after",
+              "type": "between",
+              "from": "of",
+              "to": "of"
+            },
+            {
+              "type": "between",
+              "from": "is",
+              "to": "%"
+            },
+            {
+              "type": "after_last",
               "from": "of "
             }
           ]
