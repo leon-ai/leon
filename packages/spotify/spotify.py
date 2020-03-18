@@ -44,8 +44,8 @@ def authorize(string, entities):
              'scope': utils.config('scope')}
 
   data = utils.config('client_id') + ':' + utils.config('client_secret')
-  auth_header = base64.urlsafe_b64encode(data.encode('utf-8'))
-  headers = {'Authorization': 'Basic %s' % str(auth_header, 'utf-8')}
+  encoded_data = base64.urlsafe_b64encode(data.encode('utf-8'))
+  headers = {'Authorization': 'Basic {}'.format(str(encoded_data, 'utf-8'))}
 
   results = requests.post('https://accounts.spotify.com/api/token', data=payload, headers=headers)
 
@@ -64,7 +64,7 @@ def authorize(string, entities):
 
   db.insert(token)
 
-  utils.output('end', 'success', utils.translate('logged_in'))
+  return utils.output('end', 'success', utils.translate('logged_in'))
 
 
 def play(string, entities):
