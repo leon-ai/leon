@@ -25,7 +25,7 @@ def login(string, entities):
     'scope': utils.config('scope')
   }
 
-  url = utils.config('auth_base') + urlencode(config)
+  url = "{}{}".format(utils.config('auth_base'), urlencode(config))
 
   webbrowser.open(url)
 
@@ -37,6 +37,10 @@ def authorize(string, entities):
 
   # parse url containing access code (pasted by user)
   code = string.split('?code=')[1].split("&")[0]
+
+  # workaround for what I can only assume is an error in the spotify accounts service
+  if code.endswith("#_=_"):
+    return utils.output('end', 'error', utils.translate('try_again_workaround'))
 
   payload = {'redirect_uri': utils.config('redirect_uri'),
              'code': code,

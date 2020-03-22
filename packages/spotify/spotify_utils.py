@@ -86,7 +86,11 @@ def track_to_html_list(info):
          "<li>from album {}</li>" \
          "<li>by \'{}\'</li>" \
          "<li>popularity: {}%</li>" \
-         "<li>playing time: {}</li></ul>".format(info['name'], info['album'], info['artist'], info['popularity'], info['duration'])
+         "<li>playing time: {}</li></ul>".format(info['name'],
+                                                 info['album'],
+                                                 info['artist'],
+                                                 info['popularity'],
+                                                 info['duration'])
 
 
 def display_track(track):
@@ -147,7 +151,10 @@ def display_album(album):
 
 
 def create_tracks_table(tracks):
-  tracks_table = '<table><thead style="border-bottom:1px solid black"><tr><th>Track name</th><th>Artist</th><th>Playing time</th></tr></thead><tbody>'
+  tracks_table = '<table>' \
+                 '<thead style="border-bottom:1px solid black">' \
+                 '<tr><th>Track name</th><th>Artist</th><th>Playing time</th></tr>' \
+                 '</thead><tbody>'
   for track in tracks:
     tracks_table += '<tr><td>{}</td><td>{}</td><td style="text-align:right">{}</td></tr>'.format(track['name'],
                                                                                                  track['artist'],
@@ -178,7 +185,9 @@ def display_playlist(playlist):
   for tr in result['items']:
     # tracks may be null if not available anymore
     if tr:
-      tracks.append({"name": tr['track']['name'], "duration": format_time(tr['track']['duration_ms']), "artist": tr['track']['artists'][0]['name']})
+      tracks.append({"name": tr['track']['name'],
+                     "duration": format_time(tr['track']['duration_ms']),
+                     "artist": tr['track']['artists'][0]['name']})
 
   info['tracks'] = tracks
 
@@ -191,7 +200,11 @@ def artist_to_html_list(info):
          "<li>popularity: {}%</li>" \
          "<li>followers: {}</li>" \
          "<li>genres: {}</li></ul>" \
-         "<p><u>Top tracks</u></p> {}".format(info['name'], info['popularity'], info['num_followers'], info['genres'], info['top_tracks'])
+         "<p><u>Top tracks</u></p> {}".format(info['name'],
+                                              info['popularity'],
+                                              info['num_followers'],
+                                              info['genres'],
+                                              info['top_tracks'])
 
 
 def display_artist(artist):

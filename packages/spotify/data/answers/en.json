@@ -46,6 +46,9 @@
       "Please sign in and then give me the whole URL to which you were redirected.",
       "Please log in using the opened tab in your browser and then paste the whole URL to which you are redirected."
     ],
+    "try_again_workaround": [
+      "Oops, something went wrong during the authorization process, please try logging in again!"
+    ],
     "contacting_spotify": [
       "Checking with spotify...",
       "Let me check with Spotify"
