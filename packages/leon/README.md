@@ -111,7 +111,7 @@ Leon introduces himself.
 
 ### How old
 
-Leon tells when it has been created.
+Leon tells it's age.
 
 #### Usage
 
@@ -119,5 +119,19 @@ Leon tells when it has been created.
 (en-US) "How old are you?"
 
 (fr-FR) "Quel âge as-tu?"
+...
+```
+
+
+### Birthdate
+
+Leon tells it's birthdate or it's next birthday.
+
+#### Usage
+
+```
+(en-US) "When were you born?"
+
+(fr-FR) "Quand es-tu né?"
 ...
 ```

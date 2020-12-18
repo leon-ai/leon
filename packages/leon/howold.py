@@ -5,7 +5,7 @@ import utils
 import datetime
 
 def run(string, entities):
-	"""Leon says when it was created"""
+	"""Leon says it's age"""
 
 	age = datetime.date.today() - datetime.date(2019, 2, 10)
 
