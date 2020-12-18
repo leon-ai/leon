@@ -107,3 +107,31 @@ Leon introduces himself.
 (fr-FR) "Qui es-tu ?"
 ...
 ```
+
+
+### How old
+
+Leon tells it's age.
+
+#### Usage
+
+```
+(en-US) "How old are you?"
+
+(fr-FR) "Quel âge as-tu?"
+...
+```
+
+
+### Birthdate
+
+Leon tells it's birthdate or it's next birthday.
+
+#### Usage
+
+```
+(en-US) "When were you born?"
+
+(fr-FR) "Quand es-tu né?"
+...
+```

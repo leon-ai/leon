@@ -113,5 +113,23 @@
       "Je ne connais pas cet assistant personnel.",
       "Je n'ai jamais rencontré cet assistant personnel."
     ]
+  },
+  "howold": {
+	"age": [
+		"Je suis encore très jeune, je n'ai que %years% ans et %days% jours.",
+		"J'ai seulement %years% ans et %days% jours, mais je peux déjà parler !",
+		"Je n'ai que %years% ans et %days% jours. Qu'est-ce que ça fait d'être plus âgé ?",
+		"Je suis sûrement bien plus jeune que vous, j'ai seulement %years% ans et %days% jours."
+	]
+  },
+  "birthdate": {
+	"date": [
+		"J'ai été créé le 10 février 2019.",
+		"Ma première version date du 10 février 2019."
+	],
+	"birthday": [
+		"Le 10 février prochain sera mon anniversaire.",
+		"Mon anniversaire est le 10 février."
+	]
   }
 }

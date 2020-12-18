@@ -22,5 +22,11 @@
   },
   "partnerassistant": {
     "options": {}
+  },
+  "howold": {
+    "options": {}
+  },
+  "birthdate": {
+    "options": {}
   }
 }

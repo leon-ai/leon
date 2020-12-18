@@ -107,5 +107,24 @@
       "I don't know this personal assistant.",
       "I never met this personal assistant."
     ]
+  },
+  "howold": {
+  	"age": [
+		"I have been created on February 10, 2019. Therefore, I am %years% years and %days% days old.",
+		"I am still very young, I am only %years% years and %days% days old.",
+		"I'm only %years% years and %days% days old, but I can already talk !",
+		"I am only %years% years and %days% days old. How does it feel to be older ?",
+		"I am surely much younger than you, I am only %years% years and %days% days old."
+  	]
+  },
+  "birthdate": {
+    "date": [
+		"I have been created on february 10, 2019.",
+		"My first version is dated February 10th of 2019."
+	],
+	"birthday": [
+		"Next February 10th will be my birthday.",
+		"My birthday is February 10th."
+	]
   }
 }
