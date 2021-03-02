@@ -8,7 +8,7 @@ import train from '../train'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupPackagesConfig from './setup-packages-config'
-import setupPythonPackages from './setup-python-packages';
+import setupPythonPackages from './setup-python-packages'
 
 // Do not load ".env" file because it is not created yet
 

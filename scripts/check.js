@@ -36,11 +36,11 @@ export default () => new Promise(async (resolve, reject) => {
       can_offline_stt: { title: 'Offline speech-to-text', type: 'warning', v: true }
     }
 
-    log.title('Checking');
+    log.title('Checking')
 
     // Environment checking
 
-    (await Promise.all([
+    ;(await Promise.all([
       shell('node --version'),
       shell('npm --version'),
       shell('pipenv --version')
@@ -58,9 +58,9 @@ export default () => new Promise(async (resolve, reject) => {
       } else {
         log.success(`${p.stdout}\n`)
       }
-    });
+    })
 
-    (await Promise.all([
+    ;(await Promise.all([
       shell('pipenv --where'),
       shell('pipenv run python --version')
     ])).forEach((p) => {

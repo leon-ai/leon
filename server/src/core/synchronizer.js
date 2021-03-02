@@ -104,9 +104,9 @@ class Synchronizer {
             // TODO: UI toolbox to reach this scope
             // Delete Drive files
             /* setTimeout(() => {
-              drive.files.delete({ fileId: list.data.files[i].id });
-              log.title('Synchronizer'); log.success(`"${list.data.files[i].id}" deleted`);
-            }, 200 * i); */
+              drive.files.delete({ fileId: list.data.files[i].id })
+              log.title('Synchronizer'); log.success(`"${list.data.files[i].id}" deleted`)
+            }, 200 * i) */
           }
           return false
         },
