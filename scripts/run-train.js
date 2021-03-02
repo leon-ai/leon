@@ -1,6 +1,6 @@
 import log from '@/helpers/log'
 
-import train from './train';
+import train from './train'
 
 /**
  * Execute the training script

@@ -2,7 +2,7 @@
 
 import dotenv from 'dotenv'
 
-import Server from '@/core/server';
+import Server from '@/core/server'
 
 (async () => {
   dotenv.config()

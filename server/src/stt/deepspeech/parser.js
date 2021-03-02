@@ -36,7 +36,7 @@ const BEAM_WIDTH = 500
 // The alpha hyperparameter of the CTC decoder. Language Model weight
 const LM_ALPHA = 0.75
 // The beta hyperparameter of the CTC decoder. Word insertion weight (penalty)
-// const WORD_COUNT_WEIGHT = 1.00;
+// const WORD_COUNT_WEIGHT = 1.00
 /**
  * Valid word insertion weight
  * This is used to lessen the word insertion penalty
@@ -137,7 +137,7 @@ parser.parse = (buffer, cb) => {
     return false
   }
 
-  // const audioLength = (buffer.length / 2) * (1 / 16000);
+  // const audioLength = (buffer.length / 2) * (1 / 16000)
   // We take half of the buffer_size because buffer is a char* while LocalDsSTT() expected a short*
 
   /* istanbul ignore if */
