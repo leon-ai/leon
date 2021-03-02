@@ -1,0 +1,64 @@
+{
+  "spotify": {
+    "now_playing_by": [
+      "Now playing the %type% \"%name%\" by %artist%"
+    ],
+    "now_playing": [
+      "Now playing the %type% \"%name%\""
+    ],
+    "playing_paused": [
+      "Paused"
+    ],
+    "playing_resumed": [
+      "Playing"
+    ],
+    "no_search_result": [
+      "No search result",
+      "Didn't find anything on Spotify with that name"
+    ],
+    "no_device": [
+      "Spotify is not running",
+      "Please open Spotify first"
+    ],
+    "device_not_active": [
+      "Spotify is not active, please activate it first by playing a track"
+    ],
+    "no_playlists": [
+      "You do not have any playlists"
+    ],
+    "show_my_playlists": [
+      "You currently have %num_playlists% playlists%playlists%"
+    ],
+    "display_info": [
+      "%info%"
+    ],
+    "not_logged_in": [
+      "Please login to Spotify first",
+      "You are not logged in to Spotify"
+    ],
+    "no_search_term": [
+      "Please provide a search term"
+    ],
+    "already_logged_in": [
+      "You are already logged in to Spotify"
+    ],
+    "login": [
+      "Please sign in and then give me the whole URL to which you were redirected.",
+      "Please log in using the opened tab in your browser and then paste the whole URL to which you are redirected."
+    ],
+    "try_again_workaround": [
+      "Oops, something went wrong during the authorization process, please try logging in again!"
+    ],
+    "contacting_spotify": [
+      "Checking with spotify...",
+      "Let me check with Spotify"
+    ],
+    "logged_in": [
+      "Great, you are now logged in to Spotify!",
+      "Great, you are now logged in to Spotify!\nTry playing a track!",
+      "Great, you are now logged in to Spotify!\nTry playing an album!",
+      "Great, you are now logged in to Spotify!\nTry playing an artist!",
+      "You have successfully logged in to Spotify!"
+    ]
+  }
+}

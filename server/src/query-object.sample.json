@@ -1,9 +1,9 @@
 {
   "lang": "en",
-  "package": "checker",
-  "module": "isitdown",
+  "package": "spotify",
+  "module": "spotify",
   "action": "run",
-  "query": "Check if github.com, mozilla.org and twitter.com are up",
+  "query": "show me info about the song derp",
   "entities": [
     {
       "sourceText": "github.com",

@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 import requests
-import utils
+from bridges.python import utils
 
 def run(string, entities):
 	"""Check if a website is down or not"""

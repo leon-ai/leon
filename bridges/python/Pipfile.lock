@@ -1,12 +1,10 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "73bde89b379ffec7cec145fa30f1ebb49c349204b730a94108151fd9b71b31ec"
+            "sha256": "73708fd9c2db3c7b3cbbbc199ce68e5b21c9280c82cdb41877517fad550c40f5"
         },
         "pipfile-spec": 6,
-        "requires": {
-            "python_version": "3.6"
-        },
+        "requires": {},
         "sources": [
             {
                 "name": "pypi",
@@ -27,10 +25,10 @@
         },
         "certifi": {
             "hashes": [
-                "sha256:59b7658e26ca9c7339e00f8f4636cdfe59d34fa37b9b04f6f9e9926b3cece1a5",
-                "sha256:b26104d6835d1f5e49452a26eb2ff87fe7090b89dfcaee5ea2212697e1e1d7ae"
+                "sha256:017c25db2a153ce562900032d5bc68e9f191e44e9a0f762f373977de9df1fbb3",
+                "sha256:25b64c7da4cd7479594d035c08c2d809eb4aab3a26e5a990ea98cc450c320f1f"
             ],
-            "version": "==2019.3.9"
+            "version": "==2019.11.28"
         },
         "chardet": {
             "hashes": [
@@ -62,12 +60,28 @@
             "index": "pypi",
             "version": "==2.21.0"
         },
+        "six": {
+            "hashes": [
+                "sha256:236bdbdce46e6e6a3d61a337c0f8b763ca1e8717c03b369e87a7ec7ce1319c0a",
+                "sha256:8f3cd2e254d8f793e7f3d6d9df77b92252b52637291d0f0da013c76ea2724b6c"
+            ],
+            "version": "==1.14.0"
+        },
         "soupsieve": {
             "hashes": [
-                "sha256:6898e82ecb03772a0d82bd0d0a10c0d6dcc342f77e0701d0ec4a8271be465ece",
-                "sha256:b20eff5e564529711544066d7dc0f7661df41232ae263619dede5059799cdfca"
+                "sha256:e914534802d7ffd233242b785229d5ba0766a7f487385e3f714446a07bf540ae",
+                "sha256:fcd71e08c0aee99aca1b73f45478549ee7e7fc006d51b37bec9e9def7dc22b69"
             ],
-            "version": "==1.9.1"
+            "version": "==2.0"
+        },
+        "spotipy": {
+            "hashes": [
+                "sha256:353490dccd681c643d3226f69046843be221a091cefec2e6cc1541b623cd4277",
+                "sha256:99d9bc15ca0e7e6b5c804b7527e2de3a3e3004cc0ca67d136347a5a6811c7f98",
+                "sha256:f4903379e4db045e83e24a89485b99236466e70a9ad6f9e3f7a8bfe9048b1020"
+            ],
+            "index": "pypi",
+            "version": "==2.9.0"
         },
         "tinydb": {
             "hashes": [
