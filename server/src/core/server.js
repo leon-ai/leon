@@ -1,4 +1,5 @@
 import express from 'express'
+import http from 'http'
 import bodyParser from 'body-parser'
 import socketio from 'socket.io'
 import path from 'path'
@@ -23,6 +24,7 @@ class Server {
   constructor () {
     this.server = { }
   }
+
 
   /**
    * Server entry point
@@ -78,9 +80,12 @@ class Server {
       app.use(`/${apiVersion}/downloads`, downloadRouter)
 
       try {
+        this.server = http.createServer(app)
+
         await this.listen(process.env.LEON_PORT)
         resolve()
       } catch (e) {
+        console.error(e)
         log[e.type](e.obj.message)
       }
     })
@@ -91,7 +96,11 @@ class Server {
    */
   static listen (port) {
     return new Promise((resolve, reject) => {
-      this.server = app.listen(port, (err) => {
+      const io = socketio(this.server)
+
+      io.on('connection', this.connection)
+
+      this.server.listen(port, (err) => {
         /* istanbul ignore if */
         if (err) {
           reject({ type: 'error', obj: err })
@@ -99,9 +108,6 @@ class Server {
         }
 
         log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
-
-        const io = socketio.listen(this.server)
-        io.on('connection', this.connection)
 
         resolve()
       })
