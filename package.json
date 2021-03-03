@@ -67,7 +67,7 @@
     "moment-timezone": "^0.5.14",
     "node-nlp": "^3.1.1",
     "node-wav": "0.0.2",
-    "socket.io": "^2.0.2",
+    "socket.io": "^2.4.1",
     "superagent": "^3.5.2"
   },
   "devDependencies": {
@@ -77,7 +77,7 @@
     "@babel/preset-env": "^7.4.5",
     "babel-plugin-module-resolver": "^3.2.0",
     "babelify": "^10.0.0",
-    "browser-sync": "^2.26.7",
+    "browser-sync": "^2.26.14",
     "browserify": "^14.4.0",
     "cli-spinner": "^0.2.8",
     "envify": "^4.1.0",
