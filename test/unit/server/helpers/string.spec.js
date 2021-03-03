@@ -1,5 +1,3 @@
-'use strict'
-
 import string from '@/helpers/string'
 
 describe('string helper', () => {

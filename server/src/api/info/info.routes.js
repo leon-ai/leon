@@ -1,5 +1,3 @@
-'use strict'
-
 import { Router } from 'express'
 
 import infoController from '@/api/info/info.controller'

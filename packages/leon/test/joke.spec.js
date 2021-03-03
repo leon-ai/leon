@@ -1,5 +1,3 @@
-'use strict'
-
 describe('leon:joke', async () => {
   test('tells a joke', async () => {
     global.nlu.brain.execute = jest.fn()

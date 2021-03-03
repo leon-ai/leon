@@ -1,5 +1,3 @@
-'use strict'
-
 import 'jest-extended'
 import moment from 'moment-timezone'
 

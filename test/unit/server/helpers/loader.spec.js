@@ -1,5 +1,3 @@
-'use strict'
-
 import loader from '@/helpers/loader'
 
 jest.useFakeTimers()

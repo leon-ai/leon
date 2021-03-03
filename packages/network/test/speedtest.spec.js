@@ -1,5 +1,3 @@
-'use strict'
-
 describe('network:speedtest', async () => {
   test('does a speed test', async () => {
     global.nlu.brain.execute = jest.fn()

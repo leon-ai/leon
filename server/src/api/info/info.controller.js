@@ -1,5 +1,3 @@
-'use strict'
-
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
 import log from '@/helpers/log'

@@ -1,5 +1,3 @@
-'use strict'
-
 import stt from '@google-cloud/speech'
 
 import log from '@/helpers/log'

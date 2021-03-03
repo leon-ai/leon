@@ -1,5 +1,3 @@
-'use strict'
-
 export default class Recorder {
   constructor (stream, el, info) {
     this.recorder = new MediaRecorder(stream, { audioBitsPerSecond: 16000 })

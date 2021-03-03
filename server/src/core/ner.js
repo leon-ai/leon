@@ -1,5 +1,3 @@
-'use strict'
-
 import { NerManager } from 'node-nlp'
 import fs from 'fs'
 

@@ -1,5 +1,3 @@
-'use strict'
-
 const listener = { }
 
 listener.listening = (stream, minDecibels, maxBlankTime,

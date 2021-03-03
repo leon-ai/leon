@@ -1,5 +1,3 @@
-'use strict'
-
 import fs from 'fs'
 
 import parser from '@/stt/deepspeech/parser'

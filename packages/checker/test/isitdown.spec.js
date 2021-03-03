@@ -1,5 +1,3 @@
-'use strict'
-
 describe('checker:isitdown', async () => {
   test('detects invalid domain name', async () => {
     global.nlu.brain.execute = jest.fn()

@@ -1,5 +1,3 @@
-'use strict'
-
 import Tts from 'ibm-watson/text-to-speech/v1'
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'

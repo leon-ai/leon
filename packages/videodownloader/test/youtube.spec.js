@@ -1,5 +1,3 @@
-'use strict'
-
 describe('videodownloader:youtube', async () => {
   test('requests YouTube', async () => {
     global.nlu.brain.execute = jest.fn()

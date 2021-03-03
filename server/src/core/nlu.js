@@ -1,5 +1,3 @@
-'use strict'
-
 import { NlpManager } from 'node-nlp'
 import request from 'superagent'
 import fs from 'fs'

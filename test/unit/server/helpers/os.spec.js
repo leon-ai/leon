@@ -1,5 +1,3 @@
-'use strict'
-
 import os from '@/helpers/os'
 
 describe('OS helper', () => {

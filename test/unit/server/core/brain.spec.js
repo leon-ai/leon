@@ -1,5 +1,3 @@
-'use strict'
-
 import { spawn } from 'child_process'
 
 import Brain from '@/core/brain'

@@ -1,5 +1,3 @@
-'use strict'
-
 import { Router } from 'express'
 
 import downloadController from '@/api/downloads/download.controller'

@@ -1,5 +1,3 @@
-'use strict'
-
 import fs from 'fs'
 import { spawn } from 'child_process'
 

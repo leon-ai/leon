@@ -1,5 +1,3 @@
-'use strict'
-
 let index = -1
 let parsedHistory = null
 

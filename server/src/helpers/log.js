@@ -1,5 +1,3 @@
-'use strict'
-
 import fs from 'fs'
 
 import date from '@/helpers/date'

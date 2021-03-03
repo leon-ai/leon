@@ -1,5 +1,3 @@
-'use strict'
-
 import Chatbot from './chatbot.es6'
 
 export default class Client {

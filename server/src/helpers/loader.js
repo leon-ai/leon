@@ -1,5 +1,3 @@
-'use strict'
-
 import { Spinner } from 'cli-spinner'
 
 import log from '@/helpers/log'

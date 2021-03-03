@@ -1,5 +1,3 @@
-'use strict'
-
 describe('checker:haveibeenpwned', async () => {
   test('checks if an email address has been pwned', async () => {
     global.nlu.brain.execute = jest.fn()

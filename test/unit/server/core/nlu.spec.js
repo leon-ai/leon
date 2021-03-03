@@ -1,5 +1,3 @@
-'use strict'
-
 import Nlu from '@/core/nlu'
 
 describe('NLU', () => {

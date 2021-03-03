@@ -1,5 +1,3 @@
-'use strict'
-
 /**
  * CORS middleware
  */

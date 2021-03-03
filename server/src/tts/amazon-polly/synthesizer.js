@@ -1,5 +1,3 @@
-'use strict'
-
 import tts from 'aws-sdk'
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'

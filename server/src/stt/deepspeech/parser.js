@@ -1,5 +1,3 @@
-'use strict'
-
 import wav from 'node-wav'
 import fs from 'fs'
 

@@ -1,5 +1,3 @@
-'use strict'
-
 describe('trend:github', async () => {
   test('forces limit', async () => {
     global.nlu.brain.execute = jest.fn()

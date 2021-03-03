@@ -1,5 +1,3 @@
-'use strict'
-
 import Stt from 'ibm-watson/speech-to-text/v1'
 import fs from 'fs'
 import { Duplex } from 'stream'
