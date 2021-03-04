@@ -41,7 +41,6 @@
     "start": "cross-env LEON_NODE_ENV=production node ./server/dist/index.js",
     "train": "babel-node scripts/run-train.js",
     "prepare-release": "babel-node scripts/release/prepare-release.js",
-    "commitmsg": "babel-node scripts/commit-message.js && npm run lint",
     "check": "babel-node scripts/run-check.js",
     "docker:build": "docker build -t leonai/leon .",
     "docker:run": "docker run -e TZ=`cat /etc/timezone` -p 1337:1337 -it leonai/leon",
