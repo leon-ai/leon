@@ -23,9 +23,6 @@
 
 ---
 
-**Note**
-> I'm focusing on another project, so the progress of this repo might slow down for a while. You can [subscribe here](https://www.producthunt.com/upcoming/2aud-io) to be part of the first ones.
-
 ## Introduction
 
 Leon is an **open-source personal assistant** who can live **on your server**.
