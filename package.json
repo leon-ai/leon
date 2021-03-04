@@ -71,11 +71,11 @@
     "superagent": "^3.5.2"
   },
   "devDependencies": {
-    "@babel/cli": "^7.4.4",
-    "@babel/core": "^7.4.5",
-    "@babel/node": "^7.4.5",
-    "@babel/preset-env": "^7.4.5",
-    "babel-plugin-module-resolver": "^3.2.0",
+    "@babel/cli": "^7.13.0",
+    "@babel/core": "^7.13.8",
+    "@babel/node": "^7.13.0",
+    "@babel/preset-env": "^7.13.9",
+    "babel-plugin-module-resolver": "^4.1.0",
     "babelify": "^10.0.0",
     "browser-sync": "^2.26.14",
     "browserify": "^14.4.0",
