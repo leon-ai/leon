@@ -79,7 +79,7 @@
     "babelify": "^10.0.0",
     "browser-sync": "^2.26.14",
     "browserify": "^17.0.0",
-    "cli-spinner": "^0.2.8",
+    "cli-spinner": "^0.2.10",
     "envify": "^4.1.0",
     "eslint": "^5.16.0",
     "eslint-config-airbnb-base": "^11.3.2",
