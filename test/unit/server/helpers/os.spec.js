@@ -11,7 +11,7 @@ describe('OS helper', () => {
 
     test('returns information for Windows', () => {
       jest.unmock('os')
-      const o = require.requireActual('os')
+      const o = jest.requireActual('os')
       o.type = jest.fn(() => 'Windows_NT')
 
       expect(os.get()).toEqual({ name: 'Windows', type: 'windows' })
@@ -19,7 +19,7 @@ describe('OS helper', () => {
 
     test('returns information for Linux', () => {
       jest.unmock('os')
-      const o = require.requireActual('os')
+      const o = jest.requireActual('os')
       o.type = jest.fn(() => 'Linux')
 
       expect(os.get()).toEqual({ name: 'Linux', type: 'linux' })
@@ -27,7 +27,7 @@ describe('OS helper', () => {
 
     test('returns information for macOS', () => {
       jest.unmock('os')
-      const o = require.requireActual('os')
+      const o = jest.requireActual('os')
       o.type = jest.fn(() => 'Darwin')
 
       expect(os.get()).toEqual({ name: 'macOS', type: 'macos' })
