@@ -91,7 +91,7 @@
     "jest-canvas-mock": "^2.0.0-alpha.3",
     "jest-extended": "git+https://github.com/leon-ai/jest-extended.git",
     "json": "^10.0.0",
-    "nodemon": "^1.18.9",
+    "nodemon": "^2.0.7",
     "semver": "^7.3.4",
     "shx": "^0.3.3"
   }
