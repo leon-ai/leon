@@ -87,7 +87,6 @@
     "eslint-plugin-import": "^2.22.1",
     "eslint-plugin-jest": "^21.27.2",
     "git-changelog": "git+https://github.com/leon-ai/git-changelog.git",
-    "husky": "^0.14.3",
     "inquirer": "^5.1.0",
     "jest": "^24.7.1",
     "jest-canvas-mock": "^2.0.0-alpha.3",
