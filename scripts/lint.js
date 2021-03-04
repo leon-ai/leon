@@ -1,4 +1,4 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 
 import log from '@/helpers/log'
 import loader from '@/helpers/loader'
@@ -23,7 +23,7 @@ import loader from '@/helpers/loader'
       '"test/unit/**/*.js"'
     ]
 
-    await shell(`npx eslint ${globs.join(' ')}`)
+    await command(`npx eslint ${globs.join(' ')}`, { shell: true })
 
     log.success('Looks great')
     loader.stop()

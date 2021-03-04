@@ -1,6 +1,6 @@
 import fs from 'fs'
 import path from 'path'
-import execa from 'execa'
+import { command } from 'execa'
 
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
@@ -37,7 +37,7 @@ describe('NLU modules', () => {
         process.env.LEON_LANG = langKeys[i]
 
         // Generate new classifier for the tested language
-        await execa.shell(`npm run train expressions:${lang.short}`)
+        await command(`npm run train expressions:${lang.short}`, { shell: true })
         // Load the new classifier
         await nlu.loadModel(global.paths.classifier)
       })

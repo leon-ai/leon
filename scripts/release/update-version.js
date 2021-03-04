@@ -1,4 +1,4 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 
 import log from '@/helpers/log'
 
@@ -15,7 +15,7 @@ export default version => new Promise(async (resolve, reject) => {
   ]
 
   for (let i = 0; i < files.length; i += 1) {
-    promises.push(shell(`json -I -f ${files[i]} -e 'this.version="${version}"'`))
+    promises.push(command(`json -I -f ${files[i]} -e 'this.version="${version}"'`, { shell: true }))
   }
 
   try {

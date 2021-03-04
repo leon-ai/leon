@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 import fs from 'fs'
-import { shell } from 'execa'
+import { command } from 'execa'
 import semver from 'semver'
 
 import log from '@/helpers/log'
@@ -41,17 +41,17 @@ export default () => new Promise(async (resolve, reject) => {
     // Environment checking
 
     ;(await Promise.all([
-      shell('node --version'),
-      shell('npm --version'),
-      shell('pipenv --version')
+      command('node --version', { shell: true }),
+      command('npm --version', { shell: true }),
+      command('pipenv --version', { shell: true })
     ])).forEach((p) => {
-      log.info(p.cmd)
+      log.info(p.command)
 
-      if (p.cmd.indexOf('node --version') !== -1 &&
+      if (p.command.indexOf('node --version') !== -1 &&
         !semver.satisfies(semver.clean(p.stdout), `>=${nodeMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe Node.js version must be >=${nodeMinRequiredVersion}. Please install it: https://nodejs.org (or use nvm)\n`)
-      } else if (p.cmd.indexOf('npm --version') !== -1 &&
+      } else if (p.command.indexOf('npm --version') !== -1 &&
         !semver.satisfies(semver.clean(p.stdout), `>=${npmMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe npm version must be >=${npmMinRequiredVersion}. Please install it: https://www.npmjs.com/get-npm (or use nvm)\n`)
@@ -61,12 +61,12 @@ export default () => new Promise(async (resolve, reject) => {
     })
 
     ;(await Promise.all([
-      shell('pipenv --where'),
-      shell('pipenv run python --version')
+      command('pipenv --where', { shell: true }),
+      command('pipenv run python --version', { shell: true })
     ])).forEach((p) => {
-      log.info(p.cmd)
+      log.info(p.command)
 
-      if (p.cmd.indexOf('pipenv run python --version') !== -1 &&
+      if (p.command.indexOf('pipenv run python --version') !== -1 &&
         !semver.satisfies(p.stdout.split(' ')[1], `>=${pythonMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe Python version must be >=${pythonMinRequiredVersion}. Please install it: https://www.python.org/downloads\n`)
@@ -78,11 +78,11 @@ export default () => new Promise(async (resolve, reject) => {
     // Module execution checking
 
     try {
-      const p = await shell('pipenv run python bridges/python/main.py scripts/assets/query-object.json')
-      log.info(p.cmd)
+      const p = await command('pipenv run python bridges/python/main.py scripts/assets/query-object.json', { shell: true })
+      log.info(p.command)
       log.success(`${p.stdout}\n`)
     } catch (e) {
-      log.info(e.cmd)
+      log.info(e.command)
       report.can_run_module.v = false
       log.error(`${e}\n`)
     }

@@ -1,4 +1,4 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 import fs from 'fs'
 
 import log from '@/helpers/log'
@@ -22,13 +22,13 @@ export default () => new Promise(async (resolve, reject) => {
   if (!fs.existsSync(`${destDeepSpeechFolder}/lm.binary`)) {
     try {
       log.info('Downloading pre-trained model...')
-      await shell(`cd ${tmpDir} && ${downloader} https://github.com/mozilla/DeepSpeech/releases/download/v${deepSpeechVersion}/${archiveName}`)
+      await command(`cd ${tmpDir} && ${downloader} https://github.com/mozilla/DeepSpeech/releases/download/v${deepSpeechVersion}/${archiveName}`, { shell: true })
       log.success('Pre-trained model download done')
       log.info('Unpacking...')
-      await shell(`cd ${tmpDir} && tar xvfz ${archiveName}`)
+      await command(`cd ${tmpDir} && tar xvfz ${archiveName}`, { shell: true })
       log.success('Unpack done')
       log.info('Moving...')
-      await shell(`mv -f ${tmpDir}/deepspeech-${deepSpeechVersion}-models/* ${destDeepSpeechFolder} && rm -rf ${tmpDir}/${archiveName} ${tmpDir}/models`)
+      await command(`mv -f ${tmpDir}/deepspeech-${deepSpeechVersion}-models/* ${destDeepSpeechFolder} && rm -rf ${tmpDir}/${archiveName} ${tmpDir}/models`, { shell: true })
       log.success('Move done')
       log.success('Offline speech-to-text installed')
 
