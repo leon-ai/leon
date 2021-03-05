@@ -52,7 +52,7 @@
     "@google-cloud/speech": "^3.2.0",
     "@google-cloud/text-to-speech": "^1.1.0",
     "archiver": "^2.1.1",
-    "async": "^2.6.0",
+    "async": "^3.2.0",
     "aws-sdk": "^2.382.0",
     "body-parser": "^1.19.0",
     "cross-env": "^7.0.3",
