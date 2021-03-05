@@ -24,7 +24,7 @@ parser.init = () => {
   try {
     client = new Stt({
       authenticator: new IamAuthenticator({ apikey: config.apikey }),
-      serviceUrl: `https://api.${config.location}.speech-to-text.watson.cloud.ibm.com`
+      serviceUrl: config.url
     })
 
     log.success('Parser initialized')

@@ -35,7 +35,7 @@ synthesizer.init = () => {
   try {
     client = new Tts({
       authenticator: new IamAuthenticator({ apikey: config.apikey }),
-      serviceUrl: `https://api.${config.location}.text-to-speech.watson.cloud.ibm.com`
+      serviceUrl: config.url
     })
 
     log.success('Synthesizer initialized')
