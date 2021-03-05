@@ -55,7 +55,7 @@
     "async": "^2.6.0",
     "aws-sdk": "^2.382.0",
     "body-parser": "^1.17.2",
-    "cross-env": "^5.2.0",
+    "cross-env": "^7.0.3",
     "deepspeech": "^0.5.0",
     "dotenv": "^8.2.0",
     "execa": "^5.0.0",
