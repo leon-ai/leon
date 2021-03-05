@@ -57,7 +57,7 @@
     "body-parser": "^1.17.2",
     "cross-env": "^5.2.0",
     "deepspeech": "^0.5.0",
-    "dotenv": "^4.0.0",
+    "dotenv": "^8.2.0",
     "execa": "^5.0.0",
     "express": "^4.17.1",
     "fluent-ffmpeg": "^2.1.2",
