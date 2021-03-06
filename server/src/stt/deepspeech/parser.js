@@ -14,6 +14,7 @@ try {
 
   log.success('GPU version found')
 } catch (eGpu) {
+  console.log(eGpu)
   log.info('GPU version not found, trying to get the CPU version...')
 
   try {
@@ -25,44 +26,15 @@ try {
   }
 }
 
-/**
- * These constants control the beam search decoder
- */
-
-// Beam width used in the CTC decoder when building candidate transcriptions
-const BEAM_WIDTH = 500
-// The alpha hyperparameter of the CTC decoder. Language Model weight
-const LM_ALPHA = 0.75
-// The beta hyperparameter of the CTC decoder. Word insertion weight (penalty)
-// const WORD_COUNT_WEIGHT = 1.00
-/**
- * Valid word insertion weight
- * This is used to lessen the word insertion penalty
- * When the inserted word is part of the vocabulary
- */
-const LM_BETA = 1.85
-
-/**
- * These constants are tied to the shape of the graph used (changing them changes
- * the geometry of the first layer), so make sure you use the same constants that
- * were used during training
- */
-
-// Number of MFCC features to use
-const N_FEATURES = 26
-// Size of the context window used for producing timesteps in the input vector
-const N_CONTEXT = 9
-
 let model = { }
+let desiredSampleRate = 16000
 
 /**
  * Model and language model paths
  */
 parser.conf = {
-  model: 'bin/deepspeech/output_graph.pb',
-  alphabet: 'bin/deepspeech/alphabet.txt',
-  lm: 'bin/deepspeech/lm.binary',
-  trie: 'bin/deepspeech/trie'
+  model: 'bin/deepspeech/deepspeech.pbmm',
+  scorer: 'bin/deepspeech/deepspeech.scorer'
 }
 
 /**
@@ -82,42 +54,21 @@ parser.init = (args) => {
     return false
   }
 
-  if (!fs.existsSync(args.alphabet)) {
-    log.error(`Cannot find ${args.alphabet}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
+  if (!fs.existsSync(args.scorer)) {
+    log.error(`Cannot find ${args.scorer}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
 
     return false
   }
 
   /* istanbul ignore if */
   if (process.env.LEON_NODE_ENV !== 'testing') {
-    model = new DeepSpeech.Model(args.model, N_FEATURES, N_CONTEXT, args.alphabet, BEAM_WIDTH)
+    model = new DeepSpeech.Model(args.model)
+    desiredSampleRate = model.sampleRate()
+
+    model.enableExternalScorer(args.scorer)
   }
 
   log.success('Model loaded')
-
-  if (args.lm && args.trie) {
-    log.info(`Loading language model from files ${args.lm} and ${args.trie}...`)
-
-    if (!fs.existsSync(args.lm)) {
-      log.error(`Cannot find ${args.lm}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
-
-      return false
-    }
-
-    if (!fs.existsSync(args.trie)) {
-      log.error(`Cannot find ${args.trie}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
-
-      return false
-    }
-
-    /* istanbul ignore if */
-    if (process.env.LEON_NODE_ENV !== 'testing') {
-      model.enableDecoderWithLM(args.alphabet, args.lm, args.trie,
-        LM_ALPHA, LM_BETA)
-    }
-
-    log.success('Language model loaded')
-  }
 
   return true
 }
@@ -128,19 +79,13 @@ parser.init = (args) => {
 parser.parse = (buffer, cb) => {
   const wavDecode = wav.decode(buffer)
 
-  if (wavDecode.sampleRate !== 16000) {
-    log.error(`The sample rate is not 16 kHz. DeepSpeech needs WAVE files with the following characteristics:
-    audio channel "1" (mono), bits per sample "16", sample rate "16 kHz"`)
-
-    return false
+  if (wavDecode.sampleRate < desiredSampleRate) {
+    log.warning(`Original sample rate (${wavDecode.sampleRate}) is lower than ${desiredSampleRate}Hz. Up-sampling might produce erratic speech recognition`)
   }
-
-  // const audioLength = (buffer.length / 2) * (1 / 16000)
-  // We take half of the buffer_size because buffer is a char* while LocalDsSTT() expected a short*
 
   /* istanbul ignore if */
   if (process.env.LEON_NODE_ENV !== 'testing') {
-    const string = model.stt(buffer.slice(0, buffer.length / 2), 16000)
+    const string = model.stt(buffer)
 
     cb({ string })
   }
