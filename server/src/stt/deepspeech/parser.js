@@ -14,7 +14,6 @@ try {
 
   log.success('GPU version found')
 } catch (eGpu) {
-  console.log(eGpu)
   log.info('GPU version not found, trying to get the CPU version...')
 
   try {
