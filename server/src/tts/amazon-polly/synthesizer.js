@@ -1,4 +1,4 @@
-import tts from 'aws-sdk'
+import { Polly, SynthesizeSpeechCommand } from '@aws-sdk/client-polly'
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
@@ -12,7 +12,7 @@ log.title('Amazon Polly Synthesizer')
 const synthesizer = { }
 const voices = {
   'en-US': {
-    VoiceId: 'Brian'
+    VoiceId: 'Matthew'
   },
   'fr-FR': {
     VoiceId: 'Mathieu'
@@ -29,10 +29,10 @@ synthesizer.conf = {
  * Initialize Amazon Polly based on credentials in the JSON file
  */
 synthesizer.init = () => {
-  try {
-    tts.config.loadFromPath(`${__dirname}/../../config/voice/amazon.json`)
+  const config = JSON.parse(fs.readFileSync(`${__dirname}/../../config/voice/amazon.json`, 'utf8'))
 
-    client = new tts.Polly()
+  try {
+    client = new Polly(config)
 
     log.success('Synthesizer initialized')
   } catch (e) {
@@ -48,20 +48,13 @@ synthesizer.save = (speech, em, cb) => {
 
   synthesizer.conf.Text = speech
 
-  client.synthesizeSpeech(synthesizer.conf, (err, res) => {
-    if (err) {
-      if (err.code === 'UnknownEndpoint') {
-        log.error(`Amazon Polly: the region "${err.region}" does not exist or does not support the Polly service`)
-      } else {
-        log.error(`Amazon Polly: ${err.message}`)
-      }
-    } else {
-      fs.writeFile(file, res.AudioStream, 'binary', (err) => {
-        if (err) {
-          log.error(`Amazon Polly: ${err}`)
-          return
-        }
+  client.send(new SynthesizeSpeechCommand(synthesizer.conf))
+    .then(({ AudioStream }) => {
+      const wStream = fs.createWriteStream(file)
 
+      AudioStream.pipe(wStream)
+
+      wStream.on('finish', () => {
         const ffmpeg = new Ffmpeg()
         ffmpeg.setFfmpegPath(ffmpegPath)
         ffmpeg.setFfprobePath(ffprobePath)
@@ -76,8 +69,18 @@ synthesizer.save = (speech, em, cb) => {
           }
         })
       })
-    }
-  })
+
+      wStream.on('error', (err) => {
+        log.error(`Amazon Polly: ${err}`)
+      })
+    })
+    .catch((err) => {
+      if (err.code === 'UnknownEndpoint') {
+        log.error(`Amazon Polly: the region "${err.region}" does not exist or does not support the Polly service`)
+      } else {
+        log.error(`Amazon Polly: ${err.message}`)
+      }
+    })
 }
 
 export default synthesizer
