@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-polly": "^3.8.0",
-    "@ffmpeg-installer/ffmpeg": "^1.0.17",
+    "@ffmpeg-installer/ffmpeg": "^1.0.20",
     "@ffprobe-installer/ffprobe": "^1.0.9",
     "@google-cloud/speech": "^4.2.0",
     "@google-cloud/text-to-speech": "^3.1.3",
