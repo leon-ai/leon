@@ -31,11 +31,13 @@ export default () => new Promise(async (resolve, reject) => {
 
   try {
     if (type === 'expressions') {
-      let manager = new NlpManager({ languages: ['en'] })
-
-      if (lang !== 'en') {
-        manager = new NlpManager({ languages: lang })
+      const settings = {
+        languages: lang !== 'en' ? lang : ['en'],
+        modelFileName: expressionsClassifier,
+        nlu: { log: false }
       }
+
+      const manager = new NlpManager(settings)
       const packages = fs.readdirSync(packagesDir)
         .filter(entity =>
           fs.statSync(path.join(packagesDir, entity)).isDirectory())
