@@ -63,7 +63,7 @@ Sounds good for you? Then let's get started!
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 10
+- [Node.js](https://nodejs.org/) >= 14
 - npm >= 5
 - [Python](https://www.python.org/downloads/) >= 3
 - [Pipenv](https://docs.pipenv.org)
