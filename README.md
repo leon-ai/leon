@@ -1,6 +1,6 @@
 <p align="center">
-  <a href="https://getleon.ai"><img width="96" src="https://getleon.ai/img/logo.svg"></a><br><br>
-  <a href="https://www.youtube.com/watch?v=p7GRGiicO1c"><img width="512" src="https://getleon.ai/img/1.0.0-beta.0_preview_en.png"></a><br>
+  <a href="https://getleon.ai" target="_blank"><img width="96" src="https://getleon.ai/img/logo.svg"></a><br><br>
+  <a href="https://www.youtube.com/watch?v=p7GRGiicO1c" target="_blank"><img width="512" src="https://getleon.ai/img/1.0.0-beta.0_preview_en.png"></a><br>
 </p>
 
 <h1 align="center">Leon</h1>
@@ -9,19 +9,19 @@
 
 <p align="center">
   <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat"/></a>
-  <a href="https://circleci.com/gh/leon-ai/leon/tree/develop"><img src="https://img.shields.io/circleci/build/github/leon-ai/leon/develop?label=circleci&style=flat"/></a>
+  <a href="https://circleci.com/gh/leon-ai/leon/tree/develop" target="_blank"><img src="https://img.shields.io/circleci/build/github/leon-ai/leon/develop?label=circleci&style=flat"/></a>
   <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat"/></a>
   <br>
-  <a href="https://discord.gg/MNQqqKg"><img src="https://svgshare.com/i/V09.svg"/></a>
-  <a href="https://twitter.com/louistiti_fr"><img src="https://img.shields.io/twitter/follow/louistiti_fr?label=Follow&style=social"/></a>
+  <a href="https://discord.gg/MNQqqKg" target="_blank"><img src="https://svgshare.com/i/V09.svg"/></a>
+  <a href="https://twitter.com/louistiti_fr" target="_blank"><img src="https://img.shields.io/twitter/follow/louistiti_fr?label=Follow&style=social"/></a>
 </p>
 
 <p align="center">
-  <a href="https://getleon.ai">Website</a> ::
-  <a href="https://docs.getleon.ai">Documentation</a> ::
-  <a href="https://roadmap.getleon.ai">Roadmap</a> ::
+  <a href="https://getleon.ai" target="_blank">Website</a> ::
+  <a href="https://docs.getleon.ai" target="_blank">Documentation</a> ::
+  <a href="https://roadmap.getleon.ai" target="_blank">Roadmap</a> ::
   <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md">Contributing</a> ::
-  <a href="https://blog.getleon.ai/the-story-behind-leon/">Story</a>
+  <a href="https://blog.getleon.ai/the-story-behind-leon/" target="_blank">Story</a>
 </p>
 
 ---
