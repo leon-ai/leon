@@ -1,6 +1,6 @@
 {
   "name": "leon-hotword",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hotword detection for Leon",
   "author": {
     "name": "Louis Grenard",
@@ -14,9 +14,8 @@
   "license": "MIT",
   "dependencies": {
     "node-record-lpcm16": "^0.3.0",
-    "snowboy": "^1.3.1-alpha.1",
-    "socket.io": "^2.0.2",
-    "socket.io-client": "^2.1.1",
+    "snowboy": "git+https://github.com/leon-ai/snowboy.git",
+    "socket.io-client": "^3.1.2",
     "superagent": "^3.5.2"
   }
 }
