@@ -96,7 +96,9 @@ class Server {
    */
   static listen (port) {
     return new Promise((resolve, reject) => {
-      const io = socketio(this.server)
+      const io = process.env.LEON_NODE_ENV === 'development'
+        ? socketio(this.server, { cors: { origin: '*' } })
+        : socketio(this.server)
 
       io.on('connection', this.connection)
 
