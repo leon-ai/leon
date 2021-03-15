@@ -37,8 +37,7 @@ export default () => new Promise(async (resolve, reject) => {
         manager = new NlpManager({ languages: lang })
       }
       const packages = fs.readdirSync(packagesDir)
-        .filter(entity =>
-          fs.statSync(path.join(packagesDir, entity)).isDirectory())
+        .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
       let expressionsObj = { }
 
       for (let i = 0; i < packages.length; i += 1) {

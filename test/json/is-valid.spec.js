@@ -20,7 +20,7 @@ describe('are JSON files valid', () => {
       } else if (entities[i].indexOf('.json') !== -1) {
         const jsonFile = path.join(global.paths.root, dir, entities[i])
         test(`${jsonFile} has valid JSON syntax`, () => {
-          try {
+          try { // eslint-disable-line no-useless-catch
             JSON.parse(fs.readFileSync(jsonFile, 'utf8'))
 
             expect(true).toBe(true)

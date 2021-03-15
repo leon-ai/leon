@@ -36,38 +36,38 @@ export default () => new Promise(async (resolve, reject) => {
       can_offline_stt: { title: 'Offline speech-to-text', type: 'warning', v: true }
     }
 
-    log.title('Checking')
+    log.title('Checking');
 
     // Environment checking
 
-    ;(await Promise.all([
+    (await Promise.all([
       command('node --version', { shell: true }),
       command('npm --version', { shell: true }),
       command('pipenv --version', { shell: true })
     ])).forEach((p) => {
       log.info(p.command)
 
-      if (p.command.indexOf('node --version') !== -1 &&
-        !semver.satisfies(semver.clean(p.stdout), `>=${nodeMinRequiredVersion}`)) {
+      if (p.command.indexOf('node --version') !== -1
+        && !semver.satisfies(semver.clean(p.stdout), `>=${nodeMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe Node.js version must be >=${nodeMinRequiredVersion}. Please install it: https://nodejs.org (or use nvm)\n`)
-      } else if (p.command.indexOf('npm --version') !== -1 &&
-        !semver.satisfies(semver.clean(p.stdout), `>=${npmMinRequiredVersion}`)) {
+      } else if (p.command.indexOf('npm --version') !== -1
+        && !semver.satisfies(semver.clean(p.stdout), `>=${npmMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe npm version must be >=${npmMinRequiredVersion}. Please install it: https://www.npmjs.com/get-npm (or use nvm)\n`)
       } else {
         log.success(`${p.stdout}\n`)
       }
-    })
+    });
 
-    ;(await Promise.all([
+    (await Promise.all([
       command('pipenv --where', { shell: true }),
       command('pipenv run python --version', { shell: true })
     ])).forEach((p) => {
       log.info(p.command)
 
-      if (p.command.indexOf('pipenv run python --version') !== -1 &&
-        !semver.satisfies(p.stdout.split(' ')[1], `>=${pythonMinRequiredVersion}`)) {
+      if (p.command.indexOf('pipenv run python --version') !== -1
+        && !semver.satisfies(p.stdout.split(' ')[1], `>=${pythonMinRequiredVersion}`)) {
         Object.keys(report).forEach((item) => { if (report[item].type === 'error') report[item].v = false })
         log.error(`${p.stdout}\nThe Python version must be >=${pythonMinRequiredVersion}. Please install it: https://www.python.org/downloads\n`)
       } else {

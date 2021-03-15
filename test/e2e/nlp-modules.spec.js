@@ -19,8 +19,7 @@ describe('NLU modules', () => {
   const { langs } = JSON.parse(fs.readFileSync(path.join(global.paths.root, 'core', 'langs.json'), 'utf8'))
   const langKeys = Object.keys(langs)
   const packages = fs.readdirSync(global.paths.packages)
-    .filter(entity =>
-      fs.statSync(path.join(global.paths.packages, entity)).isDirectory())
+    .filter((entity) => fs.statSync(path.join(global.paths.packages, entity)).isDirectory())
 
   for (let i = 0; i < langKeys.length; i += 1) {
     // eslint-disable-next-line no-loop-func

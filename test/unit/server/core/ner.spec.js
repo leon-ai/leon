@@ -140,8 +140,8 @@ describe('NER', () => {
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
       console.log('entities', entities)
       expect(entities.length).toBe(2)
-      expect(entities.map(e => e.entity)).toEqual(['start', 'animal'])
-      expect(entities.map(e => e.sourceText)).toEqual(['Please whistle as a', 'bird'])
+      expect(entities.map((e) => e.entity)).toEqual(['start', 'animal'])
+      expect(entities.map((e) => e.sourceText)).toEqual(['Please whistle as a', 'bird'])
     })
 
     test('extracts regex custom entities', async () => {
@@ -165,8 +165,8 @@ describe('NER', () => {
 
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
       expect(entities.length).toBe(3)
-      expect(entities.map(e => e.entity)).toEqual(['color', 'color', 'color'])
-      expect(entities.map(e => e.sourceText)).toEqual(['blue', 'white', 'red'])
+      expect(entities.map((e) => e.entity)).toEqual(['color', 'color', 'color'])
+      expect(entities.map((e) => e.sourceText)).toEqual(['blue', 'white', 'red'])
     })
   })
 })

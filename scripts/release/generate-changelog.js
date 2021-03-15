@@ -6,7 +6,7 @@ import log from '@/helpers/log'
 /**
  * Update version number in files which need version number
  */
-export default version => new Promise(async (resolve, reject) => {
+export default (version) => new Promise(async (resolve, reject) => {
   const changelog = 'CHANGELOG.md'
   const tmpChangelog = 'TMP-CHANGELOG.md'
 

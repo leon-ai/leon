@@ -25,7 +25,6 @@ class Server {
     this.server = { }
   }
 
-
   /**
    * Server entry point
    */
