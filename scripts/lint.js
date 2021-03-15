@@ -12,7 +12,7 @@ import loader from '@/helpers/loader'
 
   try {
     const globs = [
-      '"app/**/*.es6.js"',
+      '"app/src/js/*.js"',
       '"hotword/index.js"',
       '"packages/**/*.js"',
       '"scripts/**/*.js"',

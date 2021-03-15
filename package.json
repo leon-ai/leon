@@ -31,7 +31,7 @@
     "setup:offline-hotword": "babel-node scripts/setup-offline/run-setup-hotword.js",
     "preinstall": "node scripts/setup/preinstall.js",
     "postinstall": "babel-node scripts/setup/setup.js",
-    "dev:app": "babel-node scripts/app/dev-app.js",
+    "dev:app": "vite --config app/vite.config.js",
     "dev:server": "npm run train expressions && cross-env LEON_NODE_ENV=development nodemon --watch server ./server/src/index.js --ignore server/src/tmp/ --exec babel-node",
     "wake": "cross-env LEON_HOST=http://localhost LEON_PORT=1337 node hotword/index.js",
     "delete-dist:server": "shx rm -rf ./server/dist",
@@ -66,7 +66,8 @@
     "moment-timezone": "^0.5.33",
     "node-nlp": "^3.1.1",
     "node-wav": "0.0.2",
-    "socket.io": "^3.1.2",
+    "socket.io": "^4.0.0",
+    "socket.io-client": "^4.0.0",
     "superagent": "^6.1.0"
   },
   "devDependencies": {
@@ -75,16 +76,12 @@
     "@babel/node": "^7.13.0",
     "@babel/preset-env": "^7.13.9",
     "babel-plugin-module-resolver": "^4.1.0",
-    "babelify": "^10.0.0",
-    "browser-sync": "^2.26.14",
-    "browserify": "^17.0.0",
     "cli-spinner": "^0.2.10",
-    "envify": "^4.1.0",
-    "eslint": "^5.16.0",
-    "eslint-config-airbnb-base": "^11.3.2",
+    "eslint": "^7.21.0",
+    "eslint-config-airbnb-base": "^14.2.1",
     "eslint-import-resolver-babel-module": "^5.2.0",
     "eslint-plugin-import": "^2.22.1",
-    "eslint-plugin-jest": "^21.27.2",
+    "eslint-plugin-jest": "^24.3.1",
     "git-changelog": "^2.0.0",
     "inquirer": "^8.0.0",
     "jest": "^26.6.3",
@@ -93,6 +90,7 @@
     "json": "^10.0.0",
     "nodemon": "^2.0.7",
     "semver": "^7.3.4",
-    "shx": "^0.3.3"
+    "shx": "^0.3.3",
+    "vite": "^2.0.5"
   }
 }

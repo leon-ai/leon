@@ -1,11 +1,12 @@
-import Chatbot from './chatbot.es6'
+import { io } from 'socket.io-client'
+import Chatbot from './chatbot'
 
 export default class Client {
   constructor (client, serverUrl, input, res) {
     this.client = client
     this._input = input
     this.serverUrl = serverUrl
-    this.socket = io.connect(this.serverUrl)
+    this.socket = io(this.serverUrl)
     this.history = localStorage.getItem('history')
     this.parsedHistory = []
     this.info = res
