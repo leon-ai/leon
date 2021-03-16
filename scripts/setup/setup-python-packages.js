@@ -35,7 +35,7 @@ export default () => new Promise(async (resolve, reject) => {
       log.info('Installing Python packages from bridges/python/Pipfile.lock...')
 
       await command('pipenv --three', { shell: true })
-      await command('pipenv install --skip-lock', { shell: true })
+      await command('pipenv install', { shell: true })
       log.success('Python packages installed')
       resolve()
     } catch (e) {
