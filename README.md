@@ -124,7 +124,7 @@ docker run -e TZ=UTC -p 1337:1337 -it leonai/leon
 
 For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
 
-## 🗺️ Roadmap
+## 🧭 Roadmap
 
 To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai).
 
