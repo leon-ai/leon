@@ -87,7 +87,7 @@ Types define which kind of changes you made to the project.
 | chore         | Changes to the build process or auxiliary tools such as changelog generation. No production code change. |
 | docs          | Documentation only changes. |
 | feat          | A new feature. |
-| fix           | A big fix. |
+| fix           | A bug fix. |
 | perf          | A code change that improves performance. |
 | refactor      | A code change that neither fixes a bug nor adds a feature. |
 | style         | Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc.). |
