@@ -23,6 +23,9 @@ Verify if one or several email addresses have been pwned (thanks to [Have I Been
 
 #### Usage
 
+1. Since the API v3, you must [claim your API key](https://haveibeenpwned.com/API/Key).
+2. Then paste it in `packages/checker/config/config.json` at the `haveibeenpwned.api_key` key.
+
 ```
 (en-US) "Has louis.grenard@gmail.com been pwned?"
 (en-US) "Have iifeoluwa.ao@gmail.com, louis.grenard@gmail.com, and supercleanemail@test.com been pwned?"
@@ -31,7 +34,7 @@ Verify if one or several email addresses have been pwned (thanks to [Have I Been
 (fr-FR) "Est-ce que iifeoluwa.ao@gmail.com, louis.grenard@gmail.com, et supercleanemail@test.com ont été compromis ?"
 ```
 
-You can also predefined one or several email addresses in the `packages/checker/config/config.json` file at the `haveibeenpwned.emails` key.
+You can also predefine one or several email addresses in the `packages/checker/config/config.json` file at the `haveibeenpwned.emails` key.
 
 If you do, then you can use such sentences:
 
