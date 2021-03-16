@@ -34,7 +34,9 @@ downloadController.get = (req, res) => {
         if (err && err.code === 'ENOENT') {
           message = 'There is no content to download for this module.'
           log.error(message)
-          res.json({ success: false, status: 404, code: 'module_dir_not_found', message })
+          res.json({
+            success: false, status: 404, code: 'module_dir_not_found', message
+          })
         } else {
           if (err) log.error(err)
 
@@ -95,12 +97,16 @@ downloadController.get = (req, res) => {
     } else {
       message = 'This module does not exist.'
       log.error(message)
-      res.json({ success: false, status: 404, code: 'module_not_found', message })
+      res.json({
+        success: false, status: 404, code: 'module_not_found', message
+      })
     }
   } else {
     message = 'Bad request.'
     log.error(message)
-    res.json({ success: false, status: 400, code: 'bad_request', message })
+    res.json({
+      success: false, status: 400, code: 'bad_request', message
+    })
   }
 }
 

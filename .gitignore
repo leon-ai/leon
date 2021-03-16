@@ -24,6 +24,6 @@ debug.log
 packages/**/config/config.json
 packages/**/data/db/*.json
 server/src/data/expressions/classifier.json
-app/js/main.js
+app/src/js/main.js
 package.json.backup
 .python-version

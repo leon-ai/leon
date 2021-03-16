@@ -17,7 +17,7 @@ listener.listening = (stream, minDecibels, maxBlankTime,
 
     analyser.getByteFrequencyData(data)
 
-    if (data.some(v => v)) {
+    if (data.some((v) => v)) {
       if (triggered) {
         triggered = false
 

@@ -4,8 +4,8 @@ import parser from '@/stt/deepspeech/parser'
 
 describe('DeepSpeech STT parser', () => {
   // Only run these tests if the models exist
-  if (fs.existsSync(`${global.paths.root}/bin/deepspeech/deepspeech.pbmm`) &&
-    fs.existsSync(`${global.paths.root}/bin/deepspeech/deepspeech.scorer`)) {
+  if (fs.existsSync(`${global.paths.root}/bin/deepspeech/deepspeech.pbmm`)
+    && fs.existsSync(`${global.paths.root}/bin/deepspeech/deepspeech.scorer`)) {
     describe('init()', () => {
       test('returns error cannot find model', () => {
         expect(parser.init({

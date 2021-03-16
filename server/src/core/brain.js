@@ -181,8 +181,8 @@ class Brain {
 
             /* istanbul ignore next */
             // Synchronize the downloaded content if enabled
-            if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled &&
-              this.finalOutput.options.synchronization.enabled === true) {
+            if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled
+              && this.finalOutput.options.synchronization.enabled === true) {
               const sync = new Synchronizer(
                 this,
                 obj.classification,

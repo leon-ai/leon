@@ -14,8 +14,7 @@ export default () => new Promise((resolve, reject) => {
   const packagesDir = 'packages'
   // Get packages list
   const packages = fs.readdirSync(packagesDir)
-    .filter(entity =>
-      fs.statSync(path.join(packagesDir, entity)).isDirectory())
+    .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
 
   // Browse packages
   for (let i = 0; i < packages.length; i += 1) {

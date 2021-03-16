@@ -1,8 +1,6 @@
-import EventEmitter from 'events'
-
 export default class Chatbot {
   constructor () {
-    this.em = new EventEmitter()
+    this.et = new EventTarget()
     this.feed = document.querySelector('#feed')
     this.typing = document.querySelector('#is-typing')
     this.noBubbleMessage = document.querySelector('#no-bubble')
@@ -14,24 +12,24 @@ export default class Chatbot {
     await this.loadFeed()
     this.scrollDown()
 
-    this.em.on('to-leon', (string) => {
-      this.createBubble('me', string)
+    this.et.addEventListener('to-leon', (event) => {
+      this.createBubble('me', event.detail)
     })
 
-    this.em.on('me-received', (string) => {
-      this.createBubble('leon', string)
+    this.et.addEventListener('me-received', (event) => {
+      this.createBubble('leon', event.detail)
     })
   }
 
   sendTo (who, string) {
     if (who === 'leon') {
-      this.em.emit('to-leon', string)
+      this.et.dispatchEvent(new CustomEvent('to-leon', { detail: string }))
     }
   }
 
   receivedFrom (who, string) {
     if (who === 'leon') {
-      this.em.emit('me-received', string)
+      this.et.dispatchEvent(new CustomEvent('me-received', { detail: string }))
     }
   }
 

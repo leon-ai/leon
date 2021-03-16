@@ -1,9 +1,12 @@
+import on from '../sounds/on.mp3'
+import off from '../sounds/off.mp3'
+
 export default class Recorder {
   constructor (stream, el, info) {
     this.recorder = new MediaRecorder(stream, { audioBitsPerSecond: 16000 })
     this.el = el
-    this.audioOn = new Audio('../sounds/on.mp3')
-    this.audioOff = new Audio('../sounds/off.mp3')
+    this.audioOn = new Audio(on)
+    this.audioOff = new Audio(off)
     this.playSound = true
     this.info = info
     this.enabled = false

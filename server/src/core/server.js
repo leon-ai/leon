@@ -25,7 +25,6 @@ class Server {
     this.server = { }
   }
 
-
   /**
    * Server entry point
    */
@@ -71,9 +70,9 @@ class Server {
       const apiVersion = 'v1'
 
       // Render the web app
-      app.use(express.static(`${__dirname}/../../../app`))
+      app.use(express.static(`${__dirname}/../../../app/dist`))
       app.get('/', (req, res) => {
-        res.sendFile(path.resolve(`${__dirname}/../../../app/index.html`))
+        res.sendFile(path.resolve(`${__dirname}/../../../app/dist/index.html`))
       })
 
       app.use(`/${apiVersion}/info`, infoRouter)
@@ -85,7 +84,6 @@ class Server {
         await this.listen(process.env.LEON_PORT)
         resolve()
       } catch (e) {
-        console.error(e)
         log[e.type](e.obj.message)
       }
     })
@@ -97,7 +95,7 @@ class Server {
   static listen (port) {
     return new Promise((resolve, reject) => {
       const io = process.env.LEON_NODE_ENV === 'development'
-        ? socketio(this.server, { cors: { origin: '*' } })
+        ? socketio(this.server, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
         : socketio(this.server)
 
       io.on('connection', this.connection)

@@ -6,7 +6,7 @@ describe('punctuation', () => {
     'packages'
   ]
   const punctuations = ['.', ';', ':', '?', '!', '>']
-  const findPunctuation = s => punctuations.includes(s[s.length - 1])
+  const findPunctuation = (s) => punctuations.includes(s[s.length - 1])
   const findString = (iterable) => {
     const keys = Object.keys(iterable)
 
@@ -33,8 +33,8 @@ describe('punctuation', () => {
       const way = path.join(dir, entities[i])
       if (fs.statSync(way).isDirectory()) {
         list(way)
-      } else if (way.indexOf('data/answers') !== -1 &&
-        entities[i].indexOf('.json') !== -1) {
+      } else if (way.indexOf('data/answers') !== -1
+        && entities[i].indexOf('.json') !== -1) {
         const jsonFile = path.join(global.paths.root, dir, entities[i])
         const json = JSON.parse(fs.readFileSync(jsonFile, 'utf8'))
 

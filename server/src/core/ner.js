@@ -17,7 +17,7 @@ class Ner {
   }
 
   static logExtraction (entities) {
-    entities.forEach(ent => log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`))
+    entities.forEach((ent) => log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`))
   }
 
   /**
@@ -50,7 +50,9 @@ class Ner {
           const entity = actionEntities[i]
 
           if (!this.supportedEntityTypes.includes(entity.type)) {
-            reject({ type: 'warning', obj: new Error(`"${entity.type}" action entity type not supported`), code: 'random_ner_type_not_supported', data: { '%entity_type%': entity.type } })
+            reject({
+              type: 'warning', obj: new Error(`"${entity.type}" action entity type not supported`), code: 'random_ner_type_not_supported', data: { '%entity_type%': entity.type }
+            })
           } else if (entity.type === 'regex') {
             promises.push(this.injectRegexEntity(lang, entity))
           } else if (entity.type === 'trim') {

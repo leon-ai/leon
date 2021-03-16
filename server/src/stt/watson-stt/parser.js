@@ -44,7 +44,7 @@ parser.parse = async (buffer, cb) => {
 
   client.recognize(parser.conf)
     .then(({ result }) => {
-      const string = result.results.map(data => data.alternatives[0].transcript).join('\n')
+      const string = result.results.map((data) => data.alternatives[0].transcript).join('\n')
 
       cb({ string })
     })
@@ -56,7 +56,7 @@ parser.parse = async (buffer, cb) => {
     if (err) {
       log.error(`Watson STT: ${err}`)
     } else {
-      const string = res.results.map(data => data.alternatives[0].transcript).join('\n')
+      const string = res.results.map((data) => data.alternatives[0].transcript).join('\n')
 
       cb({ string })
     }

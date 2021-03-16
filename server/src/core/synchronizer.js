@@ -92,11 +92,11 @@ class Synchronizer {
           // Browse entities
           for (let i = 0; i < list.data.files.length; i += 1) {
             // In case the module folder exists
-            if (list.data.files[i].mimeType === folderMimeType &&
-              list.data.files[i].name === driveFolderName) {
+            if (list.data.files[i].mimeType === folderMimeType
+              && list.data.files[i].name === driveFolderName) {
               folderId = list.data.files[i].id
               return cb(null, true, folderId)
-            } else if ((i + 1) === list.data.files.length) {
+            } else if ((i + 1) === list.data.files.length) { // eslint-disable-line no-else-return
               return cb(null, false, folderId)
             }
             // TODO: UI toolbox to reach this scope
@@ -106,6 +106,7 @@ class Synchronizer {
               log.title('Synchronizer'); log.success(`"${list.data.files[i].id}" deleted`)
             }, 200 * i) */
           }
+
           return false
         },
         (folderExists, folderId, cb) => {
