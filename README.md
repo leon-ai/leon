@@ -26,7 +26,7 @@
 
 ---
 
-## Introduction
+## 👋 Introduction
 
 Leon is an **open-source personal assistant** who can live **on your server**.
 
@@ -62,7 +62,7 @@ If you want to, Leon can communicate with you by being **offline to protect your
 
 Sounds good for you? Then let's get started!
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
@@ -120,42 +120,44 @@ docker run -e TZ=UTC -p 1337:1337 -it leonai/leon
 # Hooray! Leon is running
 ```
 
-## Documentation
+## 📚 Documentation
 
 For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
 
-## Roadmap
+## 🗺️ Roadmap
 
 To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai).
 
-## Contributing
+## ❤️ Contributing
 
 If you have an idea for improving Leon, do not hesitate.
 
 **Leon needs open source to live**, the more modules he has, the more skillful he becomes.
 
-## The Story Behind Leon
+## 📖 The Story Behind Leon
 
 You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-behind-leon/).
 
-## Stay Tuned
+## 🔔 Stay Tuned
+
 - [Newsletter](https://getleon.ai)
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
 - [Twitter](https://twitter.com/louistiti_fr)
 - [#LeonAI](https://twitter.com/hashtag/LeonAI)
 
-## Author
+## 👨 Author
+
 **Louis Grenard** ([@louistiti_fr](https://twitter.com/louistiti_fr))
 
-## Donate
+## 👍 Donate
 
 You can also contribute by [buying me a fruit juice](https://donate.getleon.ai).
 
-## License
+## 📝 License
 [MIT License](https://github.com/leon-ai/leon/blob/develop/LICENSE.md)
 
 Copyright (c) 2019-present, Louis Grenard <louis.grenard@gmail.com>
 
 ## Cheers!
-![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f37b.png "Cheers!")
+![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f379.png "Cheers!")
