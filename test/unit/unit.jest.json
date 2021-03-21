@@ -1,7 +1,7 @@
 {
   "bail": true,
   "verbose": true,
-  "notify": true,
+  "notify": false,
   "collectCoverage": true,
   "rootDir": "../..",
   "testMatch": [
