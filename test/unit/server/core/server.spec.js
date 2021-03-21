@@ -74,19 +74,15 @@ describe('server', () => {
       ee.emit('init', 'hotword-node')
       console.log = jest.fn()
 
-      setTimeout(() => {
-        ee.emit('hotword-detected', { })
-        expect(console.log.mock.calls[0][1]).toBe('SOCKET')
-        console.log = jest.fn()
-      }, 1000)
+      ee.emit('hotword-detected', { })
+      expect(console.log.mock.calls[0][1]).toBe('SOCKET')
+      console.log = jest.fn()
 
-      setTimeout(() => {
-        ee.emit('init', 'testing')
-        expect(console.log.mock.calls[0][1]).toBe('BRAIN')
-        console.log = jest.fn()
-      }, 2000)
+      ee.emit('init', 'testing')
+      expect(console.log.mock.calls[0][1]).toBe('BRAIN')
+      console.log = jest.fn()
 
-      setTimeout(() => {
+      setImmediate(() => {
         ee.emit('query', { client: 'jest', value: 'Hello' })
         expect(['NLU', 'SOCKET']).toContain(console.log.mock.calls[0][1])
         console.log = jest.fn()
@@ -96,7 +92,7 @@ describe('server', () => {
         console.log = jest.fn()
 
         done()
-      }, 3000)
+      })
     })
   })
 })

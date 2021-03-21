@@ -26,7 +26,7 @@ class Brain {
     log.success('New instance')
 
     if (process.env.LEON_TTS === 'true') {
-      // Tnit TTS
+      // Init TTS
       this.tts = new Tts(this.socket, process.env.LEON_TTS_PROVIDER)
       this.tts.init()
     }

@@ -1,0 +1,32 @@
+name: Lint
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+
+    runs-on: ubuntu-20.04
+    container: leonai/ci:latest
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Cache node_modules
+        uses: actions/cache@v2
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node_modules-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node_modules-
+      - name: Cache Pipenv
+        uses: actions/cache@v2
+        with:
+          path: bridges/python/.venv
+          key: ${{ runner.os }}-pipenv-${{ env.cache-name }}-${{ hashFiles('bridges/python/Pipfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pipenv-
+      - name: Install
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint

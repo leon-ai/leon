@@ -32,7 +32,7 @@ export default () => new Promise(async (resolve, reject) => {
 
     try {
       // Installing Python packages
-      log.info('Installing Python packages from bridges/python/Pipfile.lock...')
+      log.info('Installing Python packages from bridges/python/Pipfile...')
 
       await command('pipenv --three', { shell: true })
       await command('pipenv install', { shell: true })

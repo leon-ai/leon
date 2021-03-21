@@ -8,12 +8,15 @@
 *<p align="center">Your open-source personal assistant.</p>*
 
 <p align="center">
-  <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat"/></a>
-  <a href="https://circleci.com/gh/leon-ai/leon/tree/develop"><img src="https://img.shields.io/circleci/build/github/leon-ai/leon/develop?label=circleci&style=flat"/></a>
-  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat"/></a>
+  <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat" /></a>
+  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" /></a>
+  <br>
+  <a href="https://github.com/leon-ai/leon/actions/workflows/build.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/build.yml/badge.svg" /></a>
+  <a href="https://github.com/leon-ai/leon/actions/workflows/tests.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/tests.yml/badge.svg" /></a>
+  <a href="https://github.com/leon-ai/leon/actions/workflows/lint.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/lint.yml/badge.svg" /></a>
   <br>
   <a href="https://discord.gg/MNQqqKg"><img src="https://svgshare.com/i/V09.svg"/></a>
-  <a href="https://twitter.com/louistiti_fr"><img src="https://img.shields.io/twitter/follow/louistiti_fr?label=Follow&style=social"/></a>
+  <a href="https://twitter.com/louistiti_fr"><img src="https://img.shields.io/twitter/follow/louistiti_fr?label=Follow&style=social" /></a>
 </p>
 
 <p align="center">

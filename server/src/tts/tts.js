@@ -41,12 +41,9 @@ class Tts {
       log.warning(`The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`)
     }
 
-    /* istanbul ignore if */
-    if (process.env.LEON_NODE_ENV !== 'testing') {
-      // Dynamically attribute the synthesizer
-      this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`) // eslint-disable-line global-require
-      this.synthesizer.default.init(this.synthesizer.default.conf)
-    }
+    // Dynamically attribute the synthesizer
+    this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`) // eslint-disable-line global-require
+    this.synthesizer.default.init(this.synthesizer.default.conf)
 
     this.onSaved()
 

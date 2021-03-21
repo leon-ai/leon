@@ -22,7 +22,7 @@ describe('ASR', () => {
     })
   })
 
-  describe('run()', async () => {
+  describe('run()', () => {
     const webmTmp = Asr.audios.webm
 
     test('returns error because of wrong WebM audio path', async () => {
