@@ -37,7 +37,7 @@ const getDownloads = async (fastify, options) => {
           if (err && err.code === 'ENOENT') {
             message = 'There is no content to download for this module.'
             log.error(message)
-            reply.send({
+            reply.code(404).send({
               success: false,
               status: 404,
               code: 'module_dir_not_found',
@@ -104,7 +104,7 @@ const getDownloads = async (fastify, options) => {
       } else {
         message = 'This module does not exist.'
         log.error(message)
-        reply.send({
+        reply.code(404).send({
           success: false,
           status: 404,
           code: 'module_not_found',
@@ -114,7 +114,7 @@ const getDownloads = async (fastify, options) => {
     } else {
       message = 'Bad request.'
       log.error(message)
-      reply.send({
+      reply.code(400).send({
         success: false,
         status: 400,
         code: 'bad_request',
