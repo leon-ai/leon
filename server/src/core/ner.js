@@ -1,4 +1,9 @@
-import { NerManager } from 'node-nlp'
+import { containerBootstrap } from '@nlpjs/core'
+import {
+  ExtractorRegex,
+  ExtractorTrim,
+  Ner as NerManager
+} from '@nlpjs/ner'
 import fs from 'fs'
 
 import log from '@/helpers/log'
@@ -6,11 +11,15 @@ import string from '@/helpers/string'
 
 class Ner {
   constructor () {
-    this.nerManager = { }
+    this.ner = { }
+    this.container = containerBootstrap()
     this.supportedEntityTypes = [
       'regex',
       'trim'
     ]
+
+    this.container.use(ExtractorRegex)
+    this.container.use(ExtractorTrim)
 
     log.title('NER')
     log.success('New instance')
@@ -29,9 +38,9 @@ class Ner {
       log.info('Searching for entities...')
 
       // Need to instanciate on the fly to flush entities
-      this.nerManager = new NerManager()
+      this.ner = new NerManager({ container: this.container })
 
-      const { entities, classification } = obj
+      const { entities: builtInEntities, classification } = obj
       // Remove end-punctuation and add an end-whitespace
       const query = `${string.removeEndPunctuation(obj.query)} `
       const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
@@ -64,8 +73,8 @@ class Ner {
 
         // Merge built-in and named entities
         const nerEntities = (
-          await this.nerManager.findBuiltinEntities(query, lang)
-        ).concat(await this.nerManager.findNamedEntities(query, lang))
+          await this.ner.process({ locale: lang, text: query })
+        ).entities.concat(builtInEntities)
 
         // Trim whitespace at the beginning and the end of the entity value
         nerEntities.map((e) => {
@@ -79,13 +88,13 @@ class Ner {
 
         resolve(nerEntities)
       } else {
-        if (entities.length > 0) {
-          Ner.logExtraction(entities)
+        if (builtInEntities.length > 0) {
+          Ner.logExtraction(builtInEntities)
         } else {
           log.info('No entity found')
         }
 
-        resolve(entities)
+        resolve(builtInEntities)
       }
     })
   }
@@ -95,19 +104,17 @@ class Ner {
    */
   injectTrimEntity (lang, entity) {
     return new Promise((resolve) => {
-      const e = this.nerManager.addNamedEntity(entity.name, entity.type)
-
       for (let j = 0; j < entity.conditions.length; j += 1) {
         const condition = entity.conditions[j]
         const conditionMethod = `add${string.snakeToPascalCase(condition.type)}Condition`
 
         if (condition.type === 'between') {
-          // e.g. list.addBetweenCondition('en', 'create a', 'list')
-          e[conditionMethod](lang, condition.from, condition.to)
+          // e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
+          this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
         } else if (condition.type.indexOf('after') !== -1) {
-          e[conditionMethod](lang, condition.from)
+          this.ner[conditionMethod](lang, entity.name, condition.from)
         } else if (condition.type.indexOf('before') !== -1) {
-          e[conditionMethod](lang, condition.to)
+          this.ner[conditionMethod](lang, entity.name, condition.to)
         }
       }
 
@@ -120,9 +127,7 @@ class Ner {
    */
   injectRegexEntity (lang, entity) {
     return new Promise((resolve) => {
-      const e = this.nerManager.addNamedEntity(entity.name, entity.type)
-
-      e.addRegex(lang, new RegExp(entity.regex, 'g'))
+      this.ner.addRegexRule(lang, entity.name, new RegExp(entity.regex, 'g'))
 
       resolve()
     })

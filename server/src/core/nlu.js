@@ -33,7 +33,9 @@ class Nlu {
 
         try {
           const data = fs.readFileSync(classifierFile, 'utf8')
-          const nlpManager = new NlpManager()
+          const nlpManager = new NlpManager({
+            forceNER: true
+          })
 
           nlpManager.import(data)
           this.classifier = nlpManager
