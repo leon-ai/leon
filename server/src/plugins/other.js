@@ -1,17 +1,10 @@
 import log from '@/helpers/log'
 
-/**
- * Just a middleware
- */
-const otherMidd = (req, res, next) => {
+const otherMidd = async (request, reply) => {
   // Disable from the header, else it makes hacker's life easier to know more about our system
-  res.removeHeader('X-Powered-By')
-
+  reply.removeHeader('X-Powered-By')
   log.title('Requesting')
-  log.info(`${req.method} ${req.url}`)
-
-  // Add next() to continue
-  next()
+  log.info(`${request.method} ${request.url}`)
 }
 
 export default otherMidd

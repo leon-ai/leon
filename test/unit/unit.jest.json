@@ -18,7 +18,7 @@
   "collectCoverageFrom": [
     "<rootDir>/server/src/**/*.js",
     "!<rootDir>/server/src/api/**/*.js",
-    "!<rootDir>/server/src/middleware/**/*.js",
+    "!<rootDir>/server/src/plugins/**/*.js",
     "!<rootDir>/server/src/stt/google-cloud-stt/**/*.js",
     "!<rootDir>/server/src/stt/watson-stt/**/*.js",
     "!<rootDir>/server/src/tts/amazon-polly/**/*.js",
