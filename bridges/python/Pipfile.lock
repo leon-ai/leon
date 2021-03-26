@@ -1,12 +1,10 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "73bde89b379ffec7cec145fa30f1ebb49c349204b730a94108151fd9b71b31ec"
+            "sha256": "18fcaba60d56141e0e72fe9b030659fbcef1065ed0a3d73e8832b1dabf994a4c"
         },
         "pipfile-spec": 6,
-        "requires": {
-            "python_version": "3.6"
-        },
+        "requires": {},
         "sources": [
             {
                 "name": "pypi",
@@ -76,6 +74,14 @@
             ],
             "index": "pypi",
             "version": "==3.9.0"
+        },
+        "tmdbsimple": {
+            "hashes": [
+                "sha256:3383780ae40fbc2b5197feb06496f81f3a5c0ff3336a2a971a51e638fb10c895",
+                "sha256:cd8c5bc3599e803f1f908339b3d010e138722d147f10ed410b3205c72db0c00c"
+            ],
+            "index": "pypi",
+            "version": "==2.2.0"
         },
         "urllib3": {
             "hashes": [

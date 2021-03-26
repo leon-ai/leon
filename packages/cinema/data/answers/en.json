@@ -1,0 +1,46 @@
+{
+	"cinema": {
+		"recommend-m": [
+      "I advise you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :\n %summarize%.",
+      "I recommend you to watch <b>%movie_title%</b> released on %release_date%, it can be summarized as follows :\n %summarize%.",
+			"One day, you should watch <b>%movie_title%</b> released on %release_date%, I tought it was a nice movie, I can summarize it as follows :\n %summarize%."
+    ],
+		"recommend-t": [
+			"I advise you to watch <b>%serie_title%</b> released on %release_date%, it can be summarized as follows :\n %summarize%.",
+			"I recommend you to watch <b>%serie_title%</b> released on %release_date%, it can be summarized as follows :\n %summarize%.",
+			"One day, you should watch <b>%serie_title%</b> released on %release_date%, I tought it was a nice serie, I can summarize it as follows :\n %summarize%."
+		],
+    "test":[
+      "%test%."
+    ],
+		"nit_list":[
+			"The films currently in the cinema are: \n %nit_title%\n It's internationnal box office."
+		],
+		"info-c":[
+			"<b>%title%</b> can be summarized as follows : %overview%."
+		],
+		"info-m":[
+			"<b>%title%</b> was released on %release_date%, it can be summarized as follows :\n %overview%.",
+			"I can summarize <b>%title%</b> as follows:\n %overview% \n did you know that it released on %release_date% ? Now you know."
+		],
+		"info-t":[
+			"<b>%title%</b> was released on %release_date%, it can be summarized as follows :\n %overview%."
+		],
+		"info-p":[
+			"<b>%name%</b> was know for %maj-movie-title% it released on %release_date%."
+		],
+		"wrong_key":[
+			"You have not entered any API key. If you don't have one yet you can go <a href=\"https://www.themoviedb.org/documentation/api\">here</a> and once retrieved go modify the configuration file."
+		],
+		"error":[
+			"Error."
+		],
+		"not_found":[
+			"I don't know this word."
+		],
+		"not_found_title":[
+			"I don't know \"%idk_request%\".",
+			"I found nothing about \"%idk_request%\"."
+		]
+  }
+}

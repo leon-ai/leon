@@ -1,0 +1,62 @@
+{
+	"cinema": {
+    "recommend":{
+      "expressions":[
+        "Leon, can you recommend a ?",
+        "Can you recommend a ?",
+				"Do you have a to recommend ?"
+      ],
+			"entities": [
+				{
+					"type": "regex",
+					"name": "Movie",
+					"regex": "film|movie"
+				},
+					{
+						"type": "regex",
+						"name": "Serie",
+						"regex": "serie|show"
+					}
+			]
+    },
+		"now_theatres":{
+			"expressions":[
+				"What movies are in theatres ?"
+			]
+		},
+		"info":{
+			"expressions":[
+				"Can you provide information about with moviedb?",
+				"Give information about with moviedb"
+			],
+			"entities": [
+        {
+          "type": "trim",
+          "name": "title",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "about",
+              "to": "with"
+            },
+						{
+							"type": "after_last",
+							"from": "about"
+						}
+          ]
+        },
+				{
+					"type": "trim",
+					"name": "API",
+					"conditions": [
+						{
+							"type": "between",
+							"from": "with",
+							"to": "?"
+						}
+					]
+				}
+			]
+		}
+  }
+}
