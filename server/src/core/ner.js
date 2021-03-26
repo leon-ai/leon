@@ -1,4 +1,9 @@
-import { containerBootstrap } from '@nlpjs/core'
+/*
+ * @nlpjs/core is dedicated to web (browsers)
+ * @nlpjs/core-loader can make use of file system
+ * https://github.com/axa-group/nlp.js/issues/766#issuecomment-750315909
+ */
+import { containerBootstrap } from '@nlpjs/core-loader'
 import {
   ExtractorRegex,
   ExtractorTrim,
