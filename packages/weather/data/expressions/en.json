@@ -1,0 +1,147 @@
+{
+  "OpenWeatherMap": {
+    "current_weather": {
+      "expressions": [
+        "What's the weather like in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    },
+    "temperature": {
+      "expressions": [
+        "Is it cold in",
+        "How cold is it in",
+        "Is it hot in",
+        "How hot is it in",
+        "Is it warm in",
+        "How warm is it in",
+        "What's the temperature like in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    },
+    "humidity": {
+      "expressions": [
+        "Is it humid in",
+        "What is the humidity in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    },
+    "wind": {
+      "expressions": [
+        "Is it windy in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    },
+    "sunrise": {
+      "expressions": [
+        "When is the sun going to rise in",
+        "When does the sun rise in",
+        "When did the sun rise in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    },
+    "sunset": {
+      "expressions": [
+        "When is the sun going to set in",
+        "When does the sun set in",
+        "When did the sun set in"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "city",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "in"
+            },
+            {
+              "type": "between",
+              "from": "in",
+              "to": "?"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
