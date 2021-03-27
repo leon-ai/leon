@@ -8,5 +8,7 @@ requests = "==2.21.0"
 pytube = "==9.5.0"
 tinydb = "==3.9.0"
 beautifulsoup4 = "==4.7.1"
+wolframalpha = "==3.0.1"
+wikipedia = "==1.4.0"
 
 [dev-packages]

@@ -1,0 +1,95 @@
+{
+  "wikipedia": {
+    "summary": {
+      "expressions": [
+        "Search on Wikipedia",
+        "Search on Wikipedia for",
+        "Search for ",
+        "Search",
+        "Look for",
+        "On wikipedia look for"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "page",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "wikipedia"
+            },
+            {
+              "type": "between",
+              "from": "wikipedia",
+              "to": "?"
+            },
+            {
+              "type": "after_last",
+              "from": "for"
+            },
+            {
+              "type": "between",
+              "from": "for",
+              "to": "?"
+            },
+            {
+              "type": "between",
+              "from": "search",
+              "to": "on"
+            },
+            {
+              "type": "after_last",
+              "from": "search"
+            }
+          ]
+        }
+      ]
+    },
+    "random": {
+      "expressions": [
+        "Search a random page on Wikipedia",
+        "Search a random Wikipedia page",
+        "Give me a random page on Wikipedia"
+      ]
+    }
+  },
+  "wolframalpha": {
+    "query": {
+      "expressions": [
+        "On Wolfram Alpha",
+        "On Wolfram Alpha search for",
+        "On Wolfram Alpha search for the",
+        "Search for this on Wolfram Alpha"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "query",
+          "conditions": [
+            {
+              "type": "before_first",
+              "from": "on"
+            },
+            {
+              "type": "after_last",
+              "from": "Alpha"
+            },
+            {
+              "type": "after_last",
+              "from": "for"
+            },
+            {
+              "type": "after_last",
+              "from": "the"
+            },
+            {
+              "type": "between",
+              "from": "for",
+              "to": "on"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,12 +1,10 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "73bde89b379ffec7cec145fa30f1ebb49c349204b730a94108151fd9b71b31ec"
+            "sha256": "ea28410fac73af53495df76106e2b7aed0292f3d0f81e8b3c151932e133dceac"
         },
         "pipfile-spec": 6,
-        "requires": {
-            "python_version": "3.6"
-        },
+        "requires": {},
         "sources": [
             {
                 "name": "pypi",
@@ -46,6 +44,27 @@
             ],
             "version": "==2.8"
         },
+        "inflect": {
+            "hashes": [
+                "sha256:4ded1b2a6fcf0fc0397419c7727f131a93b67b80d899f2973be7758628e12b73",
+                "sha256:a82b671b043ddba98ea8b2cf000b31e8b41e9197b3151567239f3bbe215dab7e"
+            ],
+            "version": "==2.1.0"
+        },
+        "jaraco.itertools": {
+            "hashes": [
+                "sha256:6ac7fcd4af4a37c1751512d52e4e57b8d532457fd2b32b6a1fd3ab5a194921f5",
+                "sha256:fdc00c2755a5abac65484d431098e44e163af57fae05d284bf8af9329d43bd7f"
+            ],
+            "version": "==4.4.2"
+        },
+        "more-itertools": {
+            "hashes": [
+                "sha256:2112d2ca570bb7c3e53ea1a35cd5df42bb0fd10c45f0fb97178679c3c03d64c7",
+                "sha256:c3e4748ba1aad8dba30a4886b0b1a2004f9a863837b8654e7059eebf727afa5a"
+            ],
+            "version": "==7.0.0"
+        },
         "pytube": {
             "hashes": [
                 "sha256:2a32f3475f063d25e7b7a7434a93b51d59aadbbda7ed24af48f097b2876c0964",
@@ -61,6 +80,13 @@
             ],
             "index": "pypi",
             "version": "==2.21.0"
+        },
+        "six": {
+            "hashes": [
+                "sha256:3350809f0555b11f552448330d0b52d5f24c91a322ea4a15ef22629740f3761c",
+                "sha256:d16a0141ec1a18405cd4ce8b4613101da75da0e9a7aec5bdd4fa804d0e0eba73"
+            ],
+            "version": "==1.12.0"
         },
         "soupsieve": {
             "hashes": [
@@ -83,6 +109,28 @@
                 "sha256:a637e5fae88995b256e3409dc4d52c2e2e0ba32c42a6365fee8bbd2238de3cfb"
             ],
             "version": "==1.24.3"
+        },
+        "wikipedia": {
+            "hashes": [
+                "sha256:db0fad1829fdd441b1852306e9856398204dc0786d2996dd2e0c8bb8e26133b2"
+            ],
+            "index": "pypi",
+            "version": "==1.4.0"
+        },
+        "wolframalpha": {
+            "hashes": [
+                "sha256:35c68635c9460a25f3e7b3b3b5498d2d7a4d05667f7e30a3007b0e1c611f2599",
+                "sha256:e1eef0cbee3cd5387cae8f112a5464e951161facf1e37f61ca98d77e7a4c01fa"
+            ],
+            "index": "pypi",
+            "version": "==3.0.1"
+        },
+        "xmltodict": {
+            "hashes": [
+                "sha256:50d8c638ed7ecb88d90561beedbf720c9b4e851a9fa6c47ebd64e99d166d8a21",
+                "sha256:8bbcb45cc982f48b2ca8fe7e7827c5d792f217ecf1792626f808bf41c3b86051"
+            ],
+            "version": "==0.12.0"
         }
     },
     "develop": {}

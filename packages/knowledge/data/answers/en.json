@@ -1,0 +1,41 @@
+{
+  "wikipedia": {
+    "acquiring": [
+      "Right away!",
+      "One second please.",
+      "Just a second...",
+      "Browsing Wikipedia right now..."
+    ],
+    "summary": [
+      "%summary%"
+    ],
+    "disambiguation_error": [
+      "Disambiguation error."
+    ],
+    "page_error": [
+      "Your request does not match any page."
+    ],
+    "no_entities_error": [
+      "Your request was not well formatted. Please, retry."
+    ],
+    "connection_error": [
+      "I'm having issuse reaching the server."
+    ]
+  },
+  "wolframalpha": {
+    "acquiring": [
+      "Right away!",
+      "One second please.",
+      "Just a second..."
+    ],
+    "result": [
+      "%result%"
+    ],
+    "no_query": [
+      "Please, specify a query."
+    ],
+    "connection_error": [
+      "I'm having issuse reaching the server."
+    ]
+  }
+}

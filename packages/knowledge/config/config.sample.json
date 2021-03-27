@@ -1,0 +1,12 @@
+{
+  "wikipedia": {
+    "lang": "en",
+    "sentences": 5,
+    "options": {}
+  },
+  "wolframalpha": {
+    "app_id": "YOUR_APP_ID",
+    "lang": "en",
+    "options": {}
+  }
+}
