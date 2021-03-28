@@ -1,4 +1,4 @@
-/*
+/**
  * @nlpjs/core is dedicated to web (browsers)
  * @nlpjs/core-loader can make use of file system
  * https://github.com/axa-group/nlp.js/issues/766#issuecomment-750315909
@@ -8,7 +8,7 @@ import {
   ExtractorRegex,
   ExtractorTrim,
   Ner as NerManager
-} from '@nlpjs/ner'
+} from '@nlpjs/nlp'
 import fs from 'fs'
 
 import log from '@/helpers/log'

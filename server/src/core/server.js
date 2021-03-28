@@ -158,7 +158,7 @@ class Server {
 
           // Train modules expressions
           try {
-            await nlu.loadModel(`${__dirname}/../data/expressions/classifier.json`)
+            await nlu.loadModel()
           } catch (e) {
             log[e.type](e.obj.message)
           }

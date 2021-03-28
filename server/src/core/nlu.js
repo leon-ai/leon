@@ -1,7 +1,8 @@
-import { NlpManager } from 'node-nlp'
+import { containerBootstrap } from '@nlpjs/core-loader'
+import { Nlp } from '@nlpjs/nlp'
 import request from 'superagent'
 import fs from 'fs'
-import path from 'path'
+import { join } from 'path'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
@@ -13,7 +14,7 @@ class Nlu {
   constructor (brain) {
     this.brain = brain
     this.request = request
-    this.classifier = { }
+    this.nlp = { }
     this.ner = new Ner()
 
     log.title('NLU')
@@ -21,26 +22,35 @@ class Nlu {
   }
 
   /**
-   * Load the expressions classifier from the latest training
+   * Load the NLP model from the latest training
    */
-  loadModel (classifierFile) {
-    return new Promise((resolve, reject) => {
-      if (!fs.existsSync(classifierFile)) {
+  loadModel () {
+    return new Promise(async (resolve, reject) => {
+      if (!fs.existsSync(join(__dirname, '../data/expressions/leon-model.nlp'))) {
         log.title('NLU')
-        reject({ type: 'warning', obj: new Error('The expressions classifier does not exist, please run: npm run train expressions') })
+        reject({ type: 'warning', obj: new Error('The NLP model does not exist, please run: npm run train expressions') })
       } else {
         log.title('NLU')
 
         try {
-          const data = fs.readFileSync(classifierFile, 'utf8')
-          const nlpManager = new NlpManager({
-            forceNER: true
+          const container = await containerBootstrap()
+          container.use(Nlp)
+
+          this.nlp = new Nlp({
+            settings: {
+              forceNER: true
+            },
+            container
           })
 
-          nlpManager.import(data)
-          this.classifier = nlpManager
 
-          log.success('Classifier loaded')
+
+          //this.nlp = container.get('nlp')
+          //this.nlp.settings.forceNER = true
+
+          await this.nlp.load(join(__dirname, '../data/expressions/leon-model.nlp'))
+
+          log.success('NLP model loaded')
           resolve()
         } catch (err) {
           this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
@@ -63,17 +73,20 @@ class Nlu {
 
     query = string.ucfirst(query)
 
-    if (Object.keys(this.classifier).length === 0) {
+    if (Object.keys(this.nlp).length === 0) {
       this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
       this.brain.socket.emit('is-typing', false)
 
-      log.error('The expressions classifier is missing, please rebuild the project or if you are in dev run: npm run train expressions')
+      log.error('The NLP model is missing, please rebuild the project or if you are in dev run: npm run train expressions')
 
       return false
     }
 
     const lang = langs[process.env.LEON_LANG].short
-    const result = await this.classifier.process(lang, query)
+    const result = await this.nlp.process(lang, query)
+
+    console.log(result)
+
     const {
       domain, intent, score, entities
     } = result
@@ -126,7 +139,7 @@ class Nlu {
     try {
       obj.entities = await this.ner.extractActionEntities(
         lang,
-        path.join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
+        join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
         obj
       )
     } catch (e) /* istanbul ignore next */ {

@@ -1,4 +1,5 @@
-import { NlpManager } from 'node-nlp'
+import { containerBootstrap } from '@nlpjs/core-loader'
+import { Nlp } from '@nlpjs/nlp'
 import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -19,7 +20,7 @@ dotenv.config()
 export default () => new Promise(async (resolve, reject) => {
   const { argv } = process
   const packagesDir = 'packages'
-  const expressionsClassifier = 'server/src/data/expressions/classifier.json'
+  const modelFileName = 'server/src/data/expressions/leon-model.nlp'
   let type = (argv[2]) ? argv[2].toLowerCase() : 'expressions'
   let lang = ''
 
@@ -31,13 +32,22 @@ export default () => new Promise(async (resolve, reject) => {
 
   try {
     if (type === 'expressions') {
-      const settings = {
-        languages: lang !== 'en' ? lang : ['en'],
-        modelFileName: expressionsClassifier,
-        nlu: { log: false }
+      const container = await containerBootstrap()
+      container.use(Nlp)
+
+      if (lang === 'fr') {
+        const { LangFr } = require('@nlpjs/lang-fr') // eslint-disable-line global-require
+        container.use(LangFr)
+      } else {
+        const { LangEn } = require('@nlpjs/lang-en') // eslint-disable-line global-require
+        container.use(LangEn)
       }
 
-      const manager = new NlpManager(settings)
+      const nlp = container.get('nlp')
+      nlp.settings.modelFileName = modelFileName
+
+      nlp.addLanguage(lang)
+
       const packages = fs.readdirSync(packagesDir)
         .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
       let expressionsObj = { }
@@ -56,10 +66,10 @@ export default () => new Promise(async (resolve, reject) => {
             const action = actions[k]
             const exprs = expressionsObj[module][action].expressions
 
-            manager.assignDomain(lang, `${module}.${action}`, packages[i])
+            nlp.assignDomain(lang, `${module}.${action}`, packages[i])
 
             for (let l = 0; l < exprs.length; l += 1) {
-              manager.addDocument(lang, exprs[l], `${module}.${action}`)
+              nlp.addDocument(lang, exprs[l], `${module}.${action}`)
             }
           }
 
@@ -67,17 +77,15 @@ export default () => new Promise(async (resolve, reject) => {
         }
       }
 
-      await manager.train()
+      try {
+        await nlp.train()
 
-      fs.writeFile(expressionsClassifier, manager.export(true), (err) => {
-        if (err) {
-          log.error(`Failed to save the classifier: ${err}`)
-          reject()
-        } else {
-          log.success('Classifier saved in server/src/data/expressions/classifier.json')
-          resolve()
-        }
-      })
+        log.success(`NLP model saved in ${modelFileName}`)
+        resolve()
+      } catch (e) {
+        log.error(`Failed to save NLP model: ${e}`)
+        reject()
+      }
     } else {
       log.error(`"${type}" training type is unknown. Try "npm run train expressions"`)
       reject()
