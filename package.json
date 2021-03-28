@@ -16,6 +16,10 @@
   "bugs": {
     "url": "https://github.com/leon-ai/leon/issues"
   },
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=5.0.0"
+  },
   "scripts": {
     "lint": "babel-node scripts/lint.js",
     "test": "npm run test:json && npm run test:unit && npm run test:e2e",
