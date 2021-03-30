@@ -10,7 +10,7 @@ on:
 
 jobs:
   commitlint:
-    runs-on: ubuntu-latest
+    runs-on: 'ubuntu-latest'
     steps:
       - uses: 'actions/checkout@v2'
         with:
@@ -18,7 +18,7 @@ jobs:
       - uses: 'actions/setup-node@v2.1.5'
         with:
           node-version: '14'
-      - run: 'npm install --global commitlint-plugin-function-rules'
+      - run: 'npm install'
       - uses: 'wagoid/commitlint-github-action@v3.0.6'
         with:
           configFile: '.commitlintrc.js'
