@@ -1,0 +1,20 @@
+# For more information see: https://github.com/marketplace/actions/commit-linter
+
+name: 'Lint Commit Messages'
+
+on:
+  push:
+    branches: [master, develop]
+  pull_request:
+    branches: [master, develop]
+
+jobs:
+  commitlint:
+    runs-on: 'ubuntu-latest'
+    steps:
+      - uses: 'actions/checkout@v2'
+        with:
+          fetch-depth: 0
+      - uses: 'wagoid/commitlint-github-action@v3.0.6'
+        with:
+          configFile: '.commitlintrc.js'
