@@ -34,17 +34,7 @@ class Nlu {
 
         try {
           const container = await containerBootstrap()
-          container.use(Nlp)
-
-          this.nlp = new Nlp({
-            settings: {
-              forceNER: true
-            },
-            container
-          })
-
-          this.nlp = container.get('nlp')
-          this.nlp.settings.forceNER = true
+          this.nlp = new Nlp({ container })
 
           await this.nlp.load(join(__dirname, '../data/leon-model.nlp'))
 
