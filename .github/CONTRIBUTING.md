@@ -85,6 +85,7 @@ Types define which kind of changes you made to the project.
 | BREAKING      | Changes including breaking changes. |
 | build         | New build version. |
 | chore         | Changes to the build process or auxiliary tools such as changelog generation. No production code change. |
+| ci            | Changes related to continuous integration only (GitHub Actions, CircleCI, etc.). |
 | docs          | Documentation only changes. |
 | feat          | A new feature. |
 | fix           | A bug fix. |
