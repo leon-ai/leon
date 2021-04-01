@@ -25,11 +25,11 @@ describe('NER', () => {
     })
   })
 
-  describe('extractActionEntities()', () => {
+  describe('extractEntities()', () => {
     test('finds no entity', async () => {
       const ner = new Ner()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         path.join(__dirname, '../../../../packages/leon/data/expressions/en.json'),
         {
@@ -51,7 +51,7 @@ describe('NER', () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         path.join(__dirname, '../../../../packages/trend/data/expressions/en.json'),
         {
@@ -74,7 +74,7 @@ describe('NER', () => {
       const ner = new Ner()
 
       try {
-        await ner.extractActionEntities(
+        await ner.extractEntities(
           'en',
           global.paths.expressions,
           {
@@ -97,7 +97,7 @@ describe('NER', () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         path.join(__dirname, '../../../../packages/calendar/data/expressions/en.json'),
         {
@@ -122,7 +122,7 @@ describe('NER', () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         global.paths.expressions,
         {
@@ -148,7 +148,7 @@ describe('NER', () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         global.paths.expressions,
         {

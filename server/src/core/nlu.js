@@ -43,10 +43,8 @@ class Nlu {
             container
           })
 
-
-
-          //this.nlp = container.get('nlp')
-          //this.nlp.settings.forceNER = true
+          this.nlp = container.get('nlp')
+          this.nlp.settings.forceNER = true
 
           await this.nlp.load(join(__dirname, '../data/expressions/leon-model.nlp'))
 
@@ -85,15 +83,13 @@ class Nlu {
     const lang = langs[process.env.LEON_LANG].short
     const result = await this.nlp.process(lang, query)
 
-    console.log(result)
-
     const {
-      domain, intent, score, entities
+      domain, intent, score
     } = result
     const [moduleName, actionName] = intent.split('.')
     let obj = {
       query,
-      entities,
+      entities: [],
       classification: {
         package: domain,
         module: moduleName,
@@ -137,7 +133,7 @@ class Nlu {
     log.success('Query found')
 
     try {
-      obj.entities = await this.ner.extractActionEntities(
+      obj.entities = await this.ner.extractEntities(
         lang,
         join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
         obj
