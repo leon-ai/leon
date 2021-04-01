@@ -24,5 +24,5 @@ process.env.LEON_NODE_ENV = 'testing'
 process.env.LEON_TIME_ZONE = global.date.time_zone
 
 beforeAll(async () => {
-  await global.nlu.loadModel(global.paths.classifier)
+  await global.nlu.loadModel(global.paths.nlp_model)
 })
