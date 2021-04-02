@@ -31,7 +31,7 @@ describe('server', () => {
 
       await server.bootstrap()
       expect(server.httpServer).not.toBeEmpty()
-      server.httpServer.close()
+      await server.httpServer.close()
     })
   })
 
@@ -48,7 +48,15 @@ describe('server', () => {
       await server.init()
 
       fakeServer.listen(process.env.LEON_PORT)
-      server.httpServer.close()
+      await server.httpServer.close()
+    })
+
+    test('listens for request', async () => {
+      const server = new Server()
+      console.log = jest.fn()
+
+      await server.listen(process.env.LEON_PORT)
+      expect(console.log.mock.calls[0][1].indexOf(process.env.LEON_PORT)).not.toBe(-1)
     })
   })
 
@@ -75,18 +83,30 @@ describe('server', () => {
       expect(console.log.mock.calls[0][1]).toBe('SOCKET')
       console.log = jest.fn()
 
-      ee.emit('init', 'testing')
+      ee.emit('init', 'jest')
       expect(server.brain).not.toBeEmpty()
       expect(server.nlu).not.toBeEmpty()
       expect(server.asr).not.toBeEmpty()
 
-      ee.emit('query', { client: 'jest', value: 'Hello' })
       setTimeout(() => {
-        expect(console.log.mock.calls[0][1]).toBe('BRAIN')
+        ee.emit('query', { client: 'jest', value: 'Hello' })
+      }, 50)
+
+      setTimeout(() => {
+        expect(console.log.mock.calls[22][1]).toBe('Query found')
+        console.log = jest.fn()
+      }, 100)
+
+      setTimeout(() => {
+        ee.emit('recognize', 'blob')
+      }, 150)
+
+      setTimeout(() => {
+        expect(console.log.mock.calls[0][1]).toBe('ASR')
         console.log = jest.fn()
 
         done()
-      }, 50)
+      }, 200)
     })
   })
 })

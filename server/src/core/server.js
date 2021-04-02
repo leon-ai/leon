@@ -1,7 +1,7 @@
 import Fastify from 'fastify'
 import fastifyStatic from 'fastify-static'
 import socketio from 'socket.io'
-import path from 'path'
+import { join } from 'path'
 
 import { version } from '@@/package.json'
 import { langs } from '@@/core/langs.json'
@@ -16,11 +16,9 @@ import downloadsPlugin from '@/api/downloads/index'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
 
-const fastify = Fastify()
-let stt = { }
-
 class Server {
   constructor () {
+    this.fastify = Fastify()
     this.httpServer = { }
     this.brain = { }
     this.nlu = { }
@@ -31,9 +29,9 @@ class Server {
   /**
    * Server entry point
    */
-  static async init () {
-    fastify.addHook('onRequest', corsMidd)
-    fastify.addHook('onRequest', otherMidd)
+  async init () {
+    this.fastify.addHook('onRequest', corsMidd)
+    this.fastify.addHook('onRequest', otherMidd)
 
     log.title('Initialization')
     log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
@@ -50,29 +48,31 @@ class Server {
     const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
     log.success(`Collaborative logger ${sLogger}`)
 
-    await Server.bootstrap()
+    await this.bootstrap()
   }
 
   /**
    * Bootstrap API
    */
-  static async bootstrap () {
+  async bootstrap () {
     const apiVersion = 'v1'
 
     // Render the web app
-    fastify.register(fastifyStatic, {
-      root: path.join(__dirname, '..', '..', '..', 'app', 'dist'),
+    this.fastify.register(fastifyStatic, {
+      root: join(__dirname, '..', '..', '..', 'app', 'dist'),
       prefix: '/'
     })
-    fastify.get('/', (_request, reply) => {
+    this.fastify.get('/', (_request, reply) => {
       reply.sendFile('index.html')
     })
 
-    fastify.register(infoPlugin, { apiVersion })
-    fastify.register(downloadsPlugin, { apiVersion })
-    this.server = fastify.server
+    this.fastify.register(infoPlugin, { apiVersion })
+    this.fastify.register(downloadsPlugin, { apiVersion })
+
+    this.httpServer = this.fastify.server
+
     try {
-      await Server.listen(process.env.LEON_PORT)
+      await this.listen(process.env.LEON_PORT)
     } catch (e) {
       log.error(e.message)
     }
@@ -81,21 +81,21 @@ class Server {
   /**
    * Launch server
    */
-  static async listen (port) {
+  async listen (port) {
     const io = process.env.LEON_NODE_ENV === 'development'
-      ? socketio(this.server, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
-      : socketio(this.server)
+      ? socketio(this.httpServer, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
+      : socketio(this.httpServer)
 
-    io.on('connection', Server.connection)
+    io.on('connection', this.connection)
 
-    await fastify.listen(port, '0.0.0.0')
+    await this.fastify.listen(port, '0.0.0.0')
     log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
   }
 
   /**
    * Bootstrap socket
    */
-  static async connection (socket) {
+  async connection (socket) {
     log.title('Client')
     log.success('Connected')
 
@@ -113,18 +113,21 @@ class Server {
           socket.broadcast.emit('enable-record')
         })
       } else {
-        const brain = new Brain(socket, langs[process.env.LEON_LANG].short)
-        const nlu = new Nlu(brain)
-        const asr = new Asr()
         let sttState = 'disabled'
         let ttsState = 'disabled'
 
+        this.brain = new Brain(socket, langs[process.env.LEON_LANG].short)
+        this.nlu = new Nlu(this.brain)
+        this.asr = new Asr()
+
+        /* istanbul ignore if */
         if (process.env.LEON_STT === 'true') {
           sttState = 'enabled'
 
-          stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
-          stt.init()
+          this.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
+          this.stt.init()
         }
+
         if (process.env.LEON_TTS === 'true') {
           ttsState = 'enabled'
         }
@@ -135,7 +138,7 @@ class Server {
 
         // Train modules expressions
         try {
-          await nlu.loadModel(`${__dirname}/../data/expressions/classifier.json`)
+          await this.nlu.loadModel(join(__dirname, '../data/leon-model.nlp'))
         } catch (e) {
           log[e.type](e.obj.message)
         }
@@ -146,13 +149,13 @@ class Server {
           log.info(`${data.client} emitted: ${data.value}`)
 
           socket.emit('is-typing', true)
-          await nlu.process(data.value)
+          await this.nlu.process(data.value)
         })
 
         // Handle automatic speech recognition
         socket.on('recognize', async (data) => {
           try {
-            await asr.run(data, stt)
+            await this.asr.run(data, this.stt)
           } catch (e) {
             log[e.type](e.obj.message)
           }
