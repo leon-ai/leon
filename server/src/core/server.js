@@ -21,7 +21,11 @@ let stt = { }
 
 class Server {
   constructor () {
-    this.server = { }
+    this.httpServer = { }
+    this.brain = { }
+    this.nlu = { }
+    this.asr = { }
+    this.stt = { }
   }
 
   /**

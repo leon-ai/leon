@@ -35,10 +35,10 @@ describe('NLU modules', () => {
       beforeAll(async () => {
         process.env.LEON_LANG = langKeys[i]
 
-        // Generate new classifier for the tested language
+        // Generate new NLP model for the tested language
         await command(`npm run train expressions:${lang.short}`, { shell: true })
-        // Load the new classifier
-        await nlu.loadModel(global.paths.classifier)
+        // Load the new NLP model
+        await nlu.loadModel(global.paths.nlp_model)
       })
 
       for (let j = 0; j < packages.length; j += 1) {

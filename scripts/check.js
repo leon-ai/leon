@@ -22,7 +22,7 @@ export default () => new Promise(async (resolve, reject) => {
     const googleCloudPath = 'server/src/config/voice/google-cloud.json'
     const watsonSttPath = 'server/src/config/voice/watson-stt.json'
     const watsonTtsPath = 'server/src/config/voice/watson-tts.json'
-    const classifierPath = 'server/src/data/expressions/classifier.json'
+    const nlpModelPath = 'server/src/data/leon-model.nlp'
     const report = {
       can_run: { title: 'Run', type: 'error', v: true },
       can_run_module: { title: 'Run modules', type: 'error', v: true },
@@ -87,13 +87,13 @@ export default () => new Promise(async (resolve, reject) => {
       log.error(`${e}\n`)
     }
 
-    // Classifier checking
+    // NLP model checking
 
-    log.info('Classifier state')
-    if (!fs.existsSync(classifierPath) || !Object.keys(fs.readFileSync(classifierPath)).length) {
+    log.info('NLP model state')
+    if (!fs.existsSync(nlpModelPath) || !Object.keys(fs.readFileSync(nlpModelPath)).length) {
       report.can_text.v = false
       Object.keys(report).forEach((item) => { if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1) report[item].v = false })
-      log.error('Classifier not found or broken. Try to generate a new one: "npm run train expressions"\n')
+      log.error('NLP model not found or broken. Try to generate a new one: "npm run train expressions"\n')
     } else {
       log.success('Found and valid\n')
     }

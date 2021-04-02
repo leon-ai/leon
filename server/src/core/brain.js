@@ -11,13 +11,13 @@ class Brain {
   constructor (socket, lang) {
     this.socket = socket
     this.lang = lang
-    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/expressions/en.json`, 'utf8'))
+    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/en.json`, 'utf8'))
     this.process = { }
     this.interOutput = { }
     this.finalOutput = { }
 
     // Read into the language file
-    const file = `${__dirname}/../data/expressions/${this.lang}.json`
+    const file = `${__dirname}/../data/${this.lang}.json`
     if (fs.existsSync(file)) {
       this.broca = JSON.parse(fs.readFileSync(file, 'utf8'))
     }

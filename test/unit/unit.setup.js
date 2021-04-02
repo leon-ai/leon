@@ -1,7 +1,7 @@
 import 'jest-extended'
 import moment from 'moment-timezone'
 
-import expressions from '@/data/expressions/en.json'
+import expressions from '@/data/en.json'
 
 jest.setTimeout(60000)
 

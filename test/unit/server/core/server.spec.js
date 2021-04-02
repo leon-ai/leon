@@ -4,69 +4,66 @@ import { EventEmitter } from 'events'
 import Server from '@/core/server'
 
 describe('server', () => {
-  const bootstrapTmp = Server.bootstrap
-  const listenTmp = Server.listen
-
   describe('constructor()', () => {
     test('creates a new instance of Server', () => {
       const server = new Server()
 
       expect(server).toBeInstanceOf(Server)
+      expect(server.brain).toBeEmpty()
     })
   })
 
   describe('init()', () => {
     test('uses default language if there is an unsupported one', async () => {
-      Server.bootstrap = jest.fn() // Need to mock bootstrap method to not continue the init
+      const server = new Server()
+
+      server.bootstrap = jest.fn() // Need to mock bootstrap method to not continue the init
       process.env.LEON_LANG = 'fake-lang'
 
-      await Server.init()
+      await server.init()
       expect(process.env.LEON_LANG).toBe('en-US')
-      Server.bootstrap = bootstrapTmp // Need to give back the real bootstrap method
-    })
-
-    test('executes bootstrap', async () => {
-      Server.bootstrap = jest.fn()
-
-      await Server.init()
-      expect(Server.bootstrap).toHaveBeenCalledTimes(1)
-      Server.bootstrap = bootstrapTmp // Need to give back the real bootstrap method
     })
   })
 
   describe('bootstrap()', () => {
-    test('executes listening', async () => {
-      Server.listen = jest.fn()
+    test('initializes HTTP server', async () => {
+      const server = new Server()
 
-      await Server.bootstrap()
-      expect(Server.listen).toHaveBeenCalledTimes(1)
-      Server.listen = listenTmp // Need to give back the real listen method
+      await server.bootstrap()
+      expect(server.httpServer).not.toBeEmpty()
+      server.httpServer.close()
     })
   })
 
   describe('listen()', () => {
     test('listens port already in use', async () => {
-      const server = net.createServer()
-      server.once('error', (err) => {
+      const fakeServer = net.createServer()
+
+      fakeServer.once('error', (err) => {
         expect(err.code).toBe('EADDRINUSE')
-        server.close()
-        Server.server.close()
+        fakeServer.close()
       })
 
-      await Server.listen(process.env.LEON_PORT)
-      server.listen(process.env.LEON_PORT)
+      const server = new Server()
+      await server.init()
+
+      fakeServer.listen(process.env.LEON_PORT)
+      server.httpServer.close()
     })
   })
 
-  // TODO: something more elegant
   describe('connection()', () => {
-    test('initializes main nodes', (done) => {
+    test('initializes main nodes', async (done) => {
+      const server = new Server()
+
+      await server.init()
+
       // Mock the WebSocket with an EventEmitter
       const ee = new EventEmitter()
       ee.broadcast = { emit: jest.fn() }
       console.log = jest.fn()
 
-      Server.connection(ee)
+      await server.connection(ee)
 
       expect(console.log.mock.calls[0][1]).toBe('CLIENT')
       console.log = jest.fn()
@@ -79,20 +76,17 @@ describe('server', () => {
       console.log = jest.fn()
 
       ee.emit('init', 'testing')
-      expect(console.log.mock.calls[0][1]).toBe('BRAIN')
-      console.log = jest.fn()
+      expect(server.brain).not.toBeEmpty()
+      expect(server.nlu).not.toBeEmpty()
+      expect(server.asr).not.toBeEmpty()
 
-      setImmediate(() => {
-        ee.emit('query', { client: 'jest', value: 'Hello' })
-        expect(['NLU', 'SOCKET']).toContain(console.log.mock.calls[0][1])
-        console.log = jest.fn()
-
-        ee.emit('recognize', { })
-        expect(console.log.mock.calls[0][1]).toBe('ASR')
+      ee.emit('query', { client: 'jest', value: 'Hello' })
+      setTimeout(() => {
+        expect(console.log.mock.calls[0][1]).toBe('BRAIN')
         console.log = jest.fn()
 
         done()
-      })
+      }, 50)
     })
   })
 })
