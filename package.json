@@ -60,7 +60,7 @@
     "@nlpjs/core-loader": "^4.22.0",
     "@nlpjs/lang-en": "^4.22.0",
     "@nlpjs/lang-fr": "^4.22.0",
-    "@nlpjs/ner": "^4.21.1",
+    "@nlpjs/ner": "^4.22.0",
     "@nlpjs/nlp": "^4.22.0",
     "archiver": "^5.2.0",
     "async": "^3.2.0",
