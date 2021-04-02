@@ -18,17 +18,20 @@ import log from '@/helpers/log'
 import date from '@/helpers/date'
 
 const app = express()
-let stt = { }
 
 class Server {
   constructor () {
-    this.server = { }
+    this.httpServer = { }
+    this.brain = { }
+    this.nlu = { }
+    this.asr = { }
+    this.stt = { }
   }
 
   /**
    * Server entry point
    */
-  static init () {
+  init () {
     return new Promise(async (resolve) => {
       // CORS middleware
       app.use(corsMidd)
@@ -65,7 +68,7 @@ class Server {
   /**
    * Bootstrap API
    */
-  static bootstrap () {
+  bootstrap () {
     return new Promise(async (resolve) => {
       const apiVersion = 'v1'
 
@@ -79,7 +82,7 @@ class Server {
       app.use(`/${apiVersion}/downloads`, downloadRouter)
 
       try {
-        this.server = http.createServer(app)
+        this.httpServer = http.createServer(app)
 
         await this.listen(process.env.LEON_PORT)
         resolve()
@@ -92,15 +95,15 @@ class Server {
   /**
    * Launch server
    */
-  static listen (port) {
+  listen (port) {
     return new Promise((resolve, reject) => {
       const io = process.env.LEON_NODE_ENV === 'development'
-        ? socketio(this.server, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
-        : socketio(this.server)
+        ? socketio(this.httpServer, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
+        : socketio(this.httpServer)
 
       io.on('connection', this.connection)
 
-      this.server.listen(port, (err) => {
+      this.httpServer.listen(port, (err) => {
         /* istanbul ignore if */
         if (err) {
           reject({ type: 'error', obj: err })
@@ -117,73 +120,70 @@ class Server {
   /**
    * Bootstrap socket
    */
-  static connection (socket) {
-    return new Promise((resolve) => {
-      log.title('Client')
-      log.success('Connected')
+  async connection (socket) {
+    log.title('Client')
+    log.success('Connected')
 
-      // Init
-      socket.on('init', async (data) => {
-        log.info(`Type: ${data}`)
-        log.info(`Socket id: ${socket.id}`)
+    // Init
+    socket.on('init', async (data) => {
+      log.info(`Type: ${data}`)
+      log.info(`Socket id: ${socket.id}`)
 
-        if (data === 'hotword-node') {
-          // Hotword triggered
-          socket.on('hotword-detected', (data) => {
-            log.title('Socket')
-            log.success(`Hotword ${data.hotword} detected`)
+      if (data === 'hotword-node') {
+        // Hotword triggered
+        socket.on('hotword-detected', (data) => {
+          log.title('Socket')
+          log.success(`Hotword ${data.hotword} detected`)
 
-            socket.broadcast.emit('enable-record')
-          })
-        } else {
-          const brain = new Brain(socket, langs[process.env.LEON_LANG].short)
-          const nlu = new Nlu(brain)
-          const asr = new Asr()
-          let sttState = 'disabled'
-          let ttsState = 'disabled'
+          socket.broadcast.emit('enable-record')
+        })
+      } else {
+        let sttState = 'disabled'
+        let ttsState = 'disabled'
 
-          if (process.env.LEON_STT === 'true') {
-            sttState = 'enabled'
+        this.brain = new Brain(socket, langs[process.env.LEON_LANG].short)
+        this.nlu = new Nlu(this.brain)
+        this.asr = new Asr()
 
-            stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
-            stt.init()
-          }
-          if (process.env.LEON_TTS === 'true') {
-            ttsState = 'enabled'
-          }
+        if (process.env.LEON_STT === 'true') {
+          sttState = 'enabled'
 
-          log.title('Initialization')
-          log.success(`STT ${sttState}`)
-          log.success(`TTS ${ttsState}`)
+          this.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
+          this.stt.init()
+        }
+        if (process.env.LEON_TTS === 'true') {
+          ttsState = 'enabled'
+        }
 
-          // Train modules expressions
+        log.title('Initialization')
+        log.success(`STT ${sttState}`)
+        log.success(`TTS ${ttsState}`)
+
+        // Train modules expressions
+        try {
+          await this.nlu.loadModel(path.join(__dirname, '..', 'data/leon-model.nlp'))
+        } catch (e) {
+          log[e.type](e.obj.message)
+        }
+
+        // Listen for new query
+        socket.on('query', async (data) => {
+          log.title('Socket')
+          log.info(`${data.client} emitted: ${data.value}`)
+
+          socket.emit('is-typing', true)
+          await this.nlu.process(data.value)
+        })
+
+        // Handle automatic speech recognition
+        socket.on('recognize', async (data) => {
           try {
-            await nlu.loadModel()
+            await this.asr.run(data, this.stt)
           } catch (e) {
             log[e.type](e.obj.message)
           }
-
-          // Listen for new query
-          socket.on('query', async (data) => {
-            log.title('Socket')
-            log.info(`${data.client} emitted: ${data.value}`)
-
-            socket.emit('is-typing', true)
-            await nlu.process(data.value)
-          })
-
-          // Handle automatic speech recognition
-          socket.on('recognize', async (data) => {
-            try {
-              await asr.run(data, stt)
-            } catch (e) {
-              log[e.type](e.obj.message)
-            }
-          })
-        }
-
-        resolve()
-      })
+        })
+      }
     })
   }
 }

@@ -35,7 +35,7 @@ describe('NLU', () => {
       const nlu = new Nlu()
 
       await nlu.loadModel(global.paths.nlp_model)
-      expect(nlu.nlp_model).not.toBeEmpty()
+      expect(nlu.nlp.nluManager.domainManagers).not.toBeEmpty()
     })
   })
 

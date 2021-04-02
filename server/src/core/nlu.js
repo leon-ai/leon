@@ -24,9 +24,9 @@ class Nlu {
   /**
    * Load the NLP model from the latest training
    */
-  loadModel () {
+  loadModel (nlpModel) {
     return new Promise(async (resolve, reject) => {
-      if (!fs.existsSync(join(__dirname, '../data/leon-model.nlp'))) {
+      if (!fs.existsSync(nlpModel)) {
         log.title('NLU')
         reject({ type: 'warning', obj: new Error('The NLP model does not exist, please run: npm run train expressions') })
       } else {
@@ -36,7 +36,7 @@ class Nlu {
           const container = await containerBootstrap()
           this.nlp = new Nlp({ container })
 
-          await this.nlp.load(join(__dirname, '../data/leon-model.nlp'))
+          await this.nlp.load(nlpModel)
 
           log.success('NLP model loaded')
           resolve()
