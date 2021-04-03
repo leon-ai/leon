@@ -1,5 +1,4 @@
-import { containerBootstrap } from '@nlpjs/core-loader'
-import { Nlp } from '@nlpjs/nlp'
+import { dockStart } from '@nlpjs/basic'
 import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -32,19 +31,11 @@ export default () => new Promise(async (resolve, reject) => {
 
   try {
     if (type === 'expressions') {
-      const container = await containerBootstrap()
-      container.use(Nlp)
+      const dock = await dockStart({ use: ['Basic'] })
 
-      if (lang === 'fr') {
-        const { LangFr } = require('@nlpjs/lang-fr') // eslint-disable-line global-require
-        container.use(LangFr)
-      } else {
-        const { LangEn } = require('@nlpjs/lang-en') // eslint-disable-line global-require
-        container.use(LangEn)
-      }
-
-      const nlp = container.get('nlp')
+      const nlp = dock.get('nlp')
       nlp.settings.modelFileName = modelFileName
+      nlp.settings.threshold = 0.8
 
       nlp.addLanguage(lang)
 
