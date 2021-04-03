@@ -2,8 +2,8 @@
   "todolist": {
     "create_list": {
       "expressions": [
-        "Create the list",
-        "Create a list"
+        "Create the x list",
+        "Create a x list"
       ],
       "entities": [
         {
@@ -44,10 +44,10 @@
     },
     "view_list": {
       "expressions": [
-        "Show my list",
-        "Show the list",
-        "What is in my list?",
-        "What is in the list?"
+        "Show my x list",
+        "Show the x list",
+        "What is in my x list?",
+        "What is in the x list?"
       ],
       "entities": [
         {
@@ -70,8 +70,8 @@
     },
     "rename_list": {
       "expressions": [
-        "Rename the list to",
-        "Rename my list to"
+        "Rename the x list to y",
+        "Rename my x list to y"
       ],
       "entities": [
         {
@@ -104,8 +104,8 @@
     },
     "delete_list": {
       "expressions": [
-        "Delete the list",
-        "Delete my list"
+        "Delete the x list",
+        "Delete my x list"
       ],
       "entities": [
         {
@@ -128,8 +128,8 @@
     },
     "add_todos": {
       "expressions": [
-        "Add to the list",
-        "Add to my list"
+        "Add x to the list x",
+        "Add x to my list x"
       ],
       "entities": [
         {
@@ -163,10 +163,10 @@
     },
     "complete_todos": {
       "expressions": [
-        "Check from the list",
-        "Check from my list",
-        "Complete from my list",
-        "Tick from my list"
+        "Check x from the x list",
+        "Check x from my x list",
+        "Complete x from my x list",
+        "Tick x from my x list"
       ],
       "entities": [
         {
@@ -210,9 +210,9 @@
     },
     "uncheck_todos": {
       "expressions": [
-        "Uncheck from the list",
-        "Uncheck from my list",
-        "Untick from my list"
+        "Uncheck x from the x list",
+        "Uncheck x from my x list",
+        "Untick x from my x list"
       ],
       "entities": [
         {

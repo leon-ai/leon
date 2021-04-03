@@ -2,8 +2,8 @@
   "todolist": {
     "create_list": {
       "expressions": [
-        "Crée la liste",
-        "Crée une liste"
+        "Crée la liste x",
+        "Crée une liste x"
       ],
       "entities": [
         {
@@ -28,10 +28,10 @@
     },
     "view_list": {
       "expressions": [
-        "Montre ma liste",
-        "Montre la liste",
-        "Qu'est-ce qu'il y a dans ma liste ?",
-        "Qu'est-ce qu'il y a dans la liste ?"
+        "Montre ma liste x",
+        "Montre la liste x",
+        "Qu'est-ce qu'il y a dans ma liste x ?",
+        "Qu'est-ce qu'il y a dans la liste x ?"
       ],
       "entities": [
         {
@@ -48,8 +48,8 @@
     },
     "rename_list": {
       "expressions": [
-        "Renomme la liste en",
-        "Renomme ma liste en"
+        "Renomme la liste x en y",
+        "Renomme ma liste x en y"
       ],
       "entities": [
         {
@@ -77,8 +77,8 @@
     },
     "delete_list": {
       "expressions": [
-        "Supprime la liste",
-        "Supprime ma liste"
+        "Supprime la liste x",
+        "Supprime ma liste x"
       ],
       "entities": [
         {
@@ -95,8 +95,8 @@
     },
     "add_todos": {
       "expressions": [
-        "Ajoute à la liste",
-        "Ajoute à ma liste"
+        "Ajoute x à la liste x",
+        "Ajoute x à ma liste x"
       ],
       "entities": [
         {
@@ -129,9 +129,9 @@
     },
     "complete_todos": {
       "expressions": [
-        "Coche de la liste",
-        "Coche de ma liste",
-        "Complète de ma liste"
+        "Coche x de la liste x",
+        "Coche x de ma liste x",
+        "Complète x de ma liste x"
       ],
       "entities": [
         {
@@ -169,10 +169,10 @@
     },
     "uncheck_todos": {
       "expressions": [
-        "Décoche de la liste",
-        "Décoche de ma liste",
-        "Invalide de ma liste",
-        "Remet sur la liste"
+        "Décoche x de la liste x",
+        "Décoche x de ma liste x",
+        "Invalide x de ma liste x",
+        "Remet x sur la liste x"
       ],
       "entities": [
         {
