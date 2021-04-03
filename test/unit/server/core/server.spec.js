@@ -101,9 +101,11 @@ describe('server', () => {
         ee.emit('recognize', 'blob')
       }, 150)
 
-      setTimeout(() => {
+      setTimeout(async () => {
         expect(console.log.mock.calls[0][1]).toBe('ASR')
         console.log = jest.fn()
+
+        await server.httpServer.close()
 
         done()
       }, 200)
