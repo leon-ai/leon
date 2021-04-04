@@ -22,7 +22,7 @@ Here are few examples about how you could help on Leon, by:
 
 ## Pull Requests
 
-**Working on your first Pull Request?** You can learn how from this *free* series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/series/how-to-contribute-to-an-open-source-project-on-github).
+**Working on your first Pull Request?** You can learn how from this *free* series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github).
 
 - **Please first discuss** the change you wish to make via [issue](https://github.com/leon-ai/leon/issues),
 email, or any other method with the owners of this repository before making a change.
