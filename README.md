@@ -72,7 +72,7 @@ Sounds good for you? Then let's get started!
 - [Node.js](https://nodejs.org/) >= 14
 - [npm](https://npmjs.com/) >= 5
 - [Python](https://www.python.org/downloads/) >= 3
-- [Pipenv](https://docs.pipenv.org)
+- [Pipenv](https://docs.pipenv.org) >= 2020.11.15
 - Supported OSes: Linux, macOS and Windows
 
 To install these prerequisites, you can follow the [How To section](https://docs.getleon.ai/how-to/) of the documentation.
