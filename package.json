@@ -25,7 +25,7 @@
     "test": "npm run test:json && npm run test:unit && npm run test:e2e",
     "test:unit": "npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --forceExit --silent --projects test/unit/unit.jest.json && npm run train expressions",
     "test:e2e": "npm run test:e2e:nlp-modules && npm run test:e2e:modules",
-    "test:e2e:modules": "npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --forceExit --silent --verbose --projects test/e2e/modules/e2e.modules.jest.json && babel-node scripts/run-clean-test-dbs.js && npm run train expressions",
+    "test:e2e:modules": "babel-node scripts/run-clean-test-dbs.js && npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --forceExit --silent --verbose --projects test/e2e/modules/e2e.modules.jest.json && babel-node scripts/run-clean-test-dbs.js && npm run train expressions",
     "test:e2e:nlp-modules": "npm run train expressions:en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --forceExit --silent --verbose --setupTestFrameworkScriptFile=./test/paths.setup.js test/e2e/nlp-modules.spec.js && npm run train expressions",
     "test:json": "jest --silent --projects test/json/json.jest.json",
     "test:module": "babel-node scripts/test-module.js",
