@@ -1,17 +1,4 @@
-import path from 'path'
-import fs from 'fs'
-
 describe('calendar:todolist', async () => {
-  // Once the tests are done, delete test DB file if it exists
-  afterAll(() => {
-    const pkgName = 'calendar'
-    const dbFile = path.join(__dirname, `../data/db/${pkgName}.spec.json`)
-
-    if (fs.existsSync(dbFile)) {
-      fs.unlinkSync(dbFile)
-    }
-  })
-
   test('no list', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Show all my lists')

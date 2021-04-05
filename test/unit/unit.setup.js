@@ -16,7 +16,6 @@ global.audio = {
 global.enExpressions = expressions
 
 process.env.LEON_LANG = 'en-US'
-process.env.LEON_NODE_ENV = 'testing'
 process.env.LEON_HOST = 'http://localhost'
 process.env.LEON_PORT = 1338
 process.env.LEON_TIME_ZONE = global.date.time_zone
