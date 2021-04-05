@@ -47,8 +47,9 @@
     "prepare-release": "babel-node scripts/release/prepare-release.js",
     "check": "babel-node scripts/run-check.js",
     "docker:build": "docker build -t leonai/leon .",
-    "docker:run": "docker run -e TZ=`cat /etc/timezone` -p 1337:1337 -it leonai/leon",
-    "docker:check": "docker run --rm -it -p 1337:1337 leonai/leon npm run check"
+    "docker:run": "docker-compose up",
+    "docker:dev": "docker-compose --file=docker-compose.dev.yml up",
+    "docker:check": "docker run --rm -it leonai/leon npm run check"
   },
   "dependencies": {
     "@aws-sdk/client-polly": "^3.8.0",

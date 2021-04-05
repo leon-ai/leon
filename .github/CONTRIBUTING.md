@@ -65,6 +65,22 @@ npm run dev:server
 npm run dev:app
 ```
 
+## Development Setup with Docker
+
+```sh
+# Clone the repository
+git clone https://github.com/leon-ai/leon.git leon
+
+# Go to the project root
+cd leon
+
+# Build
+npm run docker:build
+
+# Run the development server and the development web app
+npm run docker:dev
+```
+
 ## Versioning
 
 - We use [Semantic Versioning](https://semver.org) for releases.
