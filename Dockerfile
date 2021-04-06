@@ -12,15 +12,14 @@ RUN apk add --no-cache --no-progress \
 # Upgrade pip and install Pipenv
 RUN pip3 install --no-cache-dir --progress-bar off pipenv
 
-COPY . .
-
 # Install Leon
-# Need to explicitly run the npm preinstall and npm posinstall scripts
+# Need to explicitly run the npm preinstall and npm posinstall scripts (not needed with npm@7)
 # because npm tries to downgrade its privileges, and these scripts are not executed
+COPY ./package*.json ./
+RUN npm clean-install
+COPY ./ ./
 RUN npm run preinstall
-RUN npm install
 RUN npm run postinstall
 RUN npm run build
 
-# Let's run it
 CMD ["npm", "start"]
