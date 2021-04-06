@@ -22,7 +22,7 @@ Here are few examples about how you could help on Leon, by:
 
 ## Pull Requests
 
-**Working on your first Pull Request?** You can learn how from this *free* series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/series/how-to-contribute-to-an-open-source-project-on-github).
+**Working on your first Pull Request?** You can learn how from this *free* series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github).
 
 - **Please first discuss** the change you wish to make via [issue](https://github.com/leon-ai/leon/issues),
 email, or any other method with the owners of this repository before making a change.
@@ -65,6 +65,22 @@ npm run dev:server
 npm run dev:app
 ```
 
+## Development Setup with Docker
+
+```sh
+# Clone the repository
+git clone https://github.com/leon-ai/leon.git leon
+
+# Go to the project root
+cd leon
+
+# Build
+npm run docker:build
+
+# Run the development server and the development web app
+npm run docker:dev
+```
+
 ## Versioning
 
 - We use [Semantic Versioning](https://semver.org) for releases.
@@ -85,9 +101,10 @@ Types define which kind of changes you made to the project.
 | BREAKING      | Changes including breaking changes. |
 | build         | New build version. |
 | chore         | Changes to the build process or auxiliary tools such as changelog generation. No production code change. |
+| ci            | Changes related to continuous integration only (GitHub Actions, CircleCI, etc.). |
 | docs          | Documentation only changes. |
 | feat          | A new feature. |
-| fix           | A big fix. |
+| fix           | A bug fix. |
 | perf          | A code change that improves performance. |
 | refactor      | A code change that neither fixes a bug nor adds a feature. |
 | style         | Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc.). |

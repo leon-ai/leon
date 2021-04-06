@@ -1,5 +1,3 @@
-'use strict'
-
 import fs from 'fs'
 import { spawn } from 'child_process'
 
@@ -13,13 +11,13 @@ class Brain {
   constructor (socket, lang) {
     this.socket = socket
     this.lang = lang
-    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/expressions/en.json`, 'utf8'))
+    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/en.json`, 'utf8'))
     this.process = { }
     this.interOutput = { }
     this.finalOutput = { }
 
     // Read into the language file
-    const file = `${__dirname}/../data/expressions/${this.lang}.json`
+    const file = `${__dirname}/../data/${this.lang}.json`
     if (fs.existsSync(file)) {
       this.broca = JSON.parse(fs.readFileSync(file, 'utf8'))
     }
@@ -28,7 +26,7 @@ class Brain {
     log.success('New instance')
 
     if (process.env.LEON_TTS === 'true') {
-      // Tnit TTS
+      // Init TTS
       this.tts = new Tts(this.socket, process.env.LEON_TTS_PROVIDER)
       this.tts.init()
     }
@@ -183,8 +181,8 @@ class Brain {
 
             /* istanbul ignore next */
             // Synchronize the downloaded content if enabled
-            if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled &&
-              this.finalOutput.options.synchronization.enabled === true) {
+            if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled
+              && this.finalOutput.options.synchronization.enabled === true) {
               const sync = new Synchronizer(
                 this,
                 obj.classification,

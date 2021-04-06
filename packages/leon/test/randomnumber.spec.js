@@ -1,5 +1,3 @@
-'use strict'
-
 describe('leon:randomnumber', async () => {
   test('gives a random number between 0 and 100', async () => {
     global.nlu.brain.execute = jest.fn()

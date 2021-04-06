@@ -1,4 +1,4 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 
 import log from '@/helpers/log'
 import os from '@/helpers/os'
@@ -25,16 +25,16 @@ export default () => new Promise(async (resolve, reject) => {
       let cmd = `sudo ${pkgm} sox libsox-fmt-all -y`
       if (info.type === 'linux') {
         log.info(`Executing the following command: ${cmd}`)
-        await shell(cmd)
+        await command(cmd, { shell: true })
       } else if (info.type === 'macos') {
         cmd = `${pkgm} install swig portaudio sox`
         log.info(`Executing the following command: ${cmd}`)
-        await shell(cmd)
+        await command(cmd, { shell: true })
       }
 
       log.success('System dependencies downloaded')
       log.info('Installing hotword dependencies...')
-      await shell('cd hotword && npm install')
+      await command('cd hotword && npm install', { shell: true })
       log.success('Offline hotword detection installed')
 
       resolve()

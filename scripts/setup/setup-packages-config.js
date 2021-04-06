@@ -1,4 +1,4 @@
-import { shellSync } from 'execa'
+import { commandSync } from 'execa'
 import fs from 'fs'
 import path from 'path'
 
@@ -14,8 +14,7 @@ export default () => new Promise((resolve, reject) => {
   const packagesDir = 'packages'
   // Get packages list
   const packages = fs.readdirSync(packagesDir)
-    .filter(entity =>
-      fs.statSync(path.join(packagesDir, entity)).isDirectory())
+    .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
 
   // Browse packages
   for (let i = 0; i < packages.length; i += 1) {
@@ -44,7 +43,7 @@ export default () => new Promise((resolve, reject) => {
 
             try {
               // Add new module configuration in the config.json file
-              shellSync(`json -I -f ${configFile} -e 'this.${configSampleModules[j]}=${JSON.stringify(module[configSampleModules[j]])}'`)
+              commandSync(`json -I -f ${configFile} -e 'this.${configSampleModules[j]}=${JSON.stringify(module[configSampleModules[j]])}'`, { shell: true })
               log.success(`"${string.ucfirst(configSampleModules[j])}" module configuration added to ${configFile}`)
             } catch (e) {
               log.error(`Error while adding "${string.ucfirst(configSampleModules[j])}" module configuration to ${configFile}: ${e}`)

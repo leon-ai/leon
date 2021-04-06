@@ -1,11 +1,10 @@
-'use strict'
-
 import dotenv from 'dotenv'
 
-import Server from '@/core/server';
+import Server from '@/core/server'
 
 (async () => {
   dotenv.config()
 
-  await Server.init()
+  const server = new Server()
+  await server.init()
 })()

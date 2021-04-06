@@ -6,9 +6,12 @@ from time import sleep
 from urllib import parse
 from requests import codes, exceptions
 
+# Developer token
+apikey = utils.config('api_key')
+
 def run(string, entities):
     """Verify if one or several email addresses have been pwned"""
-    
+
     emails = []
       
     for item in entities:
@@ -58,10 +61,10 @@ def checkForBreach(email):
     # Delay for 2 seconds before making request to accomodate API usage policy
     sleep(2)
     truncate = '?truncateResponse=true'
-    url = 'https://haveibeenpwned.com/api/v2/breachedaccount/' + parse.quote_plus(email)
+    url = 'https://haveibeenpwned.com/api/v3/breachedaccount/' + parse.quote_plus(email)
 
     try:
-        response = utils.http('GET', url)
+        response = utils.http('GET', url, { 'hibp-api-key': apikey })
 
         if response.status_code == 404:
             return None

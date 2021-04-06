@@ -1,5 +1,3 @@
-'use strict'
-
 import log from '@/helpers/log'
 
 describe('log helper', () => {

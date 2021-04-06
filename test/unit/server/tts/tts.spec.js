@@ -1,5 +1,3 @@
-'use strict'
-
 import Tts from '@/tts/tts'
 
 describe('TTS', () => {

@@ -1,5 +1,3 @@
-'use strict'
-
 import path from 'path'
 
 import Ner from '@/core/ner'
@@ -27,11 +25,11 @@ describe('NER', () => {
     })
   })
 
-  describe('extractActionEntities()', () => {
+  describe('extractEntities()', () => {
     test('finds no entity', async () => {
       const ner = new Ner()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         path.join(__dirname, '../../../../packages/leon/data/expressions/en.json'),
         {
@@ -53,7 +51,7 @@ describe('NER', () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         path.join(__dirname, '../../../../packages/trend/data/expressions/en.json'),
         {
@@ -76,7 +74,7 @@ describe('NER', () => {
       const ner = new Ner()
 
       try {
-        await ner.extractActionEntities(
+        await ner.extractEntities(
           'en',
           global.paths.expressions,
           {
@@ -99,7 +97,7 @@ describe('NER', () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         path.join(__dirname, '../../../../packages/calendar/data/expressions/en.json'),
         {
@@ -124,7 +122,7 @@ describe('NER', () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         global.paths.expressions,
         {
@@ -142,15 +140,15 @@ describe('NER', () => {
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
       console.log('entities', entities)
       expect(entities.length).toBe(2)
-      expect(entities.map(e => e.entity)).toEqual(['start', 'animal'])
-      expect(entities.map(e => e.sourceText)).toEqual(['Please whistle as a', 'bird'])
+      expect(entities.map((e) => e.entity)).toEqual(['start', 'animal'])
+      expect(entities.map((e) => e.sourceText)).toEqual(['Please whistle as a', 'bird'])
     })
 
     test('extracts regex custom entities', async () => {
       const ner = new Ner()
       Ner.logExtraction = jest.fn()
 
-      const entities = await ner.extractActionEntities(
+      const entities = await ner.extractEntities(
         'en',
         global.paths.expressions,
         {
@@ -167,8 +165,8 @@ describe('NER', () => {
 
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
       expect(entities.length).toBe(3)
-      expect(entities.map(e => e.entity)).toEqual(['color', 'color', 'color'])
-      expect(entities.map(e => e.sourceText)).toEqual(['blue', 'white', 'red'])
+      expect(entities.map((e) => e.entity)).toEqual(['color', 'color', 'color'])
+      expect(entities.map((e) => e.sourceText)).toEqual(['blue', 'white', 'red'])
     })
   })
 })

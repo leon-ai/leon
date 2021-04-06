@@ -1,0 +1,14 @@
+version: '3.0'
+services:
+  leon-ai:
+    container_name: 'leon-ai'
+    build:
+      context: './'
+    image: 'leonai/leon'
+    ports:
+      - '${LEON_PORT:-1337}:${LEON_PORT:-1337}'
+    stdin_open: true
+    tty: true
+    command: 'npm run dev:server && npm run dev:app'
+    volumes:
+      - './:/app'

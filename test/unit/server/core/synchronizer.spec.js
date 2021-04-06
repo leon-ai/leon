@@ -1,5 +1,3 @@
-'use strict'
-
 import Synchronizer from '@/core/synchronizer'
 
 describe('synchronizer', () => {

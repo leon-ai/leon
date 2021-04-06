@@ -1,5 +1,3 @@
-'use strict'
-
 import fs from 'fs'
 import events from 'events'
 

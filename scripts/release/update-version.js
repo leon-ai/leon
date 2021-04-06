@@ -1,11 +1,11 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 
 import log from '@/helpers/log'
 
 /**
  * Update version number in files which need version number
  */
-export default version => new Promise(async (resolve, reject) => {
+export default (version) => new Promise(async (resolve, reject) => {
   log.info('Updating version...')
 
   const promises = []
@@ -15,7 +15,7 @@ export default version => new Promise(async (resolve, reject) => {
   ]
 
   for (let i = 0; i < files.length; i += 1) {
-    promises.push(shell(`json -I -f ${files[i]} -e 'this.version="${version}"'`))
+    promises.push(command(`json -I -f ${files[i]} -e 'this.version="${version}"'`, { shell: true }))
   }
 
   try {

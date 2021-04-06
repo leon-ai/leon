@@ -18,7 +18,6 @@ dirname = path.dirname(path.realpath(__file__))
 queryobjectpath = argv[1]
 codes = []
 
-serversrc = 'dist' if environ.get('LEON_NODE_ENV') == 'production' else 'src'
 queryobjfile = open(queryobjectpath, 'r', encoding = 'utf8')
 queryobj = loads(queryobjfile.read())
 queryobjfile.close()
