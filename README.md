@@ -31,7 +31,7 @@
 
 ## 👋 Introduction
 
-Leon is an **open-source personal assistant** who can live **on your server**.
+**Leon** is an **open-source personal assistant** who can live **on your server**.
 
 He **does stuff** when you **ask him for**.
 
