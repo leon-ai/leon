@@ -67,6 +67,8 @@ Sounds good for you? Then let's get started!
 
 ## 🚀 Getting Started
 
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
+
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) >= 14

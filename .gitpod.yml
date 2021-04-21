@@ -1,0 +1,19 @@
+image: 'gitpod/workspace-full'
+
+tasks:
+  - before: 'npm install'
+    init: 'npm run check && npm run build'
+    command: 'npm start'
+
+ports:
+  - port: 1337
+    onOpen: 'notify'
+
+github:
+  prebuilds:
+    master: true
+    branches: true
+    pullRequests: true
+    addComment: true
+    addBadge: true
+    addLabel: true
