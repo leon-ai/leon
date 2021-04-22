@@ -11,7 +11,7 @@ describe('checker:isitdown', async () => {
 
   test('detects down domain name', async () => {
     global.nlu.brain.execute = jest.fn()
-    await global.nlu.process('Check if fakedomainnametotestleon.fr is up')
+    await global.nlu.process('Check if fakedomainnametotestleon.ai is up')
 
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
