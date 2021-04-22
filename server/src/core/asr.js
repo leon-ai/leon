@@ -1,5 +1,3 @@
-'use strict'
-
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import Ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'

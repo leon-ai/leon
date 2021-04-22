@@ -1,4 +1,4 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 import fs from 'fs'
 
 import log from '@/helpers/log'
@@ -24,19 +24,19 @@ export default () => new Promise(async (resolve, reject) => {
   if (!fs.existsSync(`${destFliteFolder}/flite`)) {
     try {
       log.info('Downloading run-time synthesis engine...')
-      await shell(`cd ${tmpDir} && ${downloader} http://www.festvox.org/flite/packed/flite-2.1/flite-2.1-release.tar.bz2`)
+      await command(`cd ${tmpDir} && ${downloader} http://www.festvox.org/flite/packed/flite-2.1/flite-2.1-release.tar.bz2`, { shell: true })
       log.success('Run-time synthesis engine download done')
       log.info('Unpacking...')
-      await shell(`cd ${tmpDir} && tar xfvj flite-2.1-release.tar.bz2 && cp ../assets/leon.lv flite-2.1-release/config`)
+      await command(`cd ${tmpDir} && tar xfvj flite-2.1-release.tar.bz2 && cp ../assets/leon.lv flite-2.1-release/config`, { shell: true })
       log.success('Unpack done')
       log.info('Configuring...')
-      await shell(`cd ${tmpDir}/flite-2.1-release && ./configure --with-langvox=leon`)
+      await command(`cd ${tmpDir}/flite-2.1-release && ./configure --with-langvox=leon`, { shell: true })
       log.success('Configure done')
       log.info('Building...')
-      await shell(`cd ${tmpDir}/flite-2.1-release && make ${makeCores}`)
+      await command(`cd ${tmpDir}/flite-2.1-release && make ${makeCores}`, { shell: true })
       log.success('Build done')
       log.info('Cleaning...')
-      await shell(`cp -f ${tmpDir}/flite-2.1-release/bin/flite ${destFliteFolder} && rm -rf ${tmpDir}/flite-2.1-release*`)
+      await command(`cp -f ${tmpDir}/flite-2.1-release/bin/flite ${destFliteFolder} && rm -rf ${tmpDir}/flite-2.1-release*`, { shell: true })
       log.success('Clean done')
       log.success('Offline text-to-speech installed')
 

@@ -1,4 +1,4 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 import fs from 'fs'
 
 import log from '@/helpers/log'
@@ -6,14 +6,14 @@ import log from '@/helpers/log'
 /**
  * Update version number in files which need version number
  */
-export default version => new Promise(async (resolve, reject) => {
+export default (version) => new Promise(async (resolve, reject) => {
   const changelog = 'CHANGELOG.md'
   const tmpChangelog = 'TMP-CHANGELOG.md'
 
   log.info(`Generating ${changelog}...`)
 
   try {
-    await shell(`git-changelog --changelogrc .changelogrc --template scripts/assets/CHANGELOG-TEMPLATE.md --file scripts/tmp/${tmpChangelog} --version_name ${version}`)
+    await command(`git-changelog --changelogrc .changelogrc --template scripts/assets/CHANGELOG-TEMPLATE.md --file scripts/tmp/${tmpChangelog} --version_name ${version}`, { shell: true })
   } catch (e) {
     log.error(`Error during git-changelog: ${e}`)
     reject(e)
@@ -23,7 +23,7 @@ export default version => new Promise(async (resolve, reject) => {
     log.info('Getting remote origin URL...')
     log.info('Getting previous tag...')
 
-    const sh = await shell('git config --get remote.origin.url && git tag | tail -n1')
+    const sh = await command('git config --get remote.origin.url && git tag | tail -n1', { shell: true })
 
     const repoUrl = sh.stdout.substr(0, sh.stdout.lastIndexOf('.git'))
     const previousTag = sh.stdout.substr(sh.stdout.indexOf('\n') + 1).trim()

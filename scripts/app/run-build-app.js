@@ -1,6 +1,6 @@
 import log from '@/helpers/log'
 
-import buildApp from './build-app';
+import buildApp from './build-app'
 
 /**
  * Execute the building app script

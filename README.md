@@ -8,9 +8,15 @@
 *<p align="center">Your open-source personal assistant.</p>*
 
 <p align="center">
-  <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat"/></a>
-  <a href="https://circleci.com/gh/leon-ai/leon/tree/develop"><img src="https://img.shields.io/circleci/project/github/leon-ai/leon/develop.svg?style=flat"/></a>
-  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat"/></a>
+  <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?label=License&style=flat" /></a>
+  <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" /></a>
+  <br>
+  <a href="https://github.com/leon-ai/leon/actions/workflows/build.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/build.yml/badge.svg?branch=develop" /></a>
+  <a href="https://github.com/leon-ai/leon/actions/workflows/tests.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/tests.yml/badge.svg?branch=develop" /></a>
+  <a href="https://github.com/leon-ai/leon/actions/workflows/lint.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/lint.yml/badge.svg?branch=develop" /></a>
+  <br>
+  <a href="https://discord.gg/MNQqqKg"><img src="https://svgshare.com/i/V09.svg"/></a>
+  <a href="https://twitter.com/louistiti_fr"><img src="https://img.shields.io/twitter/follow/louistiti_fr?label=Follow&style=social" /></a>
 </p>
 
 <p align="center">
@@ -23,12 +29,9 @@
 
 ---
 
-**Note**
-> I'm focusing on another project, so the progress of this repo might slow down for a while. You can [subscribe here](https://www.producthunt.com/upcoming/2aud-io) to be part of the first ones.
+## 👋 Introduction
 
-## Introduction
-
-Leon is an **open-source personal assistant** who can live **on your server**.
+**Leon** is an **open-source personal assistant** who can live **on your server**.
 
 He **does stuff** when you **ask him for**.
 
@@ -62,14 +65,14 @@ If you want to, Leon can communicate with you by being **offline to protect your
 
 Sounds good for you? Then let's get started!
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 10
-- npm >= 5
+- [Node.js](https://nodejs.org/) >= 14
+- [npm](https://npmjs.com/) >= 5
 - [Python](https://www.python.org/downloads/) >= 3
-- [Pipenv](https://docs.pipenv.org)
+- [Pipenv](https://docs.pipenv.org) >= 2020.11.15
 - Supported OSes: Linux, macOS and Windows
 
 To install these prerequisites, you can follow the [How To section](https://docs.getleon.ai/how-to/) of the documentation.
@@ -110,52 +113,51 @@ npm start
 # Build
 npm run docker:build
 
-# Run on Linux or macOS
+# Run
 npm run docker:run
-
-# Run on Windows (you can replace "UTC" by your time zone)
-docker run -e TZ=UTC -p 1337:1337 -it leonai/leon
 
 # Go to http://localhost:1337
 # Hooray! Leon is running
 ```
 
-## Documentation
+## 📚 Documentation
 
 For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
 
-## Roadmap
+## 🧭 Roadmap
 
 To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai).
 
-## Contributing
+## ❤️ Contributing
 
 If you have an idea for improving Leon, do not hesitate.
 
 **Leon needs open source to live**, the more modules he has, the more skillful he becomes.
 
-## The Story Behind Leon
+## 📖 The Story Behind Leon
 
 You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-behind-leon/).
 
-## Stay Tuned
+## 🔔 Stay Tuned
+
 - [Newsletter](https://getleon.ai)
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
 - [Twitter](https://twitter.com/louistiti_fr)
 - [#LeonAI](https://twitter.com/hashtag/LeonAI)
 
-## Author
+## 👨 Author
+
 **Louis Grenard** ([@louistiti_fr](https://twitter.com/louistiti_fr))
 
-## Donate
+## 👍 Donate
 
 You can also contribute by [buying me a fruit juice](https://donate.getleon.ai).
 
-## License
+## 📝 License
 [MIT License](https://github.com/leon-ai/leon/blob/develop/LICENSE.md)
 
 Copyright (c) 2019-present, Louis Grenard <louis.grenard@gmail.com>
 
 ## Cheers!
-![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f37b.png "Cheers!")
+![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f379.png "Cheers!")

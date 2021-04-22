@@ -1,5 +1,3 @@
-'use strict'
-
 import Nlu from '@/core/nlu'
 
 describe('NLU', () => {
@@ -12,39 +10,39 @@ describe('NLU', () => {
   })
 
   describe('loadModel()', () => {
-    test('returns warning classifier does not exist', async () => {
+    test('returns warning NLP model does not exist', async () => {
       const nlu = new Nlu()
 
       try {
-        await nlu.loadModel('ghost-classifier.json')
+        await nlu.loadModel('ghost-model.nlp')
       } catch (e) {
         expect(e.type).toBe('warning')
       }
     })
 
-    test('rejects because of a broken classifier', async () => {
+    test('rejects because of a broken NLP model', async () => {
       const nlu = new Nlu()
       nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
 
       try {
-        await nlu.loadModel(global.paths.broken_classifier)
+        await nlu.loadModel(global.paths.broken_nlp_model)
       } catch (e) {
         expect(e.type).toBe('error')
       }
     })
 
-    test('loads the classifier', async () => {
+    test('loads the NLP model', async () => {
       const nlu = new Nlu()
 
-      await nlu.loadModel(global.paths.classifier)
-      expect(nlu.classifier).not.toBeEmpty()
+      await nlu.loadModel(global.paths.nlp_model)
+      expect(nlu.nlp.nluManager.domainManagers).not.toBeEmpty()
     })
   })
 
   describe('process()', () => {
     const nluFallbackTmp = Nlu.fallback
 
-    test('returns false because the classifier is empty', async () => {
+    test('returns false because the NLP model is empty', async () => {
       const nlu = new Nlu()
       nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
 
@@ -55,7 +53,7 @@ describe('NLU', () => {
       const nlu = new Nlu()
       nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
 
-      await nlu.loadModel(global.paths.classifier)
+      await nlu.loadModel(global.paths.nlp_model)
       expect(await nlu.process('Unknown query')).toBeFalsy()
       expect(nlu.brain.talk).toHaveBeenCalledTimes(1)
     })
@@ -71,7 +69,7 @@ describe('NLU', () => {
       nlu.brain = { execute: jest.fn() }
       Nlu.fallback = jest.fn(() => fallbackObj)
 
-      await nlu.loadModel(global.paths.classifier)
+      await nlu.loadModel(global.paths.nlp_model)
       expect(await nlu.process(query)).toBeTruthy()
       expect(nlu.brain.execute.mock.calls[0][0]).toBe(fallbackObj)
       Nlu.fallback = nluFallbackTmp // Need to give back the real fallback method
@@ -81,7 +79,7 @@ describe('NLU', () => {
       const nlu = new Nlu()
       nlu.brain = { execute: jest.fn() }
 
-      await nlu.loadModel(global.paths.classifier)
+      await nlu.loadModel(global.paths.nlp_model)
       expect(await nlu.process('Hello')).toBeTruthy()
       expect(nlu.brain.execute).toHaveBeenCalledTimes(1)
     })
@@ -99,7 +97,9 @@ describe('NLU', () => {
       }
 
       expect(Nlu.fallback(obj, [
-        { words: ['query', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module', action: 'fake-action' }
+        {
+          words: ['query', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module', action: 'fake-action'
+        }
       ]).classification).toContainEntries([['package', 'fake-pkg'], ['module', 'fake-module'], ['action', 'fake-action'], ['confidence', 1]])
     })
   })
