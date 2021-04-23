@@ -65,6 +65,12 @@ If you want to, Leon can communicate with you by being **offline to protect your
 
 Sounds good for you? Then let's get started!
 
+## ☁️ Try with a Single-Click
+
+Gitpod will automatically setup an environment and run an instance for you.
+
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
+
 ## 🚀 Getting Started
 
 ### Prerequisites

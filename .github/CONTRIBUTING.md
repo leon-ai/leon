@@ -25,16 +25,19 @@ Here are few examples about how you could help on Leon, by:
 **Working on your first Pull Request?** You can learn how from this *free* series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github).
 
 - **Please first discuss** the change you wish to make via [issue](https://github.com/leon-ai/leon/issues),
-email, or any other method with the owners of this repository before making a change.
-It might avoid a waste of your time.
+  email, or any other method with the owners of this repository before making a change.
+  It might avoid a waste of your time.
+
 - The `master` branch is actually used as a snapshot of the latest stable release. **Do not submit your PRs
-against the `master` branch**.
+  against the `master` branch**.
+
 - Ensure your code **respect our coding standards** (cf. [.eslintrc.json](https://github.com/leon-ai/leon/blob/develop/.eslintrc.json)).
 To do so, you can run:
 
   ```sh
   npm run lint
   ```
+  
 - Make sure your **code passes the tests**. You can run the tests via the following command:
   
   ```sh
@@ -42,8 +45,18 @@ To do so, you can run:
   ```
   
   If you're adding new features to Leon, please include tests.
-  
+
 ## Development Setup
+
+Choose the setup method you want to go for.
+
+### Single-Click
+
+Gitpod will automatically setup an environment and run an instance for you.
+
+[![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
+
+### Basic
 
 ```sh
 # Clone the repository
@@ -65,7 +78,7 @@ npm run dev:server
 npm run dev:app
 ```
 
-## Development Setup with Docker
+### Docker
 
 ```sh
 # Clone the repository
