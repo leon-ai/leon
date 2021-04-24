@@ -1,5 +1,3 @@
-'use strict'
-
 import moment from 'moment-timezone'
 
 import date from '@/helpers/date'

@@ -1,21 +1,19 @@
-'use strict'
-
 import request from 'superagent'
 
-import Loader from './loader.es6'
-import Client from './client.es6'
-import Recorder from './recorder.es6'
-import listener from './listener.es6'
-import { onkeydowndocument, onkeydowninput } from './onkeydown.es6'
+import Loader from './loader'
+import Client from './client'
+import Recorder from './recorder'
+import listener from './listener'
+import { onkeydowndocument, onkeydowninput } from './onkeydown'
 
 const config = {
   app: 'webapp',
-  server_host: process.env.LEON_HOST,
-  server_port: process.env.LEON_PORT,
+  server_host: import.meta.env.VITE_LEON_HOST,
+  server_port: import.meta.env.VITE_LEON_PORT,
   min_decibels: -40, // Noise detection sensitivity
   max_blank_time: 1000 // Maximum time to consider a blank (ms)
 }
-const serverUrl = process.env.LEON_NODE_ENV === 'production' ? '' : `${config.server_host}:${config.server_port}`
+const serverUrl = import.meta.env.VITE_LEON_NODE_ENV === 'production' ? '' : `${config.server_host}:${config.server_port}`
 
 document.addEventListener('DOMContentLoaded', () => {
   const loader = new Loader()

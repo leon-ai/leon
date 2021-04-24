@@ -1,4 +1,4 @@
-import { shell } from 'execa'
+import { command } from 'execa'
 import fs from 'fs'
 
 import log from '@/helpers/log'
@@ -12,23 +12,21 @@ export default () => new Promise(async (resolve, reject) => {
 
   const destDeepSpeechFolder = 'bin/deepspeech'
   const tmpDir = 'scripts/tmp'
-  const deepSpeechVersion = '0.5.0'
-  const archiveName = `deepspeech-${deepSpeechVersion}-models.tar.gz`
+  const deepSpeechVersion = '0.9.3'
   let downloader = 'wget'
   if (os.get().type === 'macos') {
     downloader = 'curl -L -O'
   }
 
-  if (!fs.existsSync(`${destDeepSpeechFolder}/lm.binary`)) {
+  if (!fs.existsSync(`${destDeepSpeechFolder}/deepspeech.scorer`)) {
     try {
       log.info('Downloading pre-trained model...')
-      await shell(`cd ${tmpDir} && ${downloader} https://github.com/mozilla/DeepSpeech/releases/download/v${deepSpeechVersion}/${archiveName}`)
+      await command(`cd ${tmpDir} && ${downloader} https://github.com/mozilla/DeepSpeech/releases/download/v${deepSpeechVersion}/deepspeech-${deepSpeechVersion}-models.pbmm`, { shell: true })
+      await command(`cd ${tmpDir} && ${downloader} https://github.com/mozilla/DeepSpeech/releases/download/v${deepSpeechVersion}/deepspeech-${deepSpeechVersion}-models.scorer`, { shell: true })
       log.success('Pre-trained model download done')
-      log.info('Unpacking...')
-      await shell(`cd ${tmpDir} && tar xvfz ${archiveName}`)
-      log.success('Unpack done')
       log.info('Moving...')
-      await shell(`mv -f ${tmpDir}/deepspeech-${deepSpeechVersion}-models/* ${destDeepSpeechFolder} && rm -rf ${tmpDir}/${archiveName} ${tmpDir}/models`)
+      await command(`mv -f ${tmpDir}/deepspeech-${deepSpeechVersion}-models.pbmm ${destDeepSpeechFolder}/deepspeech.pbmm`, { shell: true })
+      await command(`mv -f ${tmpDir}/deepspeech-${deepSpeechVersion}-models.scorer ${destDeepSpeechFolder}/deepspeech.scorer`, { shell: true })
       log.success('Move done')
       log.success('Offline speech-to-text installed')
 

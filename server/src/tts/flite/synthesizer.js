@@ -1,5 +1,3 @@
-'use strict'
-
 import { spawn } from 'child_process'
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'

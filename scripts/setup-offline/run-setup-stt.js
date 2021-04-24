@@ -3,7 +3,7 @@ import log from '@/helpers/log'
 import setupStt from './setup-stt';
 
 /**
- * execute the setup offline STT script
+ * Execute the setup offline STT script
  */
 (async () => {
   try {

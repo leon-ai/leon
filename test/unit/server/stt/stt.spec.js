@@ -1,5 +1,3 @@
-'use strict'
-
 import Stt from '@/stt/stt'
 
 describe('STT', () => {

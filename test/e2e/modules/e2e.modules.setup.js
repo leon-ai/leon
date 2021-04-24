@@ -1,5 +1,3 @@
-'use strict'
-
 import 'jest-extended'
 import moment from 'moment-timezone'
 
@@ -22,9 +20,8 @@ global.date = {
 }
 
 process.env.LEON_LANG = 'en-US'
-process.env.LEON_NODE_ENV = 'testing'
 process.env.LEON_TIME_ZONE = global.date.time_zone
 
 beforeAll(async () => {
-  await global.nlu.loadModel(global.paths.classifier)
+  await global.nlu.loadModel(global.paths.nlp_model)
 })

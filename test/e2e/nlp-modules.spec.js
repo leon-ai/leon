@@ -1,8 +1,6 @@
-'use strict'
-
 import fs from 'fs'
 import path from 'path'
-import execa from 'execa'
+import { command } from 'execa'
 
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
@@ -21,8 +19,7 @@ describe('NLU modules', () => {
   const { langs } = JSON.parse(fs.readFileSync(path.join(global.paths.root, 'core', 'langs.json'), 'utf8'))
   const langKeys = Object.keys(langs)
   const packages = fs.readdirSync(global.paths.packages)
-    .filter(entity =>
-      fs.statSync(path.join(global.paths.packages, entity)).isDirectory())
+    .filter((entity) => fs.statSync(path.join(global.paths.packages, entity)).isDirectory())
 
   for (let i = 0; i < langKeys.length; i += 1) {
     // eslint-disable-next-line no-loop-func
@@ -38,10 +35,10 @@ describe('NLU modules', () => {
       beforeAll(async () => {
         process.env.LEON_LANG = langKeys[i]
 
-        // Generate new classifier for the tested language
-        await execa.shell(`npm run train expressions:${lang.short}`)
-        // Load the new classifier
-        await nlu.loadModel(global.paths.classifier)
+        // Generate new NLP model for the tested language
+        await command(`npm run train expressions:${lang.short}`, { shell: true })
+        // Load the new NLP model
+        await nlu.loadModel(global.paths.nlp_model)
       })
 
       for (let j = 0; j < packages.length; j += 1) {

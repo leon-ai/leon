@@ -1,9 +1,7 @@
-'use strict'
-
-import express from 'express'
-import bodyParser from 'body-parser'
+import Fastify from 'fastify'
+import fastifyStatic from 'fastify-static'
 import socketio from 'socket.io'
-import path from 'path'
+import { join } from 'path'
 
 import { version } from '@@/package.json'
 import { langs } from '@@/core/langs.json'
@@ -11,175 +9,158 @@ import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
 import Asr from '@/core/asr'
 import Stt from '@/stt/stt'
-import corsMidd from '@/middleware/cors'
-import otherMidd from '@/middleware/other'
-import infoRouter from '@/api/info/info.routes'
-import downloadRouter from '@/api/downloads/download.routes'
+import corsMidd from '@/plugins/cors'
+import otherMidd from '@/plugins/other'
+import infoPlugin from '@/api/info/index'
+import downloadsPlugin from '@/api/downloads/index'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
 
-const app = express()
-let stt = { }
-
 class Server {
   constructor () {
-    this.server = { }
+    this.fastify = Fastify()
+    this.httpServer = { }
+    this.brain = { }
+    this.nlu = { }
+    this.asr = { }
+    this.stt = { }
   }
 
   /**
    * Server entry point
    */
-  static init () {
-    return new Promise(async (resolve) => {
-      // CORS middleware
-      app.use(corsMidd)
+  async init () {
+    this.fastify.addHook('onRequest', corsMidd)
+    this.fastify.addHook('onRequest', otherMidd)
 
-      // A simple middleware
-      app.use(otherMidd)
+    log.title('Initialization')
+    log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
+    log.success(`The current version is ${version}`)
 
-      app.use(bodyParser.json())
-      app.use(bodyParser.urlencoded({
-        extended: true
-      }))
+    if (!Object.keys(langs).includes(process.env.LEON_LANG) === true) {
+      process.env.LEON_LANG = 'en-US'
+      log.warning('The language you chose is not supported, then the default language has been applied')
+    }
 
-      log.title('Initialization')
-      log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
-      log.success(`The current version is ${version}`)
+    log.success(`The current language is ${process.env.LEON_LANG}`)
+    log.success(`The current time zone is ${date.timeZone()}`)
 
-      if (!Object.keys(langs).includes(process.env.LEON_LANG) === true) {
-        process.env.LEON_LANG = 'en-US'
+    const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
+    log.success(`Collaborative logger ${sLogger}`)
 
-        log.warning('The language you chose is not supported, then the default language has been applied')
-      }
-
-      log.success(`The current language is ${process.env.LEON_LANG}`)
-      log.success(`The current time zone is ${date.timeZone()}`)
-
-      const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
-      log.success(`Collaborative logger ${sLogger}`)
-
-      await this.bootstrap()
-      resolve()
-    })
+    await this.bootstrap()
   }
 
   /**
    * Bootstrap API
    */
-  static bootstrap () {
-    return new Promise(async (resolve) => {
-      const apiVersion = 'v1'
+  async bootstrap () {
+    const apiVersion = 'v1'
 
-      // Render the web app
-      app.use(express.static(`${__dirname}/../../../app`))
-      app.get('/', (req, res) => {
-        res.sendFile(path.resolve(`${__dirname}/../../../app/index.html`))
-      })
-
-      app.use(`/${apiVersion}/info`, infoRouter)
-      app.use(`/${apiVersion}/downloads`, downloadRouter)
-
-      try {
-        await this.listen(process.env.LEON_PORT)
-        resolve()
-      } catch (e) {
-        log[e.type](e.obj.message)
-      }
+    // Render the web app
+    this.fastify.register(fastifyStatic, {
+      root: join(__dirname, '..', '..', '..', 'app', 'dist'),
+      prefix: '/'
     })
+    this.fastify.get('/', (_request, reply) => {
+      reply.sendFile('index.html')
+    })
+
+    this.fastify.register(infoPlugin, { apiVersion })
+    this.fastify.register(downloadsPlugin, { apiVersion })
+
+    this.httpServer = this.fastify.server
+
+    try {
+      await this.listen(process.env.LEON_PORT)
+    } catch (e) {
+      log.error(e.message)
+    }
   }
 
   /**
    * Launch server
    */
-  static listen (port) {
-    return new Promise((resolve, reject) => {
-      this.server = app.listen(port, (err) => {
-        /* istanbul ignore if */
-        if (err) {
-          reject({ type: 'error', obj: err })
-          return
-        }
+  async listen (port) {
+    const io = process.env.LEON_NODE_ENV === 'development'
+      ? socketio(this.httpServer, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
+      : socketio(this.httpServer)
 
-        log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
+    io.on('connection', this.connection)
 
-        const io = socketio.listen(this.server)
-        io.on('connection', this.connection)
-
-        resolve()
-      })
-    })
+    await this.fastify.listen(port, '0.0.0.0')
+    log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
   }
 
   /**
    * Bootstrap socket
    */
-  static connection (socket) {
-    return new Promise((resolve) => {
-      log.title('Client')
-      log.success('Connected')
+  async connection (socket) {
+    log.title('Client')
+    log.success('Connected')
 
-      // Init
-      socket.on('init', async (data) => {
-        log.info(`Type: ${data}`)
-        log.info(`Socket id: ${socket.id}`)
+    // Init
+    socket.on('init', async (data) => {
+      log.info(`Type: ${data}`)
+      log.info(`Socket id: ${socket.id}`)
 
-        if (data === 'hotword-node') {
-          // Hotword triggered
-          socket.on('hotword-detected', (data) => {
-            log.title('Socket')
-            log.success(`Hotword ${data.hotword} detected`)
+      if (data === 'hotword-node') {
+        // Hotword triggered
+        socket.on('hotword-detected', (data) => {
+          log.title('Socket')
+          log.success(`Hotword ${data.hotword} detected`)
 
-            socket.broadcast.emit('enable-record')
-          })
-        } else {
-          const brain = new Brain(socket, langs[process.env.LEON_LANG].short)
-          const nlu = new Nlu(brain)
-          const asr = new Asr()
-          let sttState = 'disabled'
-          let ttsState = 'disabled'
+          socket.broadcast.emit('enable-record')
+        })
+      } else {
+        let sttState = 'disabled'
+        let ttsState = 'disabled'
 
-          if (process.env.LEON_STT === 'true') {
-            sttState = 'enabled'
+        this.brain = new Brain(socket, langs[process.env.LEON_LANG].short)
+        this.nlu = new Nlu(this.brain)
+        this.asr = new Asr()
 
-            stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
-            stt.init()
-          }
-          if (process.env.LEON_TTS === 'true') {
-            ttsState = 'enabled'
-          }
+        /* istanbul ignore if */
+        if (process.env.LEON_STT === 'true') {
+          sttState = 'enabled'
 
-          log.title('Initialization')
-          log.success(`STT ${sttState}`)
-          log.success(`TTS ${ttsState}`)
+          this.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
+          this.stt.init()
+        }
 
-          // Train modules expressions
+        if (process.env.LEON_TTS === 'true') {
+          ttsState = 'enabled'
+        }
+
+        log.title('Initialization')
+        log.success(`STT ${sttState}`)
+        log.success(`TTS ${ttsState}`)
+
+        // Train modules expressions
+        try {
+          await this.nlu.loadModel(join(__dirname, '../data/leon-model.nlp'))
+        } catch (e) {
+          log[e.type](e.obj.message)
+        }
+
+        // Listen for new query
+        socket.on('query', async (data) => {
+          log.title('Socket')
+          log.info(`${data.client} emitted: ${data.value}`)
+
+          socket.emit('is-typing', true)
+          await this.nlu.process(data.value)
+        })
+
+        // Handle automatic speech recognition
+        socket.on('recognize', async (data) => {
           try {
-            await nlu.loadModel(`${__dirname}/../data/expressions/classifier.json`)
+            await this.asr.run(data, this.stt)
           } catch (e) {
             log[e.type](e.obj.message)
           }
-
-          // Listen for new query
-          socket.on('query', async (data) => {
-            log.title('Socket')
-            log.info(`${data.client} emitted: ${data.value}`)
-
-            socket.emit('is-typing', true)
-            await nlu.process(data.value)
-          })
-
-          // Handle automatic speech recognition
-          socket.on('recognize', async (data) => {
-            try {
-              await asr.run(data, stt)
-            } catch (e) {
-              log[e.type](e.obj.message)
-            }
-          })
-        }
-
-        resolve()
-      })
+        })
+      }
     })
   }
 }
