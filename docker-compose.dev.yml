@@ -7,8 +7,11 @@ services:
     image: 'leonai/leon'
     ports:
       - '${LEON_PORT:-1337}:${LEON_PORT:-1337}'
+    environment:
+      LEON_PORT: ${LEON_PORT:-1337}
     stdin_open: true
     tty: true
     command: 'npm run dev:server && npm run dev:app'
     volumes:
       - './:/app'
+      - 'node_modules:/app/node_modules'
