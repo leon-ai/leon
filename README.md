@@ -126,6 +126,27 @@ npm run docker:run
 # Hooray! Leon is running
 ```
 
+### Docker guide for development
+```sh
+# Clean if old node_modules and image exist
+rm -rf node_modules
+docker system prune
+docker rmi leonai/leon
+
+# Build image
+npm run docker:dev
+
+# Start container
+docker exec -ti leon-ai sh
+
+# Build node_modules and server libraries
+# The step can be ignored if it's done in the first time.
+npm install && npm run build
+
+# Start server in container
+npm run dev:server && npm run dev:app
+```
+
 ## 📚 Documentation
 
 For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
