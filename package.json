@@ -86,7 +86,7 @@
     "@babel/preset-env": "^7.13.9",
     "babel-plugin-module-resolver": "^4.1.0",
     "cli-spinner": "^0.2.10",
-    "eslint": "^7.21.0",
+    "eslint": "^7.26.0",
     "eslint-config-airbnb-base": "^14.2.1",
     "eslint-import-resolver-babel-module": "^5.2.0",
     "eslint-plugin-import": "^2.23.2",
