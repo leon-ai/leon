@@ -18,17 +18,15 @@ jobs:
       - name: Cache node_modules
         uses: actions/cache@v2
         with:
-          path: node_modules
-          key: ${{ runner.os }}-node_modules-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node_modules-
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-npm-
       - name: Cache Pipenv
         uses: actions/cache@v2
         with:
-          path: bridges/python/.venv
-          key: ${{ runner.os }}-pipenv-${{ env.cache-name }}-${{ hashFiles('bridges/python/Pipfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-pipenv-
+          path: ./bridges/python/.venv
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/Pipfile.lock') }}
+          restore-keys: ${{ runner.os }}-pip-
       - name: Install npm dependencies
         run: npm ci
 
