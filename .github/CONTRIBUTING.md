@@ -17,7 +17,7 @@ Here are few examples about how you could help on Leon, by:
 - [Suggesting new ideas](https://github.com/leon-ai/leon/issues/new/choose).
 - [Reporting a bug](https://github.com/leon-ai/leon/issues/new?labels=bug&template=BUG.md).
 - [Improving the documentation](https://github.com/leon-ai/docs.getleon.ai) (translations, typos, better writing, etc.).
-- [Buying me a fruit juice](https://donate.getleon.ai).
+- [Sponsoring Leon](https://sponsor.getleon.ai).
 
 
 ## Pull Requests
@@ -143,7 +143,7 @@ git commit -m "style(web app): remove chatbot useless parentheses"
 
 ## Donate
 
-You can also contribute by [buying me a fruit juice](https://donate.getleon.ai).
+You can also contribute by [sponsoring Leon](https://sponsor.getleon.ai).
 
 ## Spread the Word
 

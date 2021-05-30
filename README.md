@@ -156,9 +156,9 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 
 **Louis Grenard** ([@louistiti_fr](https://twitter.com/louistiti_fr))
 
-## 👍 Donate
+## 👍 Sponsor
 
-You can also contribute by [buying me a fruit juice](https://donate.getleon.ai).
+You can also contribute by [sponsoring Leon](https://sponsor.getleon.ai).
 
 ## 📝 License
 [MIT License](https://github.com/leon-ai/leon/blob/develop/LICENSE.md)
