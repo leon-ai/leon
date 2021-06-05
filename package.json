@@ -92,7 +92,7 @@
     "eslint-plugin-import": "^2.23.2",
     "eslint-plugin-jest": "^24.3.6",
     "git-changelog": "^2.0.0",
-    "inquirer": "^8.0.0",
+    "inquirer": "^8.1.0",
     "jest": "^26.6.3",
     "jest-canvas-mock": "^2.3.1",
     "jest-extended": "^0.11.5",
