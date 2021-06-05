@@ -160,6 +160,12 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 
 You can also contribute by [sponsoring Leon](https://sponsor.getleon.ai).
 
+Please note that I dedicate most of my free time to Leon.
+
+By sponsoring the project you make the project sustainable and faster to develop features.
+
+The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process and so on...
+
 ## 📝 License
 [MIT License](https://github.com/leon-ai/leon/blob/develop/LICENSE.md)
 
