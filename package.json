@@ -68,7 +68,7 @@
     "deepspeech": "^0.9.3",
     "dotenv": "^8.2.0",
     "execa": "^5.0.0",
-    "fastify": "^3.14.0",
+    "fastify": "^3.17.0",
     "fastify-static": "^4.0.1",
     "fluent-ffmpeg": "^2.1.2",
     "googleapis": "^67.1.1",
