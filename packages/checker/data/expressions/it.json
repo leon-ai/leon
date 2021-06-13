@@ -1,0 +1,31 @@
+{
+	"isitdown": {
+    "run": {
+      "expressions": [
+        "getleon.ai è up?",
+        "mozilla.org è down?",
+        "mozilla.org è up o down?",
+        "github.com è up?",
+        "github.com è down?",
+        "Controlla se github.com è up o down",
+        "Controlla se github.com è down",
+        "Controlla se github.com è up",
+        "Controlla se nodejs.org è down",
+        "Controlla se nodejs.org è up",
+        "Controlla se nodejs.org sta funzionando",
+        "Controlla se amazon.com è up o down"
+      ]
+    }
+  },
+	"haveibeenpwned": {
+    "run": {
+      "expressions": [
+        "iifeoluwa.ao@gmail.com è stato pwned?",
+        "iifeoluwa.ao@gmail.com è stato compromesso?",
+        "La mia mail è stata pwned?",
+        "Controlla che iifeoluwa.ao@gmail.com e louis.grenard@gmail.com non sono stati compromessi",
+        "Controlla che iifeoluwa.ao@gmail.com e louis.grenard@gmail.com non sono stati pwned",
+      ]
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+	"isitdown": {
+		"up": [
+			"%website_name% funziona correttamente.",
+			"%website_name% è up."
+		],
+		"down": [
+			"%website_name% non risponde.",
+			"%website_name% è down."
+		],
+		"checking": [
+			"Controllo lo stato di %website_name%.",
+			"Sto cercando di raggiungere %website_name%."
+		],
+		"errors": [
+			"C'è un problema con la richiesta a %website_name%. Per favore controlla la connessione o se il dominio è corretto."
+		],
+    "invalid_domain_name": [
+      "Non è un dominio valido."
+    ]
+	},
+	"haveibeenpwned": {
+		"no-pwnage": [
+			"Buone notizie, \"%email%\" non è stata compromessa."
+		],
+		"pwned": [
+			"Oops, sembra che \"%email%\" sia stata compromessa:<br><br><ul>%result%</ul>",
+			"Purtroppo, \"%email%\" è stata compromessa:<br><br><ul>%result%</ul>"
+		],
+    "list_element": [
+      "<li><a href=\"%url%\" target=\"_blank\">%name%</a> per un totale di %total% profili.</li>"
+    ],
+		"checking": [
+			"Sto cercando se la mail è stata compromessa"
+		],
+		"no-email": [
+			"Per favore dimmi almeno una mail da controllare."
+		],
+		"errors": [
+			"Credo che il sito %website_name% sia down al momento, riprova più tardi.",
+			"Sto avendo problemi a raggiungere %website_name%. Controlla la tua connessione.",
+			"Cattive notizie, %website_name% non risponde. Prova più tardi."
+		],
+		"blocked": [
+			"C'è stato un errore con il servizio di %website_name%"
+		],
+    "unavailable": [
+      "Sembra che Cloudflare stia proteggendo %website_name%, riprova più tardi."
+    ]
+	}
+}

@@ -1,0 +1,89 @@
+{
+	"whoami": {
+    "run": {
+      "expressions": [
+        "Chi sei?",
+        "Come ti chiamano?",
+        "Come ti chiami?",
+        "Dimmi chi sei",
+        "Presentati"
+      ]
+    }
+  },
+	"joke": {
+    "run": {
+      "expressions": [
+        "Dimmi una barzelletta",
+        "Raccontami una barzelletta",
+        "Fammi ridere",
+        "Hai delle barzellette da raccontarmi?"
+      ]
+    }
+  },
+	"greeting": {
+    "run": {
+      "expressions": [
+        "Ciao",
+        "Hey",
+        "Buon giorno",
+        "Buon pomeriggio",
+        "Buona sera",
+        "Come va?",
+        "Come stai?",
+        "Come sta andando?"
+      ]
+    }
+  },
+	"welcome": {
+    "run": {
+      "expressions": [
+        "Grazie",
+        "Grazie mille",
+        "Perfetto"
+      ]
+    }
+  },
+	"meaningoflife": {
+    "run": {
+      "expressions": [
+        "Qual è il significato della vita?",
+        "Dimmi qual è il significato della vita"
+      ]
+    }
+  },
+	"randomnumber": {
+    "run": {
+      "expressions": [
+        "Dimmi un numero casuale",
+        "Dimmi un numero",
+        "Dimmi un numero random",
+        "Scegli un numero",
+      ]
+    }
+
+  },
+	"bye": {
+    "run": {
+      "expressions": [
+        "Ciao",
+        "Addio",
+        "Arrivederci",
+        "A più tardi",
+      ]
+    }
+  },
+  "partnerassistant": {
+    "run": {
+      "expressions": [
+				"Hai qualcosa da dire riguardo Alexa?",
+        "Dimmi qualcosa a riguardo dell'assistente personale Alexa",
+				"Hai qualcosa da dire riguardo Cortana?",
+        "Dimmi qualcosa a riguardo dell'assistente personale Cortana?",
+				"Hai qualcosa da dire riguardo Siri?",
+        "Dimmi qualcosa a riguardo dell'assistente personale Siri?",
+				"Hai qualcosa da dire riguardo Google Assistant?",
+        "Dimmi qualcosa a riguardo dell'assistente personale Google Assistant?"
+      ]
+    }
+  }
+}
