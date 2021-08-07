@@ -156,7 +156,26 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 
 **Louis Grenard** ([@louistiti_fr](https://twitter.com/louistiti_fr))
 
-## 👍 Sponsor
+## 👍 Sponsors
+
+<table>
+  <tbody>
+    <tr>
+      <td align="center" valign="middle" width="128">
+        <a href="https://github.com/GrAMATO">
+          <img src="https://github.com/GrAMATO.png?size=128" />
+          GrAMATO
+        </a><br>
+        <sub><sup>30 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
+      	<a href="https://sponsor.getleon.ai/">
+          You?
+        </a>
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 You can also contribute by [sponsoring Leon](https://sponsor.getleon.ai).
 
