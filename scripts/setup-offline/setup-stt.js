@@ -14,7 +14,9 @@ export default () => new Promise(async (resolve, reject) => {
   const tmpDir = 'scripts/tmp'
   const deepSpeechVersion = '0.9.3'
   let downloader = 'wget'
-  if (os.get().type === 'macos') {
+  const info = await os.get()
+
+  if (info.type === 'macos') {
     downloader = 'curl -L -O'
   }
 
