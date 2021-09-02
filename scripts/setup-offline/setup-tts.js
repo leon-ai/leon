@@ -17,7 +17,8 @@ export default () => new Promise(async (resolve, reject) => {
     makeCores = `-j ${os.cpus().length - 2}`
   }
   let downloader = 'wget'
-  if (os.get().type === 'macos') {
+  const info = await os.get()
+  if (info.type === 'macos') {
     downloader = 'curl -L -O'
   }
 

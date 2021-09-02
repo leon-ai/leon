@@ -9,10 +9,21 @@ import os from '@/helpers/os'
 export default () => new Promise(async (resolve, reject) => {
   log.info('Setting up offline hotword detection...')
 
-  const info = os.get()
-  let pkgm = 'apt-get install'
+  const info = await os.get()
+  let pkgm = ''
   if (info.type === 'macos') {
     pkgm = 'brew'
+  }
+  
+  if (info.name === 'Linux') {
+    // Add distros as needed
+    switch (info.distro) {
+      case 'Arch Linux':
+        pkgm = 'pacman -S'
+        break
+      default:
+        pkgm = 'apt-get install'
+    }
   }
 
   if (info.type === 'windows') {
@@ -21,9 +32,18 @@ export default () => new Promise(async (resolve, reject) => {
   } else {
     try {
       log.info('Installing dependencies...')
+      let cmd = ''
 
-      let cmd = `sudo ${pkgm} sox libsox-fmt-all -y`
       if (info.type === 'linux') {
+        // Add distros as needed
+        switch (info.distro) {
+          case 'Arch Linux':
+            cmd = `sudo ${pkgm} sox libsoxr`
+            break
+          default:
+            cmd = `sudo ${pkgm} sox libsox-fmt-all -y`
+        }
+
         log.info(`Executing the following command: ${cmd}`)
         await command(cmd, { shell: true })
       } else if (info.type === 'macos') {

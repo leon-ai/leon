@@ -1,36 +1,40 @@
+import getos from 'getos'
+
+jest.mock('getos')
+
+// Import after mock, so we can change the OS
+// eslint-disable-next-line
 import os from '@/helpers/os'
+
+const setupTest = (osName) => {
+  getos.mockImplementation((cb) => cb(null, { os: osName, dist: osName === 'Linux' ? 'Arch' : undefined }))
+}
 
 describe('OS helper', () => {
   describe('get()', () => {
-    test('returns information about the OS', () => {
-      const info = os.get()
+    test('returns information about the OS', async () => {
+      const info = await os.get()
 
       expect(info.type).toBeOneOf(['windows', 'linux', 'macos'])
       expect(info.name).toBeOneOf(['Windows', 'Linux', 'macOS'])
     })
 
-    test('returns information for Windows', () => {
-      jest.unmock('os')
-      const o = jest.requireActual('os')
-      o.type = jest.fn(() => 'Windows_NT')
+    test('returns information for Windows', async () => {
+      setupTest('Windows')
 
-      expect(os.get()).toEqual({ name: 'Windows', type: 'windows' })
+      expect(await os.get()).toEqual({ name: 'Windows', type: 'windows' })
     })
 
-    test('returns information for Linux', () => {
-      jest.unmock('os')
-      const o = jest.requireActual('os')
-      o.type = jest.fn(() => 'Linux')
+    test('returns information for Linux', async () => {
+      setupTest('Linux')
 
-      expect(os.get()).toEqual({ name: 'Linux', type: 'linux' })
+      expect(await os.get()).toEqual({ name: 'Linux', type: 'linux', distro: 'Arch' })
     })
 
-    test('returns information for macOS', () => {
-      jest.unmock('os')
-      const o = jest.requireActual('os')
-      o.type = jest.fn(() => 'Darwin')
+    test('returns information for macOS', async () => {
+      setupTest('Darwin')
 
-      expect(os.get()).toEqual({ name: 'macOS', type: 'macos' })
+      expect(await os.get()).toEqual({ name: 'macOS', type: 'macos' })
     })
   })
 

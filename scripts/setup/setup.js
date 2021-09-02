@@ -17,7 +17,7 @@ import setupPythonPackages from './setup-python-packages'
  */
 (async () => {
   try {
-    const info = os.get()
+    const info = await os.get()
 
     // Required env vars to setup
     process.env.LEON_LANG = 'en-US'

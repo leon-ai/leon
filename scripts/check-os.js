@@ -9,7 +9,7 @@ import os from '@/helpers/os'
 export default () => new Promise(async (resolve, reject) => {
   log.info('Checking OS environment...')
 
-  const info = os.get()
+  const info = await os.get()
 
   if (info.type === 'windows') {
     log.error('Voice offline mode is not available on Windows')
@@ -33,8 +33,21 @@ export default () => new Promise(async (resolve, reject) => {
         await execa('curl', ['--version'])
         log.success('"curl" found')
       } else if (info.type === 'linux') {
-        await execa('apt-get', ['--version'])
-        log.success('"apt-get" found')
+        switch (info.distro) {
+          // Add distros as needed
+          case 'Arch Linux':
+            await execa('pacman', ['--version'])
+            log.success('"pacman" found')
+            break
+          case 'Fedora':
+            await execa('dnf', ['--version'])
+            log.success('"dnf" found')
+            break
+          default: 
+            await execa('apt-get', ['--version'])
+            log.success('"apt-get" found')
+        }
+
         await execa('wget', ['--version'])
         log.success('"wget" found')
       }
