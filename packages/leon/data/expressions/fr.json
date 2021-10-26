@@ -95,8 +95,20 @@
       "expressions": [
         "Quel âge as-tu ?",
         "Es-tu vieux ?",
-        "Es-tu jeune ?",
-        "Quand as-tu été créé ?"
+        "Es-tu jeune ?"
+      ]
+    }
+  },
+  "birthdate": {
+    "date": {
+      "expressions": [
+        "Quand es-tu né?",
+        "Quand as-tu été créé?"
+      ]
+    },
+    "birthday": {
+      "expressions": [
+        "Quelle est ta date de naissance?"
       ]
     }
   }
