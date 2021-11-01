@@ -16,9 +16,9 @@ jobs:
       - checkout
       - node/install-packages:
           pkg-manager: npm
-      - run:
-          command: npm test
-    test:
+      - run: npm test
+      
+    build-and-test:
       docker:
         - image: cimg/node:16.10
         - image: snyk/snyk:node
@@ -32,6 +32,4 @@ workflows:
         jobs:
         - build
         - test
-           requires:
-            - build
 
