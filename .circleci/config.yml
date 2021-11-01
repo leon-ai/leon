@@ -12,28 +12,26 @@ jobs:
   build:
     docker:
       - image: cimg/node:16.10
-    # Then run your tests!
-    # CircleCI will report the results back to your VCS provider.
     steps:
       - checkout
       - node/install-packages:
           pkg-manager: npm
       - run:
           command: npm test
-build-and-test:
-    docker:
-      - image: cimg/node:16.10
-      - image: snyk/snyk:node
-    steps:
-      - checkout
-      - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
+    test:
+      docker:
+        - image: cimg/node:16.10
+        - image: snyk/snyk:node
+      steps:
+        - checkout
+        - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
 
 workflows:
-    version: 2
-    build_and_test:
-        jobs:
-        - build
-        - build-and-test:
-            requires:
+        version: 2
+        build_and_test:
+          jobs:
+          - build
+          - test:
+              requires:
               - build-and-test
 
