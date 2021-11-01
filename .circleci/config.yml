@@ -13,13 +13,13 @@ jobs:
         - image: snyk/snyk:node
       steps:
         - checkout
-        - run: snyk auth SNYK_TOKEN 
-        - run: snyk test
+        - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
 
 workflows:
-    version: 2
-    workflow:
-        jobs:
-        - build
-        - test
+  build_and_test:
+    jobs:
+      - build
+      - test:
+          requires:
+            - build
 
