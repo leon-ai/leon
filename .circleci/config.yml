@@ -9,7 +9,7 @@ orbs:
   node: circleci/node@4.7
 
 jobs:
-  build-and-test:
+  build:
     docker:
       - image: cimg/node:16.10
     # Then run your tests!
@@ -20,13 +20,20 @@ jobs:
           pkg-manager: npm
       - run:
           command: npm test
-      - build-test:
-            docker: snyk/snyk:node
+build-and-test:
+    docker:
+      - image: cimg/node:16.10
+      - image: snyk/snyk:node
+    steps:
+      - checkout
       - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
 
 workflows:
     version: 2
     build_and_test:
         jobs:
-        - build-and-test
+        - build
+        - build-and-test:
+            requires:
+              - build-and-test
 
