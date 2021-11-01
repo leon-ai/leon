@@ -16,7 +16,6 @@ jobs:
     # A list of available CircleCI Docker Convenience Images are available here: https://circleci.com/developer/images/image/cimg/node
     docker:
       - image: cimg/node:16.10
-      - image: snyk/snyk:node
     # Then run your tests!
     # CircleCI will report the results back to your VCS provider.
     steps:
@@ -29,6 +28,8 @@ jobs:
           pkg-manager: npm
       - run:
           command: npm test
+      - snyk/test:
+            docker: snyk/snyk:node
       - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
 
 workflows:
