@@ -9,35 +9,24 @@ orbs:
   node: circleci/node@4.7
 
 jobs:
-  # Below is the definition of your job to build and test your app, you can rename and customize it as you want.
   build-and-test:
-    # These next lines define a Docker executor: https://circleci.com/docs/2.0/executor-types/
-    # You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
-    # A list of available CircleCI Docker Convenience Images are available here: https://circleci.com/developer/images/image/cimg/node
     docker:
       - image: cimg/node:16.10
     # Then run your tests!
     # CircleCI will report the results back to your VCS provider.
     steps:
-      # Checkout the code as the first step.
       - checkout
-      # Next, the node orb's install-packages step will install the dependencies from a package.json.
-      # The orb install-packages step will also automatically cache them for faster future runs.
       - node/install-packages:
-          # If you are using yarn, change the line below from "npm" to "yarn"
           pkg-manager: npm
       - run:
           command: npm test
-      - snyk/test:
+      - build-test:
             docker: snyk/snyk:node
       - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
 
 workflows:
-  # Below is the definition of your workflow.
-  # Inside the workflow, you provide the jobs you want to run, e.g this workflow runs the build-and-test job above.
-  # CircleCI will run this workflow on every commit.
-  # For more details on extending your workflow, see the configuration docs: https://circleci.com/docs/2.0/configuration-reference/#workflows
-  sample:
-    jobs:
-      - build-and-test
+    version: 2
+    build_and_test:
+        jobs:
+        - build-and-test
 
