@@ -27,11 +27,11 @@ jobs:
         - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
 
 workflows:
-        version: 2
-        build_and_test:
-          jobs:
-          - build
-          - test:
-              requires:
-              - build-and-test
+    version: 2
+    workflow:
+        jobs:
+        - build
+        - test
+           requires:
+            - build
 
