@@ -75,8 +75,8 @@ Gitpod will automatically setup an environment and run an instance for you.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 14
-- [npm](https://npmjs.com/) >= 5
+- [Node.js](https://nodejs.org/) >= 16
+- [npm](https://npmjs.com/) >= 8
 - [Python](https://www.python.org/downloads/) >= 3
 - [Pipenv](https://docs.pipenv.org) >= 2020.11.15
 - Supported OSes: Linux, macOS and Windows

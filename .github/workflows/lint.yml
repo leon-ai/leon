@@ -8,27 +8,27 @@ on:
 
 jobs:
   lint:
-
-    runs-on: ubuntu-20.04
-    container: leonai/ci:latest
+    runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
 
-      - name: Cache node_modules
-        uses: actions/cache@v2
+      - name: Use Python
+        uses: actions/setup-python@v2
         with:
-          path: ~/.npm
-          key: ${{ runner.os }}-npm-${{ hashFiles('package-lock.json') }}
-          restore-keys: ${{ runner.os }}-npm-
-      - name: Cache Pipenv
-        uses: actions/cache@v2
+          python-version: 3.x
+
+      - name: Use Node.js
+        uses: actions/setup-node@v2
         with:
-          path: ./bridges/python/.venv
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/Pipfile.lock') }}
-          restore-keys: ${{ runner.os }}-pip-
+          node-version: 16.x
+          cache: npm
+
+      - name: Install Pipenv
+        run: pip install --upgrade pip && pip install pipenv
+
       - name: Install
-        run: npm ci
+        run: npm install
 
       - name: Run linter
         run: npm run lint
