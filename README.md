@@ -162,6 +162,13 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
+        <a href="https://github.com/Francaoz">
+          <img src="https://github.com/Francaoz.png?size=128" />
+          Francaoz
+        </a><br>
+        <sub><sup>100 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
         <a href="https://github.com/GrAMATO">
           <img src="https://github.com/GrAMATO.png?size=128" />
           GrAMATO
