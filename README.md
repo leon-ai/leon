@@ -1,9 +1,11 @@
 <p align="center">
-  <a href="https://getleon.ai"><img width="96" src="https://getleon.ai/img/logo.svg"></a><br><br>
-  <a href="https://www.youtube.com/watch?v=p7GRGiicO1c"><img width="512" src="https://getleon.ai/img/1.0.0-beta.0_preview_en.png"></a><br>
+  <img width="800" src="https://im7.ezgif.com/tmp/ezgif-7-da0ade4a2121.gif" />
 </p>
 
-<h1 align="center">Leon</h1>
+<h1 align="center">
+  <a href="https://getleon.ai"><img width="96" src="https://getleon.ai/img/logo.svg" alt="Leon"></a><br>
+  Leon
+</h1>
 
 *<p align="center">Your open-source personal assistant.</p>*
 
@@ -130,6 +132,10 @@ npm run docker:run
 
 For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
 
+## 📺 Video
+
+[Watch a demo](https://www.youtube.com/watch?v=p7GRGiicO1c).
+
 ## 🧭 Roadmap
 
 To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai).
@@ -146,10 +152,11 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 
 ## 🔔 Stay Tuned
 
+- [Twitter](https://twitter.com/louistiti_fr)
 - [Newsletter](https://getleon.ai)
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
-- [Twitter](https://twitter.com/louistiti_fr)
+- [YouTube](https://www.youtube.com/channel/UCW6mk6j6nQUzFYY97r47emQ)
 - [#LeonAI](https://twitter.com/hashtag/LeonAI)
 
 ## 👨 Author
