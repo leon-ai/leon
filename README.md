@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://getleon.ai"><img width="800" src="https://im7.ezgif.com/tmp/ezgif-7-da0ade4a2121.gif" /></a>
+  <a href="https://getleon.ai"><img width="800" src="https://getleon.ai/img/hero-animation.gif" /></a>
 </p>
 
 <h1 align="center">
