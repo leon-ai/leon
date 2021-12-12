@@ -13,11 +13,11 @@ Please note we have a [code of conduct](https://github.com/leon-ai/leon/blob/dev
 Here are few examples about how you could help on Leon, by:
 
 - [Creating a new module](https://docs.getleon.ai/packages-modules).
-- [Working on new features](https://roadmap.getleon.ai) (what is in backlog or todo).
+- [Working on new features](http://roadmap.getleon.ai) (what is in backlog or todo).
 - [Suggesting new ideas](https://github.com/leon-ai/leon/issues/new/choose).
 - [Reporting a bug](https://github.com/leon-ai/leon/issues/new?labels=bug&template=BUG.md).
 - [Improving the documentation](https://github.com/leon-ai/docs.getleon.ai) (translations, typos, better writing, etc.).
-- [Sponsoring Leon](https://sponsor.getleon.ai).
+- [Sponsoring Leon](http://sponsor.getleon.ai).
 
 
 ## Pull Requests
@@ -143,7 +143,7 @@ git commit -m "style(web app): remove chatbot useless parentheses"
 
 ## Sponsor
 
-You can also contribute by [sponsoring Leon](https://sponsor.getleon.ai).
+You can also contribute by [sponsoring Leon](http://sponsor.getleon.ai).
 
 Please note that I dedicate most of my free time to Leon.
 

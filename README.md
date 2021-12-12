@@ -24,7 +24,7 @@
 <p align="center">
   <a href="https://getleon.ai">Website</a> ::
   <a href="https://docs.getleon.ai">Documentation</a> ::
-  <a href="https://roadmap.getleon.ai">Roadmap</a> ::
+  <a href="http://roadmap.getleon.ai">Roadmap</a> ::
   <a href="https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md">Contributing</a> ::
   <a href="https://blog.getleon.ai/the-story-behind-leon/">Story</a>
 </p>
@@ -142,7 +142,7 @@ For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
 
 ## 🧭 Roadmap
 
-To know what is going on, follow [roadmap.getleon.ai](https://roadmap.getleon.ai).
+To know what is going on, follow [roadmap.getleon.ai](http://roadmap.getleon.ai).
 
 ## ❤️ Contributing
 
@@ -194,7 +194,7 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
         <sub><sup>10 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
-      	<a href="https://sponsor.getleon.ai/">
+      	<a href="http://sponsor.getleon.ai/">
           You?
         </a>
       </td>
@@ -202,7 +202,7 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   </tbody>
 </table>
 
-You can also contribute by [sponsoring Leon](https://sponsor.getleon.ai).
+You can also contribute by [sponsoring Leon](http://sponsor.getleon.ai).
 
 Please note that I dedicate most of my free time to Leon.
 
