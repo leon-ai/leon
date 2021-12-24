@@ -157,7 +157,7 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 ## 🔔 Stay Tuned
 
 - [Twitter](https://twitter.com/louistiti_fr)
-- [Newsletter](https://getleon.ai)
+- [Newsletter](http://newsletter.getleon.ai)
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
 - [YouTube](https://www.youtube.com/channel/UCW6mk6j6nQUzFYY97r47emQ)
