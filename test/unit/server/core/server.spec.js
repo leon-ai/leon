@@ -93,7 +93,7 @@ describe('server', () => {
       }, 50)
 
       setTimeout(() => {
-        expect(console.log.mock.calls[22][1]).toBe('Query found')
+        expect(console.log.mock.calls[26][1]).toBe('Query found')
         console.log = jest.fn()
       }, 100)
 
