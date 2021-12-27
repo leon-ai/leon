@@ -1,4 +1,4 @@
-describe('checker:haveibeenpwned', async () => {
+describe('checker:haveibeenpwned', () => {
   test('checks if an email address has been provided', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Have I been pwned?')

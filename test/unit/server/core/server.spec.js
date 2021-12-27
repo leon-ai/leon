@@ -61,7 +61,7 @@ describe('server', () => {
   })
 
   describe('connection()', () => {
-    test('initializes main nodes', async (done) => {
+    test('initializes main nodes', async () => {
       const server = new Server()
 
       await server.init()
@@ -88,8 +88,7 @@ describe('server', () => {
       expect(server.nlu).not.toBeEmpty()
       expect(server.asr).not.toBeEmpty()
 
-      done()
-      /* setTimeout(() => {
+      setTimeout(() => {
         ee.emit('query', { client: 'jest', value: 'Hello' })
       }, 50)
 
@@ -107,9 +106,7 @@ describe('server', () => {
         console.log = jest.fn()
 
         await server.httpServer.close()
-
-        done()
-      }, 200) */
+      }, 200)
     })
   })
 })
