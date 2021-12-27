@@ -39,7 +39,7 @@
     "dev:server": "npm run train && cross-env LEON_NODE_ENV=development nodemon --watch server ./server/src/index.js --ignore server/src/tmp/ --exec babel-node",
     "wake": "cross-env LEON_HOST=http://localhost LEON_PORT=1337 node hotword/index.js",
     "delete-dist:server": "shx rm -rf ./server/dist",
-    "build": "npm run lint && npm run build:app && npm run build:server",
+    "build": "npm run build:app && npm run build:server",
     "build:app": "cross-env LEON_NODE_ENV=production babel-node scripts/app/run-build-app.js",
     "build:server": "npm run delete-dist:server && npm run train && babel ./server/src -d ./server/dist --copy-files && shx mkdir -p server/dist/tmp",
     "start": "cross-env LEON_NODE_ENV=production node ./server/dist/index.js",

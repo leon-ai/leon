@@ -10,7 +10,7 @@ console.info('\x1b[36m➡ %s\x1b[0m', 'Running Leon\'s installation...')
 
 if (os.type().indexOf('Windows') !== -1) {
   const packageJsonPath = path.join(__dirname, '../../package.json')
-  const packageJson = require(packageJsonPath)
+  const packageJson = require(packageJsonPath) // eslint-disable-line global-require
 
   console.warn('\x1b[33m❗ %s\x1b[0m', 'The Leon\'s voice offline mode is not available on Windows')
   console.info('\x1b[36m➡ %s\x1b[0m', 'Backing up package.json...')
