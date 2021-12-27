@@ -88,7 +88,8 @@ describe('server', () => {
       expect(server.nlu).not.toBeEmpty()
       expect(server.asr).not.toBeEmpty()
 
-      setTimeout(() => {
+      done()
+      /* setTimeout(() => {
         ee.emit('query', { client: 'jest', value: 'Hello' })
       }, 50)
 
@@ -108,7 +109,7 @@ describe('server', () => {
         await server.httpServer.close()
 
         done()
-      }, 200)
+      }, 200) */
     })
   })
 })
