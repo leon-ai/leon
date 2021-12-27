@@ -75,8 +75,8 @@
     "ibm-watson": "^6.1.1",
     "moment-timezone": "^0.5.33",
     "node-wav": "0.0.2",
-    "socket.io": "^4.1.2",
-    "socket.io-client": "^4.1.2",
+    "socket.io": "^4.4.0",
+    "socket.io-client": "^4.4.0",
     "superagent": "^6.1.0"
   },
   "devDependencies": {
