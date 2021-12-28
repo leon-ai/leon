@@ -28,7 +28,7 @@ jobs:
         run: pip install --upgrade pip && pip install pipenv
 
       - name: Install
-        run: npm set-script prepare "" && npm install
+        run: npm install
 
       - name: Run linter
         run: npm run lint
