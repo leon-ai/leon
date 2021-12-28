@@ -14,4 +14,4 @@ services:
     command: 'npm run dev:server && npm run dev:app'
     volumes:
       - './:/app'
-      - 'node_modules:/app/node_modules'
+      - '/app/node_modules'

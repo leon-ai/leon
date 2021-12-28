@@ -105,13 +105,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "ajoute",
-              "to": "à"
-            },
-            {
-              "type": "between",
-              "from": "ajoute",
-              "to": "a"
+              "from": ["ajoute", "ajoute"],
+              "to": ["à", "a"]
             }
           ]
         },
@@ -140,18 +135,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "coche",
-              "to": "de"
-            },
-            {
-              "type": "between",
-              "from": "complète",
-              "to": "de"
-            },
-            {
-              "type": "between",
-              "from": "complete",
-              "to": "de"
+              "from": ["coche", "complète", "complete"],
+              "to": ["de", "de", "de"]
             }
           ]
         },
@@ -181,23 +166,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "décoche",
-              "to": "de"
-            },
-            {
-              "type": "between",
-              "from": "decoche",
-              "to": "de"
-            },
-            {
-              "type": "between",
-              "from": "invalide",
-              "to": "de"
-            },
-            {
-              "type": "between",
-              "from": "remet",
-              "to": "sur"
+              "from": ["décoche", "decoche", "invalide", "remet"],
+              "to": ["de", "de", "de", "sur"]
             }
           ]
         },

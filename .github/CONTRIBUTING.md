@@ -12,12 +12,12 @@ Please note we have a [code of conduct](https://github.com/leon-ai/leon/blob/dev
 
 Here are few examples about how you could help on Leon, by:
 
-- [Creating a new module](https://docs.getleon.ai/packages-modules.html).
-- [Working on new features](https://roadmap.getleon.ai) (what is in backlog or todo).
+- [Creating a new module](https://docs.getleon.ai/packages-modules).
+- [Working on new features](http://roadmap.getleon.ai) (what is in backlog or todo).
 - [Suggesting new ideas](https://github.com/leon-ai/leon/issues/new/choose).
 - [Reporting a bug](https://github.com/leon-ai/leon/issues/new?labels=bug&template=BUG.md).
 - [Improving the documentation](https://github.com/leon-ai/docs.getleon.ai) (translations, typos, better writing, etc.).
-- [Buying me a fruit juice](https://donate.getleon.ai).
+- [Sponsoring Leon](http://sponsor.getleon.ai).
 
 
 ## Pull Requests
@@ -141,9 +141,15 @@ git commit -m "chore: split training script into awesome blocks"
 git commit -m "style(web app): remove chatbot useless parentheses"
 ```
 
-## Donate
+## Sponsor
 
-You can also contribute by [buying me a fruit juice](https://donate.getleon.ai).
+You can also contribute by [sponsoring Leon](http://sponsor.getleon.ai).
+
+Please note that I dedicate most of my free time to Leon.
+
+By sponsoring the project you make the project sustainable and faster to develop features.
+
+The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process and so on...
 
 ## Spread the Word
 

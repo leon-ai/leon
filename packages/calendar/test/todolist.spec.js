@@ -1,4 +1,4 @@
-describe('calendar:todolist', async () => {
+describe('calendar:todolist', () => {
   test('no list', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Show all my lists')

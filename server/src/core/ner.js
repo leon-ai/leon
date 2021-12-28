@@ -86,7 +86,15 @@ class Ner {
 
         if (condition.type === 'between') {
           // e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
-          this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
+          if (Array.isArray(condition.from) && Array.isArray(condition.to)) {
+            const { from, to } = condition
+
+            from.forEach((word, index) => {
+              this.ner[conditionMethod](lang, entity.name, word, to[index])
+            })
+          } else {
+            this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
+          }
         } else if (condition.type.indexOf('after') !== -1) {
           this.ner[conditionMethod](lang, entity.name, condition.from)
         } else if (condition.type.indexOf('before') !== -1) {

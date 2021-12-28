@@ -12,6 +12,7 @@
     "<rootDir>/test/paths.setup.js"
   ],
   "setupFilesAfterEnv": [
+    "jest-extended/all",
     "<rootDir>/test/e2e/modules/e2e.modules.setup.js"
   ]
 }

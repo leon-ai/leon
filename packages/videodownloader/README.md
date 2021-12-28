@@ -25,7 +25,7 @@ Download new video(s) from a YouTube playlist.
 
 ##### Synchronization
 
-[Read the docs](https://docs.getleon.ai/configuration.html#synchronizer).
+[Read the docs](https://docs.getleon.ai/configuration#synchronizer).
 
 #### Links
 

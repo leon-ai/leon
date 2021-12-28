@@ -12,6 +12,7 @@
     "<rootDir>/test/paths.setup.js"
   ],
   "setupFilesAfterEnv": [
+    "jest-extended/all",
     "<rootDir>/test/unit/unit.setup.js"
   ],
   "coverageDirectory": "<rootDir>/test/coverage",

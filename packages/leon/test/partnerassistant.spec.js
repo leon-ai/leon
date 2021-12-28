@@ -1,4 +1,4 @@
-describe('leon:partnerassistant', async () => {
+describe('leon:partnerassistant', () => {
   test('does not know this personal assistant', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Tell me about the personal assistant Louistiti')

@@ -1,4 +1,4 @@
-describe('network:speedtest', async () => {
+describe('network:speedtest', () => {
   test('does a speed test', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Do a speed test')
