@@ -12,23 +12,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "the",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "a",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "an",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "my",
-              "to": "list"
+              "from": ["the", "a", "an", "my"],
+              "to": ["list", "list", "list", "list"]
             }
           ]
         }
@@ -56,13 +41,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "the",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "my",
-              "to": "list"
+              "from": ["the", "my"],
+              "to": ["list", "list"]
             }
           ]
         }
@@ -80,13 +60,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "the",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "my",
-              "to": "list"
+              "from": ["the", "my"],
+              "to": ["list", "list"]
             }
           ]
         },
@@ -114,13 +89,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "the",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "my",
-              "to": "list"
+              "from": ["the", "my"],
+              "to": ["list", "list"]
             }
           ]
         }
@@ -149,13 +119,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "the",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "my",
-              "to": "list"
+              "from": ["the", "my"],
+              "to": ["list", "list"]
             }
           ]
         }
@@ -175,18 +140,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "check",
-              "to": "from"
-            },
-            {
-              "type": "between",
-              "from": "complete",
-              "to": "from"
-            },
-            {
-              "type": "between",
-              "from": "tick",
-              "to": "from"
+              "from": ["check", "complete", "tick"],
+              "to": ["from", "from", "from"]
             }
           ]
         },
@@ -196,13 +151,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "the",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "my",
-              "to": "list"
+              "from": ["the", "my"],
+              "to": ["list", "list"]
             }
           ]
         }
@@ -221,13 +171,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "uncheck",
-              "to": "from"
-            },
-            {
-              "type": "between",
-              "from": "untick",
-              "to": "from"
+              "from": ["uncheck", "untick"],
+              "to": ["from", "from"]
             }
           ]
         },
@@ -237,13 +182,8 @@
           "conditions": [
             {
               "type": "between",
-              "from": "the",
-              "to": "list"
-            },
-            {
-              "type": "between",
-              "from": "my",
-              "to": "list"
+              "from": ["the", "my"],
+              "to": ["list", "list"]
             }
           ]
         }
