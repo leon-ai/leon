@@ -1,4 +1,4 @@
-# [1.0.0-beta.5](https://github.com/leon-ai/leon/compare/v1.0.0-beta.4...1.0.0-beta.5) (2021-12-28) / Refocus
+# [1.0.0-beta.5](https://github.com/leon-ai/leon/compare/v1.0.0-beta.4...v1.0.0-beta.5) (2021-12-28) / Refocus
 
 *This release marks a major turn in the future versions of the Leon core. Please [read this blog post](https://blog.getleon.ai/i-ran-away-from-open-source/) to know more.*
 
@@ -13,7 +13,7 @@
 ### Documentation Changes
  - URL redirect managed by registrar [c16d5b28](https://github.com/leon-ai/leon/commit/c16d5b280b758f7e18305e30678adec79f0a0716)  
 
-# [1.0.0-beta.4](https://github.com/leon-ai/leon/compare/1.0.0-beta.2...1.0.0-beta.4) (2021-05-01) / Getting Rid of Dust
+# [1.0.0-beta.4](https://github.com/leon-ai/leon/compare/1.0.0-beta.2...v1.0.0-beta.4) (2021-05-01) / Getting Rid of Dust
 
 *This release includes a lot of changes that are made under the hood and are not displayed here, please **[read the blog post](https://blog.getleon.ai/getting-rid-of-dust-1-0-0-beta-4/)** to know more.*
 
