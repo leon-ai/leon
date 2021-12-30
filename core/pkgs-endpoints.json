@@ -1,0 +1,132 @@
+{
+  "endpoints": [
+    {
+      "method": "POST",
+      "route": "/p/calendar/todolist/create_list",
+      "params": [
+        "list"
+      ]
+    },
+    {
+      "method": "GET",
+      "route": "/p/calendar/todolist/view_lists",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/p/calendar/todolist/view_list",
+      "params": [
+        "list"
+      ]
+    },
+    {
+      "method": "POST",
+      "route": "/p/calendar/todolist/rename_list",
+      "params": [
+        "old_list",
+        "new_list"
+      ]
+    },
+    {
+      "method": "POST",
+      "route": "/p/calendar/todolist/delete_list",
+      "params": [
+        "list"
+      ]
+    },
+    {
+      "method": "POST",
+      "route": "/p/calendar/todolist/add_todos",
+      "params": [
+        "todos",
+        "list"
+      ]
+    },
+    {
+      "method": "POST",
+      "route": "/p/calendar/todolist/complete_todos",
+      "params": [
+        "todos",
+        "list"
+      ]
+    },
+    {
+      "method": "POST",
+      "route": "/p/calendar/todolist/uncheck_todos",
+      "params": [
+        "todos",
+        "list"
+      ]
+    },
+    {
+      "method": "GET",
+      "route": "/p/checker/isitdown/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/checker/haveibeenpwned/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/whoami/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/joke/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/greeting/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/welcome/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/meaningoflife/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/randomnumber/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/bye/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/leon/partnerassistant/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/network/speedtest/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/trend/github/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/trend/producthunt/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/p/videodownloader/youtube/run",
+      "params": []
+    }
+  ]
+}

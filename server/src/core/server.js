@@ -5,6 +5,7 @@ import { join } from 'path'
 
 import { version } from '@@/package.json'
 import { langs } from '@@/core/langs.json'
+import { endpoints } from '@@/core/pkgs-endpoints.json'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
 import Asr from '@/core/asr'
@@ -68,6 +69,20 @@ class Server {
 
     this.fastify.register(infoPlugin, { apiVersion })
     this.fastify.register(downloadsPlugin, { apiVersion })
+
+    if (process.env.PACKAGES_OVER_HTTP === 'true') {
+      endpoints.forEach((endpoint) => {
+        this.fastify.route({
+          method: endpoint.method,
+          url: endpoint.route,
+          handler: (request, reply) => {
+            // TODO: get params request.body... endpoint.params...
+            // TODO: this.brain.execute(obj)
+            reply.send({ hello: 'world' })
+          }
+        })
+      })
+    }
 
     this.httpServer = this.fastify.server
 
