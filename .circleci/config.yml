@@ -6,13 +6,13 @@ jobs:
         steps:
             - checkout
             - run: npm install
-            - run: npm i snyk
-            - run: npm i snyk-delta
 
     test:
       docker:
-        - image: cimg/node:16.10
+        - image: circleci/node:latest
       steps:
+        - run: npm i snyk
+        - run: npm i snyk-delta
         - run: snyk auth $SNYK_TOKEN_2
         - run: snyk test --json --print-deps | snyk-delta
 
