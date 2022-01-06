@@ -6,14 +6,16 @@ jobs:
         steps:
             - checkout
             - run: npm install
+            - run: npm i snyk
+            - run: npm i snyk-delta
 
     test:
       docker:
         - image: cimg/node:16.10
-        - image: snyk/snyk:node
       steps:
         - checkout
-        - run: docker run --rm -it --env SNYK_TOKEN -v $(PWD):/app snyk/snyk:node
+        - run: snyk auth SNYK_TOKEN_2
+        - run: snyk test --json --print-deps | snyk-delta
 
 workflows:
   build_and_test:
