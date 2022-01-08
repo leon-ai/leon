@@ -14,7 +14,14 @@
         "Check if nodejs.org is up",
         "Check if nodejs.org is working",
         "Check if amazon.com is up or down"
-      ]
+      ],
+      "http_api": {
+        "entities": [
+          {
+            "name": "url"
+          }
+        ]
+      }
     }
   },
 	"haveibeenpwned": {

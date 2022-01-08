@@ -59,9 +59,11 @@
       ]
     },
     {
-      "method": "GET",
+      "method": "POST",
       "route": "/p/checker/isitdown/run",
-      "params": []
+      "params": [
+        "url"
+      ]
     },
     {
       "method": "GET",

@@ -24,7 +24,7 @@ class Tts {
   /**
    * Initialize the TTS provider
    */
-  init () {
+  init (cb) {
     log.info('Initializing TTS...')
 
     if (!this.providers.includes(this.provider)) {
@@ -49,6 +49,8 @@ class Tts {
 
     log.title('TTS')
     log.success('TTS initialized')
+
+    cb(this)
 
     return true
   }

@@ -29,11 +29,12 @@ export default () => new Promise(async (resolve, reject) => {
     let isFileNeedToBeGenerated = true
     let pkgObj = { }
 
+    // Check if a new routing generation is necessary
     if (fs.existsSync(outputFilePath)) {
       const mtimeEndpoints = fs.statSync(outputFilePath).mtime.getTime()
+
       for (let i = 0; i < packages.length; i += 1) {
         const pkg = packages[i]
-
         const fileInfo = fs.statSync(`${packagesDir}/${pkg}/data/expressions/${lang}.json`)
         const mtime = fileInfo.mtime.getTime()
 
@@ -64,7 +65,7 @@ export default () => new Promise(async (resolve, reject) => {
             const action = actions[k]
             const actionObj = pkgObj[module][action]
             const { entities, http_api } = actionObj // eslint-disable-line camelcase
-            let finalMethod = entities ? 'POST' : 'GET'
+            let finalMethod = entities || http_api?.entities ? 'POST' : 'GET'
 
             if (http_api?.method) {
               finalMethod = http_api.method.toUpperCase()
@@ -85,6 +86,8 @@ export default () => new Promise(async (resolve, reject) => {
             }
             if (entities) {
               endpoint.params = entities.map((entity) => entity.name)
+            } else if (http_api?.entities) {
+              endpoint.params = http_api.entities.map((entity) => entity.name)
             }
 
             finalObj.endpoints.push(endpoint)
