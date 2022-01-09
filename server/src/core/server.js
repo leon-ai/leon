@@ -25,6 +25,108 @@ let nlu = { }
 let httpServer = { }
 
 /**
+ * Generate packages routes
+ */
+const generatePackagesRoutes = () => {
+  // Dynamically expose Leon modules over HTTP
+  endpoints.forEach((endpoint) => {
+    fastify.route({
+      method: endpoint.method,
+      url: endpoint.route,
+      async handler (request, reply) {
+        const timeout = endpoint.timeout || 60000
+        const [, , pkg, module, action] = endpoint.route.split('/')
+        const handleRoute = async () => {
+          const { params } = endpoint
+          const entities = []
+
+          params.forEach((param) => {
+            const value = request.body[param]
+            const trimEntity = {
+              entity: param,
+              sourceText: value,
+              utteranceText: value,
+              resolution: { value }
+            }
+            const builtInEntity = {
+              entity: param,
+              resolution: { ...value }
+            }
+            let entity = endpoint?.entitiesType === 'trim' ? trimEntity : builtInEntity
+
+            if (Array.isArray(value)) {
+              value.forEach((v) => {
+                entity = {
+                  entity: param,
+                  resolution: { ...v }
+                }
+
+                entities.push(entity)
+              })
+            } else {
+              entities.push(entity)
+            }
+          })
+
+          const obj = {
+            query: '',
+            entities,
+            classification: {
+              package: pkg,
+              module,
+              action,
+              confidence: 1
+            }
+          }
+          const responseData = {
+            package: pkg,
+            module,
+            action,
+            execution_time: 0, // ms
+            speeches: []
+          }
+
+          try {
+            const { speeches, executionTime } = await brain.execute(obj, { mute: true })
+
+            reply.send({
+              ...responseData,
+              entities,
+              speeches,
+              execution_time: executionTime,
+              success: true
+            })
+          } catch (e) /* istanbul ignore next */ {
+            log[e.type](e.obj.message)
+            reply.statusCode = 500
+            reply.send({
+              ...responseData,
+              speeches: e.speeches,
+              execution_time: e.executionTime,
+              error: e.obj.message,
+              success: false
+            })
+          }
+        }
+
+        handleRoute()
+        setTimeout(() => {
+          reply.statusCode = 408
+          reply.send({
+            package: pkg,
+            module,
+            action,
+            message: 'The action has timed out',
+            timeout,
+            success: false
+          })
+        }, timeout)
+      }
+    })
+  })
+}
+
+/**
  * Bootstrap socket
  */
 const handleOnConnection = (socket) => {
@@ -128,86 +230,7 @@ const bootstrap = async () => {
   fastify.register(downloadsPlugin, { apiVersion })
 
   if (process.env.PACKAGES_OVER_HTTP === 'true') {
-    // Dynamically expose Leon modules over HTTP
-    endpoints.forEach((endpoint) => {
-      fastify.route({
-        method: endpoint.method,
-        url: endpoint.route,
-        async handler (request, reply) {
-          const [, , pkg, module, action] = endpoint.route.split('/')
-          const { params } = endpoint
-          const entities = []
-
-          params.forEach((param) => {
-            const value = request.body[param]
-            const trimEntity = {
-              entity: param,
-              sourceText: value,
-              utteranceText: value,
-              resolution: { value }
-            }
-            const builtInEntity = {
-              entity: param,
-              resolution: { ...value }
-            }
-            let entity = endpoint?.entitiesType === 'trim' ? trimEntity : builtInEntity
-
-            if (Array.isArray(value)) {
-              value.forEach((v) => {
-                entity = {
-                  entity: param,
-                  resolution: { ...v }
-                }
-
-                entities.push(entity)
-              })
-            } else {
-              entities.push(entity)
-            }
-          })
-
-          const obj = {
-            query: '',
-            entities,
-            classification: {
-              package: pkg,
-              module,
-              action,
-              confidence: 1
-            }
-          }
-          const responseData = {
-            package: pkg,
-            module,
-            action,
-            execution_time: 0, // ms
-            speeches: []
-          }
-
-          try {
-            const { speeches, executionTime } = await brain.execute(obj, { mute: true })
-
-            reply.send({
-              ...responseData,
-              entities,
-              speeches,
-              execution_time: executionTime,
-              success: true
-            })
-          } catch (e) /* istanbul ignore next */ {
-            log[e.type](e.obj.message)
-            reply.statusCode = 500
-            reply.send({
-              ...responseData,
-              speeches: e.speeches,
-              execution_time: e.executionTime,
-              error: e.obj.message,
-              success: false
-            })
-          }
-        }
-      })
-    })
+    generatePackagesRoutes()
   }
 
   httpServer = fastify.server
