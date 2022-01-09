@@ -18,7 +18,10 @@
       "http_api": {
         "entities": [
           {
-            "name": "url"
+            "entity": "url",
+            "resolution": [
+              "value"
+            ]
           }
         ]
       }

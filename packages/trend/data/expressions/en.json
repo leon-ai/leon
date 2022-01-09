@@ -8,7 +8,23 @@
         "What are the trends on GH?",
         "Give me the GH trends",
         "What's trending on GH?"
-      ]
+      ],
+      "http_api": {
+        "entities": [
+          {
+            "entity": "number",
+            "resolution": [
+              "value"
+            ]
+          },
+          {
+            "entity": "daterange",
+            "resolution": [
+              "timex"
+            ]
+          }
+        ]
+      }
     }
   },
   "producthunt": {

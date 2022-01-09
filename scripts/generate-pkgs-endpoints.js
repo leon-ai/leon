@@ -43,6 +43,7 @@ export default () => new Promise(async (resolve, reject) => {
         }
 
         if ((i + 1) === packages.length) {
+          log.success(`${outputFile} is already up-to-date`)
           isFileNeedToBeGenerated = false
         }
       }
@@ -67,30 +68,37 @@ export default () => new Promise(async (resolve, reject) => {
             const { entities, http_api } = actionObj // eslint-disable-line camelcase
             let finalMethod = entities || http_api?.entities ? 'POST' : 'GET'
 
-            if (http_api?.method) {
-              finalMethod = http_api.method.toUpperCase()
-            }
+            // Only generate this route if it is not disabled from the package config
+            if (!http_api?.disabled || (http_api?.disabled && http_api?.disabled === false)) {
+              if (http_api?.method) {
+                finalMethod = http_api.method.toUpperCase()
+              }
 
-            if (!supportedMethods.includes(finalMethod)) {
-              reject(`The "${finalMethod}" HTTP method of the ${pkg}/${module}/${action} action is not supported`)
-            }
+              if (!supportedMethods.includes(finalMethod)) {
+                reject(`The "${finalMethod}" HTTP method of the ${pkg}/${module}/${action} action is not supported`)
+              }
 
-            const endpoint = {
-              method: finalMethod.toUpperCase(),
-              route: `/p/${pkg}/${module}/${action}`,
-              params: []
-            }
+              const endpoint = {
+                method: finalMethod.toUpperCase(),
+                route: `/p/${pkg}/${module}/${action}`,
+                params: []
+              }
 
-            if (http_api?.timeout) {
-              endpoint.timeout = http_api.timeout
-            }
-            if (entities) {
-              endpoint.params = entities.map((entity) => entity.name)
-            } else if (http_api?.entities) {
-              endpoint.params = http_api.entities.map((entity) => entity.name)
-            }
+              if (http_api?.timeout) {
+                endpoint.timeout = http_api.timeout
+              }
+              if (entities) {
+                // Handle explicit trim entities
+                endpoint.entitiesType = 'trim'
+                endpoint.params = entities.map((entity) => entity.name)
+              } else if (http_api?.entities) {
+                // Handle built-in entities
+                endpoint.entitiesType = 'builtIn'
+                endpoint.params = http_api.entities.map((entity) => entity.entity)
+              }
 
-            finalObj.endpoints.push(endpoint)
+              finalObj.endpoints.push(endpoint)
+            }
           }
         }
       }

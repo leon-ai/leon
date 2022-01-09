@@ -7,13 +7,13 @@ import string from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
 
 class Brain {
-  constructor (socket, lang) {
-    this.socket = socket
+  constructor (lang) {
     this.lang = lang
     this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/en.json`, 'utf8'))
     this.process = { }
     this.interOutput = { }
     this.finalOutput = { }
+    this._socket = { }
     this._tts = { }
 
     // Read into the language file
@@ -24,6 +24,10 @@ class Brain {
 
     log.title('Brain')
     log.success('New instance')
+  }
+
+  set socket (newSocket) {
+    this._socket = newSocket
   }
 
   set tts (newTts) {
@@ -56,7 +60,7 @@ class Brain {
         this._tts.add(speech, end)
       }
 
-      this.socket.emit('answer', rawSpeech)
+      this._socket.emit('answer', rawSpeech)
     }
   }
 
@@ -108,7 +112,7 @@ class Brain {
 
           speeches.push(speech)
           this.talk(speech, true)
-          this.socket.emit('is-typing', false)
+          this._socket.emit('is-typing', false)
         }
 
         const executionTimeEnd = Date.now()
@@ -190,7 +194,7 @@ class Brain {
             { '%module_name%': moduleName, '%package_name%': packageName })}!`
           if (!opts.mute) {
             this.talk(speech)
-            this.socket.emit('is-typing', false)
+            this._socket.emit('is-typing', false)
           }
           speeches.push(speech)
 
@@ -248,7 +252,7 @@ class Brain {
           Brain.deleteQueryObjFile(queryObjectPath)
 
           if (!opts.mute) {
-            this.socket.emit('is-typing', false)
+            this._socket.emit('is-typing', false)
           }
 
           const executionTimeEnd = Date.now()

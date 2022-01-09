@@ -21,6 +21,7 @@ import date from '@/helpers/date'
 const server = { }
 const fastify = Fastify()
 let brain = { }
+let nlu = { }
 let httpServer = { }
 
 /**
@@ -44,14 +45,13 @@ const handleOnConnection = (socket) => {
         socket.broadcast.emit('enable-record')
       })
     } else {
-      let sttState = 'disabled'
-      let ttsState = 'disabled'
-
-      brain = new Brain(socket, langs[process.env.LEON_LANG].short)
-      const nlu = new Nlu(brain)
       const asr = new Asr()
       let stt = { }
       let tts = { }
+      let sttState = 'disabled'
+      let ttsState = 'disabled'
+
+      brain.socket = socket
 
       /* istanbul ignore if */
       if (process.env.LEON_STT === 'true') {
@@ -73,13 +73,6 @@ const handleOnConnection = (socket) => {
       log.title('Initialization')
       log.success(`STT ${sttState}`)
       log.success(`TTS ${ttsState}`)
-
-      // Train modules expressions
-      try {
-        await nlu.loadModel(join(__dirname, '../data/leon-model.nlp'))
-      } catch (e) {
-        log[e.type](e.obj.message)
-      }
 
       // Listen for new query
       socket.on('query', async (data) => {
@@ -147,23 +140,23 @@ const bootstrap = async () => {
 
           params.forEach((param) => {
             const value = request.body[param]
-
-            // TODO: be able to handle "url": [] from entity params
-
-            let entity = {
+            const trimEntity = {
               entity: param,
               sourceText: value,
               utteranceText: value,
               resolution: { value }
             }
+            const builtInEntity = {
+              entity: param,
+              resolution: { ...value }
+            }
+            let entity = endpoint?.entitiesType === 'trim' ? trimEntity : builtInEntity
 
             if (Array.isArray(value)) {
               value.forEach((v) => {
                 entity = {
                   entity: param,
-                  sourceText: v,
-                  utteranceText: v,
-                  resolution: { v }
+                  resolution: { ...v }
                 }
 
                 entities.push(entity)
@@ -192,7 +185,6 @@ const bootstrap = async () => {
           }
 
           try {
-            // Inject action entities with the others if there is
             const { speeches, executionTime } = await brain.execute(obj, { mute: true })
 
             reply.send({
@@ -248,6 +240,16 @@ server.init = async () => {
 
   const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
+
+  brain = new Brain(langs[process.env.LEON_LANG].short)
+  nlu = new Nlu(brain)
+
+  // Train modules expressions
+  try {
+    await nlu.loadModel(join(__dirname, '../data/leon-model.nlp'))
+  } catch (e) {
+    log[e.type](e.obj.message)
+  }
 
   await bootstrap()
 }

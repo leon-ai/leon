@@ -134,7 +134,6 @@ class Nlu {
     }
 
     try {
-      console.log('obj', obj)
       // Inject action entities with the others if there is
       await this.brain.execute(obj)
     } catch (e) /* istanbul ignore next */ {

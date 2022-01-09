@@ -5,7 +5,8 @@
       "route": "/p/calendar/todolist/create_list",
       "params": [
         "list"
-      ]
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "GET",
@@ -17,7 +18,8 @@
       "route": "/p/calendar/todolist/view_list",
       "params": [
         "list"
-      ]
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "POST",
@@ -25,14 +27,16 @@
       "params": [
         "old_list",
         "new_list"
-      ]
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "POST",
       "route": "/p/calendar/todolist/delete_list",
       "params": [
         "list"
-      ]
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "POST",
@@ -40,7 +44,8 @@
       "params": [
         "todos",
         "list"
-      ]
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "POST",
@@ -48,7 +53,8 @@
       "params": [
         "todos",
         "list"
-      ]
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "POST",
@@ -56,14 +62,16 @@
       "params": [
         "todos",
         "list"
-      ]
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "POST",
       "route": "/p/checker/isitdown/run",
       "params": [
         "url"
-      ]
+      ],
+      "entitiesType": "builtIn"
     },
     {
       "method": "GET",
@@ -116,9 +124,13 @@
       "params": []
     },
     {
-      "method": "GET",
+      "method": "POST",
       "route": "/p/trend/github/run",
-      "params": []
+      "params": [
+        "number",
+        "daterange"
+      ],
+      "entitiesType": "builtIn"
     },
     {
       "method": "GET",
