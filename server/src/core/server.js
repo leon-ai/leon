@@ -82,18 +82,14 @@ const generatePackagesRoutes = () => {
             package: pkg,
             module,
             action,
-            execution_time: 0, // ms
             speeches: []
           }
 
           try {
-            const { speeches, executionTime } = await brain.execute(obj, { mute: true })
+            const data = await brain.execute(obj, { mute: true })
 
             reply.send({
-              ...responseData,
-              entities,
-              speeches,
-              execution_time: executionTime,
+              ...data,
               success: true
             })
           } catch (e) /* istanbul ignore next */ {
@@ -102,7 +98,7 @@ const generatePackagesRoutes = () => {
             reply.send({
               ...responseData,
               speeches: e.speeches,
-              execution_time: e.executionTime,
+              executionTime: e.executionTime,
               error: e.obj.message,
               success: false
             })
@@ -222,12 +218,31 @@ const bootstrap = async () => {
     root: join(__dirname, '..', '..', '..', 'app', 'dist'),
     prefix: '/'
   })
-  fastify.get('/', (_request, reply) => {
+  fastify.get('/', (request, reply) => {
     reply.sendFile('index.html')
   })
 
   fastify.register(infoPlugin, { apiVersion })
   fastify.register(downloadsPlugin, { apiVersion })
+
+  fastify.post('/core/query', async (request, reply) => {
+    const { query } = request.body
+
+    try {
+      const data = await nlu.process(query, { mute: true })
+
+      reply.send({
+        ...data,
+        success: true
+      })
+    } catch (e) {
+      reply.statusCode = 500
+      reply.send({
+        error: e.message,
+        success: false
+      })
+    }
+  })
 
   if (process.env.PACKAGES_OVER_HTTP === 'true') {
     generatePackagesRoutes()

@@ -26,8 +26,16 @@ class Brain {
     log.success('New instance')
   }
 
+  get socket () {
+    return this._socket
+  }
+
   set socket (newSocket) {
     this._socket = newSocket
+  }
+
+  get tts () {
+    return this._tts
   }
 
   set tts (newTts) {
@@ -259,8 +267,11 @@ class Brain {
           const executionTime = executionTimeEnd - executionTimeStart
 
           resolve({
+            queryId,
+            lang: langs[process.env.LEON_LANG].short,
+            ...obj,
             speeches,
-            executionTime
+            executionTime // In ms, module execution time only
           })
         })
 
