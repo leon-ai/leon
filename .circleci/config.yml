@@ -12,6 +12,7 @@ jobs:
         - image: circleci/node:latest
       steps:
         - run: git clone https://github.com/Omrisnyk/leon.git
+        - run: npm install
         - run: sudo npm i snyk -g
         - run: sudo npm i snyk-delta -g
         - run: snyk auth $SNYK_TOKEN_2
