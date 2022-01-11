@@ -14,7 +14,6 @@ jobs:
         - run: sudo npm i snyk -g
         - run: sudo npm i snyk-delta -g
         - run: snyk auth $SNYK_TOKEN_2
-        - run: snyk test --json --print-deps | snyk-delta
 
 workflows:
   build_and_test:
