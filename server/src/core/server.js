@@ -244,7 +244,7 @@ const bootstrap = async () => {
     }
   })
 
-  if (process.env.PACKAGES_OVER_HTTP === 'true') {
+  if (process.env.LEON_PACKAGES_OVER_HTTP === 'true') {
     generatePackagesRoutes()
   }
 

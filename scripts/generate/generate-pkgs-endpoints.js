@@ -17,7 +17,7 @@ export default () => new Promise(async (resolve, reject) => {
   const supportedMethods = ['DELETE', 'GET', 'HEAD', 'PATCH', 'POST', 'PUT', 'OPTIONS']
   const packagesDir = 'packages'
   const outputFile = '/core/pkgs-endpoints.json'
-  const outputFilePath = path.join(__dirname, `..${outputFile}`)
+  const outputFilePath = path.join(__dirname, `../..${outputFile}`)
   const lang = langs[process.env.LEON_LANG].short.toLowerCase().substr(0, 2)
 
   try {

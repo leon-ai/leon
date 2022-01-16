@@ -5,6 +5,7 @@ import log from '@/helpers/log'
 import os from '@/helpers/os'
 
 import train from '../train'
+import generateHttpApiKey from '../generate/generate-http-api-key'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupPackagesConfig from './setup-packages-config'
@@ -31,6 +32,9 @@ import setupPythonPackages from './setup-python-packages'
       setupPackagesConfig()
     ])
     await setupPythonPackages()
+    loader.stop()
+    await generateHttpApiKey()
+    loader.start()
     await train()
     if (info.type === 'windows') {
       log.info('Windows detected, reinjecting DeepSpeech into package.json...')
