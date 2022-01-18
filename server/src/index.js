@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 
-import server from '@/core/server'
+import server from '@/core/http-server/server'
 
 (async () => {
   dotenv.config()

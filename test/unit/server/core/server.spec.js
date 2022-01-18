@@ -1,7 +1,7 @@
 import net from 'net'
 import { EventEmitter } from 'events'
 
-import Server from '@/core/server'
+import Server from '@/core/http-server/server'
 
 describe('server', () => {
   describe('constructor()', () => {

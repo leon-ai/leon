@@ -1,4 +1,4 @@
-const corsMidd = async (_request, reply) => {
+const corsMidd = async (request, reply) => {
   // Allow only a specific client to request to the API (depending of the env)
   if (process.env.LEON_NODE_ENV !== 'production') {
     reply.header(

@@ -11,10 +11,11 @@ import Brain from '@/core/brain'
 import Asr from '@/core/asr'
 import Stt from '@/stt/stt'
 import Tts from '@/tts/tts'
-import corsMidd from '@/plugins/cors'
-import otherMidd from '@/plugins/other'
-import infoPlugin from '@/api/info/index'
-import downloadsPlugin from '@/api/downloads/index'
+import corsMidd from '@/core/http-server/plugins/cors'
+import otherMidd from '@/core/http-server/plugins/other'
+import keyMidd from '@/core/http-server/plugins/key'
+import infoPlugin from '@/core/http-server/api/info'
+import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
 
@@ -27,10 +28,10 @@ let httpServer = { }
 /**
  * Generate packages routes
  */
-const generatePackagesRoutes = () => {
+const generatePackagesRoutes = (instance) => {
   // Dynamically expose Leon modules over HTTP
   endpoints.forEach((endpoint) => {
-    fastify.route({
+    instance.route({
       method: endpoint.method,
       url: endpoint.route,
       async handler (request, reply) {
@@ -99,7 +100,7 @@ const generatePackagesRoutes = () => {
               ...responseData,
               speeches: e.speeches,
               executionTime: e.executionTime,
-              error: e.obj.message,
+              message: e.obj.message,
               success: false
             })
           }
@@ -215,7 +216,7 @@ const bootstrap = async () => {
 
   // Render the web app
   fastify.register(fastifyStatic, {
-    root: join(__dirname, '..', '..', '..', 'app', 'dist'),
+    root: join(__dirname, '../../../../app/dist'),
     prefix: '/'
   })
   fastify.get('/', (request, reply) => {
@@ -225,28 +226,34 @@ const bootstrap = async () => {
   fastify.register(infoPlugin, { apiVersion })
   fastify.register(downloadsPlugin, { apiVersion })
 
-  fastify.post('/core/query', async (request, reply) => {
-    const { query } = request.body
+  fastify.register((instance, opts, next) => {
+    instance.addHook('preHandler', keyMidd)
 
-    try {
-      const data = await nlu.process(query, { mute: true })
+    instance.post('/core/query', async (request, reply) => {
+      const { query } = request.body
 
-      reply.send({
-        ...data,
-        success: true
-      })
-    } catch (e) {
-      reply.statusCode = 500
-      reply.send({
-        error: e.message,
-        success: false
-      })
+      try {
+        const data = await nlu.process(query, { mute: true })
+
+        reply.send({
+          ...data,
+          success: true
+        })
+      } catch (e) {
+        reply.statusCode = 500
+        reply.send({
+          message: e.message,
+          success: false
+        })
+      }
+    })
+
+    if (process.env.LEON_PACKAGES_OVER_HTTP === 'true') {
+      generatePackagesRoutes(instance)
     }
-  })
 
-  if (process.env.LEON_PACKAGES_OVER_HTTP === 'true') {
-    generatePackagesRoutes()
-  }
+    next()
+  })
 
   httpServer = fastify.server
 
@@ -262,7 +269,7 @@ const bootstrap = async () => {
  */
 server.init = async () => {
   fastify.addHook('onRequest', corsMidd)
-  fastify.addHook('onRequest', otherMidd)
+  fastify.addHook('preValidation', otherMidd)
 
   log.title('Initialization')
   log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
@@ -284,7 +291,7 @@ server.init = async () => {
 
   // Train modules expressions
   try {
-    await nlu.loadModel(join(__dirname, '../data/leon-model.nlp'))
+    await nlu.loadModel(join(__dirname, '../../data/leon-model.nlp'))
   } catch (e) {
     log[e.type](e.obj.message)
   }
