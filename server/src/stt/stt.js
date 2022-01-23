@@ -10,7 +10,8 @@ class Stt {
     this.providers = [
       'deepspeech',
       'google-cloud-stt',
-      'watson-stt'
+      'watson-stt',
+      'coqui-stt'
     ]
     this.parser = { }
 
