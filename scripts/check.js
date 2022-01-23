@@ -17,7 +17,7 @@ export default () => new Promise(async (resolve, reject) => {
     const npmMinRequiredVersion = '5'
     const pythonMinRequiredVersion = '3'
     const flitePath = 'bin/flite/flite'
-    const deepSpeechPath = 'bin/deepspeech/lm.binary'
+    const coquiPath = 'bin/coqui/model.tflite'
     const amazonPath = 'server/src/config/voice/amazon.json'
     const googleCloudPath = 'server/src/config/voice/google-cloud.json'
     const watsonSttPath = 'server/src/config/voice/watson-stt.json'
@@ -173,11 +173,11 @@ export default () => new Promise(async (resolve, reject) => {
     }
 
     log.info('Offline STT')
-    if (!fs.existsSync(deepSpeechPath)) {
+    if (!fs.existsSync(coquiPath)) {
       report.can_offline_stt.v = false
-      log.warning(`Cannot find ${deepSpeechPath}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
+      log.warning(`Cannot find ${coquiPath}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
     } else {
-      log.success(`Found DeepSpeech language model at ${deepSpeechPath}`)
+      log.success(`Found DeepSpeech language model at ${coquiPath}`)
     }
 
     // Report
