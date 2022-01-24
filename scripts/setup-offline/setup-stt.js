@@ -12,7 +12,8 @@ export default () => new Promise(async (resolve, reject) => {
 
   const destCoquiFolder = 'bin/coqui'
   const tmpDir = 'scripts/tmp'
-  const coquiVersion = '1.0.0'
+  // check this repo for updates: https://github.com/coqui-ai/STT-models/tree/main/english/coqui
+  const coquiModelVersion = '1.0.0'
   let downloader = 'wget'
   if (os.get().type === 'macos') {
     downloader = 'curl -L -O'
@@ -21,8 +22,8 @@ export default () => new Promise(async (resolve, reject) => {
   if (!fs.existsSync(`${destCoquiFolder}/model.tflite`)) {
     try {
       log.info('Downloading pre-trained model...')
-      await command(`cd ${tmpDir} && ${downloader} https://github.com/coqui-ai/STT-models/releases/download/english/coqui/v${coquiVersion}-huge-vocab/model.tflite`, { shell: true })
-      await command(`cd ${tmpDir} && ${downloader} https://github.com/coqui-ai/STT-models/releases/download/english/coqui/v${coquiVersion}-huge-vocab/huge-vocabulary.scorer`, { shell: true })
+      await command(`cd ${tmpDir} && ${downloader} https://github.com/coqui-ai/STT-models/releases/download/english/coqui/v${coquiModelVersion}-huge-vocab/model.tflite`, { shell: true })
+      await command(`cd ${tmpDir} && ${downloader} https://github.com/coqui-ai/STT-models/releases/download/english/coqui/v${coquiModelVersion}-huge-vocab/huge-vocabulary.scorer`, { shell: true })
       log.success('Pre-trained model download done')
       log.info('Moving...')
       await command(`mv -f ${tmpDir}/model.tflite ${destCoquiFolder}/model.tflite`, { shell: true })

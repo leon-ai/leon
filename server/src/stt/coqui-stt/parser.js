@@ -1,30 +1,12 @@
 import wav from 'node-wav'
 import fs from 'fs'
+import { Model } from 'stt'
 
 import log from '@/helpers/log'
 
 log.title('Coqui-ai Parser')
 
 const parser = { }
-let STT = { }
-
-/* istanbul ignore next */
-try {
-  STT = require('stt-gpu') // eslint-disable-line global-require, import/no-unresolved
-
-  log.success('GPU version found')
-} catch (eGpu) {
-  log.info('GPU version not found, trying to get the CPU version...')
-
-  try {
-    STT = require('stt') // eslint-disable-line global-require, import/no-unresolved
-
-    log.success('CPU version found')
-  } catch (eCpu) {
-    log.error(`No Coqui-ai library found:\nGPU: ${eGpu}\nCPU: ${eCpu}`)
-  }
-}
-
 let model = { }
 let desiredSampleRate = 16000
 
@@ -57,7 +39,7 @@ parser.init = (args) => {
   /* istanbul ignore if */
   if (process.env.LEON_NODE_ENV !== 'testing') {
     try {
-      model = new STT.Model(args.model)
+      model = new Model(args.model)
     } catch (error) { 
       throw Error(`model.stt: ${error}`)
     } 
