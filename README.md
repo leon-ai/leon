@@ -87,7 +87,7 @@ To install these prerequisites, you can follow the [How To section](https://docs
 
 ```sh
 # Install the Leon CLI
-npm install -g http://cli-latest.getleon.ai
+npm install --global @leon-ai/cli
 
 # Install Leon (stable branch)
 leon create birth
