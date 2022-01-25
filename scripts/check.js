@@ -103,7 +103,7 @@ export default () => new Promise(async (resolve, reject) => {
     log.info('Amazon Polly TTS')
     try {
       const json = JSON.parse(fs.readFileSync(amazonPath))
-      if (json.accessKeyId === '' || json.secretAccessKey === '') {
+      if (json.credentials.accessKeyId === '' || json.credentials.secretAccessKey === '') {
         report.can_amazon_polly_tts.v = false
         log.warning('Amazon Polly TTS is not yet configured\n')
       } else {
