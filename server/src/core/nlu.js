@@ -28,7 +28,7 @@ class Nlu {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         log.title('NLU')
-        reject({ type: 'warning', obj: new Error('The NLP model does not exist, please run: npm run train expressions') })
+        reject({ type: 'warning', obj: new Error('The NLP model does not exist, please run: npm run train') })
       } else {
         log.title('NLU')
 
@@ -65,7 +65,7 @@ class Nlu {
       this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
       this.brain.socket.emit('is-typing', false)
 
-      log.error('The NLP model is missing, please rebuild the project or if you are in dev run: npm run train expressions')
+      log.error('The NLP model is missing, please rebuild the project or if you are in dev run: npm run train')
 
       return false
     }

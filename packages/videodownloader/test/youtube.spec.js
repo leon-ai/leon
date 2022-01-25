@@ -1,4 +1,4 @@
-describe('videodownloader:youtube', async () => {
+describe('videodownloader:youtube', () => {
   test('requests YouTube', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Download new videos from YouTube')

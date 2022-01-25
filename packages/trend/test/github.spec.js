@@ -1,4 +1,4 @@
-describe('trend:github', async () => {
+describe('trend:github', () => {
   test('forces limit', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('Give me the 30 latest GitHub trends')

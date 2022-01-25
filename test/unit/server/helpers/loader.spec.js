@@ -4,9 +4,11 @@ jest.useFakeTimers()
 
 describe('loader helper', () => {
   describe('start()', () => {
+    jest.useFakeTimers()
+    jest.spyOn(global, 'setInterval')
+
     test('starts spinner', () => {
       expect(loader.start()).toBeObject()
-      jest.runTimersToTime(60000)
       expect(setInterval).toHaveBeenCalledTimes(1)
     })
   })

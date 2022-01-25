@@ -145,7 +145,7 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 ## 🔔 Stay Tuned
 
 - [Twitter](https://twitter.com/louistiti_fr)
-- [Newsletter](https://getleon.ai)
+- [Newsletter](http://newsletter.getleon.ai)
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
 - [YouTube](https://www.youtube.com/channel/UCW6mk6j6nQUzFYY97r47emQ)
@@ -173,6 +173,13 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
           GrAMATO
         </a><br>
         <sub><sup>30 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
+        <a href="https://github.com/phareal">
+          <img src="https://github.com/phareal.png?size=128" />
+          phareal
+        </a><br>
+        <sub><sup>17 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
         <a href="https://github.com/marvinpoo">

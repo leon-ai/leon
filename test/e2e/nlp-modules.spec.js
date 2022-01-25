@@ -36,7 +36,7 @@ describe('NLU modules', () => {
         process.env.LEON_LANG = langKeys[i]
 
         // Generate new NLP model for the tested language
-        await command(`npm run train expressions:${lang.short}`, { shell: true })
+        await command(`npm run train ${lang.short}`, { shell: true })
         // Load the new NLP model
         await nlu.loadModel(global.paths.nlp_model)
       })

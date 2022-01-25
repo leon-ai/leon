@@ -1,4 +1,4 @@
-describe('trend:producthunt', async () => {
+describe('trend:producthunt', () => {
   test('requests Product Hunt', async () => {
     global.nlu.brain.execute = jest.fn()
     await global.nlu.process('What\'s trending on Product Hunt?')

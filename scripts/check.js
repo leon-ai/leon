@@ -93,7 +93,7 @@ export default () => new Promise(async (resolve, reject) => {
     if (!fs.existsSync(nlpModelPath) || !Object.keys(fs.readFileSync(nlpModelPath)).length) {
       report.can_text.v = false
       Object.keys(report).forEach((item) => { if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1) report[item].v = false })
-      log.error('NLP model not found or broken. Try to generate a new one: "npm run train expressions"\n')
+      log.error('NLP model not found or broken. Try to generate a new one: "npm run train"\n')
     } else {
       log.success('Found and valid\n')
     }
@@ -103,7 +103,7 @@ export default () => new Promise(async (resolve, reject) => {
     log.info('Amazon Polly TTS')
     try {
       const json = JSON.parse(fs.readFileSync(amazonPath))
-      if (json.accessKeyId === '' || json.secretAccessKey === '') {
+      if (json.credentials.accessKeyId === '' || json.credentials.secretAccessKey === '') {
         report.can_amazon_polly_tts.v = false
         log.warning('Amazon Polly TTS is not yet configured\n')
       } else {
