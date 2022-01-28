@@ -3,7 +3,7 @@ import { version } from '@@/package.json'
 import log from '@/helpers/log'
 
 const getInfo = async (fastify, options) => {
-  fastify.get(`/${options.apiVersion}/info`, (request, reply) => {
+  fastify.get(`/api/${options.apiVersion}/info`, (request, reply) => {
     log.title('GET /info')
 
     const message = 'Information pulled.'

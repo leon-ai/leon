@@ -80,7 +80,7 @@ export default () => new Promise(async (resolve, reject) => {
 
               const endpoint = {
                 method: finalMethod.toUpperCase(),
-                route: `/p/${pkg}/${module}/${action}`,
+                route: `/api/p/${pkg}/${module}/${action}`,
                 params: []
               }
 

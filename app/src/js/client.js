@@ -96,7 +96,7 @@ export default class Client {
     })
 
     this.socket.on('download', (data) => {
-      window.location = `${this.serverUrl}/v1/downloads?package=${data.package}&module=${data.module}`
+      window.location = `${this.serverUrl}/api/v1/downloads?package=${data.package}&module=${data.module}`
     })
 
     if (this.history !== null) {

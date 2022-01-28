@@ -2,7 +2,7 @@
   "endpoints": [
     {
       "method": "POST",
-      "route": "/p/calendar/todolist/create_list",
+      "route": "/api/p/calendar/todolist/create_list",
       "params": [
         "list"
       ],
@@ -10,12 +10,12 @@
     },
     {
       "method": "GET",
-      "route": "/p/calendar/todolist/view_lists",
+      "route": "/api/p/calendar/todolist/view_lists",
       "params": []
     },
     {
       "method": "POST",
-      "route": "/p/calendar/todolist/view_list",
+      "route": "/api/p/calendar/todolist/view_list",
       "params": [
         "list"
       ],
@@ -23,7 +23,7 @@
     },
     {
       "method": "POST",
-      "route": "/p/calendar/todolist/rename_list",
+      "route": "/api/p/calendar/todolist/rename_list",
       "params": [
         "old_list",
         "new_list"
@@ -32,7 +32,7 @@
     },
     {
       "method": "POST",
-      "route": "/p/calendar/todolist/delete_list",
+      "route": "/api/p/calendar/todolist/delete_list",
       "params": [
         "list"
       ],
@@ -40,16 +40,7 @@
     },
     {
       "method": "POST",
-      "route": "/p/calendar/todolist/add_todos",
-      "params": [
-        "todos",
-        "list"
-      ],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "POST",
-      "route": "/p/calendar/todolist/complete_todos",
+      "route": "/api/p/calendar/todolist/add_todos",
       "params": [
         "todos",
         "list"
@@ -58,7 +49,7 @@
     },
     {
       "method": "POST",
-      "route": "/p/calendar/todolist/uncheck_todos",
+      "route": "/api/p/calendar/todolist/complete_todos",
       "params": [
         "todos",
         "list"
@@ -67,7 +58,16 @@
     },
     {
       "method": "POST",
-      "route": "/p/checker/isitdown/run",
+      "route": "/api/p/calendar/todolist/uncheck_todos",
+      "params": [
+        "todos",
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/checker/isitdown/run",
       "params": [
         "url"
       ],
@@ -75,57 +75,57 @@
     },
     {
       "method": "GET",
-      "route": "/p/checker/haveibeenpwned/run",
+      "route": "/api/p/checker/haveibeenpwned/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/whoami/run",
+      "route": "/api/p/leon/whoami/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/joke/run",
+      "route": "/api/p/leon/joke/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/greeting/run",
+      "route": "/api/p/leon/greeting/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/welcome/run",
+      "route": "/api/p/leon/welcome/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/meaningoflife/run",
+      "route": "/api/p/leon/meaningoflife/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/randomnumber/run",
+      "route": "/api/p/leon/randomnumber/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/bye/run",
+      "route": "/api/p/leon/bye/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/leon/partnerassistant/run",
+      "route": "/api/p/leon/partnerassistant/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/network/speedtest/run",
+      "route": "/api/p/network/speedtest/run",
       "params": []
     },
     {
       "method": "POST",
-      "route": "/p/trend/github/run",
+      "route": "/api/p/trend/github/run",
       "params": [
         "number",
         "daterange"
@@ -134,12 +134,12 @@
     },
     {
       "method": "GET",
-      "route": "/p/trend/producthunt/run",
+      "route": "/api/p/trend/producthunt/run",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/p/videodownloader/youtube/run",
+      "route": "/api/p/videodownloader/youtube/run",
       "params": []
     }
   ]

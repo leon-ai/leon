@@ -36,7 +36,7 @@ const generatePackagesRoutes = (instance) => {
       url: endpoint.route,
       async handler (request, reply) {
         const timeout = endpoint.timeout || 60000
-        const [, , pkg, module, action] = endpoint.route.split('/')
+        const [, , , pkg, module, action] = endpoint.route.split('/')
         const handleRoute = async () => {
           const { params } = endpoint
           const entities = []
