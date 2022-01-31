@@ -14,7 +14,7 @@ Please check if there is no similar issue before creating this one.
 - Leon version:
 - OS (or browser) version:
 - Node.js version:
-- Complete "npm run check" output:
+- Complete "leon check" (or "npm run check") output:
 - (if using Docker) Complete "npm run docker:check" output:
 - (optional) Leon package version:
 
