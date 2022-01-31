@@ -4,7 +4,7 @@ import { Model } from 'stt'
 
 import log from '@/helpers/log'
 
-log.title('Coqui-ai Parser')
+log.title('Coqui STT Parser')
 
 const parser = { }
 let model = { }
@@ -40,16 +40,16 @@ parser.init = (args) => {
   if (process.env.LEON_NODE_ENV !== 'testing') {
     try {
       model = new Model(args.model)
-    } catch (error) { 
+    } catch (error) {
       throw Error(`model.stt: ${error}`)
-    } 
+    }
     desiredSampleRate = model.sampleRate()
 
     try {
       model.enableExternalScorer(args.scorer)
-    } catch (error) { 
+    } catch (error) {
       throw Error(`model.enableExternalScorer: ${error}`)
-    } 
+    }
   }
 
   log.success('Model loaded')
