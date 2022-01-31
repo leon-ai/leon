@@ -3,7 +3,7 @@ import Stt from '@/stt/stt'
 describe('STT', () => {
   describe('constructor()', () => {
     test('creates a new instance of Stt', () => {
-      const stt = new Stt({ }, 'deepspeech')
+      const stt = new Stt({ }, 'coqui-stt')
 
       expect(stt).toBeInstanceOf(Stt)
     })
@@ -17,7 +17,7 @@ describe('STT', () => {
     })
 
     test('initializes the STT parser', () => {
-      const stt = new Stt({ }, 'deepspeech')
+      const stt = new Stt({ }, 'coqui-stt')
 
       expect(stt.init()).toBeTruthy()
     })

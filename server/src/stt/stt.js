@@ -8,7 +8,6 @@ class Stt {
     this.socket = socket
     this.provider = provider
     this.providers = [
-      'deepspeech',
       'google-cloud-stt',
       'watson-stt',
       'coqui-stt'
