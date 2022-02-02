@@ -226,34 +226,34 @@ const bootstrap = async () => {
   fastify.register(infoPlugin, { apiVersion })
   fastify.register(downloadsPlugin, { apiVersion })
 
-  fastify.register((instance, opts, next) => {
-    instance.addHook('preHandler', keyMidd)
+  if (process.env.LEON_OVER_HTTP === 'true') {
+    fastify.register((instance, opts, next) => {
+      instance.addHook('preHandler', keyMidd)
 
-    instance.post('/core/query', async (request, reply) => {
-      const { query } = request.body
+      instance.post('/api/core/query', async (request, reply) => {
+        const { query } = request.body
 
-      try {
-        const data = await nlu.process(query, { mute: true })
+        try {
+          const data = await nlu.process(query, { mute: true })
 
-        reply.send({
-          ...data,
-          success: true
-        })
-      } catch (e) {
-        reply.statusCode = 500
-        reply.send({
-          message: e.message,
-          success: false
-        })
-      }
-    })
+          reply.send({
+            ...data,
+            success: true
+          })
+        } catch (e) {
+          reply.statusCode = 500
+          reply.send({
+            message: e.message,
+            success: false
+          })
+        }
+      })
 
-    if (process.env.LEON_PACKAGES_OVER_HTTP === 'true') {
       generatePackagesRoutes(instance)
-    }
 
-    next()
-  })
+      next()
+    })
+  }
 
   httpServer = fastify.server
 
