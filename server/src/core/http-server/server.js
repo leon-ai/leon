@@ -230,7 +230,7 @@ const bootstrap = async () => {
     fastify.register((instance, opts, next) => {
       instance.addHook('preHandler', keyMidd)
 
-      instance.post('/api/core/query', async (request, reply) => {
+      instance.post('/api/query', async (request, reply) => {
         const { query } = request.body
 
         try {
