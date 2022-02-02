@@ -7,7 +7,7 @@
 
 const request = require('superagent')
 const record = require('node-record-lpcm16')
-const { Detector, Models } = require('snowboy')
+const { Detector, Models } = require('@bugsounet/snowboy')
 const { io } = require('socket.io-client')
 
 process.env.LEON_HOST = process.env.LEON_HOST || 'http://localhost'
@@ -39,7 +39,7 @@ request.get(`${url}/api/v1/info`)
       })
 
       const detector = new Detector({
-        resource: `${__dirname}/node_modules/snowboy/resources/common.res`,
+        resource: `${__dirname}/node_modules/@bugsounet/snowboy/resources/common.res`,
         models,
         audioGain: 2.0,
         applyFrontend: true

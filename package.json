@@ -68,7 +68,6 @@
     "archiver": "^5.3.0",
     "async": "^3.2.0",
     "cross-env": "^7.0.3",
-    "deepspeech": "^0.9.3",
     "dotenv": "^10.0.0",
     "execa": "^5.0.0",
     "fastify": "^3.25.2",
@@ -80,6 +79,7 @@
     "node-wav": "0.0.2",
     "socket.io": "^4.4.0",
     "socket.io-client": "^4.4.0",
+    "stt": "^1.1.0",
     "superagent": "^6.1.0"
   },
   "devDependencies": {

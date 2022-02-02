@@ -9,7 +9,7 @@ bridges/python/.venv/*
 downloads/*
 logs/*
 server/src/config/**/*.json
-bin/deepspeech/*
+bin/coqui/*
 bin/flite/*
 
 *.pyc

@@ -1,30 +1,12 @@
 import wav from 'node-wav'
 import fs from 'fs'
+import { Model } from 'stt'
 
 import log from '@/helpers/log'
 
-log.title('DeepSpeech Parser')
+log.title('Coqui STT Parser')
 
 const parser = { }
-let DeepSpeech = { }
-
-/* istanbul ignore next */
-try {
-  DeepSpeech = require('deepspeech-gpu') // eslint-disable-line global-require, import/no-unresolved
-
-  log.success('GPU version found')
-} catch (eGpu) {
-  log.info('GPU version not found, trying to get the CPU version...')
-
-  try {
-    DeepSpeech = require('deepspeech') // eslint-disable-line global-require, import/no-unresolved
-
-    log.success('CPU version found')
-  } catch (eCpu) {
-    log.error(`No DeepSpeech library found:\nGPU: ${eGpu}\nCPU: ${eCpu}`)
-  }
-}
-
 let model = { }
 let desiredSampleRate = 16000
 
@@ -32,19 +14,14 @@ let desiredSampleRate = 16000
  * Model and language model paths
  */
 parser.conf = {
-  model: 'bin/deepspeech/deepspeech.pbmm',
-  scorer: 'bin/deepspeech/deepspeech.scorer'
+  model: 'bin/coqui/model.tflite',
+  scorer: 'bin/coqui/huge-vocabulary.scorer'
 }
 
 /**
  * Load models
  */
 parser.init = (args) => {
-  /* istanbul ignore if */
-  if (process.env.LEON_LANG !== 'en-US') {
-    log.warning('The DeepSpeech parser only accepts the "en-US" language for the moment')
-  }
-
   log.info(`Loading model from file ${args.model}...`)
 
   if (!fs.existsSync(args.model)) {
@@ -61,10 +38,18 @@ parser.init = (args) => {
 
   /* istanbul ignore if */
   if (process.env.LEON_NODE_ENV !== 'testing') {
-    model = new DeepSpeech.Model(args.model)
+    try {
+      model = new Model(args.model)
+    } catch (error) {
+      throw Error(`model.stt: ${error}`)
+    }
     desiredSampleRate = model.sampleRate()
 
-    model.enableExternalScorer(args.scorer)
+    try {
+      model.enableExternalScorer(args.scorer)
+    } catch (error) {
+      throw Error(`model.enableExternalScorer: ${error}`)
+    }
   }
 
   log.success('Model loaded')

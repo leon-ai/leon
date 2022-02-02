@@ -36,6 +36,8 @@ export default () => new Promise(async (resolve, reject) => {
       log.info('Installing hotword dependencies...')
       await command('cd hotword && npm install', { shell: true })
       log.success('Offline hotword detection installed')
+      await command('cd hotword/node_modules/@bugsounet/snowboy && CXXFLAGS="--std=c++17" ../../../node_modules/@mapbox/node-pre-gyp/bin/node-pre-gyp clean configure build', { shell: true })
+      log.success('Snowboy bindings compiled')
 
       resolve()
     } catch (e) {
