@@ -162,7 +162,7 @@ class Nlu {
         return resolve({
           processingTime, // In ms, total time
           ...data,
-          nluProcessingTime: processingTime - data.executionTime // In ms, NLU processing time only
+          nluProcessingTime: processingTime - data?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
         log[e.type](e.obj.message)

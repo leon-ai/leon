@@ -20,15 +20,16 @@ import log from '@/helpers/log'
 import date from '@/helpers/date'
 
 const server = { }
-const fastify = Fastify()
 let brain = { }
 let nlu = { }
-let httpServer = { }
+
+server.fastify = Fastify()
+server.httpServer = { }
 
 /**
  * Generate packages routes
  */
-const generatePackagesRoutes = (instance) => {
+server.generatePackagesRoutes = (instance) => {
   // Dynamically expose Leon modules over HTTP
   endpoints.forEach((endpoint) => {
     instance.route({
@@ -126,7 +127,7 @@ const generatePackagesRoutes = (instance) => {
 /**
  * Bootstrap socket
  */
-const handleOnConnection = (socket) => {
+server.handleOnConnection = (socket) => {
   log.title('Client')
   log.success('Connected')
 
@@ -197,37 +198,38 @@ const handleOnConnection = (socket) => {
 /**
  * Launch server
  */
-const listen = async (port) => {
+server.listen = async (port) => {
   const io = process.env.LEON_NODE_ENV === 'development'
-    ? socketio(httpServer, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
-    : socketio(httpServer)
+    ? socketio(server.httpServer, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
+    : socketio(server.httpServer)
 
-  io.on('connection', handleOnConnection)
+  io.on('connection', server.handleOnConnection)
 
-  await fastify.listen(port, '0.0.0.0')
+  await server.fastify.listen(port, '0.0.0.0')
+  log.title('Initialization')
   log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
 }
 
 /**
  * Bootstrap API
  */
-const bootstrap = async () => {
+server.bootstrap = async () => {
   const apiVersion = 'v1'
 
   // Render the web app
-  fastify.register(fastifyStatic, {
+  server.fastify.register(fastifyStatic, {
     root: join(__dirname, '../../../../app/dist'),
     prefix: '/'
   })
-  fastify.get('/', (request, reply) => {
+  server.fastify.get('/', (request, reply) => {
     reply.sendFile('index.html')
   })
 
-  fastify.register(infoPlugin, { apiVersion })
-  fastify.register(downloadsPlugin, { apiVersion })
+  server.fastify.register(infoPlugin, { apiVersion })
+  server.fastify.register(downloadsPlugin, { apiVersion })
 
   if (process.env.LEON_OVER_HTTP === 'true') {
-    fastify.register((instance, opts, next) => {
+    server.fastify.register((instance, opts, next) => {
       instance.addHook('preHandler', keyMidd)
 
       instance.post('/api/query', async (request, reply) => {
@@ -249,16 +251,16 @@ const bootstrap = async () => {
         }
       })
 
-      generatePackagesRoutes(instance)
+      server.generatePackagesRoutes(instance)
 
       next()
     })
   }
 
-  httpServer = fastify.server
+  server.httpServer = server.fastify.server
 
   try {
-    await listen(process.env.LEON_PORT)
+    await server.listen(process.env.LEON_PORT)
   } catch (e) {
     log.error(e.message)
   }
@@ -268,8 +270,8 @@ const bootstrap = async () => {
  * Server entry point
  */
 server.init = async () => {
-  fastify.addHook('onRequest', corsMidd)
-  fastify.addHook('preValidation', otherMidd)
+  server.fastify.addHook('onRequest', corsMidd)
+  server.fastify.addHook('preValidation', otherMidd)
 
   log.title('Initialization')
   log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
@@ -296,7 +298,7 @@ server.init = async () => {
     log[e.type](e.obj.message)
   }
 
-  await bootstrap()
+  await server.bootstrap()
 }
 
 export default server

@@ -26,7 +26,7 @@ describe('NLU modules', () => {
     describe(`${langKeys[i]} language`, () => {
       const lang = langs[langKeys[i]]
       const nlu = new Nlu()
-      const brain = new Brain({ emit: jest.fn() }, lang.short)
+      const brain = new Brain(lang.short)
       let expressionsObj = { }
 
       nlu.brain = { wernicke: jest.fn(), talk: jest.fn(), socket: { emit: jest.fn() } }
