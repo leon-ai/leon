@@ -5,7 +5,7 @@ import log from '@/helpers/log'
 import string from '@/helpers/string'
 
 const getDownloads = async (fastify, options) => {
-  fastify.get(`/${options.apiVersion}/downloads`, (request, reply) => {
+  fastify.get(`/api/${options.apiVersion}/downloads`, (request, reply) => {
     log.title('GET /downloads')
 
     const clean = (dir, files) => {

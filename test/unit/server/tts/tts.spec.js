@@ -19,7 +19,7 @@ describe('TTS', () => {
     test('initializes the TTS synthesizer', () => {
       const tts = new Tts({ }, 'flite')
 
-      expect(tts.init()).toBeTruthy()
+      expect(tts.init(() => null)).toBeTruthy()
     })
   })
 

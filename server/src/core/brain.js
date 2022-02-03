@@ -5,16 +5,16 @@ import { langs } from '@@/core/langs.json'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
-import Tts from '@/tts/tts'
 
 class Brain {
-  constructor (socket, lang) {
-    this.socket = socket
+  constructor (lang) {
     this.lang = lang
     this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/en.json`, 'utf8'))
     this.process = { }
     this.interOutput = { }
     this.finalOutput = { }
+    this._socket = { }
+    this._tts = { }
 
     // Read into the language file
     const file = `${__dirname}/../data/${this.lang}.json`
@@ -24,12 +24,22 @@ class Brain {
 
     log.title('Brain')
     log.success('New instance')
+  }
 
-    if (process.env.LEON_TTS === 'true') {
-      // Init TTS
-      this.tts = new Tts(this.socket, process.env.LEON_TTS_PROVIDER)
-      this.tts.init()
-    }
+  get socket () {
+    return this._socket
+  }
+
+  set socket (newSocket) {
+    this._socket = newSocket
+  }
+
+  get tts () {
+    return this._tts
+  }
+
+  set tts (newTts) {
+    this._tts = newTts
   }
 
   /**
@@ -55,10 +65,10 @@ class Brain {
         // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
         const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, ' ')
 
-        this.tts.add(speech, end)
+        this._tts.add(speech, end)
       }
 
-      this.socket.emit('answer', rawSpeech)
+      this._socket.emit('answer', rawSpeech)
     }
   }
 
@@ -92,17 +102,34 @@ class Brain {
   /**
    * Execute Python modules
    */
-  execute (obj) {
+  execute (obj, opts) {
+    const executionTimeStart = Date.now()
+    opts = opts || {
+      mute: false // Close Leon mouth e.g. over HTTP
+    }
+
     return new Promise((resolve, reject) => {
       const queryId = `${Date.now()}-${string.random(4)}`
       const queryObjectPath = `${__dirname}/../tmp/${queryId}.json`
+      const speeches = []
 
       // Ask to repeat if Leon is not sure about the request
       if (obj.classification.confidence < langs[process.env.LEON_LANG].min_confidence) {
-        this.talk(`${this.wernicke('random_not_sure')}.`, true)
-        this.socket.emit('is-typing', false)
+        if (!opts.mute) {
+          const speech = `${this.wernicke('random_not_sure')}.`
 
-        resolve()
+          speeches.push(speech)
+          this.talk(speech, true)
+          this._socket.emit('is-typing', false)
+        }
+
+        const executionTimeEnd = Date.now()
+        const executionTime = executionTimeEnd - executionTimeStart
+
+        resolve({
+          speeches,
+          executionTime
+        })
       } else {
         // Ensure the process is empty (to be able to execute other processes outside of Brain)
         if (Object.keys(this.process).length === 0) {
@@ -146,25 +173,51 @@ class Brain {
               log.info(data.toString())
 
               this.interOutput = obj.output
-              this.talk(obj.output.speech.toString())
+
+              const speech = obj.output.speech.toString()
+              if (!opts.mute) {
+                this.talk(speech)
+              }
+              speeches.push(speech)
             } else {
               output += data
             }
           } else {
+            const executionTimeEnd = Date.now()
+            const executionTime = executionTimeEnd - executionTimeStart
+
             /* istanbul ignore next */
-            reject({ type: 'warning', obj: new Error(`The ${moduleName} module of the ${packageName} package is not well configured. Check the configuration file.`) })
+            reject({
+              type: 'warning',
+              obj: new Error(`The ${moduleName} module of the ${packageName} package is not well configured. Check the configuration file.`),
+              speeches,
+              executionTime
+            })
           }
         })
 
         // Handle error
         this.process.stderr.on('data', (data) => {
-          this.talk(`${this.wernicke('random_package_module_errors', '',
-            { '%module_name%': moduleName, '%package_name%': packageName })}!`)
+          const speech = `${this.wernicke('random_package_module_errors', '',
+            { '%module_name%': moduleName, '%package_name%': packageName })}!`
+          if (!opts.mute) {
+            this.talk(speech)
+            this._socket.emit('is-typing', false)
+          }
+          speeches.push(speech)
+
           Brain.deleteQueryObjFile(queryObjectPath)
-          this.socket.emit('is-typing', false)
 
           log.title(packageName)
-          reject({ type: 'error', obj: new Error(data) })
+
+          const executionTimeEnd = Date.now()
+          const executionTime = executionTimeEnd - executionTimeStart
+          reject({
+            type: 'error',
+            obj: new Error(data),
+            speeches,
+            executionTime
+          })
         })
 
         // Catch the end of the module execution
@@ -177,7 +230,12 @@ class Brain {
           // Check if there is an output (no module error)
           if (this.finalOutput !== '') {
             this.finalOutput = JSON.parse(this.finalOutput).output
-            this.talk(this.finalOutput.speech.toString(), true)
+
+            const speech = this.finalOutput.speech.toString()
+            if (!opts.mute) {
+              this.talk(speech, true)
+            }
+            speeches.push(speech)
 
             /* istanbul ignore next */
             // Synchronize the downloaded content if enabled
@@ -191,14 +249,30 @@ class Brain {
 
               // When the synchronization is finished
               sync.synchronize((speech) => {
-                this.talk(speech)
+                if (!opts.mute) {
+                  this.talk(speech)
+                }
+                speeches.push(speech)
               })
             }
           }
 
           Brain.deleteQueryObjFile(queryObjectPath)
-          this.socket.emit('is-typing', false)
-          resolve()
+
+          if (!opts.mute) {
+            this._socket.emit('is-typing', false)
+          }
+
+          const executionTimeEnd = Date.now()
+          const executionTime = executionTimeEnd - executionTimeStart
+
+          resolve({
+            queryId,
+            lang: langs[process.env.LEON_LANG].short,
+            ...obj,
+            speeches,
+            executionTime // In ms, module execution time only
+          })
         })
 
         // Reset the child process

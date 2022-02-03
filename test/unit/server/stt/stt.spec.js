@@ -19,7 +19,7 @@ describe('STT', () => {
     test('initializes the STT parser', () => {
       const stt = new Stt({ }, 'coqui-stt')
 
-      expect(stt.init()).toBeTruthy()
+      expect(stt.init(() => null)).toBeTruthy()
     })
   })
 
