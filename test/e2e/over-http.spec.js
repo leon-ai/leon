@@ -7,7 +7,8 @@ const queryUrl = `${urlPrefix}/query`
 const actionModuleUrl = `${urlPrefix}/p/leon/randomnumber/run`;
 
 /**
- * Test a simple module action over HTTP
+ * Test the query endpoint endpoint over HTTP
+ * and a simple module action over HTTP
  */
 
 (async () => {
