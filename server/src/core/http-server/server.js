@@ -29,6 +29,7 @@ server.httpServer = { }
 /**
  * Generate packages routes
  */
+/* istanbul ignore next */
 server.generatePackagesRoutes = (instance) => {
   // Dynamically expose Leon modules over HTTP
   endpoints.forEach((endpoint) => {

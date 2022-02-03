@@ -3,6 +3,7 @@
   "verbose": true,
   "notify": false,
   "collectCoverage": true,
+  "resetMocks": true,
   "rootDir": "../..",
   "testMatch": [
     "<rootDir>/test/unit/**/*.spec.js"

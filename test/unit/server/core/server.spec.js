@@ -4,7 +4,7 @@ import server from '@/core/http-server/server'
 
 describe('server', () => {
   describe('init()', () => {
-    test('uses default language if there is an unsupported one', async () => {
+    test('uses default language if the given one is unsupported', async () => {
       server.bootstrap = jest.fn() // Need to mock bootstrap method to not continue the init
       process.env.LEON_LANG = 'fake-lang'
 
@@ -53,10 +53,6 @@ describe('server', () => {
       console.log = jest.fn()
 
       ee.emit('init', 'jest')
-      console.debug('test', console.log.mock.calls)
-      /* expect(server.brain).not.toBeEmpty()
-      expect(server.nlu).not.toBeEmpty()
-      expect(server.asr).not.toBeEmpty() */
 
       /* setTimeout(() => {
         ee.emit('query', { client: 'jest', value: 'Hello' })

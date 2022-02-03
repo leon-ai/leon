@@ -198,7 +198,6 @@ class Brain {
 
         // Handle error
         this.process.stderr.on('data', (data) => {
-          console.debug('DATA', data.toString())
           const speech = `${this.wernicke('random_package_module_errors', '',
             { '%module_name%': moduleName, '%package_name%': packageName })}!`
           if (!opts.mute) {

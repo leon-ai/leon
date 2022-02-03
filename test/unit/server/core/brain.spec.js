@@ -81,7 +81,7 @@ describe('brain', () => {
 
       await brain.execute(obj)
 
-      // expect(brain.process).toEqual({ })
+      expect(brain.process).toEqual({ })
     })
 
     test('executes module', async () => {
