@@ -51,7 +51,7 @@ export default () => new Promise(async (resolve, reject) => {
   try {
     if (process.env.LEON_HTTP_API_KEY === '') {
       await generateHttpApiKey()
-    } else {
+    } else if (!process.env.IS_DOCKER) {
       const answer = await prompt({
         type: 'confirm',
         name: 'generate.httpApiKey',
