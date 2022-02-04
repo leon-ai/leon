@@ -189,6 +189,13 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
         <sub><sup>10 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
+        <a href="https://github.com/KeithIMyers">
+          <img src="https://github.com/KeithIMyers.png?size=128" />
+          KeithIMyers
+        </a><br>
+        <sub><sup>10 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
       	<a href="http://sponsor.getleon.ai/">
           You?
         </a>
