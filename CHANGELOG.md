@@ -1,3 +1,28 @@
+# [1.0.0-beta.6](https://github.com/leon-ai/leon/compare/v1.0.0-beta.5...1.0.0-beta.6) (2022-02-07) / Leon Over HTTP + Making Friends with Coqui STT
+### Features
+ - simple coqui-ai stt integration [86a4816b](https://github.com/leon-ai/leon/commit/86a4816b777fee8ec9c89648c5866a75de56c017) 
+ - HTTP API key generator [d10a7fa7](https://github.com/leon-ai/leon/commit/d10a7fa7880a0bf2fb1cae7904d1ef4257f05257) 
+ - avoid unnecessary routes generation  
+  
+ - **server:**
+   - make Coqui STT the default STT solution [70399187](https://github.com/leon-ai/leon/commit/7039918760c0ef7ba93bf45820e3cae774c42d8c) 
+     - add HTTP API key middleware [cdf41499](https://github.com/leon-ai/leon/commit/cdf4149939cbe3f3ae81039957dba3377a78f5a6) 
+     - expose queries over HTTP [b6428d03](https://github.com/leon-ai/leon/commit/b6428d038452619f1682c863892cd8f376efca84) 
+     - add timeout action over HTTP [115f9c16](https://github.com/leon-ai/leon/commit/115f9c164559d761625cc6f362749f7d2417d300) 
+     - handle built-in and trim entities over HTTP + add "disabled" HTTP API action option [82fb967a](https://github.com/leon-ai/leon/commit/82fb967af8f49421e3b2474184da3d34fb17294f) 
+     - execute modules over HTTP [2e5b2c59](https://github.com/leon-ai/leon/commit/2e5b2c59da0bafe3acd966773c6fac3611b3bd0c) 
+     - generate Fastify routes on the file to expose packages over HTTP [5b41713a](https://github.com/leon-ai/leon/commit/5b41713a68ee628e695212dbebc88f6b9a94b461) 
+  ### Bug Fixes
+ - do not ask to regenerate the HTTP API key if this one isn't available yet [d265377a](https://github.com/leon-ai/leon/commit/d265377a43fd4506cf12db46f261b891f2054ed2) 
+ - Python deps tree check [c6c01291](https://github.com/leon-ai/leon/commit/c6c012915824227efdf0c50df6a8f1cd8d70ed42) 
+ - hotword offline (#342) [f563d01d](https://github.com/leon-ai/leon/commit/f563d01d077499c836e94c86f85cedc2ad4d56e6) 
+ - addressed comments by @JRMeyer [b1c6f5c8](https://github.com/leon-ai/leon/commit/b1c6f5c883103d57d4fe566af640fc3ac5ce713d) 
+ - allow to detect STT offline capabilities [04d62288](https://github.com/leon-ai/leon/commit/04d622884165e0bde65785569a659f59cf9e8582) 
+ - Amazon Polly is always configured on check script due to new structure [e6246d1f](https://github.com/leon-ai/leon/commit/e6246d1f8f9ec15a4ebe9600764afffbaa7e62d9) 
+  
+### Performance Improvements
+ - check if Python deps tree has been updated before going through deps install [2d0b0f13](https://github.com/leon-ai/leon/commit/2d0b0f1365d8e4d6eadf9f7cc0a16b7b4b4306f4)
+
 # [1.0.0-beta.5](https://github.com/leon-ai/leon/compare/v1.0.0-beta.4...v1.0.0-beta.5) (2021-12-28) / Refocus
 
 *This release marks a major turn in the future versions of the Leon core. Please [read this blog post](https://blog.getleon.ai/i-ran-away-from-open-source/) to know more.*
