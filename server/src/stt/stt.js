@@ -8,9 +8,9 @@ class Stt {
     this.socket = socket
     this.provider = provider
     this.providers = [
-      'deepspeech',
       'google-cloud-stt',
-      'watson-stt'
+      'watson-stt',
+      'coqui-stt'
     ]
     this.parser = { }
 
@@ -21,7 +21,7 @@ class Stt {
   /**
    * Initialize the STT provider
    */
-  init () {
+  init (cb) {
     log.info('Initializing STT...')
 
     if (!this.providers.includes(this.provider)) {
@@ -47,6 +47,8 @@ class Stt {
 
     log.title('STT')
     log.success('STT initialized')
+
+    cb(this)
 
     return true
   }

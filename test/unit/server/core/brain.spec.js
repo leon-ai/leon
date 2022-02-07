@@ -5,7 +5,7 @@ import Brain from '@/core/brain'
 describe('brain', () => {
   describe('constructor()', () => {
     test('creates a new instance of Brain', () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
 
       expect(brain).toBeInstanceOf(Brain)
     })
@@ -13,15 +13,18 @@ describe('brain', () => {
 
   describe('talk()', () => {
     test('does not emit answer to the client when the speech is empty', () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
+
+      brain.socket.emit = jest.fn()
 
       brain.talk('')
       expect(brain.socket.emit).toHaveBeenCalledTimes(0)
     })
 
     test('emits string answer to the client', () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
       brain.tts = { add: jest.fn() }
+      brain.socket.emit = jest.fn()
 
       brain.talk('Hello world')
       expect(brain.tts.add).toHaveBeenCalledTimes(1)
@@ -31,13 +34,13 @@ describe('brain', () => {
 
   describe('wernicke()', () => {
     test('picks specific string according to object properties', () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
 
       expect(brain.wernicke('errors', 'not_found', { })).toBe('Sorry, it seems I cannot find that')
     })
 
     test('picks random string from an array', () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
 
       expect(global.enExpressions.answers.random_errors).toIncludeAnyMembers([brain.wernicke('random_errors', '', { })])
     })
@@ -45,7 +48,8 @@ describe('brain', () => {
 
   describe('execute()', () => {
     test('asks to repeat', async () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
+      brain.socket.emit = jest.fn()
       brain.talk = jest.fn()
 
       await brain.execute({ classification: { confidence: 0.1 } })
@@ -54,8 +58,9 @@ describe('brain', () => {
         .toIncludeAnyMembers([string[0].substr(0, (string[0].length - 1))])
     })
 
-    test('creates child process', async () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+    test('spawns child process', async () => {
+      const brain = new Brain('en')
+      brain.socket.emit = jest.fn()
       brain.tts = {
         synthesizer: jest.fn(),
         default: jest.fn(),
@@ -80,7 +85,8 @@ describe('brain', () => {
     })
 
     test('executes module', async () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
+      brain.socket.emit = jest.fn()
       brain.talk = jest.fn()
 
       const obj = {
@@ -107,7 +113,8 @@ describe('brain', () => {
     })
 
     test('rejects promise because of spawn failure', async () => {
-      const brain = new Brain({ emit: jest.fn() }, 'en')
+      const brain = new Brain('en')
+      brain.socket.emit = jest.fn()
       brain.talk = jest.fn()
 
       const obj = {

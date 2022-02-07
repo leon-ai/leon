@@ -55,93 +55,125 @@ class Nlu {
    * pick-up the right classification
    * and extract entities
    */
-  async process (query) {
-    log.title('NLU')
-    log.info('Processing...')
+  process (query, opts) {
+    const processingTimeStart = Date.now()
 
-    query = string.ucfirst(query)
+    return new Promise(async (resolve, reject) => {
+      log.title('NLU')
+      log.info('Processing...')
 
-    if (Object.keys(this.nlp).length === 0) {
-      this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
-      this.brain.socket.emit('is-typing', false)
-
-      log.error('The NLP model is missing, please rebuild the project or if you are in dev run: npm run train')
-
-      return false
-    }
-
-    const lang = langs[process.env.LEON_LANG].short
-    const result = await this.nlp.process(lang, query)
-
-    const {
-      domain, intent, score
-    } = result
-    const [moduleName, actionName] = intent.split('.')
-    let obj = {
-      query,
-      entities: [],
-      classification: {
-        package: domain,
-        module: moduleName,
-        action: actionName,
-        confidence: score
+      opts = opts || {
+        mute: false // Close Leon mouth e.g. over HTTP
       }
-    }
+      query = string.ucfirst(query)
 
-    /* istanbul ignore next */
-    if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
-      this.request
-        .post('https://logger.getleon.ai/v1/expressions')
-        .set('X-Origin', 'leon-core')
-        .send({
-          version,
-          query,
+      if (Object.keys(this.nlp).length === 0) {
+        if (!opts.mute) {
+          this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
+          this.brain.socket.emit('is-typing', false)
+        }
+
+        const msg = 'The NLP model is missing, please rebuild the project or if you are in dev run: npm run train'
+        log.error(msg)
+        return reject(msg)
+      }
+
+      const lang = langs[process.env.LEON_LANG].short
+      const result = await this.nlp.process(lang, query)
+
+      const {
+        domain, intent, score
+      } = result
+      const [moduleName, actionName] = intent.split('.')
+      let obj = {
+        query,
+        entities: [],
+        classification: {
+          package: domain,
+          module: moduleName,
+          action: actionName,
+          confidence: score
+        }
+      }
+
+      /* istanbul ignore next */
+      if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
+        this.request
+          .post('https://logger.getleon.ai/v1/expressions')
+          .set('X-Origin', 'leon-core')
+          .send({
+            version,
+            query,
+            lang,
+            classification: obj.classification
+          })
+          .then(() => { /* */ })
+          .catch(() => { /* */ })
+      }
+
+      if (intent === 'None') {
+        const fallback = Nlu.fallback(obj, langs[process.env.LEON_LANG].fallbacks)
+
+        if (fallback === false) {
+          if (!opts.mute) {
+            this.brain.talk(`${this.brain.wernicke('random_unknown_queries')}.`, true)
+            this.brain.socket.emit('is-typing', false)
+          }
+
+          log.title('NLU')
+          const msg = 'Query not found'
+          log.warning(msg)
+
+          const processingTimeEnd = Date.now()
+          const processingTime = processingTimeEnd - processingTimeStart
+
+          return resolve({
+            processingTime,
+            message: msg
+          })
+        }
+
+        obj = fallback
+      }
+
+      log.title('NLU')
+      log.success('Query found')
+
+      try {
+        obj.entities = await this.ner.extractEntities(
           lang,
-          classification: obj.classification
-        })
-        .then(() => { /* */ })
-        .catch(() => { /* */ })
-    }
+          join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
+          obj
+        )
+      } catch (e) /* istanbul ignore next */ {
+        log[e.type](e.obj.message)
 
-    if (intent === 'None') {
-      const fallback = Nlu.fallback(obj, langs[process.env.LEON_LANG].fallbacks)
-
-      if (fallback === false) {
-        this.brain.talk(`${this.brain.wernicke('random_unknown_queries')}.`, true)
-        this.brain.socket.emit('is-typing', false)
-
-        log.title('NLU')
-        log.warning('Query not found')
-
-        return false
+        if (!opts.mute) {
+          this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
+        }
       }
 
-      obj = fallback
-    }
+      try {
+        // Inject action entities with the others if there is
+        const data = await this.brain.execute(obj, { mute: opts.mute })
+        const processingTimeEnd = Date.now()
+        const processingTime = processingTimeEnd - processingTimeStart
 
-    log.title('NLU')
-    log.success('Query found')
+        return resolve({
+          processingTime, // In ms, total time
+          ...data,
+          nluProcessingTime: processingTime - data?.executionTime // In ms, NLU processing time only
+        })
+      } catch (e) /* istanbul ignore next */ {
+        log[e.type](e.obj.message)
 
-    try {
-      obj.entities = await this.ner.extractEntities(
-        lang,
-        join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
-        obj
-      )
-    } catch (e) /* istanbul ignore next */ {
-      log[e.type](e.obj.message)
-      this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
-    }
+        if (!opts.mute) {
+          this.brain.socket.emit('is-typing', false)
+        }
 
-    try {
-      // Inject action entities with the others if there is
-      await this.brain.execute(obj)
-    } catch (e) /* istanbul ignore next */ {
-      log[e.type](e.obj.message)
-      this.brain.socket.emit('is-typing', false)
-    }
-
-    return true
+        return reject(e.obj)
+      }
+    })
   }
 
   /**

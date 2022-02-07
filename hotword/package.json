@@ -14,7 +14,8 @@
   "license": "MIT",
   "dependencies": {
     "node-record-lpcm16": "^0.3.0",
-    "snowboy": "git+https://github.com/leon-ai/snowboy.git",
+    "@mapbox/node-pre-gyp": "^1.0.8",
+    "@bugsounet/snowboy": "^2.2.3",
     "socket.io-client": "^4.0.0",
     "superagent": "^3.5.2"
   }

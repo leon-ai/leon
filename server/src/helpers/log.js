@@ -31,7 +31,7 @@ log.error = (value) => {
 
 log.warning = (value) => console.warn('\x1b[33m❗ %s\x1b[0m', value)
 
-log.title = (value) => console.log('\n---\n\n\x1b[7m.: %s :.\x1b[0m\n', value.toUpperCase())
+log.title = (value) => console.log('\n\n\x1b[7m.: %s :.\x1b[0m', value.toUpperCase())
 
 log.default = (value) => console.log('%s', value)
 

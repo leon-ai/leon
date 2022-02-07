@@ -1,5 +1,6 @@
 import { command } from 'execa'
 import fs from 'fs'
+import path from 'path'
 
 import log from '@/helpers/log'
 
@@ -31,12 +32,33 @@ export default () => new Promise(async (resolve, reject) => {
     }
 
     try {
-      // Installing Python packages
-      log.info('Installing Python packages from bridges/python/Pipfile...')
+      const dotVenvPath = path.join(process.cwd(), 'bridges/python/.venv')
+      const pipfileLockPath = path.join(process.cwd(), 'bridges/python/Pipfile.lock')
+      const pipfileLockMtime = fs.statSync(pipfileLockPath).mtime
+      const isDotVenvExist = fs.existsSync(dotVenvPath)
+      const installPythonPackages = async () => {
+        // Installing Python packages
+        log.info('Installing Python packages from bridges/python/Pipfile...')
 
-      await command('pipenv --three', { shell: true })
-      await command('pipenv install', { shell: true })
-      log.success('Python packages installed')
+        await command('pipenv --three', { shell: true })
+        await command('pipenv install', { shell: true })
+        log.success('Python packages installed')
+      }
+
+      if (!isDotVenvExist) {
+        await installPythonPackages()
+      } else {
+        const dotProjectPath = path.join(process.cwd(), 'bridges/python/.venv/.project')
+        const dotProjectMtime = fs.statSync(dotProjectPath).mtime
+
+        // Check if Python deps tree has been modified since the initial setup
+        if (pipfileLockMtime > dotProjectMtime) {
+          await installPythonPackages()
+        } else {
+          log.success('Python packages are up-to-date')
+        }
+      }
+
       resolve()
     } catch (e) {
       log.error(`Failed to install the Python packages: ${e}`)

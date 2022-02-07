@@ -6,7 +6,7 @@ import path from 'path'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 
-import { langs } from '../core/langs.json'
+import { langs } from '@@/core/langs.json'
 
 dotenv.config()
 

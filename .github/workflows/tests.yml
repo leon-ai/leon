@@ -33,6 +33,9 @@ jobs:
       - name: Run JSON tests
         run: npm run test:json
 
+      - name: Run over HTTP tests
+        run: npm run test:over-http
+
       - name: Run E2E tests
         run: npm run test:e2e
 

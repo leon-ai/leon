@@ -7,7 +7,8 @@ import Brain from '@/core/brain'
 jest.setTimeout(60000)
 
 global.nlu = new Nlu()
-global.brain = new Brain({ emit: jest.fn() }, 'en')
+global.brain = new Brain('en')
+global.brain.socket.emit = jest.fn()
 global.nlu.brain = { wernicke: jest.fn(), talk: jest.fn(), socket: { emit: jest.fn() } }
 global.brain.tts = {
   synthesizer: jest.fn(),

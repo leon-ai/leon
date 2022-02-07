@@ -3,6 +3,7 @@
   "verbose": true,
   "notify": false,
   "collectCoverage": true,
+  "resetMocks": true,
   "rootDir": "../..",
   "testMatch": [
     "<rootDir>/test/unit/**/*.spec.js"
@@ -18,8 +19,8 @@
   "coverageDirectory": "<rootDir>/test/coverage",
   "collectCoverageFrom": [
     "<rootDir>/server/src/**/*.js",
-    "!<rootDir>/server/src/api/**/*.js",
-    "!<rootDir>/server/src/plugins/**/*.js",
+    "!<rootDir>/server/src/core/http-server/api/**/*.js",
+    "!<rootDir>/server/src/core/http-server/plugins/**/*.js",
     "!<rootDir>/server/src/stt/google-cloud-stt/**/*.js",
     "!<rootDir>/server/src/stt/watson-stt/**/*.js",
     "!<rootDir>/server/src/tts/amazon-polly/**/*.js",

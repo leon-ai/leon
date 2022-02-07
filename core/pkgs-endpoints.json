@@ -1,0 +1,146 @@
+{
+  "endpoints": [
+    {
+      "method": "POST",
+      "route": "/api/p/calendar/todolist/create_list",
+      "params": [
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/calendar/todolist/view_lists",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/calendar/todolist/view_list",
+      "params": [
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/calendar/todolist/rename_list",
+      "params": [
+        "old_list",
+        "new_list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/calendar/todolist/delete_list",
+      "params": [
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/calendar/todolist/add_todos",
+      "params": [
+        "todos",
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/calendar/todolist/complete_todos",
+      "params": [
+        "todos",
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/calendar/todolist/uncheck_todos",
+      "params": [
+        "todos",
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/checker/isitdown/run",
+      "params": [
+        "url"
+      ],
+      "entitiesType": "builtIn"
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/checker/haveibeenpwned/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/whoami/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/joke/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/greeting/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/welcome/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/meaningoflife/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/randomnumber/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/bye/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/leon/partnerassistant/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/network/speedtest/run",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/api/p/trend/github/run",
+      "params": [
+        "number",
+        "daterange"
+      ],
+      "entitiesType": "builtIn"
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/trend/producthunt/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/p/videodownloader/youtube/run",
+      "params": []
+    }
+  ]
+}

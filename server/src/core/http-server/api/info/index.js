@@ -1,4 +1,4 @@
-import getInfo from '@/api/info/get'
+import getInfo from '@/core/http-server/api/info/get'
 
 const infoPlugin = async (fastify, options) => {
   // Get information to init client

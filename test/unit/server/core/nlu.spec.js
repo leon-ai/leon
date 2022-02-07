@@ -42,19 +42,19 @@ describe('NLU', () => {
   describe('process()', () => {
     const nluFallbackTmp = Nlu.fallback
 
-    test('returns false because the NLP model is empty', async () => {
+    test('rejects because the NLP model is empty', async () => {
       const nlu = new Nlu()
       nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
 
-      expect(await nlu.process('Hello')).toBeFalsy()
+      await expect(nlu.process('Hello')).rejects.toEqual('The NLP model is missing, please rebuild the project or if you are in dev run: npm run train')
     })
 
-    test('returns false because of query not found', async () => {
+    test('resolves with query not found', async () => {
       const nlu = new Nlu()
       nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
 
       await nlu.loadModel(global.paths.nlp_model)
-      expect(await nlu.process('Unknown query')).toBeFalsy()
+      await expect(nlu.process('Unknown query')).resolves.toHaveProperty('message', 'Query not found')
       expect(nlu.brain.talk).toHaveBeenCalledTimes(1)
     })
 
@@ -70,7 +70,8 @@ describe('NLU', () => {
       Nlu.fallback = jest.fn(() => fallbackObj)
 
       await nlu.loadModel(global.paths.nlp_model)
-      expect(await nlu.process(query)).toBeTruthy()
+
+      await expect(nlu.process(query)).resolves.toHaveProperty('processingTime')
       expect(nlu.brain.execute.mock.calls[0][0]).toBe(fallbackObj)
       Nlu.fallback = nluFallbackTmp // Need to give back the real fallback method
     })
@@ -80,7 +81,7 @@ describe('NLU', () => {
       nlu.brain = { execute: jest.fn() }
 
       await nlu.loadModel(global.paths.nlp_model)
-      expect(await nlu.process('Hello')).toBeTruthy()
+      await expect(nlu.process('Hello')).toResolve()
       expect(nlu.brain.execute).toHaveBeenCalledTimes(1)
     })
   })
