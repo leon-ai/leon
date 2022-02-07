@@ -1,7 +1,6 @@
 import dotenv from 'dotenv'
 import crypto from 'crypto'
 import fs from 'fs'
-import { prompt } from 'inquirer'
 import path from 'path'
 
 import log from '@/helpers/log'
@@ -51,17 +50,6 @@ export default () => new Promise(async (resolve, reject) => {
   try {
     if (!process.env.LEON_HTTP_API_KEY || process.env.LEON_HTTP_API_KEY === '') {
       await generateHttpApiKey()
-    } else if (!process.env.IS_DOCKER) {
-      const answer = await prompt({
-        type: 'confirm',
-        name: 'generate.httpApiKey',
-        message: 'Do you want to regenerate the HTTP API key?',
-        default: false
-      })
-
-      if (answer.generate.httpApiKey === true) {
-        await generateHttpApiKey()
-      }
     }
 
     resolve()

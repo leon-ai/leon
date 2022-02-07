@@ -1,4 +1,3 @@
-import { prompt } from 'inquirer'
 import fs from 'fs'
 
 import log from '@/helpers/log'
@@ -18,22 +17,7 @@ export default () => new Promise(async (resolve) => {
 
   if (!fs.existsSync('.env')) {
     createDotenv()
-
-    resolve()
-  } else if (process.env.IS_DOCKER === 'true') {
-    resolve()
-  } else {
-    const answer = await prompt({
-      type: 'confirm',
-      name: 'dotenv.overwrite',
-      message: '.env file already exists, overwrite:',
-      default: false
-    })
-
-    if (answer.dotenv.overwrite === true) {
-      createDotenv()
-    }
-
-    resolve()
   }
+
+  resolve()
 })
