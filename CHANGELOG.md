@@ -1,4 +1,4 @@
-# [1.0.0-beta.6](https://github.com/leon-ai/leon/compare/v1.0.0-beta.5...1.0.0-beta.6) (2022-02-07) / Leon Over HTTP + Making Friends with Coqui STT
+# [1.0.0-beta.6](https://github.com/leon-ai/leon/compare/v1.0.0-beta.5...v1.0.0-beta.6) (2022-02-07) / Leon Over HTTP + Making Friends with Coqui STT
 ### Features
  - simple coqui-ai stt integration [86a4816b](https://github.com/leon-ai/leon/commit/86a4816b777fee8ec9c89648c5866a75de56c017) 
  - HTTP API key generator [d10a7fa7](https://github.com/leon-ai/leon/commit/d10a7fa7880a0bf2fb1cae7904d1ef4257f05257) 
