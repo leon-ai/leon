@@ -153,4 +153,4 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 
 ## Spread the Word
 
-Use [#LeonAI](https://twitter.com/hashtag/LeonAI) if you tweet about Leon and/or mention [@louistiti_fr](https://twitter.com/louistiti_fr).
+Use [#LeonAI](https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Alouistiti_fr)&src=typed_query) if you tweet about Leon and/or mention [@louistiti_fr](https://twitter.com/louistiti_fr).
