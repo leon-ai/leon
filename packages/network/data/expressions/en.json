@@ -1,7 +1,7 @@
 {
   "speedtest": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "What is my current Internet speed?",
         "Can you make me a speedtest?",
         "Make a speedtest",

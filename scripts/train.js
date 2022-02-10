@@ -11,7 +11,7 @@ import { langs } from '@@/core/langs.json'
 dotenv.config()
 
 /**
- * Training expressions script
+ * Training utterance samples script
  *
  * npm run train [en or fr]
  */
@@ -34,21 +34,21 @@ export default () => new Promise(async (resolve, reject) => {
 
     const packages = fs.readdirSync(packagesDir)
       .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
-    let expressionsObj = { }
+    let utteranceSamplesObj = { }
 
     for (let i = 0; i < packages.length; i += 1) {
-      log.info(`Training "${string.ucfirst(packages[i])}" package modules expressions...`)
+      log.info(`Training "${string.ucfirst(packages[i])}" package modules utterance samples...`)
 
-      expressionsObj = JSON.parse(fs.readFileSync(`${packagesDir}/${packages[i]}/data/expressions/${lang}.json`, 'utf8'))
+      utteranceSamplesObj = JSON.parse(fs.readFileSync(`${packagesDir}/${packages[i]}/data/expressions/${lang}.json`, 'utf8'))
 
-      const modules = Object.keys(expressionsObj)
+      const modules = Object.keys(utteranceSamplesObj)
       for (let j = 0; j < modules.length; j += 1) {
         const module = modules[j]
-        const actions = Object.keys(expressionsObj[module])
+        const actions = Object.keys(utteranceSamplesObj[module])
 
         for (let k = 0; k < actions.length; k += 1) {
           const action = actions[k]
-          const exprs = expressionsObj[module][action].expressions
+          const exprs = utteranceSamplesObj[module][action].utterance_samples
 
           nlp.assignDomain(lang, `${module}.${action}`, packages[i])
 
@@ -57,7 +57,7 @@ export default () => new Promise(async (resolve, reject) => {
           }
         }
 
-        log.success(`"${string.ucfirst(module)}" module expressions trained`)
+        log.success(`"${string.ucfirst(module)}" module utterance samples trained`)
       }
     }
 

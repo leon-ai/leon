@@ -28,17 +28,17 @@ class Ner {
   /**
    * Grab entities and match them with the utterance
    */
-  async extractEntities (lang, expressionsFilePath, obj) {
+  async extractEntities (lang, utteranceSamplesFilePath, obj) {
     log.title('NER')
     log.info('Searching for entities...')
 
     const { classification } = obj
     // Remove end-punctuation and add an end-whitespace
     const utterance = `${string.removeEndPunctuation(obj.utterance)} `
-    const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
+    const utteranceSamplesObj = JSON.parse(fs.readFileSync(utteranceSamplesFilePath, 'utf8'))
     const { module, action } = classification
     const promises = []
-    const actionEntities = expressionsObj[module][action].entities || []
+    const actionEntities = utteranceSamplesObj[module][action].entities || []
 
     /**
      * Browse action entities

@@ -76,7 +76,7 @@ describe('NER', () => {
       try {
         await ner.extractEntities(
           'en',
-          global.paths.expressions,
+          global.paths.utterance_samples,
           {
             utterance: 'Just an utterance',
             entities: [],
@@ -124,7 +124,7 @@ describe('NER', () => {
 
       const entities = await ner.extractEntities(
         'en',
-        global.paths.expressions,
+        global.paths.utterance_samples,
         {
           utterance: 'Please whistle as a bird',
           entities: [],
@@ -150,7 +150,7 @@ describe('NER', () => {
 
       const entities = await ner.extractEntities(
         'en',
-        global.paths.expressions,
+        global.paths.utterance_samples,
         {
           utterance: 'I love the color blue, white and red',
           entities: [],

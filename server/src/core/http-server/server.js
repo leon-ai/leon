@@ -292,7 +292,7 @@ server.init = async () => {
   brain = new Brain(langs[process.env.LEON_LANG].short)
   nlu = new Nlu(brain)
 
-  // Train modules expressions
+  // Train modules utterance samples
   try {
     await nlu.loadModel(join(__dirname, '../../data/leon-model.nlp'))
   } catch (e) {

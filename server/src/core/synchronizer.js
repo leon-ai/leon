@@ -19,19 +19,19 @@ class Synchronizer {
    * Choose the right method to synchronize
    */
   async synchronize (cb) {
-    let expression = 'synced_direct'
+    let code = 'synced_direct'
 
     this.brain.talk(`${this.brain.wernicke('synchronizer', `syncing_${this.sync.method.toLowerCase().replace('-', '_')}`)}.`)
     this.brain.socket.emit('is-typing', false)
 
     if (this.sync.method === 'google-drive') {
-      expression = 'synced_google_drive'
+      code = 'synced_google_drive'
       await this.googleDrive()
     } else {
       await this.direct()
     }
 
-    return cb(`${this.brain.wernicke('synchronizer', expression)}.`)
+    return cb(`${this.brain.wernicke('synchronizer', code)}.`)
   }
 
   /**

@@ -1,7 +1,7 @@
 {
 	"whoami": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Qui es-tu ?",
         "Comment t'appelles-tu ?",
         "Comment tu t'appelles ?",
@@ -12,7 +12,7 @@
   },
 	"joke": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Raconte-moi une blague",
         "Dis-moi une blague",
         "Donne-moi une blague",
@@ -23,7 +23,7 @@
   },
 	"greeting": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Salut",
         "Bonjour",
         "Bonsoir",
@@ -35,7 +35,7 @@
   },
 	"welcome": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Merci",
         "Merci bien",
         "Merci beaucoup",
@@ -49,7 +49,7 @@
   },
 	"meaningoflife": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Quel est le but de la vie ?",
         "Quel est l'objectif de la vie ?"
       ]
@@ -57,7 +57,7 @@
   },
 	"randomnumber": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Donne-moi un nombre aléatoire",
         "Donne-moi un nombre",
         "Dis-moi un nombre aléatoire",
@@ -68,7 +68,7 @@
   },
 	"bye": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Au revoir",
         "Aurevoir",
         "Bye",
@@ -78,7 +78,7 @@
   },
   "partnerassistant": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Connais-tu quelque chose sur Alexa ?",
         "Dis-moi quelque chose sur l'assistant personnel Alexa",
         "Connais-tu quelque chose sur Cortana ?",

@@ -1,7 +1,7 @@
 {
 	"isitdown": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Is getleon.ai up?",
         "Is mozilla.org down?",
         "Is mozilla.org up or down?",
@@ -29,7 +29,7 @@
   },
 	"haveibeenpwned": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Has iifeoluwa.ao@gmail.com been pwned?",
         "Has iifeoluwa.ao@gmail.com been compromised?",
         "Has iifeoluwa.ao@gmail.com been exposed in a breach?",

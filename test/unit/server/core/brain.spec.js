@@ -42,7 +42,7 @@ describe('brain', () => {
     test('picks random string from an array', () => {
       const brain = new Brain('en')
 
-      expect(global.enExpressions.answers.random_errors).toIncludeAnyMembers([brain.wernicke('random_errors', '', { })])
+      expect(global.enUtteranceSamples.answers.random_errors).toIncludeAnyMembers([brain.wernicke('random_errors', '', { })])
     })
   })
 
@@ -54,7 +54,7 @@ describe('brain', () => {
 
       await brain.execute({ classification: { confidence: 0.1 } })
       const [string] = brain.talk.mock.calls
-      expect(global.enExpressions.answers.random_not_sure)
+      expect(global.enUtteranceSamples.answers.random_not_sure)
         .toIncludeAnyMembers([string[0].substr(0, (string[0].length - 1))])
     })
 
