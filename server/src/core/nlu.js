@@ -116,7 +116,7 @@ class Nlu {
 
         if (fallback === false) {
           if (!opts.mute) {
-            this.brain.talk(`${this.brain.wernicke('random_unknown_queries')}.`, true)
+            this.brain.talk(`${this.brain.wernicke('random_unknown_intents')}.`, true)
             this.brain.socket.emit('is-typing', false)
           }
 

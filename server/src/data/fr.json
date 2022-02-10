@@ -25,7 +25,7 @@
 			"Désolé, j'ai une erreur avec le module \"%module_name%\" de mon paquet \"%package_name%\"",
 			"Désolé, le module \"%module_name%\" de mon paquet \"%package_name%\" est cassé"
 		],
-		"random_unknown_queries": [
+		"random_unknown_intents": [
 			"Désolé, je ne connais pas encore ça, mais vous pouvez m'aider à comprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
 			"Désolé, vous devriez m'apprendre cette requête. Vous pouvez m'apprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
 			"Désolé, je ne peux pas répondre à ça. Laissez moi vous répondre à l'avenir en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",

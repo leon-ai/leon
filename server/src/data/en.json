@@ -25,7 +25,7 @@
 			"Sorry, I've got an error with the \"%module_name%\" module of my \"%package_name%\" package",
 			"Sorry, the \"%module_name%\" module of my \"%package_name%\" package is broken"
 		],
-		"random_unknown_queries": [
+		"random_unknown_intents": [
 			"Sorry, I still don't know this, but you can help me to understand by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
 			"Sorry, you should teach me this request. You can teach me by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
 			"Sorry, I cannot answer that. Let me answer you in the future by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
