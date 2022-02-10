@@ -33,7 +33,7 @@ describe('NER', () => {
         'en',
         path.join(__dirname, '../../../../packages/leon/data/expressions/en.json'),
         {
-          query: 'Give me a random number',
+          utterance: 'Give me a random number',
           entities: [],
           classification: {
             package: 'leon',
@@ -55,7 +55,7 @@ describe('NER', () => {
         'en',
         path.join(__dirname, '../../../../packages/trend/data/expressions/en.json'),
         {
-          query: 'Give me the 2 latest GitHub trends',
+          utterance: 'Give me the 2 latest GitHub trends',
           entities: [{ sourceText: 2, entity: 'number' }],
           classification: {
             package: 'trend',
@@ -78,7 +78,7 @@ describe('NER', () => {
           'en',
           global.paths.expressions,
           {
-            query: 'Just a query',
+            utterance: 'Just an utterance',
             entities: [],
             classification: {
               package: 'doesnotmatter',
@@ -101,7 +101,7 @@ describe('NER', () => {
         'en',
         path.join(__dirname, '../../../../packages/calendar/data/expressions/en.json'),
         {
-          query: 'Create a shopping list',
+          utterance: 'Create a shopping list',
           entities: [],
           classification: {
             package: 'calendar',
@@ -126,7 +126,7 @@ describe('NER', () => {
         'en',
         global.paths.expressions,
         {
-          query: 'Please whistle as a bird',
+          utterance: 'Please whistle as a bird',
           entities: [],
           classification: {
             package: 'doesnotmatter',
@@ -152,7 +152,7 @@ describe('NER', () => {
         'en',
         global.paths.expressions,
         {
-          query: 'I love the color blue, white and red',
+          utterance: 'I love the color blue, white and red',
           entities: [],
           classification: {
             package: 'preference',

@@ -7,7 +7,7 @@ const queryUrl = `${urlPrefix}/query`
 const actionModuleUrl = `${urlPrefix}/p/leon/randomnumber/run`;
 
 /**
- * Test the query endpoint endpoint over HTTP
+ * Test the query endpoint over HTTP
  * and a simple module action over HTTP
  */
 
@@ -18,7 +18,7 @@ const actionModuleUrl = `${urlPrefix}/p/leon/randomnumber/run`;
 describe('Over HTTP', () => {
   test(`Request query endpoint POST ${queryUrl}`, async () => {
     const { body } = await superagent.post(queryUrl)
-      .send({ query: 'Hello' })
+      .send({ utterance: 'Hello' })
       .set('X-API-Key', process.env.LEON_HTTP_API_KEY)
 
     expect(body).toHaveProperty('success', true)

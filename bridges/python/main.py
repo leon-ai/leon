@@ -11,10 +11,10 @@ def main():
 
 	path.append('.')
 
-	queryobj = utils.getqueryobj()
-	m = import_module('packages.' + queryobj['package'] + '.' + queryobj['module'])
+	intent_obj = utils.get_intent_obj()
+	m = import_module('packages.' + intent_obj['package'] + '.' + intent_obj['module'])
 
-	return getattr(m, queryobj['action'])(queryobj['query'], queryobj['entities'])
+	return getattr(m, intent_obj['action'])(intent_obj['utterance'], intent_obj['entities'])
 
 if __name__ == '__main__':
 	main()

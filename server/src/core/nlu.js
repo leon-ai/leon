@@ -51,11 +51,11 @@ class Nlu {
   }
 
   /**
-   * Classify the query,
+   * Classify the utterance,
    * pick-up the right classification
    * and extract entities
    */
-  process (query, opts) {
+  process (utterance, opts) {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
@@ -65,7 +65,7 @@ class Nlu {
       opts = opts || {
         mute: false // Close Leon mouth e.g. over HTTP
       }
-      query = string.ucfirst(query)
+      utterance = string.ucfirst(utterance)
 
       if (Object.keys(this.nlp).length === 0) {
         if (!opts.mute) {
@@ -79,14 +79,14 @@ class Nlu {
       }
 
       const lang = langs[process.env.LEON_LANG].short
-      const result = await this.nlp.process(lang, query)
+      const result = await this.nlp.process(lang, utterance)
 
       const {
         domain, intent, score
       } = result
       const [moduleName, actionName] = intent.split('.')
       let obj = {
-        query,
+        utterance,
         entities: [],
         classification: {
           package: domain,
@@ -103,7 +103,7 @@ class Nlu {
           .set('X-Origin', 'leon-core')
           .send({
             version,
-            query,
+            utterance,
             lang,
             classification: obj.classification
           })
@@ -121,7 +121,7 @@ class Nlu {
           }
 
           log.title('NLU')
-          const msg = 'Query not found'
+          const msg = 'Intent not found'
           log.warning(msg)
 
           const processingTimeEnd = Date.now()
@@ -137,7 +137,7 @@ class Nlu {
       }
 
       log.title('NLU')
-      log.success('Query found')
+      log.success('Intent found')
 
       try {
         obj.entities = await this.ner.extractEntities(
@@ -181,7 +181,7 @@ class Nlu {
    * according to the wished module
    */
   static fallback (obj, fallbacks) {
-    const words = obj.query.toLowerCase().split(' ')
+    const words = obj.utterance.toLowerCase().split(' ')
 
     if (fallbacks.length > 0) {
       log.info('Looking for fallbacks...')

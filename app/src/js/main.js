@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (err || !res.ok) {
         console.error(err.response.error.message)
       } else {
-        const input = document.querySelector('#query')
+        const input = document.querySelector('#utterance')
         const mic = document.querySelector('button')
         const v = document.querySelector('#version small')
         const logger = document.querySelector('#logger small')

@@ -15,17 +15,17 @@ import re
 
 dirname = path.dirname(path.realpath(__file__))
 
-queryobjectpath = argv[1]
+intent_object_path = argv[1]
 codes = []
 
-queryobjfile = open(queryobjectpath, 'r', encoding = 'utf8')
-queryobj = loads(queryobjfile.read())
-queryobjfile.close()
+intent_obj_file = open(intent_object_path, 'r', encoding = 'utf8')
+intent_obj = loads(intent_obj_file.read())
+intent_obj_file.close()
 
-def getqueryobj():
-	"""Return query object"""
+def get_intent_obj():
+	"""Return intent object"""
 
-	return queryobj
+	return intent_obj
 
 def translate(key, d = { }):
 	"""Pickup the language file according to the cmd arg
@@ -33,11 +33,11 @@ def translate(key, d = { }):
 
 	output = ''
 
-	file = open(dirname + '/../../packages/' + queryobj['package'] + '/' + 'data/answers/' + queryobj['lang'] + '.json', 'r', encoding = 'utf8')
+	file = open(dirname + '/../../packages/' + intent_obj['package'] + '/' + 'data/answers/' + intent_obj['lang'] + '.json', 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
-	prop = obj[queryobj['module']][key]
+	prop = obj[intent_obj['module']][key]
 	if isinstance(prop, list):
 		output = choice(prop)
 	else:
@@ -58,12 +58,12 @@ def output(type, code, speech = ''):
 	codes.append(code)
 
 	print(dumps({
-		'package': queryobj['package'],
-		'module': queryobj['module'],
-		'action': queryobj['action'],
-		'lang': queryobj['lang'],
-		'input': queryobj['query'],
-		'entities': queryobj['entities'],
+		'package': intent_obj['package'],
+		'module': intent_obj['module'],
+		'action': intent_obj['action'],
+		'lang': intent_obj['lang'],
+		'utterance': intent_obj['utterance'],
+		'entities': intent_obj['entities'],
 		'output': {
 			'type': type,
 			'codes': codes,
@@ -89,27 +89,27 @@ def http(method, url, headers = None):
 def config(key):
 	"""Get a package configuration value"""
 
-	file = open(dirname + '/../../packages/' + queryobj['package'] + '/config/config.json', 'r', encoding = 'utf8')
+	file = open(dirname + '/../../packages/' + intent_obj['package'] + '/config/config.json', 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
-	return obj[queryobj['module']][key]
+	return obj[intent_obj['module']][key]
 
-def createdldir():
+def create_dl_dir():
 	"""Create the downloads folder of a current module"""
 
-	dldir = path.dirname(path.realpath(__file__)) + '/../../downloads/'
-	moduledldir = dldir + queryobj['package'] + '/' + queryobj['module']
+	dl_dir = path.dirname(path.realpath(__file__)) + '/../../downloads/'
+	module_dl_dir = dl_dir + intent_obj['package'] + '/' + intent_obj['module']
 
-	Path(moduledldir).mkdir(parents = True, exist_ok = True)
+	Path(module_dl_dir).mkdir(parents = True, exist_ok = True)
 
-	return moduledldir
+	return module_dl_dir
 
-def db(dbtype = 'tinydb'):
+def db(db_type = 'tinydb'):
 	"""Create a new dedicated database
 	for a specific package"""
 
-	if dbtype == 'tinydb':
+	if db_type == 'tinydb':
 		ext = '.json' if environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
-		db = TinyDB(dirname + '/../../packages/' + queryobj['package'] + '/data/db/' + queryobj['package'] + ext)
+		db = TinyDB(dirname + '/../../packages/' + intent_obj['package'] + '/data/db/' + intent_obj['package'] + ext)
 		return { 'db': db, 'query': Query, 'operations': operations }

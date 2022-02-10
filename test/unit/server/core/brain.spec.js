@@ -69,7 +69,7 @@ describe('brain', () => {
       }
 
       const obj = {
-        query: 'Hello',
+        utterance: 'Hello',
         entities: [],
         classification: {
           package: 'leon',
@@ -90,7 +90,7 @@ describe('brain', () => {
       brain.talk = jest.fn()
 
       const obj = {
-        query: 'Is github.com up?',
+        utterance: 'Is github.com up?',
         entities: [{
           sourceText: 'github.com',
           utteranceText: 'github.com',
@@ -118,7 +118,7 @@ describe('brain', () => {
       brain.talk = jest.fn()
 
       const obj = {
-        query: 'Hello',
+        utterance: 'Hello',
         entities: [],
         classification: {
           package: 'leon',
@@ -129,7 +129,7 @@ describe('brain', () => {
       }
 
       brain.process = spawn('pipenv', ['run', 'python', `${global.paths.packages}/fake-main-to-test.py`, 'en',
-        obj.classification.package, obj.classification.module, obj.query])
+        obj.classification.package, obj.classification.module, obj.utterance])
 
       try {
         await brain.execute(obj)

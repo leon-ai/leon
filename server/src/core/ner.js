@@ -26,7 +26,7 @@ class Ner {
   }
 
   /**
-   * Grab entities and match them with the query
+   * Grab entities and match them with the utterance
    */
   async extractEntities (lang, expressionsFilePath, obj) {
     log.title('NER')
@@ -34,7 +34,7 @@ class Ner {
 
     const { classification } = obj
     // Remove end-punctuation and add an end-whitespace
-    const query = `${string.removeEndPunctuation(obj.query)} `
+    const utterance = `${string.removeEndPunctuation(obj.utterance)} `
     const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
     const { module, action } = classification
     const promises = []
@@ -56,7 +56,7 @@ class Ner {
 
     await Promise.all(promises)
 
-    const { entities } = await this.ner.process({ locale: lang, text: query })
+    const { entities } = await this.ner.process({ locale: lang, text: utterance })
 
     // Trim whitespace at the beginning and the end of the entity value
     entities.map((e) => {

@@ -78,7 +78,7 @@ export default () => new Promise(async (resolve, reject) => {
     // Module execution checking
 
     try {
-      const p = await command('pipenv run python bridges/python/main.py scripts/assets/query-object.json', { shell: true })
+      const p = await command('pipenv run python bridges/python/main.py scripts/assets/intent-object.json', { shell: true })
       log.info(p.command)
       log.success(`${p.stdout}\n`)
     } catch (e) {

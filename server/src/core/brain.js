@@ -43,13 +43,13 @@ class Brain {
   }
 
   /**
-   * Delete query object file
+   * Delete intent object file
    */
-  static deleteQueryObjFile (queryObjectPath) {
+  static deleteIntentObjFile (intentObjectPath) {
     try {
-      fs.unlinkSync(queryObjectPath)
+      fs.unlinkSync(intentObjectPath)
     } catch (e) {
-      log.error(`Failed to delete query object file: ${e}`)
+      log.error(`Failed to delete intent object file: ${e}`)
     }
   }
 
@@ -109,8 +109,8 @@ class Brain {
     }
 
     return new Promise((resolve, reject) => {
-      const queryId = `${Date.now()}-${string.random(4)}`
-      const queryObjectPath = `${__dirname}/../tmp/${queryId}.json`
+      const utteranceId = `${Date.now()}-${string.random(4)}`
+      const intentObjectPath = `${__dirname}/../tmp/${utteranceId}.json`
       const speeches = []
 
       // Ask to repeat if Leon is not sure about the request
@@ -137,25 +137,25 @@ class Brain {
            * Execute a module in a standalone way (CLI):
            *
            * 1. Need to be at the root of the project
-           * 2. Edit: server/src/query-object.sample.json
+           * 2. Edit: server/src/intent-object.sample.json
            * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
-           *    python bridges/python/main.py server/src/query-object.sample.json
+           *    python bridges/python/main.py server/src/intent-object.sample.json
            */
-          const queryObj = {
-            id: queryId,
+          const intentObj = {
+            id: utteranceId,
             lang: langs[process.env.LEON_LANG].short,
             package: obj.classification.package,
             module: obj.classification.module,
             action: obj.classification.action,
-            query: obj.query,
+            utterance: obj.utterance,
             entities: obj.entities
           }
 
           try {
-            fs.writeFileSync(queryObjectPath, JSON.stringify(queryObj))
-            this.process = spawn(`pipenv run python bridges/python/main.py ${queryObjectPath}`, { shell: true })
+            fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
+            this.process = spawn(`pipenv run python bridges/python/main.py ${intentObjectPath}`, { shell: true })
           } catch (e) {
-            log.error(`Failed to save query object: ${e}`)
+            log.error(`Failed to save intent object: ${e}`)
           }
         }
 
@@ -198,6 +198,7 @@ class Brain {
 
         // Handle error
         this.process.stderr.on('data', (data) => {
+          console.log('data', data.toString())
           const speech = `${this.wernicke('random_package_module_errors', '',
             { '%module_name%': moduleName, '%package_name%': packageName })}!`
           if (!opts.mute) {
@@ -206,7 +207,7 @@ class Brain {
           }
           speeches.push(speech)
 
-          Brain.deleteQueryObjFile(queryObjectPath)
+          Brain.deleteIntentObjFile(intentObjectPath)
 
           log.title(packageName)
 
@@ -257,7 +258,7 @@ class Brain {
             }
           }
 
-          Brain.deleteQueryObjFile(queryObjectPath)
+          Brain.deleteIntentObjFile(intentObjectPath)
 
           if (!opts.mute) {
             this._socket.emit('is-typing', false)
@@ -267,7 +268,7 @@ class Brain {
           const executionTime = executionTimeEnd - executionTimeStart
 
           resolve({
-            queryId,
+            utteranceId,
             lang: langs[process.env.LEON_LANG].short,
             ...obj,
             speeches,

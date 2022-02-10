@@ -72,7 +72,7 @@ server.generatePackagesRoutes = (instance) => {
           })
 
           const obj = {
-            query: '',
+            utterance: '',
             entities,
             classification: {
               package: pkg,
@@ -175,8 +175,8 @@ server.handleOnConnection = (socket) => {
       log.success(`STT ${sttState}`)
       log.success(`TTS ${ttsState}`)
 
-      // Listen for new query
-      socket.on('query', async (data) => {
+      // Listen for new utterance
+      socket.on('utterance', async (data) => {
         log.title('Socket')
         log.info(`${data.client} emitted: ${data.value}`)
 
@@ -234,10 +234,10 @@ server.bootstrap = async () => {
       instance.addHook('preHandler', keyMidd)
 
       instance.post('/api/query', async (request, reply) => {
-        const { query } = request.body
+        const { utterance } = request.body
 
         try {
-          const data = await nlu.process(query, { mute: true })
+          const data = await nlu.process(utterance, { mute: true })
 
           reply.send({
             ...data,

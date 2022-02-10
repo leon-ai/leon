@@ -45,7 +45,7 @@ export default class Client {
 
     this.socket.on('recognized', (data, cb) => {
       this._input.value = data
-      this.send('query')
+      this.send('utterance')
 
       cb('string-received')
     })
