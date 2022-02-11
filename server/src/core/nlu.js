@@ -79,7 +79,14 @@ class Nlu {
       }
 
       const lang = langs[process.env.LEON_LANG].short
-      const result = await this.nlp.process(lang, utterance)
+      const guessedLang = await this.nlp.guessLanguage(utterance)
+
+      console.log('guessedLang', guessedLang)
+      console.log('sentiment', await this.nlp.getSentiment(utterance))
+
+      const result = await this.nlp.process(utterance)
+
+      console.log('result', result)
 
       const {
         domain, intent, score

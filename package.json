@@ -64,6 +64,7 @@
     "@nlpjs/basic": "^4.22.0",
     "@nlpjs/builtin-microsoft": "^4.22.0",
     "@nlpjs/core-loader": "^4.22.0",
+    "@nlpjs/lang-all": "^4.22.12",
     "@nlpjs/ner": "^4.22.0",
     "@nlpjs/nlp": "^4.22.0",
     "archiver": "^5.3.0",
