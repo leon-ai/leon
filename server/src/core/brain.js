@@ -5,22 +5,17 @@ import { langs } from '@@/core/langs.json'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
+import lang from '@/helpers/lang'
 
 class Brain {
-  constructor (lang) {
-    this.lang = lang
-    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/en.json`, 'utf8'))
+  constructor () {
+    this._lang = 'en'
+    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/${this._lang}.json`, 'utf8'))
     this.process = { }
     this.interOutput = { }
     this.finalOutput = { }
     this._socket = { }
     this._tts = { }
-
-    // Read into the language file
-    const file = `${__dirname}/../data/${this.lang}.json`
-    if (fs.existsSync(file)) {
-      this.broca = JSON.parse(fs.readFileSync(file, 'utf8'))
-    }
 
     log.title('Brain')
     log.success('New instance')
@@ -40,6 +35,23 @@ class Brain {
 
   set tts (newTts) {
     this._tts = newTts
+  }
+
+  get lang () {
+    return this._lang
+  }
+
+  set lang (newLang) {
+    this._lang = newLang
+    // Update broca
+    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/${this._lang}.json`, 'utf8'))
+
+    if (process.env.LEON_TTS === 'true') {
+      this._tts.init(this._lang, () => {
+        log.title('Brain')
+        log.info('Language has changed')
+      })
+    }
   }
 
   /**
@@ -114,7 +126,7 @@ class Brain {
       const speeches = []
 
       // Ask to repeat if Leon is not sure about the request
-      if (obj.classification.confidence < langs[process.env.LEON_LANG].min_confidence) {
+      if (obj.classification.confidence < langs[lang.getLongCode(this._lang)].min_confidence) {
         if (!opts.mute) {
           const speech = `${this.wernicke('random_not_sure')}.`
 
@@ -143,7 +155,7 @@ class Brain {
            */
           const intentObj = {
             id: utteranceId,
-            lang: langs[process.env.LEON_LANG].short,
+            lang: this._lang,
             package: obj.classification.package,
             module: obj.classification.module,
             action: obj.classification.action,
@@ -198,7 +210,6 @@ class Brain {
 
         // Handle error
         this.process.stderr.on('data', (data) => {
-          console.log('data', data.toString())
           const speech = `${this.wernicke('random_package_module_errors', '',
             { '%module_name%': moduleName, '%package_name%': packageName })}!`
           if (!opts.mute) {
@@ -269,7 +280,7 @@ class Brain {
 
           resolve({
             utteranceId,
-            lang: langs[process.env.LEON_LANG].short,
+            lang: this._lang,
             ...obj,
             speeches,
             executionTime // In ms, module execution time only

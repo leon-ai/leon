@@ -1,4 +1,3 @@
-import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
 import log from '@/helpers/log'
 
@@ -25,7 +24,6 @@ const getInfo = async (fastify, options) => {
         enabled: process.env.LEON_TTS === 'true',
         provider: process.env.LEON_TTS_PROVIDER
       },
-      lang: langs[process.env.LEON_LANG],
       version
     })
   })

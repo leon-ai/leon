@@ -22,15 +22,16 @@ const voices = {
 let client = { }
 
 synthesizer.conf = {
-  voice: voices[process.env.LEON_LANG].voice,
+  voice: '',
   accept: 'audio/wav'
 }
 
 /**
  * Initialize Watson Text-to-Speech based on credentials in the JSON file
  */
-synthesizer.init = () => {
+synthesizer.init = (lang) => {
   const config = JSON.parse(fs.readFileSync(`${__dirname}/../../config/voice/watson-tts.json`, 'utf8'))
+  synthesizer.conf.voice = voices[lang].voice
 
   try {
     client = new Tts({

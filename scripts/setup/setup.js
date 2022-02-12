@@ -16,7 +16,6 @@ import setupPythonPackages from './setup-python-packages'
 (async () => {
   try {
     // Required env vars to setup
-    process.env.LEON_LANG = 'en-US'
     process.env.PIPENV_PIPFILE = 'bridges/python/Pipfile'
     process.env.PIPENV_VENV_IN_PROJECT = 'true'
 

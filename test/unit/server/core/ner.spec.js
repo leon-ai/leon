@@ -138,7 +138,6 @@ describe('NER', () => {
       )
 
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
-      console.log('entities', entities)
       expect(entities.length).toBe(2)
       expect(entities.map((e) => e.entity)).toEqual(['start', 'animal'])
       expect(entities.map((e) => e.sourceText)).toEqual(['Please whistle as a', 'bird'])

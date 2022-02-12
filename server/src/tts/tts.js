@@ -2,6 +2,7 @@ import events from 'events'
 import fs from 'fs'
 
 import log from '@/helpers/log'
+import lang from '@/helpers/lang'
 
 class Tts {
   constructor (socket, provider) {
@@ -16,6 +17,7 @@ class Tts {
     this.synthesizer = { }
     this.em = new events.EventEmitter()
     this.speeches = []
+    this.lang = 'en'
 
     log.title('TTS')
     log.success('New instance')
@@ -24,8 +26,10 @@ class Tts {
   /**
    * Initialize the TTS provider
    */
-  init (cb) {
+  init (newLang, cb) {
     log.info('Initializing TTS...')
+
+    this.lang = newLang || this.lang
 
     if (!this.providers.includes(this.provider)) {
       log.error(`The TTS provider "${this.provider}" does not exist or is not yet supported`)
@@ -43,7 +47,7 @@ class Tts {
 
     // Dynamically attribute the synthesizer
     this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`) // eslint-disable-line global-require
-    this.synthesizer.default.init(this.synthesizer.default.conf)
+    this.synthesizer.default.init(lang.getLongCode(this.lang))
 
     this.onSaved()
 

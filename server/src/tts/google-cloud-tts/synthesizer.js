@@ -26,7 +26,7 @@ const voices = {
 let client = { }
 
 synthesizer.conf = {
-  voice: voices[process.env.LEON_LANG],
+  voice: '',
   audioConfig: {
     audioEncoding: 'MP3'
   }
@@ -36,8 +36,9 @@ synthesizer.conf = {
  * Initialize Google Cloud Text-to-Speech based on credentials in the JSON file
  * The env variable "GOOGLE_APPLICATION_CREDENTIALS" provides the JSON file path
  */
-synthesizer.init = () => {
+synthesizer.init = (lang) => {
   process.env.GOOGLE_APPLICATION_CREDENTIALS = `${__dirname}/../../config/voice/google-cloud.json`
+  synthesizer.conf.voice = voices[lang]
 
   try {
     client = new tts.TextToSpeechClient()

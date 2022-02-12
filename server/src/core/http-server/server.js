@@ -4,7 +4,6 @@ import socketio from 'socket.io'
 import { join } from 'path'
 
 import { version } from '@@/package.json'
-import { langs } from '@@/core/langs.json'
 import { endpoints } from '@@/core/pkgs-endpoints.json'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
@@ -166,7 +165,7 @@ server.handleOnConnection = (socket) => {
         ttsState = 'enabled'
 
         tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
-        tts.init((ttsInstance) => {
+        tts.init('en', (ttsInstance) => {
           brain.tts = ttsInstance
         })
       }
@@ -278,18 +277,12 @@ server.init = async () => {
   log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
   log.success(`The current version is ${version}`)
 
-  if (!Object.keys(langs).includes(process.env.LEON_LANG) === true) {
-    process.env.LEON_LANG = 'en-US'
-    log.warning('The language you chose is not supported, then the default language has been applied')
-  }
-
-  log.success(`The current language is ${process.env.LEON_LANG}`)
   log.success(`The current time zone is ${date.timeZone()}`)
 
   const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
 
-  brain = new Brain(langs[process.env.LEON_LANG].short)
+  brain = new Brain()
   nlu = new Nlu(brain)
 
   // Train modules utterance samples

@@ -7,8 +7,7 @@ import path from 'path'
 
 import log from '@/helpers/log'
 import string from '@/helpers/string'
-
-// import { langs } from '@@/core/langs.json'
+import lang from '@/helpers/lang'
 
 dotenv.config()
 
@@ -18,12 +17,8 @@ dotenv.config()
  * npm run train [en or fr]
  */
 export default () => new Promise(async (resolve, reject) => {
-  // const { argv } = process
   const packagesDir = 'packages'
   const modelFileName = 'server/src/data/leon-model.nlp'
-  /* const lang = argv[2]
-    ? argv[2].toLowerCase()
-    : langs[process.env.LEON_LANG].short.toLowerCase().substr(0, 2) */
 
   try {
     const container = await containerBootstrap()
@@ -33,10 +28,6 @@ export default () => new Promise(async (resolve, reject) => {
 
     const nlp = container.get('nlp')
     const nluManager = container.get('nlu-manager')
-    // const dock = await dockStart({ use: ['Basic', 'LangEn', 'LangFr'] })
-
-    // const nlp = dock.get('nlp')
-    // const nluManager = dock.get('nlu-manager')
 
     nluManager.settings.log = false
     nluManager.settings.trainByDomain = true
@@ -44,10 +35,11 @@ export default () => new Promise(async (resolve, reject) => {
     nlp.settings.modelFileName = modelFileName
     nlp.settings.threshold = 0.8
 
-    // TODO: grab from core/langs.json
-    const langs = ['en', 'fr']
+    const shortLangs = lang.getShortLangs()
 
-    langs.forEach(async (lang) => {
+    for (let h = 0; h < shortLangs.length; h += 1) {
+      const lang = shortLangs[h]
+
       nlp.addLanguage(lang)
 
       const packages = fs.readdirSync(packagesDir)
@@ -78,7 +70,7 @@ export default () => new Promise(async (resolve, reject) => {
           log.success(`[${lang}] "${string.ucfirst(module)}" module utterance samples trained`)
         }
       }
-    })
+    }
 
     try {
       await nlp.train()

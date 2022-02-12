@@ -22,14 +22,15 @@ let client = { }
 
 synthesizer.conf = {
   OutputFormat: 'mp3',
-  VoiceId: voices[process.env.LEON_LANG].VoiceId
+  VoiceId: ''
 }
 
 /**
  * Initialize Amazon Polly based on credentials in the JSON file
  */
-synthesizer.init = () => {
+synthesizer.init = (lang) => {
   const config = JSON.parse(fs.readFileSync(`${__dirname}/../../config/voice/amazon.json`, 'utf8'))
+  synthesizer.conf.VoiceId = voices[lang].VoiceId
 
   try {
     client = new Polly(config)

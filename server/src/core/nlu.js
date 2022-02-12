@@ -10,6 +10,7 @@ import { version } from '@@/package.json'
 import Ner from '@/core/ner'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
+import lang from '@/helpers/lang'
 
 class Nlu {
   constructor (brain) {
@@ -72,6 +73,7 @@ class Nlu {
       opts = opts || {
         mute: false // Close Leon mouth e.g. over HTTP
       }
+
       utterance = string.ucfirst(utterance)
 
       if (Object.keys(this.nlp).length === 0) {
@@ -85,17 +87,9 @@ class Nlu {
         return reject(msg)
       }
 
-      const lang = langs[process.env.LEON_LANG].short
-      const guessedLang = await this.nlp.guessLanguage(utterance)
-
-      console.log('guessedLang', guessedLang)
-
       const result = await this.nlp.process(utterance)
-
-      console.log('result', result)
-
       const {
-        domain, intent, score
+        locale, domain, intent, score
       } = result
       const [moduleName, actionName] = intent.split('.')
       let obj = {
@@ -109,6 +103,10 @@ class Nlu {
         }
       }
 
+      if (this.brain.lang !== locale) {
+        this.brain.lang = locale
+      }
+
       /* istanbul ignore next */
       if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
         this.request
@@ -117,7 +115,7 @@ class Nlu {
           .send({
             version,
             utterance,
-            lang,
+            lang: this.brain.lang,
             classification: obj.classification
           })
           .then(() => { /* */ })
@@ -125,7 +123,7 @@ class Nlu {
       }
 
       if (intent === 'None') {
-        const fallback = Nlu.fallback(obj, langs[process.env.LEON_LANG].fallbacks)
+        const fallback = Nlu.fallback(obj, langs[lang.getLongCode(locale)].fallbacks)
 
         if (fallback === false) {
           if (!opts.mute) {
@@ -154,8 +152,8 @@ class Nlu {
 
       try {
         obj.entities = await this.ner.extractEntities(
-          lang,
-          join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${lang}.json`),
+          this.brain.lang,
+          join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${this.brain.lang}.json`),
           obj
         )
       } catch (e) /* istanbul ignore next */ {
