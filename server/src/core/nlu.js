@@ -1,5 +1,6 @@
 import { containerBootstrap } from '@nlpjs/core-loader'
 import { Nlp } from '@nlpjs/nlp'
+import { LangAll } from '@nlpjs/lang-all'
 import request from 'superagent'
 import fs from 'fs'
 import { join } from 'path'
@@ -34,7 +35,13 @@ class Nlu {
 
         try {
           const container = await containerBootstrap()
-          this.nlp = new Nlp({ container })
+
+          container.use(Nlp)
+          container.use(LangAll)
+
+          this.nlp = container.get('nlp')
+          const nluManager = container.get('nlu-manager')
+          nluManager.settings.spellCheck = true
 
           await this.nlp.load(nlpModel)
 
@@ -82,7 +89,6 @@ class Nlu {
       const guessedLang = await this.nlp.guessLanguage(utterance)
 
       console.log('guessedLang', guessedLang)
-      console.log('sentiment', await this.nlp.getSentiment(utterance))
 
       const result = await this.nlp.process(utterance)
 

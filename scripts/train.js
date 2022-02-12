@@ -1,4 +1,6 @@
-import { dockStart } from '@nlpjs/basic'
+import { containerBootstrap } from '@nlpjs/core-loader'
+import { Nlp } from '@nlpjs/nlp'
+import { LangAll } from '@nlpjs/lang-all'
 import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
@@ -24,14 +26,20 @@ export default () => new Promise(async (resolve, reject) => {
     : langs[process.env.LEON_LANG].short.toLowerCase().substr(0, 2) */
 
   try {
-    const dock = await dockStart({ use: ['Basic', 'LangEn', 'LangFr'] })
+    const container = await containerBootstrap()
 
-    const nlp = dock.get('nlp')
-    const nluManager = dock.get('nlu-manager')
+    container.use(Nlp)
+    container.use(LangAll)
+
+    const nlp = container.get('nlp')
+    const nluManager = container.get('nlu-manager')
+    // const dock = await dockStart({ use: ['Basic', 'LangEn', 'LangFr'] })
+
+    // const nlp = dock.get('nlp')
+    // const nluManager = dock.get('nlu-manager')
 
     nluManager.settings.log = false
     nluManager.settings.trainByDomain = true
-    nluManager.settings.spellCheck = true
     nlp.settings.calculateSentiment = true
     nlp.settings.modelFileName = modelFileName
     nlp.settings.threshold = 0.8
