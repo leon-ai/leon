@@ -15,6 +15,7 @@ class Brain {
     this.interOutput = { }
     this.finalOutput = { }
     this._socket = { }
+    this._stt = { }
     this._tts = { }
 
     log.title('Brain')
@@ -27,6 +28,14 @@ class Brain {
 
   set socket (newSocket) {
     this._socket = newSocket
+  }
+
+  get stt () {
+    return this._stt
+  }
+
+  set stt (newStt) {
+    this._stt = newStt
   }
 
   get tts () {

@@ -146,8 +146,6 @@ server.handleOnConnection = (socket) => {
       })
     } else {
       const asr = new Asr()
-      let stt = { }
-      let tts = { }
       let sttState = 'disabled'
       let ttsState = 'disabled'
 
@@ -157,17 +155,14 @@ server.handleOnConnection = (socket) => {
       if (process.env.LEON_STT === 'true') {
         sttState = 'enabled'
 
-        stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
-        stt.init(() => null)
+        brain.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
+        brain.stt.init(() => null)
       }
-
       if (process.env.LEON_TTS === 'true') {
         ttsState = 'enabled'
 
-        tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
-        tts.init('en', (ttsInstance) => {
-          brain.tts = ttsInstance
-        })
+        brain.tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
+        brain.tts.init('en', () => null)
       }
 
       log.title('Initialization')
@@ -186,7 +181,7 @@ server.handleOnConnection = (socket) => {
       // Handle automatic speech recognition
       socket.on('recognize', async (data) => {
         try {
-          await asr.run(data, stt)
+          await asr.run(data, brain.stt)
         } catch (e) {
           log[e.type](e.obj.message)
         }
