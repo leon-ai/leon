@@ -63,7 +63,7 @@
       "<li>%todo%.</li>"
     ],
     "list_completed_todo_element": [
-      "<li><strike>%todo%</strike>.</li>"
+      "<li><s>%todo%</s>.</li>"
     ],
     "todos_added": [
       "Alright, I added the following to your \"%list%\" list:<br><br><ul>%result%</ul>",
