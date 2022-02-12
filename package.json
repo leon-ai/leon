@@ -1,7 +1,7 @@
 {
   "name": "leon",
   "version": "1.0.0-beta.7+dev",
-  "description": "Server, packages and web app of the Leon personal assistant",
+  "description": "Server, skills and web app of the Leon personal assistant",
   "author": {
     "name": "Louis Grenard",
     "email": "louis.grenard@gmail.com",

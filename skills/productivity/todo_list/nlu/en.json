@@ -1,0 +1,27 @@
+{
+  "actions": {
+    "create_list": {
+      "utterance_samples": [
+        "Create the x list",
+        "Create a x list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "a", "an", "my"],
+              "to": ["list", "list", "list", "list"]
+            }
+          ]
+        }
+      ],
+      "answers": [
+        "Alright, I've created the \"%list%\" list.",
+        "Done, I created your \"%list%\" list."
+      ]
+    }
+  }
+}
