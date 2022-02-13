@@ -6,8 +6,8 @@ import fs from 'fs'
 import path from 'path'
 
 import log from '@/helpers/log'
-import string from '@/helpers/string'
 import lang from '@/helpers/lang'
+import domain from '@/helpers/domain'
 
 dotenv.config()
 
@@ -17,7 +17,6 @@ dotenv.config()
  * npm run train [en or fr]
  */
 export default () => new Promise(async (resolve, reject) => {
-  const packagesDir = 'packages'
   const modelFileName = 'server/src/data/leon-model.nlp'
 
   try {
@@ -35,6 +34,7 @@ export default () => new Promise(async (resolve, reject) => {
     nlp.settings.modelFileName = modelFileName
     nlp.settings.threshold = 0.8
 
+    const [domainKeys, domains] = await Promise.all([domain.list(), domain.getDomainsObj()])
     const shortLangs = lang.getShortLangs()
 
     for (let h = 0; h < shortLangs.length; h += 1) {
@@ -42,33 +42,39 @@ export default () => new Promise(async (resolve, reject) => {
 
       nlp.addLanguage(lang)
 
-      const packages = fs.readdirSync(packagesDir)
-        .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
-      let utteranceSamplesObj = { }
+      for (let i = 0; i < domainKeys.length; i += 1) {
+        const currentDomain = domains[domainKeys[i]]
+        const skillKeys = Object.keys(currentDomain.skills)
 
-      for (let i = 0; i < packages.length; i += 1) {
-        log.info(`[${lang}] Training "${string.ucfirst(packages[i])}" package modules utterance samples...`)
+        log.info(`[${lang}] Training "${domainKeys[i]}" domain model...`)
 
-        utteranceSamplesObj = JSON.parse(fs.readFileSync(`${packagesDir}/${packages[i]}/data/expressions/${lang}.json`, 'utf8'))
+        for (let j = 0; j < skillKeys.length; j += 1) {
+          const { name: skillName } = currentDomain.skills[skillKeys[j]]
+          const currentSkill = currentDomain.skills[skillKeys[j]]
 
-        const modules = Object.keys(utteranceSamplesObj)
-        for (let j = 0; j < modules.length; j += 1) {
-          const module = modules[j]
-          const actions = Object.keys(utteranceSamplesObj[module])
+          log.info(`[${lang}] Using "${skillKeys[j]}" skill utterance samples`)
 
-          for (let k = 0; k < actions.length; k += 1) {
-            const action = actions[k]
-            const exprs = utteranceSamplesObj[module][action].utterance_samples
+          const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
 
-            nlp.assignDomain(lang, `${module}.${action}`, packages[i])
+          if (fs.existsSync(nluFilePath)) {
+            const { actions } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+            const actionsKeys = Object.keys(actions)
 
-            for (let l = 0; l < exprs.length; l += 1) {
-              nlp.addDocument(lang, exprs[l], `${module}.${action}`)
+            for (let k = 0; k < actionsKeys.length; k += 1) {
+              const actionName = actionsKeys[k]
+              const actionObj = actions[actionName]
+              const { utterance_samples: utteranceSamples } = actionObj
+
+              nlp.assignDomain(lang, `${skillName}.${actionName}`, currentDomain.name)
+
+              for (let l = 0; l < utteranceSamples.length; l += 1) {
+                nlp.addDocument(lang, utteranceSamples[l], `${skillName}.${actionName}`)
+              }
             }
           }
-
-          log.success(`[${lang}] "${string.ucfirst(module)}" module utterance samples trained`)
         }
+
+        log.success(`[${lang}] "${domainKeys[i]}" domain trained`)
       }
     }
 

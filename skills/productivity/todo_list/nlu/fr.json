@@ -1,0 +1,26 @@
+{
+  "actions": {
+    "create_list": {
+      "utterance_samples": [
+        "Crée la liste x",
+        "Crée une liste x"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "liste"
+            }
+          ]
+        }
+      ],
+      "answers": [
+        "Entendu, j'ai créé la liste \"%list%\".",
+        "C'est fait, j'ai créé votre liste \"%list%\"."
+      ]
+    }
+  }
+}
