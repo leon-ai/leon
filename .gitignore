@@ -22,7 +22,9 @@ debug.log
 !bridges/python/.venv/.gitkeep
 !**/*.sample*
 packages/**/config/config.json
+skills/**/src/config.json
 packages/**/data/db/*.json
+skills/**/memory/*.json
 server/src/data/leon-model.nlp
 package.json.backup
 .python-version

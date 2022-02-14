@@ -29,15 +29,15 @@ def get_intent_obj():
 
 def translate(key, d = { }):
 	"""Pickup the language file according to the cmd arg
-	and return the value regarding to the params"""
+	and return the value according to the params"""
 
 	output = ''
 
-	file = open(dirname + '/../../packages/' + intent_obj['package'] + '/' + 'data/answers/' + intent_obj['lang'] + '.json', 'r', encoding = 'utf8')
+	file = open(path.join(dirname, '../../domains', intent_obj['domain'], intent_obj['skill'], 'nlu', intent_obj['lang'] + '.json'), 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
-	prop = obj[intent_obj['module']][key]
+	prop = obj.actions[intent_obj['action']].answers[key]
 	if isinstance(prop, list):
 		output = choice(prop)
 	else:
@@ -53,13 +53,13 @@ def translate(key, d = { }):
 	return output
 
 def output(type, code, speech = ''):
-	"""Communicate with the Core"""
+	"""Communicate with the core"""
 
 	codes.append(code)
 
 	print(dumps({
-		'package': intent_obj['package'],
-		'module': intent_obj['module'],
+		'domain': intent_obj['domain'],
+		'skill': intent_obj['skill'],
 		'action': intent_obj['action'],
 		'lang': intent_obj['lang'],
 		'utterance': intent_obj['utterance'],
@@ -87,29 +87,29 @@ def http(method, url, headers = None):
 	return session.request(method, url)
 
 def config(key):
-	"""Get a package configuration value"""
+	"""Get a skill configuration value"""
 
-	file = open(dirname + '/../../packages/' + intent_obj['package'] + '/config/config.json', 'r', encoding = 'utf8')
+	file = open(path.join(dirname, '../../skills', intent_obj['domain'], intent_obj['skill'], 'src/config.json'), 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
-	return obj[intent_obj['module']][key]
+	return obj.configurations[key]
 
 def create_dl_dir():
-	"""Create the downloads folder of a current module"""
+	"""Create the downloads folder of a current skill"""
 
 	dl_dir = path.dirname(path.realpath(__file__)) + '/../../downloads/'
-	module_dl_dir = dl_dir + intent_obj['package'] + '/' + intent_obj['module']
+	skill_dl_dir = path.join(dl_dir, intent_obj['domain'], intent_obj['skill'])
 
-	Path(module_dl_dir).mkdir(parents = True, exist_ok = True)
+	Path(skill_dl_dir).mkdir(parents = True, exist_ok = True)
 
-	return module_dl_dir
+	return skill_dl_dir
 
 def db(db_type = 'tinydb'):
 	"""Create a new dedicated database
-	for a specific package"""
+	for a specific skill"""
 
 	if db_type == 'tinydb':
 		ext = '.json' if environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
-		db = TinyDB(dirname + '/../../packages/' + intent_obj['package'] + '/data/db/' + intent_obj['package'] + ext)
+		db = TinyDB(path.join(dirname, '../../skills', intent_obj['domain'], intent_obj['skill'], 'memory/db' + ext))
 		return { 'db': db, 'query': Query, 'operations': operations }

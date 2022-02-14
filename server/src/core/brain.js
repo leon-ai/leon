@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 import { spawn } from 'child_process'
 
 import { langs } from '@@/core/langs.json'
@@ -132,7 +133,7 @@ class Brain {
 
     return new Promise((resolve, reject) => {
       const utteranceId = `${Date.now()}-${string.random(4)}`
-      const intentObjectPath = `${__dirname}/../tmp/${utteranceId}.json`
+      const intentObjectPath = path.join(__dirname, `../tmp/${utteranceId}.json`)
       const speeches = []
 
       // Ask to repeat if Leon is not sure about the request

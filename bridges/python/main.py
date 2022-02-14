@@ -7,14 +7,14 @@ from json import dumps, loads
 from importlib import import_module
 
 def main():
-	"""Dynamically import modules related to the args and print the ouput"""
+	"""Dynamically import skills related to the args and print the output"""
 
 	path.append('.')
 
 	intent_obj = utils.get_intent_obj()
-	m = import_module('packages.' + intent_obj['package'] + '.' + intent_obj['module'])
+	skill = import_module('skills.' + intent_obj['domain'] + '.' + intent_obj['skill'] + '.src.actions.' + intent_obj['action'])
 
-	return getattr(m, intent_obj['action'])(intent_obj['utterance'], intent_obj['entities'])
+	return getattr(skill, intent_obj['action'])(intent_obj['utterance'], intent_obj['entities'])
 
 if __name__ == '__main__':
 	main()
