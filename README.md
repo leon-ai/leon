@@ -161,11 +161,18 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
-        <a href="https://github.com/Francaoz">
-          <img src="https://github.com/Francaoz.png?size=128" />
-          Francaoz
+        <a href="https://www.aoz.studio/">
+          <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" />
+          AOZ Studio
         </a><br>
         <sub><sup>100 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
+        <a href="https://github.com/FluxIndustries">
+          <img src="https://github.com/FluxIndustries.png?size=128" />
+          Flux Industries
+        </a><br>
+        <sub><sup>204 USD / year</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
         <a href="https://github.com/GregoireAMATO">
@@ -191,7 +198,7 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
       <td align="center" valign="middle" width="128">
         <a href="https://github.com/KeithIMyers">
           <img src="https://github.com/KeithIMyers.png?size=128" />
-          KeithIMyers
+          Keith Myers
         </a><br>
         <sub><sup>10 USD / month</sup></sub>
       </td>
