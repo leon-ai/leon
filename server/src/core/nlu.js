@@ -91,13 +91,13 @@ class Nlu {
       const {
         locale, domain, intent, score
       } = result
-      const [moduleName, actionName] = intent.split('.')
+      const [skillName, actionName] = intent.split('.')
       let obj = {
         utterance,
         entities: [],
         classification: {
-          package: domain,
-          module: moduleName,
+          domain,
+          skill: skillName,
           action: actionName,
           confidence: score
         }
@@ -153,10 +153,11 @@ class Nlu {
       try {
         obj.entities = await this.ner.extractEntities(
           this.brain.lang,
-          join(__dirname, '../../../packages', obj.classification.package, `data/expressions/${this.brain.lang}.json`),
+          join(process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, `nlu/${this.brain.lang}.json`),
           obj
         )
       } catch (e) /* istanbul ignore next */ {
+        console.error(e)
         log[e.type](e.obj.message)
 
         if (!opts.mute) {
@@ -176,6 +177,7 @@ class Nlu {
           nluProcessingTime: processingTime - data?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
+        console.error(e)
         log[e.type](e.obj.message)
 
         if (!opts.mute) {
@@ -207,8 +209,8 @@ class Nlu {
 
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i].words)) {
           obj.entities = []
-          obj.classification.package = fallbacks[i].package
-          obj.classification.module = fallbacks[i].module
+          obj.classification.domain = fallbacks[i].domain
+          obj.classification.skill = fallbacks[i].skill
           obj.classification.action = fallbacks[i].action
           obj.classification.confidence = 1
 

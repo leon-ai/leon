@@ -35,10 +35,10 @@ class Ner {
     const { classification } = obj
     // Remove end-punctuation and add an end-whitespace
     const utterance = `${string.removeEndPunctuation(obj.utterance)} `
-    const utteranceSamplesObj = JSON.parse(fs.readFileSync(utteranceSamplesFilePath, 'utf8'))
-    const { module, action } = classification
+    const { actions } = JSON.parse(fs.readFileSync(utteranceSamplesFilePath, 'utf8'))
+    const { action } = classification
     const promises = []
-    const actionEntities = utteranceSamplesObj[module][action].entities || []
+    const actionEntities = actions[action].entities || []
 
     /**
      * Browse action entities
