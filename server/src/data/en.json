@@ -19,11 +19,11 @@
 			"Sorry, you need to fix me",
 			"Sorry, I cannot do that because I'm broken"
 		],
-		"random_package_module_errors": [
-			"Sorry, it seems I have a problem with the \"%module_name%\" module of my \"%package_name%\" package",
-			"Sorry, I have an issue with the \"%module_name%\" module of my \"%package_name%\" package",
-			"Sorry, I've got an error with the \"%module_name%\" module of my \"%package_name%\" package",
-			"Sorry, the \"%module_name%\" module of my \"%package_name%\" package is broken"
+		"random_skill_errors": [
+			"Sorry, it seems I have a problem with the \"%skill_name%\" skill from the \"%domain_name%\" domain",
+			"Sorry, I have an issue with the \"%skill_name%\" skill from the \"%domain_name%\" domain",
+			"Sorry, I've got an error with the \"%skill_name%\" skill from the \"%domain_name%\" domain",
+			"Sorry, the \"%skill_name%\" skill from the \"%domain_name%\" domain is broken"
 		],
 		"random_unknown_intents": [
 			"Sorry, I still don't know this, but you can help me to understand by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",

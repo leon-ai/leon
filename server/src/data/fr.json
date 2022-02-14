@@ -19,11 +19,11 @@
 			"Désolé, vous devez me réparer",
 			"Désolé, je ne peux aboutir à votre demande parce que je suis cassé"
 		],
-		"random_package_module_errors": [
-			"Désolé, il semblerait y avoir un problème avec le module \"%module_name%\" de mon paquet \"%package_name%\"",
-			"Désolé, j'ai un problème avec le module \"%module_name%\" de mon paquet \"%package_name%\"",
-			"Désolé, j'ai une erreur avec le module \"%module_name%\" de mon paquet \"%package_name%\"",
-			"Désolé, le module \"%module_name%\" de mon paquet \"%package_name%\" est cassé"
+		"random_skill_errors": [
+			"Désolé, il semblerait y avoir un problème avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
+			"Désolé, j'ai un problème avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
+			"Désolé, j'ai une erreur avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
+			"Désolé, le skill \"%skill_name%\" du domaine \"%domain_name%\" est cassé"
 		],
 		"random_unknown_intents": [
 			"Désolé, je ne connais pas encore ça, mais vous pouvez m'aider à comprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",

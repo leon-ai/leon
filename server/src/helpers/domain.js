@@ -2,10 +2,10 @@ import fs from 'fs'
 import path from 'path'
 
 const domain = { }
+const domainsDir = path.join(process.cwd(), 'skills')
 
 domain.getDomainsObj = async () => {
   const domainsObj = { }
-  const domainsDir = path.join(process.cwd(), 'skills')
 
   await Promise.all(fs.readdirSync(domainsDir).map(async (entity) => {
     const domainPath = path.join(domainsDir, entity)
@@ -42,5 +42,23 @@ domain.getDomainsObj = async () => {
 }
 
 domain.list = async () => Object.keys(await domain.getDomainsObj())
+
+domain.getDomainName = (domain) => {
+  const { name: domainName } = JSON.parse(fs.readFileSync(
+    path.join(domainsDir, domain, 'domain.json'),
+    'utf8'
+  ))
+
+  return domainName
+}
+
+domain.getSkillName = (domain, skill) => {
+  const { name: skillName } = JSON.parse(fs.readFileSync(
+    path.join(domainsDir, domain, skill, 'skill.json'),
+    'utf8'
+  ))
+
+  return skillName
+}
 
 export default domain

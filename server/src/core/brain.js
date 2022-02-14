@@ -6,6 +6,7 @@ import log from '@/helpers/log'
 import string from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
 import lang from '@/helpers/lang'
+import domain from '@/helpers/domain'
 
 class Brain {
   constructor () {
@@ -121,7 +122,7 @@ class Brain {
   }
 
   /**
-   * Execute Python modules
+   * Execute Python skills
    */
   execute (obj, opts) {
     const executionTimeStart = Date.now()
@@ -155,7 +156,7 @@ class Brain {
         // Ensure the process is empty (to be able to execute other processes outside of Brain)
         if (Object.keys(this.process).length === 0) {
           /**
-           * Execute a module in a standalone way (CLI):
+           * Execute a skill in a standalone way (CLI):
            *
            * 1. Need to be at the root of the project
            * 2. Edit: server/src/intent-object.sample.json
@@ -165,8 +166,8 @@ class Brain {
           const intentObj = {
             id: utteranceId,
             lang: this._lang,
-            package: obj.classification.package,
-            module: obj.classification.module,
+            domain: obj.classification.domain,
+            skill: obj.classification.skill,
             action: obj.classification.action,
             utterance: obj.utterance,
             entities: obj.entities
@@ -180,8 +181,10 @@ class Brain {
           }
         }
 
-        const packageName = string.ucfirst(obj.classification.package)
-        const moduleName = string.ucfirst(obj.classification.module)
+        const domainName = obj.classification.domain
+        const skillName = obj.classification.skill
+        const domainFriendlyName = domain.getDomainName(domainName)
+        const skillFriendlyName = domain.getSkillName(domainName, skillName)
         let output = ''
 
         // Read output
@@ -190,7 +193,7 @@ class Brain {
 
           if (typeof obj === 'object') {
             if (obj.output.type === 'inter') {
-              log.title(`${packageName} package`)
+              log.title(`${skillFriendlyName} skill`)
               log.info(data.toString())
 
               this.interOutput = obj.output
@@ -210,7 +213,7 @@ class Brain {
             /* istanbul ignore next */
             reject({
               type: 'warning',
-              obj: new Error(`The ${moduleName} module of the ${packageName} package is not well configured. Check the configuration file.`),
+              obj: new Error(`The ${skillFriendlyName} skill from the ${domainFriendlyName} domain is not well configured. Check the configuration file.`),
               speeches,
               executionTime
             })
@@ -219,8 +222,8 @@ class Brain {
 
         // Handle error
         this.process.stderr.on('data', (data) => {
-          const speech = `${this.wernicke('random_package_module_errors', '',
-            { '%module_name%': moduleName, '%package_name%': packageName })}!`
+          const speech = `${this.wernicke('random_skill_errors', '',
+            { '%skill_name%': skillFriendlyName, '%domain_name%': domainFriendlyName })}!`
           if (!opts.mute) {
             this.talk(speech)
             this._socket.emit('is-typing', false)
@@ -229,7 +232,7 @@ class Brain {
 
           Brain.deleteIntentObjFile(intentObjectPath)
 
-          log.title(packageName)
+          log.title(`${skillFriendlyName} skill`)
 
           const executionTimeEnd = Date.now()
           const executionTime = executionTimeEnd - executionTimeStart
@@ -241,14 +244,14 @@ class Brain {
           })
         })
 
-        // Catch the end of the module execution
+        // Catch the end of the skill execution
         this.process.stdout.on('end', () => {
-          log.title(`${packageName} package`)
+          log.title(`${skillFriendlyName} skill`)
           log.info(output)
 
           this.finalOutput = output
 
-          // Check if there is an output (no module error)
+          // Check if there is an output (no skill error)
           if (this.finalOutput !== '') {
             this.finalOutput = JSON.parse(this.finalOutput).output
 
@@ -292,7 +295,7 @@ class Brain {
             lang: this._lang,
             ...obj,
             speeches,
-            executionTime // In ms, module execution time only
+            executionTime // In ms, skill execution time only
           })
         })
 
