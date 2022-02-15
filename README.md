@@ -161,18 +161,18 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
+        <a href="https://github.com/FluxIndustries">
+          <img src="https://github.com/FluxIndustries.png?size=128" />
+          Flux Industries
+        </a><br>
+        <sub><sup>7,200 USD / year</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
         <a href="https://www.aoz.studio/">
           <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" />
           AOZ Studio
         </a><br>
         <sub><sup>100 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
-        <a href="https://github.com/FluxIndustries">
-          <img src="https://github.com/FluxIndustries.png?size=128" />
-          Flux Industries
-        </a><br>
-        <sub><sup>204 USD / year</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
         <a href="https://github.com/GregoireAMATO">
