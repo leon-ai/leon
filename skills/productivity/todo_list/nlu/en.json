@@ -23,5 +23,84 @@
         "Done, I created your \"%list%\" list."
       ]
     }
+  },
+  "answers": {
+    "list_created": [
+      "Alright, I've created the \"%list%\" list.",
+      "Done, I created your \"%list%\" list."
+    ],
+    "list_not_provided": [
+      "Please provide me a list name.",
+      "Please provide the name of a list."
+    ],
+    "todos_not_provided": [
+      "Please provide me items.",
+      "Please provide elements."
+    ],
+    "new_or_old_list_not_provided": [
+      "Please make sure you provide the list name to rename and its new list name.",
+      "Please provide the list name to rename and its new list name."
+    ],
+    "no_list": [
+      "You do not have any list.",
+      "There is no list to show."
+    ],
+    "empty_list": [
+      "Your \"%list%\" list is empty.",
+      "There is nothing in your \"%list%\" list."
+    ],
+    "list_does_not_exist": [
+      "Sorry I can't because the \"%list%\" does not exist.",
+      "I cannot do that because the \"%list%\" does not exist."
+    ],
+    "list_already_exists": [
+      "You already have a list named \"%list%\"."
+    ],
+    "list_renamed": [
+      "I renamed the \"%old_list%\" list to \"%new_list%\"."
+    ],
+    "list_deleted": [
+      "I deleted the \"%list%\" list and all the todos it was containing."
+    ],
+    "lists_listed": [
+      "You have %lists_nb% lists. Please let me list them for you:<br><br><ul>%result%</ul>"
+    ],
+    "list_list_element": [
+      "<li>\"%list%\", with %todos_nb% elements in it.</li>",
+      "<li>\"%list%\", that contains %todos_nb% items.</li>"
+    ],
+    "no_unchecked_todo": [
+      "You do not have in progress element in your \"%list%\" list.",
+      "You don't have any in progress element in your \"%list%\" list."
+    ],
+    "no_completed_todo": [
+      "And you do not have completed element in your \"%list%\" list.",
+      "And you don't have any completed element in your \"%list%\" list."
+    ],
+    "unchecked_todos_listed": [
+      "Here are the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br>Stay motivated!",
+      "Please find the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br>Keep going!"
+    ],
+    "completed_todos_listed": [
+      "And here are the completed elements of your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
+    "list_todo_element": [
+      "<li>%todo%.</li>"
+    ],
+    "list_completed_todo_element": [
+      "<li><s>%todo%</s>.</li>"
+    ],
+    "todos_added": [
+      "Alright, I added the following to your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "The following have been added to your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
+    "todos_unchecked": [
+      "I unchecked the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "The following have been unchecked from your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
+    "todos_completed": [
+      "Keep going! I completed the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "Well done! The following have been completed from your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ]
   }
 }

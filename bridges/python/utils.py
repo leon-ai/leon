@@ -33,11 +33,11 @@ def translate(key, d = { }):
 
 	output = ''
 
-	file = open(path.join(dirname, '../../domains', intent_obj['domain'], intent_obj['skill'], 'nlu', intent_obj['lang'] + '.json'), 'r', encoding = 'utf8')
+	file = open(path.join(dirname, '../../skills', intent_obj['domain'], intent_obj['skill'], 'nlu', intent_obj['lang'] + '.json'), 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
-	prop = obj.actions[intent_obj['action']].answers[key]
+	prop = obj['answers'][key]
 	if isinstance(prop, list):
 		output = choice(prop)
 	else:
@@ -93,7 +93,7 @@ def config(key):
 	obj = loads(file.read())
 	file.close()
 
-	return obj.configurations[key]
+	return obj['configurations'][key]
 
 def create_dl_dir():
 	"""Create the downloads folder of a current skill"""
