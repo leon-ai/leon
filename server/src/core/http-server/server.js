@@ -4,7 +4,7 @@ import socketio from 'socket.io'
 import { join } from 'path'
 
 import { version } from '@@/package.json'
-import { endpoints } from '@@/core/pkgs-endpoints.json'
+import { endpoints } from '@@/core/skills-endpoints.json'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
 import Asr from '@/core/asr'

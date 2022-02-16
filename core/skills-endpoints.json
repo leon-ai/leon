@@ -1,0 +1,12 @@
+{
+  "endpoints": [
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/create_list",
+      "params": [
+        "list"
+      ],
+      "entitiesType": "trim"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ import path from 'path'
 import log from '@/helpers/log'
 
 /**
- * Download and setup Leon's packages Python dependencies
+ * Download and setup Leon's Python packages dependencies
  */
 export default () => new Promise(async (resolve, reject) => {
   log.info('Checking Python env...')

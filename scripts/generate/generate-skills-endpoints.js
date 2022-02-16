@@ -5,44 +5,55 @@ import path from 'path'
 import log from '@/helpers/log'
 
 import { langs } from '@@/core/langs.json'
+import domain from '@/helpers/domain'
 
 dotenv.config()
 
 /**
- * Generate packages endpoints script
- * Parse and convert packages configuration into a JSON file understandable by Fastify
- * to dynamically generate endpoints so packages can be accessible over HTTP
+ * Generate skills endpoints script
+ * Parse and convert skills NLU config into a JSON file understandable by Fastify
+ * to dynamically generate endpoints so skills can be accessible over HTTP
  */
 export default () => new Promise(async (resolve, reject) => {
   const supportedMethods = ['DELETE', 'GET', 'HEAD', 'PATCH', 'POST', 'PUT', 'OPTIONS']
-  const packagesDir = 'packages'
-  const outputFile = '/core/pkgs-endpoints.json'
+  const outputFile = '/core/skills-endpoints.json'
   const outputFilePath = path.join(__dirname, `../..${outputFile}`)
   const lang = langs[process.env.LEON_HTTP_API_LANG].short
 
   try {
-    const packages = fs.readdirSync(packagesDir)
-      .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
+    const [domainKeys, domains] = await Promise.all([domain.list(), domain.getDomainsObj()])
     const finalObj = {
       endpoints: []
     }
     let isFileNeedToBeGenerated = true
-    let pkgObj = { }
+    let loopIsBroken = false
 
     // Check if a new routing generation is necessary
     if (fs.existsSync(outputFilePath)) {
       const mtimeEndpoints = fs.statSync(outputFilePath).mtime.getTime()
 
-      for (let i = 0; i < packages.length; i += 1) {
-        const pkg = packages[i]
-        const fileInfo = fs.statSync(`${packagesDir}/${pkg}/data/expressions/${lang}.json`)
-        const mtime = fileInfo.mtime.getTime()
+      for (let i = 0; i < domainKeys.length; i += 1) {
+        const currentDomain = domains[domainKeys[i]]
+        const skillKeys = Object.keys(currentDomain.skills)
 
-        if (mtime > mtimeEndpoints) {
+        // Browse skills
+        for (let j = 0; j < skillKeys.length; j += 1) {
+          const skillFriendlyName = skillKeys[j]
+          const currentSkill = currentDomain.skills[skillFriendlyName]
+          const fileInfo = fs.statSync(path.join(currentSkill.path, 'nlu', `${lang}.json`))
+          const mtime = fileInfo.mtime.getTime()
+
+          if (mtime > mtimeEndpoints) {
+            loopIsBroken = true
+            break
+          }
+        }
+
+        if (loopIsBroken) {
           break
         }
 
-        if ((i + 1) === packages.length) {
+        if ((i + 1) === domainKeys.length) {
           log.success(`${outputFile} is already up-to-date`)
           isFileNeedToBeGenerated = false
         }
@@ -51,37 +62,40 @@ export default () => new Promise(async (resolve, reject) => {
 
     // Force if a language is given
     if (isFileNeedToBeGenerated) {
-      log.info('Parsing packages configuration...')
+      log.info('Parsing skills NLU configuration...')
 
-      for (let i = 0; i < packages.length; i += 1) {
-        const pkg = packages[i]
+      for (let i = 0; i < domainKeys.length; i += 1) {
+        const currentDomain = domains[domainKeys[i]]
+        const skillKeys = Object.keys(currentDomain.skills)
 
-        pkgObj = JSON.parse(fs.readFileSync(`${packagesDir}/${pkg}/data/expressions/${lang}.json`, 'utf8'))
+        // Browse skills
+        for (let j = 0; j < skillKeys.length; j += 1) {
+          const skillFriendlyName = skillKeys[j]
+          const currentSkill = currentDomain.skills[skillFriendlyName]
 
-        const modules = Object.keys(pkgObj)
-        for (let j = 0; j < modules.length; j += 1) {
-          const module = modules[j]
-          const actions = Object.keys(pkgObj[module])
+          const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
+          const { actions } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+          const actionsKeys = Object.keys(actions)
 
-          for (let k = 0; k < actions.length; k += 1) {
-            const action = actions[k]
-            const actionObj = pkgObj[module][action]
+          for (let k = 0; k < actionsKeys.length; k += 1) {
+            const action = actionsKeys[k]
+            const actionObj = actions[action]
             const { entities, http_api } = actionObj // eslint-disable-line camelcase
-            let finalMethod = entities || http_api?.entities ? 'POST' : 'GET'
+            let finalMethod = (entities || http_api?.entities) ? 'POST' : 'GET'
 
-            // Only generate this route if it is not disabled from the package config
+            // Only generate this route if it is not disabled from the skill config
             if (!http_api?.disabled || (http_api?.disabled && http_api?.disabled === false)) {
               if (http_api?.method) {
                 finalMethod = http_api.method.toUpperCase()
               }
 
               if (!supportedMethods.includes(finalMethod)) {
-                reject(`The "${finalMethod}" HTTP method of the ${pkg}/${module}/${action} action is not supported`)
+                reject(`The "${finalMethod}" HTTP method of the ${currentDomain.name}/${currentSkill.name}/${action} action is not supported`)
               }
 
               const endpoint = {
                 method: finalMethod.toUpperCase(),
-                route: `/api/p/${pkg}/${module}/${action}`,
+                route: `/api/action/${currentDomain.name}/${currentSkill.name}/${action}`,
                 params: []
               }
 
