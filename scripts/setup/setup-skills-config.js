@@ -19,8 +19,8 @@ export default () => new Promise(async (resolve, reject) => {
 
     // Browse skills
     for (let j = 0; j < skillKeys.length; j += 1) {
-      const { name: skillName } = currentDomain.skills[skillKeys[j]]
-      const currentSkill = currentDomain.skills[skillKeys[j]]
+      const skillFriendlyName = skillKeys[j]
+      const currentSkill = currentDomain.skills[skillFriendlyName]
       const configDir = path.join(currentSkill.path, 'src')
       const configFile = path.join(configDir, 'config.json')
       const configSampleFile = path.join(configDir, 'config.sample.json')
@@ -38,7 +38,7 @@ export default () => new Promise(async (resolve, reject) => {
           for (let j = 0; j < configSampleKeys.length; j += 1) {
             // Check if the current config key does not exist
             if (configKeys.includes(configSampleKeys[j]) === false) {
-              log.info(`Adding new configuration key "${configSampleKeys[j]}" for the ${skillName} skill...`)
+              log.info(`Adding new configuration key "${configSampleKeys[j]}" for the ${skillFriendlyName} skill...`)
 
               // Prepare to inject the new config key object
               const configKey = {
@@ -58,14 +58,14 @@ export default () => new Promise(async (resolve, reject) => {
         }
       } else if (!fs.existsSync(configSampleFile)) {
         // Stop the setup if the config.sample.json of the current skill does not exist
-        log.error(`The "${skillName}" skill configuration file does not exist. Try to pull the project (git pull)`)
+        log.error(`The "${skillFriendlyName}" skill configuration file does not exist. Try to pull the project (git pull)`)
         reject()
       } else {
         // Duplicate config.sample.json of the current skill to config.json
         fs.createReadStream(configSampleFile)
           .pipe(fs.createWriteStream(`${configDir}/config.json`))
 
-        log.success(`"${skillName}" skill configuration file created`)
+        log.success(`"${skillFriendlyName}" skill configuration file created`)
         resolve()
       }
     }
