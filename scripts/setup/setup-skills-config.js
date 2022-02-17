@@ -6,7 +6,7 @@ import log from '@/helpers/log'
 import domain from '@/helpers/domain'
 
 /**
- * Setup packages configuration
+ * Setup skills configuration
  */
 export default () => new Promise(async (resolve, reject) => {
   log.info('Setting up skills configuration...')
@@ -46,7 +46,7 @@ export default () => new Promise(async (resolve, reject) => {
               }
 
               try {
-                // Add new module configuration in the config.json file
+                // Add new skill configuration in the config.json file
                 commandSync(`json -I -f ${configFile} -e 'this.configurations.${configSampleKeys[j]}=${JSON.stringify(configKey[configSampleKeys[j]])}'`, { shell: true })
                 log.success(`"${configSampleKeys[j]}" configuration key added to ${configFile}`)
               } catch (e) {

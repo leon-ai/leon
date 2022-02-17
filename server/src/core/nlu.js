@@ -191,7 +191,7 @@ class Nlu {
 
   /**
    * Pickup and compare the right fallback
-   * according to the wished module
+   * according to the wished skill action
    */
   static fallback (obj, fallbacks) {
     const words = obj.utterance.toLowerCase().split(' ')

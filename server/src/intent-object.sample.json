@@ -1,7 +1,7 @@
 {
   "lang": "en",
-  "package": "checker",
-  "module": "isitdown",
+  "domain": "checker",
+  "skill": "isitdown",
   "action": "run",
   "utterance": "Check if github.com, mozilla.org and twitter.com are up",
   "entities": [

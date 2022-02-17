@@ -9,7 +9,7 @@ from ..lib.db import db_create_list
 # Skill database
 db = utils.db()['db']
 
-# Lists of the module table
+# Todo lists table
 db_lists = db.table('todo_lists')
 
 # Query

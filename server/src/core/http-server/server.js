@@ -26,18 +26,18 @@ server.fastify = Fastify()
 server.httpServer = { }
 
 /**
- * Generate packages routes
+ * Generate skills routes
  */
 /* istanbul ignore next */
-server.generatePackagesRoutes = (instance) => {
-  // Dynamically expose Leon modules over HTTP
+server.generateSkillsRoutes = (instance) => {
+  // Dynamically expose Leon skills over HTTP
   endpoints.forEach((endpoint) => {
     instance.route({
       method: endpoint.method,
       url: endpoint.route,
       async handler (request, reply) {
         const timeout = endpoint.timeout || 60000
-        const [, , , pkg, module, action] = endpoint.route.split('/')
+        const [, , , domain, skill, action] = endpoint.route.split('/')
         const handleRoute = async () => {
           const { params } = endpoint
           const entities = []
@@ -74,15 +74,15 @@ server.generatePackagesRoutes = (instance) => {
             utterance: '',
             entities,
             classification: {
-              package: pkg,
-              module,
+              domain,
+              skill,
               action,
               confidence: 1
             }
           }
           const responseData = {
-            package: pkg,
-            module,
+            domain,
+            skill,
             action,
             speeches: []
           }
@@ -111,8 +111,8 @@ server.generatePackagesRoutes = (instance) => {
         setTimeout(() => {
           reply.statusCode = 408
           reply.send({
-            package: pkg,
-            module,
+            domain,
+            skill,
             action,
             message: 'The action has timed out',
             timeout,
@@ -213,7 +213,7 @@ server.bootstrap = async () => {
 
   // Render the web app
   server.fastify.register(fastifyStatic, {
-    root: join(__dirname, '../../../../app/dist'),
+    root: join(process.cwd(), 'app/dist'),
     prefix: '/'
   })
   server.fastify.get('/', (request, reply) => {
@@ -246,7 +246,7 @@ server.bootstrap = async () => {
         }
       })
 
-      server.generatePackagesRoutes(instance)
+      server.generateSkillsRoutes(instance)
 
       next()
     })
@@ -280,7 +280,7 @@ server.init = async () => {
   brain = new Brain()
   nlu = new Nlu(brain)
 
-  // Train modules utterance samples
+  // Load NLP model
   try {
     await nlu.loadModel(join(__dirname, '../../data/leon-model.nlp'))
   } catch (e) {

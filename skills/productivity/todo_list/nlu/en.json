@@ -17,10 +17,14 @@
             }
           ]
         }
-      ],
-      "answers": [
-        "Alright, I've created the \"%list%\" list.",
-        "Done, I created your \"%list%\" list."
+      ]
+    },
+    "view_lists": {
+      "utterance_samples": [
+        "Show all the lists",
+        "Show all my lists",
+        "What are the lists?",
+        "What are my lists?"
       ]
     }
   },
