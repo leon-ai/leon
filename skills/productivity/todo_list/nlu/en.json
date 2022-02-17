@@ -2,8 +2,16 @@
   "actions": {
     "create_list": {
       "utterance_samples": [
-        "Create the x list",
-        "Create a x list"
+        "Create the shopping list",
+        "Create a material list",
+        "I want you to create a stuff list",
+        "Can you create a reminder list for me?",
+        "I need you to make a movies list",
+        "Make a food list",
+        "Add a material list",
+        "I want a shopping list",
+        "Help me to get a x list",
+        "Can you add a reminder list?"
       ],
       "entities": [
         {
@@ -21,18 +29,27 @@
     },
     "view_lists": {
       "utterance_samples": [
-        "Show all the lists",
         "Show all my lists",
-        "What are the lists?",
-        "What are my lists?"
+        "Show contents of all my lists",
+        "Can you show all my lists?",
+        "Can you show all contents of my lists?",
+        "Can you show me all the lists?",
+        "I need to see my lists",
+        "Show me all the lists"
       ]
     },
     "view_list": {
       "utterance_samples": [
-        "Show my x list",
-        "Show the x list",
-        "What is in my x list?",
-        "What is in the x list?"
+        "Show my shopping list",
+        "Show the material list",
+        "Tell me what is on my stuff list",
+        "What is on the reminder list?",
+        "Can you give me the content of my movies list?",
+        "I'd like to know what is on the food list",
+        "Give me the content of the shopping list",
+        "I need you tell me what's on the stuff list",
+        "What is in my reminder list?",
+        "Get me the food list"
       ],
       "entities": [
         {
