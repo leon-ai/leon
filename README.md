@@ -161,6 +161,7 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
+        <img src="https://getleon.ai/img/flux-industries.png" />
         Flux Industries
         <br>
         <sub><sup>7,200 USD / year</sup></sub>
