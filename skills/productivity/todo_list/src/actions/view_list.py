@@ -11,6 +11,8 @@ db = utils.db()['db']
 
 # Todo lists table
 db_lists = db.table('todo_lists')
+# Todos of the module table
+db_todos = db.table('todo_todos')
 
 # Query
 Query = utils.db()['query']()
