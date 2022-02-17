@@ -161,10 +161,8 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
-        <a href="https://github.com/FluxIndustries">
-          <img src="https://github.com/FluxIndustries.png?size=128" />
-          Flux Industries
-        </a><br>
+        Flux Industries
+        <br>
         <sub><sup>7,200 USD / year</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
