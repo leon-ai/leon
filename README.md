@@ -18,7 +18,6 @@
   <a href="https://github.com/leon-ai/leon/actions/workflows/lint.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/lint.yml/badge.svg?branch=develop" /></a>
   <br>
   <a href="https://discord.gg/MNQqqKg"><img src="https://svgshare.com/i/V09.svg"/></a>
-  <a href="https://twitter.com/louistiti_fr"><img src="https://img.shields.io/twitter/follow/louistiti_fr?label=Follow&style=social" /></a>
 </p>
 
 <p align="center">
@@ -144,16 +143,16 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 
 ## 🔔 Stay Tuned
 
-- [Twitter](https://twitter.com/louistiti_fr)
+- [Twitter](https://twitter.com/grenlouis)
 - [Newsletter](http://newsletter.getleon.ai)
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
 - [YouTube](https://www.youtube.com/channel/UCW6mk6j6nQUzFYY97r47emQ)
-- [#LeonAI](https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Alouistiti_fr)&src=typed_query)
+- [#LeonAI](https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query)
 
 ## 👨 Author
 
-**Louis Grenard** ([@louistiti_fr](https://twitter.com/louistiti_fr))
+**Louis Grenard** ([@grenlouis](https://twitter.com/grenlouis))
 
 ## 👍 Sponsors
 
