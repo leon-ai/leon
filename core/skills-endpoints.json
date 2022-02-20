@@ -64,6 +64,14 @@
         "list"
       ],
       "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/utilities/is_it_down/run",
+      "params": [
+        "url"
+      ],
+      "entitiesType": "builtIn"
     }
   ]
 }
