@@ -4,18 +4,7 @@
 from time import time
 
 import utils
-from ..lib.db import db_create_list
-
-# Skill database
-db = utils.db()['db']
-
-# Todo lists table
-db_lists = db.table('todo_lists')
-# Todos of the module table
-db_todos = db.table('todo_todos')
-
-# Query
-Query = utils.db()['query']()
+from ..lib import db
 
 def view_list(string, entities):
 	"""View a to-do list"""
@@ -29,17 +18,17 @@ def view_list(string, entities):
 			list_name = item['sourceText'].lower()
 
 	# Verify if the list exists
-	if db_lists.count(Query.name == list_name) == 0:
+	if db.has_list(list_name) == False:
 		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': list_name }))
 
 	# Grab todos of the list
-	todos = db_todos.search(Query.list == list_name)
+	todos = db.get_todos(list_name)
 
 	if len(todos) == 0:
 		return utils.output('end', 'empty_list', utils.translate('empty_list', { 'list': list_name }))
 
-	unchecked_todos = db_todos.search((Query.list == list_name) & (Query.is_completed == False))
-	completed_todos = db_todos.search((Query.list == list_name) & (Query.is_completed == True))
+	unchecked_todos = db.get_uncomplete_todos(list_name)
+	completed_todos = db.get_done_todos(list_name)
 
 	result_unchecked_todos = ''
 	result_completed_todos = ''

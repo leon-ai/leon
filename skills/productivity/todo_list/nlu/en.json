@@ -155,10 +155,10 @@
     },
     "complete_todos": {
       "utterance_samples": [
-        "Check x from the x list",
-        "Check x from my x list",
-        "Complete x from my x list",
-        "Tick x from my x list"
+        "Check potatoes from the shopping list",
+        "Check bread from my groceries list",
+        "Complete buy gift from my reminder list",
+        "Tick peach from my fruits list"
       ],
       "entities": [
         {
@@ -187,9 +187,10 @@
     },
     "uncheck_todos": {
       "utterance_samples": [
-        "Uncheck x from the x list",
-        "Uncheck x from my x list",
-        "Untick x from my x list"
+        "Uncheck potatoes from the shopping list",
+        "Uncheck bread from my groceries list",
+        "Untick buy gift from my reminder list",
+        "Can you uncomplete peach from my food list?"
       ],
       "entities": [
         {
@@ -198,7 +199,7 @@
           "conditions": [
             {
               "type": "between",
-              "from": ["uncheck", "untick"],
+              "from": ["uncheck", "untick", "uncomplete", "incomplete"],
               "to": ["from"]
             }
           ]

@@ -4,18 +4,7 @@
 from time import time
 
 import utils
-from ..lib.db import db_create_list
-
-# Skill database
-db = utils.db()['db']
-
-# Todo lists table
-db_lists = db.table('todo_lists')
-# Todos of the module table
-db_todos = db.table('todo_todos')
-
-# Query
-Query = utils.db()['query']()
+from ..lib import db
 
 def complete_todos(string, entities):
 	"""Complete todos"""
@@ -43,20 +32,16 @@ def complete_todos(string, entities):
 		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
 
 	# Verify the list exists
-	if db_lists.count(Query.name == list_name) == 0:
+	if db.has_list(list_name) == False:
 		# Create the new to-do list
-		db_create_list(db_lists, {
-			'list_name': list_name
-		})
+		db.create_list(list_name)
 
 	result = ''
 	for todo in todos:
-		for db_todo in db_todos.search(Query.list == list_name):
+		for db_todo in db.get_todos(list_name):
 			# Rough matching (e.g. 1kg of rice = rice)
 			if db_todo['name'].find(todo) != -1:
-				db_todos.update({
-					'is_completed': True
-				}, (Query.list == list_name) & (Query.name == db_todo['name']))
+				db.complete_todo(list_name, db_todo['name'])
 
 				result += utils.translate('list_completed_todo_element', { 'todo': db_todo['name'] })
 
