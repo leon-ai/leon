@@ -175,7 +175,10 @@ server.handleOnConnection = (socket) => {
         log.info(`${data.client} emitted: ${data.value}`)
 
         socket.emit('is-typing', true)
-        await nlu.process(data.value)
+
+        try {
+          await nlu.process(data.value)
+        } catch (e) { /* */ }
       })
 
       // Handle automatic speech recognition

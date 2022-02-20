@@ -30,6 +30,7 @@ export default () => new Promise(async (resolve, reject) => {
 
     nluManager.settings.log = false
     nluManager.settings.trainByDomain = true
+    nlp.settings.forceNER = true // https://github.com/axa-group/nlp.js/blob/master/examples/17-ner-nlg/index.js
     nlp.settings.calculateSentiment = true
     nlp.settings.modelFileName = modelFileName
     nlp.settings.threshold = 0.8

@@ -136,7 +136,7 @@
             {
               "type": "between",
               "from": ["coche", "complète", "complete"],
-              "to": ["de", "de", "de"]
+              "to": ["de"]
             }
           ]
         },
@@ -167,7 +167,7 @@
             {
               "type": "between",
               "from": ["décoche", "decoche", "invalide", "remet"],
-              "to": ["de", "de", "de", "sur"]
+              "to": ["de", "sur"]
             }
           ]
         },

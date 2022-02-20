@@ -4,19 +4,7 @@
 from time import time
 
 import utils
-from ..lib.db import db_create_list
-
-# Skill database
-db = utils.db()['db']
-
-# Todo lists table
-db_lists = db.table('todo_lists')
-
-# Query
-Query = utils.db()['query']()
-
-# Time stamp
-timestamp = int(time())
+from ..lib import db
 
 def create_list(string, entities):
 	"""Create a to-do list"""
@@ -34,12 +22,9 @@ def create_list(string, entities):
 		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
 
 	# Verify if list already exists or not
-	if db_lists.count(Query.name == list_name) > 0:
+	if db.has_list(list_name):
 		return utils.output('end', 'list_already_exists', utils.translate('list_already_exists', { 'list': list_name }))
 
-	db_create_list(db_lists, {
-		'list_name': list_name,
-		'timestamp': timestamp
-	})
+	db.create_list(list_name)
 
 	return utils.output('end', 'list_created', utils.translate('list_created', { 'list': list_name }))

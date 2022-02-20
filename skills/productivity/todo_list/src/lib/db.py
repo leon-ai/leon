@@ -1,19 +1,73 @@
-def db_create_list(db_lists, data):
+from time import time
+
+import utils
+
+# Skill database
+db = utils.db()['db']
+
+# Todo lists table
+db_lists = db.table('todo_lists')
+# Todos of the module table
+db_todos = db.table('todo_todos')
+
+# Query
+Query = utils.db()['query']()
+
+# Time stamp
+timestamp = int(time())
+
+def create_list(list_name):
 	"""Create list in DB"""
 
 	db_lists.insert({
-		'name': data['list_name'],
-		'created_at': data['timestamp'],
-		'updated_at': data['timestamp']
+		'name': list_name,
+		'created_at': timestamp,
+		'updated_at': timestamp
 	})
 
-def db_create_todo(db_todos, data):
+def get_lists():
+	"""Get lists"""
+
+	return db_lists
+
+def update_list_name(old_list_name, new_list_name):
+	"""Update list name in DB"""
+
+	db_lists.update({
+		'name': new_list_name,
+		'updated_at': timestamp
+	}, Query.name == old_list_name)
+
+def count_lists():
+	"""Count number of lists"""
+
+	return len(db_lists)
+
+def has_list(list_name):
+	"""Check if the list already exist"""
+
+	return db_lists.count(Query.name == list_name) > 0
+
+def create_todo(list_name, todo_name):
 	"""Create to-todo in list DB table"""
 
 	db_todos.insert({
-		'list': data['list_name'],
-		'name': data['todo_name'],
+		'list': list_name,
+		'name': todo_name,
 		'is_completed': False,
-		'created_at': data['timestamp'],
-		'updated_at': data['timestamp']
+		'created_at': timestamp,
+		'updated_at': timestamp
 	})
+
+def update_todo_list_name(old_list_name, new_list_name):
+	"""Update todo list name in DB"""
+
+	db_lists.update({
+		'list': new_list_name,
+		'updated_at': timestamp
+	}, Query.name == old_list_name)
+
+def count_todos(list_name):
+	"""Count number of todos within a list"""
+
+	return db_todos.count(Query.list == list_name)

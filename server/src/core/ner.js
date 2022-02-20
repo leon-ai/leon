@@ -3,19 +3,14 @@
  * @nlpjs/core-loader can make use of file system
  * https://github.com/axa-group/nlp.js/issues/766#issuecomment-750315909
  */
-import { containerBootstrap } from '@nlpjs/core-loader'
-import { Ner as NerManager } from '@nlpjs/ner'
-import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
 import fs from 'fs'
 
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 
 class Ner {
-  constructor () {
-    this.container = containerBootstrap()
-    this.container.register('extract-builtin-??', new BuiltinMicrosoft(), true)
-    this.ner = new NerManager({ container: this.container })
+  constructor (ner) {
+    this.ner = ner
 
     log.title('NER')
     log.success('New instance')
@@ -86,16 +81,14 @@ class Ner {
 
         if (condition.type === 'between') {
           // e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
-          if (Array.isArray(condition.from) && Array.isArray(condition.to)) {
-            const { from, to } = condition
-
-            from.forEach((word, index) => {
-              this.ner[conditionMethod](lang, entity.name, word, to[index])
-            })
-          } else {
-            this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
-          }
+          this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
         } else if (condition.type.indexOf('after') !== -1) {
+          const rule = {
+            type: 'afterLast',
+            words: condition.from,
+            options: { }
+          }
+          this.ner.addRule(lang, entity.name, 'trim', rule)
           this.ner[conditionMethod](lang, entity.name, condition.from)
         } else if (condition.type.indexOf('before') !== -1) {
           this.ner[conditionMethod](lang, entity.name, condition.to)

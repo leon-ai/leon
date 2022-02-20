@@ -52,8 +52,7 @@ def uncheck_todos(string, entities):
 			# Rough matching (e.g. 1kg of rice = rice)
 			if db_todo['name'].find(todo) != -1:
 				db_todos.update({
-					'is_completed': False,
-					'updated_at': timestamp
+					'is_completed': False
 				}, (Query.list == listname) & (Query.name == db_todo['name']))
 
 				result += utils.translate('list_todo_element', { 'todo': db_todo['name'] })

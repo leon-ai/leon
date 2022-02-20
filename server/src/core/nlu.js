@@ -1,5 +1,6 @@
 import { containerBootstrap } from '@nlpjs/core-loader'
 import { Nlp } from '@nlpjs/nlp'
+import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
 import { LangAll } from '@nlpjs/lang-all'
 import request from 'superagent'
 import fs from 'fs'
@@ -17,7 +18,7 @@ class Nlu {
     this.brain = brain
     this.request = request
     this.nlp = { }
-    this.ner = new Ner()
+    this.ner = { }
 
     log.title('NLU')
     log.success('New instance')
@@ -37,6 +38,7 @@ class Nlu {
         try {
           const container = await containerBootstrap()
 
+          container.register('extract-builtin-??', new BuiltinMicrosoft(), true)
           container.use(Nlp)
           container.use(LangAll)
 
@@ -45,8 +47,9 @@ class Nlu {
           nluManager.settings.spellCheck = true
 
           await this.nlp.load(nlpModel)
-
           log.success('NLP model loaded')
+
+          this.ner = new Ner(this.nlp.ner)
           resolve()
         } catch (err) {
           this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
@@ -148,7 +151,7 @@ class Nlu {
       }
 
       log.title('NLU')
-      log.success('Intent found')
+      log.success(`Intent found: ${obj.classification.skill}.${obj.classification.action} (domain: ${obj.classification.domain})`)
 
       try {
         obj.entities = await this.ner.extractEntities(
@@ -157,8 +160,9 @@ class Nlu {
           obj
         )
       } catch (e) /* istanbul ignore next */ {
-        console.error(e)
-        log[e.type](e.obj.message)
+        if (log[e.type]) {
+          log[e.type](e.obj.message)
+        }
 
         if (!opts.mute) {
           this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
@@ -177,7 +181,6 @@ class Nlu {
           nluProcessingTime: processingTime - data?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
-        console.error(e)
         log[e.type](e.obj.message)
 
         if (!opts.mute) {

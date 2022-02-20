@@ -4,22 +4,13 @@
 from time import time
 
 import utils
-from ..lib.db import db_create_list
-
-# Skill database
-db = utils.db()['db']
-
-# Todo lists table
-db_lists = db.table('todo_lists')
-
-# Query
-Query = utils.db()['query']()
+from ..lib import db
 
 def add_todos(string, entities):
 	"""Add todos to a to-do list"""
 
 	# List name
-	listname = ''
+	list_name = ''
 
 	# Todos
 	todos = []
@@ -27,13 +18,13 @@ def add_todos(string, entities):
 	# Find entities
 	for item in entities:
 		if item['entity'] == 'list':
-			listname = item['sourceText'].lower()
+			list_name = item['sourceText'].lower()
 		elif item['entity'] == 'todos':
 			# Split todos into array and trim start/end-whitespaces
 			todos = [chunk.strip() for chunk in item['sourceText'].lower().split(',')]
 
 	# Verify if a list name has been provided
-	if not listname:
+	if not list_name:
 		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
 
 	# Verify todos have been provided
@@ -41,17 +32,17 @@ def add_todos(string, entities):
 		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
 
 	# Verify the list exists
-	if db_lists.count(Query.name == listname) == 0:
+	if db.has_list(list_name) == False:
 		# Create the new to-do list
-		db_create_list(listname)
+		db.create_list(list_name)
 
 	result = ''
 	for todo in todos:
 		# Add to-do to DB
-		db_create_todo(listname, todo)
+		db.create_todo(list_name, todo)
 		result += utils.translate('list_todo_element', { 'todo': todo })
 
 	return utils.output('end', 'todos_added', utils.translate('todos_added', {
-	  'list': listname,
+	  'list': list_name,
 	  'result': result
 	}))

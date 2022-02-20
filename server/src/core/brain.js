@@ -70,7 +70,9 @@ class Brain {
    */
   static deleteIntentObjFile (intentObjectPath) {
     try {
-      fs.unlinkSync(intentObjectPath)
+      if (fs.existsSync(intentObjectPath)) {
+        fs.unlinkSync(intentObjectPath)
+      }
     } catch (e) {
       log.error(`Failed to delete intent object file: ${e}`)
     }
@@ -234,6 +236,7 @@ class Brain {
           Brain.deleteIntentObjFile(intentObjectPath)
 
           log.title(`${skillFriendlyName} skill`)
+          log.error(data.toString())
 
           const executionTimeEnd = Date.now()
           const executionTime = executionTimeEnd - executionTimeStart

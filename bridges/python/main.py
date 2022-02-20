@@ -12,6 +12,7 @@ def main():
 	path.append('.')
 
 	intent_obj = utils.get_intent_obj()
+
 	skill = import_module('skills.' + intent_obj['domain'] + '.' + intent_obj['skill'] + '.src.actions.' + intent_obj['action'])
 
 	return getattr(skill, intent_obj['action'])(intent_obj['utterance'], intent_obj['entities'])
