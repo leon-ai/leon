@@ -7,7 +7,7 @@ from urllib import parse
 from requests import codes, exceptions
 
 # Developer token
-apikey = utils.config('api_key')
+api_key = utils.config('credentials')['api_key']
 
 def run(string, entities):
     """Verify if one or several email addresses have been pwned"""
@@ -19,7 +19,7 @@ def run(string, entities):
             emails.append(item['resolution']['value'])
 
     if not emails:
-        emails = utils.config('emails')
+        emails = utils.config('options')['emails']
 
         if not emails:
             return utils.output('end', 'no_email', utils.translate('no_email'))
@@ -27,8 +27,8 @@ def run(string, entities):
     utils.output('inter', 'checking', utils.translate('checking'))
 
     for index, email in enumerate(emails):
-        isLastEmail = index == len(emails) - 1
-        breached = checkForBreach(email)
+        is_last_email = index == len(emails) - 1
+        breached = check_for_breach(email)
         data = { 'email': email }
 
         # Have I Been Pwned API returns a 403 when accessed by unauthorized/banned clients
@@ -37,7 +37,7 @@ def run(string, entities):
         elif breached == 503:
             return utils.output('end', 'blocked', utils.translate('unavailable', { 'website_name': 'Have I Been Pwned' }))
         elif not breached:
-            if isLastEmail:
+            if is_last_email:
                 return utils.output('end', 'no_pwnage', utils.translate('no_pwnage', data))
             else:
                 utils.output('inter', 'no_pwnage', utils.translate('no_pwnage', data))
@@ -52,19 +52,19 @@ def run(string, entities):
                     }
                 )
 
-            if isLastEmail:
+            if is_last_email:
                 return utils.output('end', 'pwned', utils.translate('pwned', data))
             else:
                 utils.output('inter', 'pwned', utils.translate('pwned', data))
 
-def checkForBreach(email):
+def check_for_breach(email):
     # Delay for 2 seconds before making request to accomodate API usage policy
     sleep(2)
     truncate = '?truncateResponse=true'
     url = 'https://haveibeenpwned.com/api/v3/breachedaccount/' + parse.quote_plus(email)
 
     try:
-        response = utils.http('GET', url, { 'hibp-api-key': apikey })
+        response = utils.http('GET', url, { 'hibp-api-key': api_key })
 
         if response.status_code == 404:
             return None

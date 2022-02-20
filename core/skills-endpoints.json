@@ -66,6 +66,11 @@
       "entitiesType": "trim"
     },
     {
+      "method": "GET",
+      "route": "/api/action/utilities/have_i_been_pwned/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/utilities/is_it_down/run",
       "params": [

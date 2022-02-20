@@ -192,31 +192,41 @@ class Brain {
 
         // Read output
         this.process.stdout.on('data', (data) => {
-          const obj = JSON.parse(data.toString())
+          const executionTimeEnd = Date.now()
+          const executionTime = executionTimeEnd - executionTimeStart
 
-          if (typeof obj === 'object') {
-            if (obj.output.type === 'inter') {
-              log.title(`${skillFriendlyName} skill`)
-              log.info(data.toString())
+          try {
+            const obj = JSON.parse(data.toString())
 
-              this.interOutput = obj.output
+            if (typeof obj === 'object') {
+              if (obj.output.type === 'inter') {
+                log.title(`${skillFriendlyName} skill`)
+                log.info(data.toString())
 
-              const speech = obj.output.speech.toString()
-              if (!opts.mute) {
-                this.talk(speech)
+                this.interOutput = obj.output
+
+                const speech = obj.output.speech.toString()
+                if (!opts.mute) {
+                  this.talk(speech)
+                }
+                speeches.push(speech)
+              } else {
+                output += data
               }
-              speeches.push(speech)
             } else {
-              output += data
+              /* istanbul ignore next */
+              reject({
+                type: 'warning',
+                obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain is not well configured. Check the configuration file.`),
+                speeches,
+                executionTime
+              })
             }
-          } else {
-            const executionTimeEnd = Date.now()
-            const executionTime = executionTimeEnd - executionTimeStart
-
+          } catch (e) {
             /* istanbul ignore next */
             reject({
-              type: 'warning',
-              obj: new Error(`The ${skillFriendlyName} skill from the ${domainFriendlyName} domain is not well configured. Check the configuration file.`),
+              type: 'error',
+              obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain isn't returning JSON format.`),
               speeches,
               executionTime
             })
