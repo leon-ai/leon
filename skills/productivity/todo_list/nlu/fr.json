@@ -2,10 +2,203 @@
   "actions": {
     "create_list": {
       "utterance_samples": [
-        "Crée la liste x",
-        "Crée une liste x"
+        "Crée la liste shopping",
+        "Crée une liste matos",
+        "Je veux que tu crées une liste choses",
+        "Peux-tu créer une liste rappel ?",
+        "J'ai besoin que tu fasses une liste films",
+        "Fais une liste nourriture",
+        "Ajoute une liste matos",
+        "Je veux une liste shopping",
+        "Aides-moi à avoir une liste films",
+        "Peux-tu ajouter une liste rappel ?"
       ],
       "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "liste"
+            }
+          ]
+        }
+      ]
+    },
+    "view_lists": {
+      "utterance_samples": [
+        "Montre toutes mes listes",
+        "Montre le contenu de toutes mes listes",
+        "Peux-tu me dire toutes mes listes ?",
+        "Peux-tu montrer tout le contenu de mes listes ?",
+        "Peux-tu me montrer toutes les listes ?",
+        "J'ai besoin de voir mes listes",
+        "Montre moi toutes les listes"
+      ]
+    },
+    "view_list": {
+      "utterance_samples": [
+        "Montre ma liste shopping",
+        "Montre la liste matériels",
+        "Dis moi ce qu'il y a dans ma liste choses",
+        "Qu'est-ce qu'il y a sur la liste rappel ?",
+        "Peux-tu donner le contenu de ma liste films ?",
+        "J'aimerai savoir ce qu'il y a sur la liste nourriture",
+        "Donne-moi le contenu de la liste shopping",
+        "J'ai besoin que tu me dises ce qu'il y a dans la liste choses",
+        "Il y a quoi dans ma liste rappel ?",
+        "Donne-moi la liste nourriture"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "liste"
+            }
+          ]
+        }
+      ]
+    },
+    "rename_list": {
+      "utterance_samples": [
+        "Renomme la liste shopping en achats",
+        "Renomme ma liste matériel par choses",
+        "Peux-tu renommer la liste nourriture en courses ?",
+        "Change la liste choses par nourriture",
+        "Modifie ma liste rappel par ne pas oublier",
+        "Remplace ma liste nourriture par shopping"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "old_list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": "liste",
+              "to": ["en", "par"]
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "new_list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": ["en", "par"]
+            }
+          ]
+        }
+      ]
+    },
+    "delete_list": {
+      "utterance_samples": [
+        "Supprime la liste shopping",
+        "Supprime ma liste matériel",
+        "Peux-tu retirer la liste nourriture ?",
+        "Retire la liste stuff",
+        "Je ne veux plus de la liste rappel",
+        "Annule ma liste courses"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "liste"
+            }
+          ]
+        }
+      ]
+    },
+    "add_todos": {
+      "utterance_samples": [
+        "Ajoute patates à ma liste courses",
+        "Ajoute bananes à la liste choses",
+        "Peux-tu ajouter nettoyage à la liste rappel ?",
+        "Il faut mettre la viande dans la liste nourriture"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["ajoute", "ajouter"],
+              "to": ["à", "a", "dans"]
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "liste"
+            }
+          ]
+        }
+      ]
+    },
+    "complete_todos": {
+      "utterance_samples": [
+        "Coche patates de la liste shopping",
+        "Coche pain de ma liste courses",
+        "Complète acheter un cadeau de la liste rappel",
+        "Tu peux cocher pêches de la liste fruits"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["coche", "complète", "complete", "cocher"],
+              "to": ["de"]
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": "liste"
+            }
+          ]
+        }
+      ]
+    },
+    "uncheck_todos": {
+      "utterance_samples": [
+        "Décoche patates de la liste courses",
+        "Remet pain sur ma liste nourriture",
+        "Invalide acheter un cadeau de la liste rappel",
+        "Peux-tu incompléter pêches de ma liste fruits ?"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["décoche", "decoche", "invalide", "remet"],
+              "to": ["de", "sur"]
+            }
+          ]
+        },
         {
           "type": "trim",
           "name": "list",
