@@ -26,6 +26,11 @@
       "params": []
     },
     {
+      "method": "GET",
+      "route": "/api/action/leon/random_number/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
       "params": [

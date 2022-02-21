@@ -1,0 +1,14 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "Give me a random number",
+        "Give me a number",
+        "Tell me a random number",
+        "Choose a number",
+        "Pick a number"
+      ]
+    }
+  },
+  "answers": { }
+}
