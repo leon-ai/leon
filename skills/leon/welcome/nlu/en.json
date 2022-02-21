@@ -1,0 +1,24 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "Thank you",
+        "Thanks",
+        "Thanks a lot",
+        "Many thanks",
+        "You are the best",
+        "I love you"
+      ]
+    }
+  },
+  "answers": {
+    "welcome": [
+      "You are very welcome.",
+      "It's my pleasure.",
+      "You are too polite with me.",
+      "You are always welcome.",
+      "That's my job!",
+      "At your service."
+    ]
+  }
+}
