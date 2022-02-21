@@ -1,0 +1,26 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "Bye",
+        "Goodbye",
+        "Good bye",
+        "See you later",
+        "Bye bye",
+        "I have to go"
+      ]
+    }
+  },
+  "answers": {
+    "good_bye": [
+      "Bye!",
+      "Bye bye!",
+      "Good bye.",
+      "Bye! Take care.",
+      "Good bye, please, take care of yourself.",
+      "Bye! Enjoy your time!",
+      "See you!",
+      "See ya!"
+    ]
+  }
+}

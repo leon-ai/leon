@@ -1,6 +1,11 @@
 {
   "endpoints": [
     {
+      "method": "GET",
+      "route": "/api/action/leon/good_bye/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
       "params": [

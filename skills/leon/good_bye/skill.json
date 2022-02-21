@@ -1,0 +1,11 @@
+{
+  "name": "Good Bye",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon says good bye.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}
