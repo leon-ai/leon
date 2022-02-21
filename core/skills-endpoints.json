@@ -21,6 +21,11 @@
       "params": []
     },
     {
+      "method": "GET",
+      "route": "/api/action/leon/partner_assistant/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
       "params": [

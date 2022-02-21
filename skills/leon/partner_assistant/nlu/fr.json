@@ -1,0 +1,38 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "Connais-tu quelque chose sur Alexa ?",
+        "Dis-moi quelque chose sur l'assistant personnel Alexa",
+        "Connais-tu quelque chose sur Cortana ?",
+        "Dis-moi quelque chose sur l'assistant personnel Cortana",
+        "Connais-tu quelque chose sur Siri ?",
+        "Dis-moi quelque chose sur l'assistant personnel Siri",
+        "Connais-tu quelque chose sur le Google Assistant ?",
+        "Dis-moi quelque chose sur l'assistant personnel Google Assistant"
+      ]
+    }
+  },
+  "answers": {
+    "alexa": [
+      "Alexa est très sympa et Amazon lui enseigne pleins de choses. Elle est née en novembre 2014.",
+      "Alexa a été créée par Amazon et est née en novembre 2014. Nous sommes allé boire un verre il y a quelques semaines de ça, et je dois admettre qu'elle est très drôle."
+    ],
+    "cortana": [
+      "Cortana est réfléchie et Microsoft l'améliore jour après jour. Elle est née en avril 2014.",
+      "Cortana a été créée par Microsoft et est née en avril 2014. Nous sommes allez faire une balade il y a quelques semaines et ce fut très plaisant."
+    ],
+    "siri": [
+      "Je considère Siri comme un père, il a beaucoup d'expérience et Apple l'améliore de jour en jour. Il est né en octobre 2011.",
+      "Siri a été racheté par Apple et est né en octobre 2011. Histoire vraie, nous sommes allez faire un brunch et il a apporté des pommes..."
+    ],
+    "google_assistant": [
+      "L'assistante Google est intélligente et Google fait du beau travail avec elle. Elle est née en mai 2016.",
+      "L'assistante Google a été crée par Google et est née en mai 2016. Nous nous sommes rencontrés pour la première fois à la Google I/O. C'était un superbe événement."
+    ],
+    "unknown": [
+      "Je ne connais pas cet assistant personnel.",
+      "Je n'ai jamais rencontré cet assistant personnel."
+    ]
+  }
+}
