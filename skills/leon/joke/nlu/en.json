@@ -1,0 +1,27 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "Tell me a joke",
+        "Give me a joke",
+        "Make me laugh",
+        "Do you have jokes to tell me?",
+        "I wanna laugh"
+      ]
+    }
+  },
+  "answers": {
+    "jokes": [
+      "My email password has been hacked. That's the third time I've had to rename the cat.",
+      "What does a baby computer call it's father? Data.",
+      "My New Year's resolution is 4K.",
+      "Any room is a panic room if you've lost your phone in it.",
+      "Why was the JavaScript developer sad? Because he didn't Node how to Express himself.",
+      "Why did the developer go broke? Because he used up all his cache.",
+      "There are 10 types of people in the world: those who understand binary, and those who don't.",
+      "Instagram is just Twitter for people who go outside.",
+      "Human: What do we want?! Computer: Natural language processing! Human: When do we want it?! Computer: When do we want what?",
+      "Is your name Wi-Fi? Because I'm feeling a connection."
+    ]
+  }
+}
