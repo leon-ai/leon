@@ -1,0 +1,16 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "Quel est le but de la vie ?",
+        "Quel est l'objectif de la vie ?"
+      ]
+    }
+  },
+  "answers": {
+    "meaning_of_life": [
+      "42.",
+      "1 0 1 0 1 0."
+    ]
+  }
+}

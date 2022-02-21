@@ -1,0 +1,11 @@
+{
+  "name": "Meaning of Life",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon tells what is the meaning of life.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

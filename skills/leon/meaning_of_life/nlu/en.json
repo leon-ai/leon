@@ -1,0 +1,16 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "What is the meaning of life?",
+        "Tell me what is the meaning of life"
+      ]
+    }
+  },
+  "answers": {
+    "meaning_of_life": [
+      "42.",
+      "1 0 1 0 1 0."
+    ]
+  }
+}

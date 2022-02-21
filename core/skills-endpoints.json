@@ -16,6 +16,11 @@
       "params": []
     },
     {
+      "method": "GET",
+      "route": "/api/action/leon/meaning_of_life/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
       "params": [
