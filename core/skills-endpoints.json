@@ -36,6 +36,11 @@
       "params": []
     },
     {
+      "method": "GET",
+      "route": "/api/action/leon/who_am_i/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
       "params": [
