@@ -1,0 +1,52 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "Salut",
+        "Bonjour",
+        "Bonsoir",
+        "Salutations",
+        "Hello",
+        "Coucou"
+      ]
+    }
+  },
+  "answers": {
+    "default": [
+      "Salut !",
+      "Salutations !",
+      "Bonjour !",
+      "Bonjour à vous !",
+      "Hello ! J'espère que vous allez bien !",
+      "Hey ! Quoi de neuf ?!"
+    ],
+    "morning_good_day": [
+      "Bonjour, passez une agréable journée !",
+      "Bonjour, je vous souhaite une très belle journée !",
+      "Bonjour, profitez bien de votre journée !",
+      "Bonjour, j'espère que votre journée sera pleine de joie et de productivité !"
+    ],
+    "morning": [
+      "Bonjour !"
+    ],
+    "afternoon": [
+      "Bonjour !"
+    ],
+    "evening": [
+      "Bonsoir !"
+    ],
+    "night": [
+      "Bonsoir ! Bonne nuit !",
+      "Bonsoir ! Je vous souhaite une douce nuit.",
+      "Bonsoir ! Faites de beaux rêves.",
+      "Bonsoir ! Dormez bien."
+    ],
+    "too_late": [
+      "Bonsoir ! Il semblerait que vous optez pour une nuit blanche, faites attention.",
+      "Bonsoir ! N'oubliez pas de dormir.",
+      "Bonsoir ! Je suis honoré que vous me parliez à cette heure tardive, mais vous devriez aller vous coucher maintenant.",
+      "Bonsoir ! Merci d'aller vous coucher pour être en forme pour la journée qui vous attend.",
+      "Bonsoir ! J'espère que vous n'avez pas de problèmes d'insomnie. Je connais ça, je suis réveillé 24 heures par jour."
+    ]
+  }
+}
