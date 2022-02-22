@@ -1,0 +1,11 @@
+{
+  "name": "GitHub Trends",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Get what is trending on GitHub.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

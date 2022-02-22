@@ -42,6 +42,15 @@
     },
     {
       "method": "POST",
+      "route": "/api/action/news/github_trends/run",
+      "params": [
+        "number",
+        "daterange"
+      ],
+      "entitiesType": "builtIn"
+    },
+    {
+      "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
       "params": [
         "list"
