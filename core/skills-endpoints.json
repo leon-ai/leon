@@ -50,6 +50,11 @@
       "entitiesType": "builtIn"
     },
     {
+      "method": "GET",
+      "route": "/api/action/news/product_hunt_trends/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
       "params": [
