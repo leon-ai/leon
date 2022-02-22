@@ -117,6 +117,11 @@
         "url"
       ],
       "entitiesType": "builtIn"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/speed_test/run",
+      "params": []
     }
   ]
 }

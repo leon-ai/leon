@@ -1,0 +1,27 @@
+{
+  "actions": {
+    "run": {
+      "utterance_samples": [
+        "What is my current Internet speed?",
+        "Can you make me a speedtest?",
+        "Make a speedtest",
+        "Start a speed test",
+        "Is my Internet network good?",
+        "Is my Internet connection good?"
+      ]
+    }
+  },
+  "answers": {
+    "testing": [
+      "Well, I start the analysis. The result of the test will be given to you in a few moments...",
+      "Alright, I'm starting the analysis. Please wait a moment, the result will be given to you soonly..."
+    ],
+    "done": [
+      "Analysis completed. Here is your result:<ul><br><li>Ping: %ping%</li><li>Download: %download%</li><li>Upload: %upload%</li></ul>"
+    ],
+    "error": [
+      "Oops, an error occurred during my research... Sorry, but I can not analyze your network.",
+      "Somehow, I was not able to run the speed test correctly. I'm sorry for that."
+    ]
+  }
+}
