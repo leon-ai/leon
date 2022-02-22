@@ -6,17 +6,12 @@ import utils
 def run(string, entities):
 	"""Leon tells you about other personal assistants"""
 
-	string = string.lower()
+	partner = ''
 
-	assistants = [
-		'alexa',
-		'cortana',
-		'siri',
-		'google assistant'
-	]
-
-	for assistant in assistants:
-		if string.find(assistant) != -1:
-			return utils.output('end', 'success', utils.translate(assistant.replace(' ', '_')))
+	# Find entities
+	for item in entities:
+		if item['entity'] == 'partnerAssistant':
+			partner = item['option'].lower()
+			return utils.output('end', 'success', utils.translate(partner.replace(' ', '_')))
 
 	return utils.output('end', 'unknown', utils.translate('unknown'))

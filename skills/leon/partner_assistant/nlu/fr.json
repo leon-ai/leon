@@ -2,15 +2,21 @@
   "actions": {
     "run": {
       "utterance_samples": [
-        "Connais-tu quelque chose sur Alexa ?",
-        "Dis-moi quelque chose sur l'assistant personnel Alexa",
-        "Connais-tu quelque chose sur Cortana ?",
-        "Dis-moi quelque chose sur l'assistant personnel Cortana",
-        "Connais-tu quelque chose sur Siri ?",
-        "Dis-moi quelque chose sur l'assistant personnel Siri",
-        "Connais-tu quelque chose sur le Google Assistant ?",
-        "Dis-moi quelque chose sur l'assistant personnel Google Assistant"
+        "Connais-tu quelque chose sur @partnerAssistant ?",
+        "Dis-moi quelque chose sur l'assistant personnel @partnerAssistant",
+        "Dis-moi quelque chose à propos de @partnerAssistant",
+        "Je veux en savoir plus au sujet de @partnerAssistant"
       ]
+    }
+  },
+  "entities": {
+    "partnerAssistant": {
+      "options": {
+        "Alexa": ["alexa"],
+        "Cortana": ["cortana"],
+        "Siri": ["siri"],
+        "Google Assistant": ["google assistant"]
+      }
     }
   },
   "answers": {

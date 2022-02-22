@@ -2,15 +2,21 @@
   "actions": {
     "run": {
       "utterance_samples": [
-        "Do you have something to say about Alexa?",
-        "Tell me about the personal assistant Alexa",
-        "Tell me about the personal assistant Cortana",
-        "Do you have something to say about Cortana?",
-        "Tell me about the personal assistant Siri",
-        "Do you have something to say about Siri?",
-        "Tell me about the personal assistant Google Assistant",
-        "Do you have something to say about Google Assistant?"
+        "Do you have something to say about @partnerAssistant?",
+        "Tell me about the personal assistant @partnerAssistant",
+        "I want to know more about @partnerAssistant",
+        "Tell me something related to @partnerAssistant"
       ]
+    }
+  },
+  "entities": {
+    "partnerAssistant": {
+      "options": {
+        "Alexa": ["alexa"],
+        "Cortana": ["cortana"],
+        "Siri": ["siri"],
+        "Google Assistant": ["google assistant"]
+      }
     }
   },
   "answers": {

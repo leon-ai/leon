@@ -285,7 +285,7 @@ server.init = async () => {
 
   // Load NLP model
   try {
-    await nlu.loadModel(join(__dirname, '../../data/leon-model.nlp'))
+    await nlu.loadModel(join(process.cwd(), 'core/data/leon-model.nlp'))
   } catch (e) {
     log[e.type](e.obj.message)
   }

@@ -7,27 +7,26 @@
         "Donne-moi une blague",
         "Je veux rire",
         "As-tu des blagues à raconter ?"
+      ],
+      "answers": [
+        "Le mot de passe de ma boîte de réception a été piraté. C'est la troisième fois que je dois renommer le chat.",
+        "Combien de développeurs faut-t-il pour remplacer une ampoule grillée ? Aucun, c'est un problème hardware.",
+        "T'as pris quoi comme résolution pour cette nouvelle année ? La 4K.",
+        "Toute pièce est une salle de panique si vous avez perdu votre téléphone à l'intérieur.",
+        "C'est l'histoire d'un administrateur qui configure ses variables d'environnement, et là... PATH le chemin !",
+        "Tu sais pourquoi l'iPhone 6 se plie ? Parce que l'Apple Store.",
+        "Dans le monde, il y a 10 catégories de personnes : celles qui connaissent le binaire et celles qui ne le connaissent pas.",
+        "Instagram c'est en fait Twitter pour les gens qui sortent un peu.",
+        "Un humain demande : qu'est-ce que tu veux ?! Un ordinateur répond : du traitement automatique du langage naturel ! L'humain : quand le voulons-nous ?! L'ordinateur : quand le voulons quoi ?",
+        "Est-ce que votre nom est Wi-Fi ? Parce que je sens une connexion.",
+        "Quand quelqu'un de triste joue aux jeux vidéo pour oublier, on peut dire qu'il se console.",
+        "Quel Pokemon a une mitraillette ? Ratatatatatatatatata.",
+        "Les filles c'est comme les noms de domaine. Celles que j'aime sont déjà prises.",
+        "Que dit une mère à son fils geek quand le diner est servi ? Alt Tab !",
+        "Quelle est la meilleure heure pour écouter de la musique ? Deezer.",
+        "De nos jours, le zip ça devient rar..."
       ]
     }
   },
-  "answers": {
-    "jokes": [
-      "Le mot de passe de ma boîte de réception a été piraté. C'est la troisième fois que je dois renommer le chat.",
-      "Combien de développeurs faut-t-il pour remplacer une ampoule grillée ? Aucun, c'est un problème hardware.",
-      "T'as pris quoi comme résolution pour cette nouvelle année ? 4K.",
-      "Toute pièce est une salle de panique si vous avez perdu votre téléphone à l'intérieur.",
-      "C'est l'histoire d'un administrateur qui configure ses variables d'environnement, et là... PATH le chemin !",
-      "Tu sais pourquoi l'iPhone 6 se plie ? Parce que l'Apple Store.",
-      "Dans le monde, il y a 10 catégories de personnes : celles qui connaissent le binaire et celles qui ne le connaissent pas.",
-      "Instagram c'est en fait Twitter pour les gens qui sortent un peu.",
-      "Un humain demande : qu'est-ce que tu veux ?! Un ordinateur répond : du traitement automatique du langage naturel ! L'humain : quand le voulons-nous ?! L'ordinateur : quand le voulons quoi ?",
-      "Est-ce que votre nom est Wi-Fi ? Parce que je sens une connexion.",
-      "Quand quelqu'un de triste joue aux jeux vidéo pour oublier, on peut dire qu'il se console.",
-      "Quel Pokemon a une mitraillette ? Ratatatatatatatatata.",
-      "Les filles c'est comme les noms de domaine. Celles que j'aime sont déjà prises.",
-      "Que dit une mère à son fils geek quand le diner est servi ? Alt Tab !",
-      "Quelle est la meilleure heure pour écouter de la musique ? Deezer.",
-      "De nos jours, le zip ça devient rar..."
-    ]
-  }
+  "answers": { }
 }

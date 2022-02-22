@@ -12,7 +12,7 @@ import domain from '@/helpers/domain'
 class Brain {
   constructor () {
     this._lang = 'en'
-    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/${this._lang}.json`, 'utf8'))
+    this.broca = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/data', this._lang, 'answers.json'), 'utf8'))
     this.process = { }
     this.interOutput = { }
     this.finalOutput = { }
@@ -55,7 +55,7 @@ class Brain {
   set lang (newLang) {
     this._lang = newLang
     // Update broca
-    this.broca = JSON.parse(fs.readFileSync(`${__dirname}/../data/${this._lang}.json`, 'utf8'))
+    this.broca = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/data', this._lang, 'answers.json'), 'utf8'))
 
     if (process.env.LEON_TTS === 'true') {
       this._tts.init(this._lang, () => {

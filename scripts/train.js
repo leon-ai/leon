@@ -17,7 +17,7 @@ dotenv.config()
  * npm run train [en or fr]
  */
 export default () => new Promise(async (resolve, reject) => {
-  const modelFileName = 'server/src/data/leon-model.nlp'
+  const modelFileName = 'core/data/leon-model.nlp'
 
   try {
     const container = await containerBootstrap()
@@ -58,18 +58,30 @@ export default () => new Promise(async (resolve, reject) => {
           const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
 
           if (fs.existsSync(nluFilePath)) {
-            const { actions } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+            const { actions, entities } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
             const actionsKeys = Object.keys(actions)
 
             for (let k = 0; k < actionsKeys.length; k += 1) {
               const actionName = actionsKeys[k]
               const actionObj = actions[actionName]
-              const { utterance_samples: utteranceSamples } = actionObj
+              const { utterance_samples: utteranceSamples, answers } = actionObj
 
               nlp.assignDomain(lang, `${skillName}.${actionName}`, currentDomain.name)
 
               for (let l = 0; l < utteranceSamples.length; l += 1) {
                 nlp.addDocument(lang, utteranceSamples[l], `${skillName}.${actionName}`)
+              }
+
+              // Train NLG if the skill has a dialog type
+              if (currentSkill.type === 'dialog') {
+                for (let l = 0; l < answers?.length; l += 1) {
+                  nlp.addAnswer(lang, `${skillName}.${actionName}`, answers[l])
+                }
+              }
+
+              // Add entities annotations (@...)
+              if (entities) {
+                nlp.addEntities(entities, lang)
               }
             }
           }

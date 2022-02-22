@@ -1,6 +1,6 @@
 import moment from 'moment-timezone'
 
-import utterance_samples from '@/data/en.json' // eslint-disable-line camelcase
+import utterance_samples from '../../core/data/en/answers.json' // eslint-disable-line camelcase
 
 jest.setTimeout(60000)
 

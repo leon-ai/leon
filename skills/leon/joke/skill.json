@@ -1,6 +1,7 @@
 {
   "name": "Joke",
-  "bridge": "python",
+  "type": "dialog",
+  "bridge": null,
   "version": "1.0.0",
   "description": "Leon says some jokes.",
   "author": {

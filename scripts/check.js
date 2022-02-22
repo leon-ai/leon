@@ -22,7 +22,7 @@ export default () => new Promise(async (resolve, reject) => {
     const googleCloudPath = 'server/src/config/voice/google-cloud.json'
     const watsonSttPath = 'server/src/config/voice/watson-stt.json'
     const watsonTtsPath = 'server/src/config/voice/watson-tts.json'
-    const nlpModelPath = 'server/src/data/leon-model.nlp'
+    const nlpModelPath = 'core/data/leon-model.nlp'
     const report = {
       can_run: { title: 'Run', type: 'error', v: true },
       can_run_module: { title: 'Run modules', type: 'error', v: true },
