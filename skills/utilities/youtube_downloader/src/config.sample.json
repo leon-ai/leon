@@ -1,0 +1,15 @@
+{
+  "configurations": {
+    "options": {
+      "playlist_id": "PLAYLIST_ID",
+      "synchronization": {
+        "enabled": true,
+        "method": "direct",
+        "email": ""
+      }
+    },
+    "credentials": {
+      "api_key": "YOUR_GOOGLE_API_KEY"
+    }
+  }
+}
