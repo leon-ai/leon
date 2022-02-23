@@ -1,5 +1,6 @@
 {
   "name": "Good Bye",
+  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Leon says good bye.",

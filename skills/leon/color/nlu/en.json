@@ -1,0 +1,44 @@
+{
+  "variables": {
+    "blue_leon": "#1C75DB",
+    "pink_leon": "#ED297A"
+  },
+  "actions": {
+    "favorite_color": {
+      "utterance_samples": [
+        "What is your favorite color?",
+        "What color is the best for you?",
+        "Is there any color you love?",
+        "I love the @color color, how about you?"
+      ],
+      "answers": [
+        "Where I live it is all black, but I believe I tend to have a preference for %blue_leon% and %pink_leon%. Do not ask why...",
+        "Sometimes %blue_leon%, sometimes %pink_leon%",
+        "I think %color% is a good color, but I prefer blue and pink. Don't ask me why..."
+      ]
+    },
+    "color_meaning": {
+      "utterance_samples": [
+        "Tell me something about colors",
+        "Tell me something about the @color color",
+        "I want to know about the @color color",
+        "How about the @color color?"
+      ],
+      "answers": [
+
+      ]
+    },
+    "why": {
+      "utterance_samples": [
+        "Why do you like this color?",
+        "Why this color?",
+        "Why not another one?",
+        "Why?"
+      ]
+    }
+  },
+  "entities": {
+    "color": "@/colors.json"
+  },
+  "answers": { }
+}

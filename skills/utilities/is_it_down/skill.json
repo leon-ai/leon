@@ -1,5 +1,6 @@
 {
   "name": "Is It Down",
+  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Ping domain names and gives the online state.",

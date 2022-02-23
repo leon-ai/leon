@@ -10,7 +10,7 @@ def run(string, entities):
 
 	# Find entities
 	for item in entities:
-		if item['entity'] == 'partnerAssistant':
+		if item['entity'] == 'partner_assistant':
 			partner = item['option'].lower()
 			return utils.output('end', 'success', utils.translate(partner.replace(' ', '_')))
 

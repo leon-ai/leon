@@ -1,5 +1,6 @@
 {
   "name": "Todo List",
+  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Manage your lists and the items they contain.",

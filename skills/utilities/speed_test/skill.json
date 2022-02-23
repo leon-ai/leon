@@ -1,5 +1,6 @@
 {
   "name": "Speed Test",
+  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Gives info about your network speed.",

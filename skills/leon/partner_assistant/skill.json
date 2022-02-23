@@ -1,5 +1,6 @@
 {
   "name": "Partner Assistant",
+  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Leon tells about other virtual assistants.",

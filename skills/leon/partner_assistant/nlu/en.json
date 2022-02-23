@@ -2,15 +2,16 @@
   "actions": {
     "run": {
       "utterance_samples": [
-        "Do you have something to say about @partnerAssistant?",
-        "Tell me about the personal assistant @partnerAssistant",
-        "I want to know more about @partnerAssistant",
-        "Tell me something related to @partnerAssistant"
+        "Do you have something to say about @partner_assistant?",
+        "Tell me about the personal assistant @partner_assistant",
+        "I want to know more about @partner_assistant",
+        "Tell me something related to @partner_assistant",
+        "Do you know @partner_assistant?"
       ]
     }
   },
   "entities": {
-    "partnerAssistant": {
+    "partner_assistant": {
       "options": {
         "Alexa": ["alexa"],
         "Cortana": ["cortana"],

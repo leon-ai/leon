@@ -1,9 +1,9 @@
 {
-  "name": "YouTube Downloader",
-  "type": "logic",
-  "bridge": "python",
+  "name": "Color",
+  "type": "dialog",
+  "bridge": null,
   "version": "1.0.0",
-  "description": "Download new videos from a YouTube playlist.",
+  "description": "Leon tells about colors.",
   "author": {
     "name": "Louis Grenard",
     "email": "louis.grenard@gmail.com",

@@ -2,6 +2,21 @@
   "endpoints": [
     {
       "method": "GET",
+      "route": "/api/action/leon/color/favorite_color",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/color/color_meaning",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/color/why",
+      "params": []
+    },
+    {
+      "method": "GET",
       "route": "/api/action/leon/good_bye/run",
       "params": []
     },
