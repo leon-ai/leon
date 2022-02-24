@@ -160,13 +160,6 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
-        <a href="https://www.aoz.studio/">
-          <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" />
-          AOZ Studio
-        </a><br>
-        <sub><sup>100 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
         <a href="https://github.com/GregoireAMATO">
           <img src="https://github.com/GregoireAMATO.png?size=128" />
           GrAMATO
@@ -213,6 +206,9 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 
 ### Special Thanks
 
+<a href="https://www.aoz.studio">
+  <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" alt="AOZ Studio" width="64" />
+</a>
 <a href="https://vercel.com/?utm_source=leon-ai&utm_campaign=oss">
   <img src="https://i.imgur.com/S5olXWh.png" alt="Vercel" width="128" />
 </a>
