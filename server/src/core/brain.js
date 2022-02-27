@@ -322,10 +322,10 @@ class Brain {
           const utteranceHasEntities = obj.entities.length > 0
           let { answers } = obj
 
-          // expect(string.pnr('Hello %name%', { '%name%': 'Leon' })).toBe('Hello Leon')
-
           if (!utteranceHasEntities) {
             answers = answers.filter(({ answer }) => answer.indexOf('{{') === -1)
+          } else {
+            answers = answers.filter(({ answer }) => answer.indexOf('{{') !== -1)
           }
 
           let { answer } = answers[Math.floor(Math.random() * answers.length)]
@@ -335,12 +335,34 @@ class Brain {
            * then map them (utterance <-> answer)
            */
           if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
-            obj.entities.forEach((entity) => {
-              answer = string.pnr(answer, { [`{{ ${entity.entity} }}`]: entity.option })
+            const nluFilePath = path.join(
+              process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'nlu', `${this._lang}.json`
+            )
+            const { entities } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+
+            obj.entities.forEach((entityObj) => {
+              answer = string.pnr(answer, { [`{{ ${entityObj.entity} }}`]: entityObj.option })
+
+              // Find matches and map deeper data from the NLU file
+              const matches = answer.match(/{{.+?}}/g)
+
+              matches?.forEach((match) => {
+                let newStr = match.substring(3)
+
+                newStr = newStr.substring(0, newStr.indexOf('}}') - 1)
+
+                const [entity, dataKey] = newStr.split('.')
+
+                if (entity === entityObj.entity) {
+                  // e.g. entities.color.options.red.data.usage
+                  const valuesArr = entities[entity].options[entityObj.option].data[dataKey]
+
+                  answer = string.pnr(answer,
+                    { [match]: valuesArr[Math.floor(Math.random() * valuesArr.length)] })
+                }
+              })
             })
           }
-
-          console.log('answer', answer)
         }
       }
     })

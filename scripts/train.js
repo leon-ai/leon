@@ -81,7 +81,24 @@ export default () => new Promise(async (resolve, reject) => {
 
               // Add entities annotations (@...)
               if (entities) {
-                nlp.addEntities(entities, lang)
+                const newEntitiesObj = { }
+                const entityKeys = Object.keys(entities)
+
+                for (let l = 0; l < entityKeys.length; l += 1) {
+                  const entity = entities[entityKeys[l]]
+                  const optionKeys = Object.keys(entity.options)
+                  const options = { }
+
+                  for (let m = 0; m < optionKeys.length; m += 1) {
+                    const option = entity.options[optionKeys[m]]
+
+                    options[optionKeys[m]] = option.synonyms
+                  }
+
+                  newEntitiesObj[entityKeys[l]] = { options }
+                }
+
+                nlp.addEntities(newEntitiesObj, lang)
               }
             }
           }

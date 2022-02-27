@@ -26,7 +26,8 @@
         "How about the @color colour?"
       ],
       "answers": [
-
+        "Well, colors are used to differentiate and bring more aesthetic. Life is colorful!",
+        "Alright, here is for the {{ color }} color: {{ color.usage }}"
       ]
     },
     "why": {
@@ -41,8 +42,23 @@
   "entities": {
     "color": {
       "options": {
-        "red": ["red"],
-        "blue": ["blue"]
+        "red": {
+          "synonyms": ["red"],
+          "data": {
+            "usage": [
+              "The red color is often used for danger"
+            ]
+          }
+        },
+        "blue": {
+          "synonyms": ["blue"],
+          "data": {
+            "usage": [
+              "The blue color is often used for that...",
+              "222 The blue color is often used for that..."
+            ]
+          }
+        }
       }
     }
   },

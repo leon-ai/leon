@@ -186,7 +186,6 @@ class Nlu {
             processingTime - data?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
-        console.error(e)
         log[e.type](e.obj.message)
 
         if (!opts.mute) {
