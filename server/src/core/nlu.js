@@ -12,6 +12,7 @@ import Ner from '@/core/ner'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 import lang from '@/helpers/lang'
+import domainHelper from '@/helpers/domain'
 
 class Nlu {
   constructor (brain) {
@@ -92,12 +93,15 @@ class Nlu {
 
       const result = await this.nlp.process(utterance)
       const {
-        locale, domain, intent, score
+        locale, domain, intent, score, answers
       } = result
       const [skillName, actionName] = intent.split('.')
+      const { type: skillType } = domainHelper.getSkillInfo(domain, skillName)
       let obj = {
         utterance,
         entities: [],
+        skillType,
+        answers, // For dialog skill type
         classification: {
           domain,
           skill: skillName,
@@ -178,9 +182,11 @@ class Nlu {
         return resolve({
           processingTime, // In ms, total time
           ...data,
-          nluProcessingTime: processingTime - data?.executionTime // In ms, NLU processing time only
+          nluProcessingTime:
+            processingTime - data?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
+        console.error(e)
         log[e.type](e.obj.message)
 
         if (!opts.mute) {

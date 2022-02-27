@@ -156,165 +156,192 @@ class Brain {
           executionTime
         })
       } else {
-        // Ensure the process is empty (to be able to execute other processes outside of Brain)
-        if (Object.keys(this.process).length === 0) {
-          /**
-           * Execute a skill in a standalone way (CLI):
-           *
-           * 1. Need to be at the root of the project
-           * 2. Edit: server/src/intent-object.sample.json
-           * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
-           *    python bridges/python/main.py server/src/intent-object.sample.json
-           */
-          const intentObj = {
-            id: utteranceId,
-            lang: this._lang,
-            domain: obj.classification.domain,
-            skill: obj.classification.skill,
-            action: obj.classification.action,
-            utterance: obj.utterance,
-            entities: obj.entities
+        const { skillType } = obj
+
+        if (skillType === 'logic') {
+          // Ensure the process is empty (to be able to execute other processes outside of Brain)
+          if (Object.keys(this.process).length === 0) {
+            /**
+             * Execute a skill in a standalone way (CLI):
+             *
+             * 1. Need to be at the root of the project
+             * 2. Edit: server/src/intent-object.sample.json
+             * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
+             *    python bridges/python/main.py server/src/intent-object.sample.json
+             */
+            const intentObj = {
+              id: utteranceId,
+              lang: this._lang,
+              domain: obj.classification.domain,
+              skill: obj.classification.skill,
+              action: obj.classification.action,
+              utterance: obj.utterance,
+              entities: obj.entities
+            }
+
+            try {
+              fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
+              this.process = spawn(`pipenv run python bridges/python/main.py ${intentObjectPath}`, { shell: true })
+            } catch (e) {
+              log.error(`Failed to save intent object: ${e}`)
+            }
           }
 
-          try {
-            fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
-            this.process = spawn(`pipenv run python bridges/python/main.py ${intentObjectPath}`, { shell: true })
-          } catch (e) {
-            log.error(`Failed to save intent object: ${e}`)
-          }
-        }
+          const domainName = obj.classification.domain
+          const skillName = obj.classification.skill
+          const { name: domainFriendlyName } = domain.getDomainInfo(domainName)
+          const { name: skillFriendlyName } = domain.getSkillInfo(domainName, skillName)
+          let output = ''
 
-        const domainName = obj.classification.domain
-        const skillName = obj.classification.skill
-        const domainFriendlyName = domain.getDomainName(domainName)
-        const skillFriendlyName = domain.getSkillName(domainName, skillName)
-        let output = ''
+          // Read output
+          this.process.stdout.on('data', (data) => {
+            const executionTimeEnd = Date.now()
+            const executionTime = executionTimeEnd - executionTimeStart
 
-        // Read output
-        this.process.stdout.on('data', (data) => {
-          const executionTimeEnd = Date.now()
-          const executionTime = executionTimeEnd - executionTimeStart
+            try {
+              const obj = JSON.parse(data.toString())
 
-          try {
-            const obj = JSON.parse(data.toString())
+              if (typeof obj === 'object') {
+                if (obj.output.type === 'inter') {
+                  log.title(`${skillFriendlyName} skill`)
+                  log.info(data.toString())
 
-            if (typeof obj === 'object') {
-              if (obj.output.type === 'inter') {
-                log.title(`${skillFriendlyName} skill`)
-                log.info(data.toString())
+                  this.interOutput = obj.output
 
-                this.interOutput = obj.output
-
-                const speech = obj.output.speech.toString()
-                if (!opts.mute) {
-                  this.talk(speech)
+                  const speech = obj.output.speech.toString()
+                  if (!opts.mute) {
+                    this.talk(speech)
+                  }
+                  speeches.push(speech)
+                } else {
+                  output += data
                 }
-                speeches.push(speech)
               } else {
-                output += data
+                /* istanbul ignore next */
+                reject({
+                  type: 'warning',
+                  obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain is not well configured. Check the configuration file.`),
+                  speeches,
+                  executionTime
+                })
               }
-            } else {
+            } catch (e) {
               /* istanbul ignore next */
               reject({
-                type: 'warning',
-                obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain is not well configured. Check the configuration file.`),
+                type: 'error',
+                obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain isn't returning JSON format.`),
                 speeches,
                 executionTime
               })
             }
-          } catch (e) {
-            /* istanbul ignore next */
-            reject({
-              type: 'error',
-              obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain isn't returning JSON format.`),
-              speeches,
-              executionTime
-            })
-          }
-        })
-
-        // Handle error
-        this.process.stderr.on('data', (data) => {
-          const speech = `${this.wernicke('random_skill_errors', '',
-            { '%skill_name%': skillFriendlyName, '%domain_name%': domainFriendlyName })}!`
-          if (!opts.mute) {
-            this.talk(speech)
-            this._socket.emit('is-typing', false)
-          }
-          speeches.push(speech)
-
-          Brain.deleteIntentObjFile(intentObjectPath)
-
-          log.title(`${skillFriendlyName} skill`)
-          log.error(data.toString())
-
-          const executionTimeEnd = Date.now()
-          const executionTime = executionTimeEnd - executionTimeStart
-          reject({
-            type: 'error',
-            obj: new Error(data),
-            speeches,
-            executionTime
           })
-        })
 
-        // Catch the end of the skill execution
-        this.process.stdout.on('end', () => {
-          log.title(`${skillFriendlyName} skill`)
-          log.info(output)
-
-          this.finalOutput = output
-
-          // Check if there is an output (no skill error)
-          if (this.finalOutput !== '') {
-            this.finalOutput = JSON.parse(this.finalOutput).output
-
-            const speech = this.finalOutput.speech.toString()
+          // Handle error
+          this.process.stderr.on('data', (data) => {
+            const speech = `${this.wernicke('random_skill_errors', '',
+              { '%skill_name%': skillFriendlyName, '%domain_name%': domainFriendlyName })}!`
             if (!opts.mute) {
-              this.talk(speech, true)
+              this.talk(speech)
+              this._socket.emit('is-typing', false)
             }
             speeches.push(speech)
 
-            /* istanbul ignore next */
-            // Synchronize the downloaded content if enabled
-            if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled
-              && this.finalOutput.options.synchronization.enabled === true) {
-              const sync = new Synchronizer(
-                this,
-                obj.classification,
-                this.finalOutput.options.synchronization
-              )
+            Brain.deleteIntentObjFile(intentObjectPath)
 
-              // When the synchronization is finished
-              sync.synchronize((speech) => {
-                if (!opts.mute) {
-                  this.talk(speech)
-                }
-                speeches.push(speech)
-              })
-            }
-          }
+            log.title(`${skillFriendlyName} skill`)
+            log.error(data.toString())
 
-          Brain.deleteIntentObjFile(intentObjectPath)
-
-          if (!opts.mute) {
-            this._socket.emit('is-typing', false)
-          }
-
-          const executionTimeEnd = Date.now()
-          const executionTime = executionTimeEnd - executionTimeStart
-
-          resolve({
-            utteranceId,
-            lang: this._lang,
-            ...obj,
-            speeches,
-            executionTime // In ms, skill execution time only
+            const executionTimeEnd = Date.now()
+            const executionTime = executionTimeEnd - executionTimeStart
+            reject({
+              type: 'error',
+              obj: new Error(data),
+              speeches,
+              executionTime
+            })
           })
-        })
 
-        // Reset the child process
-        this.process = { }
+          // Catch the end of the skill execution
+          this.process.stdout.on('end', () => {
+            log.title(`${skillFriendlyName} skill`)
+            log.info(output)
+
+            this.finalOutput = output
+
+            // Check if there is an output (no skill error)
+            if (this.finalOutput !== '') {
+              this.finalOutput = JSON.parse(this.finalOutput).output
+
+              const speech = this.finalOutput.speech.toString()
+              if (!opts.mute) {
+                this.talk(speech, true)
+              }
+              speeches.push(speech)
+
+              /* istanbul ignore next */
+              // Synchronize the downloaded content if enabled
+              if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled
+                && this.finalOutput.options.synchronization.enabled === true) {
+                const sync = new Synchronizer(
+                  this,
+                  obj.classification,
+                  this.finalOutput.options.synchronization
+                )
+
+                // When the synchronization is finished
+                sync.synchronize((speech) => {
+                  if (!opts.mute) {
+                    this.talk(speech)
+                  }
+                  speeches.push(speech)
+                })
+              }
+            }
+
+            Brain.deleteIntentObjFile(intentObjectPath)
+
+            if (!opts.mute) {
+              this._socket.emit('is-typing', false)
+            }
+
+            const executionTimeEnd = Date.now()
+            const executionTime = executionTimeEnd - executionTimeStart
+
+            resolve({
+              utteranceId,
+              lang: this._lang,
+              ...obj,
+              speeches,
+              executionTime // In ms, skill execution time only
+            })
+          })
+
+          // Reset the child process
+          this.process = { }
+        } else {
+          const utteranceHasEntities = obj.entities.length > 0
+          let { answers } = obj
+
+          // expect(string.pnr('Hello %name%', { '%name%': 'Leon' })).toBe('Hello Leon')
+
+          if (!utteranceHasEntities) {
+            answers = answers.filter(({ answer }) => answer.indexOf('{{') === -1)
+          }
+
+          let { answer } = answers[Math.floor(Math.random() * answers.length)]
+
+          /**
+           * In case the utterance contains entities, and the picked up answer too,
+           * then map them (utterance <-> answer)
+           */
+          if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
+            obj.entities.forEach((entity) => {
+              answer = string.pnr(answer, { [`{{ ${entity.entity} }}`]: entity.option })
+            })
+          }
+
+          console.log('answer', answer)
+        }
       }
     })
   }

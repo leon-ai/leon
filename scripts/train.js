@@ -53,7 +53,7 @@ export default () => new Promise(async (resolve, reject) => {
           const { name: skillName } = currentDomain.skills[skillKeys[j]]
           const currentSkill = currentDomain.skills[skillKeys[j]]
 
-          log.info(`[${lang}] Using "${skillKeys[j]}" skill utterance samples`)
+          log.info(`[${lang}] Using "${skillKeys[j]}" skill NLU data`)
 
           const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
 

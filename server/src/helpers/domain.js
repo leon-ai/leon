@@ -44,22 +44,14 @@ domain.getDomainsObj = async () => {
 
 domain.list = async () => Object.keys(await domain.getDomainsObj())
 
-domain.getDomainName = (domain) => {
-  const { name: domainName } = JSON.parse(fs.readFileSync(
-    path.join(domainsDir, domain, 'domain.json'),
-    'utf8'
-  ))
+domain.getDomainInfo = (domain) => JSON.parse(fs.readFileSync(
+  path.join(domainsDir, domain, 'domain.json'),
+  'utf8'
+))
 
-  return domainName
-}
-
-domain.getSkillName = (domain, skill) => {
-  const { name: skillName } = JSON.parse(fs.readFileSync(
-    path.join(domainsDir, domain, skill, 'skill.json'),
-    'utf8'
-  ))
-
-  return skillName
-}
+domain.getSkillInfo = (domain, skill) => JSON.parse(fs.readFileSync(
+  path.join(domainsDir, domain, skill, 'skill.json'),
+  'utf8'
+))
 
 export default domain
