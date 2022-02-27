@@ -81,7 +81,7 @@
     "socket.io": "^4.4.0",
     "socket.io-client": "^4.4.0",
     "stt": "^1.1.0",
-    "superagent": "^6.1.0"
+    "superagent": "^7.1.1"
   },
   "devDependencies": {
     "@babel/cli": "^7.16.0",
