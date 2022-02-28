@@ -319,8 +319,13 @@ class Brain {
           // Reset the child process
           this.process = { }
         } else {
+          const nluFilePath = path.join(
+            process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'nlu', `${this._lang}.json`
+          )
+          const { entities, actions } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
           const utteranceHasEntities = obj.entities.length > 0
           let { answers } = obj
+          let answer = ''
 
           if (!utteranceHasEntities) {
             answers = answers.filter(({ answer }) => answer.indexOf('{{') === -1)
@@ -328,41 +333,44 @@ class Brain {
             answers = answers.filter(({ answer }) => answer.indexOf('{{') !== -1)
           }
 
-          let { answer } = answers[Math.floor(Math.random() * answers.length)]
+          // No required entity found, hence need to fallback to the "unknown_answers"
+          if (answers.length === 0) {
+            answers = actions[obj.classification.action]?.unknown_answers
+            answer = answers[Math.floor(Math.random() * answers.length)]
+          } else {
+            answer = answers[Math.floor(Math.random() * answers.length)]?.answer
 
-          /**
-           * In case the utterance contains entities, and the picked up answer too,
-           * then map them (utterance <-> answer)
-           */
-          if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
-            const nluFilePath = path.join(
-              process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'nlu', `${this._lang}.json`
-            )
-            const { entities } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+            /**
+             * In case the utterance contains entities, and the picked up answer too,
+             * then map them (utterance <-> answer)
+             */
+            if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
+              obj.entities.forEach((entityObj) => {
+                answer = string.pnr(answer, { [`{{ ${entityObj.entity} }}`]: entityObj.option })
 
-            obj.entities.forEach((entityObj) => {
-              answer = string.pnr(answer, { [`{{ ${entityObj.entity} }}`]: entityObj.option })
+                // Find matches and map deeper data from the NLU file
+                const matches = answer.match(/{{.+?}}/g)
 
-              // Find matches and map deeper data from the NLU file
-              const matches = answer.match(/{{.+?}}/g)
+                matches?.forEach((match) => {
+                  let newStr = match.substring(3)
 
-              matches?.forEach((match) => {
-                let newStr = match.substring(3)
+                  newStr = newStr.substring(0, newStr.indexOf('}}') - 1)
 
-                newStr = newStr.substring(0, newStr.indexOf('}}') - 1)
+                  const [entity, dataKey] = newStr.split('.')
 
-                const [entity, dataKey] = newStr.split('.')
+                  if (entity === entityObj.entity) {
+                    // e.g. entities.color.options.red.data.usage
+                    const valuesArr = entities[entity].options[entityObj.option].data[dataKey]
 
-                if (entity === entityObj.entity) {
-                  // e.g. entities.color.options.red.data.usage
-                  const valuesArr = entities[entity].options[entityObj.option].data[dataKey]
-
-                  answer = string.pnr(answer,
-                    { [match]: valuesArr[Math.floor(Math.random() * valuesArr.length)] })
-                }
+                    answer = string.pnr(answer,
+                      { [match]: valuesArr[Math.floor(Math.random() * valuesArr.length)] })
+                  }
+                })
               })
-            })
+            }
           }
+
+          console.log('answer', answer)
         }
       }
     })
