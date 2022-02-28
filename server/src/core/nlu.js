@@ -96,11 +96,9 @@ class Nlu {
         locale, domain, intent, score, answers
       } = result
       const [skillName, actionName] = intent.split('.')
-      const { type: skillType } = domainHelper.getSkillInfo(domain, skillName)
       let obj = {
         utterance,
         entities: [],
-        skillType,
         answers, // For dialog skill type
         classification: {
           domain,
@@ -156,6 +154,9 @@ class Nlu {
 
       log.title('NLU')
       log.success(`Intent found: ${obj.classification.skill}.${obj.classification.action} (domain: ${obj.classification.domain})`)
+
+      const { type: skillType } = domainHelper.getSkillInfo(domain, skillName)
+      obj.skillType = skillType
 
       try {
         obj.entities = await this.ner.extractEntities(

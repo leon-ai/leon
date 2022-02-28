@@ -40,7 +40,7 @@
         "Alright, here is for the {{ color }} color: {{ color.usage }}."
       ],
       "unknown_answers": [
-        "This color looks incredible, but I haven't seen it before."
+        "This color sounds incredible, but I haven't seen it before."
       ]
     },
     "why": {
