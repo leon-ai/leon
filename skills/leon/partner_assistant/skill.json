@@ -1,7 +1,7 @@
 {
   "name": "Partner Assistant",
   "type": "dialog",
-  "bridge": "python",
+  "bridge": null,
   "version": "1.0.0",
   "description": "Leon tells about other virtual assistants.",
   "author": {
