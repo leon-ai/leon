@@ -10,6 +10,10 @@
       ],
       "answers": [
         "{{ partner_assistant.thought }}"
+      ],
+      "unknown_answers": [
+        "Je ne connais pas cet assistant personnel.",
+        "Je n'ai pas encore rencontré cet assistant personnel."
       ]
     }
   },

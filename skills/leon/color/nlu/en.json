@@ -21,13 +21,26 @@
     "color_meaning": {
       "utterance_samples": [
         "Tell me something about colors",
-        "Tell me something about the @color color",
-        "I want to know about the @color colour",
-        "How about the @color colour?"
+        "I want to know about colours",
+        "Share your knowledge about colors in general",
+        "Can you speak about colours?"
       ],
       "answers": [
-        "Well, colors are used to differentiate and bring more aesthetic. Life is colorful!",
-        "Alright, here is for the {{ color }} color: {{ color.usage }}"
+        "Well, colors are used to differentiate and bring more aesthetic. Life is colorful!"
+      ]
+    },
+    "specific_color_meaning": {
+      "utterance_samples": [
+        "Tell me something about the @color color",
+        "I want to know about the @color colour",
+        "How about the @color colour?",
+        "Can you tell me more about the @color color?"
+      ],
+      "answers": [
+        "Alright, here is for the {{ color }} color: {{ color.usage }}."
+      ],
+      "unknown_answers": [
+        "This color looks incredible, but I haven't seen it before."
       ]
     },
     "why": {

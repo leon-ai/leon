@@ -324,7 +324,8 @@ class Brain {
           )
           const { entities, actions } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
           const utteranceHasEntities = obj.entities.length > 0
-          let { answers } = obj
+          const { answers: rawAnswers } = obj
+          let answers = rawAnswers
           let answer = ''
 
           if (!utteranceHasEntities) {
@@ -333,10 +334,15 @@ class Brain {
             answers = answers.filter(({ answer }) => answer.indexOf('{{') !== -1)
           }
 
-          // No required entity found, hence need to fallback to the "unknown_answers"
+          // When answers are simple without required entity
           if (answers.length === 0) {
-            answers = actions[obj.classification.action]?.unknown_answers
-            answer = answers[Math.floor(Math.random() * answers.length)]
+            answer = rawAnswers[Math.floor(Math.random() * rawAnswers.length)]?.answer
+
+            // In case the expected answer requires a known entity
+            if (answer.indexOf('{{') !== -1) {
+              answers = actions[obj.classification.action]?.unknown_answers
+              answer = answers[Math.floor(Math.random() * answers.length)]
+            }
           } else {
             answer = answers[Math.floor(Math.random() * answers.length)]?.answer
 
@@ -370,7 +376,21 @@ class Brain {
             }
           }
 
-          console.log('answer', answer)
+          const executionTimeEnd = Date.now()
+          const executionTime = executionTimeEnd - executionTimeStart
+
+          if (!opts.mute) {
+            this.talk(answer, true)
+            this._socket.emit('is-typing', false)
+          }
+
+          resolve({
+            utteranceId,
+            lang: this._lang,
+            ...obj,
+            speeches: [answer],
+            executionTime // In ms, skill execution time only
+          })
         }
       }
     })

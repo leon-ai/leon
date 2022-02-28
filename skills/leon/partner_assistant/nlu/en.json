@@ -12,8 +12,8 @@
         "{{ partner_assistant.thought }}"
       ],
       "unknown_answers": [
-        "I do not know this personal assistant",
-        "I have not met this personal assistant yet"
+        "I do not know this personal assistant.",
+        "I have not met this personal assistant yet."
       ]
     }
   },
