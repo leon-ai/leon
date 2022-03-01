@@ -3,13 +3,18 @@
     "red": {
       "synonyms": ["red"],
       "data": {
-        "usage": "The red color is often used for danger"
+        "usage": [
+          "The red color is often used for danger"
+        ]
       }
     },
     "blue": {
       "synonyms": ["blue"],
       "data": {
-        "usage": "The blue color is often used for that..."
+        "usage": [
+          "The blue color is often used for that...",
+          "222 The blue color is often used for that..."
+        ]
       }
     }
   }

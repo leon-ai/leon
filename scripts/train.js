@@ -8,6 +8,7 @@ import path from 'path'
 import log from '@/helpers/log'
 import lang from '@/helpers/lang'
 import domain from '@/helpers/domain'
+import string from '@/helpers/string'
 
 dotenv.config()
 
@@ -58,7 +59,8 @@ export default () => new Promise(async (resolve, reject) => {
           const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
 
           if (fs.existsSync(nluFilePath)) {
-            const { actions, entities } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+            const { actions, entities, variables } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+            // const { actions, entities } = loadNluFile(nluFilePath)
             const actionsKeys = Object.keys(actions)
 
             for (let k = 0; k < actionsKeys.length; k += 1) {
@@ -74,7 +76,25 @@ export default () => new Promise(async (resolve, reject) => {
 
               // Train NLG if the skill has a dialog type
               if (currentSkill.type === 'dialog') {
+                const variablesObj = { }
+
+                // Dynamic variables binding if any variable is declared
+                if (variables) {
+                  const variableKeys = Object.keys(variables)
+
+                  for (let l = 0; l < variableKeys.length; l += 1) {
+                    const key = variableKeys[l]
+
+                    variablesObj[`%${key}%`] = variables[variableKeys[l]]
+                  }
+                }
+
                 for (let l = 0; l < answers?.length; l += 1) {
+                  const variableKeys = Object.keys(variablesObj)
+                  if (variableKeys.length > 0) {
+                    answers[l] = string.pnr(answers[l], variablesObj)
+                  }
+
                   nlp.addAnswer(lang, `${skillName}.${actionName}`, answers[l])
                 }
               }
