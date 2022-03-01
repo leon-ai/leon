@@ -9,6 +9,7 @@ import log from '@/helpers/log'
 import lang from '@/helpers/lang'
 import domain from '@/helpers/domain'
 import string from '@/helpers/string'
+import json from '@/helpers/json'
 
 dotenv.config()
 
@@ -59,8 +60,11 @@ export default () => new Promise(async (resolve, reject) => {
           const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
 
           if (fs.existsSync(nluFilePath)) {
-            const { actions, entities, variables } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
-            // const { actions, entities } = loadNluFile(nluFilePath)
+            const {
+              actions,
+              entities,
+              variables
+            } = await json.loadNluData(nluFilePath, lang) // eslint-disable-line no-await-in-loop
             const actionsKeys = Object.keys(actions)
 
             for (let k = 0; k < actionsKeys.length; k += 1) {

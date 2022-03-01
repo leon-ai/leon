@@ -8,6 +8,7 @@ import string from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
 import lang from '@/helpers/lang'
 import domain from '@/helpers/domain'
+import json from '@/helpers/json'
 
 class Brain {
   constructor () {
@@ -133,7 +134,7 @@ class Brain {
       mute: false // Close Leon mouth e.g. over HTTP
     }
 
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const utteranceId = `${Date.now()}-${string.random(4)}`
       const intentObjectPath = path.join(__dirname, `../tmp/${utteranceId}.json`)
       const speeches = []
@@ -322,7 +323,7 @@ class Brain {
           const nluFilePath = path.join(
             process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'nlu', `${this._lang}.json`
           )
-          const { entities, actions } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+          const { actions, entities } = await json.loadNluData(nluFilePath, this._lang)
           const utteranceHasEntities = obj.entities.length > 0
           const { answers: rawAnswers } = obj
           let answers = rawAnswers
