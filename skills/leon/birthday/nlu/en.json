@@ -62,10 +62,27 @@
       }
     },
     "my_birthday": {
+      "type": "dialog",
       "utterance_samples": [
         "My birthday is the 6th of August",
-        "I am born the @day of @month "
-      ]
+        "I am born the 25th of March 1992",
+        "My birth date is the 26th of June in 1998",
+        "Note that my birthday is in April 12",
+        "The 30th May 1968 is my birth date"
+      ],
+      "slots": [
+        {
+          "name": "birth_date",
+          "type": "date"
+        }
+      ],
+      "answers": {
+        "birthday_understood": [
+          "Gotcha, your birth date is the %birth_date%.",
+          "Well noted, you are born the %birth_date%.",
+          "Understood! Your birthday is the %birthday%."
+        ]
+      }
     }
   }
 }
