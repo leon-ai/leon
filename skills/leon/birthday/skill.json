@@ -1,0 +1,12 @@
+{
+  "name": "Birthday",
+  "type": "dialog",
+  "bridge": null,
+  "version": "1.0.0",
+  "description": "Leon remembers birthdays and talk about his.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

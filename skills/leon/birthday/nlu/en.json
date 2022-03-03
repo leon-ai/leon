@@ -1,0 +1,66 @@
+{
+  "actions": {
+    "leon_birthday": {
+      "type": "dialog",
+      "utterance_samples": [
+        "What's your birth date?",
+        "How old are you?",
+        "When are you born?",
+        "May I know when is your birthday?"
+      ],
+      "answers": [
+        "I'm born in February 2019.",
+        "My first version has been released in February 2019."
+      ]
+    },
+    "when_birthday": {
+      "type": "logic",
+      "utterance_samples": [
+        "Do you know when is my birthday?",
+        "Do you remember when I am born?",
+        "Do you know my birth date?",
+        "When is Phoebe's birthday?",
+        "Give me my birth date"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "person",
+          "conditions": [
+            {
+              "type": "before_last",
+              "to": ["birthday", "birth date"]
+            },
+            {
+              "type": "between",
+              "from": ["when"],
+              "to": ["am","was"]
+            }
+          ]
+        }
+      ],
+      "slots": [
+        {
+          "name": "birth_date",
+          "type": "date"
+        }
+      ],
+      "answers": {
+        "birthday_found": [
+          "%person%'s birthday is the %birth_date%",
+          "%person% is born the %birth_date%"
+        ],
+        "birthday_not_found": [
+          "I'm not sure to remember, would you please tell me what is %person%'s birth date?",
+          "I do not know, please share %person% birth date."
+        ]
+      }
+    },
+    "my_birthday": {
+      "utterance_samples": [
+        "My birthday is the 6th of August",
+        "I am born the @day of @month "
+      ]
+    }
+  }
+}

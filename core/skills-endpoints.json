@@ -2,6 +2,36 @@
   "endpoints": [
     {
       "method": "GET",
+      "route": "/api/action/leon/birthday/leon_birthday",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/birthday/when_birthday",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/birthday/my_birthday",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/birthday/color_meaning",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/birthday/specific_color_meaning",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/birthday/why",
+      "params": []
+    },
+    {
+      "method": "GET",
       "route": "/api/action/leon/color/favorite_color",
       "params": []
     },

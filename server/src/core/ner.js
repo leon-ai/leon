@@ -80,7 +80,10 @@ class Ner {
         const conditionMethod = `add${string.snakeToPascalCase(condition.type)}Condition`
 
         if (condition.type === 'between') {
-          // e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
+          /**
+           * Conditions: https://github.com/axa-group/nlp.js/blob/master/docs/v3/ner-manager.md#trim-named-entities
+           * e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
+           */
           this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
         } else if (condition.type.indexOf('after') !== -1) {
           const rule = {
