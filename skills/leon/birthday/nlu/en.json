@@ -47,12 +47,17 @@
       ],
       "answers": {
         "birthday_found": [
-          "%person%'s birthday is the %birth_date%",
+          "%person%'s birthday is the %birthday%",
           "%person% is born the %birth_date%"
         ],
         "birthday_not_found": [
           "I'm not sure to remember, would you please tell me what is %person%'s birth date?",
           "I do not know, please share %person% birth date."
+        ],
+        "birthday_understood": [
+          "Gotcha, %person%'s birth date is the %birth_date%.",
+          "Well noted, %person% is born the %birth_date%.",
+          "Understood! %person%'s birthday is the %birthday%."
         ]
       }
     },
