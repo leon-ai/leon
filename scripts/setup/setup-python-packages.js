@@ -21,7 +21,6 @@ export default () => new Promise(async (resolve, reject) => {
 
       if (pipenvVersion.indexOf('version') !== -1) {
         pipenvVersion = pipenvVersion.substr(pipenvVersion.indexOf('version') + 'version '.length)
-        pipenvVersion = pipenvVersion.substr(0, pipenvVersion.length - 1)
         pipenvVersion = `${pipenvVersion} version`
       }
 
@@ -43,6 +42,16 @@ export default () => new Promise(async (resolve, reject) => {
         await command('pipenv --three', { shell: true })
         await command('pipenv install', { shell: true })
         log.success('Python packages installed')
+
+        log.info('Installing spaCy models...')
+        // Find new spaCy models:  https://github.com/explosion/spacy-models/releases
+        await Promise.all([
+          command('pipenv run spacy download en_core_web_trf-3.2.0 --direct', { shell: true })
+          // command('pipenv run spacy download en_core_web_sm-3.1.0 --direct', { shell: true }),
+          // command('pipenv run spacy download fr_core_news_sm-3.1.0 --direct', { shell: true })
+        ])
+
+        log.success('spaCy models installed')
       }
 
       if (!isDotVenvExist) {

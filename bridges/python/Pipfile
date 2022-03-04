@@ -8,5 +8,9 @@ requests = "==2.21.0"
 pytube = "==9.5.0"
 tinydb = "==3.9.0"
 beautifulsoup4 = "==4.7.1"
+spacy = "==3.2.0"
+setuptools = "==60.9.3"
+wheel = "==0.37.1"
+torch = "==1.9.0"
 
 [dev-packages]
