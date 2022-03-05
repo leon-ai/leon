@@ -11,72 +11,76 @@ import string from '@/helpers/string'
 class Ner {
   constructor (ner) {
     this.ner = ner
-    this._spacyEntities = []
 
     log.title('NER')
     log.success('New instance')
   }
 
-  set spacyEntities (newSpacyEntities) {
-    this._spacyEntities = newSpacyEntities
-  }
-
   static logExtraction (entities) {
+    log.title('NER')
+    log.success('Entities found:')
     entities.forEach((ent) => log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`))
   }
 
   /**
    * Grab entities and match them with the utterance
    */
-  async extractEntities (lang, utteranceSamplesFilePath, obj) {
-    log.title('NER')
-    log.info('Searching for entities...')
+  extractEntities (lang, utteranceSamplesFilePath, obj) {
+    return new Promise(async (resolve) => {
+      log.title('NER')
+      log.info('Searching for entities...')
 
-    const { classification } = obj
-    // Remove end-punctuation and add an end-whitespace
-    const utterance = `${string.removeEndPunctuation(obj.utterance)} `
-    const { actions } = JSON.parse(fs.readFileSync(utteranceSamplesFilePath, 'utf8'))
-    const { action } = classification
-    const promises = []
-    const actionEntities = actions[action].entities || []
+      const { classification } = obj
+      // Remove end-punctuation and add an end-whitespace
+      const utterance = `${string.removeEndPunctuation(obj.utterance)} `
+      const { actions } = JSON.parse(fs.readFileSync(utteranceSamplesFilePath, 'utf8'))
+      const { action } = classification
+      const promises = []
+      const actionEntities = actions[action].entities || []
 
-    /**
-     * Browse action entities
-     * Dynamic injection of the action entities depending of the entity type
-     */
-    for (let i = 0; i < actionEntities.length; i += 1) {
-      const entity = actionEntities[i]
+      /**
+       * Browse action entities
+       * Dynamic injection of the action entities depending of the entity type
+       */
+      for (let i = 0; i < actionEntities.length; i += 1) {
+        const entity = actionEntities[i]
 
-      if (entity.type === 'regex') {
-        promises.push(this.injectRegexEntity(lang, entity))
-      } else if (entity.type === 'trim') {
-        promises.push(this.injectTrimEntity(lang, entity))
+        if (entity.type === 'regex') {
+          promises.push(this.injectRegexEntity(lang, entity))
+        } else if (entity.type === 'trim') {
+          promises.push(this.injectTrimEntity(lang, entity))
+        }
       }
-    }
 
-    await Promise.all(promises)
+      await Promise.all(promises)
 
-    let { entities } = await this.ner.process({ locale: lang, text: utterance })
+      let { entities } = await this.ner.process({ locale: lang, text: utterance })
 
-    // Trim whitespace at the beginning and the end of the entity value
-    entities.map((e) => {
-      e.sourceText = e.sourceText.trim()
-      e.utteranceText = e.utteranceText.trim()
+      // Trim whitespace at the beginning and the end of the entity value
+      entities.map((e) => {
+        e.sourceText = e.sourceText.trim()
+        e.utteranceText = e.utteranceText.trim()
 
-      return e
+        return e
+      })
+
+      global.tcpClient.ee.removeAllListeners()
+      global.tcpClient.ee.on('spacy-entities-received', async ({ spacyEntities }) => {
+        // Merge with spaCy entities
+        entities = entities.concat(spacyEntities)
+
+        if (entities.length > 0) {
+          Ner.logExtraction(entities)
+          return resolve(entities)
+        }
+
+        log.title('NER')
+        log.info('No entity found')
+        return resolve([])
+      })
+
+      global.tcpClient.emit('get-spacy-entities', utterance)
     })
-
-    // Merge with spaCy entities
-    entities = entities.concat(this._spacyEntities)
-    this._spacyEntities = []
-
-    if (entities.length > 0) {
-      Ner.logExtraction(entities)
-      return entities
-    }
-
-    log.info('No entity found')
-    return []
   }
 
   /**

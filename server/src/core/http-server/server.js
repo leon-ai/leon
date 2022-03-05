@@ -10,7 +10,6 @@ import Brain from '@/core/brain'
 import Asr from '@/core/asr'
 import Stt from '@/stt/stt'
 import Tts from '@/tts/tts'
-import TcpClient from '@/core/tcp-client'
 import corsMidd from '@/core/http-server/plugins/cors'
 import otherMidd from '@/core/http-server/plugins/other'
 import keyMidd from '@/core/http-server/plugins/key'
@@ -20,7 +19,6 @@ import log from '@/helpers/log'
 import date from '@/helpers/date'
 
 const server = { }
-let tcpClient = { }
 let brain = { }
 let nlu = { }
 
@@ -171,15 +169,6 @@ server.handleOnConnection = (socket) => {
       log.success(`STT ${sttState}`)
       log.success(`TTS ${ttsState}`)
 
-      tcpClient.ee.removeAllListeners()
-      tcpClient.ee.on('spacy-entities-received', async ({ utterance, spacyEntities }) => {
-        try {
-          nlu.ner.spacyEntities = spacyEntities
-
-          await nlu.process(utterance)
-        } catch (e) { /* */ }
-      })
-
       // Listen for new utterance
       socket.on('utterance', async (data) => {
         log.title('Socket')
@@ -188,8 +177,9 @@ server.handleOnConnection = (socket) => {
         socket.emit('is-typing', true)
 
         const utterance = data.value
-
-        tcpClient.emit('get-spacy-entities', utterance)
+        try {
+          await nlu.process(utterance)
+        } catch (e) { /* */ }
       })
 
       // Handle automatic speech recognition
@@ -244,27 +234,20 @@ server.bootstrap = async () => {
       instance.post('/api/query', async (request, reply) => {
         const { utterance } = request.body
 
-        tcpClient.ee.removeAllListeners()
-        tcpClient.ee.on('spacy-entities-received', async ({ utterance, spacyEntities }) => {
-          nlu.ner.spacyEntities = spacyEntities
-
+        try {
           const data = await nlu.process(utterance, { mute: true })
 
-          try {
-            reply.send({
-              ...data,
-              success: true
-            })
-          } catch (e) {
-            reply.statusCode = 500
-            reply.send({
-              message: e.message,
-              success: false
-            })
-          }
-        })
-
-        tcpClient.emit('get-spacy-entities', utterance)
+          reply.send({
+            ...data,
+            success: true
+          })
+        } catch (e) {
+          reply.statusCode = 500
+          reply.send({
+            message: e.message,
+            success: false
+          })
+        }
       })
 
       server.generateSkillsRoutes(instance)
@@ -298,10 +281,7 @@ server.init = async () => {
   const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
 
-  tcpClient = new TcpClient(process.env.LEON_PY_WS_SERVER_HOST, process.env.LEON_PY_WS_SERVER_PORT)
-  // pyWsClient = new PyWsClient(`ws://${process.env.LEON_PY_WS_SERVER_HOST}:${process.env.LEON_PY_WS_SERVER_PORT}`)
   brain = new Brain()
-  // brain.pySocket = pyWsClient.pySocket
 
   nlu = new Nlu(brain)
 

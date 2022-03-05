@@ -1,13 +1,15 @@
 import dotenv from 'dotenv'
-// import { command } from 'execa'
 
+import TcpClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
 
 (async () => {
   dotenv.config()
 
-  /* command('pipenv run python bridges/python/ws-server.py', {
-    shell: true
-  }) */
+  global.tcpClient = new TcpClient(
+    process.env.LEON_PY_WS_SERVER_HOST,
+    process.env.LEON_PY_WS_SERVER_PORT
+  )
+
   await server.init()
 })()

@@ -1,3 +1,5 @@
+""" TCP server to allow IPC with third-party such as spaCy """
+
 import socket
 import select
 import os
@@ -10,6 +12,12 @@ dotenv_path = join(dirname(__file__), '../../.env')
 load_dotenv(dotenv_path)
 
 nlp = spacy.load('en_core_web_trf', disable=['tagger', 'parser', 'attribute_ruler', 'lemmatizer'])
+
+entity_mapping = {
+	'PERSON': 'person',
+	'GPE': 'location',
+	'ORG': 'organization'
+}
 
 ws_server_host = os.environ.get('LEON_PY_WS_SERVER_HOST', '0.0.0.0')
 ws_server_port = os.environ.get('LEON_PY_WS_SERVER_PORT', 1342)
@@ -25,13 +33,14 @@ def extract_spacy_entities(utterance):
 	entities = []
 
 	for ent in doc.ents:
+		entity = entity_mapping[ent.label_]
 		entities.append({
 			'start': ent.start_char,
 			'end': ent.end_char,
 			'len': len(ent.text),
 			'sourceText': ent.text,
 			'utteranceText': ent.text,
-			'entity': ent.label_,
+			'entity': entity,
 			'resolution': {
 				'value': ent.text
 			}
@@ -61,7 +70,6 @@ while True:
 				res = {
 					'topic': 'spacy-entities-received',
 					'data': {
-						'utterance': utterance,
 						'spacyEntities': entities
 					}
 				}
