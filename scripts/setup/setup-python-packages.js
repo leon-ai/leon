@@ -46,9 +46,8 @@ export default () => new Promise(async (resolve, reject) => {
         log.info('Installing spaCy models...')
         // Find new spaCy models:  https://github.com/explosion/spacy-models/releases
         await Promise.all([
-          command('pipenv run spacy download en_core_web_trf-3.2.0 --direct', { shell: true })
-          // command('pipenv run spacy download en_core_web_sm-3.1.0 --direct', { shell: true }),
-          // command('pipenv run spacy download fr_core_news_sm-3.1.0 --direct', { shell: true })
+          command('pipenv run spacy download en_core_web_trf-3.2.0 --direct', { shell: true }),
+          command('pipenv run spacy download fr_core_news_md-3.2.0 --direct', { shell: true })
         ])
 
         log.success('spaCy models installed')

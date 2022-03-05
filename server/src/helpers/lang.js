@@ -18,4 +18,6 @@ lang.getLongCode = (shortLang) => {
   return null
 }
 
+lang.getShortCode = (longLang) => langs[longLang].short
+
 export default lang

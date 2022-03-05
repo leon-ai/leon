@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 import utils
-from sys import argv, path
+from sys import path
 from json import dumps, loads
 from importlib import import_module
 
