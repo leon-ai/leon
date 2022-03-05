@@ -171,6 +171,15 @@ server.handleOnConnection = (socket) => {
       log.success(`STT ${sttState}`)
       log.success(`TTS ${ttsState}`)
 
+      tcpClient.ee.removeAllListeners()
+      tcpClient.ee.on('spacy-entities-received', async ({ utterance, spacyEntities }) => {
+        try {
+          nlu.ner.spacyEntities = spacyEntities
+
+          await nlu.process(utterance)
+        } catch (e) { /* */ }
+      })
+
       // Listen for new utterance
       socket.on('utterance', async (data) => {
         log.title('Socket')
@@ -180,22 +189,7 @@ server.handleOnConnection = (socket) => {
 
         const utterance = data.value
 
-        /* tcpClient.on('spacy-entities-received', async (entities) => {
-          try {
-            await nlu.process(utterance)
-          } catch (e) { /!* *!/ }
-        }) */
-
         tcpClient.emit('get-spacy-entities', utterance)
-      })
-
-      tcpClient.ee.on('spacy-entities-received', async ({ utterance, spacyEntities }) => {
-        console.log('utterance', utterance)
-        console.log('spacyEntities', spacyEntities)
-
-        try {
-          await nlu.process(utterance)
-        } catch (e) { /* */ }
       })
 
       // Handle automatic speech recognition
@@ -250,20 +244,27 @@ server.bootstrap = async () => {
       instance.post('/api/query', async (request, reply) => {
         const { utterance } = request.body
 
-        try {
+        tcpClient.ee.removeAllListeners()
+        tcpClient.ee.on('spacy-entities-received', async ({ utterance, spacyEntities }) => {
+          nlu.ner.spacyEntities = spacyEntities
+
           const data = await nlu.process(utterance, { mute: true })
 
-          reply.send({
-            ...data,
-            success: true
-          })
-        } catch (e) {
-          reply.statusCode = 500
-          reply.send({
-            message: e.message,
-            success: false
-          })
-        }
+          try {
+            reply.send({
+              ...data,
+              success: true
+            })
+          } catch (e) {
+            reply.statusCode = 500
+            reply.send({
+              message: e.message,
+              success: false
+            })
+          }
+        })
+
+        tcpClient.emit('get-spacy-entities', utterance)
       })
 
       server.generateSkillsRoutes(instance)

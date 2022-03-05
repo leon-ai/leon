@@ -19,9 +19,9 @@ export default class TcpClient {
 
     this.tcpSocket.on('data', (chunk) => {
       log.title('TCP Client')
+      log.info(`Received data: ${chunk.toString()}`)
 
       const data = JSON.parse(chunk)
-
       this._ee.emit(data.topic, data.data)
     })
 
@@ -32,6 +32,7 @@ export default class TcpClient {
 
     this.tcpSocket.on('end', () => {
       log.title('TCP Client')
+
       log.success('Disconnected from TCP server')
     })
   }

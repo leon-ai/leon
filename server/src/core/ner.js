@@ -11,9 +11,14 @@ import string from '@/helpers/string'
 class Ner {
   constructor (ner) {
     this.ner = ner
+    this._spacyEntities = []
 
     log.title('NER')
     log.success('New instance')
+  }
+
+  set spacyEntities (newSpacyEntities) {
+    this._spacyEntities = newSpacyEntities
   }
 
   static logExtraction (entities) {
@@ -51,7 +56,7 @@ class Ner {
 
     await Promise.all(promises)
 
-    const { entities } = await this.ner.process({ locale: lang, text: utterance })
+    let { entities } = await this.ner.process({ locale: lang, text: utterance })
 
     // Trim whitespace at the beginning and the end of the entity value
     entities.map((e) => {
@@ -60,6 +65,10 @@ class Ner {
 
       return e
     })
+
+    // Merge with spaCy entities
+    entities = entities.concat(this._spacyEntities)
+    this._spacyEntities = []
 
     if (entities.length > 0) {
       Ner.logExtraction(entities)

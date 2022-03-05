@@ -1,4 +1,5 @@
 import socket
+import select
 import os
 import json
 from os.path import join, dirname
@@ -40,13 +41,14 @@ def extract_spacy_entities(utterance):
 
 while True:
 	print('Waiting for connection...')
-	s, addr = tcp_socket.accept()
+
+	conn, addr = tcp_socket.accept()
 
 	try:
 		print(f'Client connected: {addr}')
 
 		while True:
-			data = s.recv(1024)
+			data = conn.recv(1024)
 
 			if not data:
 				break
@@ -64,6 +66,7 @@ while True:
 					}
 				}
 
-				s.sendall(json.dumps(res).encode('utf-8'))
+				conn.sendall(json.dumps(res).encode('utf-8'))
 	finally:
-		s.close()
+		print(f'Client disconnected: {addr}')
+		conn.close()
