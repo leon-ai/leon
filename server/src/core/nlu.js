@@ -159,13 +159,6 @@ class Nlu {
       obj.skillType = skillType
 
       try {
-        // TODO
-        /* const cmd =
-        await command('pipenv run python bridges/python/ner/spacy-run.py', { shell: true })
-
-        console.log('cmd.stdout', cmd.stdout)
-        console.error('cmd.stderr', cmd.stderr) */
-
         obj.entities = await this.ner.extractEntities(
           this.brain.lang,
           join(process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, `nlu/${this.brain.lang}.json`),

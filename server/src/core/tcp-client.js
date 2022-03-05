@@ -23,8 +23,6 @@ export default class TcpClient {
       const data = JSON.parse(chunk)
 
       this._ee.emit(data.topic, data.data)
-
-      console.log('RECEIIIIVED', chunk.toString())
     })
 
     this.tcpSocket.on('error', (err) => {

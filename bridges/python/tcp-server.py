@@ -14,37 +14,56 @@ ws_server_host = os.environ.get('LEON_PY_WS_SERVER_HOST', '0.0.0.0')
 ws_server_port = os.environ.get('LEON_PY_WS_SERVER_PORT', 1342)
 
 tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# Make sure to establish TCP connection by reusing the address so it does not conflict with port already in use
+tcp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 tcp_socket.bind((ws_server_host, int(ws_server_port)))
 tcp_socket.listen()
 
 def extract_spacy_entities(utterance):
 	doc = nlp(utterance)
+	entities = []
 
 	for ent in doc.ents:
-		print(ent.text, ent.label_)
+		entities.append({
+			'start': ent.start_char,
+			'end': ent.end_char,
+			'len': len(ent.text),
+			'sourceText': ent.text,
+			'utteranceText': ent.text,
+			'entity': ent.label_,
+			'resolution': {
+				'value': ent.text
+			}
+		})
+
+	return entities
 
 while True:
 	print('Waiting for connection...')
-	connection, addr = tcp_socket.accept()
+	s, addr = tcp_socket.accept()
 
 	try:
 		print(f'Client connected: {addr}')
 
 		while True:
-			data = connection.recv(1024)
-			data_dict = json.loads(data)
-
-			print('data', data)
-
-			if data_dict['topic'] == 'get-spacy-entities':
-				extract_spacy_entities(data_dict['data'])
-
-			print(f'Received data: {data_dict}')
+			data = s.recv(1024)
 
 			if not data:
 				break
 
-			connection.sendall(data)
+			data_dict = json.loads(data)
 
+			if data_dict['topic'] == 'get-spacy-entities':
+				utterance = data_dict['data']
+				entities = extract_spacy_entities(utterance)
+				res = {
+					'topic': 'spacy-entities-received',
+					'data': {
+						'utterance': utterance,
+						'spacyEntities': entities
+					}
+				}
+
+				s.sendall(json.dumps(res).encode('utf-8'))
 	finally:
-		connection.close()
+		s.close()

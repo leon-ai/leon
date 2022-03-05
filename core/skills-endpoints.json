@@ -6,28 +6,16 @@
       "params": []
     },
     {
-      "method": "GET",
+      "method": "POST",
       "route": "/api/action/leon/birthday/when_birthday",
-      "params": []
+      "params": [
+        "person"
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "GET",
       "route": "/api/action/leon/birthday/my_birthday",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/birthday/color_meaning",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/birthday/specific_color_meaning",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/birthday/why",
       "params": []
     },
     {
