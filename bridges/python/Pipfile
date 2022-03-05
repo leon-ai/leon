@@ -12,5 +12,9 @@ spacy = "==3.2.0"
 setuptools = "==60.9.3"
 wheel = "==0.37.1"
 torch = "==1.9.0"
+python-socketio = "==5.5.2"
+eventlet = "==0.33.0"
+python-dotenv = "==0.19.2"
+zerorpc = "==0.6.3"
 
 [dev-packages]

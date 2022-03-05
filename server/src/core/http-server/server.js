@@ -10,6 +10,7 @@ import Brain from '@/core/brain'
 import Asr from '@/core/asr'
 import Stt from '@/stt/stt'
 import Tts from '@/tts/tts'
+import TcpClient from '@/core/tcp-client'
 import corsMidd from '@/core/http-server/plugins/cors'
 import otherMidd from '@/core/http-server/plugins/other'
 import keyMidd from '@/core/http-server/plugins/key'
@@ -19,6 +20,7 @@ import log from '@/helpers/log'
 import date from '@/helpers/date'
 
 const server = { }
+let tcpClient = { }
 let brain = { }
 let nlu = { }
 
@@ -176,8 +178,23 @@ server.handleOnConnection = (socket) => {
 
         socket.emit('is-typing', true)
 
+        const utterance = data.value
+
+        /* tcpClient.on('spacy-entities-received', async (entities) => {
+          try {
+            await nlu.process(utterance)
+          } catch (e) { /!* *!/ }
+        }) */
+
+        tcpClient.emit('get-spacy-entities', utterance)
+      })
+
+      tcpClient.ee.on('spacy-entities-received', async ({ utterance, spacyEntities }) => {
+        console.log('utterance', utterance)
+        console.log('spacyEntities', spacyEntities)
+
         try {
-          await nlu.process(data.value)
+          await nlu.process(utterance)
         } catch (e) { /* */ }
       })
 
@@ -280,7 +297,11 @@ server.init = async () => {
   const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
 
+  tcpClient = new TcpClient(process.env.LEON_PY_WS_SERVER_HOST, process.env.LEON_PY_WS_SERVER_PORT)
+  // pyWsClient = new PyWsClient(`ws://${process.env.LEON_PY_WS_SERVER_HOST}:${process.env.LEON_PY_WS_SERVER_PORT}`)
   brain = new Brain()
+  // brain.pySocket = pyWsClient.pySocket
+
   nlu = new Nlu(brain)
 
   // Load NLP model
