@@ -1,10 +1,13 @@
 import dotenv from 'dotenv'
+import { spawn } from 'child_process'
 
 import TcpClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
 
 (async () => {
   dotenv.config()
+
+  spawn('pipenv run python bridges/python/tcp-server.py', { shell: true, detached: true })
 
   global.tcpClient = new TcpClient(
     process.env.LEON_PY_WS_SERVER_HOST,
