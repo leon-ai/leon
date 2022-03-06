@@ -46,7 +46,7 @@
     "build": "npm run build:app && npm run build:server",
     "build:app": "cross-env LEON_NODE_ENV=production babel-node scripts/app/run-build-app.js",
     "build:server": "npm run delete-dist:server && npm run train && npm run generate:skills-endpoints && babel ./server/src -d ./server/dist --copy-files && shx mkdir -p server/dist/tmp",
-    "start:tcp-server": "cross-env PIPENV_PIPFILE=bridges/python/Pipfile pipenv run python bridges/python/tcp-server.py",
+    "start:tcp-server": "cross-env PIPENV_PIPFILE=bridges/python/Pipfile pipenv run python bridges/python/tcp_server/main.py",
     "start": "cross-env LEON_NODE_ENV=production node ./server/dist/index.js",
     "train": "babel-node scripts/run-train.js",
     "prepare-release": "babel-node scripts/release/prepare-release.js",
@@ -82,7 +82,8 @@
     "socket.io": "^4.4.0",
     "socket.io-client": "^4.4.0",
     "stt": "^1.1.0",
-    "superagent": "^6.1.0"
+    "superagent": "^6.1.0",
+    "tree-kill": "^1.2.2"
   },
   "devDependencies": {
     "@babel/cli": "^7.16.0",

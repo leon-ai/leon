@@ -64,8 +64,7 @@ class Ner {
         return e
       })
 
-      global.tcpClient.ee.removeAllListeners()
-      global.tcpClient.ee.on('spacy-entities-received', async ({ spacyEntities }) => {
+      const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
         // Merge with spaCy entities
         entities = entities.concat(spacyEntities)
 
@@ -77,7 +76,10 @@ class Ner {
         log.title('NER')
         log.info('No entity found')
         return resolve([])
-      })
+      }
+
+      global.tcpClient.ee.removeAllListeners()
+      global.tcpClient.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
 
       global.tcpClient.emit('get-spacy-entities', utterance)
     })

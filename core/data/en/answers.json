@@ -47,6 +47,11 @@
     "random_ner_type_not_supported": [
       "Sorry, the \"%entity_type%\" action entity type is not supported by my NER. Please <a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">open an issue</a> to report, that will be much appreciated",
       "Sorry, my NER does not recognize the \"%entity_type%\" action entity type. Please <a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">open an issue</a> to report, it'll be highly appreciated"
+    ],
+    "random_language_switch": [
+      "Hey, it looks like a new language, give me a sec so I make the switch",
+      "You are speaking another language, let me do the switch please",
+      "Wow, you can speak several languages, so do I! One moment please"
     ]
 	}
 }

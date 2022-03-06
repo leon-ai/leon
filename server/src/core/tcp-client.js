@@ -10,6 +10,7 @@ export default class TcpClient {
     this.host = host
     this.port = port
     this.reconnectCounter = 0
+    this.attempts = []
     this.tcpSocket = new Net.Socket()
     this._ee = new EventEmitter()
     this._status = this.tcpSocket.readyState
@@ -17,9 +18,12 @@ export default class TcpClient {
     log.title('TCP Client')
     log.success('New instance')
 
-    setTimeout(() => {
-      this.connect()
-    }, interval)
+    this.tcpSocket.on('connect', () => {
+      log.title('TCP Client')
+      log.success(`Connected to the TCP server tcp://${this.host}:${this.port}`)
+
+      this._ee.emit('connected', null)
+    })
 
     this.tcpSocket.on('data', (chunk) => {
       log.title('TCP Client')
@@ -40,13 +44,13 @@ export default class TcpClient {
           this.tcpSocket.end()
         }
 
-        if (this.reconnectCounter >= 2) {
+        if (this.reconnectCounter >= 1) {
           log.info('Trying to connect to the TCP server...')
-        }
 
-        setTimeout(() => {
-          this.connect()
-        }, interval * this.reconnectCounter)
+          setTimeout(() => {
+            this.connect()
+          }, interval * this.reconnectCounter)
+        }
       } else {
         log.error(`Failed to connect to the TCP server: ${err}`)
       }
@@ -56,6 +60,10 @@ export default class TcpClient {
       log.title('TCP Client')
       log.success('Disconnected from the TCP server')
     })
+
+    setTimeout(() => {
+      this.connect()
+    }, interval)
   }
 
   get status () {
@@ -76,9 +84,9 @@ export default class TcpClient {
   }
 
   connect () {
-    this.tcpSocket.connect({ host: this.host, port: this.port }, () => {
-      log.title('TCP Client')
-      log.success(`Connected to the TCP server tcp://${this.host}:${this.port}`)
+    this.tcpSocket.connect({
+      host: this.host,
+      port: this.port
     })
   }
 }

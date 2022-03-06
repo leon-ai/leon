@@ -5,6 +5,8 @@ import { LangAll } from '@nlpjs/lang-all'
 import request from 'superagent'
 import fs from 'fs'
 import { join } from 'path'
+import { spawn } from 'child_process'
+import kill from 'tree-kill'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
@@ -13,6 +15,7 @@ import log from '@/helpers/log'
 import string from '@/helpers/string'
 import lang from '@/helpers/lang'
 import domainHelper from '@/helpers/domain'
+import TcpClient from '@/core/tcp-client'
 
 class Nlu {
   constructor (brain) {
@@ -108,8 +111,30 @@ class Nlu {
         }
       }
 
+      // Trigger language switch
       if (this.brain.lang !== locale) {
+        const connectedHandler = async () => {
+          await this.process(utterance)
+        }
+
         this.brain.lang = locale
+        this.brain.talk(`${this.brain.wernicke('random_language_switch')}.`, true)
+
+        // Recreate a new TCP server process and reconnect the TCP client
+        kill(global.tcpServerProcess.pid, () => {
+          global.tcpServerProcess = spawn(`pipenv run python bridges/python/tcp_server/main.py ${locale}`, { shell: true })
+
+          global.tcpClient = new TcpClient(
+            process.env.LEON_PY_WS_SERVER_HOST,
+            process.env.LEON_PY_WS_SERVER_PORT
+          )
+
+          global.tcpClient.ee.removeListener('connected', connectedHandler)
+          global.tcpClient.ee.on('connected', connectedHandler)
+        })
+
+        // Do not continue the NLU process
+        return resolve({ })
       }
 
       /* istanbul ignore next */

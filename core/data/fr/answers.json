@@ -47,6 +47,11 @@
     "random_ner_type_not_supported": [
       "Désolé, le type \"%entity_type%\" d'entité d'action n'est pas supporté par ma reconnaissance d'entité. Merci d'<a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">ouvrir une issue</a> afin de reporter ce cas, ce sera très apprécié",
       "Désolé, ma reconnaissance d'entité ne reconnaît pas le type \"%entity_type%\" d'entité d'action. Merci d'<a href=\"https://github.com/leon-ai/leon/issues\" target=\"_blank\">ouvrir une issue</a> afin de reporter ce cas, ce serait très appréciable"
+    ],
+    "random_language_switch": [
+      "Vous parlez une nouvelle langue, veuillez me donner une seconde le temps que je m'adapte",
+      "Vous parlez une autre langue, un instant s'il vous plaît",
+      "Wow, vous parlez plusieurs langues, moi aussi ! Un instant je vous prie"
     ]
 	}
 }
