@@ -9,28 +9,41 @@
         "What is your favorite color?",
         "What colour is the best for you?",
         "Is there any colour you love?",
-        "I love the @color color, how about you?"
+        "I love the @color color, how about you?",
+        "I like @color color, you?"
       ],
       "answers": [
         "Where I live it is all black, but I believe I tend to have a preference for %blue_leon% and %pink_leon%. Do not ask why...",
         "Sometimes %blue_leon%, sometimes %pink_leon%.",
         "{{ color }} is great! But I prefer that one.",
         "I think {{ color }} is a good color, but I prefer blue and pink. Don't ask me why..."
+      ],
+      "output_context": [
+        "why"
+      ]
+    },
+    "why": {
+      "utterance_samples": [
+        "Why do you like this color?",
+        "Why this colour?",
+        "Why not another one?",
+        "Why?"
       ]
     },
     "color_meaning": {
+      "slots": [
+        {
+          "name": "color",
+          "type": "color",
+          "answers": [
+            "What color do you want to know about?"
+          ]
+        }
+      ],
       "utterance_samples": [
         "Tell me something about colors",
         "I want to know about colours",
-        "Share your knowledge about colors in general",
-        "Can you speak about colours?"
-      ],
-      "answers": [
-        "Well, colors are used to differentiate and bring more aesthetic. Life is colorful!"
-      ]
-    },
-    "specific_color_meaning": {
-      "utterance_samples": [
+        "Can you speak about colours?",
         "Tell me something about the @color color",
         "I want to know about the @color colour",
         "How about the @color colour?",
@@ -41,14 +54,6 @@
       ],
       "unknown_answers": [
         "This color sounds incredible, but I haven't seen it before."
-      ]
-    },
-    "why": {
-      "utterance_samples": [
-        "Why do you like this color?",
-        "Why this colour?",
-        "Why not another one?",
-        "Why?"
       ]
     }
   },

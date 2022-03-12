@@ -25,17 +25,12 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/leon/color/color_meaning",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/color/specific_color_meaning",
-      "params": []
-    },
-    {
-      "method": "GET",
       "route": "/api/action/leon/color/why",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/color/color_meaning",
       "params": []
     },
     {
