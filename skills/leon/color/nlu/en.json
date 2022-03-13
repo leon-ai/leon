@@ -67,6 +67,6 @@
     }
   },
   "entities": {
-    "color": "colors.json"
+    "color": "entities/colors.json"
   }
 }

@@ -13,24 +13,26 @@
         "My first version has been released in February 2019."
       ]
     },
-    "when_birthday": {
+    "when_my_birthday": {
       "type": "logic",
       "utterance_samples": [
         "Do you know when is my birthday?",
         "Do you remember when I am born?",
         "Do you know my birth date?",
-        "When is Phoebe's birthday?",
         "Give me my birth date"
+      ]
+    },
+    "when_birthday": {
+      "type": "logic",
+      "utterance_samples": [
+        "When is Phoebe's birthday?",
+        ""
       ],
       "entities": [
         {
           "type": "trim",
           "name": "person",
           "conditions": [
-            {
-              "type": "before_last",
-              "to": ["birthday", "birth date"]
-            },
             {
               "type": "between",
               "from": ["when"],

@@ -1,0 +1,87 @@
+{
+  "actions": {
+    "start": {
+      "type": "logic",
+      "utterance_samples": [
+        "Let's play guess the number",
+        "I wanna play guess the number",
+        "Can we play guess the number?",
+        "I want to play a game like guess the number"
+      ],
+      "output_context": [
+        "guessing"
+      ]
+    },
+    "pick_up": {
+      "type": "logic",
+      "input_context": [
+        "guessing"
+      ],
+      "utterance_samples": [
+        "I'm choosing 20",
+        "Number 38",
+        "I choose 73",
+        "86"
+      ],
+      "slots": [
+        {
+          "name": "guess",
+          "entity": "number",
+          "lifespan": 1
+        }
+      ],
+      "answers": {
+        "bigger": [
+          "The number is bigger.",
+          "Try with a bigger number."
+        ],
+        "smaller": [
+          "It is smaller.",
+          "Try a smaller number."
+        ],
+        "guessed": [
+          "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
+        ]
+      },
+      "output_context": [
+        "deciding"
+      ]
+    },
+    "decide": {
+      "type": "logic",
+      "input_context": [
+        "deciding"
+      ],
+      "utterance_samples": [
+        "Yes",
+        "Yep",
+        "Yup",
+        "Yeah",
+        "Let's do it",
+        "For sure",
+        "Sure thing",
+        "Of course!",
+        "No",
+        "No no don't",
+        "Nope",
+        "Naa",
+        "No thanks",
+        "No I'm fine"
+      ],
+      "slots": [
+        {
+          "name": "decision",
+          "entity": {
+            "boolean": "confirmations.json"
+          },
+          "lifespan": 1
+        }
+      ]
+    }
+  },
+  "answers": {
+    "ready": [
+      "Alright, I'm ready, go ahead and guess the number between 0 and 100!"
+    ]
+  }
+}
