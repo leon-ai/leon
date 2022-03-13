@@ -34,7 +34,7 @@
       "slots": [
         {
           "name": "color",
-          "type": "color",
+          "entity": "color",
           "answers": [
             "What color do you want to know about?"
           ]

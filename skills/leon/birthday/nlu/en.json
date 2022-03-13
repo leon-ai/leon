@@ -42,7 +42,7 @@
       "slots": [
         {
           "name": "birth_date",
-          "type": "date"
+          "entity": "date"
         }
       ],
       "answers": {

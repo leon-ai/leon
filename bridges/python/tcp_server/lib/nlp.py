@@ -3,6 +3,7 @@
 
 from sys import argv
 import spacy
+import geonamescache
 
 lang = argv[1] or 'en'
 spacy_nlp = None
@@ -27,6 +28,28 @@ spacy_model_mapping = {
 	}
 }
 
+gc = geonamescache.GeonamesCache()
+countries = gc.get_countries()
+cities = gc.get_cities()
+
+def gen_dict_extract(var, key):
+	if isinstance(var, dict):
+		for k, v in var.items():
+			if k == key:
+				yield v
+			if isinstance(v, (dict, list)):
+				yield from gen_dict_extract(v, key)
+	elif isinstance(var, list):
+		for d in var:
+			yield from gen_dict_extract(d, key)
+
+countries = [*gen_dict_extract(countries, 'name')]
+cities = [*gen_dict_extract(cities, 'name')]
+
+"""
+Functions called from TCPServer class
+"""
+
 def load_spacy_model():
 	global spacy_nlp
 
@@ -44,6 +67,12 @@ def extract_spacy_entities(utterance):
 	for ent in doc.ents:
 		if ent.label_ in spacy_model_mapping[lang]['entity_mapping']:
 			entity = spacy_model_mapping[lang]['entity_mapping'][ent.label_]
+			if entity == 'location':
+				if ent.text.casefold() in (country.casefold() for country in countries):
+					entity += ':country'
+				elif ent.text.casefold() in (city.casefold() for city in cities):
+					entity += ':city'
+
 			entities.append({
 				'start': ent.start_char,
 				'end': ent.end_char,
