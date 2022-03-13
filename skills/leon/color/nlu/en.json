@@ -19,15 +19,24 @@
         "I think {{ color }} is a good color, but I prefer blue and pink. Don't ask me why..."
       ],
       "output_context": [
-        "why"
+        {
+          "action": "leon.color.why",
+          "lifespan": 1
+        }
       ]
     },
     "why": {
+      "input_context": [
+        "leon.color.favorite_color"
+      ],
       "utterance_samples": [
         "Why do you like this color?",
         "Why this colour?",
         "Why not another one?",
         "Why?"
+      ],
+      "answers": [
+        "Because blue and pink are beautiful. Look at my logo..."
       ]
     },
     "color_meaning": {

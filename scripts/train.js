@@ -29,9 +29,11 @@ export default () => new Promise(async (resolve, reject) => {
 
     const nlp = container.get('nlp')
     const nluManager = container.get('nlu-manager')
+    // const slotManager = container.get('slot-manager')
 
     nluManager.settings.log = false
     nluManager.settings.trainByDomain = true
+    // slotManager.settings.
     nlp.settings.forceNER = true // https://github.com/axa-group/nlp.js/blob/master/examples/17-ner-nlg/index.js
     nlp.settings.calculateSentiment = true
     nlp.settings.modelFileName = modelFileName
