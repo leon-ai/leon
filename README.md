@@ -28,6 +28,11 @@
   <a href="https://blog.getleon.ai/the-story-behind-leon/">Story</a>
 </p>
 
+<br>
+<h2 align="center">📢 Notice 📢</h2>
+<p align="center">The next version requires long development. You can check what is happening under <a href="https://github.com/leon-ai/leon/tree/from-modules-to-skills">this branch</a>.
+<br><br>
+
 ---
 
 ## 👋 Introduction
