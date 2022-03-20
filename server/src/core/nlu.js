@@ -132,8 +132,8 @@ class Nlu {
           global.tcpServerProcess = spawn(`pipenv run python bridges/python/tcp_server/main.py ${locale}`, { shell: true })
 
           global.tcpClient = new TcpClient(
-            process.env.LEON_PY_WS_SERVER_HOST,
-            process.env.LEON_PY_WS_SERVER_PORT
+            process.env.LEON_PY_TCP_SERVER_HOST,
+            process.env.LEON_PY_TCP_SERVER_PORT
           )
 
           global.tcpClient.ee.removeListener('connected', connectedHandler)
@@ -207,6 +207,20 @@ class Nlu {
       }
 
       try {
+        const [{ entity, resolution }] = obj.entities
+        const testoEntity = {
+          [entity]: {
+            options: {
+              [resolution.value]: [resolution.value]
+            }
+          }
+        }
+        this.nlp.addEntities(testoEntity, this.brain.lang)
+
+        const result2 = await this.nlp.process(utterance)
+
+        console.log('result2', result2)
+
         // Inject action entities with the others if there is
         const data = await this.brain.execute(obj, { mute: opts.mute })
         const processingTimeEnd = Date.now()

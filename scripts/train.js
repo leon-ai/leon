@@ -29,7 +29,7 @@ export default () => new Promise(async (resolve, reject) => {
 
     const nlp = container.get('nlp')
     const nluManager = container.get('nlu-manager')
-    // const slotManager = container.get('slot-manager')
+    // const slotManager = container.get('SlotManager')
 
     nluManager.settings.log = false
     nluManager.settings.trainByDomain = true
@@ -72,12 +72,26 @@ export default () => new Promise(async (resolve, reject) => {
             for (let k = 0; k < actionsKeys.length; k += 1) {
               const actionName = actionsKeys[k]
               const actionObj = actions[actionName]
+              const intent = `${skillName}.${actionName}`
               const { utterance_samples: utteranceSamples, answers } = actionObj
 
               nlp.assignDomain(lang, `${skillName}.${actionName}`, currentDomain.name)
 
+              /**
+               * TODO:
+               * 1. Merge person, location and organization to the
+               * NER before processing NLU (cf. line 210 in nlu.js)
+               * 2. Grab intents with slots
+               * 3. .addSlot() as per the slots config
+               */
+              if (intent === 'guess_the_number.start') {
+                console.log('iiin')
+                // nlp.slotManager.addSlot(intent, 'number', true, { [lang]: 'How many players?' })
+                nlp.slotManager.addSlot(intent, 'person', true, { [lang]: 'How many players?' })
+              }
+
               for (let l = 0; l < utteranceSamples.length; l += 1) {
-                nlp.addDocument(lang, utteranceSamples[l], `${skillName}.${actionName}`)
+                nlp.addDocument(lang, utteranceSamples[l], intent)
               }
 
               // Train NLG if the skill has a dialog type
