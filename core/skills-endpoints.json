@@ -12,7 +12,7 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/games/guess_the_number/confirm",
+      "route": "/api/action/games/guess_the_number/decide",
       "params": []
     },
     {

@@ -111,6 +111,13 @@ class Nlu {
         }
       }
 
+      // Language isn't supported
+      if (!lang.getShortLangs().includes(locale)) {
+        this.brain.talk(`${this.brain.wernicke('random_language_not_supported')}.`, true)
+        this.brain.socket.emit('is-typing', false)
+        return resolve({ })
+      }
+
       // Trigger language switch
       if (this.brain.lang !== locale) {
         const connectedHandler = async () => {

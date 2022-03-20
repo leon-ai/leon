@@ -52,6 +52,11 @@
       "Hey, it looks like a new language, give me a sec so I make the switch",
       "You are speaking another language, let me do the switch please",
       "Wow, you can speak several languages, so do I! One moment please"
+    ],
+    "random_language_not_supported": [
+      "Sorry, I don't speak this language yet",
+      "You are awesome, but I can't speak this language yet",
+      "It looks like a language I can't understand at the moment"
     ]
 	}
 }
