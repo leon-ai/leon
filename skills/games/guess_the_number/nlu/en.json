@@ -1,12 +1,21 @@
 {
   "actions": {
     "start": {
-      "type": "logic",
+      "type": "dialog",
       "utterance_samples": [
         "Let's play guess the number",
         "I wanna play guess the number",
         "Can we play guess the number?",
         "I want to play a game like guess the number"
+      ],
+      "slots": [
+        {
+          "name": "players_nb",
+          "entity": "number",
+          "answers": [
+            "How many players should I set?"
+          ]
+        }
       ],
       "output_context": [
         "guessing"
@@ -66,7 +75,12 @@
         "Nope",
         "Naa",
         "No thanks",
-        "No I'm fine"
+        "No I'm fine",
+        "Okay",
+        "OK",
+        "Alright",
+        "Correct",
+        "Indeed"
       ],
       "slots": [
         {

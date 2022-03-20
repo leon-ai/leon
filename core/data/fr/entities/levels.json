@@ -1,0 +1,28 @@
+{
+  "options": {
+    "bas": {
+      "synonyms": ["bas", "basse"],
+      "data": {
+        "value": [
+          "LOW"
+        ]
+      }
+    },
+    "moyen": {
+      "synonyms": ["moyen"],
+      "data": {
+        "value": [
+          "MEDIUM"
+        ]
+      }
+    },
+    "haut": {
+      "synonyms": ["haut", "haute"],
+      "data": {
+        "value": [
+          "HIGH"
+        ]
+      }
+    }
+  }
+}

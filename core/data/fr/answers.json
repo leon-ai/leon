@@ -52,6 +52,11 @@
       "Vous parlez une nouvelle langue, veuillez me donner une seconde le temps que je m'adapte",
       "Vous parlez une autre langue, un instant s'il vous plaît",
       "Wow, vous parlez plusieurs langues, moi aussi ! Un instant je vous prie"
+    ],
+    "random_language_not_supported": [
+      "Désolé, je ne parle pas encore cette langue",
+      "Vous êtes génial, mais je n'ai pas encore appris cette langue",
+      "Ça ressemble à une lautre langue que je ne peux pas comprendre pour le moment"
     ]
 	}
 }

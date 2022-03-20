@@ -1,6 +1,0 @@
-{
-  "options": {
-    "rouge": ["rouge"],
-    "bleu": ["bleu"]
-  }
-}
