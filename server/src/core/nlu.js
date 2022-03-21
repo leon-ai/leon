@@ -54,7 +54,7 @@ class Nlu {
           log.success('NLP model loaded')
 
           this.ner = new Ner(this.nlp.ner)
-          
+
           resolve()
         } catch (err) {
           this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
@@ -192,6 +192,7 @@ class Nlu {
       obj.skillType = skillType
 
       try {
+        await this.ner.getSpacyEntities(utterance)
         obj.entities = await this.ner.extractEntities(
           this.brain.lang,
           join(process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, `nlu/${this.brain.lang}.json`),

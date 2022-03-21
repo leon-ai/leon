@@ -11,6 +11,7 @@ import string from '@/helpers/string'
 class Ner {
   constructor (ner) {
     this.ner = ner
+    this._spacyEntities = []
 
     log.title('NER')
     log.success('New instance')
@@ -64,20 +65,29 @@ class Ner {
         return e
       })
 
-      const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
-        // Merge with spaCy entities
-        entities = entities.concat(spacyEntities)
+      // Merge with spaCy entities
+      entities = entities.concat(this._spacyEntities)
 
-        if (entities.length > 0) {
-          Ner.logExtraction(entities)
-          return resolve(entities)
-        }
-
-        log.title('NER')
-        log.info('No entity found')
-        return resolve([])
+      if (entities.length > 0) {
+        Ner.logExtraction(entities)
+        return resolve(entities)
       }
 
+      log.title('NER')
+      log.info('No entity found')
+      return resolve([])
+    })
+  }
+
+  getSpacyEntities (utterance) {
+    return new Promise((resolve) => {
+      const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
+        this._spacyEntities = spacyEntities
+
+        resolve()
+      }
+
+      this._spacyEntities = []
       global.tcpClient.ee.removeAllListeners()
       global.tcpClient.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
 
