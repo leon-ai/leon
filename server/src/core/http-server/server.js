@@ -136,6 +136,15 @@ server.handleOnConnection = (socket) => {
     log.info(`Type: ${data}`)
     log.info(`Socket id: ${socket.id}`)
 
+    // Check whether the TCP client is connected to the TCP server
+    if (global.tcpClient.isConnected) {
+      socket.emit('ready')
+    } else {
+      global.tcpClient.ee.on('connected', () => {
+        socket.emit('ready')
+      })
+    }
+
     if (data === 'hotword-node') {
       // Hotword triggered
       socket.on('hotword-detected', (data) => {

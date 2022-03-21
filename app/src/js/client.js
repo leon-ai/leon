@@ -28,11 +28,15 @@ export default class Client {
     return this._recorder
   }
 
-  init () {
+  init (loader) {
     this.chatbot.init()
 
     this.socket.on('connect', () => {
       this.socket.emit('init', this.client)
+    })
+
+    this.socket.on('ready', () => {
+      loader.stop()
     })
 
     this.socket.on('answer', (data) => {

@@ -14,6 +14,7 @@ export default class TcpClient {
     this.tcpSocket = new Net.Socket()
     this._ee = new EventEmitter()
     this._status = this.tcpSocket.readyState
+    this._isConnected = false
 
     log.title('TCP Client')
     log.success('New instance')
@@ -22,6 +23,7 @@ export default class TcpClient {
       log.title('TCP Client')
       log.success(`Connected to the TCP server tcp://${this.host}:${this.port}`)
 
+      this._isConnected = true
       this._ee.emit('connected', null)
     })
 
@@ -72,6 +74,10 @@ export default class TcpClient {
 
   get ee () {
     return this._ee
+  }
+
+  get isConnected () {
+    return this._isConnected
   }
 
   emit (topic, data) {

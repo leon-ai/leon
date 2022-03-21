@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         logger.innerHTML += sLogger
 
-        client.init()
+        client.init(loader)
 
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
@@ -95,8 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           console.error('MediaDevices.getUserMedia() is not supported on your browser.')
         }
-
-        loader.stop()
 
         document.addEventListener('keydown', (e) => {
           onkeydowndocument(e, () => {
