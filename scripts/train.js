@@ -80,14 +80,16 @@ export default () => new Promise(async (resolve, reject) => {
               /**
                * TODO:
                * 1. Merge person, location and organization to the
-               * NER before processing NLU (cf. line 210 in nlu.js)
+               * NER before processing NLU (cf. line 210 in nlu.js): OK
                * 2. Grab intents with slots
                * 3. .addSlot() as per the slots config
+               * 4. Train resolvers (affirm_deny)
                */
               if (intent === 'guess_the_number.start') {
                 console.log('iiin')
                 // nlp.slotManager.addSlot(intent, 'number', true, { [lang]: 'How many players?' })
-                nlp.slotManager.addSlot(intent, 'person', true, { [lang]: 'How many players?' })
+                // nlp.slotManager.addSlot(intent, 'person', true, { [lang]: 'How many players?' })
+                nlp.slotManager.addSlot(intent, 'boolean', true, { [lang]: 'How many players?' })
               }
 
               for (let l = 0; l < utteranceSamples.length; l += 1) {

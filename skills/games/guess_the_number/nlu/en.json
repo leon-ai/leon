@@ -11,7 +11,9 @@
       "slots": [
         {
           "name": "players_nb",
-          "entity": "number",
+          "entity": {
+            "name": "number"
+          },
           "answers": [
             "How many players should I set?"
           ]
@@ -61,34 +63,15 @@
       "input_context": [
         "deciding"
       ],
-      "utterance_samples": [
-        "Yes",
-        "Yep",
-        "Yup",
-        "Yeah",
-        "Let's do it",
-        "For sure",
-        "Sure thing",
-        "Of course!",
-        "No",
-        "No no don't",
-        "Nope",
-        "Naa",
-        "No thanks",
-        "No I'm fine",
-        "Okay",
-        "OK",
-        "Alright",
-        "Correct",
-        "Indeed"
-      ],
       "slots": [
         {
           "name": "decision",
-          "entity": {
-            "boolean": "confirmations.json"
+          "resolver": {
+            "name": "affirm_deny"
           },
-          "lifespan": 1
+          "answers": [
+            "Would you like to play another round?"
+          ]
         }
       ]
     }

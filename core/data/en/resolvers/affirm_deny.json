@@ -1,0 +1,35 @@
+{
+  "name": "affirm_deny",
+  "intents": {
+    "system.affirm": {
+      "utterance_samples": [
+        "Yes",
+        "Yep",
+        "Yup",
+        "Yeah",
+        "Let's do it",
+        "For sure",
+        "Sure thing",
+        "Of course!",
+        "Okay",
+        "OK",
+        "Alright",
+        "Correct",
+        "Indeed"
+      ],
+      "value": true
+    },
+    "system.deny": {
+      "utterance_samples": [
+        "No",
+        "No no don't",
+        "Nope",
+        "Naa",
+        "No thanks",
+        "No I'm fine",
+        "Hell no"
+      ],
+      "value": false
+    }
+  }
+}
