@@ -11,10 +11,11 @@
       "slots": [
         {
           "name": "players_nb",
-          "entity": {
+          "source": {
+            "type": "entity",
             "name": "number"
           },
-          "answers": [
+          "questions": [
             "How many players should I set?"
           ]
         }
@@ -33,13 +34,6 @@
         "Number 38",
         "I choose 73",
         "86"
-      ],
-      "slots": [
-        {
-          "name": "guess",
-          "entity": "number",
-          "lifespan": 1
-        }
       ],
       "answers": {
         "bigger": [
@@ -66,10 +60,11 @@
       "slots": [
         {
           "name": "decision",
-          "resolver": {
+          "source": {
+            "type": "resolver",
             "name": "affirm_deny"
           },
-          "answers": [
+          "questions": [
             "Would you like to play another round?"
           ]
         }

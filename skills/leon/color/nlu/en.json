@@ -42,9 +42,12 @@
     "color_meaning": {
       "slots": [
         {
-          "name": "color",
-          "entity": "color",
-          "answers": [
+          "name": "color_choice",
+          "source": {
+            "type": "entity",
+            "name": "color"
+          },
+          "questions": [
             "What color do you want to know about?"
           ]
         }

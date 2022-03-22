@@ -73,26 +73,41 @@ export default () => new Promise(async (resolve, reject) => {
               const actionName = actionsKeys[k]
               const actionObj = actions[actionName]
               const intent = `${skillName}.${actionName}`
-              const { utterance_samples: utteranceSamples, answers } = actionObj
+              const { utterance_samples: utteranceSamples, answers, slots } = actionObj
 
               nlp.assignDomain(lang, `${skillName}.${actionName}`, currentDomain.name)
 
               /**
                * TODO:
-               * 1. Merge person, location and organization to the
-               * NER before processing NLU (cf. line 210 in nlu.js): OK
-               * 2. Grab intents with slots
-               * 3. .addSlot() as per the slots config
-               * 4. Train resolvers (affirm_deny)
+               * 1. [OK] Merge person, location and organization to the
+               * NER before processing NLU (cf. line 210 in nlu.js)
+               * 2. [OK] Grab intents with slots
+               * 3. [OK] .addSlot() as per the slots config
+               * 4. Handle random questions picking
+               * 5. Train resolvers (affirm_deny: boolean value)
+               * 6. Map resolvers to skill actions
+               * 7. Utterance source type to get raw input from utterance
                */
-              if (intent === 'guess_the_number.start') {
-                console.log('iiin')
-                // nlp.slotManager.addSlot(intent, 'number', true, { [lang]: 'How many players?' })
-                // nlp.slotManager.addSlot(intent, 'person', true, { [lang]: 'How many players?' })
-                nlp.slotManager.addSlot(intent, 'boolean', true, { [lang]: 'How many players?' })
+              if (slots) {
+                for (let l = 0; l < slots.length; l += 1) {
+                  const slotObj = slots[l]
+
+                  /**
+                   * TODO: handle entity within questions such as "Where does {{ hero }} live?"
+                   * https://github.com/axa-group/nlp.js/issues/328
+                   * https://github.com/axa-group/nlp.js/issues/291
+                   * https://github.com/axa-group/nlp.js/issues/307
+                   */
+                  if (slotObj.source.type === 'entity') {
+                    nlp.slotManager
+                      .addSlot(intent, slotObj.source.name, true, { [lang]: slotObj.questions })
+                  }
+                  /* nlp.slotManager
+                  .addSlot(intent, 'boolean', true, { [lang]: 'How many players?' }) */
+                }
               }
 
-              for (let l = 0; l < utteranceSamples.length; l += 1) {
+              for (let l = 0; l < utteranceSamples?.length; l += 1) {
                 nlp.addDocument(lang, utteranceSamples[l], intent)
               }
 

@@ -25,8 +25,7 @@
     "when_birthday": {
       "type": "logic",
       "utterance_samples": [
-        "When is Phoebe's birthday?",
-        ""
+        "When is Phoebe's birthday?"
       ],
       "entities": [
         {
@@ -39,12 +38,6 @@
               "to": ["am","was"]
             }
           ]
-        }
-      ],
-      "slots": [
-        {
-          "name": "birth_date",
-          "entity": "date"
         }
       ],
       "answers": {
@@ -71,12 +64,6 @@
         "My birth date is the 26th of June in 1998",
         "Note that my birthday is in April 12",
         "The 30th May 1968 is my birth date"
-      ],
-      "slots": [
-        {
-          "name": "birth_date",
-          "type": "date"
-        }
       ],
       "answers": {
         "birthday_understood": [
