@@ -95,7 +95,22 @@ class Nlu {
         return reject(msg)
       }
 
+      // Add spaCy entities
+      const spacyEntities = await Ner.getSpacyEntities(utterance)
+      if (spacyEntities.length > 0) {
+        const [{ entity, resolution }] = spacyEntities
+        const spacyEntity = {
+          [entity]: {
+            options: {
+              [resolution.value]: [resolution.value]
+            }
+          }
+        }
+        this.nlp.addEntities(spacyEntity, this.brain.lang)
+      }
+
       const result = await this.nlp.process(utterance)
+
       const {
         locale, domain, intent, score, answers
       } = result
@@ -192,7 +207,6 @@ class Nlu {
       obj.skillType = skillType
 
       try {
-        await this.ner.getSpacyEntities(utterance)
         obj.entities = await this.ner.extractEntities(
           this.brain.lang,
           join(process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, `nlu/${this.brain.lang}.json`),
@@ -209,20 +223,6 @@ class Nlu {
       }
 
       try {
-        const [{ entity, resolution }] = obj.entities
-        const testoEntity = {
-          [entity]: {
-            options: {
-              [resolution.value]: [resolution.value]
-            }
-          }
-        }
-        this.nlp.addEntities(testoEntity, this.brain.lang)
-
-        const result2 = await this.nlp.process(utterance)
-
-        console.log('result2', result2)
-
         // Inject action entities with the others if there is
         const data = await this.brain.execute(obj, { mute: opts.mute })
         const processingTimeEnd = Date.now()

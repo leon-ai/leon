@@ -11,7 +11,6 @@ import string from '@/helpers/string'
 class Ner {
   constructor (ner) {
     this.ner = ner
-    this._spacyEntities = []
 
     log.title('NER')
     log.success('New instance')
@@ -55,7 +54,7 @@ class Ner {
 
       await Promise.all(promises)
 
-      let { entities } = await this.ner.process({ locale: lang, text: utterance })
+      const { entities } = await this.ner.process({ locale: lang, text: utterance })
 
       // Trim whitespace at the beginning and the end of the entity value
       entities.map((e) => {
@@ -64,9 +63,6 @@ class Ner {
 
         return e
       })
-
-      // Merge with spaCy entities
-      entities = entities.concat(this._spacyEntities)
 
       if (entities.length > 0) {
         Ner.logExtraction(entities)
@@ -79,15 +75,15 @@ class Ner {
     })
   }
 
-  getSpacyEntities (utterance) {
+  /**
+   * Get spaCy entities from the TCP server
+   */
+  static getSpacyEntities (utterance) {
     return new Promise((resolve) => {
       const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
-        this._spacyEntities = spacyEntities
-
-        resolve()
+        resolve(spacyEntities)
       }
 
-      this._spacyEntities = []
       global.tcpClient.ee.removeAllListeners()
       global.tcpClient.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
 
