@@ -29,7 +29,7 @@ export default () => new Promise(async (resolve, reject) => {
       can_run_module: { title: 'Run modules', type: 'error', v: true },
       can_text: { title: 'Reply you by texting', type: 'error', v: true },
       can_amazon_polly_tts: { title: 'Amazon Polly text-to-speech', type: 'warning', v: true },
-      can_azure_tts: { title: 'Azure test-to-speech', type: 'warning', v: true },
+      can_azure_tts: { title: 'Azure text-to-speech', type: 'warning', v: true },
       can_google_cloud_tts: { title: 'Google Cloud text-to-speech', type: 'warning', v: true },
       can_watson_tts: { title: 'Watson text-to-speech', type: 'warning', v: true },
       can_offline_tts: { title: 'Offline text-to-speech', type: 'warning', v: true },
