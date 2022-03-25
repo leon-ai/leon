@@ -11,7 +11,8 @@ class Tts {
       'flite',
       'google-cloud-tts',
       'amazon-polly',
-      'watson-tts'
+      'watson-tts',
+      'azure-tts'
     ]
     this.synthesizer = { }
     this.em = new events.EventEmitter()
