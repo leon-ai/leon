@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 
 from sys import argv
+from pathlib import Path
 import spacy
 import geonamescache
 
@@ -10,7 +11,7 @@ spacy_nlp = None
 spacy_model_mapping = {
 	'en': {
 		'model': 'en_core_web_trf',
-		'disable': ['tagger', 'parser', 'attribute_ruler', 'lemmatizer'],
+		'exclude': ['tagger', 'parser', 'attribute_ruler', 'lemmatizer'],
 		'entity_mapping': {
 			'PERSON': 'person',
 			'GPE': 'location',
@@ -19,7 +20,7 @@ spacy_model_mapping = {
 	},
 	'fr': {
 		'model': 'fr_core_news_md',
-		'disable': ['tok2vec', 'morphologizer', 'parser', 'senter', 'attribute_ruler', 'lemmatizer'],
+		'exclude': ['tok2vec', 'morphologizer', 'parser', 'senter', 'attribute_ruler', 'lemmatizer'],
 		'entity_mapping': {
 			'PER': 'person',
 			'LOC': 'location',
@@ -54,10 +55,12 @@ def load_spacy_model():
 	global spacy_nlp
 
 	model = spacy_model_mapping[lang]['model']
-	disable = spacy_model_mapping[lang]['disable']
+	exclude = spacy_model_mapping[lang]['exclude']
 
 	print(f'Loading {model} spaCy model...')
-	spacy_nlp = spacy.load(model, disable=disable)
+	spacy_nlp = spacy.load(model, exclude=exclude)
+	# spacy_nlp = spacy.load(Path('../models/spacy_en_core_web_trf-3.2.0'), disable=disable)
+	# spacy_nlp = spacy.load(Path('../models/spacy_en_core_web_trf-3.2.0'), disable=disable)
 	print('spaCy model loaded')
 
 def extract_spacy_entities(utterance):

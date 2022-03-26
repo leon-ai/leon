@@ -98,15 +98,17 @@ class Nlu {
       // Add spaCy entities
       const spacyEntities = await Ner.getSpacyEntities(utterance)
       if (spacyEntities.length > 0) {
-        const [{ entity, resolution }] = spacyEntities
-        const spacyEntity = {
-          [entity]: {
-            options: {
-              [resolution.value]: [resolution.value]
+        spacyEntities.forEach(({ entity, resolution }) => {
+          const spacyEntity = {
+            [entity]: {
+              options: {
+                [resolution.value]: [resolution.value]
+              }
             }
           }
-        }
-        this.nlp.addEntities(spacyEntity, this.brain.lang)
+
+          this.nlp.addEntities(spacyEntity, this.brain.lang)
+        })
       }
 
       const result = await this.nlp.process(utterance)
