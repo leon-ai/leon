@@ -16,7 +16,8 @@
             "name": "number"
           },
           "questions": [
-            "How many players should I set?"
+            "How many players should I set?",
+            "Sure, how many players should I prepare?"
           ]
         }
       ],

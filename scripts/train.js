@@ -83,10 +83,13 @@ export default () => new Promise(async (resolve, reject) => {
                * NER before processing NLU (cf. line 210 in nlu.js)
                * 2. [OK] Grab intents with slots
                * 3. [OK] .addSlot() as per the slots config
-               * 4. Handle random questions picking
-               * 5. Train resolvers (affirm_deny: boolean value)
-               * 6. Map resolvers to skill actions
-               * 7. Utterance source type to get raw input from utterance
+               * 4. [OK] Handle random questions picking
+               *  srcAnswer has the array, need to activate context now?
+               *  to detect we should pick .srcAnswer
+               * 5. Activiate context and return slot data to skills
+               * 6. Train resolvers (affirm_deny: boolean value)
+               * 7. Map resolvers to skill actions
+               * 8. Utterance source type to get raw input from utterance
                */
               if (slots) {
                 for (let l = 0; l < slots.length; l += 1) {

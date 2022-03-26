@@ -2,7 +2,6 @@
 # -*- coding:utf-8 -*-
 
 from sys import argv
-from pathlib import Path
 import spacy
 import geonamescache
 

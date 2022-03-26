@@ -112,9 +112,8 @@ class Nlu {
       }
 
       const result = await this.nlp.process(utterance)
-
       const {
-        locale, domain, intent, score, answers
+        locale, domain, intent, score, answers, slotFill, srcAnswer
       } = result
       const [skillName, actionName] = intent.split('.')
       let obj = {
@@ -222,6 +221,16 @@ class Nlu {
         if (!opts.mute) {
           this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
         }
+      }
+
+      // TODO: slot filling
+      console.log('result', result)
+      if (slotFill && srcAnswer) {
+        const answer = srcAnswer[Math.floor(Math.random() * srcAnswer.length)]
+
+        this.brain.talk(answer)
+        this.brain.socket.emit('is-typing', false)
+        return resolve()
       }
 
       try {
