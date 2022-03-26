@@ -16,6 +16,7 @@ import string from '@/helpers/string'
 import lang from '@/helpers/lang'
 import domainHelper from '@/helpers/domain'
 import TcpClient from '@/core/tcp-client'
+import Conversation from '@/core/conversation'
 
 class Nlu {
   constructor (brain) {
@@ -23,6 +24,7 @@ class Nlu {
     this.request = request
     this.nlp = { }
     this.ner = { }
+    this.conv = new Conversation()
     this.currentConversation = 'conv0'
     this.maxContextHistory = 5
     this.conversations = {
@@ -249,6 +251,11 @@ class Nlu {
           this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
         }
       }
+
+      // TODO: continue here...
+
+      // const slots = await this.nlp.slotManager.getMandatorySlots(intent)
+      // this.conv.
 
       // TODO: create specific method for that
       const setContext = async (domain, intent, entities) => {
