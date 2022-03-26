@@ -113,7 +113,7 @@ class Nlu {
 
       const result = await this.nlp.process(utterance)
       const {
-        locale, domain, intent, score, answers, slotFill, srcAnswer
+        locale, domain, intent, score, answers
       } = result
       const [skillName, actionName] = intent.split('.')
       let obj = {
@@ -223,15 +223,58 @@ class Nlu {
         }
       }
 
-      // TODO: slot filling
-      console.log('result', result)
-      if (slotFill && srcAnswer) {
-        const answer = srcAnswer[Math.floor(Math.random() * srcAnswer.length)]
+      // TODO: create specific method for that
+      const getSlots = async (intent, entities) => {
+        const slots = await this.nlp.slotManager.getMandatorySlots(intent)
+        const keys = Object.keys(slots)
+        const newSlots = []
 
-        this.brain.talk(answer)
+        for (let i = 0; i < keys.length; i += 1) {
+          const key = keys[i]
+          const slotObj = slots[key]
+          const [slotName, slotEntity] = key.split('#')
+          const [foundEntity] = entities.filter(({ entity }) => entity === slotEntity)
+          const questions = slotObj.locales[this.brain.lang]
+          const question = questions[Math.floor(Math.random() * questions.length)]
+
+          newSlots.push({
+            name: slotName,
+            entity: slotEntity,
+            value: foundEntity,
+            isFilled: !!foundEntity,
+            question
+          })
+        }
+
+        return newSlots
+      }
+
+      const slots = await getSlots(intent, obj.entities)
+      console.log('slots', slots)
+      const notFilledSlots = slots.filter((slot) => !slot.isFilled)
+
+      if (notFilledSlots.length > 0) {
+        this.brain.talk(notFilledSlots[0].question)
         this.brain.socket.emit('is-typing', false)
+
         return resolve()
       }
+
+      // TODO: fill with contexts?
+      obj.slots = slots
+      // console.log('getIntentEntityNames',
+      // await this.nlp.slotManager.getIntentEntityNames(intent))
+      // ['number']
+
+      // console.log('getMandatorySlots', await this.nlp.slotManager.getMandatorySlots(intent))
+      /*
+      number: {
+          intent: 'guess_the_number.start',
+          entity: 'number',
+          mandatory: true,
+          locales: { en: [Array] }
+        }
+       */
 
       try {
         // Inject action entities with the others if there is

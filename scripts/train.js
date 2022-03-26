@@ -103,7 +103,7 @@ export default () => new Promise(async (resolve, reject) => {
                    */
                   if (slotObj.source.type === 'entity') {
                     nlp.slotManager
-                      .addSlot(intent, slotObj.source.name, true, { [lang]: slotObj.questions })
+                      .addSlot(intent, `${slotObj.name}#${slotObj.source.name}`, true, { [lang]: slotObj.questions })
                   }
                   /* nlp.slotManager
                   .addSlot(intent, 'boolean', true, { [lang]: 'How many players?' }) */
