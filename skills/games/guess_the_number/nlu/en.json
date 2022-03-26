@@ -19,17 +19,23 @@
             "How many players should I set?",
             "Sure, how many players should I prepare?"
           ]
+        },
+        {
+          "name": "email_test",
+          "source": {
+            "type": "entity",
+            "name": "email"
+          },
+          "questions": [
+            "How about the email?"
+          ]
         }
       ],
-      "output_context": [
-        "guessing"
-      ]
+      "output_context": "setup_game"
     },
     "pick_up": {
       "type": "logic",
-      "input_context": [
-        "guessing"
-      ],
+      "input_context": "setup_game",
       "utterance_samples": [
         "I'm choosing 20",
         "Number 38",
@@ -49,15 +55,11 @@
           "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
         ]
       },
-      "output_context": [
-        "deciding"
-      ]
+      "output_context": "set_restart"
     },
     "decide": {
       "type": "logic",
-      "input_context": [
-        "deciding"
-      ],
+      "input_context": "set_restart",
       "slots": [
         {
           "name": "decision",

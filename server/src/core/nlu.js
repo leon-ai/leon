@@ -23,6 +23,19 @@ class Nlu {
     this.request = request
     this.nlp = { }
     this.ner = { }
+    this.currentConversation = 'conv0'
+    this.maxContextHistory = 5
+    this.conversations = {
+      conv0: {
+        id: 'conv0',
+        activeContext: {
+          name: null,
+          slots: { },
+          activatedAt: 0
+        },
+        previousContexts: { }
+      }
+    }
 
     log.title('NLU')
     log.success('New instance')
@@ -81,7 +94,6 @@ class Nlu {
       opts = opts || {
         mute: false // Close Leon mouth e.g. over HTTP
       }
-
       utterance = string.ucfirst(utterance)
 
       if (Object.keys(this.nlp).length === 0) {
@@ -111,7 +123,21 @@ class Nlu {
         })
       }
 
+      const hasActivatedContext = !!this.conversations[this.currentConversation].activeContext.name
+
+      if (hasActivatedContext) {
+        /**
+         * TODO:
+         * 1. Extract entities from utterance
+         * 2. If none of them match any slot in the active context, then continue
+         * 3. If an entity match slot in active context, then fill it
+         */
+      }
+
+      console.log('active context obj', this.conversations[this.currentConversation].activeContext)
+
       const result = await this.nlp.process(utterance)
+      console.log('result', result)
       const {
         locale, domain, intent, score, answers
       } = result
@@ -204,13 +230,14 @@ class Nlu {
       log.title('NLU')
       log.success(`Intent found: ${obj.classification.skill}.${obj.classification.action} (domain: ${obj.classification.domain})`)
 
+      const nluDataFilePath = join(process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, `nlu/${this.brain.lang}.json`)
       const { type: skillType } = domainHelper.getSkillInfo(domain, skillName)
       obj.skillType = skillType
 
       try {
         obj.entities = await this.ner.extractEntities(
           this.brain.lang,
-          join(process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, `nlu/${this.brain.lang}.json`),
+          nluDataFilePath,
           obj
         )
       } catch (e) /* istanbul ignore next */ {
@@ -224,44 +251,92 @@ class Nlu {
       }
 
       // TODO: create specific method for that
-      const getSlots = async (intent, entities) => {
+      const setContext = async (domain, intent, entities) => {
         const slots = await this.nlp.slotManager.getMandatorySlots(intent)
-        const keys = Object.keys(slots)
-        const newSlots = []
+        const slotKeys = Object.keys(slots)
 
-        for (let i = 0; i < keys.length; i += 1) {
-          const key = keys[i]
-          const slotObj = slots[key]
-          const [slotName, slotEntity] = key.split('#')
-          const [foundEntity] = entities.filter(({ entity }) => entity === slotEntity)
-          const questions = slotObj.locales[this.brain.lang]
-          const question = questions[Math.floor(Math.random() * questions.length)]
+        // If slots are required to trigger next actions, then go through the context activation
+        if (slotKeys.length > 0) {
+          // Grab output context from the NLU data file
+          const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+          const { output_context: outputContext } = actions[actionName]
+          const activeContextName = this.conversations[this.currentConversation].activeContext.name
 
-          newSlots.push({
-            name: slotName,
-            entity: slotEntity,
-            value: foundEntity,
-            isFilled: !!foundEntity,
-            question
-          })
+          /**
+           * If there is an active context and a new one is triggered
+           * then save the current active context to the contexts history
+           */
+          if (activeContextName && activeContextName !== outputContext) {
+            this.conversations[this.currentConversation]
+              .previousContexts[activeContextName] = this.conversations[this.currentConversation]
+              .activeContext
+            // TODO: maxContextHistory
+          } else if (!activeContextName) {
+            // Activate new context
+            this.conversations[this.currentConversation].activeContext.name = outputContext
+            this.conversations[this.currentConversation].activeContext.activatedAt = Date.now()
+          }
+
+          console.log('this.conversations', this.conversations)
+
+          for (let i = 0; i < slotKeys.length; i += 1) {
+            const key = slotKeys[i]
+            const slotObj = slots[key]
+            const [slotName, slotEntity] = key.split('#')
+            const [foundEntity] = entities.filter(({ entity }) => entity === slotEntity)
+            const questions = slotObj.locales[this.brain.lang]
+            const question = questions[Math.floor(Math.random() * questions.length)]
+            const slot = this.conversations[this.currentConversation].activeContext.slots[slotName]
+            const newSlot = {
+              name: slotName,
+              domain,
+              intent,
+              entity: slotEntity,
+              value: foundEntity,
+              isFilled: !!foundEntity,
+              question
+            }
+
+            /**
+             * When the slot isn't set or not filled yet
+             * or if it already set but the value has changed
+             * then set the slot
+             */
+            if (!slot || !slot.isFilled
+              || (slot.isFilled && newSlot.isFilled
+                && slot.value.resolution.value !== newSlot.value.resolution.value)
+            ) {
+              this.conversations[this.currentConversation].activeContext.slots[slotName] = newSlot
+            }
+          }
         }
-
-        return newSlots
       }
 
-      const slots = await getSlots(intent, obj.entities)
-      console.log('slots', slots)
-      const notFilledSlots = slots.filter((slot) => !slot.isFilled)
+      await setContext(domain, intent, obj.entities)
+      console.log('slots', this.conversations[this.currentConversation].activeContext.slots)
+      const slotsKeys = Object.keys(
+        this.conversations[this.currentConversation].activeContext.slots
+      )
+      const [notFilledSlotKey] = slotsKeys
+        .filter((slotKey) => !this.conversations[this.currentConversation]
+          .activeContext.slots[slotKey].isFilled)
+      const notFilledSlot = this.conversations[this.currentConversation]
+        .activeContext.slots[notFilledSlotKey]
 
-      if (notFilledSlots.length > 0) {
-        this.brain.talk(notFilledSlots[0].question)
+      // Loop questions if all the slots haven't been filled
+      if (notFilledSlot) {
+        this.brain.talk(notFilledSlot.question)
         this.brain.socket.emit('is-typing', false)
 
         return resolve()
       }
 
+      console.log('this.conversations[this.currentConversation].activeContext.slots', this.conversations[this.currentConversation].activeContext.slots)
+
+      // return resolve()
+
       // TODO: fill with contexts?
-      obj.slots = slots
+      // obj.slots = slots
       // console.log('getIntentEntityNames',
       // await this.nlp.slotManager.getIntentEntityNames(intent))
       // ['number']

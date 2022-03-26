@@ -35,6 +35,7 @@ export default () => new Promise(async (resolve, reject) => {
     nluManager.settings.trainByDomain = true
     // slotManager.settings.
     nlp.settings.forceNER = true // https://github.com/axa-group/nlp.js/blob/master/examples/17-ner-nlg/index.js
+    // nlp.settings.nlu = { useNoneFeature: true }
     nlp.settings.calculateSentiment = true
     nlp.settings.modelFileName = modelFileName
     nlp.settings.threshold = 0.8
@@ -86,10 +87,17 @@ export default () => new Promise(async (resolve, reject) => {
                * 4. [OK] Handle random questions picking
                *  srcAnswer has the array, need to activate context now?
                *  to detect we should pick .srcAnswer
-               * 5. Activiate context and return slot data to skills
+               * 5. Activate context and forward slot data to skills
                * 6. Train resolvers (affirm_deny: boolean value)
                * 7. Map resolvers to skill actions
                * 8. Utterance source type to get raw input from utterance
+               * 9. Create superheroes skill (just for testing):
+               *  to ask Leon questions by saving context
+               *  or just use the colors skill?
+               *  - I want to know about the red color
+               *  > Well, the red color...
+               *  - Do you like this color?
+               *  > Red is cool, but I prefer...
                */
               if (slots) {
                 for (let l = 0; l < slots.length; l += 1) {
