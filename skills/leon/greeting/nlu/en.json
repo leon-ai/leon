@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "logic",
       "utterance_samples": [
         "Hi",
         "Hey",

@@ -89,7 +89,7 @@ export default () => new Promise(async (resolve, reject) => {
                *  to detect we should pick .srcAnswer
                * 5.1 [OK] Reorganize code before to proceed to next steps
                * 5.2 [OK] Activate context and fill slots
-               * 5.3 Keep action activated in context + forward slot data to skills
+               * 5.3 Keep action activated in context + forward slot data to next action
                * 6. Train resolvers (affirm_deny: boolean value)
                * 7. Map resolvers to skill actions
                * 8. Utterance source type to get raw input from utterance
@@ -124,8 +124,8 @@ export default () => new Promise(async (resolve, reject) => {
                 nlp.addDocument(lang, utteranceSamples[l], intent)
               }
 
-              // Train NLG if the skill has a dialog type
-              if (currentSkill.type === 'dialog') {
+              // Train NLG if the action has a dialog type
+              if (actionObj.type === 'dialog') {
                 const variablesObj = { }
 
                 // Dynamic variables binding if any variable is declared

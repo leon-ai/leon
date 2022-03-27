@@ -10,6 +10,8 @@ import lang from '@/helpers/lang'
 import domain from '@/helpers/domain'
 import json from '@/helpers/json'
 
+const supportedActionTypes = ['dialog', 'logic']
+
 class Brain {
   constructor () {
     this._lang = 'en'
@@ -157,9 +159,12 @@ class Brain {
           executionTime
         })
       } else {
-        const { skillType } = obj
+        const { actionType } = obj
+        if (!actionType || !supportedActionTypes.includes(actionType)) {
+          log.error(`This action type isn't supported: ${actionType}`)
+        }
 
-        if (skillType === 'logic') {
+        if (actionType === 'logic') {
           // Ensure the process is empty (to be able to execute other processes outside of Brain)
           if (Object.keys(this.process).length === 0) {
             /**

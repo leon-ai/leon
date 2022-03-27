@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "dialog",
       "utterance_samples": [
         "Merci",
         "Merci bien",
@@ -11,17 +12,15 @@
         "Tu es le meilleur",
         "Mes remerciements",
         "Je t'adore"
+      ],
+      "answers": [
+        "De rien, c'est avec joie.",
+        "Avec plaisir.",
+        "Vous êtes bien trop poli.",
+        "Vous êtes toujours bienvenue.",
+        "Je ne fais que mon travail !",
+        "À votre service."
       ]
     }
-  },
-  "answers": {
-    "welcome": [
-      "De rien, c'est avec joie.",
-      "Avec plaisir.",
-      "Vous êtes bien trop poli.",
-      "Vous êtes toujours bienvenue.",
-      "Je ne fais que mon travail !",
-      "À votre service."
-    ]
   }
 }

@@ -14,7 +14,6 @@ import Ner from '@/core/ner'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 import lang from '@/helpers/lang'
-import domainHelper from '@/helpers/domain'
 import TcpClient from '@/core/tcp-client'
 import Conversation from '@/core/conversation'
 
@@ -74,6 +73,7 @@ class Nlu {
    * Classify the utterance,
    * pick-up the right classification
    * and extract entities
+   * TODO: split this method into several methods
    */
   process (utterance, opts) {
     const processingTimeStart = Date.now()
@@ -146,27 +146,33 @@ class Nlu {
          * and at least an entity has been found
          */
         if (notFilledSlot && entities.length > 0) {
-          // TODO: check about boolean entities and disable some
-          // https://github.com/axa-group/nlp.js/issues/338
           this.brain.talk(notFilledSlot.pickedQuestion)
           this.brain.socket.emit('is-typing', false)
 
           return resolve()
         }
-        
+
         if (!this.conv.areSlotsAllFilled()) {
           this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+        } else {
+          /**
+           * TODO:
+           * 1. [OK] Extract entities from utterance
+           * 2. [OK] If none of them match any slot in the active context, then continue
+           * 3. [OK] If an entity match slot in active context, then fill it
+           * 4. Move skill type to action type
+           * 5. Execute next action (based on input_context?)
+           * 6. Split this process() method into several ones
+           * 7. Add logs in terminal about context switching, active context, etc.
+           */
+
+          const data = await this.brain.execute(nluResultObj, { mute: opts.mute })
+          return resolve({
+            ...data
+          })
         }
 
         this.conv.cleanActiveContext()
-
-        /**
-         * TODO:
-         * 1. Extract entities from utterance
-         * 2. If none of them match any slot in the active context, then continue
-         * 3. If an entity match slot in active context, then fill it
-         * 4. Add logs in terminal about context switching, active context, etc.
-         */
       }
 
       const result = await this.nlp.process(utterance)
@@ -178,7 +184,7 @@ class Nlu {
       let nluResultObj = {
         utterance,
         entities: [],
-        answers, // For dialog skill type
+        answers, // For dialog action type
         classification: {
           domain,
           skill: skillName,
@@ -264,8 +270,10 @@ class Nlu {
       log.success(`Intent found: ${nluResultObj.classification.skill}.${nluResultObj.classification.action} (domain: ${nluResultObj.classification.domain})`)
 
       const nluDataFilePath = join(process.cwd(), 'skills', nluResultObj.classification.domain, nluResultObj.classification.skill, `nlu/${this.brain.lang}.json`)
-      const { type: skillType } = domainHelper.getSkillInfo(domain, skillName)
-      nluResultObj.skillType = skillType
+      const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+      const { type: actionType } = actions[actionName]
+
+      nluResultObj.actionType = actionType
 
       try {
         nluResultObj.entities = await this.ner.extractEntities(
@@ -282,8 +290,6 @@ class Nlu {
           this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
         }
       }
-
-      // TODO: continue here...
 
       const slots = await this.nlp.slotManager.getMandatorySlots(intent)
       this.conv.setContext({
@@ -304,26 +310,6 @@ class Nlu {
 
         return resolve()
       }
-
-      // console.log('this.conv.activeContext.slots', this.conv.activeContext.slots)
-
-      // return resolve()
-
-      // TODO: fill with contexts?
-      // nluResultObj.slots = slots
-      // console.log('getIntentEntityNames',
-      // await this.nlp.slotManager.getIntentEntityNames(intent))
-      // ['number']
-
-      // console.log('getMandatorySlots', await this.nlp.slotManager.getMandatorySlots(intent))
-      /*
-      number: {
-          intent: 'guess_the_number.start',
-          entity: 'number',
-          mandatory: true,
-          locales: { en: [Array] }
-        }
-       */
 
       try {
         // Inject action entities with the others if there is
