@@ -153,8 +153,11 @@ class Nlu {
 
           return resolve()
         }
+        
+        if (!this.conv.areSlotsAllFilled()) {
+          this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+        }
 
-        this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
         this.conv.cleanActiveContext()
 
         /**

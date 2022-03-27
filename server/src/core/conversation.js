@@ -140,6 +140,13 @@ class Conversation {
   }
 
   /**
+   * Check whether slots are all filled
+   */
+  areSlotsAllFilled () {
+    return !this.getNotFilledSlot()
+  }
+
+  /**
    * Clean up active context
    */
   cleanActiveContext () {
