@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "logic",
       "utterance_samples": [
         "Quelles sont les tendances sur Product Hunt ?",
         "Donne-moi les tendances Product Hunt",

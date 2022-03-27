@@ -160,7 +160,7 @@ class Nlu {
            * 1. [OK] Extract entities from utterance
            * 2. [OK] If none of them match any slot in the active context, then continue
            * 3. [OK] If an entity match slot in active context, then fill it
-           * 4. Move skill type to action type
+           * 4. [OK] Move skill type to action type
            * 5. Execute next action (based on input_context?)
            * 6. Split this process() method into several ones
            * 7. Add logs in terminal about context switching, active context, etc.

@@ -149,6 +149,10 @@ export default () => new Promise(async (resolve, reject) => {
                 }
               }
 
+              /**
+               * TODO: load common entities not per action but globally?
+               * TODO: as these entities are exposed to all actions
+               */
               // Add entities annotations (@...)
               if (entities) {
                 const newEntitiesObj = { }

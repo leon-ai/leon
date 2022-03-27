@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "dialog",
       "utterance_samples": [
         "Raconte-moi une blague",
         "Dis-moi une blague",

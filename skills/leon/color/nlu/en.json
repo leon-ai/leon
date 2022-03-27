@@ -5,6 +5,7 @@
   },
   "actions": {
     "favorite_color": {
+      "type": "dialog",
       "utterance_samples": [
         "What is your favorite color?",
         "What colour is the best for you?",
@@ -26,6 +27,7 @@
       ]
     },
     "why": {
+      "type": "dialog",
       "input_context": [
         "leon.color.favorite_color"
       ],
@@ -40,6 +42,7 @@
       ]
     },
     "color_meaning": {
+      "type": "dialog",
       "slots": [
         {
           "name": "color_choice",

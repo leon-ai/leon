@@ -1,6 +1,5 @@
 {
   "name": "Product Hunt Trends",
-  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Get what is trending on Product Hunt.",

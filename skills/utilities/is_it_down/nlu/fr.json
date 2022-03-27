@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "logic",
       "utterance_samples": [
         "Est-ce que getleon.ai est en ligne ?",
         "Est-ce que mozilla.org est hors ligne ?",

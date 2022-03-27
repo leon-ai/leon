@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "logic",
       "utterance_samples": [
         "iifeoluwa.ao@gmail.com a-t-elle été pwned ?",
         "iifeoluwa.ao@gmail.com a-t-elle été compromise ?",

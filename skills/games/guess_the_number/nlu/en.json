@@ -58,7 +58,7 @@
       "output_context": "set_restart"
     },
     "decide": {
-      "type": "logic",
+      "type": "dialog",
       "input_context": "set_restart",
       "slots": [
         {

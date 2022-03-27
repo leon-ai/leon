@@ -1,6 +1,5 @@
 {
   "name": "Random Number",
-  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Leon gives a random number.",

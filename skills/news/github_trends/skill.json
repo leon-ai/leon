@@ -1,6 +1,5 @@
 {
   "name": "GitHub Trends",
-  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Get what is trending on GitHub.",

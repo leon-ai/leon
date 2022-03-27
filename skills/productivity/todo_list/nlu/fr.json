@@ -1,6 +1,7 @@
 {
   "actions": {
     "create_list": {
+      "type": "logic",
       "utterance_samples": [
         "Crée la liste shopping",
         "Crée une liste matos",
@@ -27,6 +28,7 @@
       ]
     },
     "view_lists": {
+      "type": "logic",
       "utterance_samples": [
         "Montre toutes mes listes",
         "Montre le contenu de toutes mes listes",
@@ -38,6 +40,7 @@
       ]
     },
     "view_list": {
+      "type": "logic",
       "utterance_samples": [
         "Montre ma liste shopping",
         "Montre la liste matériels",
@@ -64,6 +67,7 @@
       ]
     },
     "rename_list": {
+      "type": "logic",
       "utterance_samples": [
         "Renomme la liste shopping en achats",
         "Renomme ma liste matériel par choses",
@@ -97,6 +101,7 @@
       ]
     },
     "delete_list": {
+      "type": "logic",
       "utterance_samples": [
         "Supprime la liste shopping",
         "Supprime ma liste matériel",
@@ -119,6 +124,7 @@
       ]
     },
     "add_todos": {
+      "type": "logic",
       "utterance_samples": [
         "Ajoute patates à ma liste courses",
         "Ajoute bananes à la liste choses",
@@ -150,6 +156,7 @@
       ]
     },
     "complete_todos": {
+      "type": "logic",
       "utterance_samples": [
         "Coche patates de la liste shopping",
         "Coche pain de ma liste courses",
@@ -181,6 +188,7 @@
       ]
     },
     "uncheck_todos": {
+      "type": "logic",
       "utterance_samples": [
         "Décoche patates de la liste courses",
         "Remet pain sur ma liste nourriture",

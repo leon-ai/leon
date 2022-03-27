@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "dialog",
       "utterance_samples": [
         "Connais-tu quelque chose sur @partner_assistant ?",
         "Dis-moi quelque chose sur l'assistant personnel @partner_assistant",

@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "logic",
       "utterance_samples": [
         "What are the trends on GitHub?",
         "Give me the GitHub trends",

@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "logic",
       "utterance_samples": [
         "Donne-moi un nombre aléatoire",
         "Donne-moi un nombre",

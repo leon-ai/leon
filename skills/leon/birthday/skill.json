@@ -1,6 +1,5 @@
 {
   "name": "Birthday",
-  "type": "dialog",
   "bridge": null,
   "version": "1.0.0",
   "description": "Leon remembers birthdays and talk about his.",

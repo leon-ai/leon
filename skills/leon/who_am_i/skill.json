@@ -1,7 +1,6 @@
 {
   "name": "Who Am I",
-  "type": "logic",
-  "bridge": "python",
+  "bridge": null,
   "version": "1.0.0",
   "description": "Leon introduces himself.",
   "author": {

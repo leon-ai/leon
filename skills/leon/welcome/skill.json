@@ -1,5 +1,7 @@
 {
   "name": "Welcome",
+  "bridge": null,
+  "version": "1.0.0",
   "description": "Leon welcomes you.",
   "author": {
     "name": "Louis Grenard",

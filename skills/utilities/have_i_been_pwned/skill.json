@@ -1,6 +1,5 @@
 {
   "name": "Have I Been Pwned",
-  "type": "logic",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Verify if one or several email addresses have been pwned (thanks to haveibeenpwned.com).",

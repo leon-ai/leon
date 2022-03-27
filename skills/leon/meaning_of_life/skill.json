@@ -1,7 +1,6 @@
 {
   "name": "Meaning of Life",
-  "type": "logic",
-  "bridge": "python",
+  "bridge": null,
   "version": "1.0.0",
   "description": "Leon tells what is the meaning of life.",
   "author": {

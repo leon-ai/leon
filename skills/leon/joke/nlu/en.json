@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "dialog",
       "utterance_samples": [
         "Tell me a joke",
         "Give me a joke",

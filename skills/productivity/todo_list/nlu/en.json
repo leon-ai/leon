@@ -1,6 +1,7 @@
 {
   "actions": {
     "create_list": {
+      "type": "logic",
       "utterance_samples": [
         "Create the shopping list",
         "Create a material list",
@@ -28,6 +29,7 @@
       ]
     },
     "view_lists": {
+      "type": "logic",
       "utterance_samples": [
         "Show all my lists",
         "Show contents of all my lists",
@@ -39,6 +41,7 @@
       ]
     },
     "view_list": {
+      "type": "logic",
       "utterance_samples": [
         "Show my shopping list",
         "Show the material list",
@@ -66,6 +69,7 @@
       ]
     },
     "rename_list": {
+      "type": "logic",
       "utterance_samples": [
         "Rename the shopping list to purchases",
         "Rename my material list to purchases",
@@ -99,6 +103,7 @@
       ]
     },
     "delete_list": {
+      "type": "logic",
       "utterance_samples": [
         "Delete the shopping list",
         "Delete my material list",
@@ -122,6 +127,7 @@
       ]
     },
     "add_todos": {
+      "type": "logic",
       "utterance_samples": [
         "Add potatoes to the shopping list",
         "Add bananas to my groceries list",
@@ -154,6 +160,7 @@
       ]
     },
     "complete_todos": {
+      "type": "logic",
       "utterance_samples": [
         "Check potatoes from the shopping list",
         "Check bread from my groceries list",
@@ -186,6 +193,7 @@
       ]
     },
     "uncheck_todos": {
+      "type": "logic",
       "utterance_samples": [
         "Uncheck potatoes from the shopping list",
         "Uncheck bread from my groceries list",

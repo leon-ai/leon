@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "dialog",
       "utterance_samples": [
         "Who are you?",
         "How they call you?",
@@ -8,14 +9,12 @@
         "Tell me who you are",
         "Introduce yourself",
         "I want to know you"
+      ],
+      "answers": [
+        "I'm your daily personal assistant. I have been created by Louis. I'm very happy to serve you everyday.",
+        "The question is, who are you? I'm kidding! I'm your daily personal assistant. Louis created me to make your life easier.",
+        "Firstly, I'm not a criminal as you might relatively think about a popular movie. Secondly, Louis is the guy who gave me life. Thirdly, I'm your personal assistant and I'm very glad to help you."
       ]
     }
-  },
-  "answers": {
-    "introduction": [
-      "I'm your daily personal assistant. I have been created by Louis. I'm very happy to serve you everyday.",
-      "The question is, who are you? I'm kidding! I'm your daily personal assistant. Louis created me to make your life easier.",
-      "Firstly, I'm not a criminal as you might relatively think about a popular movie. Secondly, Louis is the guy who gave me life. Thirdly, I'm your personal assistant and I'm very glad to help you."
-    ]
   }
 }

@@ -1,6 +1,7 @@
 {
   "actions": {
     "run": {
+      "type": "logic",
       "utterance_samples": [
         "What is my current Internet speed?",
         "Can you make me a speedtest?",
