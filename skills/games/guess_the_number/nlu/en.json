@@ -36,12 +36,6 @@
     "pick_up": {
       "type": "logic",
       "input_context": "setup_game",
-      "utterance_samples": [
-        "I'm choosing 20",
-        "Number 38",
-        "I choose 73",
-        "86"
-      ],
       "answers": {
         "bigger": [
           "The number is bigger.",

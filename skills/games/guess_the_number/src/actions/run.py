@@ -5,6 +5,6 @@ import utils
 from random import randint
 
 def run(string, entities):
-	"""Leon gives a random number"""
+	"""TODO..."""
 
-	return utils.output('end', 'success', randint(0, 100))
+	return utils.output('end', 'ready', utils.translate('ready')

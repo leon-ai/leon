@@ -135,22 +135,26 @@ class Nlu {
           nluResultObj
         )
 
-        this.conv.setSlots(this.brain.lang, entities)
+        // Continue to loop for questions if a slot has been filled correctly
+        let notFilledSlot = this.conv.getNotFilledSlot()
+        if (entities.length > 0) {
+          const hasMatch = entities.some(({ entity }) => entity === notFilledSlot.expectedEntity)
 
-        // console.log('active context obj', this.conv.activeContext)
-        // console.log('nluResultObj', nluResultObj)
+          if (hasMatch) {
+            this.conv.setSlots(this.brain.lang, entities)
 
-        const notFilledSlot = this.conv.getNotFilledSlot()
-        /**
-         * Loop for questions if a slot hasn't been filled
-         * and at least an entity has been found
-         */
-        if (notFilledSlot && entities.length > 0) {
-          this.brain.talk(notFilledSlot.pickedQuestion)
-          this.brain.socket.emit('is-typing', false)
+            notFilledSlot = this.conv.getNotFilledSlot()
+            if (notFilledSlot && entities.length > 0) {
+              this.brain.talk(notFilledSlot.pickedQuestion)
+              this.brain.socket.emit('is-typing', false)
 
-          return resolve()
+              return resolve()
+            }
+          }
         }
+
+        console.log('notFilledSlot', notFilledSlot)
+        console.log('this.conv.activeContext', this.conv.activeContext)
 
         if (!this.conv.areSlotsAllFilled()) {
           this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
@@ -161,11 +165,17 @@ class Nlu {
            * 2. [OK] If none of them match any slot in the active context, then continue
            * 3. [OK] If an entity match slot in active context, then fill it
            * 4. [OK] Move skill type to action type
-           * 5. Execute next action (based on input_context?)
+           * 5.1 In Conversation, need to chain output/input contexts to each other
+           * to understand what action should be next
+           * 5.2 Execute next action (based on input_context?)
+           * 5.3 Need to handle the case if a context is filled in one shot
+           * e.g. I wanna play with 2 players and louis.grenard@gmail.com
            * 6. Split this process() method into several ones
            * 7. Add logs in terminal about context switching, active context, etc.
            */
 
+            // TODO: recreate nluResultObj for the NEXT action (actionType, etc.)
+          
           const data = await this.brain.execute(nluResultObj, { mute: opts.mute })
           return resolve({
             ...data

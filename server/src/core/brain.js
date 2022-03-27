@@ -129,6 +129,7 @@ class Brain {
 
   /**
    * Execute Python skills
+   * TODO: split into several methods
    */
   execute (obj, opts) {
     const executionTimeStart = Date.now()
