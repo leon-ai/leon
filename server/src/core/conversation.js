@@ -2,16 +2,19 @@ import log from '@/helpers/log'
 import fs from 'fs'
 
 const maxContextHistory = 5
+const defaultActiveContext = {
+  name: null,
+  domain: null,
+  intent: null,
+  slots: { },
+  activatedAt: 0
+}
 
 class Conversation {
   constructor (id = 'conv0') {
     // Identify conversations to allow more features in the future (multiple speakers, etc.)
     this._id = id
-    this._activeContext = {
-      name: null,
-      slots: { },
-      activatedAt: 0
-    }
+    this._activeContext = defaultActiveContext
     this._previousContexts = { }
 
     log.title('Conversation')
@@ -28,17 +31,6 @@ class Conversation {
 
   get previousContexts () {
     return this._previousContexts
-  }
-
-  /**
-   * Get data of the current conversation instance
-   */
-  getCurrent () {
-    return {
-      id: this._id,
-      activeContext: this._activeContext,
-      previousContexts: this._previousContexts
-    }
   }
 
   /**
@@ -74,57 +66,52 @@ class Conversation {
        * then save the current active context to the contexts history
        */
       if (this._activeContext.name && this._activeContext.name !== outputContext) {
-        const previousContextsKeys = Object.keys(this._previousContexts)
-
-        // Remove oldest context from the history stack
-        if (previousContextsKeys.length >= maxContextHistory) {
-          delete this._previousContexts[previousContextsKeys[0]]
-        }
-
-        this._previousContexts[this._activeContext.name] = this._activeContext
+        this.pushToPreviousContextsStack()
       } else if (!this._activeContext.name) {
         // Activate new context
-        this._activeContext.name = outputContext
-        this._activeContext.activatedAt = Date.now()
+        this._activeContext = {
+          name: outputContext,
+          domain,
+          intent,
+          slots: { },
+          activatedAt: Date.now()
+        }
       }
 
-      this.setSlots(slots, {
-        lang,
-        domain,
-        intent,
-        entities
-      })
+      this.setSlots(lang, entities, slots)
     }
   }
 
   /**
    * Set slots in active context
    */
-  setSlots (slots, valueObj) {
-    const {
-      lang,
-      domain,
-      intent,
-      entities
-    } = valueObj
+  setSlots (lang, entities, slots = this._activeContext.slots) {
     const slotKeys = Object.keys(slots)
 
     for (let i = 0; i < slotKeys.length; i += 1) {
       const key = slotKeys[i]
       const slotObj = slots[key]
-      const [slotName, slotEntity] = key.split('#')
+      const isFirstSet = key.includes('#')
+      let slotName = slotObj.name
+      let slotEntity = slotObj.expectedEntity
+      let { questions } = slotObj
+
+      // If it's the first slot setting grabbed from the model or not
+      if (isFirstSet) {
+        [slotName, slotEntity] = key.split('#')
+        questions = slotObj.locales[lang]
+      }
+
       const [foundEntity] = entities.filter(({ entity }) => entity === slotEntity)
-      const questions = slotObj.locales[lang]
-      const question = questions[Math.floor(Math.random() * questions.length)]
+      const pickedQuestion = questions[Math.floor(Math.random() * questions.length)]
       const slot = this._activeContext.slots[slotName]
       const newSlot = {
         name: slotName,
-        domain,
-        intent,
-        entity: slotEntity,
+        expectedEntity: slotEntity,
         value: foundEntity,
         isFilled: !!foundEntity,
-        question
+        questions,
+        pickedQuestion
       }
 
       /**
@@ -150,6 +137,28 @@ class Conversation {
       .filter((slotKey) => !this._activeContext.slots[slotKey].isFilled)
 
     return this._activeContext.slots[notFilledSlotKey]
+  }
+
+  /**
+   * Clean up active context
+   */
+  cleanActiveContext () {
+    this.pushToPreviousContextsStack()
+    this._activeContext = defaultActiveContext
+  }
+
+  /**
+   * Push active context to the previous contexts stack
+   */
+  pushToPreviousContextsStack () {
+    const previousContextsKeys = Object.keys(this._previousContexts)
+
+    // Remove the oldest context from the history stack if it reaches the maximum limit
+    if (previousContextsKeys.length >= maxContextHistory) {
+      delete this._previousContexts[previousContextsKeys[0]]
+    }
+
+    this._previousContexts[this._activeContext.name] = this._activeContext
   }
 }
 

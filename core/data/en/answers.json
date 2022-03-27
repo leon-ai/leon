@@ -57,6 +57,11 @@
       "Sorry, I don't speak this language yet",
       "You are awesome, but I can't speak this language yet",
       "It looks like a language I can't understand at the moment"
+    ],
+    "random_context_out_of_topic": [
+      "Sure, let's change the topic",
+      "Aah, you want to change the subject, sure",
+      "Mmmh, as you wish, let's switch conversation"
     ]
 	}
 }

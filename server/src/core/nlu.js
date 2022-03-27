@@ -112,25 +112,63 @@ class Nlu {
         })
       }
 
+      // TODO: create specific method
       const hasActivatedContext = this.conv.hasActiveContext()
       if (hasActivatedContext) {
+        const { domain, intent } = this.conv.activeContext
+        const [skillName, actionName] = intent.split('.')
+        const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
+        const nluResultObj = {
+          utterance,
+          entities: [],
+          classification: {
+            domain,
+            skill: skillName,
+            action: actionName
+          }
+        }
+        const entities = await this.ner.extractEntities(
+          this.brain.lang,
+          nluDataFilePath,
+          nluResultObj
+        )
+
+        this.conv.setSlots(this.brain.lang, entities)
+
+        console.log('active context obj', this.conv.activeContext)
+        console.log('nluResultObj', nluResultObj)
+
+        const notFilledSlot = this.conv.getNotFilledSlot()
+        /**
+         * Loop for questions if a slot hasn't been filled
+         * and at least an entity has been found
+         */
+        if (notFilledSlot && entities.length > 0) {
+          this.brain.talk(notFilledSlot.pickedQuestion)
+          this.brain.socket.emit('is-typing', false)
+
+          return resolve()
+        }
+
+        this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+        this.conv.cleanActiveContext()
+
         /**
          * TODO:
          * 1. Extract entities from utterance
          * 2. If none of them match any slot in the active context, then continue
          * 3. If an entity match slot in active context, then fill it
+         * 4. Add logs in terminal about context switching, active context, etc.
          */
       }
 
-      console.log('active context obj', this.conv.activeContext)
-
       const result = await this.nlp.process(utterance)
-      console.log('result', result)
+      // console.log('result', result)
       const {
         locale, domain, intent, score, answers
       } = result
       const [skillName, actionName] = intent.split('.')
-      let obj = {
+      let nluResultObj = {
         utterance,
         entities: [],
         answers, // For dialog skill type
@@ -184,14 +222,14 @@ class Nlu {
             version,
             utterance,
             lang: this.brain.lang,
-            classification: obj.classification
+            classification: nluResultObj.classification
           })
           .then(() => { /* */ })
           .catch(() => { /* */ })
       }
 
       if (intent === 'None') {
-        const fallback = Nlu.fallback(obj, langs[lang.getLongCode(locale)].fallbacks)
+        const fallback = Nlu.fallback(nluResultObj, langs[lang.getLongCode(locale)].fallbacks)
 
         if (fallback === false) {
           if (!opts.mute) {
@@ -212,21 +250,21 @@ class Nlu {
           })
         }
 
-        obj = fallback
+        nluResultObj = fallback
       }
 
       log.title('NLU')
-      log.success(`Intent found: ${obj.classification.skill}.${obj.classification.action} (domain: ${obj.classification.domain})`)
+      log.success(`Intent found: ${nluResultObj.classification.skill}.${nluResultObj.classification.action} (domain: ${nluResultObj.classification.domain})`)
 
-      const nluDataFilePath = join(process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, `nlu/${this.brain.lang}.json`)
+      const nluDataFilePath = join(process.cwd(), 'skills', nluResultObj.classification.domain, nluResultObj.classification.skill, `nlu/${this.brain.lang}.json`)
       const { type: skillType } = domainHelper.getSkillInfo(domain, skillName)
-      obj.skillType = skillType
+      nluResultObj.skillType = skillType
 
       try {
-        obj.entities = await this.ner.extractEntities(
+        nluResultObj.entities = await this.ner.extractEntities(
           this.brain.lang,
           nluDataFilePath,
-          obj
+          nluResultObj
         )
       } catch (e) /* istanbul ignore next */ {
         if (log[e.type]) {
@@ -248,13 +286,14 @@ class Nlu {
         actionName,
         domain,
         intent,
-        entities: obj.entities
+        entities: nluResultObj.entities
       })
 
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        this.brain.talk(notFilledSlot.question)
+        console.log('in original loop')
+        this.brain.talk(notFilledSlot.pickedQuestion)
         this.brain.socket.emit('is-typing', false)
 
         return resolve()
@@ -265,7 +304,7 @@ class Nlu {
       // return resolve()
 
       // TODO: fill with contexts?
-      // obj.slots = slots
+      // nluResultObj.slots = slots
       // console.log('getIntentEntityNames',
       // await this.nlp.slotManager.getIntentEntityNames(intent))
       // ['number']
@@ -282,7 +321,7 @@ class Nlu {
 
       try {
         // Inject action entities with the others if there is
-        const data = await this.brain.execute(obj, { mute: opts.mute })
+        const data = await this.brain.execute(nluResultObj, { mute: opts.mute })
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
 
@@ -308,8 +347,8 @@ class Nlu {
    * Pickup and compare the right fallback
    * according to the wished skill action
    */
-  static fallback (obj, fallbacks) {
-    const words = obj.utterance.toLowerCase().split(' ')
+  static fallback (nluResultObj, fallbacks) {
+    const words = nluResultObj.utterance.toLowerCase().split(' ')
 
     if (fallbacks.length > 0) {
       log.info('Looking for fallbacks...')
@@ -323,14 +362,14 @@ class Nlu {
         }
 
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i].words)) {
-          obj.entities = []
-          obj.classification.domain = fallbacks[i].domain
-          obj.classification.skill = fallbacks[i].skill
-          obj.classification.action = fallbacks[i].action
-          obj.classification.confidence = 1
+          nluResultObj.entities = []
+          nluResultObj.classification.domain = fallbacks[i].domain
+          nluResultObj.classification.skill = fallbacks[i].skill
+          nluResultObj.classification.action = fallbacks[i].action
+          nluResultObj.classification.confidence = 1
 
           log.success('Fallback found')
-          return obj
+          return nluResultObj
         }
       }
     }
