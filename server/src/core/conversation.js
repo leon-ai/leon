@@ -1,6 +1,8 @@
 import log from '@/helpers/log'
 import fs from 'fs'
 
+const maxContextHistory = 5
+
 class Conversation {
   constructor (id = 'conv0') {
     // Identify conversations to allow more features in the future (multiple speakers, etc.)
@@ -72,8 +74,14 @@ class Conversation {
        * then save the current active context to the contexts history
        */
       if (this._activeContext.name && this._activeContext.name !== outputContext) {
+        const previousContextsKeys = Object.keys(this._previousContexts)
+
+        // Remove oldest context from the history stack
+        if (previousContextsKeys.length >= maxContextHistory) {
+          delete this._previousContexts[previousContextsKeys[0]]
+        }
+
         this._previousContexts[this._activeContext.name] = this._activeContext
-        // TODO: maxContextHistory
       } else if (!this._activeContext.name) {
         // Activate new context
         this._activeContext.name = outputContext

@@ -25,19 +25,6 @@ class Nlu {
     this.nlp = { }
     this.ner = { }
     this.conv = new Conversation('conv0')
-    this.currentConversation = 'conv0'
-    this.maxContextHistory = 5
-    this.conversations = {
-      conv0: {
-        id: 'conv0',
-        activeContext: {
-          name: null,
-          slots: { },
-          activatedAt: 0
-        },
-        previousContexts: { }
-      }
-    }
 
     log.title('NLU')
     log.success('New instance')
