@@ -133,6 +133,30 @@ class Ner {
       resolve()
     })
   }
+
+  /**
+   * Get Microsoft builtin entities
+   * https://github.com/axa-group/nlp.js/blob/master/packages/builtin-microsoft/src/builtin-microsoft.js
+   */
+  static getMicrosoftBuiltinEntities () {
+    return [
+      'Number',
+      'Ordinal',
+      'Percentage',
+      'Age',
+      'Currency',
+      'Dimension',
+      'Temperature',
+      'DateTime',
+      'PhoneNumber',
+      'IpAddress',
+      // Disable booleans to handle it ourselves
+      // 'Boolean',
+      'Email',
+      'Hashtag',
+      'URL'
+    ]
+  }
 }
 
 export default Ner

@@ -44,7 +44,9 @@ class Nlu {
         try {
           const container = await containerBootstrap()
 
-          container.register('extract-builtin-??', new BuiltinMicrosoft(), true)
+          container.register('extract-builtin-??', new BuiltinMicrosoft({
+            builtins: Ner.getMicrosoftBuiltinEntities()
+          }), true)
           container.use(Nlp)
           container.use(LangAll)
 
@@ -135,8 +137,8 @@ class Nlu {
 
         this.conv.setSlots(this.brain.lang, entities)
 
-        console.log('active context obj', this.conv.activeContext)
-        console.log('nluResultObj', nluResultObj)
+        // console.log('active context obj', this.conv.activeContext)
+        // console.log('nluResultObj', nluResultObj)
 
         const notFilledSlot = this.conv.getNotFilledSlot()
         /**
@@ -144,6 +146,8 @@ class Nlu {
          * and at least an entity has been found
          */
         if (notFilledSlot && entities.length > 0) {
+          // TODO: check about boolean entities and disable some
+          // https://github.com/axa-group/nlp.js/issues/338
           this.brain.talk(notFilledSlot.pickedQuestion)
           this.brain.socket.emit('is-typing', false)
 
@@ -292,14 +296,13 @@ class Nlu {
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        console.log('in original loop')
         this.brain.talk(notFilledSlot.pickedQuestion)
         this.brain.socket.emit('is-typing', false)
 
         return resolve()
       }
 
-      console.log('this.conv.activeContext.slots', this.conv.activeContext.slots)
+      // console.log('this.conv.activeContext.slots', this.conv.activeContext.slots)
 
       // return resolve()
 
