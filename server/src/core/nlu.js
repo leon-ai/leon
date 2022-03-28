@@ -120,9 +120,11 @@ class Nlu {
         const { domain, intent } = this.conv.activeContext
         const [skillName, actionName] = intent.split('.')
         const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
-        const nluResultObj = {
+        // TODO: create specific method to build this important object
+        let nluResultObj = {
           utterance,
           entities: [],
+          nluDataFilePath,
           classification: {
             domain,
             skill: skillName,
@@ -165,17 +167,30 @@ class Nlu {
            * 2. [OK] If none of them match any slot in the active context, then continue
            * 3. [OK] If an entity match slot in active context, then fill it
            * 4. [OK] Move skill type to action type
-           * 5.1 In Conversation, need to chain output/input contexts to each other
+           * 5.1 [OK] In Conversation, need to chain output/input contexts to each other
            * to understand what action should be next
-           * 5.2 Execute next action (based on input_context?)
+           * 5.2 [OK] Execute next action (based on input_context?)
            * 5.3 Need to handle the case if a context is filled in one shot
            * e.g. I wanna play with 2 players and louis.grenard@gmail.com
-           * 6. Split this process() method into several ones
-           * 7. Add logs in terminal about context switching, active context, etc.
+           * 6. What's next once the next action has been executed?
+           * 7. Handle a "loop" feature from action (guess the number)
+           * 8. Split this process() method into several ones + clean nlu.js and brain.js
+           * 9. Add logs in terminal about context switching, active context, etc.
            */
 
-            // TODO: recreate nluResultObj for the NEXT action (actionType, etc.)
-          
+          nluResultObj = {
+            utterance: '',
+            entities: [],
+            // TODO: the brain needs to forward slots to the skill execution
+            slots: this.conv.activeContext.slots,
+            nluDataFilePath,
+            classification: {
+              domain,
+              skill: skillName,
+              action: this.conv.activeContext.nextAction
+            }
+          }
+
           const data = await this.brain.execute(nluResultObj, { mute: opts.mute })
           return resolve({
             ...data
@@ -280,10 +295,7 @@ class Nlu {
       log.success(`Intent found: ${nluResultObj.classification.skill}.${nluResultObj.classification.action} (domain: ${nluResultObj.classification.domain})`)
 
       const nluDataFilePath = join(process.cwd(), 'skills', nluResultObj.classification.domain, nluResultObj.classification.skill, `nlu/${this.brain.lang}.json`)
-      const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
-      const { type: actionType } = actions[actionName]
-
-      nluResultObj.actionType = actionType
+      nluResultObj.nluDataFilePath = nluDataFilePath
 
       try {
         nluResultObj.entities = await this.ner.extractEntities(

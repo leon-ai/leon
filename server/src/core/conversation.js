@@ -7,6 +7,7 @@ const defaultActiveContext = {
   domain: null,
   intent: null,
   slots: { },
+  nextAction: null,
   activatedAt: 0
 }
 
@@ -57,9 +58,12 @@ class Conversation {
 
     // If slots are required to trigger next actions, then go through the context activation
     if (slotKeys.length > 0) {
-      // Grab output context from the NLU data file
       const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+      const actionsKeys = Object.keys(actions)
+      // Grab output context from the NLU data file
       const { output_context: outputContext } = actions[actionName]
+      // Define next action
+      const [nextAction] = actionsKeys.filter((key) => actions[key].input_context === outputContext)
 
       /**
        * If there is an active context and a new one is triggered
@@ -74,6 +78,7 @@ class Conversation {
           domain,
           intent,
           slots: { },
+          nextAction,
           activatedAt: Date.now()
         }
       }

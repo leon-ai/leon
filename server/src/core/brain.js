@@ -160,7 +160,10 @@ class Brain {
           executionTime
         })
       } else {
-        const { actionType } = obj
+        const { nluDataFilePath, classification: { action: actionName } } = obj
+        const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+        const { type: actionType } = actions[actionName]
+
         if (!actionType || !supportedActionTypes.includes(actionType)) {
           log.error(`This action type isn't supported: ${actionType}`)
         }

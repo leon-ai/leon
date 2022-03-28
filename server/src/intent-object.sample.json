@@ -1,7 +1,7 @@
 {
   "lang": "en",
-  "domain": "checker",
-  "skill": "isitdown",
+  "domain": "utilities",
+  "skill": "is_it_down",
   "action": "run",
   "utterance": "Check if github.com, mozilla.org and twitter.com are up",
   "entities": [
