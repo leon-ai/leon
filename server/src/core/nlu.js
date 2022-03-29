@@ -191,6 +191,8 @@ class Nlu {
             }
           }
 
+          this.conv.cleanActiveContext()
+
           const data = await this.brain.execute(nluResultObj, { mute: opts.mute })
           return resolve({
             ...data
