@@ -25,7 +25,8 @@ export default () => new Promise(async (resolve, reject) => {
       const configFile = path.join(configDir, 'config.json')
       const configSampleFile = path.join(configDir, 'config.sample.json')
 
-      if (currentSkill.type === 'logic') {
+      // If there is a bridge set from the skill config
+      if (currentSkill.bridge) {
         // Check if the config and config.sample file exist
         if (fs.existsSync(configFile) && fs.existsSync(configSampleFile)) {
           const config = JSON.parse(fs.readFileSync(configFile, 'utf8'))?.configurations

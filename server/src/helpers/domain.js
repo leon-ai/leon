@@ -19,11 +19,12 @@ domain.getDomainsObj = async () => {
         const skillPath = path.join(domainPath, skillFolders[i])
 
         if (fs.statSync(skillPath).isDirectory()) {
-          const { name: skillName } = JSON.parse(fs.readFileSync(path.join(skillPath, 'skill.json'), 'utf8'))
+          const { name: skillName, bridge: skillBridge } = JSON.parse(fs.readFileSync(path.join(skillPath, 'skill.json'), 'utf8'))
 
           skillObj[skillName] = {
             name: skillFolders[i],
-            path: skillPath
+            path: skillPath,
+            bridge: skillBridge
           }
         }
 
