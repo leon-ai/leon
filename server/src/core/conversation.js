@@ -44,7 +44,7 @@ class Conversation {
   /**
    * Activate context according to the triggered action
    */
-  setContext (contextObj) {
+  set activeContext (contextObj) {
     const {
       slots,
       nluDataFilePath,

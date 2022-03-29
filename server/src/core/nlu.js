@@ -17,6 +17,18 @@ import lang from '@/helpers/lang'
 import TcpClient from '@/core/tcp-client'
 import Conversation from '@/core/conversation'
 
+const defaultNluResultObj = {
+  utterance: null,
+  entities: [],
+  answers: [], // For dialog action type
+  classification: {
+    domain: null,
+    skill: null,
+    action: null,
+    confidence: 0
+  }
+}
+
 class Nlu {
   constructor (brain) {
     this.brain = brain
@@ -24,6 +36,7 @@ class Nlu {
     this.nlp = { }
     this.ner = { }
     this.conv = new Conversation('conv0')
+    this.nluResultObj = defaultNluResultObj // TODO
 
     log.title('NLU')
     log.success('New instance')
@@ -170,8 +183,9 @@ class Nlu {
            * 5.1 [OK] In Conversation, need to chain output/input contexts to each other
            * to understand what action should be next
            * 5.2 [OK] Execute next action (based on input_context?)
-           * 5.3 Need to handle the case if a context is filled in one shot
+           * 5.3 [Ready] Need to handle the case if a context is filled in one shot
            * e.g. I wanna play with 2 players and louis.grenard@gmail.com
+           * Need to refactor now (nluResultObj method to build it, etc.)
            * 6. What's next once the next action has been executed?
            * 7. Handle a "loop" feature from action (guess the number)
            * 8. Split this process() method into several ones + clean nlu.js and brain.js
@@ -316,7 +330,7 @@ class Nlu {
       }
 
       const slots = await this.nlp.slotManager.getMandatorySlots(intent)
-      this.conv.setContext({
+      this.conv.activeContext = {
         lang: this.brain.lang,
         slots,
         nluDataFilePath,
@@ -324,7 +338,7 @@ class Nlu {
         domain,
         intent,
         entities: nluResultObj.entities
-      })
+      }
 
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
@@ -333,6 +347,10 @@ class Nlu {
         this.brain.socket.emit('is-typing', false)
 
         return resolve()
+      }
+      // In case all slots have been filled in the first utterance
+      if (this.conv.hasActiveContext() && !notFilledSlot) {
+        // TODO: call method that execute brain with slot (need refactoring first)
       }
 
       try {
