@@ -127,93 +127,12 @@ class Nlu {
         })
       }
 
-      // TODO: create specific method
       const hasActivatedContext = this.conv.hasActiveContext()
       if (hasActivatedContext) {
-        const { domain, intent } = this.conv.activeContext
-        const [skillName, actionName] = intent.split('.')
-        const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
-        // TODO: create specific method to build this important object
-        let nluResultObj = {
-          utterance,
-          entities: [],
-          nluDataFilePath,
-          classification: {
-            domain,
-            skill: skillName,
-            action: actionName
-          }
+        const processedData = await this.slotFill(utterance, opts)
+        if (processedData) {
+          return resolve(processedData)
         }
-        const entities = await this.ner.extractEntities(
-          this.brain.lang,
-          nluDataFilePath,
-          nluResultObj
-        )
-
-        // Continue to loop for questions if a slot has been filled correctly
-        let notFilledSlot = this.conv.getNotFilledSlot()
-        if (entities.length > 0) {
-          const hasMatch = entities.some(({ entity }) => entity === notFilledSlot.expectedEntity)
-
-          if (hasMatch) {
-            this.conv.setSlots(this.brain.lang, entities)
-
-            notFilledSlot = this.conv.getNotFilledSlot()
-            if (notFilledSlot && entities.length > 0) {
-              this.brain.talk(notFilledSlot.pickedQuestion)
-              this.brain.socket.emit('is-typing', false)
-
-              return resolve()
-            }
-          }
-        }
-
-        console.log('notFilledSlot', notFilledSlot)
-        console.log('this.conv.activeContext', this.conv.activeContext)
-
-        if (!this.conv.areSlotsAllFilled()) {
-          this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
-        } else {
-          /**
-           * TODO:
-           * 1. [OK] Extract entities from utterance
-           * 2. [OK] If none of them match any slot in the active context, then continue
-           * 3. [OK] If an entity match slot in active context, then fill it
-           * 4. [OK] Move skill type to action type
-           * 5.1 [OK] In Conversation, need to chain output/input contexts to each other
-           * to understand what action should be next
-           * 5.2 [OK] Execute next action (based on input_context?)
-           * 5.3 [Ready] Need to handle the case if a context is filled in one shot
-           * e.g. I wanna play with 2 players and louis.grenard@gmail.com
-           * Need to refactor now (nluResultObj method to build it, etc.)
-           * 6. What's next once the next action has been executed?
-           * 7. Handle a "loop" feature from action (guess the number)
-           * 8. Split this process() method into several ones + clean nlu.js and brain.js
-           * 9. Add logs in terminal about context switching, active context, etc.
-           */
-
-          nluResultObj = {
-            utterance: '',
-            entities: [],
-            // TODO: the brain needs to forward slots to the skill execution
-            slots: this.conv.activeContext.slots,
-            nluDataFilePath,
-            classification: {
-              domain,
-              skill: skillName,
-              action: this.conv.activeContext.nextAction
-            }
-          }
-
-          this.conv.cleanActiveContext()
-
-          const data = await this.brain.execute(nluResultObj, { mute: opts.mute })
-          return resolve({
-            ...data
-          })
-        }
-
-        this.conv.cleanActiveContext()
       }
 
       const result = await this.nlp.process(utterance)
@@ -375,6 +294,95 @@ class Nlu {
         return reject(e.obj)
       }
     })
+  }
+
+  /**
+   * Build NLU data result object based on slots
+   * and ask for more entities if necessary
+   */
+  async slotFill (utterance, opts) {
+    const { domain, intent } = this.conv.activeContext
+    const [skillName, actionName] = intent.split('.')
+    const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
+    // TODO: create specific method to build this important object
+    let nluResultObj = {
+      utterance,
+      entities: [],
+      nluDataFilePath,
+      classification: {
+        domain,
+        skill: skillName,
+        action: actionName
+      }
+    }
+    const entities = await this.ner.extractEntities(
+      this.brain.lang,
+      nluDataFilePath,
+      nluResultObj
+    )
+
+    // Continue to loop for questions if a slot has been filled correctly
+    let notFilledSlot = this.conv.getNotFilledSlot()
+    if (entities.length > 0) {
+      const hasMatch = entities.some(({ entity }) => entity === notFilledSlot.expectedEntity)
+
+      if (hasMatch) {
+        this.conv.setSlots(this.brain.lang, entities)
+
+        notFilledSlot = this.conv.getNotFilledSlot()
+        if (notFilledSlot && entities.length > 0) {
+          this.brain.talk(notFilledSlot.pickedQuestion)
+          this.brain.socket.emit('is-typing', false)
+
+          return { }
+        }
+      }
+    }
+
+    console.log('notFilledSlot', notFilledSlot)
+    console.log('this.conv.activeContext', this.conv.activeContext)
+
+    if (!this.conv.areSlotsAllFilled()) {
+      this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+    } else {
+      /**
+       * TODO:
+       * 1. [OK] Extract entities from utterance
+       * 2. [OK] If none of them match any slot in the active context, then continue
+       * 3. [OK] If an entity match slot in active context, then fill it
+       * 4. [OK] Move skill type to action type
+       * 5.1 [OK] In Conversation, need to chain output/input contexts to each other
+       * to understand what action should be next
+       * 5.2 [OK] Execute next action (based on input_context?)
+       * 5.3 [Ready] Need to handle the case if a context is filled in one shot
+       * e.g. I wanna play with 2 players and louis.grenard@gmail.com
+       * Need to refactor now (nluResultObj method to build it, etc.)
+       * 6. What's next once the next action has been executed?
+       * 7. Handle a "loop" feature from action (guess the number)
+       * 8. Split this process() method into several ones + clean nlu.js and brain.js
+       * 9. Add logs in terminal about context switching, active context, etc.
+       */
+
+      nluResultObj = {
+        utterance: '',
+        entities: [],
+        // TODO: the brain needs to forward slots to the skill execution
+        slots: this.conv.activeContext.slots,
+        nluDataFilePath,
+        classification: {
+          domain,
+          skill: skillName,
+          action: this.conv.activeContext.nextAction
+        }
+      }
+
+      this.conv.cleanActiveContext()
+
+      return this.brain.execute(nluResultObj, { mute: opts.mute })
+    }
+
+    this.conv.cleanActiveContext()
+    return null
   }
 
   /**
