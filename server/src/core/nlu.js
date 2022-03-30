@@ -20,6 +20,8 @@ import Conversation from '@/core/conversation'
 const defaultNluResultObj = {
   utterance: null,
   entities: [],
+  slots: null,
+  nluDataFilePath: null,
   answers: [], // For dialog action type
   classification: {
     domain: null,
@@ -141,9 +143,9 @@ class Nlu {
         locale, domain, intent, score, answers
       } = result
       const [skillName, actionName] = intent.split('.')
-      let nluResultObj = {
+      this.nluResultObj = {
+        ...this.nluResultObj,
         utterance,
-        entities: [],
         answers, // For dialog action type
         classification: {
           domain,
@@ -195,14 +197,14 @@ class Nlu {
             version,
             utterance,
             lang: this.brain.lang,
-            classification: nluResultObj.classification
+            classification: this.nluResultObj.classification
           })
           .then(() => { /* */ })
           .catch(() => { /* */ })
       }
 
       if (intent === 'None') {
-        const fallback = Nlu.fallback(nluResultObj, langs[lang.getLongCode(locale)].fallbacks)
+        const fallback = this.fallback(langs[lang.getLongCode(locale)].fallbacks)
 
         if (fallback === false) {
           if (!opts.mute) {
@@ -223,20 +225,20 @@ class Nlu {
           })
         }
 
-        nluResultObj = fallback
+        this.nluResultObj = fallback
       }
 
       log.title('NLU')
-      log.success(`Intent found: ${nluResultObj.classification.skill}.${nluResultObj.classification.action} (domain: ${nluResultObj.classification.domain})`)
+      log.success(`Intent found: ${this.nluResultObj.classification.skill}.${this.nluResultObj.classification.action} (domain: ${this.nluResultObj.classification.domain})`)
 
-      const nluDataFilePath = join(process.cwd(), 'skills', nluResultObj.classification.domain, nluResultObj.classification.skill, `nlu/${this.brain.lang}.json`)
-      nluResultObj.nluDataFilePath = nluDataFilePath
+      const nluDataFilePath = join(process.cwd(), 'skills', this.nluResultObj.classification.domain, this.nluResultObj.classification.skill, `nlu/${this.brain.lang}.json`)
+      this.nluResultObj.nluDataFilePath = nluDataFilePath
 
       try {
-        nluResultObj.entities = await this.ner.extractEntities(
+        this.nluResultObj.entities = await this.ner.extractEntities(
           this.brain.lang,
           nluDataFilePath,
-          nluResultObj
+          this.nluResultObj
         )
       } catch (e) /* istanbul ignore next */ {
         if (log[e.type]) {
@@ -248,33 +250,14 @@ class Nlu {
         }
       }
 
-      const slots = await this.nlp.slotManager.getMandatorySlots(intent)
-      this.conv.activeContext = {
-        lang: this.brain.lang,
-        slots,
-        nluDataFilePath,
-        actionName,
-        domain,
-        intent,
-        entities: nluResultObj.entities
-      }
-
-      const notFilledSlot = this.conv.getNotFilledSlot()
-      // Loop for questions if a slot hasn't been filled
-      if (notFilledSlot) {
-        this.brain.talk(notFilledSlot.pickedQuestion)
-        this.brain.socket.emit('is-typing', false)
-
-        return resolve()
-      }
-      // In case all slots have been filled in the first utterance
-      if (this.conv.hasActiveContext() && !notFilledSlot) {
-        // TODO: call method that execute brain with slot (need refactoring first)
+      const shouldLoop = await this.routeSlotFilling(intent)
+      if (shouldLoop) {
+        return resolve({ })
       }
 
       try {
         // Inject action entities with the others if there is
-        const data = await this.brain.execute(nluResultObj, { mute: opts.mute })
+        const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
 
@@ -301,14 +284,15 @@ class Nlu {
    * and ask for more entities if necessary
    */
   async slotFill (utterance, opts) {
+    console.log('this.conv.activeContext', this.conv.activeContext)
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
+    console.log(domain, skillName, this.brain.lang)
     const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
-    // TODO: create specific method to build this important object
-    let nluResultObj = {
+
+    this.nluResultObj = {
+      ...this.nluResultObj,
       utterance,
-      entities: [],
-      nluDataFilePath,
       classification: {
         domain,
         skill: skillName,
@@ -318,7 +302,7 @@ class Nlu {
     const entities = await this.ner.extractEntities(
       this.brain.lang,
       nluDataFilePath,
-      nluResultObj
+      this.nluResultObj
     )
 
     // Continue to loop for questions if a slot has been filled correctly
@@ -363,22 +347,22 @@ class Nlu {
        * 9. Add logs in terminal about context switching, active context, etc.
        */
 
-      nluResultObj = {
-        utterance: '',
-        entities: [],
+      this.nluResultObj = {
+        ...this.nluResultObj,
         // TODO: the brain needs to forward slots to the skill execution
         slots: this.conv.activeContext.slots,
         nluDataFilePath,
         classification: {
           domain,
           skill: skillName,
-          action: this.conv.activeContext.nextAction
+          action: this.conv.activeContext.nextAction,
+          confidence: 1
         }
       }
 
       this.conv.cleanActiveContext()
 
-      return this.brain.execute(nluResultObj, { mute: opts.mute })
+      return this.brain.execute(this.nluResultObj, { mute: opts.mute })
     }
 
     this.conv.cleanActiveContext()
@@ -386,11 +370,45 @@ class Nlu {
   }
 
   /**
+   * Decide what to do with slot filling.
+   * 1. Activate context
+   * 2. If the context is expecting slots, then loop over questions to slot fill
+   * 3. Or go to the brain executor if all slots have been filled in one shot
+   */
+  async routeSlotFilling (intent) {
+    const slots = await this.nlp.slotManager.getMandatorySlots(intent)
+    this.conv.activeContext = {
+      lang: this.brain.lang,
+      slots,
+      nluDataFilePath: this.nluResultObj.nluDataFilePath,
+      actionName: this.nluResultObj.classification.action,
+      domain: this.nluResultObj.classification.domain,
+      intent,
+      entities: this.nluResultObj.entities
+    }
+
+    const notFilledSlot = this.conv.getNotFilledSlot()
+    // Loop for questions if a slot hasn't been filled
+    if (notFilledSlot) {
+      this.brain.talk(notFilledSlot.pickedQuestion)
+      this.brain.socket.emit('is-typing', false)
+
+      return true
+    }
+    // In case all slots have been filled in the first utterance
+    if (this.conv.hasActiveContext() && !notFilledSlot) {
+      // TODO: call method that execute brain with slot (need refactoring first)
+    }
+
+    return false
+  }
+
+  /**
    * Pickup and compare the right fallback
    * according to the wished skill action
    */
-  static fallback (nluResultObj, fallbacks) {
-    const words = nluResultObj.utterance.toLowerCase().split(' ')
+  fallback (fallbacks) {
+    const words = this.nluResultObj.utterance.toLowerCase().split(' ')
 
     if (fallbacks.length > 0) {
       log.info('Looking for fallbacks...')
@@ -404,14 +422,14 @@ class Nlu {
         }
 
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i].words)) {
-          nluResultObj.entities = []
-          nluResultObj.classification.domain = fallbacks[i].domain
-          nluResultObj.classification.skill = fallbacks[i].skill
-          nluResultObj.classification.action = fallbacks[i].action
-          nluResultObj.classification.confidence = 1
+          this.nluResultObj.entities = []
+          this.nluResultObj.classification.domain = fallbacks[i].domain
+          this.nluResultObj.classification.skill = fallbacks[i].skill
+          this.nluResultObj.classification.action = fallbacks[i].action
+          this.nluResultObj.classification.confidence = 1
 
           log.success('Fallback found')
-          return nluResultObj
+          return this.nluResultObj
         }
       }
     }
