@@ -15,7 +15,13 @@ def main():
 
 	skill = import_module('skills.' + intent_obj['domain'] + '.' + intent_obj['skill'] + '.src.actions.' + intent_obj['action'])
 
-	return getattr(skill, intent_obj['action'])(intent_obj['utterance'], intent_obj['entities'])
+	params = {
+		'utterance': intent_obj['utterance'],
+		'entities': intent_obj['entities'],
+		'slots': intent_obj['slots']
+	}
+
+	return getattr(skill, intent_obj['action'])(params)
 
 if __name__ == '__main__':
 	main()

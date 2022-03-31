@@ -186,7 +186,8 @@ class Brain {
               skill: obj.classification.skill,
               action: obj.classification.action,
               utterance: obj.utterance,
-              entities: obj.entities
+              entities: obj.entities,
+              slots: obj.slots
             }
 
             try {

@@ -70,7 +70,7 @@
   },
   "answers": {
     "ready": [
-      "Alright, I'm ready, go ahead and guess the number between 0 and 100!"
+      "Alright, I have set %players_nb% players with the %email_test% email. Go ahead and guess the number between 0 and 100!"
     ]
   }
 }

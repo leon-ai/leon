@@ -89,17 +89,23 @@ export default () => new Promise(async (resolve, reject) => {
                *  to detect we should pick .srcAnswer
                * 5.1 [OK] Reorganize code before to proceed to next steps
                * 5.2 [OK] Activate context and fill slots
-               * 5.3 Keep action activated in context + forward slot data to next action
-               * 6. Train resolvers (affirm_deny: boolean value)
-               * 7. Map resolvers to skill actions
-               * 8. Utterance source type to get raw input from utterance
-               * 9. Create superheroes skill (just for testing):
+               * 5.3 [OK] Keep action activated in context + forward slot data to next action
+               * 6. Make entities + slots way lighter with simple properties
+               * to be used in skills without too much properties and nested props.
+               * Currently: slots['players_nb']['value']['sourceText']
+               * Should be: slots['players_nb']['value']
+               * And possible: slots['players_nb']['sourceText']
+               * 7. Train resolvers (affirm_deny: boolean value)
+               * 8. Map resolvers to skill actions
+               * 9. Utterance source type to get raw input from utterance
+               * 10. Create superheroes skill (just for testing):
                *  to ask Leon questions by saving context
                *  or just use the colors skill?
                *  - I want to know about the red color
                *  > Well, the red color...
                *  - Do you like this color?
                *  > Red is cool, but I prefer...
+               * 11. Modify skills as per new code (skill params became dictionary, etc.)
                */
               if (slots) {
                 for (let l = 0; l < slots.length; l += 1) {

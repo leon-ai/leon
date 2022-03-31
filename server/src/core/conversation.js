@@ -8,6 +8,7 @@ const defaultActiveContext = {
   intent: null,
   slots: { },
   nextAction: null,
+  originalUtterance: null,
   activatedAt: 0
 }
 
@@ -79,6 +80,7 @@ class Conversation {
           intent,
           slots: { },
           nextAction,
+          originalUtterance: contextObj.originalUtterance,
           activatedAt: Date.now()
         }
       }

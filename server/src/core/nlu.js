@@ -359,6 +359,7 @@ class Nlu {
         ...this.nluResultObj,
         // TODO: the brain needs to forward slots to the skill execution
         slots: this.conv.activeContext.slots,
+        utterance: this.conv.activeContext.originalUtterance,
         nluDataFilePath,
         classification: {
           domain,
@@ -388,6 +389,7 @@ class Nlu {
     this.conv.activeContext = {
       lang: this.brain.lang,
       slots,
+      originalUtterance: this.nluResultObj.utterance,
       nluDataFilePath: this.nluResultObj.nluDataFilePath,
       actionName: this.nluResultObj.classification.action,
       domain: this.nluResultObj.classification.domain,
