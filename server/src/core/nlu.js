@@ -255,6 +255,14 @@ class Nlu {
         return resolve({ })
       }
 
+      // In case all slots have been filled in the first utterance
+      if (this.conv.hasActiveContext()) {
+        const processedData = await this.slotFill(utterance, opts)
+        if (processedData) {
+          return resolve(processedData)
+        }
+      }
+
       try {
         // Inject action entities with the others if there is
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
@@ -307,7 +315,7 @@ class Nlu {
 
     // Continue to loop for questions if a slot has been filled correctly
     let notFilledSlot = this.conv.getNotFilledSlot()
-    if (entities.length > 0) {
+    if (notFilledSlot && entities.length > 0) {
       const hasMatch = entities.some(({ entity }) => entity === notFilledSlot.expectedEntity)
 
       if (hasMatch) {
@@ -338,7 +346,7 @@ class Nlu {
        * 5.1 [OK] In Conversation, need to chain output/input contexts to each other
        * to understand what action should be next
        * 5.2 [OK] Execute next action (based on input_context?)
-       * 5.3 [Ready] Need to handle the case if a context is filled in one shot
+       * 5.3 [OK] Need to handle the case if a context is filled in one shot
        * e.g. I wanna play with 2 players and louis.grenard@gmail.com
        * Need to refactor now (nluResultObj method to build it, etc.)
        * 6. What's next once the next action has been executed?
@@ -394,10 +402,6 @@ class Nlu {
       this.brain.socket.emit('is-typing', false)
 
       return true
-    }
-    // In case all slots have been filled in the first utterance
-    if (this.conv.hasActiveContext() && !notFilledSlot) {
-      // TODO: call method that execute brain with slot (need refactoring first)
     }
 
     return false
