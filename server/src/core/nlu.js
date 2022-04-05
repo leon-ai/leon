@@ -139,10 +139,33 @@ class Nlu {
       }
 
       const result = await this.nlp.process(utterance)
-      // console.log('result', result)
+      console.log('result', result)
       const {
-        locale, domain, intent, score, answers
+        locale, answers, classifications
       } = result
+      let { score, intent, domain } = result
+
+      /**
+       * If a context is active, then use the appropriate classification based on score probability.
+       * E.g. 1. Create my shopping list; 2. Actually delete it.
+       * If there are several "delete it" across skills, Leon needs to make use of
+       * the current context ({domain}.{skill}) to define the most accurate classification
+       */
+      if (this.conv.hasActiveContext()) {
+        classifications.forEach(({ intent: newIntent, score: newScore }) => {
+          if (newScore > 0.6) {
+            const [skillName] = newIntent.split('.')
+            const newDomain = this.nlp.getIntentDomain(locale, newIntent)
+            const contextName = `${newDomain}.${skillName}`
+            if (this.conv.activeContext.name === contextName) {
+              score = newScore
+              intent = newIntent
+              domain = newDomain
+            }
+          }
+        })
+      }
+
       const [skillName, actionName] = intent.split('.')
       this.nluResultObj = {
         ...this.nluResultObj,
@@ -370,11 +393,10 @@ class Nlu {
        * 5.3 [OK] Need to handle the case if a context is filled in one shot
        * e.g. I wanna play with 2 players and louis.grenard@gmail.com
        * Need to refactor now (nluResultObj method to build it, etc.)
-       * 6. What's next once the next action has been executed?
-       * 7. Handle a "loop" feature from action (guess the number)
+       * 6. Handle a "loop" feature from action (guess the number)
        * No need "loop" in the NLU skill config. Just add option in util output
-       * 8. Split this process() method into several ones + clean nlu.js and brain.js
-       * 9. Add logs in terminal about context switching, active context, etc.
+       * 7. Split this process() method into several ones + clean nlu.js and brain.js
+       * 8. Add logs in terminal about context switching, active context, etc.
        */
 
       this.nluResultObj = {

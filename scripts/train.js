@@ -111,8 +111,9 @@ export default () => new Promise(async (resolve, reject) => {
                *  > Well, the red color...
                *  - Do you like this color?
                *  > Red is cool, but I prefer...
-               * 11. "Add potatoes to my shopping list" ... "Actually remove it"
-               * Need to see in current context and loop through classifications intent.
+               * 11. [OK] "Add potatoes to my shopping list" ... "Actually remove it"
+               * The entities are already persistent in context.
+               * Just need to check in current context and loop through classifications intent.
                * If the skill is found, then use that intent. So an intent should not always be
                * the one with the highest confidence
                * 12. Modify skills as per new code (skill params became dictionary [OK], etc.)
