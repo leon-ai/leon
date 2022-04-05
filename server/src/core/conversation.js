@@ -68,18 +68,18 @@ class Conversation {
       const [nextAction] = actionsKeys.filter((key) => actions[key].input_context === outputContext)
 
       /**
-       * If there is an active context and a new one is triggered
+       * If a new context is triggered
        * then save the current active context to the contexts history
        */
-      if (this._activeContext.name && this._activeContext.name !== outputContext) {
+      if (this._activeContext.name !== outputContext) {
         this.pushToPreviousContextsStack()
-      } else if (!this._activeContext.name) {
         // Activate new context
         this._activeContext = {
-          ...defaultActiveContext,
           name: outputContext,
           domain,
           intent,
+          entities: [],
+          slots: { },
           nextAction,
           originalUtterance: contextObj.originalUtterance,
           activatedAt: Date.now()
@@ -90,20 +90,37 @@ class Conversation {
       }
 
       this.setSlots(lang, entities, slots)
-    } else if (entities.length > 0) {
-      console.log('entities', entities)
-      // Activate new context
-      this._activeContext = {
-        ...defaultActiveContext,
-        name: 'test',
-        domain,
-        intent,
-        entities,
-        originalUtterance: contextObj.originalUtterance,
-        activatedAt: Date.now()
+    } else {
+      const [skillName] = intent.split('.')
+      const newContextName = `${domain}.${skillName}`
+
+      if (this._activeContext.name && this._activeContext.name !== newContextName) {
+        this.cleanActiveContext()
       }
 
-      console.log('1this._activeContext', this._activeContext)
+      /**
+       * Activate new context and persist entities in a new context
+       * as long as the skill is being used
+       */
+      if (this._activeContext.name !== newContextName) {
+        // Activate new context
+        this._activeContext = {
+          name: newContextName,
+          domain,
+          intent,
+          entities,
+          slots: { },
+          nextAction: null,
+          originalUtterance: contextObj.originalUtterance,
+          activatedAt: Date.now()
+        }
+
+        log.title('Conversation')
+        log.info(`New active context: ${newContextName}`)
+      } else {
+        // Add new entities at the end of the context entities array
+        this._activeContext.entities.push(...entities)
+      }
     }
   }
 
@@ -175,6 +192,9 @@ class Conversation {
    * Clean up active context
    */
   cleanActiveContext () {
+    log.title('Conversation')
+    log.info('Clean active context')
+
     this.pushToPreviousContextsStack()
     this._activeContext = defaultActiveContext
   }
@@ -190,7 +210,9 @@ class Conversation {
       delete this._previousContexts[previousContextsKeys[0]]
     }
 
-    this._previousContexts[this._activeContext.name] = this._activeContext
+    if (this._activeContext.name) {
+      this._previousContexts[this._activeContext.name] = this._activeContext
+    }
   }
 }
 

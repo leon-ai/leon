@@ -267,20 +267,26 @@ class Nlu {
         }
       }
 
-      if (this.nluResultObj.entities.length > 0) {
-        this.conv.activeContext = {
-          name: `${this.nluResultObj.classification.domain}.${this.nluResultObj.classification.skill}`,
-          lang: this.brain.lang,
-          entities: this.nluResultObj.entities,
-          originalUtterance: this.nluResultObj.utterance,
-          actionName: this.nluResultObj.classification.action,
-          domain: this.nluResultObj.classification.domain,
-          intent
-        }
+      const newContextName = `${this.nluResultObj.classification.domain}.${skillName}`
+      if (this.conv.activeContext.name !== newContextName) {
+        this.conv.cleanActiveContext()
       }
+      this.conv.activeContext = {
+        lang: this.brain.lang,
+        slots: { },
+        originalUtterance: this.nluResultObj.utterance,
+        nluDataFilePath: this.nluResultObj.nluDataFilePath,
+        actionName: this.nluResultObj.classification.action,
+        domain: this.nluResultObj.classification.domain,
+        intent,
+        entities: this.nluResultObj.entities
+      }
+      // Pass context entities to the NLU result object
+      this.nluResultObj.entities = this.conv.activeContext.entities
+
+      // console.log('this.conv.activeContext', this.conv.activeContext)
 
       try {
-        // Inject action entities with the others if there is
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
@@ -308,6 +314,10 @@ class Nlu {
    * and ask for more entities if necessary
    */
   async slotFill (utterance, opts) {
+    if (!this.conv.activeContext.nextAction) {
+      return null
+    }
+
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
     const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
@@ -348,9 +358,6 @@ class Nlu {
     if (!this.conv.areSlotsAllFilled()) {
       this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
     } else {
-      if (!this.conv.activeContext.nextAction) {
-        return null
-      }
       /**
        * TODO:
        * 1. [OK] Extract entities from utterance
@@ -372,7 +379,8 @@ class Nlu {
 
       this.nluResultObj = {
         ...this.nluResultObj,
-        slots: this.conv.activeContext.slots,
+        // Assign slots only if there is a next action
+        slots: this.conv.activeContext.nextAction ? this.conv.activeContext.slots : { },
         utterance: this.conv.activeContext.originalUtterance,
         nluDataFilePath,
         classification: {
@@ -409,24 +417,28 @@ class Nlu {
    */
   async routeSlotFilling (intent) {
     const slots = await this.nlp.slotManager.getMandatorySlots(intent)
-    this.conv.activeContext = {
-      lang: this.brain.lang,
-      slots,
-      originalUtterance: this.nluResultObj.utterance,
-      nluDataFilePath: this.nluResultObj.nluDataFilePath,
-      actionName: this.nluResultObj.classification.action,
-      domain: this.nluResultObj.classification.domain,
-      intent,
-      entities: this.nluResultObj.entities
-    }
+    const hasMandatorySlots = Object.keys(slots)?.length > 0
 
-    const notFilledSlot = this.conv.getNotFilledSlot()
-    // Loop for questions if a slot hasn't been filled
-    if (notFilledSlot) {
-      this.brain.talk(notFilledSlot.pickedQuestion)
-      this.brain.socket.emit('is-typing', false)
+    if (hasMandatorySlots) {
+      this.conv.activeContext = {
+        lang: this.brain.lang,
+        slots,
+        originalUtterance: this.nluResultObj.utterance,
+        nluDataFilePath: this.nluResultObj.nluDataFilePath,
+        actionName: this.nluResultObj.classification.action,
+        domain: this.nluResultObj.classification.domain,
+        intent,
+        entities: this.nluResultObj.entities
+      }
 
-      return true
+      const notFilledSlot = this.conv.getNotFilledSlot()
+      // Loop for questions if a slot hasn't been filled
+      if (notFilledSlot) {
+        this.brain.talk(notFilledSlot.pickedQuestion)
+        this.brain.socket.emit('is-typing', false)
+
+        return true
+      }
     }
 
     return false
