@@ -56,12 +56,18 @@ class Ner {
 
       const { entities } = await this.ner.process({ locale: lang, text: utterance })
 
-      // Trim whitespace at the beginning and the end of the entity value
-      entities.map((e) => {
-        e.sourceText = e.sourceText.trim()
-        e.utteranceText = e.utteranceText.trim()
+      // Normalize entities
+      entities.map((entity) => {
+        // Trim whitespace at the beginning and the end of the entity value
+        entity.sourceText = entity.sourceText.trim()
+        entity.utteranceText = entity.utteranceText.trim()
 
-        return e
+        // Add resolution property to stay consistent with all entities
+        if (!entity.resolution) {
+          entity.resolution = { value: entity.sourceText }
+        }
+
+        return entity
       })
 
       if (entities.length > 0) {

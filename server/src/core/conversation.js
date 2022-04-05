@@ -56,7 +56,7 @@ class Conversation {
       entities
     } = contextObj
     const slotKeys = Object.keys(slots)
-
+    
     // If slots are required to trigger next actions, then go through the context activation
     if (slotKeys.length > 0) {
       const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
@@ -83,6 +83,9 @@ class Conversation {
           originalUtterance: contextObj.originalUtterance,
           activatedAt: Date.now()
         }
+
+        log.title('Conversation')
+        log.info(`New active context: ${outputContext}`)
       }
 
       this.setSlots(lang, entities, slots)
