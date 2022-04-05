@@ -6,7 +6,7 @@ from time import time
 import utils
 from ..lib import db
 
-def add_todos(string, entities):
+def add_todos(params):
 	"""Add todos to a to-do list"""
 
 	# List name
@@ -16,7 +16,7 @@ def add_todos(string, entities):
 	todos = []
 
 	# Find entities
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'list':
 			list_name = item['sourceText'].lower()
 		elif item['entity'] == 'todos':

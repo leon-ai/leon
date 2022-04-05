@@ -6,14 +6,14 @@ from time import time
 import utils
 from ..lib import db
 
-def delete_list(string, entities):
+def delete_list(params):
 	"""Delete a to-do list"""
 
 	# List name
 	list_name = ''
 
 	# Find entities
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'list':
 			list_name = item['sourceText'].lower()
 

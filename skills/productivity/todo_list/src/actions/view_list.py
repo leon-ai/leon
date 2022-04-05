@@ -6,14 +6,14 @@ from time import time
 import utils
 from ..lib import db
 
-def view_list(string, entities):
+def view_list(params):
 	"""View a to-do list"""
 
 	# List name
 	list_name = ''
 
 	# Find entities
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'list':
 			list_name = item['sourceText'].lower()
 

@@ -6,7 +6,7 @@ from time import time
 import utils
 from ..lib import db
 
-def complete_todos(string, entities):
+def complete_todos(params):
 	"""Complete todos"""
 
 	# List name
@@ -16,7 +16,7 @@ def complete_todos(string, entities):
 	todos = []
 
 	# Find entities
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'list':
 			list_name = item['sourceText'].lower()
 		elif item['entity'] == 'todos':

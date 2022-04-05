@@ -9,12 +9,12 @@ from requests import codes, exceptions
 # Developer token
 api_key = utils.config('credentials')['api_key']
 
-def run(string, entities):
+def run(params):
     """Verify if one or several email addresses have been pwned"""
 
     emails = []
-      
-    for item in entities:
+
+    for item in params['entities']:
         if item['entity'] == 'email':
             emails.append(item['resolution']['value'])
 

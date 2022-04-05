@@ -7,7 +7,7 @@ from ..lib import github_lang
 from re import search, escape
 from bs4 import BeautifulSoup
 
-def run(string, entities):
+def run(params):
 	"""Get the GitHub trends"""
 
 	# Number of repositories
@@ -25,7 +25,7 @@ def run(string, entities):
 	# Answer key
 	answer_key = 'today'
 
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'number':
 			limit = item['resolution']['value']
 		if item['entity'] == 'daterange':
@@ -39,7 +39,7 @@ def run(string, entities):
 	# Feed the languages list based on the GitHub languages list
 	for i, language in enumerate(github_lang.get_all()):
 		# Find the asked language
-		if search(r'\b' + escape(language.lower()) + r'\b', string.lower()):
+		if search(r'\b' + escape(language.lower()) + r'\b', params['utterance'].lower()):
 			answer_key += '_with_tech'
 			tech = language
 			tech_slug = language.lower()

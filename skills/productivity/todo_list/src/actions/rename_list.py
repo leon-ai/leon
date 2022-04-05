@@ -6,7 +6,7 @@ from time import time
 import utils
 from ..lib import db
 
-def rename_list(string, entities):
+def rename_list(params):
 	"""Rename a to-do list"""
 
 	# Old list name
@@ -16,7 +16,7 @@ def rename_list(string, entities):
 	new_list_name = ''
 
 	# Find entities
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'old_list':
 			old_list_name = item['sourceText'].lower()
 		elif item['entity'] == 'new_list':

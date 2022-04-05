@@ -7,7 +7,7 @@ import utils
 from time import time
 from pytube import YouTube
 
-def run(string, entities):
+def run(params):
 	"""Download new videos from a YouTube playlist"""
 
 	db = utils.db()['db']

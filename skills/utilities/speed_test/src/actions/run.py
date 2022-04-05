@@ -12,7 +12,7 @@ import sys
 import subprocess
 import re
 
-def run(string, entities):
+def run(params):
     """Give you information about your network speed"""
 
     utils.output('inter', 'testing', utils.translate('testing'))

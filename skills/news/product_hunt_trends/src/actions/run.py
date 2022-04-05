@@ -4,7 +4,7 @@
 import requests
 import utils
 
-def run(string, entities):
+def run(params):
 	"""Get the Product Hunt trends"""
 
 	# Developer token
@@ -19,7 +19,7 @@ def run(string, entities):
 	# Day date
 	day_date = ''
 
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'number':
 			limit = item['resolution']['value']
 		if item['entity'] == 'date':

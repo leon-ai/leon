@@ -6,7 +6,7 @@ from time import time
 import utils
 from ..lib import db
 
-def view_lists(string, entities):
+def view_lists(params):
 	"""View to-do lists"""
 
 	# Lists number

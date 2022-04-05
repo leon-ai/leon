@@ -102,6 +102,7 @@ class Nlu {
       }
       utterance = string.ucfirst(utterance)
 
+      // TODO: method
       if (Object.keys(this.nlp).length === 0) {
         if (!opts.mute) {
           this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
@@ -114,6 +115,7 @@ class Nlu {
       }
 
       // Add spaCy entities
+      // TODO: method
       const spacyEntities = await Ner.getSpacyEntities(utterance)
       if (spacyEntities.length > 0) {
         spacyEntities.forEach(({ entity, resolution }) => {
@@ -163,6 +165,7 @@ class Nlu {
       }
 
       // Trigger language switch
+      // TODO: method
       if (this.brain.lang !== locale) {
         const connectedHandler = async () => {
           await this.process(utterance)
@@ -188,6 +191,7 @@ class Nlu {
         return resolve({ })
       }
 
+      // TODO: method
       /* istanbul ignore next */
       if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
         this.request
@@ -204,6 +208,7 @@ class Nlu {
       }
 
       if (intent === 'None') {
+        // TODO: method
         const fallback = this.fallback(langs[lang.getLongCode(locale)].fallbacks)
 
         if (fallback === false) {
@@ -351,6 +356,7 @@ class Nlu {
        * Need to refactor now (nluResultObj method to build it, etc.)
        * 6. What's next once the next action has been executed?
        * 7. Handle a "loop" feature from action (guess the number)
+       * No need "loop" in the NLU skill config. Just add option in util output
        * 8. Split this process() method into several ones + clean nlu.js and brain.js
        * 9. Add logs in terminal about context switching, active context, etc.
        */
@@ -371,7 +377,12 @@ class Nlu {
 
       this.conv.cleanActiveContext()
 
-      return this.brain.execute(this.nluResultObj, { mute: opts.mute })
+      const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+      // If it is a loop action
+
+      // TODO: remove this
+      data.loop = true
+      return data
     }
 
     this.conv.cleanActiveContext()

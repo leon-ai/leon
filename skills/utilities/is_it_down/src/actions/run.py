@@ -4,13 +4,13 @@
 import requests
 import utils
 
-def run(string, entities):
+def run(params):
 	"""Check if a website is down or not"""
 
 	domains = []
 	output = ''
 
-	for item in entities:
+	for item in params['entities']:
 		if item['entity'] == 'url':
 			domains.append(item['resolution']['value'].lower())
 
