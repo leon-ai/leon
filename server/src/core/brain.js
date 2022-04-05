@@ -180,6 +180,7 @@ class Brain {
               skill: obj.classification.skill,
               action: obj.classification.action,
               utterance: obj.utterance,
+              current_entities: obj.currentEntities,
               entities: obj.entities,
               slots: obj.slots
             }

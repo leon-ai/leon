@@ -19,6 +19,7 @@ import Conversation from '@/core/conversation'
 
 const defaultNluResultObj = {
   utterance: null,
+  currentEntities: [],
   entities: [],
   slots: null,
   nluDataFilePath: null,
@@ -139,7 +140,7 @@ class Nlu {
       }
 
       const result = await this.nlp.process(utterance)
-      console.log('result', result)
+      // console.log('result', result)
       const {
         locale, answers, classifications
       } = result
@@ -304,10 +305,12 @@ class Nlu {
         intent,
         entities: this.nluResultObj.entities
       }
+      // Pass current utterance entities to the NLU result object
+      this.nluResultObj.currentEntities = this.conv.activeContext.currentEntities
       // Pass context entities to the NLU result object
       this.nluResultObj.entities = this.conv.activeContext.entities
 
-      // console.log('this.conv.activeContext', this.conv.activeContext)
+      console.log('this.conv.activeContext', this.conv.activeContext)
 
       try {
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })

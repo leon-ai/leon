@@ -10,9 +10,16 @@ def run(params):
 	domains = []
 	output = ''
 
-	for item in params['entities']:
+	# Find entities from the current utterance
+	for item in params['current_entities']:
 		if item['entity'] == 'url':
 			domains.append(item['resolution']['value'].lower())
+
+	if len(domains) == 0:
+		# Find entities from the context
+		for item in params['entities']:
+			if item['entity'] == 'url':
+				domains.append(item['resolution']['value'].lower())
 
 	for i, domain in enumerate(domains):
 		state = 'up'

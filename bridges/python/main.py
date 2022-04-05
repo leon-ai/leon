@@ -17,6 +17,7 @@ def main():
 
 	params = {
 		'utterance': intent_obj['utterance'],
+		'current_entities': intent_obj['current_entities'],
 		'entities': intent_obj['entities'],
 		'slots': intent_obj['slots']
 	}

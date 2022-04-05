@@ -6,6 +6,7 @@ const defaultActiveContext = {
   name: null,
   domain: null,
   intent: null,
+  currentEntities: [],
   entities: [],
   slots: { },
   nextAction: null,
@@ -78,6 +79,7 @@ class Conversation {
           name: outputContext,
           domain,
           intent,
+          currentEntities: [],
           entities: [],
           slots: { },
           nextAction,
@@ -108,6 +110,7 @@ class Conversation {
           name: newContextName,
           domain,
           intent,
+          currentEntities: entities,
           entities,
           slots: { },
           nextAction: null,
@@ -118,6 +121,7 @@ class Conversation {
         log.title('Conversation')
         log.info(`New active context: ${newContextName}`)
       } else {
+        this._activeContext.currentEntities = entities
         // Add new entities at the end of the context entities array
         this._activeContext.entities.push(...entities)
       }
