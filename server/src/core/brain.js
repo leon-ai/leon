@@ -10,8 +10,6 @@ import lang from '@/helpers/lang'
 import domain from '@/helpers/domain'
 import json from '@/helpers/json'
 
-const supportedActionTypes = ['dialog', 'logic']
-
 class Brain {
   constructor () {
     this._lang = 'en'
@@ -163,10 +161,6 @@ class Brain {
         const { nluDataFilePath, classification: { action: actionName } } = obj
         const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
         const { type: actionType } = actions[actionName]
-
-        if (!actionType || !supportedActionTypes.includes(actionType)) {
-          log.error(`This action type isn't supported: ${actionType}`)
-        }
 
         if (actionType === 'logic') {
           // Ensure the process is empty (to be able to execute other processes outside of Brain)

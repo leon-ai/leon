@@ -6,6 +6,7 @@ const defaultActiveContext = {
   name: null,
   domain: null,
   intent: null,
+  entities: [],
   slots: { },
   nextAction: null,
   originalUtterance: null,
@@ -56,7 +57,7 @@ class Conversation {
       entities
     } = contextObj
     const slotKeys = Object.keys(slots)
-    
+
     // If slots are required to trigger next actions, then go through the context activation
     if (slotKeys.length > 0) {
       const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
@@ -75,10 +76,10 @@ class Conversation {
       } else if (!this._activeContext.name) {
         // Activate new context
         this._activeContext = {
+          ...defaultActiveContext,
           name: outputContext,
           domain,
           intent,
-          slots: { },
           nextAction,
           originalUtterance: contextObj.originalUtterance,
           activatedAt: Date.now()
@@ -89,6 +90,20 @@ class Conversation {
       }
 
       this.setSlots(lang, entities, slots)
+    } else if (entities.length > 0) {
+      console.log('entities', entities)
+      // Activate new context
+      this._activeContext = {
+        ...defaultActiveContext,
+        name: 'test',
+        domain,
+        intent,
+        entities,
+        originalUtterance: contextObj.originalUtterance,
+        activatedAt: Date.now()
+      }
+
+      console.log('1this._activeContext', this._activeContext)
     }
   }
 

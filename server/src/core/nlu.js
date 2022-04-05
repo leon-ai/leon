@@ -131,8 +131,7 @@ class Nlu {
         })
       }
 
-      const hasActivatedContext = this.conv.hasActiveContext()
-      if (hasActivatedContext) {
+      if (this.conv.hasActiveContext()) {
         const processedData = await this.slotFill(utterance, opts)
         if (processedData) {
           return resolve(processedData)
@@ -268,6 +267,18 @@ class Nlu {
         }
       }
 
+      if (this.nluResultObj.entities.length > 0) {
+        this.conv.activeContext = {
+          name: `${this.nluResultObj.classification.domain}.${this.nluResultObj.classification.skill}`,
+          lang: this.brain.lang,
+          entities: this.nluResultObj.entities,
+          originalUtterance: this.nluResultObj.utterance,
+          actionName: this.nluResultObj.classification.action,
+          domain: this.nluResultObj.classification.domain,
+          intent
+        }
+      }
+
       try {
         // Inject action entities with the others if there is
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
@@ -297,10 +308,8 @@ class Nlu {
    * and ask for more entities if necessary
    */
   async slotFill (utterance, opts) {
-    console.log('this.conv.activeContext', this.conv.activeContext)
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
-    console.log(domain, skillName, this.brain.lang)
     const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
 
     this.nluResultObj = {
@@ -336,12 +345,12 @@ class Nlu {
       }
     }
 
-    console.log('notFilledSlot', notFilledSlot)
-    console.log('this.conv.activeContext', this.conv.activeContext)
-
     if (!this.conv.areSlotsAllFilled()) {
       this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
     } else {
+      if (!this.conv.activeContext.nextAction) {
+        return null
+      }
       /**
        * TODO:
        * 1. [OK] Extract entities from utterance
@@ -363,13 +372,16 @@ class Nlu {
 
       this.nluResultObj = {
         ...this.nluResultObj,
-        // TODO: the brain needs to forward slots to the skill execution
         slots: this.conv.activeContext.slots,
         utterance: this.conv.activeContext.originalUtterance,
         nluDataFilePath,
         classification: {
           domain,
           skill: skillName,
+          /**
+           * Use the next action if it is defined via the skill NLU config
+           * or take the classified action
+           */
           action: this.conv.activeContext.nextAction,
           confidence: 1
         }

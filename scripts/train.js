@@ -20,6 +20,7 @@ dotenv.config()
  */
 export default () => new Promise(async (resolve, reject) => {
   const modelFileName = 'core/data/leon-model.nlp'
+  const supportedActionTypes = ['dialog', 'logic']
 
   try {
     const container = await containerBootstrap()
@@ -76,6 +77,11 @@ export default () => new Promise(async (resolve, reject) => {
               const intent = `${skillName}.${actionName}`
               const { utterance_samples: utteranceSamples, answers, slots } = actionObj
 
+              if (!actionObj.type || !supportedActionTypes.includes(actionObj.type)) {
+                log.error(`This action type isn't supported: ${actionObj.type}`)
+                process.exit(1)
+              }
+
               nlp.assignDomain(lang, `${skillName}.${actionName}`, currentDomain.name)
 
               /**
@@ -100,12 +106,16 @@ export default () => new Promise(async (resolve, reject) => {
                * 9. Utterance source type to get raw input from utterance
                * 10. Create superheroes skill (just for testing):
                *  to ask Leon questions by saving context
-               *  or just use the colors skill?
+               *  or just use the color or to do list skill?
                *  - I want to know about the red color
                *  > Well, the red color...
                *  - Do you like this color?
                *  > Red is cool, but I prefer...
-               * 11. Modify skills as per new code (skill params became dictionary, etc.)
+               * 11. "Add potatoes to my shopping list" ... "Actually remove it"
+               * Need to see in current context and loop through classifications intent.
+               * If the skill is found, then use that intent. So an intent should not always be
+               * the one with the highest confidence
+               * 12. Modify skills as per new code (skill params became dictionary [OK], etc.)
                */
               if (slots) {
                 for (let l = 0; l < slots.length; l += 1) {
