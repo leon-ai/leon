@@ -31,29 +31,17 @@
           ]
         }
       ],
-      "output_context": "setup_game"
+      "next_action": "setup"
     },
-    "pick_up": {
+    "setup": {
       "type": "logic",
-      "input_context": "setup_game",
-      "answers": {
-        "bigger": [
-          "The number is bigger.",
-          "Try with a bigger number."
-        ],
-        "smaller": [
-          "It is smaller.",
-          "Try a smaller number."
-        ],
-        "guessed": [
-          "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
-        ]
-      },
-      "output_context": "set_restart"
+      "next_action": "guess"
+    },
+    "guess": {
+      "type": "logic"
     },
     "decide": {
       "type": "dialog",
-      "input_context": "set_restart",
       "slots": [
         {
           "name": "decision",
@@ -71,6 +59,17 @@
   "answers": {
     "ready": [
       "Alright, I have set %players_nb% players with the %email_test% email. Go ahead and guess the number between 0 and 100!"
+    ],
+    "bigger": [
+      "The number is bigger.",
+      "Try with a bigger number."
+    ],
+    "smaller": [
+      "It is smaller.",
+      "Try a smaller number."
+    ],
+    "guessed": [
+      "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
     ]
   }
 }

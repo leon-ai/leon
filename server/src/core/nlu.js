@@ -92,6 +92,7 @@ class Nlu {
    * TODO: split this method into several methods
    */
   process (utterance, opts) {
+    console.log('this.conv.activeContext', this.conv.activeContext)
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
@@ -310,10 +311,20 @@ class Nlu {
       // Pass context entities to the NLU result object
       this.nluResultObj.entities = this.conv.activeContext.entities
 
-      console.log('this.conv.activeContext', this.conv.activeContext)
-
       try {
+        // TODO: next action based on next_action
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+
+        if (this.conv.activeContext.name === 'setup_game') {
+          // If it is a loop action
+          // TODO: remove this
+          data.loop = true
+
+          if (data.loop) {
+            this.conv.activeContext.nextAction = 'guess'
+          }
+        }
+
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
 
@@ -411,10 +422,6 @@ class Nlu {
         classification: {
           domain,
           skill: skillName,
-          /**
-           * Use the next action if it is defined via the skill NLU config
-           * or take the classified action
-           */
           action: this.conv.activeContext.nextAction,
           confidence: 1
         }
@@ -422,12 +429,7 @@ class Nlu {
 
       this.conv.cleanActiveContext()
 
-      const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
-      // If it is a loop action
-
-      // TODO: remove this
-      data.loop = true
-      return data
+      return this.brain.execute(this.nluResultObj, { mute: opts.mute })
     }
 
     this.conv.cleanActiveContext()

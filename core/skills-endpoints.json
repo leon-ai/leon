@@ -7,7 +7,12 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/games/guess_the_number/pick_up",
+      "route": "/api/action/games/guess_the_number/setup",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/guess_the_number/guess",
       "params": []
     },
     {

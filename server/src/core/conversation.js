@@ -58,25 +58,24 @@ class Conversation {
       entities
     } = contextObj
     const slotKeys = Object.keys(slots)
+    const [skillName] = intent.split('.')
+    const newContextName = `${domain}.${skillName}`
 
     // If slots are required to trigger next actions, then go through the context activation
     if (slotKeys.length > 0) {
       const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
-      const actionsKeys = Object.keys(actions)
-      // Grab output context from the NLU data file
-      const { output_context: outputContext } = actions[actionName]
-      // Define next action
-      const [nextAction] = actionsKeys.filter((key) => actions[key].input_context === outputContext)
+      // Grab next action from the NLU data file
+      const { next_action: nextAction } = actions[actionName]
 
       /**
        * If a new context is triggered
        * then save the current active context to the contexts history
        */
-      if (this._activeContext.name !== outputContext) {
+      if (this._activeContext.name !== newContextName) {
         this.pushToPreviousContextsStack()
         // Activate new context
         this._activeContext = {
-          name: outputContext,
+          name: newContextName,
           domain,
           intent,
           currentEntities: [],
@@ -88,7 +87,7 @@ class Conversation {
         }
 
         log.title('Conversation')
-        log.info(`New active context: ${outputContext}`)
+        log.info(`New active context: ${newContextName}`)
       }
 
       this.setSlots(lang, entities, slots)

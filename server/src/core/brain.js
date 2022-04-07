@@ -158,6 +158,7 @@ class Brain {
           executionTime
         })
       } else {
+        console.log('brain obj', obj)
         const { nluDataFilePath, classification: { action: actionName } } = obj
         const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
         const { type: actionType } = actions[actionName]
