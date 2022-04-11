@@ -24,10 +24,10 @@ export default () => new Promise(async (resolve, reject) => {
   if (!fs.existsSync(`${destFliteFolder}/flite`)) {
     try {
       log.info('Downloading run-time synthesis engine...')
-      await command(`cd ${tmpDir} && ${downloader} http://www.festvox.org/flite/packed/flite-2.1/flite-2.1-release.tar.bz2`, { shell: true })
+      await command(`cd ${tmpDir} && ${downloader} http://ports.ubuntu.com/pool/universe/f/flite/flite_2.1-release.orig.tar.bz2`, { shell: true })
       log.success('Run-time synthesis engine download done')
       log.info('Unpacking...')
-      await command(`cd ${tmpDir} && tar xfvj flite-2.1-release.tar.bz2 && cp ../assets/leon.lv flite-2.1-release/config`, { shell: true })
+      await command(`cd ${tmpDir} && tar xfvj flite_2.1-release.orig.tar.bz2 && cp ../assets/leon.lv flite-2.1-release/config`, { shell: true })
       log.success('Unpack done')
       log.info('Configuring...')
       await command(`cd ${tmpDir}/flite-2.1-release && ./configure --with-langvox=leon`, { shell: true })
