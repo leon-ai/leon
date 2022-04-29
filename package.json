@@ -97,7 +97,7 @@
     "eslint-plugin-jest": "^24.3.6",
     "git-changelog": "^2.0.0",
     "husky": "^7.0.0",
-    "inquirer": "^8.1.0",
+    "inquirer": "^8.2.4",
     "jest": "^27.4.7",
     "jest-canvas-mock": "^2.3.1",
     "jest-extended": "^2.0.0",
