@@ -13,9 +13,7 @@ def setup(params):
 
 	# TODO: save these values in DB
 
-	# if "not init" phase: check nb + increment counter
-
-	# TODO: "loop" option to return to the core
+	# TODO: add output_context
 	return utils.output('end', 'ready', utils.translate('ready', {
 		'players_nb': slots['players_nb']['value']['sourceText'],
 		'email_test': slots['email_test']['value']['sourceText']

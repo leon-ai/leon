@@ -34,13 +34,12 @@
       "next_action": "setup"
     },
     "setup": {
-      "type": "logic",
-      "next_action": "guess"
+      "type": "logic"
     },
     "guess": {
       "type": "logic"
     },
-    "decide": {
+    "replay": {
       "type": "dialog",
       "slots": [
         {

@@ -17,7 +17,7 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/games/guess_the_number/decide",
+      "route": "/api/action/games/guess_the_number/replay",
       "params": []
     },
     {

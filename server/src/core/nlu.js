@@ -133,11 +133,34 @@ class Nlu {
         })
       }
 
+      // TODO: make difference between context that needs slots and the ones who does not
+      // TODO: this case is only for slots context
+      // TODO: an action requiring slots must always have a next_action
+      console.log('THIS.CONV', this.conv.activeContext)
       if (this.conv.hasActiveContext()) {
         const processedData = await this.slotFill(utterance, opts)
-        if (processedData) {
-          return resolve(processedData)
+        console.log('processedData (slot filled over)', processedData)
+
+        if (processedData && Object.keys(processedData).length > 0) {
+          processedData.nextAction = 'guess'
+          // Set new context with the next action if there is one
+          if (processedData.nextAction) {
+            this.conv.activeContext = {
+              lang: this.brain.lang,
+              slots: { },
+              originalUtterance: processedData.utterance,
+              nluDataFilePath: processedData.nluDataFilePath,
+              actionName: processedData.nextAction,
+              domain: processedData.classification.domain,
+              intent: `${processedData.classification.skill}.${processedData.nextAction}`,
+              entities: []
+            }
+
+            console.log('NEW ACTIVE CONTEXT', this.conv.activeContext)
+          }
         }
+
+        return resolve(processedData)
       }
 
       const result = await this.nlp.process(utterance)
@@ -315,15 +338,31 @@ class Nlu {
         // TODO: next action based on next_action
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
 
-        if (this.conv.activeContext.name === 'setup_game') {
-          // If it is a loop action
-          // TODO: remove this
-          data.loop = true
+        console.log('data', data)
+        // TODO: if there is a nextAction, then don't empty active context for next round?
+        // TODO: or name "nextAction" by something else such as "nextContext"?
+        // TODO: make difference between next action that needs to be immediately triggered
+        // TODO: and the one that just need to set the context
 
-          if (data.loop) {
-            this.conv.activeContext.nextAction = 'guess'
+        // TODO: remove the next if
+        if (data.classification.skill === 'guess_the_number') {
+          data.nextAction = 'guess'
+          // Set new context with the next action if there is one
+          if (data.nextAction) {
+            this.conv.activeContext = {
+              lang: this.brain.lang,
+              slots: { },
+              originalUtterance: data.utterance,
+              nluDataFilePath: data.nluDataFilePath,
+              actionName: data.nextAction,
+              domain: data.domain,
+              intent: `${data.classification.skill}.${data.nextAction}`,
+              entities: []
+            }
           }
         }
+
+        console.log('this.conv.activeContext', this.conv.activeContext)
 
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
@@ -426,6 +465,9 @@ class Nlu {
           confidence: 1
         }
       }
+
+      console.log('this.conv.activeContext just before execute', this.conv.activeContext)
+      console.log('this.nluResultObj just before execute', this.nluResultObj)
 
       this.conv.cleanActiveContext()
 
