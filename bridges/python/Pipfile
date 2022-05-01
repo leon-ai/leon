@@ -3,6 +3,9 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+[requires]
+python_version = "3.9.10"
+
 [packages]
 requests = "==2.21.0"
 pytube = "==9.5.0"
