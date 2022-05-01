@@ -186,13 +186,6 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
         <sub><sup>17 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
-        <a href="https://github.com/Divlo">
-          <img src="https://github.com/Divlo.png?size=128" />
-          Divlo
-        </a><br>
-        <sub><sup>10 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
         <a href="https://github.com/KeithIMyers">
           <img src="https://github.com/KeithIMyers.png?size=128" />
           Keith Myers
