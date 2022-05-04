@@ -4,7 +4,9 @@
   "skill": "is_it_down",
   "action": "run",
   "utterance": "Check if github.com, mozilla.org and twitter.com are up",
-  "entities": [
+  "slots": {},
+  "entities": [],
+  "current_entities": [
     {
       "sourceText": "github.com",
       "utteranceText": "github.com",

@@ -9,6 +9,7 @@ const defaultActiveContext = {
   currentEntities: [],
   entities: [],
   slots: { },
+  isInActionLoop: false,
   nextAction: null,
   originalUtterance: null,
   activatedAt: 0
@@ -50,6 +51,7 @@ class Conversation {
   set activeContext (contextObj) {
     const {
       slots,
+      isInActionLoop,
       nluDataFilePath,
       actionName,
       lang,
@@ -81,6 +83,7 @@ class Conversation {
           currentEntities: [],
           entities: [],
           slots: { },
+          isInActionLoop,
           nextAction,
           originalUtterance: contextObj.originalUtterance,
           activatedAt: Date.now()
@@ -112,6 +115,7 @@ class Conversation {
           currentEntities: entities,
           entities,
           slots: { },
+          isInActionLoop,
           nextAction: null,
           originalUtterance: contextObj.originalUtterance,
           activatedAt: Date.now()
