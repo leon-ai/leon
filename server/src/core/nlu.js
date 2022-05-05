@@ -159,6 +159,15 @@ class Nlu {
           )
 
           const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+
+          if (processedData.core?.isInActionLoop === false) {
+            this.conv.activeContext = {
+              ...this.conv.activeContext,
+              isInActionLoop: false
+            }
+          }
+
+          console.log('isInActionLoop processedData', processedData)
           return resolve(processedData)
         }
 
@@ -371,29 +380,6 @@ class Nlu {
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
 
         console.log('data', data)
-        // TODO: if there is a nextAction, then don't empty active context for next round?
-        // TODO: or name "nextAction" by something else such as "nextContext"?
-        // TODO: make difference between next action that needs to be immediately triggered
-        // TODO: and the one that just need to set the context
-
-        // TODO: remove the next if
-        if (data.classification.skill === 'guess_the_number') {
-          data.nextAction = 'guess'
-          // Set new context with the next action if there is one
-          if (data.nextAction) {
-            this.conv.activeContext = {
-              lang: this.brain.lang,
-              slots: { },
-              originalUtterance: data.utterance,
-              nluDataFilePath: data.nluDataFilePath,
-              actionName: data.nextAction,
-              domain: data.domain,
-              intent: `${data.classification.skill}.${data.nextAction}`,
-              entities: []
-            }
-          }
-        }
-
         console.log('this.conv.activeContext', this.conv.activeContext)
 
         const processingTimeEnd = Date.now()

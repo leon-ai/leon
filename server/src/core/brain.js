@@ -279,6 +279,8 @@ class Brain {
             if (this.finalOutput !== '') {
               this.finalOutput = JSON.parse(this.finalOutput).output
 
+              console.log('[BRAIN] this.finalOutput', this.finalOutput)
+
               const speech = this.finalOutput.speech.toString()
               if (!opts.mute) {
                 this.talk(speech, true)
@@ -319,6 +321,7 @@ class Brain {
               lang: this._lang,
               ...obj,
               speeches,
+              core: this.finalOutput.core,
               executionTime // In ms, skill execution time only
             })
           })
@@ -397,6 +400,7 @@ class Brain {
             lang: this._lang,
             ...obj,
             speeches: [answer],
+            core: this.finalOutput.core,
             executionTime // In ms, skill execution time only
           })
         }

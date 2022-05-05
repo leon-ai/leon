@@ -52,7 +52,7 @@ def translate(key, d = { }):
 
 	return output
 
-def output(type, code, speech = ''):
+def output(type, code, speech = '', core = { }):
 	"""Communicate with the core"""
 
 	codes.append(code)
@@ -68,6 +68,7 @@ def output(type, code, speech = ''):
 			'type': type,
 			'codes': codes,
 			'speech': speech,
+			'core': core,
 			'options': config('options')
 		}
 	}))

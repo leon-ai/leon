@@ -17,7 +17,7 @@ def guess(params):
 			given_nb = item['resolution']['value']
 
 	if given_nb == nb_to_guess:
-		return utils.output('end', 'guessed', '....CONGRATS....')
+		return utils.output('end', 'guessed', '....CONGRATS....', { 'isInActionLoop': False })
 	if nb_to_guess < given_nb:
 		return utils.output('end', 'smaller', utils.translate('smaller'))
 	if nb_to_guess > given_nb:
