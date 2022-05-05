@@ -160,14 +160,11 @@ class Nlu {
 
           const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
 
+          // Break the action loop
           if (processedData.core?.isInActionLoop === false) {
-            this.conv.activeContext = {
-              ...this.conv.activeContext,
-              isInActionLoop: false
-            }
+            this.conv.activeContext.isInActionLoop = false
           }
 
-          console.log('isInActionLoop processedData', processedData)
           return resolve(processedData)
         }
 

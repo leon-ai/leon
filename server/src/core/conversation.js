@@ -49,7 +49,6 @@ class Conversation {
    * Activate context according to the triggered action
    */
   set activeContext (contextObj) {
-    console.log('set activeContext', contextObj)
     const {
       slots,
       isInActionLoop,
@@ -108,7 +107,6 @@ class Conversation {
        * as long as the skill is being used
        */
       if (this._activeContext.name !== newContextName) {
-        console.log('activate new context')
         // Activate new context
         this._activeContext = {
           name: newContextName,
