@@ -58,8 +58,6 @@ def load_spacy_model():
 
 	print(f'Loading {model} spaCy model...')
 	spacy_nlp = spacy.load(model, exclude=exclude)
-	# spacy_nlp = spacy.load(Path('../models/spacy_en_core_web_trf-3.2.0'), disable=disable)
-	# spacy_nlp = spacy.load(Path('../models/spacy_en_core_web_trf-3.2.0'), disable=disable)
 	print('spaCy model loaded')
 
 def extract_spacy_entities(utterance):
