@@ -34,10 +34,15 @@
       "next_action": "setup"
     },
     "setup": {
-      "type": "logic"
+      "type": "logic",
+      "next_action": "guess"
     },
     "guess": {
-      "type": "logic"
+      "type": "logic",
+      "loop": {
+        "expected_entities": ["number"]
+      },
+      "next_action": "replay"
     },
     "replay": {
       "type": "dialog",
