@@ -103,7 +103,7 @@ export default () => new Promise(async (resolve, reject) => {
                * And possible: slots['players_nb']['sourceText']
                * 7. Train resolvers (affirm_deny: boolean value)
                * 8. Map resolvers to skill actions
-               * 9. Utterance source type to get raw input from utterance
+               * 9. Utterance item type to get raw input from utterance
                * 10. Create superheroes skill (just for testing):
                *  to ask Leon questions by saving context
                *  or just use the color or to do list skill?
@@ -128,9 +128,9 @@ export default () => new Promise(async (resolve, reject) => {
                    * https://github.com/axa-group/nlp.js/issues/291
                    * https://github.com/axa-group/nlp.js/issues/307
                    */
-                  if (slotObj.source.type === 'entity') {
+                  if (slotObj.item.type === 'entity') {
                     nlp.slotManager
-                      .addSlot(intent, `${slotObj.name}#${slotObj.source.name}`, true, { [lang]: slotObj.questions })
+                      .addSlot(intent, `${slotObj.name}#${slotObj.item.name}`, true, { [lang]: slotObj.questions })
                   }
                   /* nlp.slotManager
                   .addSlot(intent, 'boolean', true, { [lang]: 'How many players?' }) */

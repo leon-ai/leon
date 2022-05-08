@@ -46,7 +46,7 @@
       "slots": [
         {
           "name": "color_choice",
-          "source": {
+          "item": {
             "type": "entity",
             "name": "color"
           },

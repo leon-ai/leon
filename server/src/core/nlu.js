@@ -396,7 +396,7 @@ class Nlu {
         const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
 
         console.log('data', data)
-        console.log('this.conv.activeContext', this.conv.activeContext)
+        console.log('final this.conv.activeContext', this.conv.activeContext)
 
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart

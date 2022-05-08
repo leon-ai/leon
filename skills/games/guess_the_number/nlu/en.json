@@ -11,7 +11,7 @@
       "slots": [
         {
           "name": "players_nb",
-          "source": {
+          "item": {
             "type": "entity",
             "name": "number"
           },
@@ -22,7 +22,7 @@
         },
         {
           "name": "email_test",
-          "source": {
+          "item": {
             "type": "entity",
             "name": "email"
           },
@@ -40,7 +40,7 @@
     "guess": {
       "type": "logic",
       "loop": {
-        "expected_entities": ["number"]
+        "expected_items": ["number"]
       },
       "next_action": "replay"
     },
@@ -49,7 +49,7 @@
       "slots": [
         {
           "name": "decision",
-          "source": {
+          "item": {
             "type": "resolver",
             "name": "affirm_deny"
           },
