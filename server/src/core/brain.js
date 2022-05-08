@@ -161,7 +161,9 @@ class Brain {
         console.log('brain obj', obj)
         const { nluDataFilePath, classification: { action: actionName } } = obj
         const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
-        const { type: actionType } = actions[actionName]
+        const action = actions[actionName]
+        const { type: actionType } = action
+        const nextAction = action.next_action ? actions[action.next_action] : null
 
         if (actionType === 'logic') {
           // Ensure the process is empty (to be able to execute other processes outside of Brain)
@@ -281,29 +283,32 @@ class Brain {
 
               console.log('[BRAIN] this.finalOutput', this.finalOutput)
 
-              const speech = this.finalOutput.speech.toString()
-              if (!opts.mute) {
-                this.talk(speech, true)
-              }
-              speeches.push(speech)
+              let { speech } = this.finalOutput
+              if (speech) {
+                speech = speech.toString()
+                if (!opts.mute) {
+                  this.talk(speech, true)
+                }
+                speeches.push(speech)
 
-              /* istanbul ignore next */
-              // Synchronize the downloaded content if enabled
-              if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled
-                && this.finalOutput.options.synchronization.enabled === true) {
-                const sync = new Synchronizer(
-                  this,
-                  obj.classification,
-                  this.finalOutput.options.synchronization
-                )
+                /* istanbul ignore next */
+                // Synchronize the downloaded content if enabled
+                if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled
+                  && this.finalOutput.options.synchronization.enabled === true) {
+                  const sync = new Synchronizer(
+                    this,
+                    obj.classification,
+                    this.finalOutput.options.synchronization
+                  )
 
-                // When the synchronization is finished
-                sync.synchronize((speech) => {
-                  if (!opts.mute) {
-                    this.talk(speech)
-                  }
-                  speeches.push(speech)
-                })
+                  // When the synchronization is finished
+                  sync.synchronize((speech) => {
+                    if (!opts.mute) {
+                      this.talk(speech)
+                    }
+                    speeches.push(speech)
+                  })
+                }
               }
             }
 
@@ -322,6 +327,8 @@ class Brain {
               ...obj,
               speeches,
               core: this.finalOutput.core,
+              action,
+              nextAction,
               executionTime // In ms, skill execution time only
             })
           })
@@ -401,6 +408,8 @@ class Brain {
             ...obj,
             speeches: [answer],
             core: this.finalOutput.core,
+            action,
+            nextAction,
             executionTime // In ms, skill execution time only
           })
         }

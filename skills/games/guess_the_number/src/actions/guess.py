@@ -11,10 +11,13 @@ def guess(params):
 	nb_to_guess = 42 # TODO: pick up from DB
 
 	# Find entities
-	# TODO: if no number entity found, then break the action loop
 	for item in params['entities']:
 		if item['entity'] == 'number':
 			given_nb = item['resolution']['value']
+
+	# Return no speech if no number has been found
+	if given_nb == -1:
+		return utils.output('end', None, None, { 'isInActionLoop': False })
 
 	if given_nb == nb_to_guess:
 		return utils.output('end', 'guessed', '....CONGRATS....', { 'isInActionLoop': False })

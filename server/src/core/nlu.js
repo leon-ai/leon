@@ -159,6 +159,18 @@ class Nlu {
           )
 
           const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+          const expectedItems = processedData.action.loop.expected_items.map(({ name }) => name)
+          // TODO: also check for resolvers, not only entities
+          const hasMatchingItem = processedData
+            .entities.filter(({ entity }) => expectedItems.includes(entity)).length > 0
+
+          // Ensure expected items are in the utterance, otherwise clean context and reprocess
+          if (!hasMatchingItem) {
+            this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+            this.conv.cleanActiveContext()
+            await this.process(utterance, opts)
+            return resolve(null)
+          }
 
           // Break the action loop
           if (processedData.core?.isInActionLoop === false) {
@@ -187,18 +199,17 @@ class Nlu {
           }
 
           if (Object.keys(processedData).length > 0) {
-            processedData.nextAction = 'guess'
             // Set new context with the next action if there is one
-            if (processedData.nextAction) {
+            if (processedData.action.next_action) {
               this.conv.activeContext = {
                 lang: this.brain.lang,
                 slots: { },
-                isInActionLoop: true, // TODO: dynamic value according to the skill output
+                isInActionLoop: !!processedData.nextAction.loop,
                 originalUtterance: processedData.utterance,
                 nluDataFilePath: processedData.nluDataFilePath,
-                actionName: processedData.nextAction,
+                actionName: processedData.action.next_action,
                 domain: processedData.classification.domain,
-                intent: `${processedData.classification.skill}.${processedData.nextAction}`,
+                intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
                 entities: []
               }
 
@@ -262,7 +273,7 @@ class Nlu {
       // TODO: method
       if (this.brain.lang !== locale) {
         const connectedHandler = async () => {
-          await this.process(utterance)
+          await this.process(utterance, opts)
         }
 
         this.brain.lang = locale
@@ -358,18 +369,17 @@ class Nlu {
       if (this.conv.hasActiveContext()) {
         const processedData = await this.slotFill(utterance, opts)
         if (processedData && Object.keys(processedData).length > 0) {
-          processedData.nextAction = 'guess'
           // Set new context with the next action if there is one
-          if (processedData.nextAction) {
+          if (processedData.action.next_action) {
             this.conv.activeContext = {
               lang: this.brain.lang,
               slots: { },
-              isInActionLoop: true, // TODO: dynamic value according to the skill output
+              isInActionLoop: !!processedData.nextAction.loop,
               originalUtterance: processedData.utterance,
               nluDataFilePath: processedData.nluDataFilePath,
-              actionName: processedData.nextAction,
+              actionName: processedData.action.next_action,
               domain: processedData.classification.domain,
-              intent: `${processedData.classification.skill}.${processedData.nextAction}`,
+              intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
               entities: []
             }
 
@@ -490,14 +500,14 @@ class Nlu {
        * e.g. I wanna play with 2 players and louis.grenard@gmail.com
        * Need to refactor now (nluResultObj method to build it, etc.)
        * 6. [OK] Handle a "loop" feature from action (guess the number)
-       * No need "loop" in the NLU skill config. Just add option in util output
-       * 7. While in an action loop, if something other than an expected entity is sent
+       * 7. [OK] While in an action loop, if something other than an expected entity is sent
        * then break the loop. Need "loop" object in NLU skill config to describe
        * 8. Make difference between actions to trigger immediately vs context to prepare
        * 8.a. For the setup action, replace "next_action": "setup" by "action_to_trigger": "setup"
        * 8.b. Keep next_action for the ones where context needs to be prepared ahead
-       * 9. Split this process() method into several ones + clean nlu.js and brain.js
-       * 10. Add logs in terminal about context switching, active context, etc.
+       * 9. Be able to use the loop without necessarily need slots
+       * 10. Split this process() method into several ones + clean nlu.js and brain.js
+       * 11. Add logs in terminal about context switching, active context, etc.
        */
 
       this.nluResultObj = {
