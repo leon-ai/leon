@@ -50,19 +50,15 @@
       "next_action": "replay"
     },
     "replay": {
-      "type": "dialog",
-      "slots": [
-        {
-          "name": "decision",
-          "item": {
-            "type": "resolver",
-            "name": "affirm_deny"
-          },
-          "questions": [
-            "Would you like to play another round?"
-          ]
-        }
-      ]
+      "type": "logic",
+      "loop": {
+        "expected_items": [
+          {
+            "type": "entity",
+            "name": "number"
+          }
+        ]
+      }
     }
   },
   "answers": {

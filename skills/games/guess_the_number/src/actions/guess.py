@@ -20,7 +20,7 @@ def guess(params):
 		return utils.output('end', None, None, { 'isInActionLoop': False })
 
 	if given_nb == nb_to_guess:
-		return utils.output('end', 'guessed', '....CONGRATS....', { 'isInActionLoop': False })
+		return utils.output('end', 'guessed', '....CONGRATS.... Do you want to play another round?', { 'isInActionLoop': False })
 	if nb_to_guess < given_nb:
 		return utils.output('end', 'smaller', utils.translate('smaller'))
 	if nb_to_guess > given_nb:

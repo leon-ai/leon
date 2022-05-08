@@ -172,9 +172,26 @@ class Nlu {
             return resolve(null)
           }
 
-          // Break the action loop
+          // Reprocess with the original utterance that triggered the context at first
+          if (processedData.core?.restart === true) {
+            const { originalUtterance } = this.conv.activeContext
+
+            this.conv.cleanActiveContext()
+            await this.process(originalUtterance, opts)
+            return resolve(null)
+          }
+
+          // In case there is no next action to prepare anymore
+          if (!processedData.action.next_action) {
+            this.conv.cleanActiveContext()
+            return resolve(null)
+          }
+
+          // Break the action loop and prepare for the next action if necessary
           if (processedData.core?.isInActionLoop === false) {
-            this.conv.activeContext.isInActionLoop = false
+            this.conv.activeContext.isInActionLoop = !!processedData.action.loop
+            this.conv.activeContext.actionName = processedData.action.next_action
+            this.conv.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`
           }
 
           return resolve(processedData)
@@ -502,9 +519,7 @@ class Nlu {
        * 6. [OK] Handle a "loop" feature from action (guess the number)
        * 7. [OK] While in an action loop, if something other than an expected entity is sent
        * then break the loop. Need "loop" object in NLU skill config to describe
-       * 8. Make difference between actions to trigger immediately vs context to prepare
-       * 8.a. For the setup action, replace "next_action": "setup" by "action_to_trigger": "setup"
-       * 8.b. Keep next_action for the ones where context needs to be prepared ahead
+       * 8. [OK] Replay with the original utterance
        * 9. Be able to use the loop without necessarily need slots
        * 10. Split this process() method into several ones + clean nlu.js and brain.js
        * 11. Add logs in terminal about context switching, active context, etc.
