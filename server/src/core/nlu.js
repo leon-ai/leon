@@ -177,6 +177,15 @@ class Nlu {
           const processedData = await this.slotFill(utterance, opts)
           console.log('processedData (slot filled over)', processedData)
 
+          /**
+           * In case the slot filling has been interrupted. e.g. context change, etc.
+           * Then reprocess with the new utterance
+           */
+          if (!processedData) {
+            await this.process(utterance, opts)
+            return resolve(null)
+          }
+
           if (processedData && Object.keys(processedData).length > 0) {
             processedData.nextAction = 'guess'
             // Set new context with the next action if there is one

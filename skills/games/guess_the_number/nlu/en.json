@@ -40,7 +40,12 @@
     "guess": {
       "type": "logic",
       "loop": {
-        "expected_items": ["number"]
+        "expected_items": [
+          {
+            "type": "entity",
+            "name": "number"
+          }
+        ]
       },
       "next_action": "replay"
     },
