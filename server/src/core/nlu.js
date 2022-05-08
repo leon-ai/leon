@@ -186,7 +186,7 @@ class Nlu {
             return resolve(null)
           }
 
-          if (processedData && Object.keys(processedData).length > 0) {
+          if (Object.keys(processedData).length > 0) {
             processedData.nextAction = 'guess'
             // Set new context with the next action if there is one
             if (processedData.nextAction) {
