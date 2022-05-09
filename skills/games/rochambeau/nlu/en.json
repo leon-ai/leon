@@ -1,0 +1,76 @@
+{
+  "actions": {
+    "start": {
+      "type": "dialog",
+      "utterance_samples": [
+        "Let's play rochambeau",
+        "I wanna play rock paper scissors",
+        "Can we play paper rock scissors?",
+        "I want to play rochambeau"
+      ],
+      "slots": [
+        {
+          "name": "rounds_nb",
+          "item": {
+            "type": "entity",
+            "name": "number"
+          },
+          "questions": [
+            "How many rounds would you like to play?",
+            "How many rounds should I set?",
+            "Sure, how many rounds should I prepare?"
+          ]
+        }
+      ],
+      "next_action": "setup"
+    },
+    "setup": {
+      "type": "logic",
+      "next_action": "play"
+    },
+    "play": {
+      "type": "logic",
+      "loop": {
+        "expected_items": [
+          {
+            "type": "entity",
+            "name": "handsign"
+          }
+        ]
+      },
+      "next_action": "rematch"
+    },
+    "rematch": {
+      "type": "logic",
+      "loop": {
+        "expected_items": [
+          {
+            "type": "resolver",
+            "name": "number"
+          }
+        ]
+      }
+    }
+  },
+  "entities": {
+    "handsign": "entities/handsigns.json"
+  },
+  "answers": {
+    "ready": [
+      "Alright, let's get started!"
+    ],
+    "equal": [
+      "No point."
+    ],
+    "point": [
+      "The %handsign_1% beats the %handsign_2%."
+    ],
+    "win": [
+      "I won! Would you like a rematch?"
+    ],
+    "lose": [
+      "You're good at it! Can I get a rematch?",
+      "Congrats! Should we go for a rematch?"
+    ]
+  }
+}

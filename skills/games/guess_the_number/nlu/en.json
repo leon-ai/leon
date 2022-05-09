@@ -1,40 +1,13 @@
 {
   "actions": {
-    "start": {
-      "type": "dialog",
+    "setup": {
+      "type": "logic",
       "utterance_samples": [
         "Let's play guess the number",
         "I wanna play guess the number",
         "Can we play guess the number?",
         "I want to play a game like guess the number"
       ],
-      "slots": [
-        {
-          "name": "players_nb",
-          "item": {
-            "type": "entity",
-            "name": "number"
-          },
-          "questions": [
-            "How many players should I set?",
-            "Sure, how many players should I prepare?"
-          ]
-        },
-        {
-          "name": "email_test",
-          "item": {
-            "type": "entity",
-            "name": "email"
-          },
-          "questions": [
-            "How about the email?"
-          ]
-        }
-      ],
-      "next_action": "setup"
-    },
-    "setup": {
-      "type": "logic",
       "next_action": "guess"
     },
     "guess": {
@@ -63,7 +36,7 @@
   },
   "answers": {
     "ready": [
-      "Alright, I have set %players_nb% players with the %email_test% email. Go ahead and guess the number between 0 and 100!"
+      "Alright, I'm ready! Go ahead and guess the number between 0 and 100!"
     ],
     "bigger": [
       "The number is bigger.",
