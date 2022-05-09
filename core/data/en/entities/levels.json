@@ -1,28 +1,13 @@
 {
   "options": {
-    "low": {
-      "synonyms": ["low"],
-      "data": {
-        "value": [
-          "LOW"
-        ]
-      }
+    "LOW": {
+      "synonyms": ["low"]
     },
-    "medium": {
-      "synonyms": ["medium"],
-      "data": {
-        "value": [
-          "MEDIUM"
-        ]
-      }
+    "MEDIUM": {
+      "synonyms": ["medium"]
     },
-    "high": {
-      "synonyms": ["high"],
-      "data": {
-        "value": [
-          "HIGH"
-        ]
-      }
+    "HIGH": {
+      "synonyms": ["high"]
     }
   }
 }

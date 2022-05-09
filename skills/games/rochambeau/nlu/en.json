@@ -62,8 +62,15 @@
     "equal": [
       "No point."
     ],
-    "point": [
-      "The %handsign_1% beats the %handsign_2%."
+    "point_for_leon": [
+      "I got you. The %handsign_1% beats the %handsign_2%.",
+      "Yeaaah! The %handsign_1% beats the %handsign_2%.",
+      "Gotcha! The %handsign_1% beats the %handsign_2%."
+    ],
+    "point_for_player": [
+      "You got me. The %handsign_1% beats the %handsign_2%.",
+      "Aargh no. The %handsign_1% beats the %handsign_2%.",
+      "Well play! The %handsign_1% beats the %handsign_2%."
     ],
     "win": [
       "I won! Would you like a rematch?"
