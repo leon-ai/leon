@@ -56,7 +56,7 @@
     "docker:check": "docker run --rm --interactive leonai/leon npm run check"
   },
   "dependencies": {
-    "@aws-sdk/client-polly": "^3.18.0",
+    "@aws-sdk/client-polly": "^3.87.0",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@ffprobe-installer/ffprobe": "^1.3.0",
     "@google-cloud/speech": "^4.2.0",
