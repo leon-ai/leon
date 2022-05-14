@@ -15,7 +15,14 @@
         "OK",
         "Alright",
         "Correct",
-        "Indeed"
+        "Indeed",
+        "Agree",
+        "Perfect",
+        "That's right",
+        "That works",
+        "Go ahead",
+        "Why not",
+        "I do"
       ],
       "value": true
     },
@@ -27,7 +34,8 @@
         "Naa",
         "No thanks",
         "No I'm fine",
-        "Hell no"
+        "Hell no",
+        "Please do not"
       ],
       "value": false
     }
