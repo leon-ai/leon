@@ -428,10 +428,24 @@ class Nlu {
       this.nluResultObj.entities = this.conv.activeContext.entities
 
       try {
-        // TODO: next action based on next_action
-        const data = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+        const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
 
-        console.log('data', data)
+        // Prepare next action if there is one queuing
+        if (processedData.nextAction) {
+          this.conv.cleanActiveContext()
+          this.conv.activeContext = {
+            lang: this.brain.lang,
+            slots: { },
+            isInActionLoop: !!processedData.nextAction.loop,
+            originalUtterance: processedData.utterance,
+            nluDataFilePath: processedData.nluDataFilePath,
+            actionName: processedData.action.next_action,
+            domain: processedData.classification.domain,
+            intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
+            entities: []
+          }
+        }
+
         console.log('final this.conv.activeContext', this.conv.activeContext)
 
         const processingTimeEnd = Date.now()
@@ -439,9 +453,9 @@ class Nlu {
 
         return resolve({
           processingTime, // In ms, total time
-          ...data,
+          ...processedData,
           nluProcessingTime:
-            processingTime - data?.executionTime // In ms, NLU processing time only
+            processingTime - processedData?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
         log[e.type](e.obj.message)
