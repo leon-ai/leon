@@ -27,8 +27,8 @@
       "loop": {
         "expected_items": [
           {
-            "type": "entity",
-            "name": "number"
+            "type": "resolver",
+            "name": "affirmation_denial"
           }
         ]
       }

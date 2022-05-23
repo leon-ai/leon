@@ -1,5 +1,5 @@
 {
-  "name": "Affirmation & Denial",
+  "name": "affirmation_denial",
   "intents": {
     "system.resolver.affirmation": {
       "utterance_samples": [
