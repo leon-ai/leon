@@ -21,6 +21,8 @@ const defaultNluResultObj = {
   utterance: null,
   currentEntities: [],
   entities: [],
+  currentResolvers: [],
+  resolvers: [],
   slots: null,
   nluDataFilePath: null,
   answers: [], // For dialog action type
@@ -159,10 +161,19 @@ class Nlu {
           )
 
           const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+          console.log('processedData', processedData)
           const expectedItems = processedData.action.loop.expected_items.map(({ name }) => name)
           // TODO: also check for resolvers, not only entities
           const hasMatchingItem = processedData
             .entities.filter(({ entity }) => expectedItems.includes(entity)).length > 0
+            || processedData
+              .resolvers.filter(({ resolver }) => expectedItems.includes(resolver)).length > 0
+
+          console.log('expectedItems', expectedItems[0])
+          // TODO: only process expected_items includes resolvers
+          const testo = await this.nlp.process(utterance)
+          console.log('testo', testo)
+          // this.nluResultObj.resolvers = await this.resolveResolvers()
 
           // Ensure expected items are in the utterance, otherwise clean context and reprocess
           if (!hasMatchingItem) {

@@ -185,6 +185,8 @@ class Brain {
               utterance: obj.utterance,
               current_entities: obj.currentEntities,
               entities: obj.entities,
+              current_resolvers: obj.currentResolvers,
+              resolvers: obj.resolvers,
               slots: obj.slots
             }
 

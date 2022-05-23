@@ -20,7 +20,7 @@ def main():
 		'current_entities': intent_obj['current_entities'],
 		'entities': intent_obj['entities'],
 		'current_resolvers': intent_obj['current_resolvers'],
-		'resolvers': intent_obj['resolvers']
+		'resolvers': intent_obj['resolvers'],
 		'slots': intent_obj['slots']
 	}
 
