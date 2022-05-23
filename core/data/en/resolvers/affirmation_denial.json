@@ -1,7 +1,7 @@
 {
-  "name": "affirm_deny",
+  "name": "Affirmation & Denial",
   "intents": {
-    "system.affirm": {
+    "system.resolver.affirmation": {
       "utterance_samples": [
         "Yes",
         "Yep",
@@ -26,7 +26,7 @@
       ],
       "value": true
     },
-    "system.deny": {
+    "system.resolver.denial": {
       "utterance_samples": [
         "No",
         "No no don't",

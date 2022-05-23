@@ -46,9 +46,33 @@ export default () => new Promise(async (resolve, reject) => {
 
     for (let h = 0; h < shortLangs.length; h += 1) {
       const lang = shortLangs[h]
+      const resolversPath = path.join(process.cwd(), 'core/data', lang, 'resolvers')
+      const resolverFiles = fs.readdirSync(resolversPath)
 
       nlp.addLanguage(lang)
 
+      // Train resolvers
+      for (let i = 0; i < resolverFiles.length; i += 1) {
+        const resolverFileName = resolverFiles[i]
+        const resolverPath = path.join(resolversPath, resolverFileName)
+        const { name: resolverName, intents: resolverIntents } = JSON.parse(fs.readFileSync(resolverPath, 'utf8'))
+        const intentKeys = Object.keys(resolverIntents)
+
+        log.info(`[${lang}] Training "${resolverName}" resolver...`)
+
+        for (let j = 0; j < intentKeys.length; j += 1) {
+          const intentName = intentKeys[j]
+          const intentObj = resolverIntents[intentName]
+
+          for (let k = 0; k < intentObj.utterance_samples.length; k += 1) {
+            nlp.addDocument(lang, intentObj.utterance_samples[k], intentName)
+          }
+        }
+
+        log.success(`[${lang}] "${resolverName}" resolver trained`)
+      }
+
+      // Train skills actions
       for (let i = 0; i < domainKeys.length; i += 1) {
         const currentDomain = domains[domainKeys[i]]
         const skillKeys = Object.keys(currentDomain.skills)

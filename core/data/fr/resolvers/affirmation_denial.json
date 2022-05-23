@@ -1,0 +1,40 @@
+{
+  "name": "Affirmation & Denial",
+  "intents": {
+    "system.resolver.affirmation": {
+      "utterance_samples": [
+        "Oui",
+        "Yep",
+        "Yup",
+        "Ouais",
+        "Faisons ça",
+        "Bien sûr",
+        "Évidemment",
+        "Tout à fait",
+        "Correct",
+        "OK",
+        "C'est vrai",
+        "En effet",
+        "Entendu",
+        "Ça marche",
+        "Pourquoi pas",
+        "Parfait",
+        "Allez"
+      ],
+      "value": true
+    },
+    "system.resolver.denial": {
+      "utterance_samples": [
+        "Non",
+        "Ne le fais pas",
+        "Nope",
+        "Non merci",
+        "Non ça va",
+        "C'est faux",
+        "Bien sûr que non",
+        "Fais pas ça"
+      ],
+      "value": false
+    }
+  }
+}
