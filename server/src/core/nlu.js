@@ -88,6 +88,144 @@ class Nlu {
   }
 
   /**
+   * Check if the NLP model exists
+   */
+  hasNlpModel () {
+    return Object.keys(this.nlp).length > 0
+  }
+
+  /**
+   * Merge spaCy entities with the current NER instance
+   */
+  async mergeSpacyEntities (utterance) {
+    const spacyEntities = await Ner.getSpacyEntities(utterance)
+    if (spacyEntities.length > 0) {
+      spacyEntities.forEach(({ entity, resolution }) => {
+        const spacyEntity = {
+          [entity]: {
+            options: {
+              [resolution.value]: [resolution.value]
+            }
+          }
+        }
+
+        this.nlp.addEntities(spacyEntity, this.brain.lang)
+      })
+    }
+  }
+
+  /**
+   * Handle in action loop logic before NLU processing
+   */
+  async handleActionLoop (utterance, opts) {
+    const { domain, intent } = this.conv.activeContext
+    const [skillName, actionName] = intent.split('.')
+    const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
+    this.nluResultObj = {
+      ...this.nluResultObj,
+      slots: this.conv.activeContext.slots,
+      utterance,
+      nluDataFilePath,
+      classification: {
+        domain,
+        skill: skillName,
+        action: actionName,
+        confidence: 1
+      }
+    }
+    this.nluResultObj.entities = await this.ner.extractEntities(
+      this.brain.lang,
+      nluDataFilePath,
+      this.nluResultObj
+    )
+
+    const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+    console.log('processedData', processedData)
+    const expectedItems = processedData.action.loop.expected_items.map(({ name }) => name)
+    // TODO: also check for resolvers, not only entities
+    const hasMatchingItem = processedData
+      .entities.filter(({ entity }) => expectedItems.includes(entity)).length > 0
+      || processedData
+        .resolvers.filter(({ resolver }) => expectedItems.includes(resolver)).length > 0
+
+    console.log('expectedItems', expectedItems[0])
+    // TODO: only process expected_items includes resolvers
+    const testo = await this.nlp.process(utterance)
+    console.log('testo', testo)
+    // this.nluResultObj.resolvers = await this.resolveResolvers()
+
+    // Ensure expected items are in the utterance, otherwise clean context and reprocess
+    if (!hasMatchingItem) {
+      this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+      this.conv.cleanActiveContext()
+      await this.process(utterance, opts)
+      return null
+    }
+
+    // Reprocess with the original utterance that triggered the context at first
+    if (processedData.core?.restart === true) {
+      const { originalUtterance } = this.conv.activeContext
+
+      this.conv.cleanActiveContext()
+      await this.process(originalUtterance, opts)
+      return null
+    }
+
+    // In case there is no next action to prepare anymore
+    if (!processedData.action.next_action) {
+      this.conv.cleanActiveContext()
+      return null
+    }
+
+    // Break the action loop and prepare for the next action if necessary
+    if (processedData.core?.isInActionLoop === false) {
+      this.conv.activeContext.isInActionLoop = !!processedData.action.loop
+      this.conv.activeContext.actionName = processedData.action.next_action
+      this.conv.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`
+    }
+
+    return processedData
+  }
+
+  /**
+   * Handle slot filling
+   */
+  async handleSlotFilling (utterance, opts) {
+    const processedData = await this.slotFill(utterance, opts)
+    console.log('processedData (slot filled over)', processedData)
+
+    /**
+     * In case the slot filling has been interrupted. e.g. context change, etc.
+     * Then reprocess with the new utterance
+     */
+    if (!processedData) {
+      await this.process(utterance, opts)
+      return null
+    }
+
+    if (processedData && Object.keys(processedData).length > 0) {
+      // Set new context with the next action if there is one
+      if (processedData.action.next_action) {
+        this.conv.activeContext = {
+          lang: this.brain.lang,
+          slots: { },
+          isInActionLoop: !!processedData.nextAction.loop,
+          originalUtterance: processedData.utterance,
+          nluDataFilePath: processedData.nluDataFilePath,
+          actionName: processedData.action.next_action,
+          domain: processedData.classification.domain,
+          intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
+          entities: []
+        }
+
+        console.log('NEW ACTIVE CONTEXT', this.conv.activeContext)
+      }
+    }
+
+    return processedData
+  }
+
+  /**
    * Classify the utterance,
    * pick-up the right classification
    * and extract entities
@@ -106,8 +244,7 @@ class Nlu {
       }
       utterance = string.ucfirst(utterance)
 
-      // TODO: method
-      if (Object.keys(this.nlp).length === 0) {
+      if (!this.hasNlpModel()) {
         if (!opts.mute) {
           this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
           this.brain.socket.emit('is-typing', false)
@@ -119,93 +256,14 @@ class Nlu {
       }
 
       // Add spaCy entities
-      // TODO: method
-      const spacyEntities = await Ner.getSpacyEntities(utterance)
-      if (spacyEntities.length > 0) {
-        spacyEntities.forEach(({ entity, resolution }) => {
-          const spacyEntity = {
-            [entity]: {
-              options: {
-                [resolution.value]: [resolution.value]
-              }
-            }
-          }
-
-          this.nlp.addEntities(spacyEntity, this.brain.lang)
-        })
-      }
+      await this.mergeSpacyEntities(utterance)
 
       // Pre NLU processing according to the active context if there is one
       if (this.conv.hasActiveContext()) {
         // When the active context is in an action loop, then directly trigger the action
         if (this.conv.activeContext.isInActionLoop) {
-          const { domain, intent } = this.conv.activeContext
-          const [skillName, actionName] = intent.split('.')
-          const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
-          this.nluResultObj = {
-            ...this.nluResultObj,
-            slots: this.conv.activeContext.slots,
-            utterance,
-            nluDataFilePath,
-            classification: {
-              domain,
-              skill: skillName,
-              action: actionName,
-              confidence: 1
-            }
-          }
-          this.nluResultObj.entities = await this.ner.extractEntities(
-            this.brain.lang,
-            nluDataFilePath,
-            this.nluResultObj
-          )
-
-          const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
-          console.log('processedData', processedData)
-          const expectedItems = processedData.action.loop.expected_items.map(({ name }) => name)
-          // TODO: also check for resolvers, not only entities
-          const hasMatchingItem = processedData
-            .entities.filter(({ entity }) => expectedItems.includes(entity)).length > 0
-            || processedData
-              .resolvers.filter(({ resolver }) => expectedItems.includes(resolver)).length > 0
-
-          console.log('expectedItems', expectedItems[0])
-          // TODO: only process expected_items includes resolvers
-          const testo = await this.nlp.process(utterance)
-          console.log('testo', testo)
-          // this.nluResultObj.resolvers = await this.resolveResolvers()
-
-          // Ensure expected items are in the utterance, otherwise clean context and reprocess
-          if (!hasMatchingItem) {
-            this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
-            this.conv.cleanActiveContext()
-            await this.process(utterance, opts)
-            return resolve(null)
-          }
-
-          // Reprocess with the original utterance that triggered the context at first
-          if (processedData.core?.restart === true) {
-            const { originalUtterance } = this.conv.activeContext
-
-            this.conv.cleanActiveContext()
-            await this.process(originalUtterance, opts)
-            return resolve(null)
-          }
-
-          // In case there is no next action to prepare anymore
-          if (!processedData.action.next_action) {
-            this.conv.cleanActiveContext()
-            return resolve(null)
-          }
-
-          // Break the action loop and prepare for the next action if necessary
-          if (processedData.core?.isInActionLoop === false) {
-            this.conv.activeContext.isInActionLoop = !!processedData.action.loop
-            this.conv.activeContext.actionName = processedData.action.next_action
-            this.conv.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`
-          }
-
-          return resolve(processedData)
+          console.log('111111')
+          return resolve(await this.handleActionLoop(utterance, opts))
         }
 
         // TODO: make difference between context that needs slots and the ones who does not
@@ -214,41 +272,12 @@ class Nlu {
         console.log('THIS.CONV', this.conv.activeContext)
         // When the active context has slots filled
         if (Object.keys(this.conv.activeContext.slots).length > 0) {
-          const processedData = await this.slotFill(utterance, opts)
-          console.log('processedData (slot filled over)', processedData)
-
-          /**
-           * In case the slot filling has been interrupted. e.g. context change, etc.
-           * Then reprocess with the new utterance
-           */
-          if (!processedData) {
-            await this.process(utterance, opts)
-            return resolve(null)
-          }
-
-          if (Object.keys(processedData).length > 0) {
-            // Set new context with the next action if there is one
-            if (processedData.action.next_action) {
-              this.conv.activeContext = {
-                lang: this.brain.lang,
-                slots: { },
-                isInActionLoop: !!processedData.nextAction.loop,
-                originalUtterance: processedData.utterance,
-                nluDataFilePath: processedData.nluDataFilePath,
-                actionName: processedData.action.next_action,
-                domain: processedData.classification.domain,
-                intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
-                entities: []
-              }
-
-              console.log('NEW ACTIVE CONTEXT', this.conv.activeContext)
-            }
-          }
-
-          return resolve(processedData)
+          console.log('222222')
+          return resolve(await this.handleSlotFilling(utterance, opts))
         }
       }
 
+      console.log('333333')
       const result = await this.nlp.process(utterance)
       // console.log('result', result)
       const {
@@ -395,27 +424,7 @@ class Nlu {
 
       // In case all slots have been filled in the first utterance
       if (this.conv.hasActiveContext()) {
-        const processedData = await this.slotFill(utterance, opts)
-        if (processedData && Object.keys(processedData).length > 0) {
-          // Set new context with the next action if there is one
-          if (processedData.action.next_action) {
-            this.conv.activeContext = {
-              lang: this.brain.lang,
-              slots: { },
-              isInActionLoop: !!processedData.nextAction.loop,
-              originalUtterance: processedData.utterance,
-              nluDataFilePath: processedData.nluDataFilePath,
-              actionName: processedData.action.next_action,
-              domain: processedData.classification.domain,
-              intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
-              entities: []
-            }
-
-            console.log('NEW ACTIVE CONTEXT', this.conv.activeContext)
-          }
-
-          return resolve(processedData)
-        }
+        return resolve(await this.handleSlotFilling(utterance, opts))
       }
 
       const newContextName = `${this.nluResultObj.classification.domain}.${skillName}`
