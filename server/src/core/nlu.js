@@ -95,6 +95,33 @@ class Nlu {
   }
 
   /**
+   * Set new language; recreate a new TCP server with new language; and reprocess understanding
+   */
+  switchlanguage (utterance, locale, opts) {
+    const connectedHandler = async () => {
+      await this.process(utterance, opts)
+    }
+
+    this.brain.lang = locale
+    this.brain.talk(`${this.brain.wernicke('random_language_switch')}.`, true)
+
+    // Recreate a new TCP server process and reconnect the TCP client
+    kill(global.tcpServerProcess.pid, () => {
+      global.tcpServerProcess = spawn(`pipenv run python bridges/python/tcp_server/main.py ${locale}`, { shell: true })
+
+      global.tcpClient = new TcpClient(
+        process.env.LEON_PY_TCP_SERVER_HOST,
+        process.env.LEON_PY_TCP_SERVER_PORT
+      )
+
+      global.tcpClient.ee.removeListener('connected', connectedHandler)
+      global.tcpClient.ee.on('connected', connectedHandler)
+    })
+
+    return { }
+  }
+
+  /**
    * Merge spaCy entities with the current NER instance
    */
   async mergeSpacyEntities (utterance) {
@@ -326,31 +353,9 @@ class Nlu {
         return resolve({ })
       }
 
-      // Trigger language switch
-      // TODO: method
+      // Trigger language switching
       if (this.brain.lang !== locale) {
-        const connectedHandler = async () => {
-          await this.process(utterance, opts)
-        }
-
-        this.brain.lang = locale
-        this.brain.talk(`${this.brain.wernicke('random_language_switch')}.`, true)
-
-        // Recreate a new TCP server process and reconnect the TCP client
-        kill(global.tcpServerProcess.pid, () => {
-          global.tcpServerProcess = spawn(`pipenv run python bridges/python/tcp_server/main.py ${locale}`, { shell: true })
-
-          global.tcpClient = new TcpClient(
-            process.env.LEON_PY_TCP_SERVER_HOST,
-            process.env.LEON_PY_TCP_SERVER_PORT
-          )
-
-          global.tcpClient.ee.removeListener('connected', connectedHandler)
-          global.tcpClient.ee.on('connected', connectedHandler)
-        })
-
-        // Do not continue the NLU process
-        return resolve({ })
+        return resolve(this.switchlanguage(utterance, locale, opts))
       }
 
       // TODO: method
