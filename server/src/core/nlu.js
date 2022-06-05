@@ -122,6 +122,26 @@ class Nlu {
   }
 
   /**
+   * Collaborative logger request
+   */
+  sendLog (utterance) {
+    /* istanbul ignore next */
+    if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
+      this.request
+        .post('https://logger.getleon.ai/v1/expressions')
+        .set('X-Origin', 'leon-core')
+        .send({
+          version,
+          utterance,
+          lang: this.brain.lang,
+          classification: this.nluResultObj.classification
+        })
+        .then(() => { /* */ })
+        .catch(() => { /* */ })
+    }
+  }
+
+  /**
    * Merge spaCy entities with the current NER instance
    */
   async mergeSpacyEntities (utterance) {
@@ -358,24 +378,9 @@ class Nlu {
         return resolve(this.switchlanguage(utterance, locale, opts))
       }
 
-      // TODO: method
-      /* istanbul ignore next */
-      if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
-        this.request
-          .post('https://logger.getleon.ai/v1/expressions')
-          .set('X-Origin', 'leon-core')
-          .send({
-            version,
-            utterance,
-            lang: this.brain.lang,
-            classification: this.nluResultObj.classification
-          })
-          .then(() => { /* */ })
-          .catch(() => { /* */ })
-      }
+      this.sendLog()
 
       if (intent === 'None') {
-        // TODO: method
         const fallback = this.fallback(langs[lang.getLongCode(locale)].fallbacks)
 
         if (fallback === false) {
