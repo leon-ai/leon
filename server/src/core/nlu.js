@@ -423,7 +423,7 @@ class Nlu {
       }
 
       // In case all slots have been filled in the first utterance
-      if (this.conv.hasActiveContext()) {
+      if (this.conv.hasActiveContext() && Object.keys(this.conv.activeContext.slots).length > 0) {
         return resolve(await this.handleSlotFilling(utterance, opts))
       }
 
