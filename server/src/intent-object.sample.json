@@ -1,9 +1,9 @@
 {
   "lang": "en",
-  "domain": "utilities",
-  "skill": "is_it_down",
-  "action": "run",
-  "utterance": "Check if github.com, mozilla.org and twitter.com are up",
+  "domain": "games",
+  "skill": "guess_the_number",
+  "action": "replay",
+  "utterance": "No no no",
   "slots": {},
   "entities": [],
   "current_entities": [
@@ -31,5 +31,7 @@
         "value": "twitter.com"
       }
     }
-  ]
+  ],
+  "current_resolvers": [],
+  "resolvers": []
 }

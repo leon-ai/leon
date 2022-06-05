@@ -190,6 +190,8 @@ class Brain {
               slots: obj.slots
             }
 
+            console.log('intentObjintentObjintentObj', intentObj)
+
             try {
               fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
               this.process = spawn(`pipenv run python bridges/python/main.py ${intentObjectPath}`, { shell: true })

@@ -6,20 +6,20 @@ import utils
 def replay(params):
 	"""This is a test"""
 
-	entities, slots = params['entities'], params['slots']
-	decision = 0
+	entities, resolvers, slots = params['entities'], params['resolvers'], params['slots']
+	decision = False
 
 	# Find entities
 	# TODO: replace with confirmation resolver
-	for item in params['entities']:
-		if item['entity'] == 'number':
-			decision = item['resolution']['value']
+	for resolver in resolvers:
+		if resolver['name'] == 'affirmation_denial':
+			decision = resolver['value']
 
-	if decision == 1:
-		return utils.output('end', 'replay', 'Let\'s goooo', {
+	if decision == True:
+		return utils.output('end', 'replay', 'Let\'s goooo ' + str(decision), {
 			'isInActionLoop': False,
 			'restart': True
 		})
 
 
-	return utils.output('end', 'quit', 'As you wish', { 'isInActionLoop': False })
+	return utils.output('end', 'quit', 'As you wish ' + str(decision), { 'isInActionLoop': False })

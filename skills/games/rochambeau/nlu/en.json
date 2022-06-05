@@ -31,24 +31,20 @@
     "play": {
       "type": "logic",
       "loop": {
-        "expected_items": [
-          {
-            "type": "entity",
-            "name": "handsign"
-          }
-        ]
+        "expected_item": {
+          "type": "entity",
+          "name": "handsign"
+        }
       },
       "next_action": "rematch"
     },
     "rematch": {
       "type": "logic",
       "loop": {
-        "expected_items": [
-          {
-            "type": "resolver",
-            "name": "number"
-          }
-        ]
+        "expected_item": {
+          "type": "resolver",
+          "name": "number"
+        }
       }
     }
   },

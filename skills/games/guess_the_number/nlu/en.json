@@ -13,24 +13,20 @@
     "guess": {
       "type": "logic",
       "loop": {
-        "expected_items": [
-          {
-            "type": "entity",
-            "name": "number"
-          }
-        ]
+        "expected_item": {
+          "type": "entity",
+          "name": "number"
+        }
       },
       "next_action": "replay"
     },
     "replay": {
       "type": "logic",
       "loop": {
-        "expected_items": [
-          {
-            "type": "resolver",
-            "name": "affirmation_denial"
-          }
-        ]
+        "expected_item": {
+          "type": "resolver",
+          "name": "affirmation_denial"
+        }
       }
     }
   },

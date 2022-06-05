@@ -188,21 +188,40 @@ class Nlu {
 
     const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
     console.log('processedData', processedData)
-    const expectedItems = processedData.action.loop.expected_items.map(({ name }) => name)
-    // TODO: also check for resolvers, not only entities
-    const hasMatchingItem = processedData
-      .entities.filter(({ entity }) => expectedItems.includes(entity)).length > 0
-      || processedData
-        .resolvers.filter(({ resolver }) => expectedItems.includes(resolver)).length > 0
+    const { name: expectedItemName, type: expectedItemType } = processedData
+      .action.loop.expected_item
+    let hasMatchingEntity = false
+    let hasMatchingResolver = false
 
-    console.log('expectedItems', expectedItems[0])
-    // TODO: only process expected_items includes resolvers
-    const testo = await this.nlp.process(utterance)
-    console.log('testo', testo)
-    // this.nluResultObj.resolvers = await this.resolveResolvers()
+    console.log('expectedItemName', expectedItemName)
+    if (expectedItemType === 'entity') {
+      hasMatchingEntity = processedData
+        .entities.filter(({ entity }) => expectedItemName === entity)
+    } else if (expectedItemType === 'resolver') {
+      const { intent } = await this.nlp.process(utterance)
+      const resolveResolvers = (resolver, intent) => {
+        const resolversPath = join(process.cwd(), 'core/data', this.brain.lang, 'resolvers')
+        const { intents } = JSON.parse(fs.readFileSync(join(resolversPath, `${resolver}.json`)))
+
+        return [{
+          name: expectedItemName,
+          value: intents[intent].value
+        }]
+      }
+
+      // TODO: understand why the resolvers aren't correctly resolved on the Python side
+
+      console.log('INTENT', intent)
+      this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
+
+      hasMatchingResolver = this.nluResultObj.resolvers.length > 0
+      // await this.process(utterance, opts)
+    }
+
+    console.log('this.nluResultObj.resolvers', this.nluResultObj.resolvers)
 
     // Ensure expected items are in the utterance, otherwise clean context and reprocess
-    if (!hasMatchingItem) {
+    if (!hasMatchingEntity && !hasMatchingResolver) {
       this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
       this.conv.cleanActiveContext()
       await this.process(utterance, opts)
@@ -276,7 +295,6 @@ class Nlu {
    * Classify the utterance,
    * pick-up the right classification
    * and extract entities
-   * TODO: split this method into several methods
    */
   process (utterance, opts) {
     console.log('process() start this.conv.activeContext', this.conv.activeContext)
@@ -309,24 +327,16 @@ class Nlu {
       if (this.conv.hasActiveContext()) {
         // When the active context is in an action loop, then directly trigger the action
         if (this.conv.activeContext.isInActionLoop) {
-          console.log('111111')
           return resolve(await this.handleActionLoop(utterance, opts))
         }
 
-        // TODO: make difference between context that needs slots and the ones who does not
-        // TODO: this case is only for slots context
-        // TODO: an action requiring slots must always have a next_action
-        console.log('THIS.CONV', this.conv.activeContext)
         // When the active context has slots filled
         if (Object.keys(this.conv.activeContext.slots).length > 0) {
-          console.log('222222')
           return resolve(await this.handleSlotFilling(utterance, opts))
         }
       }
 
-      console.log('333333')
       const result = await this.nlp.process(utterance)
-      // console.log('result', result)
       const {
         locale, answers, classifications
       } = result
@@ -565,7 +575,7 @@ class Nlu {
        * then break the loop. Need "loop" object in NLU skill config to describe
        * 8. [OK] Replay with the original utterance
        * 9. [OK] Be able to use the loop without necessarily need slots
-       * 10. Split this process() method into several ones + clean nlu.js and brain.js
+       * 10. [OK] Split this process() method into several ones + clean nlu.js and brain.js
        * 11. Add logs in terminal about context switching, active context, etc.
        */
 
