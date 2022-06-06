@@ -186,17 +186,15 @@ class Nlu {
       this.nluResultObj
     )
 
-    const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
-    console.log('processedData', processedData)
-    const { name: expectedItemName, type: expectedItemType } = processedData
-      .action.loop.expected_item
+    const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+    const action = actions[this.nluResultObj.classification.action]
+    const { name: expectedItemName, type: expectedItemType } = action.loop.expected_item
     let hasMatchingEntity = false
     let hasMatchingResolver = false
 
-    console.log('expectedItemName', expectedItemName)
     if (expectedItemType === 'entity') {
-      hasMatchingEntity = processedData
-        .entities.filter(({ entity }) => expectedItemName === entity)
+      hasMatchingEntity = this.nluResultObj
+        .entities.filter(({ entity }) => expectedItemName === entity).length > 0
     } else if (expectedItemType === 'resolver') {
       const { intent } = await this.nlp.process(utterance)
       const resolveResolvers = (resolver, intent) => {
@@ -209,16 +207,12 @@ class Nlu {
         }]
       }
 
-      // TODO: understand why the resolvers aren't correctly resolved on the Python side
-
-      console.log('INTENT', intent)
-      this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
-
-      hasMatchingResolver = this.nluResultObj.resolvers.length > 0
-      // await this.process(utterance, opts)
+      // Resolve resolver if one has been found
+      if (intent.includes('system.resolver')) {
+        this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
+        hasMatchingResolver = this.nluResultObj.resolvers.length > 0
+      }
     }
-
-    console.log('this.nluResultObj.resolvers', this.nluResultObj.resolvers)
 
     // Ensure expected items are in the utterance, otherwise clean context and reprocess
     if (!hasMatchingEntity && !hasMatchingResolver) {
@@ -228,6 +222,7 @@ class Nlu {
       return null
     }
 
+    const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
     // Reprocess with the original utterance that triggered the context at first
     if (processedData.core?.restart === true) {
       const { originalUtterance } = this.conv.activeContext
@@ -258,7 +253,6 @@ class Nlu {
    */
   async handleSlotFilling (utterance, opts) {
     const processedData = await this.slotFill(utterance, opts)
-    console.log('processedData (slot filled over)', processedData)
 
     /**
      * In case the slot filling has been interrupted. e.g. context change, etc.

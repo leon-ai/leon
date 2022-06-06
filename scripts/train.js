@@ -126,7 +126,7 @@ export default () => new Promise(async (resolve, reject) => {
                * Should be: slots['players_nb']['value']
                * And possible: slots['players_nb']['sourceText']
                * 7. [OK] Train resolvers (affirm_deny: boolean value)
-               * 8. Map resolvers to skill actions
+               * 8. [OK] Map resolvers to skill actions
                * 9. Utterance item type to get raw input from utterance
                * 10. Create superheroes skill (just for testing):
                *  to ask Leon questions by saving context
