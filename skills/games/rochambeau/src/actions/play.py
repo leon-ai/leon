@@ -21,8 +21,10 @@ def play(params):
 			'inferior_to': 'ROCK'
 		}
 	}
-	entities = params['entities']
-	rounds_nb = 3 # TODO: pickup from memory
+	entities, slots = params['entities'], params['slots']
+	# TODO: make resolution more simple. E.g. slots['rounds_nb']['strValue']. Same for entities
+	rounds_nb = slots['rounds_nb']['value']['resolution']['strValue']
+	testo = slots['testo']['value']['resolution']['strValue']
 	player = {
 		'handsign': None,
 		'points': 0
@@ -33,9 +35,11 @@ def play(params):
 	}
 
 	# Find entities
-	for item in params['entities']:
-		if item['entity'] == 'handsign':
-			player['handsign'] = item['option']
+	for entity in entities:
+		if entity['entity'] == 'handsign':
+			player['handsign'] = entity['option']
+
+	utils.output('inter', 'testo', 'Just a test: ' + str(rounds_nb) + ' and ' + str(testo))
 
 	# Return no speech if no number has been found
 	if player['handsign'] == None:

@@ -20,6 +20,16 @@
             "How many rounds should I set?",
             "Sure, how many rounds should I prepare?"
           ]
+        },
+        {
+          "name": "testo_nb",
+          "item": {
+            "type": "entity",
+            "name": "number"
+          },
+          "questions": [
+            "Testo?"
+          ]
         }
       ],
       "next_action": "setup"

@@ -74,7 +74,6 @@ class Conversation {
        * then save the current active context to the contexts history
        */
       if (this._activeContext.name !== newContextName) {
-        console.log('ACTIVE NEWWW', this._activeContext.name, newContextName)
         this.pushToPreviousContextsStack()
         // Activate new context
         this._activeContext = {
@@ -158,7 +157,8 @@ class Conversation {
       const newSlot = {
         name: slotName,
         expectedEntity: slotEntity,
-        value: foundEntity,
+        // Map the entity with the slot or use the existing value if there is one
+        value: foundEntity || slotObj.value,
         isFilled: !!foundEntity,
         questions,
         pickedQuestion
