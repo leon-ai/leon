@@ -19,6 +19,7 @@ export default () => new Promise(async (resolve, reject) => {
     const flitePath = 'bin/flite/flite'
     const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
     const amazonPath = 'server/src/config/voice/amazon.json'
+    const azureTtsPath = 'server/src/config/voice/azure-tts.json'
     const googleCloudPath = 'server/src/config/voice/google-cloud.json'
     const watsonSttPath = 'server/src/config/voice/watson-stt.json'
     const watsonTtsPath = 'server/src/config/voice/watson-tts.json'
@@ -28,6 +29,7 @@ export default () => new Promise(async (resolve, reject) => {
       can_run_module: { title: 'Run modules', type: 'error', v: true },
       can_text: { title: 'Reply you by texting', type: 'error', v: true },
       can_amazon_polly_tts: { title: 'Amazon Polly text-to-speech', type: 'warning', v: true },
+      can_azure_tts: { title: 'Azure text-to-speech', type: 'warning', v: true },
       can_google_cloud_tts: { title: 'Google Cloud text-to-speech', type: 'warning', v: true },
       can_watson_tts: { title: 'Watson text-to-speech', type: 'warning', v: true },
       can_offline_tts: { title: 'Offline text-to-speech', type: 'warning', v: true },
@@ -146,6 +148,22 @@ export default () => new Promise(async (resolve, reject) => {
     } catch (e) {
       report.can_watson_tts.v = false
       log.warning(`Watson TTS is not yet configured: ${e}\n`)
+    }
+
+    log.info('Azure TTS')
+    try {
+      const json = JSON.parse(fs.readFileSync(azureTtsPath))
+      const results = []
+      Object.keys(json).forEach((item) => { if (json[item] === '') results.push(false) })
+      if (results.includes(false)) {
+        report.can_azure_tts.v = false
+        log.warning('Azure TTS is not yet configured\n')
+      } else {
+        log.success('Configured\n')
+      }
+    } catch (e) {
+      report.can_azure_tts.v = false
+      log.warning(`Azure TTS is not yet configured: ${e}\n`)
     }
 
     log.info('Offline TTS')
