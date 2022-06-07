@@ -158,7 +158,6 @@ class Brain {
           executionTime
         })
       } else {
-        console.log('brain obj', obj)
         const { nluDataFilePath, classification: { action: actionName } } = obj
         const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
         const action = actions[actionName]
@@ -189,8 +188,6 @@ class Brain {
               resolvers: obj.resolvers,
               slots: obj.slots
             }
-
-            console.log('intentObjintentObjintentObj', intentObj)
 
             try {
               fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
@@ -284,8 +281,6 @@ class Brain {
             // Check if there is an output (no skill error)
             if (this.finalOutput !== '') {
               this.finalOutput = JSON.parse(this.finalOutput).output
-
-              console.log('[BRAIN] this.finalOutput', this.finalOutput)
 
               let { speech } = this.finalOutput
               if (speech) {

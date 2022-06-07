@@ -74,6 +74,7 @@ class Conversation {
        * then save the current active context to the contexts history
        */
       if (this._activeContext.name !== newContextName) {
+        console.log('ACTIVE NEWWW', this._activeContext.name, newContextName)
         this.pushToPreviousContextsStack()
         // Activate new context
         this._activeContext = {

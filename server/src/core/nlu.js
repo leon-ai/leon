@@ -97,7 +97,7 @@ class Nlu {
   /**
    * Set new language; recreate a new TCP server with new language; and reprocess understanding
    */
-  switchlanguage (utterance, locale, opts) {
+  switchLanguage (utterance, locale, opts) {
     const connectedHandler = async () => {
       await this.process(utterance, opts)
     }
@@ -209,7 +209,10 @@ class Nlu {
 
       // Resolve resolver if one has been found
       if (intent.includes('system.resolver')) {
+        log.title('NLU')
+        log.success('Resolvers resolved:')
         this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
+        this.nluResultObj.resolvers.forEach((resolver) => log.success(JSON.stringify(resolver)))
         hasMatchingResolver = this.nluResultObj.resolvers.length > 0
       }
     }
@@ -277,8 +280,6 @@ class Nlu {
           intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
           entities: []
         }
-
-        console.log('NEW ACTIVE CONTEXT', this.conv.activeContext)
       }
     }
 
@@ -291,8 +292,9 @@ class Nlu {
    * and extract entities
    */
   process (utterance, opts) {
-    console.log('process() start this.conv.activeContext', this.conv.activeContext)
     const processingTimeStart = Date.now()
+
+    console.log('activecontext', this.conv.activeContext)
 
     return new Promise(async (resolve, reject) => {
       log.title('NLU')
@@ -379,7 +381,7 @@ class Nlu {
 
       // Trigger language switching
       if (this.brain.lang !== locale) {
-        return resolve(this.switchlanguage(utterance, locale, opts))
+        return resolve(this.switchLanguage(utterance, locale, opts))
       }
 
       this.sendLog()
@@ -480,8 +482,6 @@ class Nlu {
           }
         }
 
-        console.log('final this.conv.activeContext', this.conv.activeContext)
-
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
 
@@ -552,27 +552,6 @@ class Nlu {
     if (!this.conv.areSlotsAllFilled()) {
       this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
     } else {
-      /**
-       * TODO:
-       * 1. [OK] Extract entities from utterance
-       * 2. [OK] If none of them match any slot in the active context, then continue
-       * 3. [OK] If an entity match slot in active context, then fill it
-       * 4. [OK] Move skill type to action type
-       * 5.1 [OK] In Conversation, need to chain output/input contexts to each other
-       * to understand what action should be next
-       * 5.2 [OK] Execute next action (based on input_context?)
-       * 5.3 [OK] Need to handle the case if a context is filled in one shot
-       * e.g. I wanna play with 2 players and louis.grenard@gmail.com
-       * Need to refactor now (nluResultObj method to build it, etc.)
-       * 6. [OK] Handle a "loop" feature from action (guess the number)
-       * 7. [OK] While in an action loop, if something other than an expected entity is sent
-       * then break the loop. Need "loop" object in NLU skill config to describe
-       * 8. [OK] Replay with the original utterance
-       * 9. [OK] Be able to use the loop without necessarily need slots
-       * 10. [OK] Split this process() method into several ones + clean nlu.js and brain.js
-       * 11. Add logs in terminal about context switching, active context, etc.
-       */
-
       this.nluResultObj = {
         ...this.nluResultObj,
         // Assign slots only if there is a next action
@@ -586,9 +565,6 @@ class Nlu {
           confidence: 1
         }
       }
-
-      console.log('this.conv.activeContext just before execute', this.conv.activeContext)
-      console.log('this.nluResultObj just before execute', this.nluResultObj)
 
       this.conv.cleanActiveContext()
 
@@ -621,6 +597,8 @@ class Nlu {
         intent,
         entities: this.nluResultObj.entities
       }
+
+      console.log('here', this.conv.activeContext)
 
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
