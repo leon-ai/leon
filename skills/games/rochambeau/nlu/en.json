@@ -22,13 +22,23 @@
           ]
         },
         {
+          "name": "testo_email",
+          "item": {
+            "type": "entity",
+            "name": "email"
+          },
+          "questions": [
+            "Testo?"
+          ]
+        },
+        {
           "name": "testo_nb",
           "item": {
             "type": "entity",
             "name": "number"
           },
           "questions": [
-            "Testo?"
+            "Testo2?"
           ]
         }
       ],

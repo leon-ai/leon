@@ -85,6 +85,16 @@
     },
     {
       "method": "GET",
+      "route": "/api/action/leon/introduction/fill",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/introduction/remember",
+      "params": []
+    },
+    {
+      "method": "GET",
       "route": "/api/action/leon/joke/run",
       "params": []
     },

@@ -1,0 +1,47 @@
+{
+  "actions": {
+    "fill": {
+      "type": "dialog",
+      "utterance_samples": [
+        "Do you know who am I?",
+        "Do you know me?",
+        "Do you know my name?",
+        "My name is @person",
+        "I'm born the @date"
+      ],
+      "slots": [
+        {
+          "name": "owner_name",
+          "item": {
+            "type": "entity",
+            "name": "person"
+          },
+          "questions": [
+            "May I know how should I call you?",
+            "May I know your name?"
+          ]
+        },
+        {
+          "name": "owner_birth_date",
+          "item": {
+            "type": "entity",
+            "name": "date"
+          },
+          "questions": [
+            "What's your birth date?"
+          ]
+        }
+      ],
+      "next_action": "remember"
+    },
+    "remember": {
+      "type": "logic"
+    }
+  },
+  "answers": {
+    "remembered": [
+      "I'm going to remember that %owner_name%",
+      "Good to know a bit more about you %owner_name%"
+    ]
+  }
+}

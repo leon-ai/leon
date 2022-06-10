@@ -531,7 +531,6 @@ class Nlu {
 
     // Continue to loop for questions if a slot has been filled correctly
     let notFilledSlot = this.conv.getNotFilledSlot()
-    console.log('notFilledSlotx1', notFilledSlot)
     if (notFilledSlot && entities.length > 0) {
       const hasMatch = entities.some(({ entity }) => entity === notFilledSlot.expectedEntity)
 
@@ -539,8 +538,7 @@ class Nlu {
         this.conv.setSlots(this.brain.lang, entities)
 
         notFilledSlot = this.conv.getNotFilledSlot()
-        console.log('notFilledSlotx2', notFilledSlot)
-        if (notFilledSlot && entities.length > 0) {
+        if (notFilledSlot) {
           this.brain.talk(notFilledSlot.pickedQuestion)
           this.brain.socket.emit('is-typing', false)
 
@@ -599,7 +597,6 @@ class Nlu {
       }
 
       const notFilledSlot = this.conv.getNotFilledSlot()
-      console.log('notFilledSlotx3', notFilledSlot)
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
         this.brain.talk(notFilledSlot.pickedQuestion)

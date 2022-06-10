@@ -151,7 +151,9 @@ class Conversation {
         questions = slotObj.locales[lang]
       }
 
-      const [foundEntity] = entities.filter(({ entity }) => entity === slotEntity)
+      // Match the slot with the submitted entity and ensure the slot hasn't been filled yet
+      const [foundEntity] = entities
+        .filter(({ entity }) => entity === slotEntity && !slotObj.isFilled)
       const pickedQuestion = questions[Math.floor(Math.random() * questions.length)]
       const slot = this._activeContext.slots[slotName]
       const newSlot = {
@@ -173,7 +175,12 @@ class Conversation {
         || (slot.isFilled && newSlot.isFilled
           && slot.value.resolution.value !== newSlot.value.resolution.value)
       ) {
+        if (newSlot?.isFilled) {
+          log.title('Conversation')
+          log.success(`Slot filled: { name: ${newSlot.name}, value: ${JSON.stringify(newSlot.value)} }`)
+        }
         this._activeContext.slots[slotName] = newSlot
+        entities.shift()
       }
     }
   }

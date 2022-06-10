@@ -23,8 +23,9 @@ def play(params):
 	}
 	entities, slots = params['entities'], params['slots']
 	# TODO: make resolution more simple. E.g. slots['rounds_nb']['strValue']. Same for entities
-	rounds_nb = slots['rounds_nb']['value']['resolution']['strValue']
-	testo = slots['testo']['value']['resolution']['strValue']
+	rounds_nb = str(slots['rounds_nb']['value']['resolution']['value'])
+	testo_email = str(slots['testo_email']['value']['resolution']['value'])
+	testo_nb = str(slots['testo_nb']['value']['resolution']['value'])
 	player = {
 		'handsign': None,
 		'points': 0
@@ -39,7 +40,7 @@ def play(params):
 		if entity['entity'] == 'handsign':
 			player['handsign'] = entity['option']
 
-	utils.output('inter', 'testo', 'Just a test: ' + str(rounds_nb) + ' and ' + str(testo))
+	utils.output('inter', 'testo', 'Just a test: ' + rounds_nb + ' + ' + testo_email + ' + ' + testo_nb)
 
 	# Return no speech if no number has been found
 	if player['handsign'] == None:
