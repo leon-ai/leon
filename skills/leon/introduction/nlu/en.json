@@ -28,7 +28,7 @@
             "name": "date"
           },
           "questions": [
-            "What's your birth date?"
+            "What's your birth date {{ person }}?"
           ]
         }
       ],

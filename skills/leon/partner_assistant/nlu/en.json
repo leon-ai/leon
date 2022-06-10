@@ -22,7 +22,7 @@
     "partner_assistant": {
       "options": {
         "Alexa": {
-          "synonyms": ["alexa"],
+          "synonyms": ["Alexa"],
           "data": {
             "thought": [
               "Alexa is very kind and Amazon is teaching it many things. It was born in November 2014.",
@@ -31,7 +31,7 @@
           }
         },
         "Cortana": {
-          "synonyms": ["cortana"],
+          "synonyms": ["Cortana"],
           "data": {
             "thought": [
               "Cortana is thoughtful and Microsoft is improving her day after day. She was born in April 2014.",
@@ -40,7 +40,7 @@
           }
         },
         "Siri": {
-          "synonyms": ["siri"],
+          "synonyms": ["Siri"],
           "data": {
             "thought": [
               "I consider Siri as a leader, it has a lot of experience and Apple is constantly improving it. It was born in October 2011.",
@@ -49,7 +49,7 @@
           }
         },
         "Google Assistant": {
-          "synonyms": ["google assistant"],
+          "synonyms": ["Google Assistant"],
           "data": {
             "thought": [
               "Google Assistant is smart and Google is doing a great job with it. It was born in May 2016.",

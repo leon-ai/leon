@@ -64,6 +64,8 @@ export default () => new Promise(async (resolve, reject) => {
           const intentName = intentKeys[j]
           const intentObj = resolverIntents[intentName]
 
+          nlp.assignDomain(lang, intentName, 'system')
+
           for (let k = 0; k < intentObj.utterance_samples.length; k += 1) {
             nlp.addDocument(lang, intentObj.utterance_samples[k], intentName)
           }

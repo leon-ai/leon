@@ -165,6 +165,10 @@ class Brain {
         const nextAction = action.next_action ? actions[action.next_action] : null
 
         if (actionType === 'logic') {
+          /**
+           * "Logic" action skill execution
+           */
+
           // Ensure the process is empty (to be able to execute other processes outside of Brain)
           if (Object.keys(this.process).length === 0) {
             /**
@@ -335,6 +339,10 @@ class Brain {
           // Reset the child process
           this.process = { }
         } else {
+          /**
+           * "Dialog" action skill execution
+           */
+
           const nluFilePath = path.join(
             process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'nlu', `${this._lang}.json`
           )
@@ -369,9 +377,9 @@ class Brain {
              */
             if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
               obj.entities.forEach((entityObj) => {
-                answer = string.pnr(answer, { [`{{ ${entityObj.entity} }}`]: entityObj.option })
+                answer = string.pnr(answer, { [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value })
 
-                // Find matches and map deeper data from the NLU file
+                // Find matches and map deeper data from the NLU file (global/custom entities)
                 const matches = answer.match(/{{.+?}}/g)
 
                 matches?.forEach((match) => {
