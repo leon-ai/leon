@@ -2,6 +2,7 @@
 # -*- coding:utf-8 -*-
 
 import utils
+from traceback import print_exc
 from sys import path
 from json import dumps, loads
 from importlib import import_module
@@ -27,4 +28,9 @@ def main():
 	return getattr(skill, intent_obj['action'])(params)
 
 if __name__ == '__main__':
-	main()
+	try:
+		raise main()
+	except Exception as e:
+		# Print full traceback error report if skills triggers an error from the call stack
+		if 'exceptions must derive from BaseException' not in str(e):
+			print_exc()

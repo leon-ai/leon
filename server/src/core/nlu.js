@@ -326,7 +326,11 @@ class Nlu {
 
         // When the active context has slots filled
         if (Object.keys(this.conv.activeContext.slots).length > 0) {
-          return resolve(await this.handleSlotFilling(utterance, opts))
+          try {
+            return resolve(await this.handleSlotFilling(utterance, opts))
+          } catch (e) {
+            return reject({ })
+          }
         }
       }
 
@@ -438,7 +442,11 @@ class Nlu {
 
       // In case all slots have been filled in the first utterance
       if (this.conv.hasActiveContext() && Object.keys(this.conv.activeContext.slots).length > 0) {
-        return resolve(await this.handleSlotFilling(utterance, opts))
+        try {
+          return resolve(await this.handleSlotFilling(utterance, opts))
+        } catch (e) {
+          return reject({ })
+        }
       }
 
       const newContextName = `${this.nluResultObj.classification.domain}.${skillName}`

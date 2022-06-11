@@ -6,10 +6,10 @@ from datetime import datetime
 from random import randint
 
 def remember(params):
-	"""Save name and birth date in Leon's memory"""
+	"""Save name and birth date into Leon's memory"""
 
 	slots = params['slots']
 	owner_name = slots['owner_name']['value']['resolution']['value']
-	owner_birth_date = slots['owner_birthdate']['value']['resolution']['value']
+	owner_birth_date = slots['owner_birth_date']['value']['resolution']['timex']
 
-	return utils.output('end', 'default', utils.translate('default', { 'owner_name': owner_name }))
+	return utils.output('end', 'remembered', utils.translate('remembered', { 'owner_name': owner_name }))
