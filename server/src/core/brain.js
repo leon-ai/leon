@@ -179,6 +179,10 @@ class Brain {
              * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
              *    python bridges/python/main.py server/src/intent-object.sample.json
              */
+            const slots = { }
+            Object.keys(obj.slots).forEach((slotName) => {
+              slots[slotName] = obj.slots[slotName].value
+            })
             const intentObj = {
               id: utteranceId,
               lang: this._lang,
@@ -190,7 +194,7 @@ class Brain {
               entities: obj.entities,
               current_resolvers: obj.currentResolvers,
               resolvers: obj.resolvers,
-              slots: obj.slots
+              slots
             }
 
             try {
