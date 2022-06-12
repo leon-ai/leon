@@ -25,15 +25,19 @@ def uncheck_todos(params):
 
 	# Verify if a list name has been provided
 	if not list_name:
-		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
+		return utils.output('end', 'list_not_provided')
 
 	# Verify todos have been provided
 	if len(todos) == 0:
-		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
+		return utils.output('end', 'todos_not_provided')
 
 	# Verify if the list exists
 	if db.has_list(list_name) == False:
-		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': list_name }))
+		return utils.output('end', { 'key': 'list_does_not_exist',
+			'data': {
+				'list': list_name
+			}
+		})
 
 	result = ''
 	for todo in todos:
@@ -44,7 +48,9 @@ def uncheck_todos(params):
 
 				result += utils.translate('list_todo_element', { 'todo': db_todo['name'] })
 
-	return utils.output('end', 'todo_unchecked', utils.translate('todos_unchecked', {
-	  'list': list_name,
-	  'result': result
-	}))
+	return utils.output('end', { 'key': 'todo_unchecked',
+		'data': {
+			'list': list_name,
+			'result': result
+		}
+	})

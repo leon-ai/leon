@@ -14,4 +14,4 @@ def setup(params):
 	# TODO: save these values in DB
 
 	# TODO: add output_context
-	return utils.output('end', 'ready', utils.translate('ready'))
+	return utils.output('end', 'ready')

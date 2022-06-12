@@ -31,14 +31,23 @@ def translate(key, dict = { }):
 	"""Pickup the language file according to the cmd arg
 	and return the value according to the params"""
 
+	# "Temporize" for the data buffer ouput on the core
+	sleep(0.1)
+
 	output = ''
+	variables = { }
 
 	file = open(path.join(dirname, '../../skills', intent_obj['domain'], intent_obj['skill'], 'nlu', intent_obj['lang'] + '.json'), 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 
+	# In case the key is a raw answer
+	if key not in obj['answers']:
+		return key
+
 	prop = obj['answers'][key]
-	variables = obj['variables']
+	if 'variables' in obj:
+		variables = obj['variables']
 	if isinstance(prop, list):
 		output = choice(prop)
 	else:
@@ -52,15 +61,18 @@ def translate(key, dict = { }):
 		for key in variables:
 			output = output.replace('%' + key + '%', str(variables[key]))
 
-	# "Temporize" for the data buffer ouput on the core
-	sleep(0.1)
-
 	return output
 
-def output(type, code, speech = '', core = { }):
+def output(type, content = '', core = { }):
 	"""Communicate with the core"""
 
-	codes.append(code)
+	if isinstance(content, dict):
+		speech = translate(content['key'], content['data'])
+		codes.append(content['key'])
+	else:
+		content = str(content)
+		speech = translate(content)
+		codes.append(content)
 
 	print(dumps({
 		'domain': intent_obj['domain'],
@@ -69,6 +81,7 @@ def output(type, code, speech = '', core = { }):
 		'lang': intent_obj['lang'],
 		'utterance': intent_obj['utterance'],
 		'entities': intent_obj['entities'],
+		'slots': intent_obj['slots'],
 		'output': {
 			'type': type,
 			'codes': codes,

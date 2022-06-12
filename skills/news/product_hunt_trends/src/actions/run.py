@@ -30,7 +30,7 @@ def run(params):
 			else:
 				day_date = item['resolution']['strValue']
 
-	utils.output('inter', 'reaching', utils.translate('reaching'))
+	utils.output('inter', 'reaching')
 
 	try:
 		url = 'https://api.producthunt.com/v1/posts'
@@ -41,19 +41,21 @@ def run(params):
 		response = r.json()
 
 		if 'error' in response and response['error'] == 'unauthorized_oauth':
-			return utils.output('end', 'invalid_developer_token', utils.translate('invalid_developer_token'))
+			return utils.output('end', 'invalid_developer_token')
 
 		posts = list(enumerate(response['posts']))
 		result = ''
 
 		if len(posts) == 0:
-			return utils.output('end', 'not_found', utils.translate('not_found'))
+			return utils.output('end', 'not_found')
 
 		if limit > len(posts):
-			utils.output('inter', 'limit_max', utils.translate('limit_max', {
-			  'limit': limit,
-			  'new_limit': len(posts)
-			}))
+			utils.output('inter', { 'key': 'limit_max',
+				'data': {
+					'limit': limit,
+					'new_limit': len(posts)
+				}
+			})
 			limit = len(posts)
 		elif limit == 0:
 			limit = 5
@@ -83,12 +85,12 @@ def run(params):
 			if (i + 1) == limit:
 				break
 
-		return utils.output('end', answer_key, utils.translate(answer_key, {
-					'limit': limit,
-					'result': result,
-					'date': day_date
-				}
-			)
-		)
+		return utils.output('end', { 'key': answer_key,
+			'data': {
+				'limit': limit,
+				'result': result,
+				'date': day_date
+			}
+		})
 	except requests.exceptions.RequestException as e:
-		return utils.output('end', 'unreachable', utils.translate('unreachable'))
+		return utils.output('end', 'unreachable')

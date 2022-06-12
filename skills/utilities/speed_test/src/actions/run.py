@@ -13,29 +13,29 @@ import subprocess
 import re
 
 def run(params):
-    """Give you information about your network speed"""
+	"""Give you information about your network speed"""
 
-    utils.output('inter', 'testing', utils.translate('testing'))
+	utils.output('inter', 'testing')
 
-    realpath = os.path.dirname(os.path.realpath(__file__))
-    process = subprocess.Popen(
-    [sys.executable, realpath + '/../lib/speed_test.lib.py', '--simple'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT
+	realpath = os.path.dirname(os.path.realpath(__file__))
+	process = subprocess.Popen(
+	[sys.executable, realpath + '/../lib/speed_test.lib.py', '--simple'],
+		stdout=subprocess.PIPE,
+		stderr=subprocess.STDOUT
     )
 
-    (output, err) = process.communicate()
-    p_status = process.wait()
+	(output, err) = process.communicate()
+	p_status = process.wait()
 
-    if err:
-        return utils.output('end', 'error', utils.translate('error'))
+	if err:
+		return utils.output('end', 'error')
 
-    rawoutput = output.decode('utf-8')
+	rawoutput = output.decode('utf-8')
 
-    data = {
-        'ping': re.search('Ping:(.+?)\n', rawoutput).group(1).strip(),
-        'download': re.search('Download:(.+?)\n', rawoutput).group(1).strip(),
-        'upload': re.search('Upload:(.+?)\n', rawoutput).group(1).strip()
-    }
+	data = {
+		'ping': re.search('Ping:(.+?)\n', rawoutput).group(1).strip(),
+		'download': re.search('Download:(.+?)\n', rawoutput).group(1).strip(),
+		'upload': re.search('Upload:(.+?)\n', rawoutput).group(1).strip()
+	}
 
-    return utils.output('end', 'done', utils.translate('done', data))
+	return utils.output('end', { 'key': 'done', 'data': data })

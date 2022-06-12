@@ -10,4 +10,4 @@ def setup(params):
 
 	# TODO: use rounds_nb slot and save it in DB
 
-	return utils.output('end', 'ready', utils.translate('ready'))
+	return utils.output('end', 'ready')

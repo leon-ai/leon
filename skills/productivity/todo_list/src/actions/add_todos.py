@@ -25,11 +25,11 @@ def add_todos(params):
 
 	# Verify if a list name has been provided
 	if not list_name:
-		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
+		return utils.output('end', 'list_not_provided')
 
 	# Verify todos have been provided
 	if len(todos) == 0:
-		return utils.output('end', 'todos_not_provided', utils.translate('todos_not_provided'))
+		return utils.output('end', 'todos_not_provided')
 
 	# Verify the list exists
 	if db.has_list(list_name) == False:
@@ -42,7 +42,9 @@ def add_todos(params):
 		db.create_todo(list_name, todo)
 		result += utils.translate('list_todo_element', { 'todo': todo })
 
-	return utils.output('end', 'todos_added', utils.translate('todos_added', {
-	  'list': list_name,
-	  'result': result
-	}))
+	return utils.output('end', { 'key': 'todos_added',
+		'data': {
+			'list': list_name,
+		  	'result': result
+		}
+	})

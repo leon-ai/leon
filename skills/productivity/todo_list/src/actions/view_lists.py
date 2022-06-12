@@ -14,7 +14,7 @@ def view_lists(params):
 
 	# Verify if a list exists
 	if lists_nb == 0:
-		return utils.output('end', 'no_list', utils.translate('no_list'))
+		return utils.output('end', 'no_list')
 
 	result = ''
 	# Fill end-result
@@ -24,9 +24,9 @@ def view_lists(params):
 			'todos_nb': db.count_todos( list_element['name'])
 		})
 
-	return utils.output('end', 'lists_listed', utils.translate('lists_listed', {
-				'lists_nb': lists_nb,
-				'result': result
-			}
-		)
-	)
+	return utils.output('end', { 'key': 'lists_listed',
+		'data': {
+			'lists_nb': lists_nb,
+			'result': result
+		}
+	})

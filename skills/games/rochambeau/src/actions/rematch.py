@@ -16,9 +16,9 @@ def rematch(params):
 			decision = item['resolution']['value']
 
 	if decision == 1:
-		return utils.output('end', 'replay', 'Let\'s goooo', {
+		return utils.output('end', 'Let\'s goooo', {
 			'isInActionLoop': False,
 			'restart': True
 		})
 
-	return utils.output('end', 'quit', 'As you wish', { 'isInActionLoop': False })
+	return utils.output('end', 'As you wish', { 'isInActionLoop': False })

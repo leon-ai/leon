@@ -22,9 +22,9 @@ def run(params):
         emails = utils.config('options')['emails']
 
         if not emails:
-            return utils.output('end', 'no_email', utils.translate('no_email'))
+            return utils.output('end', 'no_email')
 
-    utils.output('inter', 'checking', utils.translate('checking'))
+    utils.output('inter', 'checking')
 
     for index, email in enumerate(emails):
         is_last_email = index == len(emails) - 1
@@ -33,14 +33,22 @@ def run(params):
 
         # Have I Been Pwned API returns a 403 when accessed by unauthorized/banned clients
         if breached == 403:
-            return utils.output('end', 'blocked', utils.translate('blocked', { 'website_name': 'Have I Been Pwned' }))
+        	return utils.output('end', { 'key': 'blocked',
+				'data': {
+					'website_name': 'Have I Been Pwned'
+				}
+			})
         elif breached == 503:
-            return utils.output('end', 'blocked', utils.translate('unavailable', { 'website_name': 'Have I Been Pwned' }))
+        	return utils.output('end', { 'key': 'unavailable',
+				'data': {
+					'website_name': 'Have I Been Pwned'
+				}
+			})
         elif not breached:
             if is_last_email:
-                return utils.output('end', 'no_pwnage', utils.translate('no_pwnage', data))
+            	return utils.output('end', { 'key': 'no_pwnage', 'data': data })
             else:
-                utils.output('inter', 'no_pwnage', utils.translate('no_pwnage', data))
+            	utils.output('inter', { 'key': 'no_pwnage', 'data': data })
         else:
             data['result'] = ''
 
@@ -53,10 +61,9 @@ def run(params):
                 )
 
             if is_last_email:
-                return utils.output('end', 'pwned', utils.translate('pwned', data))
+            	return utils.output('end', { 'key': 'pwned', 'data': data })
             else:
-                utils.output('inter', 'pwned', utils.translate('pwned', data))
-
+            	utils.output('inter', { 'key': 'pwned', 'data': data })
 def check_for_breach(email):
     # Delay for 2 seconds before making request to accomodate API usage policy
     sleep(2)
@@ -73,4 +80,8 @@ def check_for_breach(email):
 
         return response.status_code
     except exceptions.RequestException as e:
-        return utils.output('end', 'down', utils.translate('errors', { 'website_name': 'Have I Been Pwned' }))
+    	return utils.output('end', { 'key': 'errors',
+			'data': {
+				'website_name': 'Have I Been Pwned'
+			}
+		})

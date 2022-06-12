@@ -17,11 +17,11 @@ def guess(params):
 
 	# Return no speech if no number has been found
 	if given_nb == -1:
-		return utils.output('end', None, None, { 'isInActionLoop': False })
+		return utils.output('end', None, { 'isInActionLoop': False })
 
 	if given_nb == nb_to_guess:
-		return utils.output('end', 'guessed', '....CONGRATS.... Do you want to play another round?', { 'isInActionLoop': False })
+		return utils.output('end', '....CONGRATS.... Do you want to play another round?', { 'isInActionLoop': False })
 	if nb_to_guess < given_nb:
-		return utils.output('end', 'smaller', utils.translate('smaller'))
+		return utils.output('end', 'smaller')
 	if nb_to_guess > given_nb:
-		return utils.output('end', 'bigger', utils.translate('bigger'))
+		return utils.output('end', 'bigger')

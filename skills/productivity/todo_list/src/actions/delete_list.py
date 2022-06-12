@@ -19,13 +19,21 @@ def delete_list(params):
 
 	# Verify if a list name has been provided
 	if not list_name:
-		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
+		return utils.output('end', 'list_not_provided')
 
 	# Verify if the list exists
 	if db.has_list(list_name) == False:
-		return utils.output('end', 'list_does_not_exist', utils.translate('list_does_not_exist', { 'list': list_name }))
+		return utils.output('end', { 'key': 'list_does_not_exist',
+			'data': {
+				'list': list_name
+			}
+		})
 
 	# Delete the to-do list
 	db.delete_list(list_name)
 
-	return utils.output('end', 'list_deleted', utils.translate('list_deleted', { 'list': list_name }))
+	return utils.output('end', { 'key': 'list_deleted',
+		'data': {
+			'list': list_name
+		}
+	})

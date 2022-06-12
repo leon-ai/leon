@@ -19,12 +19,20 @@ def create_list(params):
 
 	# Verify if a list name has been provided
 	if not list_name:
-		return utils.output('end', 'list_not_provided', utils.translate('list_not_provided'))
+		return utils.output('end', 'list_not_provided')
 
 	# Verify if list already exists or not
 	if db.has_list(list_name):
-		return utils.output('end', 'list_already_exists', utils.translate('list_already_exists', { 'list': list_name }))
+		return utils.output('end', { 'key': 'list_already_exists',
+			'data': {
+				'list': list_name
+			}
+		})
 
 	db.create_list(list_name)
 
-	return utils.output('end', 'list_created', utils.translate('list_created', { 'list': list_name }))
+	return utils.output('end', { 'key': 'list_created',
+		'data': {
+			'list': list_name
+		}
+	})

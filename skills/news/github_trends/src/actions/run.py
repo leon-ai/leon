@@ -45,14 +45,12 @@ def run(params):
 			tech_slug = language.lower()
 
 	if limit > 25:
-		utils.output('inter', 'limit_max', utils.translate('limit_max', {
-		  'limit': limit
-		}))
+		utils.output('inter', { 'key': 'limit_max', 'data': { 'limit': limit } })
 		limit = 25
 	elif limit == 0:
 		limit = 5
 
-	utils.output('inter', 'reaching', utils.translate('reaching'))
+	utils.output('inter', 'reaching')
 
 	try:
 		r = utils.http('GET', 'https://github.com/trending/' + tech_slug + '?since=' + since)
@@ -88,12 +86,12 @@ def run(params):
 					}
 				)
 
-		return utils.output('end', answer_key, utils.translate(answer_key, {
-					'limit': limit,
-					'tech': tech,
-					'result': result
-				}
-			)
-		)
+		return utils.output('end', { 'key': answer_key,
+			'data': {
+				'limit': limit,
+				'tech': tech,
+				'result': result
+			}
+		})
 	except requests.exceptions.RequestException as e:
-		return utils.output('end', 'unreachable', utils.translate('unreachable'))
+		return utils.output('end', 'unreachable')

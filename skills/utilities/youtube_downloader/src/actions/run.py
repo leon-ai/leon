@@ -18,7 +18,7 @@ def run(params):
 	# https://developers.google.com/youtube/v3/docs/playlistItems/list
 	url = 'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=' + playlist_id + '&key=' + api_key
 
-	utils.output('inter', 'reaching_playlist', utils.translate('reaching_playlist'))
+	utils.output('inter', 'reaching_playlist')
 	# Get videos from the playlist
 	try:
 		r = utils.http('GET', url)
@@ -26,11 +26,12 @@ def run(params):
 		# In case there is a problem like wrong settings
 		if 'error' in r.json():
 			error = r.json()['error']['errors'][0]
-			return utils.output('settings_error', 'settings_error', utils.translate('settings_errors', {
-				'reason': error['reason'],
-				'message': error['message']
-			}))
-
+			return utils.output('end', { 'key': 'settings_error'
+				'data': {
+					'reason': error['reason'],
+					'message': error['message']
+				}
+			})
 
 		items = r.json()['items']
 		video_ids = []
@@ -46,7 +47,7 @@ def run(params):
 					'title': item['snippet']['title']
 				})
 	except requests.exceptions.RequestException as e:
-		return utils.output('request_error', 'request_error', utils.translate('request_errors'))
+		return utils.output('end', 'request_error')
 
 	Entry = query()
 
@@ -71,19 +72,23 @@ def run(params):
 	nbrto_download = len(to_download)
 
 	if nbrto_download == 0:
-		return utils.output('nothing_to_download', 'nothing_to_download', utils.translate('nothing_to_download'))
+		return utils.output('end', 'nothing_to_download')
 
-	utils.output('inter', 'nb_to_download', utils.translate('nb_to_download', {
-		'nb': nbrto_download
-	}))
+	utils.output('inter', { 'key': 'nb_to_download'
+		'data': {
+			'nb': nbrto_download
+		}
+	})
 
 	# Create the module downloads directory
 	skill_dl_dir = utils.create_dl_dir()
 
 	for i, video in enumerate(to_download):
-		utils.output('inter', 'downloading', utils.translate('downloading', {
-			'video_title': video['title']
-		}))
+		utils.output('inter', { 'key': 'downloading'
+			'data': {
+				'video_title': video['title']
+			}
+		})
 
 		# Download the video
 		yt = YouTube('https://youtube.com/watch?v=' + video['id'])
@@ -94,4 +99,4 @@ def run(params):
 		db.update({ 'downloaded_videos': downloaded_videos }, Entry.platform == 'youtube')
 
 	# Will synchronize the content (because "end" type) if synchronization enabled
-	return utils.output('end', 'success', utils.translate('success'))
+	return utils.output('end', 'success')

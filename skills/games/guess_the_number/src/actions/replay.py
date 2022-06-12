@@ -16,10 +16,9 @@ def replay(params):
 			decision = resolver['value']
 
 	if decision == True:
-		return utils.output('end', 'replay', 'Let\'s goooo ' + str(decision), {
+		return utils.output('end', 'Let\'s goooo ' + str(decision), {
 			'isInActionLoop': False,
 			'restart': True
 		})
 
-
-	return utils.output('end', 'quit', 'As you wish ' + str(decision), { 'isInActionLoop': False })
+	return utils.output('end', 'As you wish ' + str(decision), { 'isInActionLoop': False })

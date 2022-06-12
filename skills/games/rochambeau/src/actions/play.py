@@ -23,9 +23,9 @@ def play(params):
 	}
 	entities, slots = params['entities'], params['slots']
 	# TODO: make resolution more simple. E.g. slots['rounds_nb']['strValue']. Same for entities
-	rounds_nb = str(slots['rounds_nb']['value']['resolution']['value'])
-	testo_email = str(slots['testo_email']['value']['resolution']['value'])
-	testo_nb = str(slots['testo_nb']['value']['resolution']['value'])
+	rounds_nb = str(slots['rounds_nb']['resolution']['value'])
+	testo_email = str(slots['testo_email']['resolution']['value'])
+	testo_nb = str(slots['testo_nb']['resolution']['value'])
 	player = {
 		'handsign': None,
 		'points': 0
@@ -40,26 +40,29 @@ def play(params):
 		if entity['entity'] == 'handsign':
 			player['handsign'] = entity['option']
 
-	utils.output('inter', 'testo', 'Just a test: ' + rounds_nb + ' + ' + testo_email + ' + ' + testo_nb)
+	utils.output('inter', 'Just a test: ' + rounds_nb + ' + ' + testo_email + ' + ' + testo_nb)
 
-	# Return no speech if no number has been found
+	# Exit the loop if no handsign has been found
 	if player['handsign'] == None:
 		return utils.output('end', None, None, { 'isInActionLoop': False })
 
 	if leon['handsign'] == player['handsign']:
-		return utils.output('end', 'equal', utils.translate('equal'))
+		return utils.output('end', 'equal')
 
 	# Point for Leon
 	if handsigns[leon['handsign']]['superior_to'] == player['handsign']:
 		# TODO: increment +1 for Leon
-		return utils.output('end', 'point_for_leon', utils.translate('point_for_leon', {
-			'handsign_1': leon['handsign'].lower(),
-			'handsign_2': player['handsign'].lower()
-		}))
+		return utils.output('end', { 'key': 'point_for_leon',
+			'data': {
+				'handsign_1': leon['handsign'].lower(),
+				'handsign_2': player['handsign'].lower()
+			}
+		})
 
 	# TODO: increment +1 for player
-
-	return utils.output('end', 'point_for_player', utils.translate('point_for_player', {
-		'handsign_1': player['handsign'].lower(),
-		'handsign_2': leon['handsign'].lower()
-	}))
+	return utils.output('end', { 'key': 'point_for_player',
+		'data': {
+			'handsign_1': player['handsign'].lower(),
+            'handsign_2': leon['handsign'].lower()
+		}
+	})
