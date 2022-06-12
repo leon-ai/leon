@@ -6,6 +6,7 @@ from sys import argv, path
 from json import dumps, loads
 from importlib import import_module
 
+
 def main():
 	"""Dynamically import modules related to the args and print the ouput"""
 
@@ -17,4 +18,5 @@ def main():
 	return getattr(m, queryobj['action'])(queryobj['query'], queryobj['entities'])
 
 if __name__ == '__main__':
+	#Appropriately adding Face recognition modules in the main python file.
 	main()
