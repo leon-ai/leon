@@ -2,7 +2,7 @@
   "name": "Introduction",
   "bridge": "python",
   "version": "1.0.0",
-  "description": "Leon remembers basic information about you.",
+  "description": "Leon introduce himself and remembers basic information about you.",
   "author": {
     "name": "Louis Grenard",
     "email": "louis.grenard@gmail.com",

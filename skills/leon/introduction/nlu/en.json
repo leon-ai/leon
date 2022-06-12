@@ -1,6 +1,23 @@
 {
+  "variables": {
+    "leon_introduction_1": "I'm your daily personal assistant. I have been created by Louis. I'm very happy to serve you everyday.",
+    "leon_introduction_2": "The question is, who are you? I'm kidding! I'm your daily personal assistant. Louis created me to make your life easier.",
+    "leon_introduction_3": "Firstly, I'm not a criminal as you might relatively think about a popular movie. Secondly, Louis is the guy who gave me life. Thirdly, I'm your personal assistant and I'm very glad to help you."
+  },
   "actions": {
-    "fill": {
+    "introduce_leon": {
+      "type": "logic",
+      "utterance_samples": [
+        "Who are you?",
+        "How they call you?",
+        "What's your name?",
+        "Tell me who you are",
+        "Introduce yourself",
+        "I want to know you"
+      ],
+      "next_action": "gather_basic_info"
+    },
+    "gather_basic_info": {
       "type": "dialog",
       "utterance_samples": [
         "Do you know who am I?",
@@ -42,6 +59,16 @@
     "remembered": [
       "I'm going to remember that %owner_name%",
       "Good to know a bit more about you %owner_name%"
+    ],
+    "leon_introduction": [
+      "%leon_introduction_1%",
+      "%leon_introduction_2%",
+      "%leon_introduction_3%"
+    ],
+    "leon_introduction_with_question": [
+      "%leon_introduction_1% How about you?",
+      "%leon_introduction_2% How about you?",
+      "%leon_introduction_3% How about you?"
     ]
   }
 }

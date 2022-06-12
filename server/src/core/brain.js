@@ -180,9 +180,11 @@ class Brain {
              *    python bridges/python/main.py server/src/intent-object.sample.json
              */
             const slots = { }
-            Object.keys(obj.slots).forEach((slotName) => {
-              slots[slotName] = obj.slots[slotName].value
-            })
+            if (obj.slots) {
+              Object.keys(obj.slots)?.forEach((slotName) => {
+                slots[slotName] = obj.slots[slotName].value
+              })
+            }
             const intentObj = {
               id: utteranceId,
               lang: this._lang,

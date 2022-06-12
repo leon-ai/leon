@@ -85,7 +85,12 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/leon/introduction/fill",
+      "route": "/api/action/leon/introduction/introduce_leon",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/introduction/gather_basic_info",
       "params": []
     },
     {
@@ -116,11 +121,6 @@
     {
       "method": "GET",
       "route": "/api/action/leon/welcome/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/who_am_i/run",
       "params": []
     },
     {

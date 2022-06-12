@@ -110,40 +110,6 @@ export default () => new Promise(async (resolve, reject) => {
 
               nlp.assignDomain(lang, `${skillName}.${actionName}`, currentDomain.name)
 
-              /**
-               * TODO:
-               * 1. [OK] Merge person, location and organization to the
-               * NER before processing NLU (cf. line 210 in nlu.js)
-               * 2. [OK] Grab intents with slots
-               * 3. [OK] .addSlot() as per the slots config
-               * 4. [OK] Handle random questions picking
-               *  srcAnswer has the array, need to activate context now?
-               *  to detect we should pick .srcAnswer
-               * 5.1 [OK] Reorganize code before to proceed to next steps
-               * 5.2 [OK] Activate context and fill slots
-               * 5.3 [OK] Keep action activated in context + forward slot data to next action
-               * 6. Make entities + slots way lighter with simple properties
-               * to be used in skills without too much properties and nested props.
-               * Currently: slots['players_nb']['value']['sourceText']
-               * Should be: slots['players_nb']['value']
-               * And possible: slots['players_nb']['sourceText']
-               * 7. [OK] Train resolvers (affirm_deny: boolean value)
-               * 8. [OK] Map resolvers to skill actions
-               * 9. Utterance item type to get raw input from utterance
-               * 10. Create superheroes skill (just for testing):
-               *  to ask Leon questions by saving context
-               *  or just use the color or to do list skill?
-               *  - I want to know about the red color
-               *  > Well, the red color...
-               *  - Do you like this color?
-               *  > Red is cool, but I prefer...
-               * 11. [OK] "Add potatoes to my shopping list" ... "Actually remove it"
-               * The entities are already persistent in context.
-               * Just need to check in current context and loop through classifications intent.
-               * If the skill is found, then use that intent. So an intent should not always be
-               * the one with the highest confidence
-               * 12. Modify skills as per new code (skill params became dictionary [OK], etc.)
-               */
               if (slots) {
                 for (let l = 0; l < slots.length; l += 1) {
                   const slotObj = slots[l]

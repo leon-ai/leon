@@ -2,8 +2,6 @@
 # -*- coding:utf-8 -*-
 
 import utils
-from datetime import datetime
-from random import randint
 
 def remember(params):
 	"""Save name and birth date into Leon's memory"""

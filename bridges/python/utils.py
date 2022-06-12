@@ -27,7 +27,7 @@ def get_intent_obj():
 
 	return intent_obj
 
-def translate(key, d = { }):
+def translate(key, dict = { }):
 	"""Pickup the language file according to the cmd arg
 	and return the value according to the params"""
 
@@ -38,14 +38,19 @@ def translate(key, d = { }):
 	file.close()
 
 	prop = obj['answers'][key]
+	variables = obj['variables']
 	if isinstance(prop, list):
 		output = choice(prop)
 	else:
 		output = prop
 
-	if d:
-		for k in d:
-			output = output.replace('%' + k + '%', str(d[k]))
+	if dict:
+		for key in dict:
+			output = output.replace('%' + key + '%', str(dict[key]))
+
+	if variables:
+		for key in variables:
+			output = output.replace('%' + key + '%', str(variables[key]))
 
 	# "Temporize" for the data buffer ouput on the core
 	sleep(0.1)
