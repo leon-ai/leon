@@ -169,7 +169,7 @@ class Nlu {
     const [skillName, actionName] = intent.split('.')
     const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
     this.nluResultObj = {
-      ...this.nluResultObj,
+      ...defaultNluResultObj, // Reset entities, slots, etc.
       slots: this.conv.activeContext.slots,
       utterance,
       nluDataFilePath,
@@ -363,7 +363,7 @@ class Nlu {
 
       const [skillName, actionName] = intent.split('.')
       this.nluResultObj = {
-        ...this.nluResultObj,
+        ...defaultNluResultObj, // Reset entities, slots, etc.
         utterance,
         answers, // For dialog action type
         classification: {
@@ -529,7 +529,7 @@ class Nlu {
     const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
 
     this.nluResultObj = {
-      ...this.nluResultObj,
+      ...defaultNluResultObj, // Reset entities, slots, etc.
       utterance,
       classification: {
         domain,
@@ -565,7 +565,7 @@ class Nlu {
       this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
     } else {
       this.nluResultObj = {
-        ...this.nluResultObj,
+        ...defaultNluResultObj, // Reset entities, slots, etc.
         // Assign slots only if there is a next action
         slots: this.conv.activeContext.nextAction ? this.conv.activeContext.slots : { },
         utterance: this.conv.activeContext.originalUtterance,

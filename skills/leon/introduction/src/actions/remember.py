@@ -10,4 +10,6 @@ def remember(params):
 	owner_name = slots['owner_name']['resolution']['value']
 	owner_birth_date = slots['owner_birth_date']['resolution']['timex']
 
-	return utils.output('end', 'remembered', utils.translate('remembered', { 'owner_name': owner_name }))
+	return utils.output('end', { 'key': 'remembered',
+		'data': { 'owner_name': owner_name }
+	})

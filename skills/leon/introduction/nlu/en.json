@@ -66,9 +66,9 @@
       "%leon_introduction_3%"
     ],
     "leon_introduction_with_question": [
-      "%leon_introduction_1% How about you?",
-      "%leon_introduction_2% How about you?",
-      "%leon_introduction_3% How about you?"
+      "%leon_introduction_1% How about you, what's your name?",
+      "%leon_introduction_2% How about you, how should I call you?",
+      "%leon_introduction_3% How about you, may I know your name?"
     ]
   }
 }

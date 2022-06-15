@@ -1,5 +1,6 @@
-import log from '@/helpers/log'
 import fs from 'fs'
+
+import log from '@/helpers/log'
 
 const maxContextHistory = 5
 const defaultActiveContext = {
@@ -62,13 +63,12 @@ class Conversation {
     const slotKeys = Object.keys(slots)
     const [skillName] = intent.split('.')
     const newContextName = `${domain}.${skillName}`
+    const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+    // Grab next action from the NLU data file
+    const { next_action: nextAction } = actions[actionName]
 
     // If slots are required to trigger next actions, then go through the context activation
     if (slotKeys.length > 0) {
-      const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
-      // Grab next action from the NLU data file
-      const { next_action: nextAction } = actions[actionName]
-
       /**
        * If a new context is triggered
        * then save the current active context to the contexts history
@@ -116,7 +116,7 @@ class Conversation {
           entities,
           slots: { },
           isInActionLoop,
-          nextAction: null,
+          nextAction,
           originalUtterance: contextObj.originalUtterance,
           activatedAt: Date.now()
         }
