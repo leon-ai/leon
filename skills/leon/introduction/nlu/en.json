@@ -24,7 +24,8 @@
         "Do you know me?",
         "Do you know my name?",
         "My name is @person",
-        "I'm born the @date"
+        "I'm born the @date",
+        "My birth date is the @date"
       ],
       "slots": [
         {
