@@ -246,6 +246,9 @@ class Brain {
                 })
               }
             } catch (e) {
+              log.title('Brain')
+              log.debug(`process.stdout: ${String(data)}`)
+
               /* istanbul ignore next */
               reject({
                 type: 'error',

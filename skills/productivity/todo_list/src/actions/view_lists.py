@@ -21,7 +21,7 @@ def view_lists(params):
 	for list_element in db.get_lists():
 		result += utils.translate('list_list_element', {
 			'list': list_element['name'],
-			'todos_nb': db.count_todos( list_element['name'])
+			'todos_nb': db.count_todos(list_element['name'])
 		})
 
 	return utils.output('end', { 'key': 'lists_listed',

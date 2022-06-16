@@ -9,7 +9,7 @@ python_version = "3.9.10"
 [packages]
 requests = "==2.21.0"
 pytube = "==9.5.0"
-tinydb = "==3.9.0"
+tinydb = "==4.7.0"
 beautifulsoup4 = "==4.7.1"
 spacy = "==3.3.0"
 setuptools = "==60.9.3"

@@ -57,8 +57,8 @@
   },
   "answers": {
     "remembered": [
-      "I'm going to remember that %owner_name%",
-      "Good to know a bit more about you %owner_name%"
+      "I'm going to remember that %owner_name%.",
+      "Good to know a bit more about you %owner_name%."
     ],
     "leon_introduction": [
       "%leon_introduction_1%",

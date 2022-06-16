@@ -1,9 +1,13 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
-import utils
 from datetime import datetime
 from random import randint
+
+import utils
+
+owner_table = utils.get_table('leon.introduction.owner')
+owner = owner_table.get(doc_id=0)
 
 def run(params):
 	"""Leon greets you"""
@@ -24,5 +28,10 @@ def run(params):
 			return utils.output('end', 'night')
 
 		return utils.output('end', 'too_late')
+
+	if owner != None:
+		return utils.output('end', { 'key': 'default_w_name',
+			'data': { 'owner_name': owner['name'] }
+		})
 
 	return utils.output('end', 'default')

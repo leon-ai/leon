@@ -7,7 +7,7 @@ from pathlib import Path
 from random import choice
 from sys import argv, stdout
 from vars import useragent
-from tinydb import TinyDB, Query, operations
+from tinydb import TinyDB, Query, table, operations
 from time import sleep
 import sqlite3
 import requests
@@ -131,4 +131,17 @@ def db(db_type = 'tinydb'):
 	if db_type == 'tinydb':
 		ext = '.json' if environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
 		db = TinyDB(path.join(dirname, '../../skills', intent_obj['domain'], intent_obj['skill'], 'memory/db' + ext))
-		return { 'db': db, 'query': Query, 'operations': operations }
+		return {
+			'db': db,
+			'query': Query,
+			'table': table,
+			'operations': operations
+		}
+
+def get_table(slug):
+	"""Get a table from a specific skill"""
+
+	domain, skill, table = slug.split('.')
+	ext = '.json' if environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
+	db = TinyDB(path.join(dirname, '../../skills', domain, skill, 'memory/db' + ext))
+	return db.table(table)
