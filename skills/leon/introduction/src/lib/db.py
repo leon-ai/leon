@@ -21,7 +21,7 @@ def upsert_owner(owner_name, owner_birth_date):
 		'birth_date': owner_birth_date
 	}, doc_id=0))
 
-def get_basic_info():
+def get_owner():
 	"""Get owner's basic information"""
 
-	return owner_table
+	return owner_table.get(doc_id=0)
