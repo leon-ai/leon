@@ -1,5 +1,3 @@
-from time import time
-
 import utils
 
 # Skill database
@@ -9,9 +7,6 @@ table = utils.db()['table']
 
 # Owner table
 owner_table = db.table('owner')
-
-# Time stamp
-timestamp = int(time())
 
 def upsert_owner(owner_name, owner_birth_date):
 	"""Save basic information about the owner"""

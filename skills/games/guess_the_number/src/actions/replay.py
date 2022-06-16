@@ -4,21 +4,19 @@
 import utils
 
 def replay(params):
-	"""This is a test"""
+	"""Take decision about whether to replay"""
 
-	entities, resolvers, slots = params['entities'], params['resolvers'], params['slots']
+	resolvers = params['resolvers']
 	decision = False
 
-	# Find entities
-	# TODO: replace with confirmation resolver
 	for resolver in resolvers:
 		if resolver['name'] == 'affirmation_denial':
 			decision = resolver['value']
 
 	if decision == True:
-		return utils.output('end', 'Let\'s goooo ' + str(decision), {
+		return utils.output('end', 'replay', {
 			'isInActionLoop': False,
 			'restart': True
 		})
 
-	return utils.output('end', 'As you wish ' + str(decision), { 'isInActionLoop': False })
+	return utils.output('end', 'stop', { 'isInActionLoop': False })

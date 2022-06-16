@@ -44,6 +44,17 @@
     ],
     "guessed": [
       "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
+    ],
+    "replay": [
+      "Let's gooo!",
+      "You said it!",
+      "Let me pick up a number...",
+      "Gotcha, I'm picking up a number..."
+    ],
+    "stop": [
+      "Sure, as you wish.",
+      "You said it.",
+      "Let's stop here then!"
     ]
   }
 }

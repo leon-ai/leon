@@ -37,29 +37,6 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/leon/birthday/leon_birthday",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/birthday/when_my_birthday",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/leon/birthday/when_birthday",
-      "params": [
-        "person"
-      ],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/birthday/my_birthday",
-      "params": []
-    },
-    {
-      "method": "GET",
       "route": "/api/action/leon/color/favorite_color",
       "params": []
     },
