@@ -3,6 +3,7 @@ import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
+import path from 'path'
 
 import log from '@/helpers/log'
 import string from '@/helpers/string'
@@ -37,7 +38,7 @@ synthesizer.conf = {
  * The env variable "GOOGLE_APPLICATION_CREDENTIALS" provides the JSON file path
  */
 synthesizer.init = (lang) => {
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = `${__dirname}/../../config/voice/google-cloud.json`
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'core/config/voice/google-cloud.json')
   synthesizer.conf.voice = voices[lang]
 
   try {

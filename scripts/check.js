@@ -18,10 +18,10 @@ export default () => new Promise(async (resolve, reject) => {
     const pythonMinRequiredVersion = '3'
     const flitePath = 'bin/flite/flite'
     const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
-    const amazonPath = 'server/src/config/voice/amazon.json'
-    const googleCloudPath = 'server/src/config/voice/google-cloud.json'
-    const watsonSttPath = 'server/src/config/voice/watson-stt.json'
-    const watsonTtsPath = 'server/src/config/voice/watson-tts.json'
+    const amazonPath = 'core/config/voice/amazon.json'
+    const googleCloudPath = 'core/config/voice/google-cloud.json'
+    const watsonSttPath = 'core/config/voice/watson-stt.json'
+    const watsonTtsPath = 'core/config/voice/watson-tts.json'
     const nlpModelPath = 'core/data/leon-model.nlp'
     const report = {
       can_run: { title: 'Run', type: 'error', v: true },

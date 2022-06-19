@@ -4,6 +4,7 @@ import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
+import path from 'path'
 
 import log from '@/helpers/log'
 import string from '@/helpers/string'
@@ -30,7 +31,7 @@ synthesizer.conf = {
  * Initialize Watson Text-to-Speech based on credentials in the JSON file
  */
 synthesizer.init = (lang) => {
-  const config = JSON.parse(fs.readFileSync(`${__dirname}/../../config/voice/watson-tts.json`, 'utf8'))
+  const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/voice/watson-tts.json'), 'utf8'))
   synthesizer.conf.voice = voices[lang].voice
 
   try {

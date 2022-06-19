@@ -8,7 +8,7 @@ test/coverage/
 bridges/python/.venv/*
 downloads/*
 logs/*
-server/src/config/**/*.json
+core/config/**/*.json
 bin/coqui/*
 bin/flite/*
 

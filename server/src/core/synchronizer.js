@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import fs from 'fs'
+import path from 'path'
 import { waterfall } from 'async'
 
 import log from '@/helpers/log'
@@ -58,7 +59,7 @@ class Synchronizer {
       const driveFolderName = `leon-${this.classification.domain}-${this.classification.skill}`
       const folderMimeType = 'application/vnd.google-apps.folder'
       const entities = fs.readdirSync(this.downloadDir)
-      const key = JSON.parse(fs.readFileSync(`${__dirname}/../config/synchronizer/google-drive.json`, 'utf8'))
+      const key = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/synchronizer/google-drive.json'), 'utf8'))
       const authClient = new google.auth.JWT(
         key.client_email,
         key,
