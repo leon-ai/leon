@@ -4,21 +4,19 @@
 import utils
 
 def rematch(params):
-	"""This is a test"""
+	"""Take decision whether to do a rematch"""
 
-	entities, slots = params['entities'], params['slots']
-	decision = 0
+	resolvers = params['resolvers']
+	decision = False
 
-	# Find entities
-	# TODO: replace with confirmation resolver
-	for item in params['entities']:
-		if item['entity'] == 'number':
-			decision = item['resolution']['value']
+	for resolver in resolvers:
+		if resolver['name'] == 'affirmation_denial':
+			decision = resolver['value']
 
-	if decision == 1:
-		return utils.output('end', 'Let\'s goooo', {
+	if decision == True:
+		return utils.output('end', 'confirm_rematch', {
 			'isInActionLoop': False,
 			'restart': True
 		})
 
-	return utils.output('end', 'As you wish', { 'isInActionLoop': False })
+	return utils.output('end', 'deny_rematch', { 'isInActionLoop': False })

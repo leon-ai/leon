@@ -8,44 +8,9 @@
         "Can we play paper rock scissors?",
         "I want to play rochambeau"
       ],
-      "slots": [
-        {
-          "name": "rounds_nb",
-          "item": {
-            "type": "entity",
-            "name": "number"
-          },
-          "questions": [
-            "How many rounds would you like to play?",
-            "How many rounds should I set?",
-            "Sure, how many rounds should I prepare?"
-          ]
-        },
-        {
-          "name": "testo_email",
-          "item": {
-            "type": "entity",
-            "name": "email"
-          },
-          "questions": [
-            "Testo?"
-          ]
-        },
-        {
-          "name": "testo_nb",
-          "item": {
-            "type": "entity",
-            "name": "number"
-          },
-          "questions": [
-            "Testo2?"
-          ]
-        }
+      "answers": [
+        "Alright, let's get started!"
       ],
-      "next_action": "setup"
-    },
-    "setup": {
-      "type": "logic",
       "next_action": "play"
     },
     "play": {
@@ -62,8 +27,8 @@
       "type": "logic",
       "loop": {
         "expected_item": {
-          "type": "entity",
-          "name": "number"
+          "type": "resolver",
+          "name": "affirmation_denial"
         }
       }
     }
@@ -73,27 +38,36 @@
   },
   "answers": {
     "ready": [
-      "Alright, let's get started!"
+      "Let's get started!"
+    ],
+    "leon_emoji": [
+      "%leon_emoji%"
     ],
     "equal": [
-      "No point."
+      "No point.",
+      "It's a tie."
     ],
     "point_for_leon": [
       "I got you. The %handsign_1% beats the %handsign_2%.",
-      "Yeaaah! The %handsign_1% beats the %handsign_2%.",
-      "Gotcha! The %handsign_1% beats the %handsign_2%."
+      "Yeaaah, I won! The %handsign_1% beats the %handsign_2%.",
+      "Gotcha! I got the point because the %handsign_1% beats the %handsign_2%."
     ],
     "point_for_player": [
       "You got me. The %handsign_1% beats the %handsign_2%.",
-      "Aargh no. The %handsign_1% beats the %handsign_2%.",
-      "Well played! The %handsign_1% beats the %handsign_2%."
+      "Aargh no, you got the point. The %handsign_1% beats the %handsign_2%.",
+      "Well played! You got the point because the %handsign_1% beats the %handsign_2%."
     ],
-    "win": [
-      "I won! Would you like a rematch?"
+    "ask_for_rematch": [
+      "Do you want a rematch?",
+      "Should we go for another round?"
     ],
-    "lose": [
-      "You're good at it! Can I get a rematch?",
-      "Congrats! Should we go for a rematch?"
+    "confirm_rematch": [
+      "Be ready!",
+      "I'm not gonna let you win."
+    ],
+    "deny_rematch": [
+      "As you wish.",
+      "Let me know anytime you want to play."
     ]
   }
 }

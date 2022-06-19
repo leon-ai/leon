@@ -5,7 +5,7 @@ import utils
 # Skill database
 db = utils.db()['db']
 
-# Owner table
+# Game table
 game_table = db.table('game')
 
 # Time stamp

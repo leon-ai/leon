@@ -225,30 +225,34 @@ class Nlu {
       return null
     }
 
-    const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
-    // Reprocess with the original utterance that triggered the context at first
-    if (processedData.core?.restart === true) {
-      const { originalUtterance } = this.conv.activeContext
+    try {
+      const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+      // Reprocess with the original utterance that triggered the context at first
+      if (processedData.core?.restart === true) {
+        const { originalUtterance } = this.conv.activeContext
 
-      this.conv.cleanActiveContext()
-      await this.process(originalUtterance, opts)
+        this.conv.cleanActiveContext()
+        await this.process(originalUtterance, opts)
+        return null
+      }
+
+      // In case there is no next action to prepare anymore
+      if (!processedData.action.next_action) {
+        this.conv.cleanActiveContext()
+        return null
+      }
+
+      // Break the action loop and prepare for the next action if necessary
+      if (processedData.core?.isInActionLoop === false) {
+        this.conv.activeContext.isInActionLoop = !!processedData.action.loop
+        this.conv.activeContext.actionName = processedData.action.next_action
+        this.conv.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`
+      }
+
+      return processedData
+    } catch (e) /* istanbul ignore next */ {
       return null
     }
-
-    // In case there is no next action to prepare anymore
-    if (!processedData.action.next_action) {
-      this.conv.cleanActiveContext()
-      return null
-    }
-
-    // Break the action loop and prepare for the next action if necessary
-    if (processedData.core?.isInActionLoop === false) {
-      this.conv.activeContext.isInActionLoop = !!processedData.action.loop
-      this.conv.activeContext.actionName = processedData.action.next_action
-      this.conv.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`
-    }
-
-    return processedData
   }
 
   /**

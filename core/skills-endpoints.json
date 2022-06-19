@@ -22,11 +22,6 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/games/rochambeau/setup",
-      "params": []
-    },
-    {
-      "method": "GET",
       "route": "/api/action/games/rochambeau/play",
       "params": []
     },
