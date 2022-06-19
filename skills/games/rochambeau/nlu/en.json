@@ -9,7 +9,9 @@
         "I want to play rochambeau"
       ],
       "answers": [
-        "Alright, let's get started!"
+        "Alright, let's get started!",
+        "1, 2, 3, FIRE!",
+        "Rock, paper, scissors..."
       ],
       "next_action": "play"
     },
