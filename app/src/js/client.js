@@ -2,10 +2,10 @@ import { io } from 'socket.io-client'
 import Chatbot from './chatbot'
 
 export default class Client {
-  constructor (client, serverUrl, input, suggestionsContainer, res) {
+  constructor (client, serverUrl, input, res) {
     this.client = client
     this._input = input
-    this._suggestionContainer = suggestionsContainer
+    this._suggestionContainer = document.querySelector('#suggestions-container')
     this.serverUrl = serverUrl
     this.socket = io(this.serverUrl)
     this.history = localStorage.getItem('history')
@@ -13,6 +13,7 @@ export default class Client {
     this.info = res
     this.chatbot = new Chatbot()
     this._recorder = { }
+    this._suggestions = []
   }
 
   set input (newInput) {
@@ -45,9 +46,8 @@ export default class Client {
     })
 
     this.socket.on('suggest', (data) => {
-      data.forEach((suggestion) => {
-        this._suggestionContainer.innerHTML
-          += `<button class="suggestion">${suggestion}</button>`
+      data.forEach((suggestionText) => {
+        this.addSuggestion(suggestionText)
       })
     })
 
@@ -121,6 +121,12 @@ export default class Client {
       this.socket.emit(keyword, { client: this.client, value: this._input.value.trim() })
       this.chatbot.sendTo('leon', this._input.value)
 
+      this._suggestions.forEach((suggestion) => {
+        // Remove all event listeners of the suggestion
+        suggestion.replaceWith(suggestion.cloneNode(true))
+        this._suggestionContainer.replaceChildren()
+      })
+
       this.save()
 
       return true
@@ -149,5 +155,21 @@ export default class Client {
     }
 
     this._input.value = ''
+  }
+
+  addSuggestion (text) {
+    const newSuggestion = document.createElement('button')
+    newSuggestion.classList.add('suggestion')
+    newSuggestion.textContent = text
+
+    this._suggestionContainer.appendChild(newSuggestion)
+
+    newSuggestion.addEventListener('click', (e) => {
+      e.preventDefault()
+      this.input = e.target.textContent
+      this.send('utterance')
+    })
+
+    this._suggestions.push(newSuggestion)
   }
 }
