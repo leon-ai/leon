@@ -13,6 +13,11 @@
         "1, 2, 3, FIRE!",
         "Rock, paper, scissors..."
       ],
+      "suggestions": [
+        "Rock ✊",
+        "Paper ✋",
+        "Scissors ✌"
+      ],
       "next_action": "play"
     },
     "play": {
@@ -23,6 +28,10 @@
           "name": "handsign"
         }
       },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ],
       "next_action": "rematch"
     },
     "rematch": {

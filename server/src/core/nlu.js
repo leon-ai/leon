@@ -188,7 +188,9 @@ class Nlu {
 
     const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
     const action = actions[this.nluResultObj.classification.action]
-    const { name: expectedItemName, type: expectedItemType } = action.loop.expected_item
+    const {
+      name: expectedItemName, type: expectedItemType
+    } = action.loop.expected_item
     let hasMatchingEntity = false
     let hasMatchingResolver = false
 
@@ -244,6 +246,11 @@ class Nlu {
 
       // Break the action loop and prepare for the next action if necessary
       if (processedData.core?.isInActionLoop === false) {
+        // Send suggestions to the client only at the end of the action loop
+        if (action.suggestions) {
+          this.brain.socket.emit('suggest', action.suggestions)
+        }
+
         this.conv.activeContext.isInActionLoop = !!processedData.action.loop
         this.conv.activeContext.actionName = processedData.action.next_action
         this.conv.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`

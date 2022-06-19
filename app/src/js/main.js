@@ -26,10 +26,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error(err.response.error.message)
       } else {
         const input = document.querySelector('#utterance')
-        const mic = document.querySelector('button')
+        const mic = document.querySelector('#mic-button')
         const v = document.querySelector('#version small')
         const logger = document.querySelector('#logger small')
-        const client = new Client(config.app, serverUrl, input, res.body)
+        const suggestionsContainer = document.querySelector('#suggestions-container')
+        const client = new Client(config.app, serverUrl, input, suggestionsContainer, res.body)
         let rec = { }
         let chunks = []
         let sLogger = ' enabled, thank you.'

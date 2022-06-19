@@ -18,6 +18,10 @@
           "name": "number"
         }
       },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ],
       "next_action": "replay"
     },
     "replay": {

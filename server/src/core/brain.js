@@ -161,8 +161,13 @@ class Brain {
         const { nluDataFilePath, classification: { action: actionName } } = obj
         const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
         const action = actions[actionName]
-        const { type: actionType } = action
+        const { type: actionType, suggestions } = action
         const nextAction = action.next_action ? actions[action.next_action] : null
+
+        // Send suggestions to the client if this action does not contain an action loop
+        if (suggestions && !action.loop) {
+          this._socket.emit('suggest', suggestions)
+        }
 
         if (actionType === 'logic') {
           /**

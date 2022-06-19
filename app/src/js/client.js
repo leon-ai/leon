@@ -2,9 +2,10 @@ import { io } from 'socket.io-client'
 import Chatbot from './chatbot'
 
 export default class Client {
-  constructor (client, serverUrl, input, res) {
+  constructor (client, serverUrl, input, suggestionsContainer, res) {
     this.client = client
     this._input = input
+    this._suggestionContainer = suggestionsContainer
     this.serverUrl = serverUrl
     this.socket = io(this.serverUrl)
     this.history = localStorage.getItem('history')
@@ -41,6 +42,13 @@ export default class Client {
 
     this.socket.on('answer', (data) => {
       this.chatbot.receivedFrom('leon', data)
+    })
+
+    this.socket.on('suggest', (data) => {
+      data.forEach((suggestion) => {
+        this._suggestionContainer.innerHTML
+          += `<button class="suggestion">${suggestion}</button>`
+      })
     })
 
     this.socket.on('is-typing', (data) => {
