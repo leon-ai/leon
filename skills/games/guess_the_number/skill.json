@@ -1,0 +1,11 @@
+{
+  "name": "Guess the Number",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Find the number as soon as possible.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

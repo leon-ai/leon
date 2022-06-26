@@ -1,0 +1,37 @@
+{
+  "lang": "en",
+  "domain": "games",
+  "skill": "guess_the_number",
+  "action": "replay",
+  "utterance": "No no no",
+  "slots": {},
+  "entities": [],
+  "current_entities": [
+    {
+      "sourceText": "github.com",
+      "utteranceText": "github.com",
+      "entity": "url",
+      "resolution": {
+        "value": "github.com"
+      }
+    },
+    {
+      "sourceText": "mozilla.org",
+      "utteranceText": "mozilla.org",
+      "entity": "url",
+      "resolution": {
+        "value": "mozilla.org"
+      }
+    },
+    {
+      "sourceText": "twitter.com",
+      "utteranceText": "twitter.com",
+      "entity": "url",
+      "resolution": {
+        "value": "twitter.com"
+      }
+    }
+  ],
+  "current_resolvers": [],
+  "resolvers": []
+}

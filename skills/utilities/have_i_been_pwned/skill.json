@@ -1,0 +1,11 @@
+{
+  "name": "Have I Been Pwned",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Verify if one or several email addresses have been pwned (thanks to haveibeenpwned.com).",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

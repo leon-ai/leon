@@ -1,5 +1,4 @@
 import fs from 'fs'
-import path from 'path'
 
 import log from '@/helpers/log'
 
@@ -14,15 +13,7 @@ const commitEditMsgFile = '.git/COMMIT_EDITMSG'
 if (fs.existsSync(commitEditMsgFile)) {
   try {
     const commitMessage = fs.readFileSync(commitEditMsgFile, 'utf8')
-    const packagesDir = 'packages'
-    const packages = fs.readdirSync(packagesDir)
-      .filter((entity) => fs.statSync(path.join(packagesDir, entity)).isDirectory())
-    const packagesScopeString = packages.map((pkg, i) => {
-      if (packages.length === i + 1) return pkg
-      return `${pkg}|`
-    }).join('')
-
-    const regex = `(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|server|hotword|package\\/(${packagesScopeString})))?\\)?: .{1,50}` // eslint-disable-line no-useless-escape
+    const regex = '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|server|hotword|skill\\/([\\w-]+)))?\\)?: .{1,50}' // eslint-disable-line no-useless-escape
 
     if (commitMessage.match(regex) !== null) {
       log.success('Commit message validated')

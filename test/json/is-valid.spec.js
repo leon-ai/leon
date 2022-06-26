@@ -5,7 +5,7 @@ describe('are JSON files valid', () => {
   const rootFolders = [
     'core',
     'packages',
-    'server/src/config',
+    'core/config',
     'server/src/data'
   ]
   const list = (dir) => {

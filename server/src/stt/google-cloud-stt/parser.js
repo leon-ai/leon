@@ -1,3 +1,4 @@
+import path from 'path'
 import stt from '@google-cloud/speech'
 
 import log from '@/helpers/log'
@@ -18,7 +19,7 @@ parser.conf = {
  * the env variable "GOOGLE_APPLICATION_CREDENTIALS" provides the JSON file path
  */
 parser.init = () => {
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = `${__dirname}/../../config/voice/google-cloud.json`
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'core/config/voice/google-cloud.json')
 
   try {
     client = new stt.SpeechClient()

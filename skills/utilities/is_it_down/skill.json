@@ -1,0 +1,11 @@
+{
+  "name": "Is It Down",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Ping domain names and gives the online state.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

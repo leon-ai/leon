@@ -1,0 +1,13 @@
+{
+  "options": {
+    "ROCK": {
+      "synonyms": ["rock", "stone"]
+    },
+    "PAPER": {
+      "synonyms": ["paper"]
+    },
+    "SCISSORS": {
+      "synonyms": ["scissors"]
+    }
+  }
+}

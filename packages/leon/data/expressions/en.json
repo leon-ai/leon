@@ -1,7 +1,7 @@
 {
 	"whoami": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Who are you?",
         "How they call you?",
         "What's your name?",
@@ -12,7 +12,7 @@
   },
 	"joke": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Tell me a joke",
         "Give me a joke",
         "Make me laugh",
@@ -22,7 +22,7 @@
   },
 	"greeting": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Hi",
         "Hey",
         "Hello",
@@ -37,7 +37,7 @@
   },
 	"welcome": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Thank you",
         "Thanks",
         "Thanks a lot",
@@ -48,7 +48,7 @@
   },
 	"meaningoflife": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "What is the meaning of life?",
         "Tell me what is the meaning of life"
       ]
@@ -56,7 +56,7 @@
   },
 	"randomnumber": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Give me a random number",
         "Give me a number",
         "Tell me a random number",
@@ -68,7 +68,7 @@
   },
 	"bye": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Bye",
         "Goodbye",
         "Good bye",
@@ -79,7 +79,7 @@
   },
   "partnerassistant": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Do you have something to say about Alexa?",
         "Tell me about the personal assistant Alexa",
         "Tell me about the personal assistant Cortana",

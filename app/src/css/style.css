@@ -46,6 +46,11 @@ table {
   outline: none;
 }
 
+:root {
+  --black-color: #151718;
+  --white-color: #FFF;
+}
+
 a {
   color: inherit;
 }
@@ -55,8 +60,8 @@ ul li {
 }
 
 body {
-  color: #FFF;
-  background-color: #151718;
+  color: var(--white-color);
+  background-color: var(--black-color);
   font-family: 'Open Sans', sans-serif;
   font-weight: 400;
 }
@@ -107,10 +112,10 @@ footer {
 
 input {
   text-align: center;
-  color: #FFF;
+  color: var(--white-color);
   width: 100%;
   border: none;
-  border-bottom: 2px solid #FFF;
+  border-bottom: 2px solid var(--white-color);
   background: none;
   font-weight: 400;
   font-size: 4em;
@@ -118,7 +123,7 @@ input {
 }
 
 small {
-  color: #FFF;
+  color: var(--white-color);
   font-size: .7em;
 }
 
@@ -139,7 +144,7 @@ small {
   top: 10%;
   height: 50%;
   overflow-y: auto;
-  border: 2px solid #FFF;
+  border: 2px solid var(--white-color);
   border-radius: 12px;
 }
 #feed::-webkit-scrollbar {
@@ -172,7 +177,7 @@ small {
   border-radius: 50%;
   width: 10px;
   height: 10px;
-  background-color: #FFF;
+  background-color: var(--white-color);
   transform: scale(1);
 }
 #is-typing .circle:nth-child(1) {
@@ -181,7 +186,7 @@ small {
 }
 #is-typing .circle:nth-child(2) {
   animation: typing .2s .2s linear infinite alternate;
-  background-color: #FFF;
+  background-color: var(--white-color);
 }
 #is-typing .circle:nth-child(3) {
   animation: typing .2s linear infinite alternate;
@@ -215,12 +220,12 @@ small {
 }
 #feed .me .bubble {
   background-color: #1C75DB;
-  color: #FFF;
+  color: var(--white-color);
   right: 0;
 }
 #feed .leon .bubble {
   background-color: #EEE;
-  color: #151718;
+  color: var(--black-color);
 }
 @keyframes fadeIn {
   100% {
@@ -228,10 +233,35 @@ small {
   }
 }
 
+#suggestions-container {
+  position: absolute;
+  z-index: 10;
+  width: 100%;
+  bottom: 36%;
+  display: flex;
+  justify-content: flex-end;
+  column-gap: 8px;
+  overflow-x: auto;
+}
+.suggestion {
+  border: 1px solid var(--white-color);
+  background-color: transparent;
+  color: var(--white-color);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: inherit;
+  cursor: pointer;
+  transition: background-color .2s, color .2s;
+}
+.suggestion:hover {
+  color: var(--black-color);
+  background-color: var(--white-color);
+}
+
 #input-container {
   position: absolute;
   width: 100%;
-  bottom: 25%;
+  bottom: 22%;
 }
 
 #mic-container {
@@ -244,7 +274,7 @@ small {
   font-style: italic;
 }
 
-button {
+#mic-button {
   position: absolute;
   border: none;
   cursor: pointer;
@@ -256,16 +286,16 @@ button {
   mask-image: url(../img/mic.svg);
   transition: background-color .2s;
 }
-button:not(.enabled) {
+#mic-button:not(.enabled) {
   margin-left: -26px;
 }
-button:hover {
-  background-color: #FFF;
+#mic-button:hover {
+  background-color: var(--white-color);
 }
-button.enabled {
+#mic-button.enabled {
   background-color: #00E676;
 }
-button.enabled + #sonar {
+#mic-button.enabled + #sonar {
   width: 26px;
   height: 26px;
   border-radius: 50%;

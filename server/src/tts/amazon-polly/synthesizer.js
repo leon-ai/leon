@@ -3,6 +3,7 @@ import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
+import path from 'path'
 
 import log from '@/helpers/log'
 import string from '@/helpers/string'
@@ -22,14 +23,15 @@ let client = { }
 
 synthesizer.conf = {
   OutputFormat: 'mp3',
-  VoiceId: voices[process.env.LEON_LANG].VoiceId
+  VoiceId: ''
 }
 
 /**
  * Initialize Amazon Polly based on credentials in the JSON file
  */
-synthesizer.init = () => {
-  const config = JSON.parse(fs.readFileSync(`${__dirname}/../../config/voice/amazon.json`, 'utf8'))
+synthesizer.init = (lang) => {
+  const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/voice/amazon.json'), 'utf8'))
+  synthesizer.conf.VoiceId = voices[lang].VoiceId
 
   try {
     client = new Polly(config)

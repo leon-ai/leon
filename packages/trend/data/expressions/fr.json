@@ -1,7 +1,7 @@
 {
   "github": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Quelles sont les tendances sur GitHub ?",
         "Donne-moi les tendances GitHub",
         "Qu'est-ce qu'il y a en tendance sur GitHub ?",
@@ -13,7 +13,7 @@
   },
   "producthunt": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Quelles sont les tendances sur Product Hunt ?",
         "Donne-moi les tendances Product Hunt",
         "Qu'est-ce qu'il y a en tendance sur Product Hunt ?",

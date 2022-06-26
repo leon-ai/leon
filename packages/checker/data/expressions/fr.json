@@ -1,7 +1,7 @@
 {
 	"isitdown": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Est-ce que getleon.ai est en ligne ?",
         "Est-ce que mozilla.org est hors ligne ?",
         "mozilla.org est en ligne ou hors ligne ?",
@@ -19,7 +19,7 @@
   },
 	"haveibeenpwned": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "iifeoluwa.ao@gmail.com a-t-elle été pwned ?",
         "iifeoluwa.ao@gmail.com a-t-elle été compromise ?",
         "iifeoluwa.ao@gmail.com a-t-elle été exposée à une brèche ?",

@@ -22,7 +22,7 @@ def run(string, entities):
         emails = utils.config('emails')
 
         if not emails:
-            return utils.output('end', 'no-email', utils.translate('no-email'))
+            return utils.output('end', 'no_email', utils.translate('no_email'))
 
     utils.output('inter', 'checking', utils.translate('checking'))
 
@@ -38,9 +38,9 @@ def run(string, entities):
             return utils.output('end', 'blocked', utils.translate('unavailable', { 'website_name': 'Have I Been Pwned' }))
         elif not breached:
             if isLastEmail:
-                return utils.output('end', 'no-pwnage', utils.translate('no-pwnage', data))
+                return utils.output('end', 'no_pwnage', utils.translate('no_pwnage', data))
             else:
-                utils.output('inter', 'no-pwnage', utils.translate('no-pwnage', data))
+                utils.output('inter', 'no_pwnage', utils.translate('no_pwnage', data))
         else:
             data['result'] = ''
 

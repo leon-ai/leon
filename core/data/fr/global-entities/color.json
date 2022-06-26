@@ -1,0 +1,20 @@
+{
+  "options": {
+    "rouge": {
+      "synonyms": ["rouge"],
+      "data": {
+        "usage": [
+          "..."
+        ]
+      }
+    },
+    "bleu": {
+      "synonyms": ["bleu"],
+      "data": {
+        "usage": [
+          "..."
+        ]
+      }
+    }
+  }
+}

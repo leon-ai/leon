@@ -6,6 +6,6 @@ describe('checker:haveibeenpwned', () => {
     const [obj] = global.nlu.brain.execute.mock.calls
     await global.brain.execute(obj[0])
 
-    expect(global.brain.finalOutput.codes).toIncludeSameMembers(['no-email'])
+    expect(global.brain.finalOutput.codes).toIncludeSameMembers(['no_email'])
   })
 })

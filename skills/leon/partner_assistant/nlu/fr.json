@@ -1,0 +1,24 @@
+{
+  "actions": {
+    "run": {
+      "type": "dialog",
+      "utterance_samples": [
+        "Connais-tu quelque chose sur @partner_assistant ?",
+        "Dis-moi quelque chose sur l'assistant personnel @partner_assistant",
+        "Dis-moi quelque chose à propos de @partner_assistant",
+        "Je veux en savoir plus au sujet de @partner_assistant",
+        "Connais-tu @partner_assistant ?"
+      ],
+      "answers": [
+        "{{ partner_assistant.thought }}"
+      ],
+      "unknown_answers": [
+        "Je ne connais pas cet assistant personnel.",
+        "Je n'ai pas encore rencontré cet assistant personnel."
+      ]
+    }
+  },
+  "entities": {
+    "partner_assistant": "global-entities/partner_assistant.json"
+  }
+}

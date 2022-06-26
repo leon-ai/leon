@@ -3,10 +3,19 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 name = "pypi"
 
+[requires]
+python_version = "3.9.10"
+
 [packages]
 requests = "==2.21.0"
 pytube = "==9.5.0"
-tinydb = "==3.9.0"
+tinydb = "==4.7.0"
 beautifulsoup4 = "==4.7.1"
+spacy = "==3.3.0"
+setuptools = "==60.9.3"
+wheel = "==0.37.1"
+torch = "==1.9.0"
+python-dotenv = "==0.19.2"
+geonamescache = "==1.3.0"
 
 [dev-packages]

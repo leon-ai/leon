@@ -1,0 +1,11 @@
+{
+  "name": "Random Number",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon gives a random number.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

@@ -5,6 +5,7 @@ export default class Client {
   constructor (client, serverUrl, input, res) {
     this.client = client
     this._input = input
+    this._suggestionContainer = document.querySelector('#suggestions-container')
     this.serverUrl = serverUrl
     this.socket = io(this.serverUrl)
     this.history = localStorage.getItem('history')
@@ -12,6 +13,7 @@ export default class Client {
     this.info = res
     this.chatbot = new Chatbot()
     this._recorder = { }
+    this._suggestions = []
   }
 
   set input (newInput) {
@@ -28,15 +30,25 @@ export default class Client {
     return this._recorder
   }
 
-  init () {
+  init (loader) {
     this.chatbot.init()
 
     this.socket.on('connect', () => {
       this.socket.emit('init', this.client)
     })
 
+    this.socket.on('ready', () => {
+      loader.stop()
+    })
+
     this.socket.on('answer', (data) => {
       this.chatbot.receivedFrom('leon', data)
+    })
+
+    this.socket.on('suggest', (data) => {
+      data.forEach((suggestionText) => {
+        this.addSuggestion(suggestionText)
+      })
     })
 
     this.socket.on('is-typing', (data) => {
@@ -45,7 +57,7 @@ export default class Client {
 
     this.socket.on('recognized', (data, cb) => {
       this._input.value = data
-      this.send('query')
+      this.send('utterance')
 
       cb('string-received')
     })
@@ -96,7 +108,7 @@ export default class Client {
     })
 
     this.socket.on('download', (data) => {
-      window.location = `${this.serverUrl}/api/v1/downloads?package=${data.package}&module=${data.module}`
+      window.location = `${this.serverUrl}/api/v1/downloads?domain=${data.domain}&skill=${data.skill}`
     })
 
     if (this.history !== null) {
@@ -108,6 +120,12 @@ export default class Client {
     if (this._input.value !== '') {
       this.socket.emit(keyword, { client: this.client, value: this._input.value.trim() })
       this.chatbot.sendTo('leon', this._input.value)
+
+      this._suggestions.forEach((suggestion) => {
+        // Remove all event listeners of the suggestion
+        suggestion.replaceWith(suggestion.cloneNode(true))
+        this._suggestionContainer.replaceChildren()
+      })
 
       this.save()
 
@@ -137,5 +155,21 @@ export default class Client {
     }
 
     this._input.value = ''
+  }
+
+  addSuggestion (text) {
+    const newSuggestion = document.createElement('button')
+    newSuggestion.classList.add('suggestion')
+    newSuggestion.textContent = text
+
+    this._suggestionContainer.appendChild(newSuggestion)
+
+    newSuggestion.addEventListener('click', (e) => {
+      e.preventDefault()
+      this.input = e.target.textContent
+      this.send('utterance')
+    })
+
+    this._suggestions.push(newSuggestion)
   }
 }

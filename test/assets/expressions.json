@@ -1,7 +1,7 @@
 {
   "color": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "I like that color"
       ],
       "entities": [
@@ -15,8 +15,8 @@
   },
   "unittest": {
     "do_not_support_entity": {
-      "expressions": [
-        "Just an expression"
+      "utterance_samples": [
+        "Just an utterance sample"
       ],
       "entities": [
         {
@@ -27,7 +27,7 @@
   },
   "mockingbird": {
     "test": {
-      "expressions": [
+      "utterance_samples": [
         "Whistle as a bird"
       ],
       "entities": [

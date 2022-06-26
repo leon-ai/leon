@@ -1,0 +1,6 @@
+{
+  "configurations": {
+    "options": {},
+    "credentials": {}
+  }
+}

@@ -1,0 +1,293 @@
+{
+  "actions": {
+    "create_list": {
+      "type": "logic",
+      "utterance_samples": [
+        "Create [the|a] [shopping|material] list",
+        "I [want|need] you to [create|make] a stuff list",
+        "Can you create a reminder list for me?",
+        "Make a food list",
+        "I want a shopping list",
+        "Help me to get material list",
+        "Can you add a reminder list?"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "a", "an", "my"],
+              "to": ["list"]
+            }
+          ]
+        }
+      ]
+    },
+    "view_lists": {
+      "type": "logic",
+      "utterance_samples": [
+        "Show all my lists",
+        "Show contents of all my lists",
+        "Can you show all my lists?",
+        "Can you show all contents of my lists?",
+        "Can you show me all the lists?",
+        "I need to see my lists",
+        "Show me all the lists"
+      ]
+    },
+    "view_list": {
+      "type": "logic",
+      "utterance_samples": [
+        "Show [my|the] shopping list",
+        "Tell me what is on my stuff list",
+        "What is on the reminder list?",
+        "Can you give me the content of my movies list?",
+        "I'd like to know what is on the food list",
+        "Give me the content of the shopping list",
+        "I need you tell me what's on the stuff list",
+        "What is in my reminder list?",
+        "Get me the food list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "my"],
+              "to": ["list"]
+            }
+          ]
+        }
+      ]
+    },
+    "rename_list": {
+      "type": "logic",
+      "utterance_samples": [
+        "Rename [the|my] shopping list to purchases",
+        "Can you rename the food list into groceries?",
+        "[Change|Modify|Replace] [the|my] stuff list [to|by] food"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "old_list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "my"],
+              "to": ["list"]
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "new_list",
+          "conditions": [
+            {
+              "type": "after_last",
+              "from": ["to", "by", "with"]
+            }
+          ]
+        }
+      ]
+    },
+    "delete_list": {
+      "type": "logic",
+      "utterance_samples": [
+        "Delete [the|my] shopping list",
+        "Delete it",
+        "Can you remove the food list?",
+        "[Remove|Cancel] [the|my] groceries list",
+        "I don't want the reminder list anymore"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "my"],
+              "to": ["list"]
+            }
+          ]
+        }
+      ]
+    },
+    "add_todos": {
+      "type": "logic",
+      "utterance_samples": [
+        "[Add|Append] potatoes to [the|my] groceries list",
+        "Can you add meat to my food list?"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["add", "append"],
+              "to": ["to"]
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "my"],
+              "to": ["list"]
+            }
+          ]
+        }
+      ]
+    },
+    "complete_todos": {
+      "type": "logic",
+      "utterance_samples": [
+        "[Check|Complete|Tick] potatoes from [the|my] [shopping|fruits] list"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["check", "complete", "tick"],
+              "to": ["from"]
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "my"],
+              "to": ["list"]
+            }
+          ]
+        }
+      ]
+    },
+    "uncheck_todos": {
+      "type": "logic",
+      "utterance_samples": [
+        "[Uncheck|Untick] potatoes from [the|my] [shopping|fruits] list",
+        "Can you uncomplete peach from my food list?"
+      ],
+      "entities": [
+        {
+          "type": "trim",
+          "name": "todos",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["uncheck", "untick", "uncomplete", "incomplete"],
+              "to": ["from"]
+            }
+          ]
+        },
+        {
+          "type": "trim",
+          "name": "list",
+          "conditions": [
+            {
+              "type": "between",
+              "from": ["the", "my"],
+              "to": ["list"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "answers": {
+    "list_created": [
+      "Alright, I've created the \"%list%\" list.",
+      "Done, I created your \"%list%\" list."
+    ],
+    "list_not_provided": [
+      "Please provide me a list name.",
+      "Please provide the name of a list."
+    ],
+    "todos_not_provided": [
+      "Please provide me items.",
+      "Please provide elements."
+    ],
+    "new_or_old_list_not_provided": [
+      "Please make sure you provide the list name to rename and its new list name.",
+      "Please provide the list name to rename and its new list name."
+    ],
+    "no_list": [
+      "You do not have any list.",
+      "There is no list to show."
+    ],
+    "empty_list": [
+      "Your \"%list%\" list is empty.",
+      "There is nothing in your \"%list%\" list."
+    ],
+    "list_does_not_exist": [
+      "Sorry I can't because the \"%list%\" does not exist.",
+      "I cannot do that because the \"%list%\" does not exist."
+    ],
+    "list_already_exists": [
+      "You already have a list named \"%list%\"."
+    ],
+    "list_renamed": [
+      "I renamed the \"%old_list%\" list to \"%new_list%\"."
+    ],
+    "list_deleted": [
+      "I deleted the \"%list%\" list and all the todos it was containing."
+    ],
+    "lists_listed": [
+      "You have %lists_nb% lists. Please let me list them for you:<br><br><ul>%result%</ul>"
+    ],
+    "list_list_element": [
+      "<li>\"%list%\", with %todos_nb% elements in it.</li>",
+      "<li>\"%list%\", that contains %todos_nb% items.</li>"
+    ],
+    "no_unchecked_todo": [
+      "You do not have in progress element in your \"%list%\" list.",
+      "You don't have any in progress element in your \"%list%\" list."
+    ],
+    "no_completed_todo": [
+      "And you do not have completed element in your \"%list%\" list.",
+      "And you don't have any completed element in your \"%list%\" list."
+    ],
+    "unchecked_todos_listed": [
+      "Here are the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br>Stay motivated!",
+      "Please find the in progress elements of your \"%list%\" list:<br><br><ul>%result%</ul><br>Keep going!"
+    ],
+    "completed_todos_listed": [
+      "And here are the completed elements of your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
+    "list_todo_element": [
+      "<li>%todo%.</li>"
+    ],
+    "list_completed_todo_element": [
+      "<li><s>%todo%</s>.</li>"
+    ],
+    "todos_added": [
+      "Alright, I added the following to your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "The following have been added to your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
+    "todos_unchecked": [
+      "I unchecked the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "The following have been unchecked from your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ],
+    "todos_completed": [
+      "Keep going! I completed the following from your \"%list%\" list:<br><br><ul>%result%</ul>",
+      "Well done! The following have been completed from your \"%list%\" list:<br><br><ul>%result%</ul>"
+    ]
+  }
+}

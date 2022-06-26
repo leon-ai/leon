@@ -1,7 +1,7 @@
 {
 	"youtube": {
     "run": {
-      "expressions": [
+      "utterance_samples": [
         "Download new videos from YouTube"
       ]
     }

@@ -1,0 +1,42 @@
+{
+  "name": "affirmation_denial",
+  "intents": {
+    "system.resolver.affirmation": {
+      "utterance_samples": [
+        "Yes",
+        "Yep",
+        "Yup",
+        "Yeah",
+        "Let's do it",
+        "For sure",
+        "Sure thing",
+        "Of course!",
+        "Okay",
+        "OK",
+        "Alright",
+        "Correct",
+        "Indeed",
+        "Agree",
+        "Perfect",
+        "That's right",
+        "That works",
+        "Go ahead",
+        "Why not"
+      ],
+      "value": true
+    },
+    "system.resolver.denial": {
+      "utterance_samples": [
+        "No",
+        "No no don't",
+        "Nope",
+        "Naa",
+        "No thanks",
+        "No I'm fine",
+        "Hell no",
+        "Please do not"
+      ],
+      "value": false
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "actions": {
+    "run": {
+      "type": "dialog",
+      "utterance_samples": [
+        "Merci",
+        "Merci bien",
+        "Merci beaucoup",
+        "Merci mille fois",
+        "Merci infiniment",
+        "Merci à toi",
+        "Tu es le meilleur",
+        "Mes remerciements",
+        "Je t'adore"
+      ],
+      "answers": [
+        "De rien, c'est avec joie.",
+        "Avec plaisir.",
+        "Vous êtes bien trop poli.",
+        "Vous êtes toujours bienvenue.",
+        "Je ne fais que mon travail !",
+        "À votre service."
+      ]
+    }
+  }
+}

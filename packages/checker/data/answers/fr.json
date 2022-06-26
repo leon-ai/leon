@@ -25,7 +25,7 @@
     ]
 	},
 	"haveibeenpwned": {
-		"no-pwnage": [
+		"no_pwnage": [
 			"Bonne nouvelle, %email% n'a pas été compromis par une violation de données.",
 			"%email% cela me semble correct!"
 		],
@@ -38,7 +38,7 @@
 			"Je cherche un email compromis.",
 			"Essayer de vérifier le statut de pwnage."
 		],
-		"no-email": [
+		"no_email": [
 			"Veuillez fournir une ou plusieurs adresses électroniques que vous devez vérifier..."
 		],
 		"errors": [

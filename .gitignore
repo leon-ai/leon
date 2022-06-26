@@ -8,7 +8,7 @@ test/coverage/
 bridges/python/.venv/*
 downloads/*
 logs/*
-server/src/config/**/*.json
+core/config/**/*.json
 bin/coqui/*
 bin/flite/*
 
@@ -22,7 +22,9 @@ debug.log
 !bridges/python/.venv/.gitkeep
 !**/*.sample*
 packages/**/config/config.json
+skills/**/src/config.json
 packages/**/data/db/*.json
-server/src/data/leon-model.nlp
+skills/**/memory/*.json
+core/data/leon-model.nlp
 package.json.backup
 .python-version

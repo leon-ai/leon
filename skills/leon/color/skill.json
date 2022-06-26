@@ -1,0 +1,11 @@
+{
+  "name": "Color",
+  "bridge": null,
+  "version": "1.0.0",
+  "description": "Leon tells about colors.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

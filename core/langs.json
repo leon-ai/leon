@@ -12,8 +12,8 @@
       "fallbacks": [
         {
           "words": ["merci"],
-          "package": "leon",
-          "module": "welcome",
+          "domain": "leon",
+          "skill": "welcome",
           "action": "run"
         }
       ]

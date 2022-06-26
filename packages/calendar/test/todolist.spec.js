@@ -30,7 +30,7 @@ describe('calendar:todolist', () => {
 
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(1)
     expect(global.brain.finalOutput.speech.indexOf('"shopping" list')).not.toBe(-1)
-    expect(global.brain.finalOutput.speech.indexOf('<strike>1kg of rice</strike>')).not.toBe(-1)
+    expect(global.brain.finalOutput.speech.indexOf('<s>1kg of rice</s>')).not.toBe(-1)
     expect(global.brain.finalOutput.codes).toIncludeSameMembers(['todos_completed'])
   })
 
@@ -48,7 +48,7 @@ describe('calendar:todolist', () => {
     expect(global.brain.interOutput.speech.indexOf('bread')).not.toBe(-1)
     expect(global.brain.finalOutput.speech.split('</li>').length - 1).toBe(1)
     expect(global.brain.finalOutput.speech.indexOf('"shopping" list')).not.toBe(-1)
-    expect(global.brain.finalOutput.speech.indexOf('<strike>1kg of rice</strike>')).not.toBe(-1)
+    expect(global.brain.finalOutput.speech.indexOf('<s>1kg of rice</s>')).not.toBe(-1)
     expect(global.brain.finalOutput.codes).toIncludeSameMembers([
       'unchecked_todos_listed',
       'completed_todos_listed'

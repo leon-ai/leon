@@ -25,7 +25,7 @@
     ]
 	},
 	"haveibeenpwned": {
-		"no-pwnage": [
+		"no_pwnage": [
 			"Great news, \"%email%\" hasn't been compromised in a data breach.",
 			"\"%email%\" looks good to me!"
 		],
@@ -41,7 +41,7 @@
 			"I'm checking for a compromised email...",
 			"Trying to verify pwnage status..."
 		],
-		"no-email": [
+		"no_email": [
 			"Please provide one or more email addresses you need me to check."
 		],
 		"errors": [

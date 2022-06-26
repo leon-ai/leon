@@ -1,0 +1,13 @@
+{
+  "options": {
+    "LOW": {
+      "synonyms": ["low"]
+    },
+    "MEDIUM": {
+      "synonyms": ["medium"]
+    },
+    "HIGH": {
+      "synonyms": ["high"]
+    }
+  }
+}

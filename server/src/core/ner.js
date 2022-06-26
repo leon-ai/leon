@@ -3,76 +3,98 @@
  * @nlpjs/core-loader can make use of file system
  * https://github.com/axa-group/nlp.js/issues/766#issuecomment-750315909
  */
-import { containerBootstrap } from '@nlpjs/core-loader'
-import { Ner as NerManager } from '@nlpjs/ner'
-import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
 import fs from 'fs'
 
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 
 class Ner {
-  constructor () {
-    this.container = containerBootstrap()
-    this.container.register('extract-builtin-??', new BuiltinMicrosoft(), true)
-    this.ner = new NerManager({ container: this.container })
+  constructor (ner) {
+    this.ner = ner
 
     log.title('NER')
     log.success('New instance')
   }
 
   static logExtraction (entities) {
+    log.title('NER')
+    log.success('Entities found:')
     entities.forEach((ent) => log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`))
   }
 
   /**
-   * Grab entities and match them with the query
+   * Grab entities and match them with the utterance
    */
-  async extractEntities (lang, expressionsFilePath, obj) {
-    log.title('NER')
-    log.info('Searching for entities...')
+  extractEntities (lang, utteranceSamplesFilePath, obj) {
+    return new Promise(async (resolve) => {
+      log.title('NER')
+      log.info('Searching for entities...')
 
-    const { classification } = obj
-    // Remove end-punctuation and add an end-whitespace
-    const query = `${string.removeEndPunctuation(obj.query)} `
-    const expressionsObj = JSON.parse(fs.readFileSync(expressionsFilePath, 'utf8'))
-    const { module, action } = classification
-    const promises = []
-    const actionEntities = expressionsObj[module][action].entities || []
+      const { classification } = obj
+      // Remove end-punctuation and add an end-whitespace
+      const utterance = `${string.removeEndPunctuation(obj.utterance)} `
+      const { actions } = JSON.parse(fs.readFileSync(utteranceSamplesFilePath, 'utf8'))
+      const { action } = classification
+      const promises = []
+      const actionEntities = actions[action].entities || []
 
-    /**
-     * Browse action entities
-     * Dynamic injection of the action entities depending of the entity type
-     */
-    for (let i = 0; i < actionEntities.length; i += 1) {
-      const entity = actionEntities[i]
+      /**
+       * Browse action entities
+       * Dynamic injection of the action entities depending of the entity type
+       */
+      for (let i = 0; i < actionEntities.length; i += 1) {
+        const entity = actionEntities[i]
 
-      if (entity.type === 'regex') {
-        promises.push(this.injectRegexEntity(lang, entity))
-      } else if (entity.type === 'trim') {
-        promises.push(this.injectTrimEntity(lang, entity))
+        if (entity.type === 'regex') {
+          promises.push(this.injectRegexEntity(lang, entity))
+        } else if (entity.type === 'trim') {
+          promises.push(this.injectTrimEntity(lang, entity))
+        }
       }
-    }
 
-    await Promise.all(promises)
+      await Promise.all(promises)
 
-    const { entities } = await this.ner.process({ locale: lang, text: query })
+      const { entities } = await this.ner.process({ locale: lang, text: utterance })
 
-    // Trim whitespace at the beginning and the end of the entity value
-    entities.map((e) => {
-      e.sourceText = e.sourceText.trim()
-      e.utteranceText = e.utteranceText.trim()
+      // Normalize entities
+      entities.map((entity) => {
+        // Trim whitespace at the beginning and the end of the entity value
+        entity.sourceText = entity.sourceText.trim()
+        entity.utteranceText = entity.utteranceText.trim()
 
-      return e
+        // Add resolution property to stay consistent with all entities
+        if (!entity.resolution) {
+          entity.resolution = { value: entity.sourceText }
+        }
+
+        return entity
+      })
+
+      if (entities.length > 0) {
+        Ner.logExtraction(entities)
+        return resolve(entities)
+      }
+
+      log.title('NER')
+      log.info('No entity found')
+      return resolve([])
     })
+  }
 
-    if (entities.length > 0) {
-      Ner.logExtraction(entities)
-      return entities
-    }
+  /**
+   * Get spaCy entities from the TCP server
+   */
+  static getSpacyEntities (utterance) {
+    return new Promise((resolve) => {
+      const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
+        resolve(spacyEntities)
+      }
 
-    log.info('No entity found')
-    return []
+      global.tcpClient.ee.removeAllListeners()
+      global.tcpClient.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
+
+      global.tcpClient.emit('get-spacy-entities', utterance)
+    })
   }
 
   /**
@@ -85,17 +107,18 @@ class Ner {
         const conditionMethod = `add${string.snakeToPascalCase(condition.type)}Condition`
 
         if (condition.type === 'between') {
-          // e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
-          if (Array.isArray(condition.from) && Array.isArray(condition.to)) {
-            const { from, to } = condition
-
-            from.forEach((word, index) => {
-              this.ner[conditionMethod](lang, entity.name, word, to[index])
-            })
-          } else {
-            this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
-          }
+          /**
+           * Conditions: https://github.com/axa-group/nlp.js/blob/master/docs/v3/ner-manager.md#trim-named-entities
+           * e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
+           */
+          this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
         } else if (condition.type.indexOf('after') !== -1) {
+          const rule = {
+            type: 'afterLast',
+            words: condition.from,
+            options: { }
+          }
+          this.ner.addRule(lang, entity.name, 'trim', rule)
           this.ner[conditionMethod](lang, entity.name, condition.from)
         } else if (condition.type.indexOf('before') !== -1) {
           this.ner[conditionMethod](lang, entity.name, condition.to)
@@ -115,6 +138,30 @@ class Ner {
 
       resolve()
     })
+  }
+
+  /**
+   * Get Microsoft builtin entities
+   * https://github.com/axa-group/nlp.js/blob/master/packages/builtin-microsoft/src/builtin-microsoft.js
+   */
+  static getMicrosoftBuiltinEntities () {
+    return [
+      'Number',
+      'Ordinal',
+      'Percentage',
+      'Age',
+      'Currency',
+      'Dimension',
+      'Temperature',
+      'DateTime',
+      'PhoneNumber',
+      'IpAddress',
+      // Disable booleans to handle it ourselves
+      // 'Boolean',
+      'Email',
+      'Hashtag',
+      'URL'
+    ]
   }
 }
 

@@ -5,7 +5,7 @@ import train from '../train'
 import generateHttpApiKey from '../generate/generate-http-api-key'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
-import setupPackagesConfig from './setup-packages-config'
+import setupSkillsConfig from './setup-skills-config'
 import setupPythonPackages from './setup-python-packages'
 
 // Do not load ".env" file because it is not created yet
@@ -16,7 +16,6 @@ import setupPythonPackages from './setup-python-packages'
 (async () => {
   try {
     // Required env vars to setup
-    process.env.LEON_LANG = 'en-US'
     process.env.PIPENV_PIPFILE = 'bridges/python/Pipfile'
     process.env.PIPENV_VENV_IN_PROJECT = 'true'
 
@@ -24,7 +23,7 @@ import setupPythonPackages from './setup-python-packages'
     loader.start()
     await Promise.all([
       setupCore(),
-      setupPackagesConfig()
+      setupSkillsConfig()
     ])
     await setupPythonPackages()
     loader.stop()

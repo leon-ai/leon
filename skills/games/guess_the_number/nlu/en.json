@@ -1,0 +1,64 @@
+{
+  "actions": {
+    "setup": {
+      "type": "logic",
+      "utterance_samples": [
+        "Let's play guess the number",
+        "I wanna play guess the number",
+        "Can we play guess the number?",
+        "I want to play a game like guess the number"
+      ],
+      "next_action": "guess"
+    },
+    "guess": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "entity",
+          "name": "number"
+        }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ],
+      "next_action": "replay"
+    },
+    "replay": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "resolver",
+          "name": "affirmation_denial"
+        }
+      }
+    }
+  },
+  "answers": {
+    "ready": [
+      "Alright, I'm ready! Go ahead and guess the number between 0 and 100!"
+    ],
+    "bigger": [
+      "The number is bigger.",
+      "Try with a bigger number."
+    ],
+    "smaller": [
+      "It is smaller.",
+      "Try a smaller number."
+    ],
+    "guessed": [
+      "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
+    ],
+    "replay": [
+      "Let's gooo!",
+      "You said it!",
+      "Let me pick up a number...",
+      "Gotcha, I'm picking up a number..."
+    ],
+    "stop": [
+      "Sure, as you wish.",
+      "You said it.",
+      "Let's stop here then!"
+    ]
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "Download new videos from YouTube"
+      ]
+    }
+  },
+  "answers": {
+    "success": [
+      "All of the videos have been downloaded.",
+      "I finished to download the videos.",
+      "New videos are now in my memory."
+    ],
+    "downloading": [
+      "I'm downloading %video_title%.",
+      "I am currently downloading %video_title%.",
+      "Download for %video_title% has started."
+    ],
+    "reaching_playlist": [
+      "I'm trying to collect videos from the YouTube playlist.",
+      "I'm getting videos from the YouTube playlist.",
+      "I am reaching the YouTube playlist to collect videos."
+    ],
+    "nb_to_download": [
+      "I will download %nb% videos.",
+      "There are %nb% new videos to download."
+    ],
+    "nothing_to_download": [
+      "There is no new video to download. Add a new video to the YouTube playlist if you want to download a new one.",
+      "I have no new video to download."
+    ],
+    "settings_errors": [
+      "Please verify my settings. There is an error for the following reason: %reason%, which includes this message: %message%.",
+      "I have an error for this reason: %reason%, which includes the following message: %message%. Please check if my settings are correct."
+    ],
+    "request_errors": [
+      "I cannot reach YouTube for now. Please verify the URL and your network settings are correct.",
+      "I currently can't reach YouTube. Do you think YouTube is broken? Please verify the URL and your network settings."
+    ]
+  }
+}

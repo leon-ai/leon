@@ -4,8 +4,7 @@ import socketio from 'socket.io'
 import { join } from 'path'
 
 import { version } from '@@/package.json'
-import { langs } from '@@/core/langs.json'
-import { endpoints } from '@@/core/pkgs-endpoints.json'
+import { endpoints } from '@@/core/skills-endpoints.json'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
 import Asr from '@/core/asr'
@@ -27,18 +26,18 @@ server.fastify = Fastify()
 server.httpServer = { }
 
 /**
- * Generate packages routes
+ * Generate skills routes
  */
 /* istanbul ignore next */
-server.generatePackagesRoutes = (instance) => {
-  // Dynamically expose Leon modules over HTTP
+server.generateSkillsRoutes = (instance) => {
+  // Dynamically expose Leon skills over HTTP
   endpoints.forEach((endpoint) => {
     instance.route({
       method: endpoint.method,
       url: endpoint.route,
       async handler (request, reply) {
         const timeout = endpoint.timeout || 60000
-        const [, , , pkg, module, action] = endpoint.route.split('/')
+        const [, , , domain, skill, action] = endpoint.route.split('/')
         const handleRoute = async () => {
           const { params } = endpoint
           const entities = []
@@ -72,18 +71,18 @@ server.generatePackagesRoutes = (instance) => {
           })
 
           const obj = {
-            query: '',
+            utterance: '',
             entities,
             classification: {
-              package: pkg,
-              module,
+              domain,
+              skill,
               action,
               confidence: 1
             }
           }
           const responseData = {
-            package: pkg,
-            module,
+            domain,
+            skill,
             action,
             speeches: []
           }
@@ -112,8 +111,8 @@ server.generatePackagesRoutes = (instance) => {
         setTimeout(() => {
           reply.statusCode = 408
           reply.send({
-            package: pkg,
-            module,
+            domain,
+            skill,
             action,
             message: 'The action has timed out',
             timeout,
@@ -137,6 +136,15 @@ server.handleOnConnection = (socket) => {
     log.info(`Type: ${data}`)
     log.info(`Socket id: ${socket.id}`)
 
+    // Check whether the TCP client is connected to the TCP server
+    if (global.tcpClient.isConnected) {
+      socket.emit('ready')
+    } else {
+      global.tcpClient.ee.on('connected', () => {
+        socket.emit('ready')
+      })
+    }
+
     if (data === 'hotword-node') {
       // Hotword triggered
       socket.on('hotword-detected', (data) => {
@@ -147,8 +155,6 @@ server.handleOnConnection = (socket) => {
       })
     } else {
       const asr = new Asr()
-      let stt = { }
-      let tts = { }
       let sttState = 'disabled'
       let ttsState = 'disabled'
 
@@ -158,36 +164,37 @@ server.handleOnConnection = (socket) => {
       if (process.env.LEON_STT === 'true') {
         sttState = 'enabled'
 
-        stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
-        stt.init(() => null)
+        brain.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
+        brain.stt.init(() => null)
       }
-
       if (process.env.LEON_TTS === 'true') {
         ttsState = 'enabled'
 
-        tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
-        tts.init((ttsInstance) => {
-          brain.tts = ttsInstance
-        })
+        brain.tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
+        brain.tts.init('en', () => null)
       }
 
       log.title('Initialization')
       log.success(`STT ${sttState}`)
       log.success(`TTS ${ttsState}`)
 
-      // Listen for new query
-      socket.on('query', async (data) => {
+      // Listen for new utterance
+      socket.on('utterance', async (data) => {
         log.title('Socket')
         log.info(`${data.client} emitted: ${data.value}`)
 
         socket.emit('is-typing', true)
-        await nlu.process(data.value)
+
+        const utterance = data.value
+        try {
+          await nlu.process(utterance)
+        } catch (e) { /* */ }
       })
 
       // Handle automatic speech recognition
       socket.on('recognize', async (data) => {
         try {
-          await asr.run(data, stt)
+          await asr.run(data, brain.stt)
         } catch (e) {
           log[e.type](e.obj.message)
         }
@@ -219,7 +226,7 @@ server.bootstrap = async () => {
 
   // Render the web app
   server.fastify.register(fastifyStatic, {
-    root: join(__dirname, '../../../../app/dist'),
+    root: join(process.cwd(), 'app/dist'),
     prefix: '/'
   })
   server.fastify.get('/', (request, reply) => {
@@ -234,10 +241,10 @@ server.bootstrap = async () => {
       instance.addHook('preHandler', keyMidd)
 
       instance.post('/api/query', async (request, reply) => {
-        const { query } = request.body
+        const { utterance } = request.body
 
         try {
-          const data = await nlu.process(query, { mute: true })
+          const data = await nlu.process(utterance, { mute: true })
 
           reply.send({
             ...data,
@@ -252,7 +259,7 @@ server.bootstrap = async () => {
         }
       })
 
-      server.generatePackagesRoutes(instance)
+      server.generateSkillsRoutes(instance)
 
       next()
     })
@@ -278,23 +285,18 @@ server.init = async () => {
   log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
   log.success(`The current version is ${version}`)
 
-  if (!Object.keys(langs).includes(process.env.LEON_LANG) === true) {
-    process.env.LEON_LANG = 'en-US'
-    log.warning('The language you chose is not supported, then the default language has been applied')
-  }
-
-  log.success(`The current language is ${process.env.LEON_LANG}`)
   log.success(`The current time zone is ${date.timeZone()}`)
 
   const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
 
-  brain = new Brain(langs[process.env.LEON_LANG].short)
+  brain = new Brain()
+
   nlu = new Nlu(brain)
 
-  // Train modules expressions
+  // Load NLP model
   try {
-    await nlu.loadModel(join(__dirname, '../../data/leon-model.nlp'))
+    await nlu.loadModel(join(process.cwd(), 'core/data/leon-model.nlp'))
   } catch (e) {
     log[e.type](e.obj.message)
   }

@@ -1,7 +1,7 @@
 {
   "todolist": {
     "create_list": {
-      "expressions": [
+      "utterance_samples": [
         "Create the x list",
         "Create a x list"
       ],
@@ -20,7 +20,7 @@
       ]
     },
     "view_lists": {
-      "expressions": [
+      "utterance_samples": [
         "Show all the lists",
         "Show all my lists",
         "What are the lists?",
@@ -28,7 +28,7 @@
       ]
     },
     "view_list": {
-      "expressions": [
+      "utterance_samples": [
         "Show my x list",
         "Show the x list",
         "What is in my x list?",
@@ -49,7 +49,7 @@
       ]
     },
     "rename_list": {
-      "expressions": [
+      "utterance_samples": [
         "Rename the x list to y",
         "Rename my x list to y"
       ],
@@ -78,7 +78,7 @@
       ]
     },
     "delete_list": {
-      "expressions": [
+      "utterance_samples": [
         "Delete the x list",
         "Delete my x list"
       ],
@@ -97,7 +97,7 @@
       ]
     },
     "add_todos": {
-      "expressions": [
+      "utterance_samples": [
         "Add x to the list x",
         "Add x to my list x"
       ],
@@ -127,7 +127,7 @@
       ]
     },
     "complete_todos": {
-      "expressions": [
+      "utterance_samples": [
         "Check x from the x list",
         "Check x from my x list",
         "Complete x from my x list",
@@ -159,7 +159,7 @@
       ]
     },
     "uncheck_todos": {
-      "expressions": [
+      "utterance_samples": [
         "Uncheck x from the x list",
         "Uncheck x from my x list",
         "Untick x from my x list"

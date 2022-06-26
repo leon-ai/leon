@@ -9,7 +9,7 @@ const onkeydowninput = (e, client) => {
   }
 
   if (key === 13) {
-    if (client.send('query')) {
+    if (client.send('utterance')) {
       parsedHistory = JSON.parse(localStorage.getItem('history')).reverse()
       index = -1
     }

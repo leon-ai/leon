@@ -1,0 +1,67 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "What are the trends on GitHub?",
+        "Give me the GitHub trends",
+        "What's trending on GitHub?",
+        "What are the trends on GH?",
+        "Give me the GH trends",
+        "What's trending on GH?"
+      ],
+      "http_api": {
+        "entities": [
+          {
+            "entity": "number",
+            "resolution": [
+              "value"
+            ]
+          },
+          {
+            "entity": "daterange",
+            "resolution": [
+              "timex"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "answers": {
+    "limit_max": [
+      "You've asked for too many GitHub trends, I'll give you 25 trends instead.",
+      "%limit% GitHub trends is a lot, let me tell you the 25 trends instead."
+    ],
+    "reaching": [
+      "I'm reaching GitHub, please wait a second...",
+      "Let me reach GitHub..."
+    ],
+    "today": [
+      "Here are the %limit% GitHub trends of the day:<br><br><ul>%result%</ul>"
+    ],
+    "week": [
+      "Here are the %limit% GitHub trends of the week:<br><br><ul>%result%</ul>"
+    ],
+    "month": [
+      "Here are the %limit% GitHub trends of the month:<br><br><ul>%result%</ul>"
+    ],
+    "today_with_tech": [
+      "Here are the %limit% GitHub trends of the day for the %tech% technology:<br><br><ul>%result%</ul>"
+    ],
+    "week_with_tech": [
+      "Here are the %limit% GitHub trends of the week for the %tech% technology:<br><br><ul>%result%</ul>"
+    ],
+    "month_with_tech": [
+      "Here are the %limit% GitHub trends of the month for the %tech% technology:<br><br><ul>%result%</ul>"
+    ],
+    "unreachable": [
+      "GitHub is unreachable for the moment, please retry later.",
+      "I'm having difficulties to reach GitHub, please retry later.",
+      "GitHub seems to be down, please try again later."
+    ],
+    "list_element": [
+      "<li>#%rank%. <a href=\"%repository_url%\" target=\"_blank\">%repository_name%</a> created by <a href=\"%author_url%\" target=\"_blank\">%author_username%</a> with %stars_nb% new stars.</li>"
+    ]
+  }
+}

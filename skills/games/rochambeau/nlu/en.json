@@ -1,0 +1,84 @@
+{
+  "actions": {
+    "start": {
+      "type": "dialog",
+      "utterance_samples": [
+        "Let's play rochambeau",
+        "I wanna play rock paper scissors",
+        "Can we play paper rock scissors?",
+        "I want to play rochambeau"
+      ],
+      "answers": [
+        "Alright, let's get started!",
+        "1, 2, 3, FIRE!",
+        "Rock, paper, scissors..."
+      ],
+      "suggestions": [
+        "Rock ✊",
+        "Paper ✋",
+        "Scissors ✌"
+      ],
+      "next_action": "play"
+    },
+    "play": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "entity",
+          "name": "handsign"
+        }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ],
+      "next_action": "rematch"
+    },
+    "rematch": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "resolver",
+          "name": "affirmation_denial"
+        }
+      }
+    }
+  },
+  "entities": {
+    "handsign": "global-entities/handsign.json"
+  },
+  "answers": {
+    "ready": [
+      "Let's get started!"
+    ],
+    "leon_emoji": [
+      "%leon_emoji%"
+    ],
+    "equal": [
+      "No point.",
+      "It's a tie."
+    ],
+    "point_for_leon": [
+      "I got you. The %handsign_1% beats the %handsign_2%.",
+      "Yeaaah, I won! The %handsign_1% beats the %handsign_2%.",
+      "Gotcha! I got the point because the %handsign_1% beats the %handsign_2%."
+    ],
+    "point_for_player": [
+      "You got me. The %handsign_1% beats the %handsign_2%.",
+      "Aargh no, you got the point. The %handsign_1% beats the %handsign_2%.",
+      "Well played! You got the point because the %handsign_1% beats the %handsign_2%."
+    ],
+    "ask_for_rematch": [
+      "Do you want a rematch?",
+      "Should we go for another round?"
+    ],
+    "confirm_rematch": [
+      "Be ready!",
+      "I'm not gonna let you win."
+    ],
+    "deny_rematch": [
+      "As you wish.",
+      "Let me know anytime you want to play."
+    ]
+  }
+}

@@ -25,8 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (err || !res.ok) {
         console.error(err.response.error.message)
       } else {
-        const input = document.querySelector('#query')
-        const mic = document.querySelector('button')
+        const input = document.querySelector('#utterance')
+        const mic = document.querySelector('#mic-button')
         const v = document.querySelector('#version small')
         const logger = document.querySelector('#logger small')
         const client = new Client(config.app, serverUrl, input, res.body)
@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         logger.innerHTML += sLogger
 
-        client.init()
+        client.init(loader)
 
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
@@ -95,8 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
           console.error('MediaDevices.getUserMedia() is not supported on your browser.')
         }
-
-        loader.stop()
 
         document.addEventListener('keydown', (e) => {
           onkeydowndocument(e, () => {

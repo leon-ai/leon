@@ -1,0 +1,11 @@
+{
+  "name": "Rochambeau",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Rock paper scissors game.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

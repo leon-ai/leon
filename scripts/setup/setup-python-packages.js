@@ -5,7 +5,7 @@ import path from 'path'
 import log from '@/helpers/log'
 
 /**
- * Download and setup Leon's packages Python dependencies
+ * Download and setup Leon's Python packages dependencies
  */
 export default () => new Promise(async (resolve, reject) => {
   log.info('Checking Python env...')
@@ -21,7 +21,6 @@ export default () => new Promise(async (resolve, reject) => {
 
       if (pipenvVersion.indexOf('version') !== -1) {
         pipenvVersion = pipenvVersion.substr(pipenvVersion.indexOf('version') + 'version '.length)
-        pipenvVersion = pipenvVersion.substr(0, pipenvVersion.length - 1)
         pipenvVersion = `${pipenvVersion} version`
       }
 
@@ -40,9 +39,17 @@ export default () => new Promise(async (resolve, reject) => {
         // Installing Python packages
         log.info('Installing Python packages from bridges/python/Pipfile...')
 
-        await command('pipenv --three', { shell: true })
         await command('pipenv install', { shell: true })
         log.success('Python packages installed')
+
+        log.info('Installing spaCy models...')
+        // Find new spaCy models:  https://github.com/explosion/spacy-models/releases
+        await Promise.all([
+          command('pipenv run spacy download en_core_web_trf-3.3.0 --direct', { shell: true }),
+          command('pipenv run spacy download fr_core_news_md-3.3.0 --direct', { shell: true })
+        ])
+
+        log.success('spaCy models installed')
       }
 
       if (!isDotVenvExist) {

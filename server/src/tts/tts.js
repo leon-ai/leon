@@ -1,7 +1,9 @@
 import events from 'events'
 import fs from 'fs'
+import path from 'path'
 
 import log from '@/helpers/log'
+import lang from '@/helpers/lang'
 
 class Tts {
   constructor (socket, provider) {
@@ -16,6 +18,7 @@ class Tts {
     this.synthesizer = { }
     this.em = new events.EventEmitter()
     this.speeches = []
+    this.lang = 'en'
 
     log.title('TTS')
     log.success('New instance')
@@ -24,8 +27,10 @@ class Tts {
   /**
    * Initialize the TTS provider
    */
-  init (cb) {
+  init (newLang, cb) {
     log.info('Initializing TTS...')
+
+    this.lang = newLang || this.lang
 
     if (!this.providers.includes(this.provider)) {
       log.error(`The TTS provider "${this.provider}" does not exist or is not yet supported`)
@@ -35,15 +40,15 @@ class Tts {
 
     /* istanbul ignore next */
     if (this.provider === 'google-cloud-tts' && typeof process.env.GOOGLE_APPLICATION_CREDENTIALS === 'undefined') {
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = `${__dirname}/../config/voice/google-cloud.json`
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'core/config/voice/google-cloud.json')
     } else if (typeof process.env.GOOGLE_APPLICATION_CREDENTIALS !== 'undefined'
-      && process.env.GOOGLE_APPLICATION_CREDENTIALS.indexOf('config/voice/google-cloud.json') === -1) {
+      && process.env.GOOGLE_APPLICATION_CREDENTIALS.indexOf('google-cloud.json') === -1) {
       log.warning(`The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`)
     }
 
     // Dynamically attribute the synthesizer
     this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`) // eslint-disable-line global-require
-    this.synthesizer.default.init(this.synthesizer.default.conf)
+    this.synthesizer.default.init(lang.getLongCode(this.lang))
 
     this.onSaved()
 

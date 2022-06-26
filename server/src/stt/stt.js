@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 
 import Asr from '@/core/asr'
 import log from '@/helpers/log'
@@ -32,9 +33,9 @@ class Stt {
 
     /* istanbul ignore next */
     if (this.provider === 'google-cloud-stt' && typeof process.env.GOOGLE_APPLICATION_CREDENTIALS === 'undefined') {
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = `${__dirname}/../config/voice/google-cloud.json`
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'core/config/voice/google-cloud.json')
     } else if (typeof process.env.GOOGLE_APPLICATION_CREDENTIALS !== 'undefined'
-      && process.env.GOOGLE_APPLICATION_CREDENTIALS.indexOf('config/voice/google-cloud.json') === -1) {
+      && process.env.GOOGLE_APPLICATION_CREDENTIALS.indexOf('google-cloud.json') === -1) {
       log.warning(`The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`)
     }
 
