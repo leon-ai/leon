@@ -45,7 +45,7 @@
     }
   },
   "entities": {
-    "handsign": "entities/handsigns.json"
+    "handsign": "global-entities/handsign.json"
   },
   "answers": {
     "ready": [

@@ -46,10 +46,35 @@ export default () => new Promise(async (resolve, reject) => {
 
     for (let h = 0; h < shortLangs.length; h += 1) {
       const lang = shortLangs[h]
+      const globalEntitiesPath = path.join(process.cwd(), 'core/data', lang, 'global-entities')
+      const globalEntityFiles = fs.readdirSync(globalEntitiesPath)
       const resolversPath = path.join(process.cwd(), 'core/data', lang, 'resolvers')
       const resolverFiles = fs.readdirSync(resolversPath)
+      const newEntitiesObj = { }
 
       nlp.addLanguage(lang)
+
+      // Add global entities annotations (@...)
+      for (let i = 0; i < globalEntityFiles.length; i += 1) {
+        const globalEntityFileName = globalEntityFiles[i]
+        const [entityName] = globalEntityFileName.split('.')
+        const globalEntityPath = path.join(globalEntitiesPath, globalEntityFileName)
+        const { options } = JSON.parse(fs.readFileSync(globalEntityPath, 'utf8'))
+        const optionKeys = Object.keys(options)
+        const optionsObj = { }
+
+        optionKeys.forEach((optionKey) => {
+          const { synonyms } = options[optionKey]
+
+          optionsObj[optionKey] = synonyms
+        })
+
+        newEntitiesObj[entityName] = { options: optionsObj }
+      }
+
+      console.log('newEntitiesObj1', newEntitiesObj)
+
+      nlp.addEntities(newEntitiesObj, lang)
 
       // Train resolvers
       for (let i = 0; i < resolverFiles.length; i += 1) {
@@ -92,7 +117,6 @@ export default () => new Promise(async (resolve, reject) => {
           if (fs.existsSync(nluFilePath)) {
             const {
               actions,
-              entities,
               variables
             } = await json.loadNluData(nluFilePath, lang) // eslint-disable-line no-await-in-loop
             const actionsKeys = Object.keys(actions)
@@ -156,32 +180,6 @@ export default () => new Promise(async (resolve, reject) => {
 
                   nlp.addAnswer(lang, `${skillName}.${actionName}`, answers[l])
                 }
-              }
-
-              /**
-               * TODO: load common entities not per action but globally?
-               * TODO: as these entities are exposed to all actions
-               */
-              // Add entities annotations (@...)
-              if (entities) {
-                const newEntitiesObj = { }
-                const entityKeys = Object.keys(entities)
-
-                for (let l = 0; l < entityKeys.length; l += 1) {
-                  const entity = entities[entityKeys[l]]
-                  const optionKeys = Object.keys(entity.options)
-                  const options = { }
-
-                  for (let m = 0; m < optionKeys.length; m += 1) {
-                    const option = entity.options[optionKeys[m]]
-
-                    options[optionKeys[m]] = option.synonyms
-                  }
-
-                  newEntitiesObj[entityKeys[l]] = { options }
-                }
-
-                nlp.addEntities(newEntitiesObj, lang)
               }
             }
           }

@@ -73,6 +73,6 @@
     }
   },
   "entities": {
-    "color": "entities/colors.json"
+    "color": "global-entities/color.json"
   }
 }
