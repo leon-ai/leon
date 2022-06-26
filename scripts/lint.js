@@ -14,7 +14,8 @@ import loader from '@/helpers/loader'
     const globs = [
       '"app/src/js/*.js"',
       '"hotword/index.js"',
-      '"packages/**/*.js"',
+      // TODO: put it back once tests have been reintroduced into skills
+      // '"skills/**/*.js"',
       '"scripts/**/*.js"',
       '"server/src/**/*.js"',
       '"test/*.js"',
