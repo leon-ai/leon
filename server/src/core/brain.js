@@ -390,10 +390,10 @@ class Brain {
              * then map them (utterance <-> answer)
              */
             if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
-              obj.entities.forEach((entityObj) => {
+              obj.currentEntities.forEach((entityObj) => {
                 answer = string.pnr(answer, { [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value })
 
-                // Find matches and map deeper data from the NLU file (global/custom entities)
+                // Find matches and map deeper data from the NLU file (global entities)
                 const matches = answer.match(/{{.+?}}/g)
 
                 matches?.forEach((match) => {

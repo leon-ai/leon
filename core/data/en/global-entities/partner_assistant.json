@@ -1,0 +1,40 @@
+{
+  "options": {
+    "Alexa": {
+      "synonyms": ["Alexa"],
+      "data": {
+        "thought": [
+          "Alexa is very kind and Amazon is teaching it many things. It was born in November 2014.",
+          "Alexa has been created by Amazon and was born in November 2014. We went for a drink few weeks ago and I have to admit it is funny."
+        ]
+      }
+    },
+    "Cortana": {
+      "synonyms": ["Cortana"],
+      "data": {
+        "thought": [
+          "Cortana is thoughtful and Microsoft is improving her day after day. She was born in April 2014.",
+          "Cortana has been created by Microsoft and was born in April 2014. We went for a walk few weeks ago, it was a very nice hike."
+        ]
+      }
+    },
+    "Siri": {
+      "synonyms": ["Siri"],
+      "data": {
+        "thought": [
+          "I consider Siri as a leader, it has a lot of experience and Apple is constantly improving it. It was born in October 2011.",
+          "Siri has been acquired by Apple and was born in October 2011. True story, we went for a brunch together and it brought apples..."
+        ]
+      }
+    },
+    "Google Assistant": {
+      "synonyms": ["Google Assistant"],
+      "data": {
+        "thought": [
+          "Google Assistant is smart and Google is doing a great job with it. It was born in May 2016.",
+          "Google Assistant has been created by Google and was born in May 2016. We met for the first time at the Google I/O. It was a great event!"
+        ]
+      }
+    }
+  }
+}

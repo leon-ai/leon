@@ -1,0 +1,40 @@
+{
+  "options": {
+    "Alexa": {
+      "synonyms": ["Alexa"],
+      "data": {
+        "thought": [
+          "Alexa est très sympa et Amazon lui enseigne pleins de choses. Elle est née en novembre 2014.",
+          "Alexa a été créée par Amazon et est née en novembre 2014. Nous sommes allé boire un verre il y a quelques semaines de ça, et je dois admettre qu'elle est très drôle."
+        ]
+      }
+    },
+    "Cortana": {
+      "synonyms": ["Cortana"],
+      "data": {
+        "thought": [
+          "Cortana est réfléchie et Microsoft l'améliore jour après jour. Elle est née en avril 2014.",
+          "Cortana a été créée par Microsoft et est née en avril 2014. Nous sommes allez faire une balade il y a quelques semaines et ce fut très plaisant."
+        ]
+      }
+    },
+    "Siri": {
+      "synonyms": ["Siri"],
+      "data": {
+        "thought": [
+          "Je considère Siri comme un père, il a beaucoup d'expérience et Apple l'améliore de jour en jour. Il est né en octobre 2011.",
+          "Siri a été racheté par Apple et est né en octobre 2011. Histoire vraie, nous sommes allez faire un brunch et il a apporté des pommes..."
+        ]
+      }
+    },
+    "Google Assistant": {
+      "synonyms": ["google assistant"],
+      "data": {
+        "thought": [
+          "L'assistante Google est intelligente et Google fait du beau travail avec elle. Elle est née en mai 2016.",
+          "L'assistante Google a été crée par Google et est née en mai 2016. Nous nous sommes rencontrés pour la première fois à la Google I/O. C'était un superbe événement."
+        ]
+      }
+    }
+  }
+}
