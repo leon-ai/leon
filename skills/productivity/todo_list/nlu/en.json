@@ -3,8 +3,7 @@
     "create_list": {
       "type": "logic",
       "utterance_samples": [
-        "Create the shopping list",
-        "Create a material list",
+        "Create [the|a] [shopping|material] list",
         "I want you to create a stuff list",
         "Can you create a reminder list for me?",
         "I need you to make a movies list",

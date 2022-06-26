@@ -89,6 +89,7 @@
     "@babel/core": "^7.16.0",
     "@babel/node": "^7.16.0",
     "@babel/preset-env": "^7.16.0",
+    "@nlpjs/utils": "^4.24.1",
     "babel-plugin-module-resolver": "^4.1.0",
     "cli-spinner": "^0.2.10",
     "eslint": "^7.28.0",

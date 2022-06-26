@@ -1,6 +1,6 @@
 import { containerBootstrap } from '@nlpjs/core-loader'
 import { Nlp } from '@nlpjs/nlp'
-// import { composeFromPattern, composeCorpus } from '@nlpjs/utils'
+import { composeFromPattern } from '@nlpjs/utils'
 import { LangAll } from '@nlpjs/lang-all'
 import dotenv from 'dotenv'
 import fs from 'fs'
@@ -156,7 +156,13 @@ export default () => new Promise(async (resolve, reject) => {
               }
 
               for (let l = 0; l < utteranceSamples?.length; l += 1) {
-                nlp.addDocument(lang, utteranceSamples[l], intent)
+                const utterance = utteranceSamples[l]
+                // Achieve Cartesian training
+                const utteranceAlternatives = composeFromPattern(utterance)
+
+                utteranceAlternatives.forEach((utteranceAlternative) => {
+                  nlp.addDocument(lang, utteranceAlternative, intent)
+                })
               }
 
               // Train NLG if the action has a dialog type
