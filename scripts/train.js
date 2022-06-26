@@ -1,5 +1,6 @@
 import { containerBootstrap } from '@nlpjs/core-loader'
 import { Nlp } from '@nlpjs/nlp'
+// import { composeFromPattern, composeCorpus } from '@nlpjs/utils'
 import { LangAll } from '@nlpjs/lang-all'
 import dotenv from 'dotenv'
 import fs from 'fs'
@@ -63,6 +64,8 @@ export default () => new Promise(async (resolve, reject) => {
         const optionKeys = Object.keys(options)
         const optionsObj = { }
 
+        log.info(`[${lang}] Adding "${entityName}" global entity...`)
+
         optionKeys.forEach((optionKey) => {
           const { synonyms } = options[optionKey]
 
@@ -70,9 +73,8 @@ export default () => new Promise(async (resolve, reject) => {
         })
 
         newEntitiesObj[entityName] = { options: optionsObj }
+        log.success(`[${lang}] "${entityName}" global entity added`)
       }
-
-      console.log('newEntitiesObj1', newEntitiesObj)
 
       nlp.addEntities(newEntitiesObj, lang)
 
