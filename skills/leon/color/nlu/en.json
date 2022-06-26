@@ -18,19 +18,10 @@
         "Sometimes %blue_leon%, sometimes %pink_leon%.",
         "{{ color }} is great! But I prefer that one.",
         "I think {{ color }} is a good color, but I prefer blue and pink. Don't ask me why..."
-      ],
-      "output_context": [
-        {
-          "action": "leon.color.why",
-          "lifespan": 1
-        }
       ]
     },
     "why": {
       "type": "dialog",
-      "input_context": [
-        "leon.color.favorite_color"
-      ],
       "utterance_samples": [
         "Why do you like this color?",
         "Why this colour?",
@@ -41,34 +32,20 @@
         "Because blue and pink are beautiful. Look at my logo..."
       ]
     },
-    "color_meaning": {
+    "color_hexadecimal": {
       "type": "dialog",
-      "slots": [
-        {
-          "name": "color_choice",
-          "item": {
-            "type": "entity",
-            "name": "color"
-          },
-          "questions": [
-            "What color do you want to know about?"
-          ]
-        }
-      ],
       "utterance_samples": [
-        "Tell me something about colors",
-        "I want to know about colours",
-        "Can you speak about colours?",
-        "Tell me something about the @color color",
-        "I want to know about the @color colour",
-        "How about the @color colour?",
-        "Can you tell me more about the @color color?"
+        "Tell me the hexadecimal code of a color",
+        "What is the hexa code of the green color?",
+        "Give me the hexadecimal code of the @color color",
+        "I want to know the @color hexadecimal",
+        "How about the @color colour?"
       ],
       "answers": [
-        "Alright, here is for the {{ color }} color: {{ color.usage }}."
+        "Alright, here is for the {{ color }} color: {{ color.hexa }} <div style=\"background:{{ color.hexa }};display:inline-block;width:12px;height:12px;border-radius:50%;\"></div>."
       ],
       "unknown_answers": [
-        "This color sounds incredible, but I haven't seen it before."
+        "This color must look incredible, but I haven't seen it before."
       ]
     }
   },

@@ -42,7 +42,7 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/leon/color/color_meaning",
+      "route": "/api/action/leon/color/color_hexadecimal",
       "params": []
     },
     {
