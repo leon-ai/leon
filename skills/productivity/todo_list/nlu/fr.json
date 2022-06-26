@@ -3,13 +3,10 @@
     "create_list": {
       "type": "logic",
       "utterance_samples": [
-        "Crée la liste shopping",
-        "Crée une liste matos",
+        "[Crée|Fais] [la|une] liste [shopping|nourriture]",
         "Je veux que tu crées une liste choses",
         "Peux-tu créer une liste rappel ?",
         "J'ai besoin que tu fasses une liste films",
-        "Fais une liste nourriture",
-        "Ajoute une liste matos",
         "Je veux une liste shopping",
         "Aides-moi à avoir une liste films",
         "Peux-tu ajouter une liste rappel ?"
@@ -42,8 +39,7 @@
     "view_list": {
       "type": "logic",
       "utterance_samples": [
-        "Montre ma liste shopping",
-        "Montre la liste matériels",
+        "Montre [ma|la] liste shopping",
         "Dis moi ce qu'il y a dans ma liste choses",
         "Qu'est-ce qu'il y a sur la liste rappel ?",
         "Peux-tu donner le contenu de ma liste films ?",
@@ -69,12 +65,8 @@
     "rename_list": {
       "type": "logic",
       "utterance_samples": [
-        "Renomme la liste shopping en achats",
-        "Renomme ma liste matériel par choses",
-        "Peux-tu renommer la liste nourriture en courses ?",
-        "Change la liste choses par nourriture",
-        "Modifie ma liste rappel par ne pas oublier",
-        "Remplace ma liste nourriture par shopping"
+        "[Renomme|Change|Modifie|Remplace] [la|ma] liste shopping [en|par] achats",
+        "Peux-tu renommer la liste nourriture en courses ?"
       ],
       "entities": [
         {
@@ -103,13 +95,10 @@
     "delete_list": {
       "type": "logic",
       "utterance_samples": [
-        "Supprime la liste shopping",
-        "Supprime ma liste matériel",
+        "[Supprime|Retire|Annule] [la|ma] liste shopping",
         "Supprime la",
         "Peux-tu retirer la liste nourriture ?",
-        "Retire la liste stuff",
-        "Je ne veux plus de la liste rappel",
-        "Annule ma liste courses"
+        "Je ne veux plus de la liste rappel"
       ],
       "entities": [
         {
@@ -127,8 +116,7 @@
     "add_todos": {
       "type": "logic",
       "utterance_samples": [
-        "Ajoute patates à ma liste courses",
-        "Ajoute bananes à la liste choses",
+        "Ajoute patates à [ma|la] liste courses",
         "Peux-tu ajouter nettoyage à la liste rappel ?",
         "Il faut mettre la viande dans la liste nourriture"
       ],
@@ -159,9 +147,7 @@
     "complete_todos": {
       "type": "logic",
       "utterance_samples": [
-        "Coche patates de la liste shopping",
-        "Coche pain de ma liste courses",
-        "Complète acheter un cadeau de la liste rappel",
+        "[Coche|Complète] pain de [la|ma] liste shopping",
         "Tu peux cocher pêches de la liste fruits"
       ],
       "entities": [
@@ -191,9 +177,7 @@
     "uncheck_todos": {
       "type": "logic",
       "utterance_samples": [
-        "Décoche patates de la liste courses",
-        "Remet pain sur ma liste nourriture",
-        "Invalide acheter un cadeau de la liste rappel",
+        "[Décoche|Remet|Invalide] patates de [la|ma] liste courses",
         "Peux-tu incompléter pêches de ma liste fruits ?"
       ],
       "entities": [
