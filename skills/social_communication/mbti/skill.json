@@ -1,0 +1,11 @@
+{
+  "name": "MBTI (Myers–Briggs Type Indicator)",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Questionnaire to define your MBTI personality type.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

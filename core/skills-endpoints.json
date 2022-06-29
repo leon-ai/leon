@@ -176,6 +176,16 @@
     },
     {
       "method": "GET",
+      "route": "/api/action/social_communication/mbti/setup",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/social_communication/mbti/quiz",
+      "params": []
+    },
+    {
+      "method": "GET",
       "route": "/api/action/utilities/have_i_been_pwned/run",
       "params": []
     },

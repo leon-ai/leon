@@ -1,0 +1,63 @@
+{
+  "actions": {
+    "setup": {
+      "type": "dialog",
+      "utterance_samples": [
+        "I want to know my MBTI personality type"
+      ],
+      "answers": [
+        "Alright, let's go!"
+      ],
+      "next_action": "quiz"
+    },
+    "quiz": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "resolver",
+          "name": "mbti_quiz"
+        }
+      }
+    }
+  },
+  "resolvers": {
+    "mbti_quiz": {
+      "intents": {
+        "resolver.1_a": {
+          "utterance_samples": [
+            "Interact with many",
+            "Including strangers",
+            "[Like|Love] to [interact|communicate|talk]"
+          ],
+          "value": "1_a"
+        },
+        "resolver.1_b": {
+          "utterance_samples": [
+            "Interact with a few",
+            "Know to [me|you]"
+          ],
+          "value": "1_b"
+        },
+        "resolver.2_a": {
+          "utterance_samples": [
+            "Realistic than speculative",
+            "I'm not a dreamer",
+            "I believe in science"
+          ],
+          "value": "2_a"
+        },
+        "resolver.2_b": {
+          "utterance_samples": [
+            "Speculative than realistic",
+            "Speculative",
+            "I [like|love] to dream",
+            "I am a dreamer"
+          ],
+          "value": "2_b"
+        }
+      }
+    }
+  },
+  "answers": {
+  }
+}
