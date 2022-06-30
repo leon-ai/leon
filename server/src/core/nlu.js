@@ -38,7 +38,8 @@ class Nlu {
   constructor (brain) {
     this.brain = brain
     this.request = request
-    this.nlp = { }
+    this.resolversNlp = { }
+    this.mainNlp = { }
     this.ner = { }
     this.conv = new Conversation('conv0')
     this.nluResultObj = defaultNluResultObj // TODO
@@ -48,33 +49,28 @@ class Nlu {
   }
 
   /**
-   * Load the NLP model from the latest training
+   * Load the resolvers NLP model from the latest training
    */
-  loadModel (nlpModel) {
+  loadResolversModel (nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         log.title('NLU')
-        reject({ type: 'warning', obj: new Error('The NLP model does not exist, please run: npm run train') })
+        reject({ type: 'warning', obj: new Error('The resolvers NLP model does not exist, please run: npm run train') })
       } else {
         log.title('NLU')
 
         try {
           const container = await containerBootstrap()
 
-          container.register('extract-builtin-??', new BuiltinMicrosoft({
-            builtins: Ner.getMicrosoftBuiltinEntities()
-          }), true)
           container.use(Nlp)
           container.use(LangAll)
 
-          this.nlp = container.get('nlp')
+          this.resolversNlp = container.get('nlp')
           const nluManager = container.get('nlu-manager')
           nluManager.settings.spellCheck = true
 
-          await this.nlp.load(nlpModel)
-          log.success('NLP model loaded')
-
-          this.ner = new Ner(this.nlp.ner)
+          await this.resolversNlp.load(nlpModel)
+          log.success('Resolvers NLP model loaded')
 
           resolve()
         } catch (err) {
@@ -88,10 +84,51 @@ class Nlu {
   }
 
   /**
-   * Check if the NLP model exists
+   * Load the main NLP model from the latest training
    */
-  hasNlpModel () {
-    return Object.keys(this.nlp).length > 0
+  loadMainModel (nlpModel) {
+    return new Promise(async (resolve, reject) => {
+      if (!fs.existsSync(nlpModel)) {
+        log.title('NLU')
+        reject({ type: 'warning', obj: new Error('The main NLP model does not exist, please run: npm run train') })
+      } else {
+        log.title('NLU')
+
+        try {
+          const container = await containerBootstrap()
+
+          container.register('extract-builtin-??', new BuiltinMicrosoft({
+            builtins: Ner.getMicrosoftBuiltinEntities()
+          }), true)
+          container.use(Nlp)
+          container.use(LangAll)
+
+          this.mainNlp = container.get('nlp')
+          const nluManager = container.get('nlu-manager')
+          nluManager.settings.spellCheck = true
+
+          await this.mainNlp.load(nlpModel)
+          log.success('Main NLP model loaded')
+
+          this.ner = new Ner(this.mainNlp.ner)
+
+          resolve()
+        } catch (err) {
+          this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
+          this.brain.socket.emit('is-typing', false)
+
+          reject({ type: 'error', obj: err })
+        }
+      }
+    })
+  }
+
+  /**
+   * Check if NLP models exists
+   */
+  hasNlpModels () {
+    return Object.keys(this.resolversNlp).length > 0
+      && Object.keys(this.mainNlp).length > 0
   }
 
   /**
@@ -156,7 +193,7 @@ class Nlu {
           }
         }
 
-        this.nlp.addEntities(spacyEntity, this.brain.lang)
+        this.mainNlp.addEntities(spacyEntity, this.brain.lang)
       })
     }
   }
@@ -198,7 +235,7 @@ class Nlu {
       hasMatchingEntity = this.nluResultObj
         .entities.filter(({ entity }) => expectedItemName === entity).length > 0
     } else if (expectedItemType === 'resolver') {
-      const { intent } = await this.nlp.process(utterance)
+      const { intent } = await this.resolversNlp.process(utterance)
       const resolveResolvers = (resolver, intent) => {
         const resolversPath = join(process.cwd(), 'core/data', this.brain.lang, 'resolvers')
         const { intents } = JSON.parse(fs.readFileSync(join(resolversPath, `${resolver}.json`)))
@@ -314,7 +351,7 @@ class Nlu {
       }
       utterance = string.ucfirst(utterance)
 
-      if (!this.hasNlpModel()) {
+      if (!this.hasNlpModels()) {
         if (!opts.mute) {
           this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
           this.brain.socket.emit('is-typing', false)
@@ -345,7 +382,7 @@ class Nlu {
         }
       }
 
-      const result = await this.nlp.process(utterance)
+      const result = await this.mainNlp.process(utterance)
       const {
         locale, answers, classifications
       } = result
@@ -361,7 +398,7 @@ class Nlu {
         classifications.forEach(({ intent: newIntent, score: newScore }) => {
           if (newScore > 0.6) {
             const [skillName] = newIntent.split('.')
-            const newDomain = this.nlp.getIntentDomain(locale, newIntent)
+            const newDomain = this.mainNlp.getIntentDomain(locale, newIntent)
             const contextName = `${newDomain}.${skillName}`
             if (this.conv.activeContext.name === contextName) {
               score = newScore
@@ -605,7 +642,7 @@ class Nlu {
    * 3. Or go to the brain executor if all slots have been filled in one shot
    */
   async routeSlotFilling (intent) {
-    const slots = await this.nlp.slotManager.getMandatorySlots(intent)
+    const slots = await this.mainNlp.slotManager.getMandatorySlots(intent)
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
     if (hasMandatorySlots) {

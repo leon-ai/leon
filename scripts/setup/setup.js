@@ -1,7 +1,7 @@
 import loader from '@/helpers/loader'
 import log from '@/helpers/log'
 
-import train from '../train'
+import train from '../train/train'
 import generateHttpApiKey from '../generate/generate-http-api-key'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'

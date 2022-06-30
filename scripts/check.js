@@ -22,7 +22,8 @@ export default () => new Promise(async (resolve, reject) => {
     const googleCloudPath = 'core/config/voice/google-cloud.json'
     const watsonSttPath = 'core/config/voice/watson-stt.json'
     const watsonTtsPath = 'core/config/voice/watson-tts.json'
-    const nlpModelPath = 'core/data/leon-model.nlp'
+    const resolversNlpModelPath = 'core/data/models/leon-resolvers-model.nlp'
+    const mainNlpModelPath = 'core/data/models/leon-main-model.nlp'
     const report = {
       can_run: { title: 'Run', type: 'error', v: true },
       can_run_module: { title: 'Run modules', type: 'error', v: true },
@@ -87,13 +88,26 @@ export default () => new Promise(async (resolve, reject) => {
       log.error(`${e}\n`)
     }
 
-    // NLP model checking
+    // Resolvers NLP model checking
 
-    log.info('NLP model state')
-    if (!fs.existsSync(nlpModelPath) || !Object.keys(fs.readFileSync(nlpModelPath)).length) {
+    log.info('Resolvers NLP model state')
+    if (!fs.existsSync(resolversNlpModelPath)
+      || !Object.keys(fs.readFileSync(resolversNlpModelPath)).length) {
       report.can_text.v = false
       Object.keys(report).forEach((item) => { if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1) report[item].v = false })
-      log.error('NLP model not found or broken. Try to generate a new one: "npm run train"\n')
+      log.error('Resolvers NLP model not found or broken. Try to generate a new one: "npm run train"\n')
+    } else {
+      log.success('Found and valid\n')
+    }
+
+    // Main NLP model checking
+
+    log.info('Main NLP model state')
+    if (!fs.existsSync(mainNlpModelPath)
+      || !Object.keys(fs.readFileSync(mainNlpModelPath)).length) {
+      report.can_text.v = false
+      Object.keys(report).forEach((item) => { if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1) report[item].v = false })
+      log.error('Main NLP model not found or broken. Try to generate a new one: "npm run train"\n')
     } else {
       log.success('Found and valid\n')
     }

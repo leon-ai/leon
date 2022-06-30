@@ -294,9 +294,12 @@ server.init = async () => {
 
   nlu = new Nlu(brain)
 
-  // Load NLP model
+  // Load NLP models
   try {
-    await nlu.loadModel(join(process.cwd(), 'core/data/leon-model.nlp'))
+    await Promise.all([
+      nlu.loadResolversModel(join(process.cwd(), 'core/data/models/leon-resolvers-model.nlp')),
+      nlu.loadMainModel(join(process.cwd(), 'core/data/models/leon-main-model.nlp'))
+    ])
   } catch (e) {
     log[e.type](e.obj.message)
   }

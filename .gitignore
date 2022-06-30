@@ -25,6 +25,6 @@ packages/**/config/config.json
 skills/**/src/config.json
 packages/**/data/db/*.json
 skills/**/memory/*.json
-core/data/leon-model.nlp
+core/data/models/*.nlp
 package.json.backup
 .python-version
