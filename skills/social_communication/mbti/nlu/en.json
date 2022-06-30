@@ -15,13 +15,13 @@
       "loop": {
         "expected_item": {
           "type": "resolver",
-          "name": "mbti_quiz"
+          "name": "form"
         }
       }
     }
   },
   "resolvers": {
-    "mbti_quiz": {
+    "form": {
       "intents": {
         "1_a": {
           "utterance_samples": [
@@ -41,8 +41,8 @@
         "2_a": {
           "utterance_samples": [
             "Realistic than speculative",
-            "I'm not a dreamer",
-            "I believe in science"
+            "Not a dreamer",
+            "Believe in science"
           ],
           "value": "2_a"
         },
@@ -50,8 +50,8 @@
           "utterance_samples": [
             "Speculative than realistic",
             "Speculative",
-            "I [like|love] to dream",
-            "I am a dreamer"
+            "[like|love] to dream",
+            "A dreamer"
           ],
           "value": "2_b"
         }

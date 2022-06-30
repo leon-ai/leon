@@ -22,7 +22,7 @@ export default (lang, nlp) => new Promise((resolve) => {
 
     for (let j = 0; j < intentKeys.length; j += 1) {
       const intentName = intentKeys[j]
-      const intent = `resolver.global.${intentName}`
+      const intent = `resolver.global.${resolverName}.${intentName}`
       const intentObj = resolverIntents[intentName]
 
       nlp.assignDomain(lang, intent, 'system')

@@ -223,7 +223,7 @@ class Nlu {
       this.nluResultObj
     )
 
-    const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+    const { actions, resolvers } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
     const action = actions[this.nluResultObj.classification.action]
     const {
       name: expectedItemName, type: expectedItemType
@@ -235,17 +235,38 @@ class Nlu {
       hasMatchingEntity = this.nluResultObj
         .entities.filter(({ entity }) => expectedItemName === entity).length > 0
     } else if (expectedItemType === 'resolver') {
-      const { intent } = await this.resolversNlp.process(utterance)
+      const result = await this.resolversNlp.process(utterance)
+      const { classifications } = result
+      let { intent } = result
+
+      /**
+       * Prioritize skill resolvers in the classification
+       * to not overlap with resolvers from other skills
+       */
+      if (this.conv.hasActiveContext()) {
+        classifications.forEach(({ intent: newIntent, score: newScore }) => {
+          if (newScore > 0.6) {
+            const [, skillName] = newIntent.split('.')
+            if (this.nluResultObj.classification.skill === skillName) {
+              intent = newIntent
+            }
+          }
+        })
+      }
+
       const resolveResolvers = (resolver, intent) => {
         const resolversPath = join(process.cwd(), 'core/data', this.brain.lang, 'global-resolvers')
-        const { intents } = JSON.parse(fs.readFileSync(join(resolversPath, `${resolver}.json`)))
+        // Load the skill resolver or the global resolver
+        const resolvedIntents = !intent.includes('resolver.global')
+          ? resolvers[resolver]
+          : JSON.parse(fs.readFileSync(join(resolversPath, `${resolver}.json`)))
 
         // E.g. resolver.global.denial -> denial
         intent = intent.substring(intent.lastIndexOf('.') + 1)
 
         return [{
           name: expectedItemName,
-          value: intents[intent].value
+          value: resolvedIntents.intents[intent].value
         }]
       }
 

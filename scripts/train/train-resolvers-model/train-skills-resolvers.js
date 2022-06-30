@@ -34,7 +34,7 @@ export default (lang, nlp) => new Promise(async (resolve) => {
             log.info(`[${lang}] Training "${resolverName}" resolver...`)
 
             intentKeys.forEach((intentName) => {
-              const intent = `resolver.${currentSkill.name}.${intentName}`
+              const intent = `resolver.${currentSkill.name}.${resolverName}.${intentName}`
               const intentObj = resolver.intents[intentName]
 
               nlp.assignDomain(lang, intent, currentDomain.name)
