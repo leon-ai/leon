@@ -464,12 +464,6 @@ class Nlu {
       log.title('NLU')
       log.success(`Intent found: ${this.nluResultObj.classification.skill}.${this.nluResultObj.classification.action} (domain: ${this.nluResultObj.classification.domain})`)
 
-      if (this.nluResultObj.classification.domain === 'system') {
-        this.brain.talk(`${this.brain.wernicke('random_unknown_intents')}.`, true)
-        this.brain.socket.emit('is-typing', false)
-        return resolve({ })
-      }
-
       const nluDataFilePath = join(process.cwd(), 'skills', this.nluResultObj.classification.domain, this.nluResultObj.classification.skill, `nlu/${this.brain.lang}.json`)
       this.nluResultObj.nluDataFilePath = nluDataFilePath
 
