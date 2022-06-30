@@ -23,7 +23,7 @@
   "resolvers": {
     "mbti_quiz": {
       "intents": {
-        "resolver.1_a": {
+        "1_a": {
           "utterance_samples": [
             "Interact with many",
             "Including strangers",
@@ -31,14 +31,14 @@
           ],
           "value": "1_a"
         },
-        "resolver.1_b": {
+        "1_b": {
           "utterance_samples": [
             "Interact with a few",
             "Know to [me|you]"
           ],
           "value": "1_b"
         },
-        "resolver.2_a": {
+        "2_a": {
           "utterance_samples": [
             "Realistic than speculative",
             "I'm not a dreamer",
@@ -46,7 +46,7 @@
           ],
           "value": "2_a"
         },
-        "resolver.2_b": {
+        "2_b": {
           "utterance_samples": [
             "Speculative than realistic",
             "Speculative",

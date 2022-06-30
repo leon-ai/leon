@@ -237,8 +237,11 @@ class Nlu {
     } else if (expectedItemType === 'resolver') {
       const { intent } = await this.resolversNlp.process(utterance)
       const resolveResolvers = (resolver, intent) => {
-        const resolversPath = join(process.cwd(), 'core/data', this.brain.lang, 'resolvers')
+        const resolversPath = join(process.cwd(), 'core/data', this.brain.lang, 'global-resolvers')
         const { intents } = JSON.parse(fs.readFileSync(join(resolversPath, `${resolver}.json`)))
+
+        // E.g. resolver.global.denial -> denial
+        intent = intent.substring(intent.lastIndexOf('.') + 1)
 
         return [{
           name: expectedItemName,
@@ -246,8 +249,8 @@ class Nlu {
         }]
       }
 
-      // Resolve resolver if one has been found
-      if (intent.includes('system.resolver')) {
+      // Resolve resolver if global resolver or skill resolver has been found
+      if (intent.includes('resolver.global') || intent.includes(`resolver.${skillName}`)) {
         log.title('NLU')
         log.success('Resolvers resolved:')
         this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)

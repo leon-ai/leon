@@ -8,7 +8,7 @@ import string from '@/helpers/string'
 import domain from '@/helpers/domain'
 
 /**
- * Train global entities
+ * Train skills actions
  */
 export default (lang, nlp) => new Promise(async (resolve) => {
   log.title('Skills actions training')
@@ -16,7 +16,6 @@ export default (lang, nlp) => new Promise(async (resolve) => {
   const supportedActionTypes = ['dialog', 'logic']
   const [domainKeys, domains] = await Promise.all([domain.list(), domain.getDomainsObj()])
 
-  // Train skills actions
   for (let i = 0; i < domainKeys.length; i += 1) {
     const currentDomain = domains[domainKeys[i]]
     const skillKeys = Object.keys(currentDomain.skills)
@@ -49,7 +48,7 @@ export default (lang, nlp) => new Promise(async (resolve) => {
             process.exit(1)
           }
 
-          nlp.assignDomain(lang, `${skillName}.${actionName}`, currentDomain.name)
+          nlp.assignDomain(lang, intent, currentDomain.name)
 
           if (slots) {
             for (let l = 0; l < slots.length; l += 1) {

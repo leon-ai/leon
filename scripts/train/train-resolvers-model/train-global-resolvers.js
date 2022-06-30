@@ -4,16 +4,14 @@ import fs from 'fs'
 import log from '@/helpers/log'
 
 /**
- * Train global entities
+ * Train global resolvers
  */
 export default (lang, nlp) => new Promise((resolve) => {
   log.title('Global resolvers training')
 
-  const resolversPath = path.join(process.cwd(), 'core/data', lang, 'resolvers')
+  const resolversPath = path.join(process.cwd(), 'core/data', lang, 'global-resolvers')
   const resolverFiles = fs.readdirSync(resolversPath)
 
-  // Add global entities annotations (@...)
-  // Train resolvers
   for (let i = 0; i < resolverFiles.length; i += 1) {
     const resolverFileName = resolverFiles[i]
     const resolverPath = path.join(resolversPath, resolverFileName)
@@ -24,12 +22,13 @@ export default (lang, nlp) => new Promise((resolve) => {
 
     for (let j = 0; j < intentKeys.length; j += 1) {
       const intentName = intentKeys[j]
+      const intent = `resolver.global.${intentName}`
       const intentObj = resolverIntents[intentName]
 
-      nlp.assignDomain(lang, intentName, 'system')
+      nlp.assignDomain(lang, intent, 'system')
 
       for (let k = 0; k < intentObj.utterance_samples.length; k += 1) {
-        nlp.addDocument(lang, intentObj.utterance_samples[k], intentName)
+        nlp.addDocument(lang, intentObj.utterance_samples[k], intent)
       }
     }
 

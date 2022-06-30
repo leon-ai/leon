@@ -1,7 +1,7 @@
 {
   "name": "affirmation_denial",
   "intents": {
-    "system.resolver.affirmation": {
+    "affirmation": {
       "utterance_samples": [
         "Yes",
         "Yep",
@@ -21,11 +21,12 @@
         "That's right",
         "That works",
         "Go ahead",
-        "Why not"
+        "Why not",
+        "Please"
       ],
       "value": true
     },
-    "system.resolver.denial": {
+    "denial": {
       "utterance_samples": [
         "No",
         "No no don't",

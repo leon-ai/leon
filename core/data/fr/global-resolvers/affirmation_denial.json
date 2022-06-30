@@ -1,7 +1,7 @@
 {
   "name": "affirmation_denial",
   "intents": {
-    "system.resolver.affirmation": {
+    "affirmation": {
       "utterance_samples": [
         "Oui",
         "Yep",
@@ -23,7 +23,7 @@
       ],
       "value": true
     },
-    "system.resolver.denial": {
+    "denial": {
       "utterance_samples": [
         "Non",
         "Ne le fais pas",

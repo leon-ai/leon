@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import log from '@/helpers/log'
 import lang from '@/helpers/lang'
 import trainGlobalResolvers from './train-resolvers-model/train-global-resolvers'
+import trainSkillsResolvers from './train-resolvers-model/train-skills-resolvers'
 import trainGlobalEntities from './train-main-model/train-global-entities'
 import trainSkillsActions from './train-main-model/train-skills-actions'
 
@@ -68,6 +69,8 @@ export default () => new Promise(async (resolve, reject) => {
       resolversNlp.addLanguage(lang)
       // eslint-disable-next-line no-await-in-loop
       await trainGlobalResolvers(lang, resolversNlp)
+      // eslint-disable-next-line no-await-in-loop
+      await trainSkillsResolvers(lang, resolversNlp)
 
       mainNlp.addLanguage(lang)
       // eslint-disable-next-line no-await-in-loop

@@ -5,6 +5,7 @@ import log from '@/helpers/log'
 
 /**
  * Train global entities
+ * Add global entities annotations (@...)
  */
 export default (lang, nlp) => new Promise((resolve) => {
   log.title('Global entities training')
@@ -13,7 +14,6 @@ export default (lang, nlp) => new Promise((resolve) => {
   const globalEntityFiles = fs.readdirSync(globalEntitiesPath)
   const newEntitiesObj = { }
 
-  // Add global entities annotations (@...)
   for (let i = 0; i < globalEntityFiles.length; i += 1) {
     const globalEntityFileName = globalEntityFiles[i]
     const [entityName] = globalEntityFileName.split('.')
