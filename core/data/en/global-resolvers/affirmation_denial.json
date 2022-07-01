@@ -7,7 +7,7 @@
         "Yep",
         "Yup",
         "Yeah",
-        "Let's do it",
+        "Do [it|this|that]",
         "For sure",
         "Sure thing",
         "Of course!",
@@ -30,6 +30,7 @@
       "utterance_samples": [
         "No",
         "No no don't",
+        "Stop it",
         "Nope",
         "Naa",
         "No thanks",

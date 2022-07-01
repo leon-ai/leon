@@ -49,6 +49,8 @@ class Ner {
           promises.push(this.injectRegexEntity(lang, entity))
         } else if (entity.type === 'trim') {
           promises.push(this.injectTrimEntity(lang, entity))
+        } else if (entity.type === 'enum') {
+          promises.push(this.injectEnumEntity(lang, entity))
         }
       }
 
@@ -135,6 +137,24 @@ class Ner {
   injectRegexEntity (lang, entity) {
     return new Promise((resolve) => {
       this.ner.addRegexRule(lang, entity.name, new RegExp(entity.regex, 'g'))
+
+      resolve()
+    })
+  }
+
+  /**
+   * Inject enum type entities
+   */
+  injectEnumEntity (lang, entity) {
+    return new Promise((resolve) => {
+      const { name: entityName, options } = entity
+      const optionKeys = Object.keys(options)
+
+      optionKeys.forEach((optionName) => {
+        const { synonyms } = options[optionName]
+
+        this.ner.addRuleOptionTexts(lang, entityName, optionName, synonyms)
+      })
 
       resolve()
     })

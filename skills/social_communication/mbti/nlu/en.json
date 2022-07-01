@@ -3,10 +3,11 @@
     "setup": {
       "type": "dialog",
       "utterance_samples": [
-        "I want to know my MBTI personality type"
+        "I want to know my MBTI personality type",
+        "Start a personality type [quiz|questionnaire|test]"
       ],
       "answers": [
-        "Alright, let's go!"
+        "Alright, let's go!<br><br>1/20<br>At a party do you:<ul><li>a. Interact with many, including strangers</li><li>b. Interact with a few, known to you</li></ul>"
       ],
       "next_action": "quiz"
     },
@@ -34,24 +35,20 @@
         "1_b": {
           "utterance_samples": [
             "Interact with a few",
-            "Know to [me|you]"
+            "Known to [me|you]"
           ],
           "value": "1_b"
         },
         "2_a": {
           "utterance_samples": [
-            "Realistic than speculative",
-            "Not a dreamer",
-            "Believe in science"
+            "Head in the clouds",
+            "My head in the clouds"
           ],
           "value": "2_a"
         },
         "2_b": {
           "utterance_samples": [
-            "Speculative than realistic",
-            "Speculative",
-            "[like|love] to dream",
-            "A dreamer"
+            "In a rut"
           ],
           "value": "2_b"
         }
@@ -59,5 +56,7 @@
     }
   },
   "answers": {
+    "2": ["%question%/20<br>Is it worse to:<ul><li>a. Have your \"head in the clouds\"</li><li>b. Be \"in a rut\"</li></ul>"],
+    "3": ["%question%/20<br>Is it worse to:<ul><li>a. Have your \"head in the clouds\"</li><li>b. Be \"in a rut\"</li></ul>"]
   }
 }

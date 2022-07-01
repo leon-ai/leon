@@ -1,5 +1,6 @@
 import path from 'path'
 import fs from 'fs'
+import { composeFromPattern } from '@nlpjs/utils'
 
 import log from '@/helpers/log'
 
@@ -28,7 +29,13 @@ export default (lang, nlp) => new Promise((resolve) => {
       nlp.assignDomain(lang, intent, 'system')
 
       for (let k = 0; k < intentObj.utterance_samples.length; k += 1) {
-        nlp.addDocument(lang, intentObj.utterance_samples[k], intent)
+        const utteranceSample = intentObj.utterance_samples[k]
+        // Achieve Cartesian training
+        const utteranceAlternatives = composeFromPattern(utteranceSample)
+
+        utteranceAlternatives.forEach((utteranceAlternative) => {
+          nlp.addDocument(lang, utteranceAlternative, intent)
+        })
       }
     }
 
