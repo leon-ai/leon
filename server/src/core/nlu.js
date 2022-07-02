@@ -299,8 +299,11 @@ class Nlu {
         return null
       }
 
-      // In case there is no next action to prepare anymore
-      if (!processedData.action.next_action) {
+      /**
+       * In case there is no next action to prepare anymore
+       * and there is an explicit stop of the loop from the skill
+       */
+      if (!processedData.action.next_action && processedData.core?.isInActionLoop === false) {
         this.conv.cleanActiveContext()
         return null
       }

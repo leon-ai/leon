@@ -5,26 +5,24 @@ import utils
 from ..lib import db
 
 def quiz(params):
-	"""TODO"""
+	"""Loop over the questions and track choices"""
 
 	resolvers = params['resolvers']
 
 	for resolver in resolvers:
-		if resolver['name'] == 'mbti_quiz':
-			answer = resolver['value']
+		if resolver['name'] == 'form':
+			choice = resolver['value']
 
 	session = db.get_session()
-
-	current_question = 1
-	if session != None:
-		current_question = session['current_question']
-
+	current_question = session['current_question'] + 1
 	db.upsert_session(current_question)
-
-	current_question += 1
 
 	if current_question == 20:
 		# TODO
 		return utils.output('end', 'Your personality type is...', { 'isInActionLoop': False })
 
-	return utils.output('end', { 'key': current_question, 'data': { 'question': current_question }})
+	return utils.output('end', { 'key': str(current_question),
+		'data': {
+			'question': str(current_question)
+		}
+	})

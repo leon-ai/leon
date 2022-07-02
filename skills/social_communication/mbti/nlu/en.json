@@ -1,13 +1,10 @@
 {
   "actions": {
     "setup": {
-      "type": "dialog",
+      "type": "logic",
       "utterance_samples": [
         "I want to know my MBTI personality type",
         "Start a personality type [quiz|questionnaire|test]"
-      ],
-      "answers": [
-        "Alright, let's go!<br><br>1/20<br>At a party do you:<ul><li>a. Interact with many, including strangers</li><li>b. Interact with a few, known to you</li></ul>"
       ],
       "next_action": "quiz"
     },
@@ -56,6 +53,7 @@
     }
   },
   "answers": {
+    "1": ["%question%/20<br>At a party do you:<ul><li>a. Interact with many, including strangers</li><li>b. Interact with a few, known to you</li></ul>"],
     "2": ["%question%/20<br>Is it worse to:<ul><li>a. Have your \"head in the clouds\"</li><li>b. Be \"in a rut\"</li></ul>"],
     "3": ["%question%/20<br>Is it worse to:<ul><li>a. Have your \"head in the clouds\"</li><li>b. Be \"in a rut\"</li></ul>"]
   }
