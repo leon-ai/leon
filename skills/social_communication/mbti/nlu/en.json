@@ -75,7 +75,7 @@
 
     "17": ["%question%/20<br>In company do you:<ul><li>a. Initiate conversation</li><li>b. Wait to be approached</li></ul>"],
     "18": ["%question%/20<br>Children often do not:<ul><li>a. Make themselves useful enough</li><li>b. Exercise their fantasy enough</li></ul>"],
-    "19": ["%question%/20<br>Are you more:<ul><li>a. Firm than gentle</li><li>b. Gentle than firm</li></ul>"],
+    "19": ["%question%/20<b r>Are you more:<ul><li>a. Firm than gentle</li><li>b. Gentle than firm</li></ul>"],
     "20": ["%question%/20<br>Do you put more value on:<ul><li>a. Infinite</li><li>b. Open-minded</li></ul>"]
   }
 }
