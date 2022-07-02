@@ -55,6 +55,27 @@
   "answers": {
     "1": ["%question%/20<br>At a party do you:<ul><li>a. Interact with many, including strangers</li><li>b. Interact with a few, known to you</li></ul>"],
     "2": ["%question%/20<br>Is it worse to:<ul><li>a. Have your \"head in the clouds\"</li><li>b. Be \"in a rut\"</li></ul>"],
-    "3": ["%question%/20<br>Is it worse to:<ul><li>a. Have your \"head in the clouds\"</li><li>b. Be \"in a rut\"</li></ul>"]
+    "3": ["%question%/20<br>Are you more drawn toward the:<ul><li>a. Convincing</li><li>b. Touching</li></ul>"],
+    "4": ["%question%/20<br>Do you tend to choose:<ul><li>a. Rather carefully</li><li>b. Somewhat impulsively</li></ul>"],
+
+    "5": ["%question%/20<br>At parties do you:<ul><li>a. Stay late, with increasing energy</li><li>b. Leave early with decreased energy</li></ul>"],
+    "6": ["%question%/20<br>Are you more interested in:<ul><li>a. What is actual</li><li>b. What is possible</li></ul>"],
+    "7": ["%question%/20<br>In approaching others is your inclination to be somewhat:<ul><li>a. Objective</li><li>b. Personal</li></ul>"],
+    "8": ["%question%/20<br>Does it bother you more having things:<ul><li>a. Incomplete</li><li>b. Completed</li></ul>"],
+
+    "9": ["%question%/20<br>In your social groups do you:<ul><li>a. Keep abreast of other's happenings</li><li>b. Get behind on the news</li></ul>"],
+    "10": ["%question%/20<br>Writers should:<ul><li>a. \"Say what they mean and mean what they say\"</li><li>b. Express things more by use of analogy</li></ul>"],
+    "11": ["%question%/20<br>Are you more comfortable in making:<ul><li>a. Logical judgments</li><li>b. Value judgments</li></ul>"],
+    "12": ["%question%/20<br>Would you say you are more:<ul><li>a. Serious and determined</li><li>b. Easy-going</li></ul>"],
+
+    "13": ["%question%/20<br>In phoning do you:<ul><li>a. Rarely question that it will all be said</li><li>b. Rehearse what you’ll say</li></ul>"],
+    "14": ["%question%/20<br>Are visionaries:<ul><li>a. Somewhat annoying</li><li>b. Rather fascinating</li></ul>"],
+    "15": ["%question%/20<br>Is it worse to be:<ul><li>a. Unjust</li><li>b. Merciless</li></ul>"],
+    "16": ["%question%/20<br>Do you feel better about:<ul><li>a. Having purchased</li><li>b. Having the option to buy</li></ul>"],
+
+    "17": ["%question%/20<br>In company do you:<ul><li>a. Initiate conversation</li><li>b. Wait to be approached</li></ul>"],
+    "18": ["%question%/20<br>Children often do not:<ul><li>a. Make themselves useful enough</li><li>b. Exercise their fantasy enough</li></ul>"],
+    "19": ["%question%/20<br>Are you more:<ul><li>a. Firm than gentle</li><li>b. Gentle than firm</li></ul>"],
+    "20": ["%question%/20<br>Do you put more value on:<ul><li>a. Infinite</li><li>b. Open-minded</li></ul>"]
   }
 }
