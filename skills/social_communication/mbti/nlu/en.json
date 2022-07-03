@@ -119,6 +119,153 @@
             "Completed"
           ],
           "value": "8_b"
+        },
+        "9_a": {
+          "utterance_samples": [
+            "Keep abreast of [other|others] happenings"
+          ],
+          "value": "9_a"
+        },
+        "9_b": {
+          "utterance_samples": [
+            "Get behind on the news"
+          ],
+          "value": "9_b"
+        },
+        "10_a": {
+          "utterance_samples": [
+            "Production and distribution"
+          ],
+          "value": "10_a"
+        },
+        "10_b": {
+          "utterance_samples": [
+            "Design and research"
+          ],
+          "value": "10_b"
+        },
+        "11_a": {
+          "utterance_samples": [
+            "Logical judgments"
+          ],
+          "value": "11_a"
+        },
+        "11_b": {
+          "utterance_samples": [
+            "Value judgments"
+          ],
+          "value": "11_b"
+        },
+        "12_a": {
+          "utterance_samples": [
+            "Serious and determined"
+          ],
+          "value": "12_a"
+        },
+        "12_b": {
+          "utterance_samples": [
+            "Easy-going",
+            "Easy going"
+          ],
+          "value": "12_b"
+        },
+        "13_a": {
+          "utterance_samples": [
+            "Stimulate and energize [you|me]"
+          ],
+          "value": "13_a"
+        },
+        "13_b": {
+          "utterance_samples": [
+            "Tax [your|my] reserves"
+          ],
+          "value": "13_b"
+        },
+        "14_a": {
+          "utterance_samples": [
+            "Somewhat annoying"
+          ],
+          "value": "14_a"
+        },
+        "14_b": {
+          "utterance_samples": [
+            "Rather fascinating"
+          ],
+          "value": "14_b"
+        },
+        "15_a": {
+          "utterance_samples": [
+            "Unjust"
+          ],
+          "value": "15_a"
+        },
+        "15_b": {
+          "utterance_samples": [
+            "Merciless"
+          ],
+          "value": "15_b"
+        },
+        "16_a": {
+          "utterance_samples": [
+            "Having purchased",
+            "After a purchase"
+          ],
+          "value": "16_a"
+        },
+        "16_b": {
+          "utterance_samples": [
+            "Having the option to buy"
+          ],
+          "value": "16_b"
+        },
+        "17_a": {
+          "utterance_samples": [
+            "Initiate conversation"
+          ],
+          "value": "17_a"
+        },
+        "17_b": {
+          "utterance_samples": [
+            "Wait to be approached",
+            "Wait for other to initiate"
+          ],
+          "value": "17_b"
+        },
+        "18_a": {
+          "utterance_samples": [
+            "Make themselves useful enough"
+          ],
+          "value": "18_a"
+        },
+        "18_b": {
+          "utterance_samples": [
+            "Exercise their fantasy enough"
+          ],
+          "value": "18_b"
+        },
+        "19_a": {
+          "utterance_samples": [
+            "Firm than gentle"
+          ],
+          "value": "19_a"
+        },
+        "19_b": {
+          "utterance_samples": [
+            "Gentle than firm"
+          ],
+          "value": "19_b"
+        },
+        "20_a": {
+          "utterance_samples": [
+            "After a decision"
+          ],
+          "value": "20_a"
+        },
+        "20_b": {
+          "utterance_samples": [
+            "Before a decision"
+          ],
+          "value": "20_b"
         }
       }
     }
