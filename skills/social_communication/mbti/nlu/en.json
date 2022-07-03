@@ -38,16 +38,87 @@
         },
         "2_a": {
           "utterance_samples": [
-            "Head in the clouds",
-            "My head in the clouds"
+            "See how others are useful"
           ],
           "value": "2_a"
         },
         "2_b": {
           "utterance_samples": [
-            "In a rut"
+            "See how others see"
           ],
           "value": "2_b"
+        },
+        "3_a": {
+          "utterance_samples": [
+            "[Your|My] head"
+          ],
+          "value": "3_a"
+        },
+        "3_b": {
+          "utterance_samples": [
+            "[Your|my] heart"
+          ],
+          "value": "3_b"
+        },
+        "4_a": {
+          "utterance_samples": [
+            "Carefully"
+          ],
+          "value": "4_a"
+        },
+        "4_b": {
+          "utterance_samples": [
+            "Impulsively"
+          ],
+          "value": "4_b"
+        },
+        "5_a": {
+          "utterance_samples": [
+            "Stay [late|later] with increasing energy"
+          ],
+          "value": "5_a"
+        },
+        "5_b": {
+          "utterance_samples": [
+            "Leave [early|earlier] with decreased energy"
+          ],
+          "value": "5_b"
+        },
+        "6_a": {
+          "utterance_samples": [
+            "What is actual"
+          ],
+          "value": "6_a"
+        },
+        "6_b": {
+          "utterance_samples": [
+            "What is possible"
+          ],
+          "value": "6_b"
+        },
+        "7_a": {
+          "utterance_samples": [
+            "Principles"
+          ],
+          "value": "7_a"
+        },
+        "7_b": {
+          "utterance_samples": [
+            "Emotions"
+          ],
+          "value": "7_b"
+        },
+        "8_a": {
+          "utterance_samples": [
+            "Incomplete"
+          ],
+          "value": "8_a"
+        },
+        "8_b": {
+          "utterance_samples": [
+            "Completed"
+          ],
+          "value": "8_b"
         }
       }
     }
@@ -76,6 +147,10 @@
     "17": ["%question%/20<br>In company do you:<ul><li>a. Initiate conversation</li><li>b. Wait to be approached</li></ul>"],
     "18": ["%question%/20<br>Children often do not:<ul><li>a. Make themselves useful enough</li><li>b. Exercise their fantasy enough</li></ul>"],
     "19": ["%question%/20<br>Are you more:<ul><li>a. Firm than gentle</li><li>b. Gentle than firm</li></ul>"],
-    "20": ["%question%/20<br>Are you more comfortable:<ul><li>a. After a decision</li><li>b. Before a decision</li></ul>"]
+    "20": ["%question%/20<br>Are you more comfortable:<ul><li>a. After a decision</li><li>b. Before a decision</li></ul>"],
+
+    "result": [
+      "Your personality type is: <a href=\"https://www.16personalities.com/%type_url%-personality\" target=\"_blank\">%type%</a>."
+    ]
   }
 }
