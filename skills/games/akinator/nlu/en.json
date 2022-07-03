@@ -1,0 +1,83 @@
+{
+  "actions": {
+    "start": {
+      "type": "dialog",
+      "utterance_samples": [
+        "[Let's play|I want to play|I wanna play] with Akinator"
+      ],
+      "answers": [
+        "Alright, I'm calling my friend Akinator..."
+      ],
+      "next_action": "guess"
+    },
+    "guess": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "resolver",
+          "name": "answer"
+        }
+      },
+      "suggestions": [
+        "Yes",
+        "No",
+        "I don't know",
+        "Probably",
+        "Probably not"
+      ],
+      "next_action": "replay"
+    },
+    "replay": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "resolver",
+          "name": "affirmation_denial"
+        }
+      }
+    }
+  },
+  "resolvers": {
+    "answer": {
+      "intents": {
+        "yes": {
+          "utterance_samples": [
+            "[Yes|Yep|Yup|Yeah]",
+            "Sure",
+            "Correct"
+          ],
+          "value": "yes"
+        },
+        "no": {
+          "utterance_samples": [
+            "[No|Nope|Nah]"
+          ],
+          "value": "no"
+        },
+        "idk": {
+          "utterance_samples": [
+            "I do not know",
+            "Don't know",
+            "Not sure"
+          ],
+          "value": "idk"
+        },
+        "probably": {
+          "utterance_samples": [
+            "Probably",
+            "Probably yes"
+          ],
+          "value": "probably"
+        },
+        "probably_not": {
+          "utterance_samples": [
+            "Probably [no|not]"
+          ],
+          "value": "probably_not"
+        }
+      }
+    }
+  },
+  "answers": {
+  }
+}

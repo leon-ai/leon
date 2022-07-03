@@ -1,0 +1,11 @@
+{
+  "name": "Akinator",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon's friend, the Akinator genie will read your mind.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis.grenard@gmail.com",
+    "url": "https://github.com/louistiti"
+  }
+}

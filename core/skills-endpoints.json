@@ -2,6 +2,21 @@
   "endpoints": [
     {
       "method": "GET",
+      "route": "/api/action/games/akinator/start",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/akinator/play",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/akinator/rematch",
+      "params": []
+    },
+    {
+      "method": "GET",
       "route": "/api/action/games/guess_the_number/setup",
       "params": []
     },
