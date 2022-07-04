@@ -1,17 +1,24 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
-import random
-
 import utils
 from ..lib import akinator
 
 def guess(params):
     aki = akinator.Akinator()
 
-    q = aki.start_game()
+    q = aki.start_game('en')
 
-    while aki.progression <= 80:
+    i = 0
+    while i <= 2:
+    	i += 1
+    	utils.output('end', 'ook')
+
+    """ while aki.progression <= 80:
+    	# a = input(q + "\n\t")
+    	return utils.output('end', q) """
+
+    """ while aki.progression <= 80:
         a = input(q + "\n\t")
         if a == "b":
             try:
@@ -26,4 +33,4 @@ def guess(params):
     if correct.lower() == "yes" or correct.lower() == "y":
         print("Yay\n")
     else:
-        print("Oof\n")
+        print("Oof\n") """

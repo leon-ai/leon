@@ -682,6 +682,11 @@ class Nlu {
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
+        const { actions } = JSON.parse(fs.readFileSync(this.nluResultObj.nluDataFilePath, 'utf8'))
+        const [currentSlot] = actions[this.nluResultObj.classification.action].slots
+          .filter(({ name }) => name === notFilledSlot.name)
+
+        this.brain.socket.emit('suggest', currentSlot.suggestions)
         this.brain.talk(notFilledSlot.pickedQuestion)
         this.brain.socket.emit('is-typing', false)
 

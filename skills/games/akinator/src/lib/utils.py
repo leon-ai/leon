@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import exceptions
+from .exceptions import InvalidAnswerError, InvalidLanguageError, AkiServerDown, AkiTechnicalError, AkiTimedOut, AkiNoQuestions, AkiConnectionFailure
 
 def ans_to_id(ans):
     """Convert an input answer string into an Answer ID for Akinator"""
@@ -39,7 +39,7 @@ def ans_to_id(ans):
     elif ans == "probably not" or ans == "pn" or ans == "4":
         return "4"
     else:
-        raise exceptions.InvalidAnswerError("""
+        raise InvalidAnswerError("""
         You put "{}", which is an invalid answer.
         The answer must be one of these:
             - "yes" OR "y" OR "0" for YES
@@ -106,19 +106,19 @@ def get_lang_and_theme(lang=None):
     elif lang == "id" or lang == "indonesian":
         return {"lang": "id", "theme": "c"}
     else:
-        raise exceptions.InvalidLanguageError("You put \"{}\", which is an invalid language.".format(lang))
+        raise InvalidLanguageError("You put \"{}\", which is an invalid language.".format(lang))
 
 
 def raise_connection_error(response):
     """Raise the proper error if the API failed to connect"""
 
     if response == "KO - SERVER DOWN":
-        raise exception.AkiServerDown("Akinator's servers are down in this region. Try again later or use a different language")
+        raise AkiServerDown("Akinator's servers are down in this region. Try again later or use a different language")
     elif response == "KO - TECHNICAL ERROR":
-        raise exception.AkiTechnicalError("Akinator's servers have had a technical error. Try again later or use a different language")
+        raise AkiTechnicalError("Akinator's servers have had a technical error. Try again later or use a different language")
     elif response == "KO - TIMEOUT":
-        raise exceptions.AkiTimedOut("Your Akinator session has timed out")
+        raise AkiTimedOut("Your Akinator session has timed out")
     elif response == "KO - ELEM LIST IS EMPTY" or response == "WARN - NO QUESTION":
-        raise exceptions.AkiNoQuestions("\"Akinator.step\" reached 79. No more questions")
+        raise AkiNoQuestions("\"Akinator.step\" reached 79. No more questions")
     else:
-        raise exceptions.AkiConnectionFailure("An unknown error has occured. Server response: {}".format(response))
+        raise AkiConnectionFailure("An unknown error has occured. Server response: {}".format(response))

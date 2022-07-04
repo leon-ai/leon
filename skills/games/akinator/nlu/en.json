@@ -1,38 +1,65 @@
 {
   "actions": {
-    "start": {
+    "choose_thematic": {
       "type": "dialog",
       "utterance_samples": [
         "[Let's play|I want to play|I wanna play] with Akinator"
       ],
+      "slots": [
+        {
+          "name": "thematic",
+          "item": {
+            "type": "entity",
+            "name": "thematic"
+          },
+          "questions": [
+            "What thematic would you like to play with?",
+            "What thematic do you choose?"
+          ],
+          "suggestions": [
+            "Characters",
+            "Objects",
+            "Animals"
+          ]
+        }
+      ],
+      "entities": [
+        {
+          "type": "enum",
+          "name": "thematic",
+          "options": {
+            "characters": {
+              "synonyms": ["characters", "character"]
+            },
+            "objects": {
+              "synonyms": ["objects", "object"]
+            },
+            "animals": {
+              "synonyms": ["animals", "animal"]
+            }
+          }
+        }
+      ],
+      "next_action": "setup"
+    },
+    "setup": {
+      "type": "logic",
       "answers": [
         "Alright, I'm calling my friend Akinator..."
-      ],
-      "next_action": "guess"
+      ]
     },
     "guess": {
       "type": "logic",
-      "loop": {
-        "expected_item": {
-          "type": "resolver",
-          "name": "answer"
-        }
-      },
-      "suggestions": [
-        "Yes",
-        "No",
-        "I don't know",
-        "Probably",
-        "Probably not"
-      ],
-      "next_action": "replay"
+      "answers": [
+        "Alright, I'm calling my friend Akinator..."
+      ]
     },
     "replay": {
       "type": "logic",
       "loop": {
         "expected_item": {
           "type": "resolver",
-          "name": "affirmation_denial"
+          "name": "answer"
         }
       }
     }

@@ -1,18 +1,26 @@
 {
   "endpoints": [
     {
+      "method": "POST",
+      "route": "/api/action/games/akinator/choose_thematic",
+      "params": [
+        "thematic"
+      ],
+      "entitiesType": "trim"
+    },
+    {
       "method": "GET",
-      "route": "/api/action/games/akinator/start",
+      "route": "/api/action/games/akinator/setup",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/api/action/games/akinator/play",
+      "route": "/api/action/games/akinator/guess",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/api/action/games/akinator/rematch",
+      "route": "/api/action/games/akinator/replay",
       "params": []
     },
     {

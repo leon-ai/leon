@@ -22,8 +22,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
-import utils
-import exceptions
+from .utils import get_lang_and_theme, ans_to_id, raise_connection_error
+from .exceptions import CantGoBackAnyFurther
 import re
 import time
 import json
@@ -155,7 +155,7 @@ class Akinator():
         The "child_mode" parameter is False by default. If it's set to True, then Akinator won't ask questions about things that are NSFW
         """
         self.timestamp = time.time()
-        region_info = self._auto_get_region(utils.get_lang_and_theme(language)["lang"], utils.get_lang_and_theme(language)["theme"])
+        region_info = self._auto_get_region(get_lang_and_theme(language)["lang"], get_lang_and_theme(language)["theme"])
         self.uri, self.server = region_info["uri"], region_info["server"]
 
         self.child_mode = child_mode
@@ -165,6 +165,8 @@ class Akinator():
         self._get_session_info()
 
         r = requests.get(NEW_SESSION_URL.format(self.uri, self.timestamp, self.server, str(self.child_mode).lower(), self.uid, self.frontaddr, soft_constraint, self.question_filter), headers=HEADERS)
+        # TODO: save r.text
+        # print('r.text', r.text)
         resp = self._parse_response(r.text)
 
         if resp["completion"] == "OK":
@@ -183,7 +185,7 @@ class Akinator():
             - "probably" OR "p" OR "3" for PROBABLY
             - "probably not" OR "pn" OR "4" for PROBABLY NOT
         """
-        ans = utils.ans_to_id(ans)
+        ans = ans_to_id(ans)
 
         r = requests.get(ANSWER_URL.format(self.uri, self.timestamp, self.server, str(self.child_mode).lower(), self.session, self.signature, self.step, ans, self.frontaddr, self.question_filter), headers=HEADERS)
         resp = self._parse_response(r.text)
@@ -192,7 +194,7 @@ class Akinator():
             self._update(resp)
             return self.question
         else:
-            return utils.raise_connection_error(resp["completion"])
+            return raise_connection_error(resp["completion"])
 
     def back(self):
         """Goes back to the previous question. Returns a string containing that question
@@ -200,7 +202,7 @@ class Akinator():
         If you're on the first question and you try to go back again, the CantGoBackAnyFurther exception will be raised
         """
         if self.step == 0:
-            raise exceptions.CantGoBackAnyFurther("You were on the first question and couldn't go back any further")
+            raise CantGoBackAnyFurther("You were on the first question and couldn't go back any further")
 
         r = requests.get(BACK_URL.format(self.server, self.timestamp, str(self.child_mode).lower(), self.session, self.signature, self.step, self.question_filter), headers=HEADERS)
         resp = self._parse_response(r.text)
