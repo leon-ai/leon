@@ -244,14 +244,21 @@ class Nlu {
        * to not overlap with resolvers from other skills
        */
       if (this.conv.hasActiveContext()) {
-        classifications.forEach(({ intent: newIntent, score: newScore }) => {
+        const classification = classifications.find(({ intent: newIntent, score: newScore }) => {
+          const [, skillName] = newIntent.split('.')
+
+          // Prioritize skill resolver intent
           if (newScore > 0.6) {
-            const [, skillName] = newIntent.split('.')
             if (this.nluResultObj.classification.skill === skillName) {
-              intent = newIntent
+              return true
             }
           }
+
+          // Use a global resolver if any
+          return skillName === 'global'
         })
+        // eslint-disable-next-line prefer-destructuring
+        intent = classification.intent
       }
 
       const resolveResolvers = (resolver, intent) => {
