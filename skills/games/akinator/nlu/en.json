@@ -44,17 +44,16 @@
     },
     "setup": {
       "type": "logic",
-      "answers": [
-        "Alright, I'm calling my friend Akinator..."
-      ]
+      "suggestions": [
+        "Yes",
+        "No",
+        "Don't know",
+        "Probably",
+        "Probably not"
+      ],
+      "next_action": "guess"
     },
     "guess": {
-      "type": "logic",
-      "answers": [
-        "Alright, I'm calling my friend Akinator..."
-      ]
-    },
-    "replay": {
       "type": "logic",
       "loop": {
         "expected_item": {
@@ -62,6 +61,9 @@
           "name": "answer"
         }
       }
+    },
+    "replay": {
+      "type": "logic"
     }
   },
   "resolvers": {
@@ -73,13 +75,13 @@
             "Sure",
             "Correct"
           ],
-          "value": "yes"
+          "value": "y"
         },
         "no": {
           "utterance_samples": [
             "[No|Nope|Nah]"
           ],
-          "value": "no"
+          "value": "n"
         },
         "idk": {
           "utterance_samples": [
@@ -94,13 +96,13 @@
             "Probably",
             "Probably yes"
           ],
-          "value": "probably"
+          "value": "p"
         },
         "probably_not": {
           "utterance_samples": [
             "Probably [no|not]"
           ],
-          "value": "probably_not"
+          "value": "pn"
         }
       }
     }

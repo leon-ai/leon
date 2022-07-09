@@ -258,7 +258,7 @@ class Nlu {
           return skillName === 'global'
         })
         // eslint-disable-next-line prefer-destructuring
-        intent = classification.intent
+        intent = classification?.intent
       }
 
       const resolveResolvers = (resolver, intent) => {
@@ -278,7 +278,7 @@ class Nlu {
       }
 
       // Resolve resolver if global resolver or skill resolver has been found
-      if (intent.includes('resolver.global') || intent.includes(`resolver.${skillName}`)) {
+      if (intent && (intent.includes('resolver.global') || intent.includes(`resolver.${skillName}`))) {
         log.title('NLU')
         log.success('Resolvers resolved:')
         this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
@@ -289,6 +289,7 @@ class Nlu {
 
     // Ensure expected items are in the utterance, otherwise clean context and reprocess
     if (!hasMatchingEntity && !hasMatchingResolver) {
+      console.log('HEREEEEEEE1')
       this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
       this.conv.cleanActiveContext()
       await this.process(utterance, opts)
@@ -301,6 +302,7 @@ class Nlu {
       if (processedData.core?.restart === true) {
         const { originalUtterance } = this.conv.activeContext
 
+        console.log('HEREEEEEEE2')
         this.conv.cleanActiveContext()
         await this.process(originalUtterance, opts)
         return null
@@ -311,6 +313,7 @@ class Nlu {
        * and there is an explicit stop of the loop from the skill
        */
       if (!processedData.action.next_action && processedData.core?.isInActionLoop === false) {
+        console.log('HEREEEEEEE3')
         this.conv.cleanActiveContext()
         return null
       }
@@ -533,6 +536,7 @@ class Nlu {
 
       const newContextName = `${this.nluResultObj.classification.domain}.${skillName}`
       if (this.conv.activeContext.name !== newContextName) {
+        console.log('HEREEEEEEE4')
         this.conv.cleanActiveContext()
       }
       this.conv.activeContext = {
@@ -556,6 +560,7 @@ class Nlu {
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
+          console.log('HEREEEEEEE5')
           this.conv.cleanActiveContext()
           this.conv.activeContext = {
             lang: this.brain.lang,
@@ -654,11 +659,13 @@ class Nlu {
         }
       }
 
+      console.log('HEREEEEEEE6')
       this.conv.cleanActiveContext()
 
       return this.brain.execute(this.nluResultObj, { mute: opts.mute })
     }
 
+    console.log('HEREEEEEEE7')
     this.conv.cleanActiveContext()
     return null
   }
