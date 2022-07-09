@@ -3,6 +3,7 @@ import fs from 'fs'
 import { command } from 'execa'
 import semver from 'semver'
 
+import { version } from '@@/package.json'
 import log from '@/helpers/log'
 
 dotenv.config()
@@ -37,7 +38,12 @@ export default () => new Promise(async (resolve, reject) => {
       can_offline_stt: { title: 'Offline speech-to-text', type: 'warning', v: true }
     }
 
-    log.title('Checking');
+    log.title('Checking')
+
+    // Leon version checking
+
+    log.info('Leon version')
+    log.success(`${version}\n`);
 
     // Environment checking
 
