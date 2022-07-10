@@ -5,19 +5,20 @@ import utils
 # Skill database
 db = utils.db()['db']
 
+table = utils.db()['table']
+
 # Session table
 session_table = db.table('session')
 
 # Time stamp
 timestamp = int(time())
 
-def create_new_session(session):
-	"""Creation new session"""
+def upsert_session(session):
+	"""Save progress/info about the session"""
 
-	session_table.insert(session)
+	session_table.upsert(table.Document(session, doc_id=0))
 
-def get_new_session():
-	"""Get the newly created session"""
+def get_session():
+	"""Get current session progress data"""
 
-
-	return session_table.all()[-1]
+	return session_table.get(doc_id=0)

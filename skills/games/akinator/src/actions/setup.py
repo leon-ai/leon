@@ -5,11 +5,19 @@ import utils
 from ..lib import akinator, db
 
 def setup(params):
+	"""Initialize new session"""
+
+	slots, lang = params['slots'], params['lang']
+	thematic = slots['thematic']['resolution']['value']
+	theme_lang = lang
+	if thematic != 'characters':
+		theme_lang = lang + '_' + thematic
+
 	aki = akinator.Akinator()
 
-	q = aki.start_game('en')
+	q = aki.start_game(theme_lang)
 
-	db.create_new_session({
+	db.upsert_session({
     	'response': aki.response,
     	'session': aki.session,
     	'progression': aki.progression,

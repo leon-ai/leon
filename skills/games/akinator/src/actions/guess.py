@@ -4,6 +4,7 @@
 import utils
 from ..lib import akinator, db
 
+# TODO: emit suggestion on each question of the loop
 # TODO: catch network error
 # TODO: timeout on question/answer
 
@@ -21,30 +22,30 @@ def guess(params):
 
 	aki = akinator.Akinator()
 
-	new_session = db.get_new_session()
-	response = new_session['response']
+	session = db.get_session()
+	response = session['response']
 	formatted_response = aki._parse_response(response)
-	aki.session = new_session['session']
-	aki.signature = new_session['signature']
-	aki.progression = new_session['progression']
-	aki.uri = new_session['uri']
-	aki.timestamp = new_session['timestamp']
-	aki.server = new_session['server']
-	aki.child_mode = new_session['child_mode']
-	aki.frontaddr = new_session['frontaddr']
-	aki.question_filter = new_session['question_filter']
+	aki.session = session['session']
+	aki.signature = session['signature']
+	aki.progression = session['progression']
+	aki.uri = session['uri']
+	aki.timestamp = session['timestamp']
+	aki.server = session['server']
+	aki.child_mode = session['child_mode']
+	aki.frontaddr = session['frontaddr']
+	aki.question_filter = session['question_filter']
 
 	resp = aki._parse_response(response)
 	aki._update(resp, '"step":"0"' in response)
 
-	if new_session['progression'] > 80:
+	if session['progression'] > 80:
 		aki.win()
 		# name; description; absolute_picture_path
 		return utils.output('end', aki.first_guess['name'])
 
 	aki.answer(answer)
 
-	db.create_new_session({
+	db.upsert_session({
         'response': aki.response,
 		'session': aki.session,
 		'signature': aki.signature,

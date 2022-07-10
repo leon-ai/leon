@@ -7,7 +7,7 @@ from ..lib import db
 def guess(params):
 	"""Check whether the given number matches the chosen number"""
 
-	entities, slots = params['entities'], params['slots']
+	entities = params['entities']
 	given_nb = -1
 	nb_to_guess = db.get_new_game()['nb']
 
