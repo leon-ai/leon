@@ -234,7 +234,7 @@ class Nlu {
     if (expectedItemType === 'entity') {
       hasMatchingEntity = this.nluResultObj
         .entities.filter(({ entity }) => expectedItemName === entity).length > 0
-    } else if (expectedItemType === 'resolver') {
+    } else if (expectedItemType.indexOf('resolver') !== -1) {
       const result = await this.resolversNlp.process(utterance)
       const { classifications } = result
       let { intent } = result
@@ -247,15 +247,19 @@ class Nlu {
         const classification = classifications.find(({ intent: newIntent, score: newScore }) => {
           const [, skillName] = newIntent.split('.')
 
-          // Prioritize skill resolver intent
-          if (newScore > 0.6) {
-            if (this.nluResultObj.classification.skill === skillName) {
-              return true
+          if (expectedItemType === 'skill_resolver') {
+            // Prioritize skill resolver intent
+            if (newScore > 0.6) {
+              return this.nluResultObj.classification.skill === skillName
             }
           }
 
-          // Use a global resolver if any
-          return skillName === 'global'
+          if (expectedItemType === 'global_resolver') {
+            // Use a global resolver if any
+            return skillName === 'global'
+          }
+
+          return false
         })
         // eslint-disable-next-line prefer-destructuring
         intent = classification?.intent

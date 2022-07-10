@@ -20,7 +20,7 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/games/akinator/replay",
+      "route": "/api/action/games/akinator/retry",
       "params": []
     },
     {

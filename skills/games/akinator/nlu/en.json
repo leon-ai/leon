@@ -57,13 +57,24 @@
       "type": "logic",
       "loop": {
         "expected_item": {
-          "type": "resolver",
+          "type": "skill_resolver",
           "name": "answer"
         }
-      }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ],
+      "next_action": "retry"
     },
-    "replay": {
-      "type": "logic"
+    "retry": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "global_resolver",
+          "name": "affirmation_denial"
+        }
+      }
     }
   },
   "resolvers": {
@@ -86,7 +97,9 @@
         "idk": {
           "utterance_samples": [
             "I do not know",
-            "Don't know",
+            "Do not know",
+            "[Dont|Don't] know",
+            "No idea",
             "Not sure"
           ],
           "value": "idk"
@@ -108,5 +121,29 @@
     }
   },
   "answers": {
+    "calling_akinator": [
+      "I'm calling my friend Akinator...",
+      "Alright, let me call Akinator, wait a sec...",
+      "Sure, let me get in touch with Akinator. Please wait a sec..."
+    ],
+    "guessed": [
+      "I take the shot, you are thinking of %name%. %description%.",
+      "I guess you think of %name%. %description%."
+    ],
+    "guessed_img": [
+      "<img src=\"%url%\" alt=\"%name%\" style=\"max-width:200px\" />"
+    ],
+    "ask_for_retry": [
+      "Do you want to go for another one?",
+      "Should we go for another try?"
+    ],
+    "confirm_retry": [
+      "Gotcha!",
+      "Let's go for another try then!"
+    ],
+    "deny_retry": [
+      "Got it, take care.",
+      "Let me know anytime you want I call Akinator."
+    ]
   }
 }

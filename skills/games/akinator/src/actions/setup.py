@@ -7,6 +7,8 @@ from ..lib import akinator, db
 def setup(params):
 	"""Initialize new session"""
 
+	utils.output('inter', 'calling_akinator')
+
 	slots, lang = params['slots'], params['lang']
 	thematic = slots['thematic']['resolution']['value']
 	theme_lang = lang

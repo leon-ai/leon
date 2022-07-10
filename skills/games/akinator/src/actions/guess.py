@@ -12,6 +12,8 @@ def guess(params):
 	resolvers = params['resolvers']
 	answer = None
 
+	return utils.output('end', 'ask_for_retry', { 'isInActionLoop': False })
+
 	for resolver in resolvers:
 		if resolver['name'] == 'answer':
 			answer = resolver['value']
@@ -40,8 +42,18 @@ def guess(params):
 
 	if session['progression'] > 80:
 		aki.win()
-		# name; description; absolute_picture_path
-		return utils.output('end', aki.first_guess['name'])
+
+		utils.output('inter', { 'key': 'guessed', 'data': {
+			'name': aki.first_guess['name'],
+			'description': aki.first_guess['description']
+		}})
+
+		utils.output('inter', { 'key': 'guessed_img', 'data': {
+			'name': aki.first_guess['name'],
+			'url': aki.first_guess['absolute_picture_path']
+		}}, { 'isInActionLoop': False })
+
+		return utils.output('end', 'ask_for_retry', { 'isInActionLoop': False })
 
 	aki.answer(answer)
 

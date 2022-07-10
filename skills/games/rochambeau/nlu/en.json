@@ -38,7 +38,7 @@
       "type": "logic",
       "loop": {
         "expected_item": {
-          "type": "resolver",
+          "type": "global_resolver",
           "name": "affirmation_denial"
         }
       }
