@@ -12,8 +12,6 @@ def guess(params):
 	resolvers = params['resolvers']
 	answer = None
 
-	return utils.output('end', 'ask_for_retry', { 'isInActionLoop': False })
-
 	for resolver in resolvers:
 		if resolver['name'] == 'answer':
 			answer = resolver['value']
