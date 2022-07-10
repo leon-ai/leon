@@ -44,9 +44,12 @@
       "params": []
     },
     {
-      "method": "GET",
+      "method": "POST",
       "route": "/api/action/games/rochambeau/play",
-      "params": []
+      "params": [
+        "handsign"
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "GET",

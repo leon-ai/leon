@@ -32,6 +32,23 @@
         "Yes",
         "No thanks"
       ],
+      "entities": [
+        {
+          "type": "enum",
+          "name": "handsign",
+          "options": {
+            "ROCK": {
+              "synonyms": ["rock", "stone"]
+            },
+            "PAPER": {
+              "synonyms": ["paper"]
+            },
+            "SCISSORS": {
+              "synonyms": ["scissors"]
+            }
+          }
+        }
+      ],
       "next_action": "rematch"
     },
     "rematch": {
@@ -43,9 +60,6 @@
         }
       }
     }
-  },
-  "entities": {
-    "handsign": "global-entities/handsign.json"
   },
   "answers": {
     "ready": [
