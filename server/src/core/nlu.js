@@ -38,7 +38,8 @@ class Nlu {
   constructor (brain) {
     this.brain = brain
     this.request = request
-    this.resolversNlp = { }
+    this.globalResolversNlp = { }
+    this.skillsResolversNlp = { }
     this.mainNlp = { }
     this.ner = { }
     this.conv = new Conversation('conv0')
@@ -49,13 +50,13 @@ class Nlu {
   }
 
   /**
-   * Load the resolvers NLP model from the latest training
+   * Load the global resolvers NLP model from the latest training
    */
-  loadResolversModel (nlpModel) {
+  loadGlobalResolversModel (nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         log.title('NLU')
-        reject({ type: 'warning', obj: new Error('The resolvers NLP model does not exist, please run: npm run train') })
+        reject({ type: 'warning', obj: new Error('The global resolvers NLP model does not exist, please run: npm run train') })
       } else {
         log.title('NLU')
 
@@ -65,12 +66,47 @@ class Nlu {
           container.use(Nlp)
           container.use(LangAll)
 
-          this.resolversNlp = container.get('nlp')
+          this.globalResolversNlp = container.get('nlp')
           const nluManager = container.get('nlu-manager')
           nluManager.settings.spellCheck = true
 
-          await this.resolversNlp.load(nlpModel)
-          log.success('Resolvers NLP model loaded')
+          await this.globalResolversNlp.load(nlpModel)
+          log.success('Global resolvers NLP model loaded')
+
+          resolve()
+        } catch (err) {
+          this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
+          this.brain.socket.emit('is-typing', false)
+
+          reject({ type: 'error', obj: err })
+        }
+      }
+    })
+  }
+
+  /**
+   * Load the skills resolvers NLP model from the latest training
+   */
+  loadSkillsResolversModel (nlpModel) {
+    return new Promise(async (resolve, reject) => {
+      if (!fs.existsSync(nlpModel)) {
+        log.title('NLU')
+        reject({ type: 'warning', obj: new Error('The skills resolvers NLP model does not exist, please run: npm run train') })
+      } else {
+        log.title('NLU')
+
+        try {
+          const container = await containerBootstrap()
+
+          container.use(Nlp)
+          container.use(LangAll)
+
+          this.skillsResolversNlp = container.get('nlp')
+          const nluManager = container.get('nlu-manager')
+          nluManager.settings.spellCheck = true
+
+          await this.skillsResolversNlp.load(nlpModel)
+          log.success('Skills resolvers NLP model loaded')
 
           resolve()
         } catch (err) {
@@ -127,7 +163,8 @@ class Nlu {
    * Check if NLP models exists
    */
   hasNlpModels () {
-    return Object.keys(this.resolversNlp).length > 0
+    return Object.keys(this.globalResolversNlp).length > 0
+      && Object.keys(this.skillsResolversNlp).length > 0
       && Object.keys(this.mainNlp).length > 0
   }
 
@@ -235,35 +272,12 @@ class Nlu {
       hasMatchingEntity = this.nluResultObj
         .entities.filter(({ entity }) => expectedItemName === entity).length > 0
     } else if (expectedItemType.indexOf('resolver') !== -1) {
-      const result = await this.resolversNlp.process(utterance)
-      const { classifications } = result
-      let { intent } = result
-
-      /**
-       * Prioritize skill resolvers in the classification
-       * to not overlap with resolvers from other skills
-       */
-      if (this.conv.hasActiveContext()) {
-        const classification = classifications.find(({ intent: newIntent, score: newScore }) => {
-          const [, skillName] = newIntent.split('.')
-
-          if (expectedItemType === 'skill_resolver') {
-            // Prioritize skill resolver intent
-            if (newScore > 0.6) {
-              return this.nluResultObj.classification.skill === skillName
-            }
-          }
-
-          if (expectedItemType === 'global_resolver') {
-            // Use a global resolver if any
-            return skillName === 'global'
-          }
-
-          return false
-        })
-        // eslint-disable-next-line prefer-destructuring
-        intent = classification?.intent
+      const nlpObjs = {
+        global_resolver: this.globalResolversNlp,
+        skill_resolver: this.skillsResolversNlp
       }
+      const result = await nlpObjs[expectedItemType].process(utterance)
+      const { intent } = result
 
       const resolveResolvers = (resolver, intent) => {
         const resolversPath = join(process.cwd(), 'core/data', this.brain.lang, 'global-resolvers')
@@ -286,7 +300,7 @@ class Nlu {
         log.title('NLU')
         log.success('Resolvers resolved:')
         this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
-        this.nluResultObj.resolvers.forEach((resolver) => log.success(JSON.stringify(resolver)))
+        this.nluResultObj.resolvers.forEach((resolver) => log.success(`${intent}: ${JSON.stringify(resolver)}`))
         hasMatchingResolver = this.nluResultObj.resolvers.length > 0
       }
     }

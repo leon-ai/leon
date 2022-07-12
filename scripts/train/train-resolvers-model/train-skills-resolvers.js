@@ -32,7 +32,7 @@ export default (lang, nlp) => new Promise(async (resolve) => {
             const resolver = resolvers[resolverName]
             const intentKeys = Object.keys(resolver.intents)
 
-            log.info(`[${lang}] Training "${resolverName}" resolver...`)
+            log.info(`[${lang}] Training ${skillName} "${resolverName}" resolver...`)
 
             intentKeys.forEach((intentName) => {
               const intent = `resolver.${currentSkill.name}.${resolverName}.${intentName}`
@@ -50,7 +50,7 @@ export default (lang, nlp) => new Promise(async (resolve) => {
               })
             })
 
-            log.success(`[${lang}] "${resolverName}" resolver trained`)
+            log.success(`[${lang}] ${skillName} "${resolverName}" resolver trained`)
           })
         }
       }
