@@ -69,5 +69,5 @@ def play(params):
 		})
 
 	return utils.output('end', 'ask_for_rematch', {
-		'isInActionLoop': False, 'showSuggestions': True
+		'isInActionLoop': False, 'showNextActionSuggestions': True
 	})

@@ -334,8 +334,11 @@ class Brain {
             const executionTime = executionTimeEnd - executionTimeStart
 
             // Send suggestions to the client
-            if (nextAction?.suggestions && this.finalOutput.core?.showSuggestions) {
+            if (nextAction?.suggestions && this.finalOutput.core?.showNextActionSuggestions) {
               this._socket.emit('suggest', nextAction.suggestions)
+            }
+            if (action?.suggestions && this.finalOutput.core?.showSuggestions) {
+              this._socket.emit('suggest', action.suggestions)
             }
 
             resolve({

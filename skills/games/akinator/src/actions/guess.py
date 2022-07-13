@@ -9,6 +9,39 @@ from ..lib import akinator, db
 # TODO: timeout on question/answer
 
 def guess(params):
+	utils.output('inter', 'calling_akinator')
+
+	session = db.get_session()
+
+	if '"step":"0"' in session['response']:
+		slots, lang = params['slots'], params['lang']
+		thematic = slots['thematic']['resolution']['value']
+		theme_lang = lang
+		if thematic != 'characters':
+			theme_lang = lang + '_' + thematic
+
+		aki = akinator.Akinator()
+
+		q = aki.start_game(theme_lang)
+
+		db.upsert_session({
+			'response': aki.response,
+			'session': aki.session,
+			'progression': aki.progression,
+			'signature': aki.signature,
+			'uri': aki.uri,
+			'timestamp': aki.timestamp,
+			'server': aki.server,
+			'child_mode': aki.child_mode,
+			'frontaddr': aki.frontaddr,
+			'question_filter': aki.question_filter
+		})
+
+		return utils.output('end', q, { 'showSuggestions': True })
+
+
+	print('HEREEE')
+
 	resolvers = params['resolvers']
 	answer = None
 
@@ -52,7 +85,7 @@ def guess(params):
 		}})
 
 		return utils.output('end', 'ask_for_retry', {
-			'isInActionLoop': False, 'showSuggestions': True
+			'isInActionLoop': False, 'showNextActionSuggestions': True
 		})
 
 	aki.answer(answer)
