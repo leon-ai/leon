@@ -4,9 +4,6 @@
 import utils
 from ..lib import akinator, db
 
-# TODO: catch network error
-# TODO: timeout on question/answer
-
 def guess(params):
 	"""Guess according to the given thematic"""
 

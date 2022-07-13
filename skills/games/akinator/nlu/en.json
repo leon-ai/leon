@@ -121,6 +121,11 @@
     }
   },
   "answers": {
+    "network_error": [
+      "I cannot reach Akinator, you may verify your network.",
+      "Akinator isn't reachable at the moment. Please check your network.",
+      "It looks like your network cannot reach Akinator."
+    ],
     "calling_akinator": [
       "I'm calling my friend Akinator...",
       "Alright, let me call Akinator, wait a sec...",
