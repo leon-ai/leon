@@ -32,4 +32,4 @@ def setup(params):
 		'question_filter': aki.question_filter
     })
 
-	return utils.output('end', q)
+	return utils.output('end', q, { 'showNextActionSuggestions': True })

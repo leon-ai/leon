@@ -40,7 +40,7 @@
           }
         }
       ],
-      "next_action": "guess"
+      "next_action": "setup"
     },
     "setup": {
       "type": "logic",
