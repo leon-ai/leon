@@ -18,10 +18,6 @@
           "name": "number"
         }
       },
-      "suggestions": [
-        "Yes",
-        "No thanks"
-      ],
       "next_action": "replay"
     },
     "replay": {
@@ -31,7 +27,11 @@
           "type": "global_resolver",
           "name": "affirmation_denial"
         }
-      }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ]
     }
   },
   "answers": {

@@ -44,13 +44,6 @@
     },
     "setup": {
       "type": "logic",
-      "suggestions": [
-        "Yes",
-        "No",
-        "Don't know",
-        "Probably",
-        "Probably not"
-      ],
       "next_action": "guess"
     },
     "guess": {
@@ -63,7 +56,10 @@
       },
       "suggestions": [
         "Yes",
-        "No thanks"
+        "No",
+        "Don't know",
+        "Probably",
+        "Probably not"
       ],
       "next_action": "retry"
     },
@@ -74,7 +70,11 @@
           "type": "global_resolver",
           "name": "affirmation_denial"
         }
-      }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ]
     }
   },
   "resolvers": {

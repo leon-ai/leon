@@ -161,13 +161,8 @@ class Brain {
         const { nluDataFilePath, classification: { action: actionName } } = obj
         const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
         const action = actions[actionName]
-        const { type: actionType, suggestions } = action
+        const { type: actionType } = action
         const nextAction = action.next_action ? actions[action.next_action] : null
-
-        // Send suggestions to the client if this action does not contain an action loop
-        if (suggestions && !action.loop) {
-          this._socket.emit('suggest', suggestions)
-        }
 
         if (actionType === 'logic') {
           /**
@@ -338,6 +333,11 @@ class Brain {
             const executionTimeEnd = Date.now()
             const executionTime = executionTimeEnd - executionTimeStart
 
+            // Send suggestions to the client
+            if (nextAction?.suggestions && this.finalOutput.core?.showSuggestions) {
+              this._socket.emit('suggest', nextAction.suggestions)
+            }
+
             resolve({
               utteranceId,
               lang: this._lang,
@@ -421,6 +421,11 @@ class Brain {
           if (!opts.mute) {
             this.talk(answer, true)
             this._socket.emit('is-typing', false)
+          }
+
+          // Send suggestions to the client
+          if (nextAction?.suggestions) {
+            this._socket.emit('suggest', nextAction.suggestions)
           }
 
           resolve({

@@ -49,9 +49,11 @@ def guess(params):
 		utils.output('inter', { 'key': 'guessed_img', 'data': {
 			'name': aki.first_guess['name'],
 			'url': aki.first_guess['absolute_picture_path']
-		}}, { 'isInActionLoop': False })
+		}})
 
-		return utils.output('end', 'ask_for_retry', { 'isInActionLoop': False })
+		return utils.output('end', 'ask_for_retry', {
+			'isInActionLoop': False, 'showSuggestions': True
+		})
 
 	aki.answer(answer)
 
@@ -68,4 +70,4 @@ def guess(params):
         'question_filter': aki.question_filter
     })
 
-	return utils.output('end', aki.question)
+	return utils.output('end', aki.question, { 'showSuggestions': True })

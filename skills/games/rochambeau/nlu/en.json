@@ -13,11 +13,6 @@
         "1, 2, 3, FIRE!",
         "Rock, paper, scissors..."
       ],
-      "suggestions": [
-        "Rock ✊",
-        "Paper ✋",
-        "Scissors ✌"
-      ],
       "next_action": "play"
     },
     "play": {
@@ -29,8 +24,9 @@
         }
       },
       "suggestions": [
-        "Yes",
-        "No thanks"
+        "Rock ✊",
+        "Paper ✋",
+        "Scissors ✌"
       ],
       "entities": [
         {
@@ -58,7 +54,11 @@
           "type": "global_resolver",
           "name": "affirmation_denial"
         }
-      }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ]
     }
   },
   "answers": {

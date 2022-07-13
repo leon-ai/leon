@@ -9,7 +9,8 @@ def guess(params):
 
 	entities = params['entities']
 	given_nb = -1
-	nb_to_guess = db.get_new_game()['nb']
+	# nb_to_guess = db.get_new_game()['nb']
+	nb_to_guess = 50
 
 	# Find entities
 	for item in params['entities']:
@@ -29,7 +30,7 @@ def guess(params):
 				'nb': nb_to_guess,
 				'attempts_nb': counter
 			}
-		}, { 'isInActionLoop': False })
+		}, { 'isInActionLoop': False, 'showSuggestions': True })
 	if nb_to_guess < given_nb:
 		return utils.output('end', 'smaller')
 	if nb_to_guess > given_nb:
