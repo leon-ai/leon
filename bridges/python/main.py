@@ -17,6 +17,7 @@ def main():
 	skill = import_module('skills.' + intent_obj['domain'] + '.' + intent_obj['skill'] + '.src.actions.' + intent_obj['action'])
 
 	params = {
+		'lang': intent_obj['lang'],
 		'utterance': intent_obj['utterance'],
 		'current_entities': intent_obj['current_entities'],
 		'entities': intent_obj['entities'],

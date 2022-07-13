@@ -44,24 +44,37 @@
     },
     "setup": {
       "type": "logic",
-      "answers": [
-        "Alright, I'm calling my friend Akinator..."
-      ]
+      "next_action": "guess"
     },
     "guess": {
       "type": "logic",
-      "answers": [
-        "Alright, I'm calling my friend Akinator..."
-      ]
+      "loop": {
+        "expected_item": {
+          "type": "skill_resolver",
+          "name": "answer"
+        }
+      },
+      "suggestions": [
+        "Yes",
+        "No",
+        "Don't know",
+        "Probably",
+        "Probably not"
+      ],
+      "next_action": "retry"
     },
-    "replay": {
+    "retry": {
       "type": "logic",
       "loop": {
         "expected_item": {
-          "type": "resolver",
-          "name": "answer"
+          "type": "global_resolver",
+          "name": "affirmation_denial"
         }
-      }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ]
     }
   },
   "resolvers": {
@@ -73,18 +86,20 @@
             "Sure",
             "Correct"
           ],
-          "value": "yes"
+          "value": "y"
         },
         "no": {
           "utterance_samples": [
             "[No|Nope|Nah]"
           ],
-          "value": "no"
+          "value": "n"
         },
         "idk": {
           "utterance_samples": [
             "I do not know",
-            "Don't know",
+            "Do not know",
+            "[Dont|Don't] know",
+            "No idea",
             "Not sure"
           ],
           "value": "idk"
@@ -94,17 +109,46 @@
             "Probably",
             "Probably yes"
           ],
-          "value": "probably"
+          "value": "p"
         },
         "probably_not": {
           "utterance_samples": [
             "Probably [no|not]"
           ],
-          "value": "probably_not"
+          "value": "pn"
         }
       }
     }
   },
   "answers": {
+    "network_error": [
+      "I cannot reach Akinator, you may verify your network.",
+      "Akinator isn't reachable at the moment. Please check your network.",
+      "It looks like your network cannot reach Akinator."
+    ],
+    "calling_akinator": [
+      "I'm calling my friend Akinator...",
+      "Alright, let me call Akinator, wait a sec...",
+      "Sure, let me get in touch with Akinator. Please wait a sec..."
+    ],
+    "guessed": [
+      "I take the shot, you are thinking of %name%. %description%.",
+      "I guess you think of %name%. %description%."
+    ],
+    "guessed_img": [
+      "<img src=\"%url%\" alt=\"%name%\" style=\"max-width:200px\" />"
+    ],
+    "ask_for_retry": [
+      "Do you want to go for another one?",
+      "Should we go for another try?"
+    ],
+    "confirm_retry": [
+      "Gotcha!",
+      "Let's go for another try then!"
+    ],
+    "deny_retry": [
+      "Got it, take care.",
+      "Let me know anytime you want I call Akinator."
+    ]
   }
 }

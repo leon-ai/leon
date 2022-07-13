@@ -18,25 +18,42 @@ dotenv.config()
  * npm run train [en or fr]
  */
 export default () => new Promise(async (resolve, reject) => {
-  const resolversModelFileName = 'core/data/models/leon-resolvers-model.nlp'
+  const globalResolversModelFileName = 'core/data/models/leon-global-resolvers-model.nlp'
+  const skillsResolversModelFileName = 'core/data/models/leon-skills-resolvers-model.nlp'
   const mainModelFileName = 'core/data/models/leon-main-model.nlp'
 
   try {
     /**
-     * Resolvers NLP model configuration
+     * Global resolvers NLP model configuration
      */
-    const resolversContainer = await containerBootstrap()
+    const globalResolversContainer = await containerBootstrap()
 
-    resolversContainer.use(Nlp)
-    resolversContainer.use(LangAll)
+    globalResolversContainer.use(Nlp)
+    globalResolversContainer.use(LangAll)
 
-    const resolversNlp = resolversContainer.get('nlp')
-    const resolversNluManager = resolversContainer.get('nlu-manager')
+    const globalResolversNlp = globalResolversContainer.get('nlp')
+    const globalResolversNluManager = globalResolversContainer.get('nlu-manager')
 
-    resolversNluManager.settings.log = false
-    resolversNluManager.settings.trainByDomain = true
-    resolversNlp.settings.modelFileName = resolversModelFileName
-    resolversNlp.settings.threshold = 0.8
+    globalResolversNluManager.settings.log = false
+    globalResolversNluManager.settings.trainByDomain = false
+    globalResolversNlp.settings.modelFileName = globalResolversModelFileName
+    globalResolversNlp.settings.threshold = 0.8
+
+    /**
+     * Skills resolvers NLP model configuration
+     */
+    const skillsResolversContainer = await containerBootstrap()
+
+    skillsResolversContainer.use(Nlp)
+    skillsResolversContainer.use(LangAll)
+
+    const skillsResolversNlp = skillsResolversContainer.get('nlp')
+    const skillsResolversNluManager = skillsResolversContainer.get('nlu-manager')
+
+    skillsResolversNluManager.settings.log = false
+    skillsResolversNluManager.settings.trainByDomain = true
+    skillsResolversNlp.settings.modelFileName = skillsResolversModelFileName
+    skillsResolversNlp.settings.threshold = 0.8
 
     /**
      * Main NLP model configuration
@@ -66,11 +83,13 @@ export default () => new Promise(async (resolve, reject) => {
     for (let h = 0; h < shortLangs.length; h += 1) {
       const lang = shortLangs[h]
 
-      resolversNlp.addLanguage(lang)
+      globalResolversNlp.addLanguage(lang)
       // eslint-disable-next-line no-await-in-loop
-      await trainGlobalResolvers(lang, resolversNlp)
+      await trainGlobalResolvers(lang, globalResolversNlp)
+
+      skillsResolversNlp.addLanguage(lang)
       // eslint-disable-next-line no-await-in-loop
-      await trainSkillsResolvers(lang, resolversNlp)
+      await trainSkillsResolvers(lang, skillsResolversNlp)
 
       mainNlp.addLanguage(lang)
       // eslint-disable-next-line no-await-in-loop
@@ -80,12 +99,22 @@ export default () => new Promise(async (resolve, reject) => {
     }
 
     try {
-      await resolversNlp.train()
+      await globalResolversNlp.train()
 
-      log.success(`Resolvers NLP model saved in ${resolversModelFileName}`)
+      log.success(`Global resolvers NLP model saved in ${globalResolversModelFileName}`)
       resolve()
     } catch (e) {
-      log.error(`Failed to save resolvers NLP model: ${e}`)
+      log.error(`Failed to save global resolvers NLP model: ${e}`)
+      reject()
+    }
+
+    try {
+      await skillsResolversNlp.train()
+
+      log.success(`Skills resolvers NLP model saved in ${skillsResolversModelFileName}`)
+      resolve()
+    } catch (e) {
+      log.error(`Failed to save skills resolvers NLP model: ${e}`)
       reject()
     }
 

@@ -13,11 +13,6 @@
         "1, 2, 3, FIRE!",
         "Rock, paper, scissors..."
       ],
-      "suggestions": [
-        "Rock ✊",
-        "Paper ✋",
-        "Scissors ✌"
-      ],
       "next_action": "play"
     },
     "play": {
@@ -29,8 +24,26 @@
         }
       },
       "suggestions": [
-        "Yes",
-        "No thanks"
+        "Rock ✊",
+        "Paper ✋",
+        "Scissors ✌"
+      ],
+      "entities": [
+        {
+          "type": "enum",
+          "name": "handsign",
+          "options": {
+            "ROCK": {
+              "synonyms": ["rock", "stone"]
+            },
+            "PAPER": {
+              "synonyms": ["paper"]
+            },
+            "SCISSORS": {
+              "synonyms": ["scissors"]
+            }
+          }
+        }
       ],
       "next_action": "rematch"
     },
@@ -38,14 +51,15 @@
       "type": "logic",
       "loop": {
         "expected_item": {
-          "type": "resolver",
+          "type": "global_resolver",
           "name": "affirmation_denial"
         }
-      }
+      },
+      "suggestions": [
+        "Yes",
+        "No thanks"
+      ]
     }
-  },
-  "entities": {
-    "handsign": "global-entities/handsign.json"
   },
   "answers": {
     "ready": [

@@ -2,35 +2,70 @@
 # -*- coding:utf-8 -*-
 
 import utils
-from ..lib import akinator
+from ..lib import akinator, db
 
 def guess(params):
-    aki = akinator.Akinator()
+	"""Guess according to the given thematic"""
 
-    q = aki.start_game('en')
+	resolvers = params['resolvers']
+	answer = None
 
-    i = 0
-    while i <= 2:
-    	i += 1
-    	utils.output('end', 'ook')
+	for resolver in resolvers:
+		if resolver['name'] == 'answer':
+			answer = resolver['value']
 
-    """ while aki.progression <= 80:
-    	# a = input(q + "\n\t")
-    	return utils.output('end', q) """
+	# Return no speech if no value has been found
+	if answer == None:
+		return utils.output('end', None, { 'isInActionLoop': False })
 
-    """ while aki.progression <= 80:
-        a = input(q + "\n\t")
-        if a == "b":
-            try:
-                q = aki.back()
-            except akinator.CantGoBackAnyFurther:
-                pass
-        else:
-            q = aki.answer(a)
-    aki.win()
+	aki = akinator.Akinator()
 
-    correct = input(f"It's {aki.first_guess['name']} ({aki.first_guess['description']})! Was I correct?\n{aki.first_guess['absolute_picture_path']}\n\t")
-    if correct.lower() == "yes" or correct.lower() == "y":
-        print("Yay\n")
-    else:
-        print("Oof\n") """
+	session = db.get_session()
+	response = session['response']
+	formatted_response = aki._parse_response(response)
+	aki.session = session['session']
+	aki.signature = session['signature']
+	aki.progression = session['progression']
+	aki.uri = session['uri']
+	aki.timestamp = session['timestamp']
+	aki.server = session['server']
+	aki.child_mode = session['child_mode']
+	aki.frontaddr = session['frontaddr']
+	aki.question_filter = session['question_filter']
+
+	resp = aki._parse_response(response)
+	aki._update(resp, '"step":"0"' in response)
+
+	if session['progression'] > 80:
+		aki.win()
+
+		utils.output('inter', { 'key': 'guessed', 'data': {
+			'name': aki.first_guess['name'],
+			'description': aki.first_guess['description']
+		}})
+
+		utils.output('inter', { 'key': 'guessed_img', 'data': {
+			'name': aki.first_guess['name'],
+			'url': aki.first_guess['absolute_picture_path']
+		}})
+
+		return utils.output('end', 'ask_for_retry', {
+			'isInActionLoop': False, 'showNextActionSuggestions': True
+		})
+
+	aki.answer(answer)
+
+	db.upsert_session({
+        'response': aki.response,
+		'session': aki.session,
+		'signature': aki.signature,
+		'progression': aki.progression,
+        'uri': aki.uri,
+        'timestamp': aki.timestamp,
+        'server': aki.server,
+        'child_mode': aki.child_mode,
+        'frontaddr': aki.frontaddr,
+        'question_filter': aki.question_filter
+    })
+
+	return utils.output('end', aki.question, { 'showSuggestions': True })

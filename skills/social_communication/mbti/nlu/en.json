@@ -12,7 +12,7 @@
       "type": "logic",
       "loop": {
         "expected_item": {
-          "type": "resolver",
+          "type": "skill_resolver",
           "name": "form"
         }
       }

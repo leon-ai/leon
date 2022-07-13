@@ -1,9 +1,9 @@
 {
   "lang": "en",
-  "domain": "games",
-  "skill": "guess_the_number",
-  "action": "replay",
-  "utterance": "No no no",
+  "domain": "utilities",
+  "skill": "is_it_down",
+  "action": "run",
+  "utterance": "Check if github.com, mozilla.org and twitter.com are online",
   "slots": {},
   "entities": [],
   "current_entities": [
