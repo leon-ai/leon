@@ -18,12 +18,47 @@ import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
 
-const server = { }
-let brain = { }
-let nlu = { }
+const server = {}
+
+// A separate class instead ?
+let mainProvider = { id: 1, brain: {}, nlu: {} }
+let providers = [] // {id, brain, nlu}[] // used by sockets
+const createProvider = async (id) => {
+  const brain = new Brain()
+
+  const nlu = new Nlu(brain)
+
+  // Load NLP models
+  try {
+    await Promise.all([
+      nlu.loadGlobalResolversModel(join(process.cwd(), 'core/data/models/leon-global-resolvers-model.nlp')),
+      nlu.loadSkillsResolversModel(join(process.cwd(), 'core/data/models/leon-skills-resolvers-model.nlp')),
+      nlu.loadMainModel(join(process.cwd(), 'core/data/models/leon-main-model.nlp'))
+    ])
+
+    return { id, brain, nlu }
+  } catch (e) {
+    log[e.type](e.obj.message)
+    return null
+  }
+}
+const addProvider = async (id) => {
+  providers = providers || []
+  const index = providers.indexOf((p) => p.id === id)
+  const obj = await createProvider(id)
+  if (id === '1' && obj) { mainProvider = obj }
+  if (index < 0) providers.push(obj); else providers.splice(index, 1, obj)
+  return obj
+}
+
+const deleteProvider = (id) => {
+  providers = providers || []
+  providers = providers.filter((p) => p.id !== id)
+  if (id === '1') { mainProvider = { id: 1, brain: {}, nlu: {} } }
+}
 
 server.fastify = Fastify()
-server.httpServer = { }
+server.httpServer = {}
 
 /**
  * Generate skills routes
@@ -88,7 +123,7 @@ server.generateSkillsRoutes = (instance) => {
           }
 
           try {
-            const data = await brain.execute(obj, { mute: true })
+            const data = await mainProvider.brain.execute(obj, { mute: true })
 
             reply.send({
               ...data,
@@ -136,6 +171,8 @@ server.handleOnConnection = (socket) => {
     log.info(`Type: ${data}`)
     log.info(`Socket id: ${socket.id}`)
 
+    const provider = await addProvider(socket.id)
+
     // Check whether the TCP client is connected to the TCP server
     if (global.tcpClient.isConnected) {
       socket.emit('ready')
@@ -158,20 +195,20 @@ server.handleOnConnection = (socket) => {
       let sttState = 'disabled'
       let ttsState = 'disabled'
 
-      brain.socket = socket
+      provider.brain.socket = socket
 
       /* istanbul ignore if */
       if (process.env.LEON_STT === 'true') {
         sttState = 'enabled'
 
-        brain.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
-        brain.stt.init(() => null)
+        provider.brain.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
+        provider.brain.stt.init(() => null)
       }
       if (process.env.LEON_TTS === 'true') {
         ttsState = 'enabled'
 
-        brain.tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
-        brain.tts.init('en', () => null)
+        provider.brain.tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
+        provider.brain.tts.init('en', () => null)
       }
 
       log.title('Initialization')
@@ -187,19 +224,23 @@ server.handleOnConnection = (socket) => {
 
         const utterance = data.value
         try {
-          await nlu.process(utterance)
+          await provider.nlu.process(utterance)
         } catch (e) { /* */ }
       })
 
       // Handle automatic speech recognition
       socket.on('recognize', async (data) => {
         try {
-          await asr.run(data, brain.stt)
+          await asr.run(data, provider.brain.stt)
         } catch (e) {
           log[e.type](e.obj.message)
         }
       })
     }
+  })
+
+  socket.once('disconnect', () => {
+    deleteProvider(socket.id)
   })
 }
 
@@ -244,7 +285,7 @@ server.bootstrap = async () => {
         const { utterance } = request.body
 
         try {
-          const data = await nlu.process(utterance, { mute: true })
+          const data = await mainProvider.nlu.process(utterance, { mute: true })
 
           reply.send({
             ...data,
@@ -290,20 +331,7 @@ server.init = async () => {
   const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
 
-  brain = new Brain()
-
-  nlu = new Nlu(brain)
-
-  // Load NLP models
-  try {
-    await Promise.all([
-      nlu.loadGlobalResolversModel(join(process.cwd(), 'core/data/models/leon-global-resolvers-model.nlp')),
-      nlu.loadSkillsResolversModel(join(process.cwd(), 'core/data/models/leon-skills-resolvers-model.nlp')),
-      nlu.loadMainModel(join(process.cwd(), 'core/data/models/leon-main-model.nlp'))
-    ])
-  } catch (e) {
-    log[e.type](e.obj.message)
-  }
+  await addProvider('1')
 
   await server.bootstrap()
 }
