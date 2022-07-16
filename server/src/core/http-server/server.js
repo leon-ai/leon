@@ -18,14 +18,16 @@ import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
 
-const server = {}
+const server = { }
 
-// A separate class instead ?
-let mainProvider = { id: 1, brain: {}, nlu: {} }
-let providers = [] // {id, brain, nlu}[] // used by sockets
+let mainProvider = {
+  id: 1,
+  brain: { },
+  nlu: { }
+}
+let providers = []
 const createProvider = async (id) => {
   const brain = new Brain()
-
   const nlu = new Nlu(brain)
 
   // Load NLP models
@@ -36,9 +38,14 @@ const createProvider = async (id) => {
       nlu.loadMainModel(join(process.cwd(), 'core/data/models/leon-main-model.nlp'))
     ])
 
-    return { id, brain, nlu }
+    return {
+      id,
+      brain,
+      nlu
+    }
   } catch (e) {
     log[e.type](e.obj.message)
+
     return null
   }
 }
@@ -46,19 +53,35 @@ const addProvider = async (id) => {
   providers = providers || []
   const index = providers.indexOf((p) => p.id === id)
   const obj = await createProvider(id)
-  if (id === '1' && obj) { mainProvider = obj }
-  if (index < 0) providers.push(obj); else providers.splice(index, 1, obj)
+
+  if (id === '1' && obj) {
+    mainProvider = obj
+  }
+
+  if (index < 0) {
+    providers.push(obj)
+  } else {
+    providers.splice(index, 1, obj)
+  }
+
   return obj
 }
 
 const deleteProvider = (id) => {
   providers = providers || []
   providers = providers.filter((p) => p.id !== id)
-  if (id === '1') { mainProvider = { id: 1, brain: {}, nlu: {} } }
+
+  if (id === '1') {
+    mainProvider = {
+      id: 1,
+      brain: { },
+      nlu: { }
+    }
+  }
 }
 
 server.fastify = Fastify()
-server.httpServer = {}
+server.httpServer = { }
 
 /**
  * Generate skills routes
