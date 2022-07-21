@@ -16,7 +16,7 @@
       "answers": [
         "Where I live it is all black, but I believe I tend to have a preference for %blue_leon% and %pink_leon%. Do not ask why...",
         "Sometimes %blue_leon%, sometimes %pink_leon%.",
-        "{{ color }} is great! But I prefer that one.",
+        "{{ color }} is great! But I prefer blue and pink.",
         "I think {{ color }} is a good color, but I prefer blue and pink. Don't ask me why..."
       ]
     },
