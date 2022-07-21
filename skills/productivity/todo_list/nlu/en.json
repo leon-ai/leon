@@ -8,8 +8,7 @@
         "Can you create a reminder list for me?",
         "Make a food list",
         "I want a shopping list",
-        "Help me to get material list",
-        "Can you add a reminder list?"
+        "Help me to get material list"
       ],
       "entities": [
         {

@@ -225,7 +225,7 @@ class Nlu {
         const spacyEntity = {
           [entity]: {
             options: {
-              [resolution.value]: [resolution.value]
+              [resolution.value]: [string.ucfirst(resolution.value)]
             }
           }
         }
@@ -396,7 +396,6 @@ class Nlu {
       opts = opts || {
         mute: false // Close Leon mouth e.g. over HTTP
       }
-      utterance = string.ucfirst(utterance)
 
       if (!this.hasNlpModels()) {
         if (!opts.mute) {
