@@ -1,13 +1,15 @@
-image: 'gitpod/workspace-full'
+image: gitpod/workspace-full
 
 tasks:
-  - before: 'npm install'
-    init: 'npm run check && npm run build'
-    command: 'npm start'
+  - before: npm install -g @leon-ai/cli
+    init: >
+      leon create birth --develop &&
+      exec $SHELL
+    command: leon start
 
 ports:
   - port: 1337
-    onOpen: 'notify'
+    onOpen: notify
 
 github:
   prebuilds:
