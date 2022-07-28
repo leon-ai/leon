@@ -2,7 +2,7 @@ image: gitpod/workspace-full
 
 tasks:
   - before: npm install -g @leon-ai/cli
-    init: leon create birth --develop
+    init: leon create birth
     command: leon start
 
 ports:
