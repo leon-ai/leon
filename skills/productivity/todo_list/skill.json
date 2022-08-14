@@ -2,7 +2,7 @@
   "name": "Todo List",
   "bridge": "python",
   "version": "1.0.0",
-  "description": "Manage your lists and the items they contain.",
+  "description": "Manage your lists and items they contain.",
   "author": {
     "name": "Louis Grenard",
     "email": "louis.grenard@gmail.com",

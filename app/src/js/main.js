@@ -28,17 +28,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const input = document.querySelector('#utterance')
         const mic = document.querySelector('#mic-button')
         const v = document.querySelector('#version small')
-        const logger = document.querySelector('#logger small')
         const client = new Client(config.app, serverUrl, input, res.body)
         let rec = { }
         let chunks = []
-        let sLogger = ' enabled, thank you.'
 
         v.innerHTML += client.info.version
-        if (client.info.logger === false) {
-          sLogger = ' disabled.'
-        }
-        logger.innerHTML += sLogger
 
         client.init(loader)
 
