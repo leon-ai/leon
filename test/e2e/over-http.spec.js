@@ -4,11 +4,11 @@ import server from '@/core/http-server/server'
 
 const urlPrefix = `${process.env.LEON_HOST}:${process.env.LEON_PORT}/api`
 const queryUrl = `${urlPrefix}/query`
-const actionModuleUrl = `${urlPrefix}/p/leon/randomnumber/run`;
+const actionSkillUrl = `${urlPrefix}/p/leon/randomnumber/run`;
 
 /**
  * Test the query endpoint over HTTP
- * and a simple module action over HTTP
+ * and a simple skill action over HTTP
  */
 
 (async () => {
@@ -24,8 +24,8 @@ describe('Over HTTP', () => {
     expect(body).toHaveProperty('success', true)
   })
 
-  test(`Request an action module: GET ${actionModuleUrl}`, async () => {
-    const { body } = await superagent.get(actionModuleUrl)
+  test(`Request an action skill: GET ${actionSkillUrl}`, async () => {
+    const { body } = await superagent.get(actionSkillUrl)
       .set('X-API-Key', process.env.LEON_HTTP_API_KEY)
 
     expect(body).toHaveProperty('success', true)

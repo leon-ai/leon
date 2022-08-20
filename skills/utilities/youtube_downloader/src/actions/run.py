@@ -80,7 +80,7 @@ def run(params):
 		}
 	})
 
-	# Create the module downloads directory
+	# Create the skill downloads directory
 	skill_dl_dir = utils.create_dl_dir()
 
 	for i, video in enumerate(to_download):

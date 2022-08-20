@@ -28,7 +28,7 @@ export default () => new Promise(async (resolve, reject) => {
     const mainNlpModelPath = 'core/data/models/leon-main-model.nlp'
     const report = {
       can_run: { title: 'Run', type: 'error', v: true },
-      can_run_module: { title: 'Run modules', type: 'error', v: true },
+      can_run_skill: { title: 'Run skills', type: 'error', v: true },
       can_text: { title: 'Reply you by texting', type: 'error', v: true },
       can_amazon_polly_tts: { title: 'Amazon Polly text-to-speech', type: 'warning', v: true },
       can_google_cloud_tts: { title: 'Google Cloud text-to-speech', type: 'warning', v: true },
@@ -83,7 +83,7 @@ export default () => new Promise(async (resolve, reject) => {
       }
     })
 
-    // Module execution checking
+    // Skill execution checking
 
     try {
       const p = await command('pipenv run python bridges/python/main.py scripts/assets/intent-object.json', { shell: true })
@@ -91,7 +91,7 @@ export default () => new Promise(async (resolve, reject) => {
       log.success(`${p.stdout}\n`)
     } catch (e) {
       log.info(e.command)
-      report.can_run_module.v = false
+      report.can_run_skill.v = false
       log.error(`${e}\n`)
     }
 
@@ -226,7 +226,7 @@ export default () => new Promise(async (resolve, reject) => {
     })
 
     log.default('')
-    if (report.can_run.v && report.can_run_module.v && report.can_text.v) {
+    if (report.can_run.v && report.can_run_skill.v && report.can_text.v) {
       log.success('Hooray! Leon can run correctly')
       log.info('If you have some yellow warnings, it is all good. It means some entities are not yet configured')
     } else {
