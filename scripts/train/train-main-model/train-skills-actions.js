@@ -26,15 +26,15 @@ export default (lang, nlp) => new Promise(async (resolve) => {
       const { name: skillName } = currentDomain.skills[skillKeys[j]]
       const currentSkill = currentDomain.skills[skillKeys[j]]
 
-      log.info(`[${lang}] Using "${skillKeys[j]}" skill NLU data`)
+      log.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
 
-      const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
+      const configFilePath = path.join(currentSkill.path, 'config', `${lang}.json`)
 
-      if (fs.existsSync(nluFilePath)) {
+      if (fs.existsSync(configFilePath)) {
         const {
           actions,
           variables
-        } = await json.loadNluData(nluFilePath, lang) // eslint-disable-line no-await-in-loop
+        } = await json.loadConfigData(configFilePath, lang) // eslint-disable-line no-await-in-loop
         const actionsKeys = Object.keys(actions)
 
         for (let k = 0; k < actionsKeys.length; k += 1) {

@@ -53,7 +53,7 @@ class Conversation {
     const {
       slots,
       isInActionLoop,
-      nluDataFilePath,
+      configDataFilePath,
       actionName,
       lang,
       domain,
@@ -63,7 +63,7 @@ class Conversation {
     const slotKeys = Object.keys(slots)
     const [skillName] = intent.split('.')
     const newContextName = `${domain}.${skillName}`
-    const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+    const { actions } = JSON.parse(fs.readFileSync(configDataFilePath, 'utf8'))
     // Grab next action from the NLU data file
     const { next_action: nextAction } = actions[actionName]
 

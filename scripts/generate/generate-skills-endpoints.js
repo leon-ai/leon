@@ -11,7 +11,7 @@ dotenv.config()
 
 /**
  * Generate skills endpoints script
- * Parse and convert skills NLU config into a JSON file understandable by Fastify
+ * Parse and convert skills config into a JSON file understandable by Fastify
  * to dynamically generate endpoints so skills can be accessible over HTTP
  */
 export default () => new Promise(async (resolve, reject) => {
@@ -40,7 +40,7 @@ export default () => new Promise(async (resolve, reject) => {
         for (let j = 0; j < skillKeys.length; j += 1) {
           const skillFriendlyName = skillKeys[j]
           const currentSkill = currentDomain.skills[skillFriendlyName]
-          const fileInfo = fs.statSync(path.join(currentSkill.path, 'nlu', `${lang}.json`))
+          const fileInfo = fs.statSync(path.join(currentSkill.path, 'config', `${lang}.json`))
           const mtime = fileInfo.mtime.getTime()
 
           if (mtime > mtimeEndpoints) {
@@ -62,7 +62,7 @@ export default () => new Promise(async (resolve, reject) => {
 
     // Force if a language is given
     if (isFileNeedToBeGenerated) {
-      log.info('Parsing skills NLU configuration...')
+      log.info('Parsing skills configuration...')
 
       for (let i = 0; i < domainKeys.length; i += 1) {
         const currentDomain = domains[domainKeys[i]]
@@ -73,8 +73,8 @@ export default () => new Promise(async (resolve, reject) => {
           const skillFriendlyName = skillKeys[j]
           const currentSkill = currentDomain.skills[skillFriendlyName]
 
-          const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
-          const { actions } = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
+          const configFilePath = path.join(currentSkill.path, 'config', `${lang}.json`)
+          const { actions } = JSON.parse(fs.readFileSync(configFilePath, 'utf8'))
           const actionsKeys = Object.keys(actions)
 
           for (let k = 0; k < actionsKeys.length; k += 1) {

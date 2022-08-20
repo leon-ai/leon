@@ -37,7 +37,7 @@ def translate(key, dict = { }):
 	output = ''
 	variables = { }
 
-	file = open(path.join(dirname, '../../skills', intent_obj['domain'], intent_obj['skill'], 'nlu', intent_obj['lang'] + '.json'), 'r', encoding = 'utf8')
+	file = open(path.join(dirname, '../../skills', intent_obj['domain'], intent_obj['skill'], 'config', intent_obj['lang'] + '.json'), 'r', encoding = 'utf8')
 	obj = loads(file.read())
 	file.close()
 

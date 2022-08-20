@@ -20,10 +20,10 @@ export default (lang, nlp) => new Promise(async (resolve) => {
 
     skillKeys.forEach(async (skillName) => {
       const currentSkill = currentDomain.skills[skillName]
-      const nluFilePath = path.join(currentSkill.path, 'nlu', `${lang}.json`)
+      const configFilePath = path.join(currentSkill.path, 'config', `${lang}.json`)
 
-      if (fs.existsSync(nluFilePath)) {
-        const { resolvers } = await json.loadNluData(nluFilePath, lang)
+      if (fs.existsSync(configFilePath)) {
+        const { resolvers } = await json.loadConfigData(configFilePath, lang)
 
         if (resolvers) {
           const resolversKeys = Object.keys(resolvers)

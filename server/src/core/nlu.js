@@ -24,7 +24,7 @@ const defaultNluResultObj = {
   currentResolvers: [],
   resolvers: [],
   slots: null,
-  nluDataFilePath: null,
+  configDataFilePath: null,
   answers: [], // For dialog action type
   classification: {
     domain: null,
@@ -241,12 +241,12 @@ class Nlu {
   async handleActionLoop (utterance, opts) {
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
-    const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
+    const configDataFilePath = join(process.cwd(), 'skills', domain, skillName, `config/${this.brain.lang}.json`)
     this.nluResultObj = {
       ...defaultNluResultObj, // Reset entities, slots, etc.
       slots: this.conv.activeContext.slots,
       utterance,
-      nluDataFilePath,
+      configDataFilePath,
       classification: {
         domain,
         skill: skillName,
@@ -256,11 +256,11 @@ class Nlu {
     }
     this.nluResultObj.entities = await this.ner.extractEntities(
       this.brain.lang,
-      nluDataFilePath,
+      configDataFilePath,
       this.nluResultObj
     )
 
-    const { actions, resolvers } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+    const { actions, resolvers } = JSON.parse(fs.readFileSync(configDataFilePath, 'utf8'))
     const action = actions[this.nluResultObj.classification.action]
     const {
       name: expectedItemName, type: expectedItemType
@@ -369,7 +369,7 @@ class Nlu {
           slots: processedData.slots,
           isInActionLoop: !!processedData.nextAction.loop,
           originalUtterance: processedData.utterance,
-          nluDataFilePath: processedData.nluDataFilePath,
+          configDataFilePath: processedData.configDataFilePath,
           actionName: processedData.action.next_action,
           domain: processedData.classification.domain,
           intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
@@ -510,13 +510,13 @@ class Nlu {
       log.title('NLU')
       log.success(`Intent found: ${this.nluResultObj.classification.skill}.${this.nluResultObj.classification.action} (domain: ${this.nluResultObj.classification.domain})`)
 
-      const nluDataFilePath = join(process.cwd(), 'skills', this.nluResultObj.classification.domain, this.nluResultObj.classification.skill, `nlu/${this.brain.lang}.json`)
-      this.nluResultObj.nluDataFilePath = nluDataFilePath
+      const configDataFilePath = join(process.cwd(), 'skills', this.nluResultObj.classification.domain, this.nluResultObj.classification.skill, `config/${this.brain.lang}.json`)
+      this.nluResultObj.configDataFilePath = configDataFilePath
 
       try {
         this.nluResultObj.entities = await this.ner.extractEntities(
           this.brain.lang,
-          nluDataFilePath,
+          configDataFilePath,
           this.nluResultObj
         )
       } catch (e) /* istanbul ignore next */ {
@@ -552,7 +552,7 @@ class Nlu {
         slots: { },
         isInActionLoop: false,
         originalUtterance: this.nluResultObj.utterance,
-        nluDataFilePath: this.nluResultObj.nluDataFilePath,
+        configDataFilePath: this.nluResultObj.configDataFilePath,
         actionName: this.nluResultObj.classification.action,
         domain: this.nluResultObj.classification.domain,
         intent,
@@ -574,7 +574,7 @@ class Nlu {
             slots: { },
             isInActionLoop: !!processedData.nextAction.loop,
             originalUtterance: processedData.utterance,
-            nluDataFilePath: processedData.nluDataFilePath,
+            configDataFilePath: processedData.configDataFilePath,
             actionName: processedData.action.next_action,
             domain: processedData.classification.domain,
             intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
@@ -614,7 +614,7 @@ class Nlu {
 
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
-    const nluDataFilePath = join(process.cwd(), 'skills', domain, skillName, `nlu/${this.brain.lang}.json`)
+    const configDataFilePath = join(process.cwd(), 'skills', domain, skillName, `config/${this.brain.lang}.json`)
 
     this.nluResultObj = {
       ...defaultNluResultObj, // Reset entities, slots, etc.
@@ -627,7 +627,7 @@ class Nlu {
     }
     const entities = await this.ner.extractEntities(
       this.brain.lang,
-      nluDataFilePath,
+      configDataFilePath,
       this.nluResultObj
     )
 
@@ -657,7 +657,7 @@ class Nlu {
         // Assign slots only if there is a next action
         slots: this.conv.activeContext.nextAction ? this.conv.activeContext.slots : { },
         utterance: this.conv.activeContext.originalUtterance,
-        nluDataFilePath,
+        configDataFilePath,
         classification: {
           domain,
           skill: skillName,
@@ -691,7 +691,7 @@ class Nlu {
         slots,
         isInActionLoop: false,
         originalUtterance: this.nluResultObj.utterance,
-        nluDataFilePath: this.nluResultObj.nluDataFilePath,
+        configDataFilePath: this.nluResultObj.configDataFilePath,
         actionName: this.nluResultObj.classification.action,
         domain: this.nluResultObj.classification.domain,
         intent,
@@ -701,7 +701,7 @@ class Nlu {
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        const { actions } = JSON.parse(fs.readFileSync(this.nluResultObj.nluDataFilePath, 'utf8'))
+        const { actions } = JSON.parse(fs.readFileSync(this.nluResultObj.configDataFilePath, 'utf8'))
         const [currentSlot] = actions[this.nluResultObj.classification.action].slots
           .filter(({ name }) => name === notFilledSlot.name)
 

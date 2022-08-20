@@ -158,8 +158,8 @@ class Brain {
           executionTime
         })
       } else {
-        const { nluDataFilePath, classification: { action: actionName } } = obj
-        const { actions } = JSON.parse(fs.readFileSync(nluDataFilePath, 'utf8'))
+        const { configDataFilePath, classification: { action: actionName } } = obj
+        const { actions } = JSON.parse(fs.readFileSync(configDataFilePath, 'utf8'))
         const action = actions[actionName]
         const { type: actionType } = action
         const nextAction = action.next_action ? actions[action.next_action] : null
@@ -360,10 +360,10 @@ class Brain {
            * "Dialog" action skill execution
            */
 
-          const nluFilePath = path.join(
-            process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'nlu', `${this._lang}.json`
+          const configFilePath = path.join(
+            process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'config', `${this._lang}.json`
           )
-          const { actions, entities } = await json.loadNluData(nluFilePath, this._lang)
+          const { actions, entities } = await json.loadConfigData(configFilePath, this._lang)
           const utteranceHasEntities = obj.entities.length > 0
           const { answers: rawAnswers } = obj
           let answers = rawAnswers

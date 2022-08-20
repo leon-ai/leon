@@ -3,10 +3,10 @@ import path from 'path'
 
 const json = { }
 
-json.loadNluData = async (nluFilePath, lang) => {
+json.loadConfigData = async (configFilePath, lang) => {
   const sharedDataPath = path.join(process.cwd(), 'core/data', lang)
-  const nluData = JSON.parse(fs.readFileSync(nluFilePath, 'utf8'))
-  const { entities } = nluData
+  const configData = JSON.parse(fs.readFileSync(configFilePath, 'utf8'))
+  const { entities } = configData
 
   // Load shared data entities if entity = 'xxx.json'
   if (entities) {
@@ -18,10 +18,10 @@ json.loadNluData = async (nluFilePath, lang) => {
       }
     })
 
-    nluData.entities = entities
+    configData.entities = entities
   }
 
-  return nluData
+  return configData
 }
 
 export default json
