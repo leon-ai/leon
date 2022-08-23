@@ -214,7 +214,7 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 ## 📝 License
 [MIT License](https://github.com/leon-ai/leon/blob/develop/LICENSE.md)
 
-Copyright (c) 2019-present, Louis Grenard <louis.grenard@gmail.com>
+Copyright (c) 2019-present, Louis Grenard <louis@getleon.ai>
 
 ## Cheers!
 ![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f379.png "Cheers!")

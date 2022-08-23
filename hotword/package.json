@@ -4,7 +4,7 @@
   "description": "Hotword detection for Leon",
   "author": {
     "name": "Louis Grenard",
-    "email": "louis.grenard@gmail.com",
+    "email": "louis@getleon.ai",
     "url": "https://twitter.com/grenlouis"
   },
   "main": "index.js",

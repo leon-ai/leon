@@ -5,7 +5,7 @@
   "description": "Verify if one or several email addresses have been pwned (thanks to haveibeenpwned.com).",
   "author": {
     "name": "Louis Grenard",
-    "email": "louis.grenard@gmail.com",
+    "email": "louis@getleon.ai",
     "url": "https://github.com/louistiti"
   }
 }
