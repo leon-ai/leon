@@ -32,8 +32,8 @@ export default () => new Promise(async (resolve, reject) => {
 
     try {
       const dotVenvPath = path.join(process.cwd(), 'bridges/python/.venv')
-      const pipfileLockPath = path.join(process.cwd(), 'bridges/python/Pipfile.lock')
-      const pipfileLockMtime = fs.statSync(pipfileLockPath).mtime
+      const pipfilePath = path.join(process.cwd(), 'bridges/python/Pipfile')
+      const pipfileMtime = fs.statSync(pipfilePath).mtime
       const isDotVenvExist = fs.existsSync(dotVenvPath)
       const installPythonPackages = async () => {
         // Installing Python packages
@@ -60,7 +60,7 @@ export default () => new Promise(async (resolve, reject) => {
           const dotProjectMtime = fs.statSync(dotProjectPath).mtime
 
           // Check if Python deps tree has been modified since the initial setup
-          if (pipfileLockMtime > dotProjectMtime) {
+          if (pipfileMtime > dotProjectMtime) {
             await installPythonPackages()
           } else {
             log.success('Python packages are up-to-date')
