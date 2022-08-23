@@ -56,13 +56,17 @@ export default () => new Promise(async (resolve, reject) => {
         await installPythonPackages()
       } else {
         const dotProjectPath = path.join(process.cwd(), 'bridges/python/.venv/.project')
-        const dotProjectMtime = fs.statSync(dotProjectPath).mtime
+        if (fs.existsSync(dotProjectPath)) {
+          const dotProjectMtime = fs.statSync(dotProjectPath).mtime
 
-        // Check if Python deps tree has been modified since the initial setup
-        if (pipfileLockMtime > dotProjectMtime) {
-          await installPythonPackages()
+          // Check if Python deps tree has been modified since the initial setup
+          if (pipfileLockMtime > dotProjectMtime) {
+            await installPythonPackages()
+          } else {
+            log.success('Python packages are up-to-date')
+          }
         } else {
-          log.success('Python packages are up-to-date')
+          await installPythonPackages()
         }
       }
 
