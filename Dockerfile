@@ -55,7 +55,7 @@ RUN pyenv global ${PYTHON_VERSION}
 # Install Pipenv
 ENV PYTHON_BIN_PATH /home/docker/.local/bin
 ENV PATH="${PYTHON_BIN_PATH}:${PATH}"
-RUN python -m pip install --user --force-reinstall pipenv virtualenv
+RUN python -m pip install --user --force-reinstall pipenv virtualenv tinydb requests
 
 # Install Leon
 WORKDIR /home/docker/leon
