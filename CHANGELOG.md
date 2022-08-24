@@ -1,4 +1,7 @@
 # [1.0.0-beta.7](https://github.com/leon-ai/leon/compare/v1.0.0-beta.6...v1.0.0-beta.7) (2022-08-24) / A Much Better NLP
+
+*Please [read this blog post](https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/) to know more about all the new features and the exciting future of Leon.*
+
 ### BREAKING CHANGES
  - remove legacy packages [07743657](https://github.com/leon-ai/leon/commit/07743657cd2954e7f850c08eea7c032c24b28a96) 
   
