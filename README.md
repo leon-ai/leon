@@ -30,7 +30,11 @@
 
 <br>
 <h2 align="center">📢 Notice 📢</h2>
-<p align="center">The next version requires long development. You can check what is happening under <a href="https://github.com/leon-ai/leon/tree/develop">this branch</a>.
+<p align="center">
+  <a href="https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/"><img width="400" src="https://blog.getleon.ai/static/a62ac28a01cb6898e299dced40875a68/c1b63/beta-7.png" /></a>
+  <br>
+  Many exciting things are coming up, hence no new documentation and test are going to be written until the official release of Leon. Feel free to <a href="https://discord.gg/MNQqqKg"><b>join us on Discord</b></a> to know more and to read the <a href="https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/"><b>"A Much Better NLP and Future" blog post</b></a>.
+</p>
 <br><br>
 
 ---
