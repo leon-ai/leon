@@ -1,0 +1,24 @@
+{
+  "actions": {
+    "run": {
+      "type": "dialog",
+      "utterance_samples": [
+        "Do you have something to say about @partner_assistant?",
+        "Tell me about the personal assistant @partner_assistant",
+        "I want to know more about @partner_assistant",
+        "Tell me something related to @partner_assistant",
+        "Do you know @partner_assistant?"
+      ],
+      "answers": [
+        "{{ partner_assistant.thought }}"
+      ],
+      "unknown_answers": [
+        "I do not know this personal assistant.",
+        "I have not met this personal assistant yet."
+      ]
+    }
+  },
+  "entities": {
+    "partner_assistant": "global-entities/partner_assistant.json"
+  }
+}

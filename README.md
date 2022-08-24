@@ -18,7 +18,6 @@
   <a href="https://github.com/leon-ai/leon/actions/workflows/lint.yml"><img src="https://github.com/leon-ai/leon/actions/workflows/lint.yml/badge.svg?branch=develop" /></a>
   <br>
   <a href="https://discord.gg/MNQqqKg"><img src="https://svgshare.com/i/V09.svg"/></a>
-  <a href="https://twitter.com/louistiti_fr"><img src="https://img.shields.io/twitter/follow/louistiti_fr?label=Follow&style=social" /></a>
 </p>
 
 <p align="center">
@@ -29,13 +28,22 @@
   <a href="https://blog.getleon.ai/the-story-behind-leon/">Story</a>
 </p>
 
+<br>
+<h2 align="center">📢 Notice 📢</h2>
+<p align="center">
+  <a href="https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/"><img width="400" src="https://blog.getleon.ai/static/a62ac28a01cb6898e299dced40875a68/c1b63/beta-7.png" /></a>
+  <br>
+  Many exciting things are coming up, hence no new documentation and test are going to be written until the official release of Leon. Feel free to <a href="https://discord.gg/MNQqqKg"><b>join us on Discord</b></a> to know more and to read the <a href="https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/"><b>"A Much Better NLP and Future" blog post</b></a>.
+</p>
+<br><br>
+
 ---
 
 ## 👋 Introduction
 
 **Leon** is an **open-source personal assistant** who can live **on your server**.
 
-He **does stuff** when you **ask him for**.
+He **does stuff** when you **ask him to**.
 
 You can **talk to him** and he can **talk to you**.
 You can also **text him** and he can also **text you**.
@@ -45,8 +53,8 @@ If you want to, Leon can communicate with you by being **offline to protect your
 
 > 1. If you are a developer (or not), you may want to build many things that could help in your daily life.
 > Instead of building a dedicated project for each of those ideas, Leon can help you with his
-> packages/modules (skills) structure.
-> 2. With this generic structure, everyone can create their own modules and share them with others.
+> Skills structure.
+> 2. With this generic structure, everyone can create their own skills and share them with others.
 > Therefore there is only one core (to rule them all).
 > 3. Leon uses AI concepts, which is cool.
 > 4. Privacy matters, you can configure Leon to talk with him offline. You can already text with him without any third party services.
@@ -56,13 +64,13 @@ If you want to, Leon can communicate with you by being **offline to protect your
 
 > This repository contains the following nodes of Leon:
 > - The server
-> - The packages/modules
+> - Skills
 > - The web app
 > - The hotword node
 
 ### What is Leon able to do?
 
-> Today, the most interesting part is about his core and the way he can scale up. He is pretty young but can easily scale to have new features (packages/modules).
+> Today, the most interesting part is about his core and the way he can scale up. He is pretty young but can easily scale to have new features (skills).
 > You can find what he is able to do by browsing the [packages list](https://github.com/leon-ai/leon/tree/develop/packages).
 
 Sounds good for you? Then let's get started!
@@ -136,7 +144,7 @@ To know what is going on, follow [roadmap.getleon.ai](http://roadmap.getleon.ai)
 
 If you have an idea for improving Leon, do not hesitate.
 
-**Leon needs open source to live**, the more modules he has, the more skillful he becomes.
+**Leon needs open source to live**, the more skills he has, the more skillful he becomes.
 
 ## 📖 The Story Behind Leon
 
@@ -144,16 +152,16 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 
 ## 🔔 Stay Tuned
 
-- [Twitter](https://twitter.com/louistiti_fr)
-- [Newsletter](http://newsletter.getleon.ai)
+- [Twitter](https://twitter.com/grenlouis)
+- [Newsletter](https://newsletter.getleon.ai/subscription/form)
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
 - [YouTube](https://www.youtube.com/channel/UCW6mk6j6nQUzFYY97r47emQ)
-- [#LeonAI](https://twitter.com/hashtag/LeonAI)
+- [#LeonAI](https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query)
 
 ## 👨 Author
 
-**Louis Grenard** ([@louistiti_fr](https://twitter.com/louistiti_fr))
+**Louis Grenard** ([@grenlouis](https://twitter.com/grenlouis))
 
 ## 👍 Sponsors
 
@@ -161,37 +169,23 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
-        <a href="https://github.com/Francaoz">
-          <img src="https://github.com/Francaoz.png?size=128" />
-          Francaoz
-        </a><br>
-        <sub><sup>100 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
-        <a href="https://github.com/GregoireAMATO">
-          <img src="https://github.com/GregoireAMATO.png?size=128" />
-          GrAMATO
-        </a><br>
-        <sub><sup>17 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
         <a href="https://github.com/phareal">
           <img src="https://github.com/phareal.png?size=128" />
           phareal
         </a><br>
-        <sub><sup>17 USD / month</sup></sub>
+        <sub><sup>30 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
-        <a href="https://github.com/Divlo">
-          <img src="https://github.com/Divlo.png?size=128" />
-          Divlo
+        <a href="https://antmedia.io/?utm_source=github&utm_medium=banner&utm_campaign=opensource&utm_id=1">
+          <img src="https://github.com/ant-media.png?size=128" />
+          Ant Media
         </a><br>
-        <sub><sup>10 USD / month</sup></sub>
+        <sub><sup>17 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
         <a href="https://github.com/KeithIMyers">
           <img src="https://github.com/KeithIMyers.png?size=128" />
-          KeithIMyers
+          Keith Myers
         </a><br>
         <sub><sup>10 USD / month</sup></sub>
       </td>
@@ -214,6 +208,9 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 
 ### Special Thanks
 
+<a href="https://www.aoz.studio">
+  <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" alt="AOZ Studio" width="64" />
+</a>
 <a href="https://vercel.com/?utm_source=leon-ai&utm_campaign=oss">
   <img src="https://i.imgur.com/S5olXWh.png" alt="Vercel" width="128" />
 </a>
@@ -221,7 +218,7 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 ## 📝 License
 [MIT License](https://github.com/leon-ai/leon/blob/develop/LICENSE.md)
 
-Copyright (c) 2019-present, Louis Grenard <louis.grenard@gmail.com>
+Copyright (c) 2019-present, Louis Grenard <louis@getleon.ai>
 
 ## Cheers!
 ![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f379.png "Cheers!")

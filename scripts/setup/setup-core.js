@@ -9,7 +9,7 @@ import log from '@/helpers/log'
 export default () => new Promise((resolve) => {
   log.info('Configuring core...')
 
-  const dir = 'server/src/config'
+  const dir = 'core/config'
   const list = (dir) => {
     const entities = fs.readdirSync(dir)
 

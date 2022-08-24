@@ -1,0 +1,51 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "Quelles sont les tendances sur GitHub ?",
+        "Donne-moi les tendances GitHub",
+        "Qu'est-ce qu'il y a en tendance sur GitHub ?",
+        "Quelles sont les tendances sur GH ?",
+        "Donne-moi les tendances GH",
+        "Qu'est-ce qu'il y a en tendance sur GH ?"
+      ]
+    }
+  },
+  "answers": {
+    "limit_max": [
+      "Vous demandez beaucoup trop de tendances, laissez moi plutôt vous donner les 25 tendances.",
+      "%limit% tendances GitHub c'est beaucoup, permettez moi de vous donner les 25 tendances à la place."
+    ],
+    "reaching": [
+      "Je suis en train d'atteindre GitHub, veuillez patienter une seconde...",
+      "Laissez moi atteindre GitHub..."
+    ],
+    "today": [
+      "Voici les %limit% dernières tendances GitHub du jour :<br><br><ul>%result%</ul>"
+    ],
+    "week": [
+      "Voici les %limit% dernières tendances GitHub de la semaine :<br><br><ul>%result%</ul>"
+    ],
+    "month": [
+      "Voici les %limit% dernières tendances GitHub du mois :<br><br><ul>%result%</ul>"
+    ],
+    "today_with_tech": [
+      "Voici les %limit% dernières tendances GitHub du jour pour la technologie %tech% :<br><br><ul>%result%</ul>"
+    ],
+    "week_with_tech": [
+      "Voici les %limit% dernières tendances GitHub de la semaine pour la technologie %tech% :<br><br><ul>%result%</ul>"
+    ],
+    "month_with_tech": [
+      "Voici les %limit% dernières tendances GitHub du mois pour la technologie %tech% :<br><br><ul>%result%</ul>"
+    ],
+    "unreachable": [
+      "GitHub est inaccessible pour le moment, merci de réessayer plus tard.",
+      "Je rencontre des difficultés pour atteindre GitHub, merci de réessayer plus tard.",
+      "GitHub semble ne pas fonctionner correctement, veuillez retenter plus tard."
+    ],
+    "list_element": [
+      "<li>#%rank%. <a href=\"%repository_url%\" target=\"_blank\">%repository_name%</a> créé par <a href=\"%author_url%\" target=\"_blank\">%author_username%</a> avec %stars_nb% nouvelles étoiles.</li>"
+    ]
+  }
+}

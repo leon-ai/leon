@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import fs from 'fs'
+import path from 'path'
 import { waterfall } from 'async'
 
 import log from '@/helpers/log'
@@ -9,7 +10,7 @@ class Synchronizer {
     this.brain = brain
     this.classification = classification
     this.sync = sync
-    this.downloadDir = `${__dirname}/../../../downloads/${this.classification.package}/${this.classification.module}`
+    this.downloadDir = `${__dirname}/../../../downloads/${this.classification.domain}/${this.classification.skill}`
 
     log.title('Synchronizer')
     log.success('New instance')
@@ -19,19 +20,19 @@ class Synchronizer {
    * Choose the right method to synchronize
    */
   async synchronize (cb) {
-    let expression = 'synced_direct'
+    let code = 'synced_direct'
 
     this.brain.talk(`${this.brain.wernicke('synchronizer', `syncing_${this.sync.method.toLowerCase().replace('-', '_')}`)}.`)
     this.brain.socket.emit('is-typing', false)
 
     if (this.sync.method === 'google-drive') {
-      expression = 'synced_google_drive'
+      code = 'synced_google_drive'
       await this.googleDrive()
     } else {
       await this.direct()
     }
 
-    return cb(`${this.brain.wernicke('synchronizer', expression)}.`)
+    return cb(`${this.brain.wernicke('synchronizer', code)}.`)
   }
 
   /**
@@ -40,8 +41,8 @@ class Synchronizer {
   direct () {
     return new Promise((resolve) => {
       this.brain.socket.emit('download', {
-        package: this.classification.package,
-        module: this.classification.module,
+        domain: this.classification.domain,
+        skill: this.classification.skill,
         action: this.classification.action
       })
 
@@ -55,10 +56,10 @@ class Synchronizer {
   googleDrive () {
     /* istanbul ignore next */
     return new Promise((resolve, reject) => {
-      const driveFolderName = `leon-${this.classification.package}-${this.classification.module}`
+      const driveFolderName = `leon-${this.classification.domain}-${this.classification.skill}`
       const folderMimeType = 'application/vnd.google-apps.folder'
       const entities = fs.readdirSync(this.downloadDir)
-      const key = JSON.parse(fs.readFileSync(`${__dirname}/../config/synchronizer/google-drive.json`, 'utf8'))
+      const key = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/synchronizer/google-drive.json'), 'utf8'))
       const authClient = new google.auth.JWT(
         key.client_email,
         key,
@@ -91,7 +92,7 @@ class Synchronizer {
 
           // Browse entities
           for (let i = 0; i < list.data.files.length; i += 1) {
-            // In case the module folder exists
+            // In case the skill folder exists
             if (list.data.files[i].mimeType === folderMimeType
               && list.data.files[i].name === driveFolderName) {
               folderId = list.data.files[i].id
@@ -111,7 +112,7 @@ class Synchronizer {
         },
         (folderExists, folderId, cb) => {
           if (folderExists === false) {
-            // Create the module folder if it does not exist
+            // Create the skill folder if it does not exist
             drive.files.create({
               resource: {
                 name: driveFolderName,

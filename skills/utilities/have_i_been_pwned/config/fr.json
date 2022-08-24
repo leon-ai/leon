@@ -1,0 +1,49 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "iifeoluwa.ao@gmail.com a-t-elle été pwned ?",
+        "iifeoluwa.ao@gmail.com a-t-elle été compromise ?",
+        "iifeoluwa.ao@gmail.com a-t-elle été exposée à une brèche ?",
+        "iifeoluwa.ao@gmail.com est-elle toujours non compromise ?",
+        "Est-ce que iifeoluwa.ao@gmail.com est compromise ?",
+        "Est-ce que mon adresse email a été compromise ?",
+        "Vérifie que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été compromise",
+        "Vérifie que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été pwned",
+        "Vérifie que iifeoluwa.ao@gmail.com et louis.grenard@gmail.com n'ont pas été exposées à une brèche"
+      ]
+    }
+  },
+  "answers": {
+    "no_pwnage": [
+      "Bonne nouvelle, %email% n'a pas été compromis par une violation de données.",
+      "%email% cela me semble correct!"
+    ],
+    "pwned": [
+      "Oups, on dirait que %email% a été compromis par une infraction impliquant %breach%.",
+      "%breach% a été impliqué dans une brèche. Malheureusement, %email% a été touché.",
+      "Malheureusement, %email% a été exposé à une violation de données affectant %breach%."
+    ],
+    "checking": [
+      "Je cherche un email compromis.",
+      "Essayer de vérifier le statut de pwnage."
+    ],
+    "no_email": [
+      "Veuillez fournir une ou plusieurs adresses électroniques que vous devez vérifier..."
+    ],
+    "errors": [
+      "Je pense que %website_name% est en panne pour le moment, veuillez réessayer plus tard.",
+      "J'ai du mal à joindre %website_name%. Veuillez vérifier que votre connexion Internet est active.",
+      "Mauvaise nouvelle, %website_name% ne répond pas. Peut-être essayer plus tard?"
+    ],
+    "blocked": [
+      "Il y avait un problème d'accès au service de %website_name%.",
+      "Malheureusement, %website_name% ne me donne pas accès à son service."
+    ],
+    "unavailable": [
+      "Il semblerait que Cloudflare protège %website_name%, veuillez réessayer dans un petit instant.",
+      "Malheureusement, Cloudflare a temporairement bloqué votre accès à %website_name%, merci de retenter dans un moment."
+    ]
+  }
+}

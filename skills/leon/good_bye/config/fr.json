@@ -1,0 +1,23 @@
+{
+  "actions": {
+    "run": {
+      "type": "dialog",
+      "utterance_samples": [
+        "Au revoir",
+        "Aurevoir",
+        "Bye",
+        "A la prochaine",
+        "Je dois y aller"
+      ],
+      "answers": [
+        "Bye !",
+        "Bye bye !",
+        "Au revoir.",
+        "Au revoir ! Prenez soin de vous.",
+        "Au revoir, merci de prendre soin de vous-même.",
+        "Bye ! Profitez de votre temps à bon escient !",
+        "A la prochaine !"
+      ]
+    }
+  }
+}

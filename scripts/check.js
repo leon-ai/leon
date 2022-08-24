@@ -3,6 +3,7 @@ import fs from 'fs'
 import { command } from 'execa'
 import semver from 'semver'
 
+import { version } from '@@/package.json'
 import log from '@/helpers/log'
 
 dotenv.config()
@@ -18,14 +19,16 @@ export default () => new Promise(async (resolve, reject) => {
     const pythonMinRequiredVersion = '3'
     const flitePath = 'bin/flite/flite'
     const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
-    const amazonPath = 'server/src/config/voice/amazon.json'
-    const googleCloudPath = 'server/src/config/voice/google-cloud.json'
-    const watsonSttPath = 'server/src/config/voice/watson-stt.json'
-    const watsonTtsPath = 'server/src/config/voice/watson-tts.json'
-    const nlpModelPath = 'server/src/data/leon-model.nlp'
+    const amazonPath = 'core/config/voice/amazon.json'
+    const googleCloudPath = 'core/config/voice/google-cloud.json'
+    const watsonSttPath = 'core/config/voice/watson-stt.json'
+    const watsonTtsPath = 'core/config/voice/watson-tts.json'
+    const globalResolversNlpModelPath = 'core/data/models/leon-global-resolvers-model.nlp'
+    const skillsResolversNlpModelPath = 'core/data/models/leon-skills-resolvers-model.nlp'
+    const mainNlpModelPath = 'core/data/models/leon-main-model.nlp'
     const report = {
       can_run: { title: 'Run', type: 'error', v: true },
-      can_run_module: { title: 'Run modules', type: 'error', v: true },
+      can_run_skill: { title: 'Run skills', type: 'error', v: true },
       can_text: { title: 'Reply you by texting', type: 'error', v: true },
       can_amazon_polly_tts: { title: 'Amazon Polly text-to-speech', type: 'warning', v: true },
       can_google_cloud_tts: { title: 'Google Cloud text-to-speech', type: 'warning', v: true },
@@ -36,7 +39,12 @@ export default () => new Promise(async (resolve, reject) => {
       can_offline_stt: { title: 'Offline speech-to-text', type: 'warning', v: true }
     }
 
-    log.title('Checking');
+    log.title('Checking')
+
+    // Leon version checking
+
+    log.info('Leon version')
+    log.success(`${version}\n`);
 
     // Environment checking
 
@@ -75,25 +83,50 @@ export default () => new Promise(async (resolve, reject) => {
       }
     })
 
-    // Module execution checking
+    // Skill execution checking
 
     try {
-      const p = await command('pipenv run python bridges/python/main.py scripts/assets/query-object.json', { shell: true })
+      const p = await command('pipenv run python bridges/python/main.py scripts/assets/intent-object.json', { shell: true })
       log.info(p.command)
       log.success(`${p.stdout}\n`)
     } catch (e) {
       log.info(e.command)
-      report.can_run_module.v = false
+      report.can_run_skill.v = false
       log.error(`${e}\n`)
     }
 
-    // NLP model checking
+    // Global resolvers NLP model checking
 
-    log.info('NLP model state')
-    if (!fs.existsSync(nlpModelPath) || !Object.keys(fs.readFileSync(nlpModelPath)).length) {
+    log.info('Global resolvers NLP model state')
+    if (!fs.existsSync(globalResolversNlpModelPath)
+      || !Object.keys(fs.readFileSync(globalResolversNlpModelPath)).length) {
       report.can_text.v = false
       Object.keys(report).forEach((item) => { if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1) report[item].v = false })
-      log.error('NLP model not found or broken. Try to generate a new one: "npm run train"\n')
+      log.error('Global resolvers NLP model not found or broken. Try to generate a new one: "npm run train"\n')
+    } else {
+      log.success('Found and valid\n')
+    }
+
+    // Skills resolvers NLP model checking
+
+    log.info('Skills resolvers NLP model state')
+    if (!fs.existsSync(skillsResolversNlpModelPath)
+      || !Object.keys(fs.readFileSync(skillsResolversNlpModelPath)).length) {
+      report.can_text.v = false
+      Object.keys(report).forEach((item) => { if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1) report[item].v = false })
+      log.error('Skills resolvers NLP model not found or broken. Try to generate a new one: "npm run train"\n')
+    } else {
+      log.success('Found and valid\n')
+    }
+
+    // Main NLP model checking
+
+    log.info('Main NLP model state')
+    if (!fs.existsSync(mainNlpModelPath)
+      || !Object.keys(fs.readFileSync(mainNlpModelPath)).length) {
+      report.can_text.v = false
+      Object.keys(report).forEach((item) => { if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1) report[item].v = false })
+      log.error('Main NLP model not found or broken. Try to generate a new one: "npm run train"\n')
     } else {
       log.success('Found and valid\n')
     }
@@ -193,7 +226,7 @@ export default () => new Promise(async (resolve, reject) => {
     })
 
     log.default('')
-    if (report.can_run.v && report.can_run_module.v && report.can_text.v) {
+    if (report.can_run.v && report.can_run_skill.v && report.can_text.v) {
       log.success('Hooray! Leon can run correctly')
       log.info('If you have some yellow warnings, it is all good. It means some entities are not yet configured')
     } else {

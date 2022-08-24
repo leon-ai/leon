@@ -1,0 +1,244 @@
+{
+  "options": {
+    "red": {
+      "synonyms": ["red"],
+      "data": {
+        "hexa": ["#FF0000"]
+      }
+    },
+    "blue": {
+      "synonyms": ["blue"],
+      "data": {
+        "hexa": ["#0000FF"]
+      }
+    },
+    "green": {
+      "synonyms": ["green"],
+      "data": {
+        "hexa": ["#006400"]
+      }
+    },
+    "orange": {
+      "synonyms": ["orange"],
+      "data": {
+        "hexa": ["#FF6600"]
+      }
+    },
+    "white": {
+      "synonyms": ["white"],
+      "data": {
+        "hexa": ["#FFFFFF"]
+      }
+    },
+    "black": {
+      "synonyms": ["black"],
+      "data": {
+        "hexa": ["#000000"]
+      }
+    },
+    "yellow": {
+      "synonyms": ["yellow"],
+      "data": {
+        "hexa": ["#FFFF00"]
+      }
+    },
+    "purple": {
+      "synonyms": ["purple"],
+      "data": {
+        "hexa": ["#A020F0"]
+      }
+    },
+    "silver": {
+      "synonyms": ["silver"],
+      "data": {
+        "hexa": ["#C0C0C0"]
+      }
+    },
+    "brown": {
+      "synonyms": ["brown"],
+      "data": {
+        "hexa": ["#964B00"]
+      }
+    },
+    "gray": {
+      "synonyms": ["gray", "grey"],
+      "data": {
+        "hexa": ["#808080"]
+      }
+    },
+    "pink": {
+      "synonyms": ["pink"],
+      "data": {
+        "hexa": ["#FFC0CB"]
+      }
+    },
+    "olive": {
+      "synonyms": ["olive"],
+      "data": {
+        "hexa": ["#808000"]
+      }
+    },
+    "maroon": {
+      "synonyms": ["maroon"],
+      "data": {
+        "hexa": ["#800000"]
+      }
+    },
+    "violet": {
+      "synonyms": ["violet"],
+      "data": {
+        "hexa": ["#8F00FF"]
+      }
+    },
+    "charcoal": {
+      "synonyms": ["charcoal"],
+      "data": {
+        "hexa": ["#36454F"]
+      }
+    },
+    "magenta": {
+      "synonyms": ["magenta"],
+      "data": {
+        "hexa": ["#FF00FF"]
+      }
+    },
+    "bronze": {
+      "synonyms": ["bronze"],
+      "data": {
+        "hexa": ["#CD7F32"]
+      }
+    },
+    "cream": {
+      "synonyms": ["cream"],
+      "data": {
+        "hexa": ["#FFFDD0"]
+      }
+    },
+    "gold": {
+      "synonyms": ["gold"],
+      "data": {
+        "hexa": ["#FFD700"]
+      }
+    },
+    "tan": {
+      "synonyms": ["tan"],
+      "data": {
+        "hexa": ["#D2B48C"]
+      }
+    },
+    "teal": {
+      "synonyms": ["teal"],
+      "data": {
+        "hexa": ["#008080"]
+      }
+    },
+    "mustard": {
+      "synonyms": ["mustard"],
+      "data": {
+        "hexa": ["#FFDB58"]
+      }
+    },
+    "navy blue": {
+      "synonyms": ["navy blue"],
+      "data": {
+        "hexa": ["#000080"]
+      }
+    },
+    "coral": {
+      "synonyms": ["coral"],
+      "data": {
+        "hexa": ["#FF7F50"]
+      }
+    },
+    "burgundy": {
+      "synonyms": ["burgundy"],
+      "data": {
+        "hexa": ["#800020"]
+      }
+    },
+    "lavender": {
+      "synonyms": ["lavender"],
+      "data": {
+        "hexa": ["#E6E6FA"]
+      }
+    },
+    "mauve": {
+      "synonyms": ["mauve"],
+      "data": {
+        "hexa": ["#E0b0FF"]
+      }
+    },
+    "peach": {
+      "synonyms": ["peach"],
+      "data": {
+        "hexa": ["#FFE5B4"]
+      }
+    },
+    "rust": {
+      "synonyms": ["rust"],
+      "data": {
+        "hexa": ["#B7410E"]
+      }
+    },
+    "indigo": {
+      "synonyms": ["indigo"],
+      "data": {
+        "hexa": ["#4B0082"]
+      }
+    },
+    "ruby": {
+      "synonyms": ["ruby"],
+      "data": {
+        "hexa": ["#E0115F"]
+      }
+    },
+    "clay": {
+      "synonyms": ["clay"],
+      "data": {
+        "hexa": ["#CC7357"]
+      }
+    },
+    "cyan": {
+      "synonyms": ["cyan"],
+      "data": {
+        "hexa": ["#00FFFF"]
+      }
+    },
+    "azure": {
+      "synonyms": ["azure"],
+      "data": {
+        "hexa": ["#007FFF"]
+      }
+    },
+    "beige": {
+      "synonyms": ["beige"],
+      "data": {
+        "hexa": ["#F5F5DC"]
+      }
+    },
+    "off white": {
+      "synonyms": ["off white"],
+      "data": {
+        "hexa": ["#FAF9F6"]
+      }
+    },
+    "turquoise": {
+      "synonyms": ["turquoise"],
+      "data": {
+        "hexa": ["#30D5C8"]
+      }
+    },
+    "amber": {
+      "synonyms": ["amber"],
+      "data": {
+        "hexa": ["#FFBF00"]
+      }
+    },
+    "mint": {
+      "synonyms": ["mint"],
+      "data": {
+        "hexa": ["#3EB489"]
+      }
+    }
+  }
+}

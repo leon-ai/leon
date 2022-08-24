@@ -33,7 +33,7 @@ describe('NER', () => {
         'en',
         path.join(__dirname, '../../../../packages/leon/data/expressions/en.json'),
         {
-          query: 'Give me a random number',
+          utterance: 'Give me a random number',
           entities: [],
           classification: {
             package: 'leon',
@@ -55,7 +55,7 @@ describe('NER', () => {
         'en',
         path.join(__dirname, '../../../../packages/trend/data/expressions/en.json'),
         {
-          query: 'Give me the 2 latest GitHub trends',
+          utterance: 'Give me the 2 latest GitHub trends',
           entities: [{ sourceText: 2, entity: 'number' }],
           classification: {
             package: 'trend',
@@ -76,9 +76,9 @@ describe('NER', () => {
       try {
         await ner.extractEntities(
           'en',
-          global.paths.expressions,
+          global.paths.utterance_samples,
           {
-            query: 'Just a query',
+            utterance: 'Just an utterance',
             entities: [],
             classification: {
               package: 'doesnotmatter',
@@ -101,7 +101,7 @@ describe('NER', () => {
         'en',
         path.join(__dirname, '../../../../packages/calendar/data/expressions/en.json'),
         {
-          query: 'Create a shopping list',
+          utterance: 'Create a shopping list',
           entities: [],
           classification: {
             package: 'calendar',
@@ -124,9 +124,9 @@ describe('NER', () => {
 
       const entities = await ner.extractEntities(
         'en',
-        global.paths.expressions,
+        global.paths.utterance_samples,
         {
-          query: 'Please whistle as a bird',
+          utterance: 'Please whistle as a bird',
           entities: [],
           classification: {
             package: 'doesnotmatter',
@@ -138,7 +138,6 @@ describe('NER', () => {
       )
 
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
-      console.log('entities', entities)
       expect(entities.length).toBe(2)
       expect(entities.map((e) => e.entity)).toEqual(['start', 'animal'])
       expect(entities.map((e) => e.sourceText)).toEqual(['Please whistle as a', 'bird'])
@@ -150,9 +149,9 @@ describe('NER', () => {
 
       const entities = await ner.extractEntities(
         'en',
-        global.paths.expressions,
+        global.paths.utterance_samples,
         {
-          query: 'I love the color blue, white and red',
+          utterance: 'I love the color blue, white and red',
           entities: [],
           classification: {
             package: 'preference',

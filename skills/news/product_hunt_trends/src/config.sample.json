@@ -1,0 +1,8 @@
+{
+  "configurations": {
+    "options": {},
+    "credentials": {
+      "developer_token": "YOUR_DEVELOPER_TOKEN"
+    }
+  }
+}

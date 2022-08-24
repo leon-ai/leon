@@ -1,0 +1,54 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "Has iifeoluwa.ao@gmail.com been pwned?",
+        "Has iifeoluwa.ao@gmail.com been compromised?",
+        "Has iifeoluwa.ao@gmail.com been exposed in a breach?",
+        "Is iifeoluwa.ao@gmail.com still uncompromised?",
+        "Is iifeoluwa.ao@gmail.com compromised?",
+        "Have my email address been pwned?",
+        "Check that iifeoluwa.ao@gmail.com and louis.grenard@gmail.com haven't been compromised",
+        "Check that iifeoluwa.ao@gmail.com and louis.grenard@gmail.com haven't been pwned",
+        "Check that iifeoluwa.ao@gmail.com and louis.grenard@gmail.com haven't been exposed in a breach",
+        "Verify the pwnage status of iifeoluwa.ao@gmail.com",
+        "Verify the pwnage status of iifeoluwa.ao@gmail.com and louis.grenard@gmail.com"
+      ]
+    }
+  },
+  "answers": {
+    "no_pwnage": [
+      "Great news, \"%email%\" hasn't been compromised in a data breach.",
+      "\"%email%\" looks good to me!"
+    ],
+    "pwned": [
+      "Oops, looks like \"%email%\" has been compromised in at least one breach involving:<br><br><ul>%result%</ul>",
+      "Sadly, \"%email%\" was affected in the following breaches:<br><br><ul>%result%</ul>",
+      "Unfortunately, \"%email%\" has been exposed in a data breach affecting:<br><br><ul>%result%</ul>"
+    ],
+    "list_element": [
+      "<li><a href=\"%url%\" target=\"_blank\">%name%</a> with a total of %total% accounts.</li>"
+    ],
+    "checking": [
+      "I'm checking for a compromised email...",
+      "Trying to verify pwnage status..."
+    ],
+    "no_email": [
+      "Please provide one or more email addresses you need me to check."
+    ],
+    "errors": [
+      "I think %website_name% is down at the moment, please try again later.",
+      "I'm having trouble reaching %website_name%. Please check that your internet connection is active.",
+      "Bad news, %website_name% is not responding. Maybe try at a later time?"
+    ],
+    "blocked": [
+      "There was an issue accessing %website_name%'s service.",
+      "Unfortunate news, %website_name% isn't granting me access to its service."
+    ],
+    "unavailable": [
+      "It looks like Cloudflare is defending %website_name%, please retry in a few moments.",
+      "Unfortunately, Cloudflare is temporarily blocking your access to %website_name%, please retry in a while."
+    ]
+  }
+}

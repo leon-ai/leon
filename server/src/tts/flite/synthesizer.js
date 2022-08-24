@@ -21,11 +21,11 @@ synthesizer.conf = {
 /**
  * There is nothing to initialize for this synthesizer
  */
-synthesizer.init = () => {
+synthesizer.init = (lang) => {
   const flitePath = 'bin/flite/flite'
 
   /* istanbul ignore if */
-  if (process.env.LEON_LANG !== 'en-US') {
+  if (lang !== 'en-US') {
     log.warning('The Flite synthesizer only accepts the "en-US" language for the moment')
   }
 

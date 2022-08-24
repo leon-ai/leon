@@ -1,6 +1,7 @@
 import Stt from 'ibm-watson/speech-to-text/v1'
 import { IamAuthenticator } from 'ibm-watson/auth'
 import fs from 'fs'
+import path from 'path'
 import { Duplex } from 'stream'
 
 import log from '@/helpers/log'
@@ -19,7 +20,7 @@ parser.conf = {
  * Initialize Watson Speech-to-Text based on credentials in the JSON file
  */
 parser.init = () => {
-  const config = JSON.parse(fs.readFileSync(`${__dirname}/../../config/voice/watson-stt.json`, 'utf8'))
+  const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/voice/watson-stt.json'), 'utf8'))
 
   try {
     client = new Stt({

@@ -1,0 +1,43 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "Télécharge les nouvelles vidéos depuis YouTube"
+      ]
+    }
+  },
+  "answers": {
+    "success": [
+      "Toutes les vidéos ont été téléchargées.",
+      "J'ai terminé de télécharger les vidéos.",
+      "Les nouvelles vidéos sont maintenant enregistrées dans ma mémoire."
+    ],
+    "downloading": [
+      "Je télécharge %video_title%.",
+      "Je suis actuellement en train de télécharger %video_title%.",
+      "Le téléchargement pour %video_title% a débuté."
+    ],
+    "reaching_playlist": [
+      "J'essaye de collecter les vidéos depuis la playlist YouTube.",
+      "Je récupère les vidéos depuis la playlist YouTube.",
+      "Je requête la playlist YouTube pour collecter les vidéos."
+    ],
+    "nb_to_download": [
+      "Je vais télécharger %nb% vidéos.",
+      "Il y a %nb% nouvelles vidéos à télécharger."
+    ],
+    "nothing_to_download": [
+      "Il n'y a pas de nouvelle vidéo à télécharger. Ajoutez une nouvelle vidéo à la playlist YouTube pour en télécharger une nouvelle.",
+      "Je n'ai pas de nouvelle vidéo à télécharger."
+    ],
+    "settings_errors": [
+      "Merci de vérifier mes paramètres. Il y a une erreur pour la raison suivante : %reason%, qui inclut ce message : %message%.",
+      "J'ai une erreur pour cette raison : %reason%, qui inclut le message suivant : %message%. Merci de vérifier si paramètres sont corrects."
+    ],
+    "request_errors": [
+      "Je ne peux pas atteindre YouTube pour le moment. Merci de vérifier si l'URL ainsi que vos paramètres réseaux sont corrects.",
+      "Je ne peux actuellement pas atteindre YouTube. Pensez-vous que YouTube est hors ligne ? Merci de vérifier l'URL et vos paramètres réseaux."
+    ]
+  }
+}

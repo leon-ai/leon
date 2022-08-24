@@ -1,4 +1,5 @@
 import fs from 'fs'
+import path from 'path'
 import archiver from 'archiver'
 
 import log from '@/helpers/log'
@@ -9,7 +10,7 @@ const getDownloads = async (fastify, options) => {
     log.title('GET /downloads')
 
     const clean = (dir, files) => {
-      log.info('Cleaning module download directory...')
+      log.info('Cleaning skill download directory...')
       for (let i = 0; i < files.length; i += 1) {
         fs.unlinkSync(`${dir}/${files[i]}`)
       }
@@ -18,29 +19,28 @@ const getDownloads = async (fastify, options) => {
     }
     let message = ''
 
-    if (request.query.package && request.query.module) {
-      const packageDir = `${__dirname}/../../../../packages/${request.query.package}`
-      const dlPackageDir = `${__dirname}/../../../../downloads/${request.query.package}`
-      const module = `${packageDir}/${request.query.module}.py`
+    if (request.query.domain && request.query.skill) {
+      const dlDomainDir = path.join(process.cwd(), 'downloads', request.query.domain)
+      const skill = path.join(dlDomainDir, `${request.query.skill}.py`)
 
       log.info(
         `Checking existence of the ${string.ucfirst(
-          request.query.module
-        )} module...`
+          request.query.skill
+        )} skill...`
       )
-      if (fs.existsSync(module)) {
-        log.success(`${string.ucfirst(request.query.module)} module exists`)
-        const downloadsDir = `${dlPackageDir}/${request.query.module}`
+      if (fs.existsSync(skill)) {
+        log.success(`${string.ucfirst(request.query.skill)} skill exists`)
+        const downloadsDir = `${dlDomainDir}/${request.query.skill}`
 
         log.info('Reading downloads directory...')
         fs.readdir(downloadsDir, (err, files) => {
           if (err && err.code === 'ENOENT') {
-            message = 'There is no content to download for this module.'
+            message = 'There is no content to download for this skill.'
             log.error(message)
             reply.code(404).send({
               success: false,
               status: 404,
-              code: 'module_dir_not_found',
+              code: 'skill_dir_not_found',
               message
             })
           } else {
@@ -54,22 +54,22 @@ const getDownloads = async (fastify, options) => {
               clean(downloadsDir, files)
             } else {
               log.info('Deleting previous archives...')
-              const zipSlug = `leon-${request.query.package}-${request.query.module}`
-              const pkgFiles = fs.readdirSync(dlPackageDir)
+              const zipSlug = `leon-${request.query.domain}-${request.query.skill}`
+              const domainsFiles = fs.readdirSync(dlDomainDir)
 
-              for (let i = 0; i < pkgFiles.length; i += 1) {
+              for (let i = 0; i < domainsFiles.length; i += 1) {
                 if (
-                  pkgFiles[i].indexOf('.zip') !== -1
-                  && pkgFiles[i].indexOf(zipSlug) !== -1
+                  domainsFiles[i].indexOf('.zip') !== -1
+                  && domainsFiles[i].indexOf(zipSlug) !== -1
                 ) {
-                  fs.unlinkSync(`${dlPackageDir}/${pkgFiles[i]}`)
-                  log.success(`${pkgFiles[i]} archive deleted`)
+                  fs.unlinkSync(`${dlDomainDir}/${domainsFiles[i]}`)
+                  log.success(`${domainsFiles[i]} archive deleted`)
                 }
               }
 
               log.info('Preparing new archive...')
               const zipName = `${zipSlug}-${Date.now()}.zip`
-              const zipFile = `${dlPackageDir}/${zipName}`
+              const zipFile = `${dlDomainDir}/${zipName}`
               const output = fs.createWriteStream(zipFile)
               const archive = archiver('zip', { zlib: { level: 9 } })
 
@@ -102,12 +102,12 @@ const getDownloads = async (fastify, options) => {
           }
         })
       } else {
-        message = 'This module does not exist.'
+        message = 'This skill does not exist.'
         log.error(message)
         reply.code(404).send({
           success: false,
           status: 404,
-          code: 'module_not_found',
+          code: 'skill_not_found',
           message
         })
       }

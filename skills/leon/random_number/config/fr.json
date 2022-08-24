@@ -1,0 +1,15 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "Donne-moi un nombre aléatoire",
+        "Donne-moi un nombre",
+        "Dis-moi un nombre aléatoire",
+        "Choisis un nombre",
+        "Pioche un nombre"
+      ]
+    }
+  },
+  "answers": { }
+}

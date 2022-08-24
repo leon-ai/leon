@@ -49,19 +49,19 @@ describe('NLU', () => {
       await expect(nlu.process('Hello')).rejects.toEqual('The NLP model is missing, please rebuild the project or if you are in dev run: npm run train')
     })
 
-    test('resolves with query not found', async () => {
+    test('resolves with intent not found', async () => {
       const nlu = new Nlu()
       nlu.brain = { talk: jest.fn(), wernicke: jest.fn(), socket: { emit: jest.fn() } }
 
       await nlu.loadModel(global.paths.nlp_model)
-      await expect(nlu.process('Unknown query')).resolves.toHaveProperty('message', 'Query not found')
+      await expect(nlu.process('Unknown intent')).resolves.toHaveProperty('message', 'Intent not found')
       expect(nlu.brain.talk).toHaveBeenCalledTimes(1)
     })
 
     test('executes brain with the fallback value (object)', async () => {
-      const query = 'Thisisaqueryexampletotestfallbacks'
+      const utterance = 'Thisisanutteranceexampletotestfallbacks'
       const fallbackObj = {
-        query,
+        utterance,
         entities: [],
         classification: { package: 'leon', module: 'randomnumber', action: 'run' }
       }
@@ -71,12 +71,12 @@ describe('NLU', () => {
 
       await nlu.loadModel(global.paths.nlp_model)
 
-      await expect(nlu.process(query)).resolves.toHaveProperty('processingTime')
+      await expect(nlu.process(utterance)).resolves.toHaveProperty('processingTime')
       expect(nlu.brain.execute.mock.calls[0][0]).toBe(fallbackObj)
       Nlu.fallback = nluFallbackTmp // Need to give back the real fallback method
     })
 
-    test('returns true thanks to query found', async () => {
+    test('returns true thanks to intent found', async () => {
       const nlu = new Nlu()
       nlu.brain = { execute: jest.fn() }
 
@@ -87,19 +87,19 @@ describe('NLU', () => {
   })
 
   describe('fallback()', () => {
-    test('returns false because there is no fallback matching the query', () => {
-      expect(Nlu.fallback({ query: 'This is a query example to test fallbacks' }, [])).toBeFalsy()
+    test('returns false because there is no fallback matching the utterance', () => {
+      expect(Nlu.fallback({ utterance: 'This is an utterance example to test fallbacks' }, [])).toBeFalsy()
     })
 
     test('returns fallback injected object', () => {
       const obj = {
-        query: 'This is a query example to test fallbacks',
+        utterance: 'This is am utterance example to test fallbacks',
         classification: { }
       }
 
       expect(Nlu.fallback(obj, [
         {
-          words: ['query', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module', action: 'fake-action'
+          words: ['utterance', 'example', 'test', 'fallbacks'], package: 'fake-pkg', module: 'fake-module', action: 'fake-action'
         }
       ]).classification).toContainEntries([['package', 'fake-pkg'], ['module', 'fake-module'], ['action', 'fake-action'], ['confidence', 1]])
     })

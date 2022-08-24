@@ -1,0 +1,54 @@
+{
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": [
+        "Is getleon.ai up?",
+        "Is mozilla.org online?",
+        "Is mozilla.org up or down?",
+        "Is github.com up?",
+        "Is github.com offline?",
+        "Can you tell me if getleon.ai is up?",
+        "Check if github.com is up or down",
+        "Check if github.com is down",
+        "Check if github.com is up",
+        "Check if nodejs.org is working"
+      ],
+      "http_api": {
+        "entities": [
+          {
+            "entity": "url",
+            "resolution": [
+              "value"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "answers": {
+    "up": [
+      "%website_name% is running correctly.",
+      "%website_name% is working correctly.",
+      "%website_name% is up."
+    ],
+    "down": [
+      "%website_name% is not running correctly.",
+      "%website_name% is having troubles.",
+      "%website_name% is down."
+    ],
+    "checking": [
+      "I'm checking %website_name% state.",
+      "I'm trying to reach %website_name%.",
+      "I am now requesting %website_name%."
+    ],
+    "errors": [
+      "There is an issue with the HTTP request for %website_name%. Please verify your local network or if the domain name is correct.",
+      "Bad news, the HTTP request is having troubles for %website_name%. You should check if the domain name is valid."
+    ],
+    "invalid_domain_name": [
+      "Please provide me at least one valid domain name.",
+      "You did not gave me a valid domain name."
+    ]
+  }
+}

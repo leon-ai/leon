@@ -2,7 +2,7 @@
 
 Thanks a lot for your interest in contributing to Leon! :heart:
 
-**Leon needs open source to live**, the more modules he has, the more skillful he becomes.
+**Leon needs open source to live**, the more skills he has, the more skillful he becomes.
 
 **Before submitting your contribution**, please take a moment to review this document.
 
@@ -97,9 +97,6 @@ npm run docker:dev
 ## Versioning
 
 - We use [Semantic Versioning](https://semver.org) for releases.
-- A new Leon module creation increases the MINOR version number of its relevant Leon package.
-- Each time a MAJOR or MINOR version number of a Leon package is increased, then the MINOR version number of the project should also be increased.
-- Each time a PATCH version number of a Leon package is increased, then the PATCH version number of the projet should also be increased.
 
 ## Commits
 
@@ -130,13 +127,13 @@ Scopes define high-level nodes of Leon.
 - web app
 - server
 - hotword
-- package/package_name
+- skill/skill_name
 
 ### Examples
 
 ```sh
 git commit -m "feat(server): awesome new server feature"
-git commit -m "docs(package/leon): fix spelling"
+git commit -m "docs(skill/leon): fix spelling"
 git commit -m "chore: split training script into awesome blocks"
 git commit -m "style(web app): remove chatbot useless parentheses"
 ```
@@ -153,4 +150,4 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 
 ## Spread the Word
 
-Use [#LeonAI](https://twitter.com/hashtag/LeonAI) if you tweet about Leon and/or mention [@louistiti_fr](https://twitter.com/louistiti_fr).
+Use [#LeonAI](https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query) if you tweet about Leon and/or mention [@grenlouis](https://twitter.com/grenlouis).

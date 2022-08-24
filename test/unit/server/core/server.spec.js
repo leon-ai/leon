@@ -55,11 +55,11 @@ describe('server', () => {
       ee.emit('init', 'jest')
 
       /* setTimeout(() => {
-        ee.emit('query', { client: 'jest', value: 'Hello' })
+        ee.emit('utterance', { client: 'jest', value: 'Hello' })
       }, 50)
 
       setTimeout(() => {
-        expect(console.log.mock.calls[26][1]).toBe('Query found')
+        expect(console.log.mock.calls[26][1]).toBe('Intent found')
         console.log = jest.fn()
       }, 100)
 
