@@ -37,7 +37,7 @@
     "preinstall": "node scripts/setup/preinstall.js",
     "postinstall": "ts-node scripts/setup/setup.js",
     "dev:app": "vite --config app/vite.config.js",
-    "dev:server": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development nodemon --watch server ./server/src/index.js --ignore server/src/tmp/ --exec ts-node",
+    "dev:server": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development nodemon --watch server server/src/index.ts --ignore server/src/tmp/ --exec ts-node",
     "wake": "cross-env LEON_HOST=http://localhost LEON_PORT=1337 node hotword/index.js",
     "delete-dist:server": "shx rm -rf ./server/dist",
     "prepare": "husky install",
