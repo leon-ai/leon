@@ -9,7 +9,7 @@ import server from '@/core/http-server/server'
   dotenv.config()
 
   process.title = 'leon'
-  
+
   global.tcpServerProcess = spawn(`pipenv run python bridges/python/tcp_server/main.py ${lang.getShortCode(process.env.LEON_LANG)}`, { shell: true })
 
   global.tcpClient = new TcpClient(

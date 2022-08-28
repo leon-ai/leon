@@ -3,6 +3,7 @@
     "target": "esnext",
     "module": "commonjs",
     "rootDir": ".",
+    "outDir": "./server/dist",
     "baseUrl": ".",
     "paths": {
       "@@/*": ["./*"],
@@ -12,7 +13,8 @@
     "allowJs": true,
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "skipLibCheck": true
   },
   "ts-node": {
     "require": ["tsconfig-paths/register"],
