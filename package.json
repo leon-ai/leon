@@ -107,6 +107,7 @@
     "jest-extended": "^2.0.0",
     "json": "^10.0.0",
     "nodemon": "^2.0.19",
+    "resolve-tspaths": "^0.7.4",
     "semver": "^7.3.5",
     "shx": "^0.3.3",
     "ts-node": "^10.9.1",
