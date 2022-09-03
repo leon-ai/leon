@@ -22,6 +22,7 @@
   },
   "scripts": {
     "lint": "ts-node scripts/lint.js",
+    "prettier": "prettier . --check --ignore-path .gitignore",
     "test": "npm run test:json && npm run test:over-http && npm run test:unit && npm run test:e2e",
     "test:unit": "npm run train en && cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --forceExit --silent --projects test/unit/unit.jest.json && npm run train",
     "test:e2e": "npm run test:e2e:nlp-modules && npm run test:e2e:modules",
@@ -105,6 +106,7 @@
     "jest-extended": "^2.0.0",
     "json": "^10.0.0",
     "nodemon": "^2.0.19",
+    "prettier": "2.7.1",
     "resolve-tspaths": "^0.7.4",
     "semver": "^7.3.5",
     "shx": "^0.3.3",
