@@ -1,0 +1,14 @@
+{
+  "verbose": false,
+  "watch": [
+    "server/src"
+  ],
+  "ext": "ts,js,json",
+  "ignore": [
+    ".git",
+    "node_modules",
+    "server/src/tmp",
+    "server/dist"
+  ],
+  "exec": "ts-node --project tsconfig.dev.json server/src/index.ts"
+}
