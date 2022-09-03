@@ -10,7 +10,7 @@ import string from '@/helpers/string'
 
 log.title('Amazon Polly Synthesizer')
 
-const synthesizer = { }
+const synthesizer = {}
 const voices = {
   'en-US': {
     VoiceId: 'Matthew'
@@ -19,7 +19,7 @@ const voices = {
     VoiceId: 'Mathieu'
   }
 }
-let client = { }
+let client = {}
 
 synthesizer.conf = {
   OutputFormat: 'mp3',
@@ -30,7 +30,12 @@ synthesizer.conf = {
  * Initialize Amazon Polly based on credentials in the JSON file
  */
 synthesizer.init = (lang) => {
-  const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/voice/amazon.json'), 'utf8'))
+  const config = JSON.parse(
+    fs.readFileSync(
+      path.join(process.cwd(), 'core/config/voice/amazon.json'),
+      'utf8'
+    )
+  )
   synthesizer.conf.VoiceId = voices[lang].VoiceId
 
   try {
@@ -50,7 +55,8 @@ synthesizer.save = (speech, em, cb) => {
 
   synthesizer.conf.Text = speech
 
-  client.send(new SynthesizeSpeechCommand(synthesizer.conf))
+  client
+    .send(new SynthesizeSpeechCommand(synthesizer.conf))
     .then(({ AudioStream }) => {
       const wStream = fs.createWriteStream(file)
 
@@ -78,7 +84,9 @@ synthesizer.save = (speech, em, cb) => {
     })
     .catch((err) => {
       if (err.code === 'UnknownEndpoint') {
-        log.error(`Amazon Polly: the region "${err.region}" does not exist or does not support the Polly service`)
+        log.error(
+          `Amazon Polly: the region "${err.region}" does not exist or does not support the Polly service`
+        )
       } else {
         log.error(`Amazon Polly: ${err.message}`)
       }

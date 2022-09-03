@@ -14,15 +14,11 @@
         "entities": [
           {
             "entity": "number",
-            "resolution": [
-              "value"
-            ]
+            "resolution": ["value"]
           },
           {
             "entity": "daterange",
-            "resolution": [
-              "timex"
-            ]
+            "resolution": ["timex"]
           }
         ]
       }

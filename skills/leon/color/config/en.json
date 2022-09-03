@@ -28,9 +28,7 @@
         "Why not another one?",
         "Why?"
       ],
-      "answers": [
-        "Because blue and pink are beautiful. Look at my logo..."
-      ]
+      "answers": ["Because blue and pink are beautiful. Look at my logo..."]
     },
     "color_hexadecimal": {
       "type": "dialog",

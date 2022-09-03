@@ -12,6 +12,7 @@ Please place an x (no spaces - [x]) in all [ ] that apply.
 -->
 
 ### Documentation Is:
+
 - [ ] Missing
 - [ ] Needed
 - [ ] Confusing

@@ -5,15 +5,11 @@ import Asr from '@/core/asr'
 import log from '@/helpers/log'
 
 class Stt {
-  constructor (socket, provider) {
+  constructor(socket, provider) {
     this.socket = socket
     this.provider = provider
-    this.providers = [
-      'google-cloud-stt',
-      'watson-stt',
-      'coqui-stt'
-    ]
-    this.parser = { }
+    this.providers = ['google-cloud-stt', 'watson-stt', 'coqui-stt']
+    this.parser = {}
 
     log.title('STT')
     log.success('New instance')
@@ -22,21 +18,35 @@ class Stt {
   /**
    * Initialize the STT provider
    */
-  init (cb) {
+  init(cb) {
     log.info('Initializing STT...')
 
     if (!this.providers.includes(this.provider)) {
-      log.error(`The STT provider "${this.provider}" does not exist or is not yet supported`)
+      log.error(
+        `The STT provider "${this.provider}" does not exist or is not yet supported`
+      )
 
       return false
     }
 
     /* istanbul ignore next */
-    if (this.provider === 'google-cloud-stt' && typeof process.env.GOOGLE_APPLICATION_CREDENTIALS === 'undefined') {
-      process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'core/config/voice/google-cloud.json')
-    } else if (typeof process.env.GOOGLE_APPLICATION_CREDENTIALS !== 'undefined'
-      && process.env.GOOGLE_APPLICATION_CREDENTIALS.indexOf('google-cloud.json') === -1) {
-      log.warning(`The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`)
+    if (
+      this.provider === 'google-cloud-stt' &&
+      typeof process.env.GOOGLE_APPLICATION_CREDENTIALS === 'undefined'
+    ) {
+      process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(
+        process.cwd(),
+        'core/config/voice/google-cloud.json'
+      )
+    } else if (
+      typeof process.env.GOOGLE_APPLICATION_CREDENTIALS !== 'undefined' &&
+      process.env.GOOGLE_APPLICATION_CREDENTIALS.indexOf(
+        'google-cloud.json'
+      ) === -1
+    ) {
+      log.warning(
+        `The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`
+      )
     }
 
     /* istanbul ignore if */
@@ -58,7 +68,7 @@ class Stt {
    * Forward string output to the client
    * and delete audio files once it has been forwarded
    */
-  forward (string) {
+  forward(string) {
     this.socket.emit('recognized', string, (confirmation) => {
       /* istanbul ignore next */
       if (confirmation === 'string-received') {
@@ -72,7 +82,7 @@ class Stt {
   /**
    * Read the speech file and parse
    */
-  parse (file) {
+  parse(file) {
     log.info('Parsing WAVE file...')
 
     if (!fs.existsSync(file)) {
@@ -100,7 +110,7 @@ class Stt {
   /**
    * Delete audio files
    */
-  static deleteAudios () {
+  static deleteAudios() {
     return new Promise((resolve) => {
       const audios = Object.keys(Asr.audios)
 
@@ -111,7 +121,7 @@ class Stt {
           fs.unlinkSync(Asr.audios[audios[i]])
         }
 
-        if ((i + 1) === audios.length) {
+        if (i + 1 === audios.length) {
           resolve()
         }
       }

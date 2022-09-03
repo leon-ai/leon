@@ -8,12 +8,12 @@ import setupHotword from './setup-hotword'
 import setupTts from './setup-tts'
 import setupStt from './setup-stt'
 
-dotenv.config();
+dotenv.config()
 
 /**
  * Main entry to setup offline components
  */
-(async () => {
+;(async () => {
   try {
     loader.start()
     await checkOs()

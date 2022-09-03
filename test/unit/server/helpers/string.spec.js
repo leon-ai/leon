@@ -3,7 +3,9 @@ import string from '@/helpers/string'
 describe('string helper', () => {
   describe('pnr()', () => {
     test('replaces substring to a string defined in an object', () => {
-      expect(string.pnr('Hello %name%', { '%name%': 'Leon' })).toBe('Hello Leon')
+      expect(string.pnr('Hello %name%', { '%name%': 'Leon' })).toBe(
+        'Hello Leon'
+      )
     })
   })
 
@@ -37,8 +39,12 @@ describe('string helper', () => {
   describe('removeEndPunctuation()', () => {
     test('removes end-punctuation', () => {
       expect(string.removeEndPunctuation('Who are you?')).toBe('Who are you')
-      expect(string.removeEndPunctuation('This is great.')).toBe('This is great')
-      expect(string.removeEndPunctuation('This string has no punctuation')).toBe('This string has no punctuation')
+      expect(string.removeEndPunctuation('This is great.')).toBe(
+        'This is great'
+      )
+      expect(
+        string.removeEndPunctuation('This string has no punctuation')
+      ).toBe('This string has no punctuation')
     })
   })
 })

@@ -5,7 +5,7 @@ import check from './check'
 /**
  * Execute the checking script
  */
-(async () => {
+;(async () => {
   try {
     loader.start()
     await check()

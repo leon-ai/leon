@@ -4,10 +4,6 @@
   "notify": false,
   "collectCoverage": false,
   "rootDir": "../..",
-  "testMatch": [
-    "<rootDir>/test/json/**/*.spec.js"
-  ],
-  "setupFiles": [
-    "<rootDir>/test/paths.setup.js"
-  ]
+  "testMatch": ["<rootDir>/test/json/**/*.spec.js"],
+  "setupFiles": ["<rootDir>/test/paths.setup.js"]
 }

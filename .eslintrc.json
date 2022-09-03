@@ -1,9 +1,13 @@
 {
-  "extends": "airbnb-base",
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "prettier"
+  ],
+  "parser": "@typescript-eslint/parser",
   "env": {
     "node": true,
-    "browser": true,
-    "jest/globals": true
+    "browser": true
   },
   "parserOptions": {
     "ecmaVersion": 2021
@@ -11,37 +15,14 @@
   "globals": {
     "io": true
   },
-  "plugins": [
-    "import",
-    "jest"
-  ],
-  "settings": {
-    "import/resolver": {
-      "babel-module": {
-        "alias": {
-          "@@": ".",
-          "@": "./server/src"
-        }
-      }
-    }
-  },
+  "plugins": ["@typescript-eslint"],
+  "ignorePatterns": "*.spec.js",
   "rules": {
-    "no-multi-assign": "off",
-    "no-trailing-spaces": "off",
-    "linebreak-style": "off",
-    "indent": "off",
-    "strict": "off",
-    "no-console": "off",
-    "no-param-reassign": "off",
-    "no-shadow": "off",
-    "import/no-extraneous-dependencies": "off",
-    "import/no-dynamic-require": "off",
-    "prefer-promise-reject-errors": ["off"],
     "no-async-promise-executor": ["off"],
     "no-underscore-dangle": ["error", { "allowAfterThis": true }],
-    "space-before-function-paren": ["error", "always"],
-    "prefer-destructuring": ["error", { "array": true, "object": true }],
+    "prefer-destructuring": ["error"],
     "comma-dangle": ["error", "never"],
-    "semi": ["error", "never"]
+    "semi": ["error", "never"],
+    "object-curly-spacing": ["error", "always"]
   }
 }

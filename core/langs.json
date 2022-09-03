@@ -1,10 +1,9 @@
 {
-	"langs": {
+  "langs": {
     "en-US": {
       "short": "en",
       "min_confidence": 0.5,
-      "fallbacks": [
-      ]
+      "fallbacks": []
     },
     "fr-FR": {
       "short": "fr",
@@ -18,5 +17,5 @@
         }
       ]
     }
-	}
+  }
 }

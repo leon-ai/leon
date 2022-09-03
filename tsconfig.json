@@ -1,7 +1,6 @@
 {
+  "extends": "@tsconfig/node16-strictest/tsconfig.json",
   "compilerOptions": {
-    "target": "esnext",
-    "module": "commonjs",
     "rootDir": ".",
     "outDir": "./server/dist",
     "baseUrl": ".",
@@ -9,18 +8,16 @@
       "@@/*": ["./*"],
       "@/*": ["./server/src/*"]
     },
-    "strict": true,
     "allowJs": true,
-    "forceConsistentCasingInFileNames": true,
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true
+    "checkJs": false,
+    "resolveJsonModule": true
   },
   "ts-node": {
+    "swc": true,
     "require": ["tsconfig-paths/register"],
     "files": true
   },
   "files": ["server/src/global.d.ts"],
-  "include": ["**/*.ts"],
+  "include": ["server/src/*"],
   "exclude": ["node_modules", "server/dist"]
 }

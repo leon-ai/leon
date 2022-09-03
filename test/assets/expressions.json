@@ -1,9 +1,7 @@
 {
   "color": {
     "run": {
-      "utterance_samples": [
-        "I like that color"
-      ],
+      "utterance_samples": ["I like that color"],
       "entities": [
         {
           "type": "regex",
@@ -15,9 +13,7 @@
   },
   "unittest": {
     "do_not_support_entity": {
-      "utterance_samples": [
-        "Just an utterance sample"
-      ],
+      "utterance_samples": ["Just an utterance sample"],
       "entities": [
         {
           "type": "not_supported_entity"
@@ -27,9 +23,7 @@
   },
   "mockingbird": {
     "test": {
-      "utterance_samples": [
-        "Whistle as a bird"
-      ],
+      "utterance_samples": ["Whistle as a bird"],
       "entities": [
         {
           "type": "trim",

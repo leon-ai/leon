@@ -18,12 +18,12 @@ import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
 
-const server = { }
+const server = {}
 
 let mainProvider = {
   id: 1,
-  brain: { },
-  nlu: { }
+  brain: {},
+  nlu: {}
 }
 let providers = []
 const createProvider = async (id) => {
@@ -33,9 +33,15 @@ const createProvider = async (id) => {
   // Load NLP models
   try {
     await Promise.all([
-      nlu.loadGlobalResolversModel(join(process.cwd(), 'core/data/models/leon-global-resolvers-model.nlp')),
-      nlu.loadSkillsResolversModel(join(process.cwd(), 'core/data/models/leon-skills-resolvers-model.nlp')),
-      nlu.loadMainModel(join(process.cwd(), 'core/data/models/leon-main-model.nlp'))
+      nlu.loadGlobalResolversModel(
+        join(process.cwd(), 'core/data/models/leon-global-resolvers-model.nlp')
+      ),
+      nlu.loadSkillsResolversModel(
+        join(process.cwd(), 'core/data/models/leon-skills-resolvers-model.nlp')
+      ),
+      nlu.loadMainModel(
+        join(process.cwd(), 'core/data/models/leon-main-model.nlp')
+      )
     ])
 
     return {
@@ -74,14 +80,14 @@ const deleteProvider = (id) => {
   if (id === '1') {
     mainProvider = {
       id: 1,
-      brain: { },
-      nlu: { }
+      brain: {},
+      nlu: {}
     }
   }
 }
 
 server.fastify = Fastify()
-server.httpServer = { }
+server.httpServer = {}
 
 /**
  * Generate skills routes
@@ -93,7 +99,7 @@ server.generateSkillsRoutes = (instance) => {
     instance.route({
       method: endpoint.method,
       url: endpoint.route,
-      async handler (request, reply) {
+      async handler(request, reply) {
         const timeout = endpoint.timeout || 60000
         const [, , , domain, skill, action] = endpoint.route.split('/')
         const handleRoute = async () => {
@@ -112,7 +118,8 @@ server.generateSkillsRoutes = (instance) => {
               entity: param,
               resolution: { ...value }
             }
-            let entity = endpoint?.entitiesType === 'trim' ? trimEntity : builtInEntity
+            let entity =
+              endpoint?.entitiesType === 'trim' ? trimEntity : builtInEntity
 
             if (Array.isArray(value)) {
               value.forEach((v) => {
@@ -248,7 +255,9 @@ server.handleOnConnection = (socket) => {
         const utterance = data.value
         try {
           await provider.nlu.process(utterance)
-        } catch (e) { /* */ }
+        } catch (e) {
+          /* */
+        }
       })
 
       // Handle automatic speech recognition
@@ -271,9 +280,12 @@ server.handleOnConnection = (socket) => {
  * Launch server
  */
 server.listen = async (port) => {
-  const io = process.env.LEON_NODE_ENV === 'development'
-    ? socketio(server.httpServer, { cors: { origin: `${process.env.LEON_HOST}:3000` } })
-    : socketio(server.httpServer)
+  const io =
+    process.env.LEON_NODE_ENV === 'development'
+      ? socketio(server.httpServer, {
+          cors: { origin: `${process.env.LEON_HOST}:3000` }
+        })
+      : socketio(server.httpServer)
 
   io.on('connection', server.handleOnConnection)
 
@@ -351,7 +363,7 @@ server.init = async () => {
 
   log.success(`The current time zone is ${date.timeZone()}`)
 
-  const sLogger = (process.env.LEON_LOGGER !== 'true') ? 'disabled' : 'enabled'
+  const sLogger = process.env.LEON_LOGGER !== 'true' ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
 
   await addProvider('1')

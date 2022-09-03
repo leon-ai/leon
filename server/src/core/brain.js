@@ -11,52 +11,62 @@ import domain from '@/helpers/domain'
 import json from '@/helpers/json'
 
 class Brain {
-  constructor () {
+  constructor() {
     this._lang = 'en'
-    this.broca = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/data', this._lang, 'answers.json'), 'utf8'))
-    this.process = { }
-    this.interOutput = { }
-    this.finalOutput = { }
-    this._socket = { }
-    this._stt = { }
-    this._tts = { }
+    this.broca = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), 'core/data', this._lang, 'answers.json'),
+        'utf8'
+      )
+    )
+    this.process = {}
+    this.interOutput = {}
+    this.finalOutput = {}
+    this._socket = {}
+    this._stt = {}
+    this._tts = {}
 
     log.title('Brain')
     log.success('New instance')
   }
 
-  get socket () {
+  get socket() {
     return this._socket
   }
 
-  set socket (newSocket) {
+  set socket(newSocket) {
     this._socket = newSocket
   }
 
-  get stt () {
+  get stt() {
     return this._stt
   }
 
-  set stt (newStt) {
+  set stt(newStt) {
     this._stt = newStt
   }
 
-  get tts () {
+  get tts() {
     return this._tts
   }
 
-  set tts (newTts) {
+  set tts(newTts) {
     this._tts = newTts
   }
 
-  get lang () {
+  get lang() {
     return this._lang
   }
 
-  set lang (newLang) {
+  set lang(newLang) {
     this._lang = newLang
     // Update broca
-    this.broca = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/data', this._lang, 'answers.json'), 'utf8'))
+    this.broca = JSON.parse(
+      fs.readFileSync(
+        path.join(process.cwd(), 'core/data', this._lang, 'answers.json'),
+        'utf8'
+      )
+    )
 
     if (process.env.LEON_TTS === 'true') {
       this._tts.init(this._lang, () => {
@@ -69,7 +79,7 @@ class Brain {
   /**
    * Delete intent object file
    */
-  static deleteIntentObjFile (intentObjectPath) {
+  static deleteIntentObjFile(intentObjectPath) {
     try {
       if (fs.existsSync(intentObjectPath)) {
         fs.unlinkSync(intentObjectPath)
@@ -82,7 +92,7 @@ class Brain {
   /**
    * Make Leon talk
    */
-  talk (rawSpeech, end = false) {
+  talk(rawSpeech, end = false) {
     log.title('Leon')
     log.info('Talking...')
 
@@ -101,7 +111,7 @@ class Brain {
   /**
    * Pickup speech info we need to return
    */
-  wernicke (type, key, obj) {
+  wernicke(type, key, obj) {
     let answer = ''
 
     // Choose a random answer or a specific one
@@ -129,7 +139,7 @@ class Brain {
    * Execute Python skills
    * TODO: split into several methods
    */
-  execute (obj, opts) {
+  execute(obj, opts) {
     const executionTimeStart = Date.now()
     opts = opts || {
       mute: false // Close Leon mouth e.g. over HTTP
@@ -137,11 +147,17 @@ class Brain {
 
     return new Promise(async (resolve, reject) => {
       const utteranceId = `${Date.now()}-${string.random(4)}`
-      const intentObjectPath = path.join(__dirname, `../tmp/${utteranceId}.json`)
+      const intentObjectPath = path.join(
+        __dirname,
+        `../tmp/${utteranceId}.json`
+      )
       const speeches = []
 
       // Ask to repeat if Leon is not sure about the request
-      if (obj.classification.confidence < langs[lang.getLongCode(this._lang)].min_confidence) {
+      if (
+        obj.classification.confidence <
+        langs[lang.getLongCode(this._lang)].min_confidence
+      ) {
         if (!opts.mute) {
           const speech = `${this.wernicke('random_not_sure')}.`
 
@@ -158,11 +174,18 @@ class Brain {
           executionTime
         })
       } else {
-        const { configDataFilePath, classification: { action: actionName } } = obj
-        const { actions } = JSON.parse(fs.readFileSync(configDataFilePath, 'utf8'))
+        const {
+          configDataFilePath,
+          classification: { action: actionName }
+        } = obj
+        const { actions } = JSON.parse(
+          fs.readFileSync(configDataFilePath, 'utf8')
+        )
         const action = actions[actionName]
         const { type: actionType } = action
-        const nextAction = action.next_action ? actions[action.next_action] : null
+        const nextAction = action.next_action
+          ? actions[action.next_action]
+          : null
 
         if (actionType === 'logic') {
           /**
@@ -179,7 +202,7 @@ class Brain {
              * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
              *    python bridges/python/main.py server/src/intent-object.sample.json
              */
-            const slots = { }
+            const slots = {}
             if (obj.slots) {
               Object.keys(obj.slots)?.forEach((slotName) => {
                 slots[slotName] = obj.slots[slotName].value
@@ -201,7 +224,10 @@ class Brain {
 
             try {
               fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
-              this.process = spawn(`pipenv run python bridges/python/main.py ${intentObjectPath}`, { shell: true })
+              this.process = spawn(
+                `pipenv run python bridges/python/main.py ${intentObjectPath}`,
+                { shell: true }
+              )
             } catch (e) {
               log.error(`Failed to save intent object: ${e}`)
             }
@@ -210,7 +236,10 @@ class Brain {
           const domainName = obj.classification.domain
           const skillName = obj.classification.skill
           const { name: domainFriendlyName } = domain.getDomainInfo(domainName)
-          const { name: skillFriendlyName } = domain.getSkillInfo(domainName, skillName)
+          const { name: skillFriendlyName } = domain.getSkillInfo(
+            domainName,
+            skillName
+          )
           let output = ''
 
           // Read output
@@ -240,7 +269,9 @@ class Brain {
                 /* istanbul ignore next */
                 reject({
                   type: 'warning',
-                  obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain is not well configured. Check the configuration file.`),
+                  obj: new Error(
+                    `The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain is not well configured. Check the configuration file.`
+                  ),
                   speeches,
                   executionTime
                 })
@@ -252,7 +283,9 @@ class Brain {
               /* istanbul ignore next */
               reject({
                 type: 'error',
-                obj: new Error(`The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain isn't returning JSON format.`),
+                obj: new Error(
+                  `The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain isn't returning JSON format.`
+                ),
                 speeches,
                 executionTime
               })
@@ -261,8 +294,10 @@ class Brain {
 
           // Handle error
           this.process.stderr.on('data', (data) => {
-            const speech = `${this.wernicke('random_skill_errors', '',
-              { '%skill_name%': skillFriendlyName, '%domain_name%': domainFriendlyName })}!`
+            const speech = `${this.wernicke('random_skill_errors', '', {
+              '%skill_name%': skillFriendlyName,
+              '%domain_name%': domainFriendlyName
+            })}!`
             if (!opts.mute) {
               this.talk(speech)
               this._socket.emit('is-typing', false)
@@ -305,8 +340,12 @@ class Brain {
 
                 /* istanbul ignore next */
                 // Synchronize the downloaded content if enabled
-                if (this.finalOutput.type === 'end' && this.finalOutput.options.synchronization && this.finalOutput.options.synchronization.enabled
-                  && this.finalOutput.options.synchronization.enabled === true) {
+                if (
+                  this.finalOutput.type === 'end' &&
+                  this.finalOutput.options.synchronization &&
+                  this.finalOutput.options.synchronization.enabled &&
+                  this.finalOutput.options.synchronization.enabled === true
+                ) {
                   const sync = new Synchronizer(
                     this,
                     obj.classification,
@@ -334,7 +373,10 @@ class Brain {
             const executionTime = executionTimeEnd - executionTimeStart
 
             // Send suggestions to the client
-            if (nextAction?.suggestions && this.finalOutput.core?.showNextActionSuggestions) {
+            if (
+              nextAction?.suggestions &&
+              this.finalOutput.core?.showNextActionSuggestions
+            ) {
               this._socket.emit('suggest', nextAction.suggestions)
             }
             if (action?.suggestions && this.finalOutput.core?.showSuggestions) {
@@ -354,30 +396,43 @@ class Brain {
           })
 
           // Reset the child process
-          this.process = { }
+          this.process = {}
         } else {
           /**
            * "Dialog" action skill execution
            */
 
           const configFilePath = path.join(
-            process.cwd(), 'skills', obj.classification.domain, obj.classification.skill, 'config', `${this._lang}.json`
+            process.cwd(),
+            'skills',
+            obj.classification.domain,
+            obj.classification.skill,
+            'config',
+            `${this._lang}.json`
           )
-          const { actions, entities } = await json.loadConfigData(configFilePath, this._lang)
+          const { actions, entities } = await json.loadConfigData(
+            configFilePath,
+            this._lang
+          )
           const utteranceHasEntities = obj.entities.length > 0
           const { answers: rawAnswers } = obj
           let answers = rawAnswers
           let answer = ''
 
           if (!utteranceHasEntities) {
-            answers = answers.filter(({ answer }) => answer.indexOf('{{') === -1)
+            answers = answers.filter(
+              ({ answer }) => answer.indexOf('{{') === -1
+            )
           } else {
-            answers = answers.filter(({ answer }) => answer.indexOf('{{') !== -1)
+            answers = answers.filter(
+              ({ answer }) => answer.indexOf('{{') !== -1
+            )
           }
 
           // When answers are simple without required entity
           if (answers.length === 0) {
-            answer = rawAnswers[Math.floor(Math.random() * rawAnswers.length)]?.answer
+            answer =
+              rawAnswers[Math.floor(Math.random() * rawAnswers.length)]?.answer
 
             // In case the expected answer requires a known entity
             if (answer.indexOf('{{') !== -1) {
@@ -394,7 +449,9 @@ class Brain {
              */
             if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
               obj.currentEntities.forEach((entityObj) => {
-                answer = string.pnr(answer, { [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value })
+                answer = string.pnr(answer, {
+                  [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value
+                })
 
                 // Find matches and map deeper data from the NLU file (global entities)
                 const matches = answer.match(/{{.+?}}/g)
@@ -408,10 +465,13 @@ class Brain {
 
                   if (entity === entityObj.entity) {
                     // e.g. entities.color.options.red.data.usage
-                    const valuesArr = entities[entity].options[entityObj.option].data[dataKey]
+                    const valuesArr =
+                      entities[entity].options[entityObj.option].data[dataKey]
 
-                    answer = string.pnr(answer,
-                      { [match]: valuesArr[Math.floor(Math.random() * valuesArr.length)] })
+                    answer = string.pnr(answer, {
+                      [match]:
+                        valuesArr[Math.floor(Math.random() * valuesArr.length)]
+                    })
                   }
                 })
               })

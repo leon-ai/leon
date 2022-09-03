@@ -1,11 +1,11 @@
 import log from '@/helpers/log'
 
-import setupTts from './setup-tts';
+import setupTts from './setup-tts'
 
 /**
  * Execute the setup offline TTS script
  */
-(async () => {
+;(async () => {
   try {
     await setupTts()
   } catch (e) {

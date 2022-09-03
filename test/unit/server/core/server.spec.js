@@ -20,7 +20,7 @@ describe('server', () => {
   describe('bootstrap()', () => {
     test('initializes HTTP server', async () => {
       await server.bootstrap()
-      expect(server.httpServer).not.toBe({ })
+      expect(server.httpServer).not.toBe({})
     })
   })
 
@@ -29,7 +29,11 @@ describe('server', () => {
       console.log = jest.fn()
 
       await server.listen(process.env.LEON_PORT)
-      expect(console.log.mock.calls[1][1].indexOf(`${process.env.LEON_HOST}:${process.env.LEON_PORT}`)).not.toEqual(-1)
+      expect(
+        console.log.mock.calls[1][1].indexOf(
+          `${process.env.LEON_HOST}:${process.env.LEON_PORT}`
+        )
+      ).not.toEqual(-1)
     })
   })
 
@@ -48,7 +52,7 @@ describe('server', () => {
       ee.emit('init', 'hotword-node')
       console.log = jest.fn()
 
-      ee.emit('hotword-detected', { })
+      ee.emit('hotword-detected', {})
       expect(console.log.mock.calls[0][1]).toBe('SOCKET')
       console.log = jest.fn()
 

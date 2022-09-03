@@ -23,11 +23,7 @@
           "name": "handsign"
         }
       },
-      "suggestions": [
-        "Rock ✊",
-        "Paper ✋",
-        "Scissors ✌"
-      ],
+      "suggestions": ["Rock ✊", "Paper ✋", "Scissors ✌"],
       "entities": [
         {
           "type": "enum",
@@ -55,23 +51,13 @@
           "name": "affirmation_denial"
         }
       },
-      "suggestions": [
-        "Yes",
-        "No thanks"
-      ]
+      "suggestions": ["Yes", "No thanks"]
     }
   },
   "answers": {
-    "ready": [
-      "Let's get started!"
-    ],
-    "leon_emoji": [
-      "%leon_emoji%"
-    ],
-    "equal": [
-      "No point.",
-      "It's a tie."
-    ],
+    "ready": ["Let's get started!"],
+    "leon_emoji": ["%leon_emoji%"],
+    "equal": ["No point.", "It's a tie."],
     "point_for_leon": [
       "I got you. The %handsign_1% beats the %handsign_2%.",
       "Yeaaah, I won! The %handsign_1% beats the %handsign_2%.",
@@ -86,13 +72,7 @@
       "Do you want a rematch?",
       "Should we go for another round?"
     ],
-    "confirm_rematch": [
-      "Be ready!",
-      "I'm not gonna let you win."
-    ],
-    "deny_rematch": [
-      "As you wish.",
-      "Let me know anytime you want to play."
-    ]
+    "confirm_rematch": ["Be ready!", "I'm not gonna let you win."],
+    "deny_rematch": ["As you wish.", "Let me know anytime you want to play."]
   }
 }

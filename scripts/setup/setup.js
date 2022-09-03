@@ -13,7 +13,7 @@ import setupPythonPackages from './setup-python-packages'
 /**
  * Main entry to setup Leon
  */
-(async () => {
+;(async () => {
   try {
     // Required env vars to setup
     process.env.PIPENV_PIPFILE = 'bridges/python/Pipfile'
@@ -21,10 +21,7 @@ import setupPythonPackages from './setup-python-packages'
 
     await setupDotenv()
     loader.start()
-    await Promise.all([
-      setupCore(),
-      setupSkillsConfig()
-    ])
+    await Promise.all([setupCore(), setupSkillsConfig()])
     await setupPythonPackages()
     loader.stop()
     await generateHttpApiKey()

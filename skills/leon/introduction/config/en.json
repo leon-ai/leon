@@ -45,9 +45,7 @@
             "type": "entity",
             "name": "date"
           },
-          "questions": [
-            "What's your birth date?"
-          ]
+          "questions": ["What's your birth date?"]
         }
       ],
       "next_action": "remember"

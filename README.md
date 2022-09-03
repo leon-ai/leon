@@ -7,7 +7,7 @@
   Leon
 </h1>
 
-*<p align="center">Your open-source personal assistant.</p>*
+_<p align="center">Your open-source personal assistant.</p>_
 
 <p align="center">
   <a href="https://github.com/leon-ai/leon/blob/develop/LICENSE.md"><img src="https://img.shields.io/badge/license-MIT-blue.svg?label=License&style=flat" /></a>
@@ -52,10 +52,10 @@ If you want to, Leon can communicate with you by being **offline to protect your
 ### Why?
 
 > 1. If you are a developer (or not), you may want to build many things that could help in your daily life.
-> Instead of building a dedicated project for each of those ideas, Leon can help you with his
-> Skills structure.
+>    Instead of building a dedicated project for each of those ideas, Leon can help you with his
+>    Skills structure.
 > 2. With this generic structure, everyone can create their own skills and share them with others.
-> Therefore there is only one core (to rule them all).
+>    Therefore there is only one core (to rule them all).
 > 3. Leon uses AI concepts, which is cool.
 > 4. Privacy matters, you can configure Leon to talk with him offline. You can already text with him without any third party services.
 > 5. Open source is great.
@@ -63,6 +63,7 @@ If you want to, Leon can communicate with you by being **offline to protect your
 ### What is this repository for?
 
 > This repository contains the following nodes of Leon:
+>
 > - The server
 > - Skills
 > - The web app
@@ -157,7 +158,7 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
 - [Blog](https://blog.getleon.ai)
 - [GitHub issues](https://github.com/leon-ai/leon/issues)
 - [YouTube](https://www.youtube.com/channel/UCW6mk6j6nQUzFYY97r47emQ)
-- [#LeonAI](https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query)
+- [#LeonAI](<https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query>)
 
 ## 👨 Author
 
@@ -216,9 +217,11 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 </a>
 
 ## 📝 License
+
 [MIT License](https://github.com/leon-ai/leon/blob/develop/LICENSE.md)
 
 Copyright (c) 2019-present, Louis Grenard <louis@getleon.ai>
 
 ## Cheers!
-![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f379.png "Cheers!")
+
+![Cheers!](https://github.githubassets.com/images/icons/emoji/unicode/1f379.png 'Cheers!')

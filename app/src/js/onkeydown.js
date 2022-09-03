@@ -14,13 +14,13 @@ const onkeydowninput = (e, client) => {
       index = -1
     }
   } else if (localStorage.getItem('history') !== null) {
-    if (key === 38 && index < (parsedHistory.length - 1)) {
+    if (key === 38 && index < parsedHistory.length - 1) {
       index += 1
       client.input = parsedHistory[index]
-    } else if (key === 40 && (index - 1) >= 0) {
+    } else if (key === 40 && index - 1 >= 0) {
       index -= 1
       client.input = parsedHistory[index]
-    } else if (key === 40 && (index - 1) < 0) {
+    } else if (key === 40 && index - 1 < 0) {
       client.input = ''
       index = -1
     }
@@ -33,7 +33,4 @@ const onkeydowndocument = (e, cb) => {
   }
 }
 
-export {
-  onkeydowninput,
-  onkeydowndocument
-}
+export { onkeydowninput, onkeydowndocument }

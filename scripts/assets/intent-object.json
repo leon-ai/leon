@@ -1,1 +1,12 @@
-{"lang":"en","domain":"leon","skill":"random_number","action":"run","utterance":"Give me a random number","slots":{},"entities":[],"current_entities":[],"resolvers":[],"current_resolvers":[]}
+{
+  "lang": "en",
+  "domain": "leon",
+  "skill": "random_number",
+  "action": "run",
+  "utterance": "Give me a random number",
+  "slots": {},
+  "entities": [],
+  "current_entities": [],
+  "resolvers": [],
+  "current_resolvers": []
+}

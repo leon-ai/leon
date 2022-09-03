@@ -36,13 +36,17 @@ describe('brain', () => {
     test('picks specific string according to object properties', () => {
       const brain = new Brain('en')
 
-      expect(brain.wernicke('errors', 'not_found', { })).toBe('Sorry, it seems I cannot find that')
+      expect(brain.wernicke('errors', 'not_found', {})).toBe(
+        'Sorry, it seems I cannot find that'
+      )
     })
 
     test('picks random string from an array', () => {
       const brain = new Brain('en')
 
-      expect(global.enUtteranceSamples.answers.random_errors).toIncludeAnyMembers([brain.wernicke('random_errors', '', { })])
+      expect(
+        global.enUtteranceSamples.answers.random_errors
+      ).toIncludeAnyMembers([brain.wernicke('random_errors', '', {})])
     })
   })
 
@@ -54,8 +58,9 @@ describe('brain', () => {
 
       await brain.execute({ classification: { confidence: 0.1 } })
       const [string] = brain.talk.mock.calls
-      expect(global.enUtteranceSamples.answers.random_not_sure)
-        .toIncludeAnyMembers([string[0].substr(0, (string[0].length - 1))])
+      expect(
+        global.enUtteranceSamples.answers.random_not_sure
+      ).toIncludeAnyMembers([string[0].substr(0, string[0].length - 1)])
     })
 
     test('spawns child process', async () => {
@@ -81,7 +86,7 @@ describe('brain', () => {
 
       await brain.execute(obj)
 
-      expect(brain.process).toEqual({ })
+      expect(brain.process).toEqual({})
     })
 
     test('executes module', async () => {
@@ -91,14 +96,16 @@ describe('brain', () => {
 
       const obj = {
         utterance: 'Is github.com up?',
-        entities: [{
-          sourceText: 'github.com',
-          utteranceText: 'github.com',
-          entity: 'url',
-          resolution: {
-            value: 'github.com'
+        entities: [
+          {
+            sourceText: 'github.com',
+            utteranceText: 'github.com',
+            entity: 'url',
+            resolution: {
+              value: 'github.com'
+            }
           }
-        }],
+        ],
         classification: {
           package: 'checker',
           module: 'isitdown',
@@ -128,8 +135,15 @@ describe('brain', () => {
         }
       }
 
-      brain.process = spawn('pipenv', ['run', 'python', `${global.paths.packages}/fake-main-to-test.py`, 'en',
-        obj.classification.package, obj.classification.module, obj.utterance])
+      brain.process = spawn('pipenv', [
+        'run',
+        'python',
+        `${global.paths.packages}/fake-main-to-test.py`,
+        'en',
+        obj.classification.package,
+        obj.classification.module,
+        obj.utterance
+      ])
 
       try {
         await brain.execute(obj)

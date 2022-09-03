@@ -8,7 +8,7 @@ import loader from '@/helpers/loader'
  *
  * npm run test:module videodownloader:youtube
  */
-(async () => {
+;(async () => {
   const { argv } = process
   const s = argv[2].toLowerCase()
   const arr = s.split(':')
@@ -17,7 +17,10 @@ import loader from '@/helpers/loader'
   try {
     loader.start()
     await command('npm run train en', { shell: true })
-    const cmd = await command(`cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --silent --config=./test/e2e/modules/e2e.modules.jest.json packages/${pkg}/test/${module}.spec.js && npm run train`, { shell: true })
+    const cmd = await command(
+      `cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --silent --config=./test/e2e/modules/e2e.modules.jest.json packages/${pkg}/test/${module}.spec.js && npm run train`,
+      { shell: true }
+    )
 
     log.default(cmd.stdout)
     log.default(cmd.stderr)

@@ -24,25 +24,16 @@
       "Hey! I hope you're doing well!",
       "Hi! What's up?!"
     ],
-    "default_w_name": [
-      "Hey %owner_name%!",
-      "Hi %owner_name%! What's up?!"
-    ],
+    "default_w_name": ["Hey %owner_name%!", "Hi %owner_name%! What's up?!"],
     "morning_good_day": [
       "Good morning, have a very nice day!",
       "Good morning, I wish you a very pleasant day!",
       "Good morning, enjoy your day!",
       "Good morning, I hope your day will be full of joy and productivity!"
     ],
-    "morning": [
-      "Good morning!"
-    ],
-    "afternoon": [
-      "Good afternoon!"
-    ],
-    "evening": [
-      "Good evening!"
-    ],
+    "morning": ["Good morning!"],
+    "afternoon": ["Good afternoon!"],
+    "evening": ["Good evening!"],
     "night": [
       "Hi! Good night!",
       "Hello! I wish you a very sweet night.",

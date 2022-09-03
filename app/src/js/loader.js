@@ -1,5 +1,5 @@
 export default class Loader {
-  constructor () {
+  constructor() {
     this.et = new EventTarget()
     this.body = document.querySelector('body')
 
@@ -12,11 +12,11 @@ export default class Loader {
     })
   }
 
-  start () {
+  start() {
     this.et.dispatchEvent(new CustomEvent('settingup', { detail: true }))
   }
 
-  stop () {
+  stop() {
     this.et.dispatchEvent(new CustomEvent('settingup', { detail: false }))
   }
 }

@@ -35,13 +35,13 @@ const defaultNluResultObj = {
 }
 
 class Nlu {
-  constructor (brain) {
+  constructor(brain) {
     this.brain = brain
     this.request = request
-    this.globalResolversNlp = { }
-    this.skillsResolversNlp = { }
-    this.mainNlp = { }
-    this.ner = { }
+    this.globalResolversNlp = {}
+    this.skillsResolversNlp = {}
+    this.mainNlp = {}
+    this.ner = {}
     this.conv = new Conversation('conv0')
     this.nluResultObj = defaultNluResultObj // TODO
 
@@ -52,11 +52,16 @@ class Nlu {
   /**
    * Load the global resolvers NLP model from the latest training
    */
-  loadGlobalResolversModel (nlpModel) {
+  loadGlobalResolversModel(nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         log.title('NLU')
-        reject({ type: 'warning', obj: new Error('The global resolvers NLP model does not exist, please run: npm run train') })
+        reject({
+          type: 'warning',
+          obj: new Error(
+            'The global resolvers NLP model does not exist, please run: npm run train'
+          )
+        })
       } else {
         log.title('NLU')
 
@@ -75,7 +80,13 @@ class Nlu {
 
           resolve()
         } catch (err) {
-          this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
+          this.brain.talk(
+            `${this.brain.wernicke('random_errors')}! ${this.brain.wernicke(
+              'errors',
+              'nlu',
+              { '%error%': err.message }
+            )}.`
+          )
           this.brain.socket.emit('is-typing', false)
 
           reject({ type: 'error', obj: err })
@@ -87,11 +98,16 @@ class Nlu {
   /**
    * Load the skills resolvers NLP model from the latest training
    */
-  loadSkillsResolversModel (nlpModel) {
+  loadSkillsResolversModel(nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         log.title('NLU')
-        reject({ type: 'warning', obj: new Error('The skills resolvers NLP model does not exist, please run: npm run train') })
+        reject({
+          type: 'warning',
+          obj: new Error(
+            'The skills resolvers NLP model does not exist, please run: npm run train'
+          )
+        })
       } else {
         log.title('NLU')
 
@@ -110,7 +126,13 @@ class Nlu {
 
           resolve()
         } catch (err) {
-          this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
+          this.brain.talk(
+            `${this.brain.wernicke('random_errors')}! ${this.brain.wernicke(
+              'errors',
+              'nlu',
+              { '%error%': err.message }
+            )}.`
+          )
           this.brain.socket.emit('is-typing', false)
 
           reject({ type: 'error', obj: err })
@@ -122,20 +144,29 @@ class Nlu {
   /**
    * Load the main NLP model from the latest training
    */
-  loadMainModel (nlpModel) {
+  loadMainModel(nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         log.title('NLU')
-        reject({ type: 'warning', obj: new Error('The main NLP model does not exist, please run: npm run train') })
+        reject({
+          type: 'warning',
+          obj: new Error(
+            'The main NLP model does not exist, please run: npm run train'
+          )
+        })
       } else {
         log.title('NLU')
 
         try {
           const container = await containerBootstrap()
 
-          container.register('extract-builtin-??', new BuiltinMicrosoft({
-            builtins: Ner.getMicrosoftBuiltinEntities()
-          }), true)
+          container.register(
+            'extract-builtin-??',
+            new BuiltinMicrosoft({
+              builtins: Ner.getMicrosoftBuiltinEntities()
+            }),
+            true
+          )
           container.use(Nlp)
           container.use(LangAll)
 
@@ -150,7 +181,13 @@ class Nlu {
 
           resolve()
         } catch (err) {
-          this.brain.talk(`${this.brain.wernicke('random_errors')}! ${this.brain.wernicke('errors', 'nlu', { '%error%': err.message })}.`)
+          this.brain.talk(
+            `${this.brain.wernicke('random_errors')}! ${this.brain.wernicke(
+              'errors',
+              'nlu',
+              { '%error%': err.message }
+            )}.`
+          )
           this.brain.socket.emit('is-typing', false)
 
           reject({ type: 'error', obj: err })
@@ -162,16 +199,18 @@ class Nlu {
   /**
    * Check if NLP models exists
    */
-  hasNlpModels () {
-    return Object.keys(this.globalResolversNlp).length > 0
-      && Object.keys(this.skillsResolversNlp).length > 0
-      && Object.keys(this.mainNlp).length > 0
+  hasNlpModels() {
+    return (
+      Object.keys(this.globalResolversNlp).length > 0 &&
+      Object.keys(this.skillsResolversNlp).length > 0 &&
+      Object.keys(this.mainNlp).length > 0
+    )
   }
 
   /**
    * Set new language; recreate a new TCP server with new language; and reprocess understanding
    */
-  switchLanguage (utterance, locale, opts) {
+  switchLanguage(utterance, locale, opts) {
     const connectedHandler = async () => {
       await this.process(utterance, opts)
     }
@@ -181,7 +220,10 @@ class Nlu {
 
     // Recreate a new TCP server process and reconnect the TCP client
     kill(global.tcpServerProcess.pid, () => {
-      global.tcpServerProcess = spawn(`pipenv run python bridges/python/tcp_server/main.py ${locale}`, { shell: true })
+      global.tcpServerProcess = spawn(
+        `pipenv run python bridges/python/tcp_server/main.py ${locale}`,
+        { shell: true }
+      )
 
       global.tcpClient = new TcpClient(
         process.env.LEON_PY_TCP_SERVER_HOST,
@@ -192,15 +234,18 @@ class Nlu {
       global.tcpClient.ee.on('connected', connectedHandler)
     })
 
-    return { }
+    return {}
   }
 
   /**
    * Collaborative logger request
    */
-  sendLog (utterance) {
+  sendLog(utterance) {
     /* istanbul ignore next */
-    if (process.env.LEON_LOGGER === 'true' && process.env.LEON_NODE_ENV !== 'testing') {
+    if (
+      process.env.LEON_LOGGER === 'true' &&
+      process.env.LEON_NODE_ENV !== 'testing'
+    ) {
       this.request
         .post('https://logger.getleon.ai/v1/expressions')
         .set('X-Origin', 'leon-core')
@@ -210,15 +255,19 @@ class Nlu {
           lang: this.brain.lang,
           classification: this.nluResultObj.classification
         })
-        .then(() => { /* */ })
-        .catch(() => { /* */ })
+        .then(() => {
+          /* */
+        })
+        .catch(() => {
+          /* */
+        })
     }
   }
 
   /**
    * Merge spaCy entities with the current NER instance
    */
-  async mergeSpacyEntities (utterance) {
+  async mergeSpacyEntities(utterance) {
     const spacyEntities = await Ner.getSpacyEntities(utterance)
     if (spacyEntities.length > 0) {
       spacyEntities.forEach(({ entity, resolution }) => {
@@ -238,10 +287,16 @@ class Nlu {
   /**
    * Handle in action loop logic before NLU processing
    */
-  async handleActionLoop (utterance, opts) {
+  async handleActionLoop(utterance, opts) {
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
-    const configDataFilePath = join(process.cwd(), 'skills', domain, skillName, `config/${this.brain.lang}.json`)
+    const configDataFilePath = join(
+      process.cwd(),
+      'skills',
+      domain,
+      skillName,
+      `config/${this.brain.lang}.json`
+    )
     this.nluResultObj = {
       ...defaultNluResultObj, // Reset entities, slots, etc.
       slots: this.conv.activeContext.slots,
@@ -260,17 +315,20 @@ class Nlu {
       this.nluResultObj
     )
 
-    const { actions, resolvers } = JSON.parse(fs.readFileSync(configDataFilePath, 'utf8'))
+    const { actions, resolvers } = JSON.parse(
+      fs.readFileSync(configDataFilePath, 'utf8')
+    )
     const action = actions[this.nluResultObj.classification.action]
-    const {
-      name: expectedItemName, type: expectedItemType
-    } = action.loop.expected_item
+    const { name: expectedItemName, type: expectedItemType } =
+      action.loop.expected_item
     let hasMatchingEntity = false
     let hasMatchingResolver = false
 
     if (expectedItemType === 'entity') {
-      hasMatchingEntity = this.nluResultObj
-        .entities.filter(({ entity }) => expectedItemName === entity).length > 0
+      hasMatchingEntity =
+        this.nluResultObj.entities.filter(
+          ({ entity }) => expectedItemName === entity
+        ).length > 0
     } else if (expectedItemType.indexOf('resolver') !== -1) {
       const nlpObjs = {
         global_resolver: this.globalResolversNlp,
@@ -280,7 +338,12 @@ class Nlu {
       const { intent } = result
 
       const resolveResolvers = (resolver, intent) => {
-        const resolversPath = join(process.cwd(), 'core/data', this.brain.lang, 'global-resolvers')
+        const resolversPath = join(
+          process.cwd(),
+          'core/data',
+          this.brain.lang,
+          'global-resolvers'
+        )
         // Load the skill resolver or the global resolver
         const resolvedIntents = !intent.includes('resolver.global')
           ? resolvers[resolver]
@@ -289,18 +352,26 @@ class Nlu {
         // E.g. resolver.global.denial -> denial
         intent = intent.substring(intent.lastIndexOf('.') + 1)
 
-        return [{
-          name: expectedItemName,
-          value: resolvedIntents.intents[intent].value
-        }]
+        return [
+          {
+            name: expectedItemName,
+            value: resolvedIntents.intents[intent].value
+          }
+        ]
       }
 
       // Resolve resolver if global resolver or skill resolver has been found
-      if (intent && (intent.includes('resolver.global') || intent.includes(`resolver.${skillName}`))) {
+      if (
+        intent &&
+        (intent.includes('resolver.global') ||
+          intent.includes(`resolver.${skillName}`))
+      ) {
         log.title('NLU')
         log.success('Resolvers resolved:')
         this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
-        this.nluResultObj.resolvers.forEach((resolver) => log.success(`${intent}: ${JSON.stringify(resolver)}`))
+        this.nluResultObj.resolvers.forEach((resolver) =>
+          log.success(`${intent}: ${JSON.stringify(resolver)}`)
+        )
         hasMatchingResolver = this.nluResultObj.resolvers.length > 0
       }
     }
@@ -314,7 +385,9 @@ class Nlu {
     }
 
     try {
-      const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+      const processedData = await this.brain.execute(this.nluResultObj, {
+        mute: opts.mute
+      })
       // Reprocess with the original utterance that triggered the context at first
       if (processedData.core?.restart === true) {
         const { originalUtterance } = this.conv.activeContext
@@ -328,7 +401,10 @@ class Nlu {
        * In case there is no next action to prepare anymore
        * and there is an explicit stop of the loop from the skill
        */
-      if (!processedData.action.next_action && processedData.core?.isInActionLoop === false) {
+      if (
+        !processedData.action.next_action &&
+        processedData.core?.isInActionLoop === false
+      ) {
         this.conv.cleanActiveContext()
         return null
       }
@@ -349,7 +425,7 @@ class Nlu {
   /**
    * Handle slot filling
    */
-  async handleSlotFilling (utterance, opts) {
+  async handleSlotFilling(utterance, opts) {
     const processedData = await this.slotFill(utterance, opts)
 
     /**
@@ -386,7 +462,7 @@ class Nlu {
    * pick-up the right classification
    * and extract entities
    */
-  process (utterance, opts) {
+  process(utterance, opts) {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
@@ -403,7 +479,8 @@ class Nlu {
           this.brain.socket.emit('is-typing', false)
         }
 
-        const msg = 'The NLP model is missing, please rebuild the project or if you are in dev run: npm run train'
+        const msg =
+          'The NLP model is missing, please rebuild the project or if you are in dev run: npm run train'
         log.error(msg)
         return reject(msg)
       }
@@ -423,15 +500,13 @@ class Nlu {
           try {
             return resolve(await this.handleSlotFilling(utterance, opts))
           } catch (e) {
-            return reject({ })
+            return reject({})
           }
         }
       }
 
       const result = await this.mainNlp.process(utterance)
-      const {
-        locale, answers, classifications
-      } = result
+      const { locale, answers, classifications } = result
       let { score, intent, domain } = result
 
       /**
@@ -470,9 +545,12 @@ class Nlu {
 
       // Language isn't supported
       if (!lang.getShortLangs().includes(locale)) {
-        this.brain.talk(`${this.brain.wernicke('random_language_not_supported')}.`, true)
+        this.brain.talk(
+          `${this.brain.wernicke('random_language_not_supported')}.`,
+          true
+        )
         this.brain.socket.emit('is-typing', false)
-        return resolve({ })
+        return resolve({})
       }
 
       // Trigger language switching
@@ -483,11 +561,16 @@ class Nlu {
       this.sendLog()
 
       if (intent === 'None') {
-        const fallback = this.fallback(langs[lang.getLongCode(locale)].fallbacks)
+        const fallback = this.fallback(
+          langs[lang.getLongCode(locale)].fallbacks
+        )
 
         if (fallback === false) {
           if (!opts.mute) {
-            this.brain.talk(`${this.brain.wernicke('random_unknown_intents')}.`, true)
+            this.brain.talk(
+              `${this.brain.wernicke('random_unknown_intents')}.`,
+              true
+            )
             this.brain.socket.emit('is-typing', false)
           }
 
@@ -508,9 +591,17 @@ class Nlu {
       }
 
       log.title('NLU')
-      log.success(`Intent found: ${this.nluResultObj.classification.skill}.${this.nluResultObj.classification.action} (domain: ${this.nluResultObj.classification.domain})`)
+      log.success(
+        `Intent found: ${this.nluResultObj.classification.skill}.${this.nluResultObj.classification.action} (domain: ${this.nluResultObj.classification.domain})`
+      )
 
-      const configDataFilePath = join(process.cwd(), 'skills', this.nluResultObj.classification.domain, this.nluResultObj.classification.skill, `config/${this.brain.lang}.json`)
+      const configDataFilePath = join(
+        process.cwd(),
+        'skills',
+        this.nluResultObj.classification.domain,
+        this.nluResultObj.classification.skill,
+        `config/${this.brain.lang}.json`
+      )
       this.nluResultObj.configDataFilePath = configDataFilePath
 
       try {
@@ -531,15 +622,18 @@ class Nlu {
 
       const shouldSlotLoop = await this.routeSlotFilling(intent)
       if (shouldSlotLoop) {
-        return resolve({ })
+        return resolve({})
       }
 
       // In case all slots have been filled in the first utterance
-      if (this.conv.hasActiveContext() && Object.keys(this.conv.activeContext.slots).length > 0) {
+      if (
+        this.conv.hasActiveContext() &&
+        Object.keys(this.conv.activeContext.slots).length > 0
+      ) {
         try {
           return resolve(await this.handleSlotFilling(utterance, opts))
         } catch (e) {
-          return reject({ })
+          return reject({})
         }
       }
 
@@ -549,7 +643,7 @@ class Nlu {
       }
       this.conv.activeContext = {
         lang: this.brain.lang,
-        slots: { },
+        slots: {},
         isInActionLoop: false,
         originalUtterance: this.nluResultObj.utterance,
         configDataFilePath: this.nluResultObj.configDataFilePath,
@@ -559,19 +653,22 @@ class Nlu {
         entities: this.nluResultObj.entities
       }
       // Pass current utterance entities to the NLU result object
-      this.nluResultObj.currentEntities = this.conv.activeContext.currentEntities
+      this.nluResultObj.currentEntities =
+        this.conv.activeContext.currentEntities
       // Pass context entities to the NLU result object
       this.nluResultObj.entities = this.conv.activeContext.entities
 
       try {
-        const processedData = await this.brain.execute(this.nluResultObj, { mute: opts.mute })
+        const processedData = await this.brain.execute(this.nluResultObj, {
+          mute: opts.mute
+        })
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
           this.conv.cleanActiveContext()
           this.conv.activeContext = {
             lang: this.brain.lang,
-            slots: { },
+            slots: {},
             isInActionLoop: !!processedData.nextAction.loop,
             originalUtterance: processedData.utterance,
             configDataFilePath: processedData.configDataFilePath,
@@ -588,8 +685,7 @@ class Nlu {
         return resolve({
           processingTime, // In ms, total time
           ...processedData,
-          nluProcessingTime:
-            processingTime - processedData?.executionTime // In ms, NLU processing time only
+          nluProcessingTime: processingTime - processedData?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
         log[e.type](e.obj.message)
@@ -607,14 +703,20 @@ class Nlu {
    * Build NLU data result object based on slots
    * and ask for more entities if necessary
    */
-  async slotFill (utterance, opts) {
+  async slotFill(utterance, opts) {
     if (!this.conv.activeContext.nextAction) {
       return null
     }
 
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
-    const configDataFilePath = join(process.cwd(), 'skills', domain, skillName, `config/${this.brain.lang}.json`)
+    const configDataFilePath = join(
+      process.cwd(),
+      'skills',
+      domain,
+      skillName,
+      `config/${this.brain.lang}.json`
+    )
 
     this.nluResultObj = {
       ...defaultNluResultObj, // Reset entities, slots, etc.
@@ -634,7 +736,9 @@ class Nlu {
     // Continue to loop for questions if a slot has been filled correctly
     let notFilledSlot = this.conv.getNotFilledSlot()
     if (notFilledSlot && entities.length > 0) {
-      const hasMatch = entities.some(({ entity }) => entity === notFilledSlot.expectedEntity)
+      const hasMatch = entities.some(
+        ({ entity }) => entity === notFilledSlot.expectedEntity
+      )
 
       if (hasMatch) {
         this.conv.setSlots(this.brain.lang, entities)
@@ -644,7 +748,7 @@ class Nlu {
           this.brain.talk(notFilledSlot.pickedQuestion)
           this.brain.socket.emit('is-typing', false)
 
-          return { }
+          return {}
         }
       }
     }
@@ -655,7 +759,9 @@ class Nlu {
       this.nluResultObj = {
         ...defaultNluResultObj, // Reset entities, slots, etc.
         // Assign slots only if there is a next action
-        slots: this.conv.activeContext.nextAction ? this.conv.activeContext.slots : { },
+        slots: this.conv.activeContext.nextAction
+          ? this.conv.activeContext.slots
+          : {},
         utterance: this.conv.activeContext.originalUtterance,
         configDataFilePath,
         classification: {
@@ -681,7 +787,7 @@ class Nlu {
    * 2. If the context is expecting slots, then loop over questions to slot fill
    * 3. Or go to the brain executor if all slots have been filled in one shot
    */
-  async routeSlotFilling (intent) {
+  async routeSlotFilling(intent) {
     const slots = await this.mainNlp.slotManager.getMandatorySlots(intent)
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
@@ -701,9 +807,12 @@ class Nlu {
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        const { actions } = JSON.parse(fs.readFileSync(this.nluResultObj.configDataFilePath, 'utf8'))
-        const [currentSlot] = actions[this.nluResultObj.classification.action].slots
-          .filter(({ name }) => name === notFilledSlot.name)
+        const { actions } = JSON.parse(
+          fs.readFileSync(this.nluResultObj.configDataFilePath, 'utf8')
+        )
+        const [currentSlot] = actions[
+          this.nluResultObj.classification.action
+        ].slots.filter(({ name }) => name === notFilledSlot.name)
 
         this.brain.socket.emit('suggest', currentSlot.suggestions)
         this.brain.talk(notFilledSlot.pickedQuestion)
@@ -720,7 +829,7 @@ class Nlu {
    * Pickup and compare the right fallback
    * according to the wished skill action
    */
-  fallback (fallbacks) {
+  fallback(fallbacks) {
     const words = this.nluResultObj.utterance.toLowerCase().split(' ')
 
     if (fallbacks.length > 0) {

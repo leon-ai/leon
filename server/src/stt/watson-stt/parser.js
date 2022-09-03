@@ -8,8 +8,8 @@ import log from '@/helpers/log'
 
 log.title('Watson STT Parser')
 
-const parser = { }
-let client = { }
+const parser = {}
+let client = {}
 
 parser.conf = {
   contentType: 'audio/wav',
@@ -20,7 +20,12 @@ parser.conf = {
  * Initialize Watson Speech-to-Text based on credentials in the JSON file
  */
 parser.init = () => {
-  const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/voice/watson-stt.json'), 'utf8'))
+  const config = JSON.parse(
+    fs.readFileSync(
+      path.join(process.cwd(), 'core/config/voice/watson-stt.json'),
+      'utf8'
+    )
+  )
 
   try {
     client = new Stt({
@@ -43,9 +48,12 @@ parser.parse = async (buffer, cb) => {
   stream.push(null)
   parser.conf.audio = stream
 
-  client.recognize(parser.conf)
+  client
+    .recognize(parser.conf)
     .then(({ result }) => {
-      const string = result.results.map((data) => data.alternatives[0].transcript).join('\n')
+      const string = result.results
+        .map((data) => data.alternatives[0].transcript)
+        .join('\n')
 
       cb({ string })
     })
@@ -57,7 +65,9 @@ parser.parse = async (buffer, cb) => {
     if (err) {
       log.error(`Watson STT: ${err}`)
     } else {
-      const string = res.results.map((data) => data.alternatives[0].transcript).join('\n')
+      const string = res.results
+        .map((data) => data.alternatives[0].transcript)
+        .join('\n')
 
       cb({ string })
     }
