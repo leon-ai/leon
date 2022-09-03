@@ -9,23 +9,25 @@ import log from '@/helpers/log'
 import string from '@/helpers/string'
 
 class Ner {
-  constructor (ner) {
+  constructor(ner) {
     this.ner = ner
 
     log.title('NER')
     log.success('New instance')
   }
 
-  static logExtraction (entities) {
+  static logExtraction(entities) {
     log.title('NER')
     log.success('Entities found:')
-    entities.forEach((ent) => log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`))
+    entities.forEach((ent) =>
+      log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`)
+    )
   }
 
   /**
    * Grab entities and match them with the utterance
    */
-  extractEntities (lang, utteranceSamplesFilePath, obj) {
+  extractEntities(lang, utteranceSamplesFilePath, obj) {
     return new Promise(async (resolve) => {
       log.title('NER')
       log.info('Searching for entities...')
@@ -33,7 +35,9 @@ class Ner {
       const { classification } = obj
       // Remove end-punctuation and add an end-whitespace
       const utterance = `${string.removeEndPunctuation(obj.utterance)} `
-      const { actions } = JSON.parse(fs.readFileSync(utteranceSamplesFilePath, 'utf8'))
+      const { actions } = JSON.parse(
+        fs.readFileSync(utteranceSamplesFilePath, 'utf8')
+      )
       const { action } = classification
       const promises = []
       const actionEntities = actions[action].entities || []
@@ -56,7 +60,10 @@ class Ner {
 
       await Promise.all(promises)
 
-      const { entities } = await this.ner.process({ locale: lang, text: utterance })
+      const { entities } = await this.ner.process({
+        locale: lang,
+        text: utterance
+      })
 
       // Normalize entities
       entities.map((entity) => {
@@ -86,14 +93,17 @@ class Ner {
   /**
    * Get spaCy entities from the TCP server
    */
-  static getSpacyEntities (utterance) {
+  static getSpacyEntities(utterance) {
     return new Promise((resolve) => {
       const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
         resolve(spacyEntities)
       }
 
       global.tcpClient.ee.removeAllListeners()
-      global.tcpClient.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
+      global.tcpClient.ee.on(
+        'spacy-entities-received',
+        spacyEntitiesReceivedHandler
+      )
 
       global.tcpClient.emit('get-spacy-entities', utterance)
     })
@@ -102,23 +112,30 @@ class Ner {
   /**
    * Inject trim type entities
    */
-  injectTrimEntity (lang, entity) {
+  injectTrimEntity(lang, entity) {
     return new Promise((resolve) => {
       for (let j = 0; j < entity.conditions.length; j += 1) {
         const condition = entity.conditions[j]
-        const conditionMethod = `add${string.snakeToPascalCase(condition.type)}Condition`
+        const conditionMethod = `add${string.snakeToPascalCase(
+          condition.type
+        )}Condition`
 
         if (condition.type === 'between') {
           /**
            * Conditions: https://github.com/axa-group/nlp.js/blob/master/docs/v3/ner-manager.md#trim-named-entities
            * e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
            */
-          this.ner[conditionMethod](lang, entity.name, condition.from, condition.to)
+          this.ner[conditionMethod](
+            lang,
+            entity.name,
+            condition.from,
+            condition.to
+          )
         } else if (condition.type.indexOf('after') !== -1) {
           const rule = {
             type: 'afterLast',
             words: condition.from,
-            options: { }
+            options: {}
           }
           this.ner.addRule(lang, entity.name, 'trim', rule)
           this.ner[conditionMethod](lang, entity.name, condition.from)
@@ -134,7 +151,7 @@ class Ner {
   /**
    * Inject regex type entities
    */
-  injectRegexEntity (lang, entity) {
+  injectRegexEntity(lang, entity) {
     return new Promise((resolve) => {
       this.ner.addRegexRule(lang, entity.name, new RegExp(entity.regex, 'g'))
 
@@ -145,7 +162,7 @@ class Ner {
   /**
    * Inject enum type entities
    */
-  injectEnumEntity (lang, entity) {
+  injectEnumEntity(lang, entity) {
     return new Promise((resolve) => {
       const { name: entityName, options } = entity
       const optionKeys = Object.keys(options)
@@ -164,7 +181,7 @@ class Ner {
    * Get Microsoft builtin entities
    * https://github.com/axa-group/nlp.js/blob/master/packages/builtin-microsoft/src/builtin-microsoft.js
    */
-  static getMicrosoftBuiltinEntities () {
+  static getMicrosoftBuiltinEntities() {
     return [
       'Number',
       'Ordinal',

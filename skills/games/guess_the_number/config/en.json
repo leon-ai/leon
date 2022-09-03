@@ -28,24 +28,15 @@
           "name": "affirmation_denial"
         }
       },
-      "suggestions": [
-        "Yes",
-        "No thanks"
-      ]
+      "suggestions": ["Yes", "No thanks"]
     }
   },
   "answers": {
     "ready": [
       "Alright, I'm ready! Go ahead and guess the number between 0 and 100!"
     ],
-    "bigger": [
-      "The number is bigger.",
-      "Try with a bigger number."
-    ],
-    "smaller": [
-      "It is smaller.",
-      "Try a smaller number."
-    ],
+    "bigger": ["The number is bigger.", "Try with a bigger number."],
+    "smaller": ["It is smaller.", "Try a smaller number."],
     "guessed": [
       "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
     ],
@@ -55,10 +46,6 @@
       "Let me pick up a number...",
       "Gotcha, I'm picking up a number..."
     ],
-    "stop": [
-      "Sure, as you wish.",
-      "You said it.",
-      "Let's stop here then!"
-    ]
+    "stop": ["Sure, as you wish.", "You said it.", "Let's stop here then!"]
   }
 }

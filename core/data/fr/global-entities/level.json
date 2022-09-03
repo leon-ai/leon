@@ -3,25 +3,19 @@
     "bas": {
       "synonyms": ["bas", "basse"],
       "data": {
-        "value": [
-          "LOW"
-        ]
+        "value": ["LOW"]
       }
     },
     "moyen": {
       "synonyms": ["moyen"],
       "data": {
-        "value": [
-          "MEDIUM"
-        ]
+        "value": ["MEDIUM"]
       }
     },
     "haut": {
       "synonyms": ["haut", "haute"],
       "data": {
-        "value": [
-          "HIGH"
-        ]
+        "value": ["HIGH"]
       }
     }
   }

@@ -20,7 +20,11 @@ const getDownloads = async (fastify, options) => {
     let message = ''
 
     if (request.query.domain && request.query.skill) {
-      const dlDomainDir = path.join(process.cwd(), 'downloads', request.query.domain)
+      const dlDomainDir = path.join(
+        process.cwd(),
+        'downloads',
+        request.query.domain
+      )
       const skill = path.join(dlDomainDir, `${request.query.skill}.py`)
 
       log.info(
@@ -59,8 +63,8 @@ const getDownloads = async (fastify, options) => {
 
               for (let i = 0; i < domainsFiles.length; i += 1) {
                 if (
-                  domainsFiles[i].indexOf('.zip') !== -1
-                  && domainsFiles[i].indexOf(zipSlug) !== -1
+                  domainsFiles[i].indexOf('.zip') !== -1 &&
+                  domainsFiles[i].indexOf(zipSlug) !== -1
                 ) {
                   fs.unlinkSync(`${dlDomainDir}/${domainsFiles[i]}`)
                   log.success(`${domainsFiles[i]} archive deleted`)

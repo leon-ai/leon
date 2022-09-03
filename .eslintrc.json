@@ -1,7 +1,8 @@
 {
   "extends": [
     "eslint:recommended",
-    "plugin:@typescript-eslint/recommended"
+    "plugin:@typescript-eslint/recommended",
+    "prettier"
   ],
   "parser": "@typescript-eslint/parser",
   "env": {
@@ -14,15 +15,14 @@
   "globals": {
     "io": true
   },
-  "plugins": [
-    "@typescript-eslint"
-  ],
+  "plugins": ["@typescript-eslint"],
   "ignorePatterns": "*.spec.js",
   "rules": {
     "no-async-promise-executor": ["off"],
     "no-underscore-dangle": ["error", { "allowAfterThis": true }],
     "prefer-destructuring": ["error"],
     "comma-dangle": ["error", "never"],
-    "semi": ["error", "never"]
+    "semi": ["error", "never"],
+    "object-curly-spacing": ["error", "always"]
   }
 }

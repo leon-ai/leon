@@ -20,7 +20,9 @@ describe('NER', () => {
         { sourceText: 'red', entity: 'color' }
       ])
 
-      expect(console.log.mock.calls[0][1]).toBe('{ value: shopping, entity: list }')
+      expect(console.log.mock.calls[0][1]).toBe(
+        '{ value: shopping, entity: list }'
+      )
       expect(console.log.mock.calls[1][1]).toBe('{ value: red, entity: color }')
     })
   })
@@ -31,7 +33,10 @@ describe('NER', () => {
 
       const entities = await ner.extractEntities(
         'en',
-        path.join(__dirname, '../../../../packages/leon/data/expressions/en.json'),
+        path.join(
+          __dirname,
+          '../../../../packages/leon/data/expressions/en.json'
+        ),
         {
           utterance: 'Give me a random number',
           entities: [],
@@ -53,7 +58,10 @@ describe('NER', () => {
 
       const entities = await ner.extractEntities(
         'en',
-        path.join(__dirname, '../../../../packages/trend/data/expressions/en.json'),
+        path.join(
+          __dirname,
+          '../../../../packages/trend/data/expressions/en.json'
+        ),
         {
           utterance: 'Give me the 2 latest GitHub trends',
           entities: [{ sourceText: 2, entity: 'number' }],
@@ -74,20 +82,16 @@ describe('NER', () => {
       const ner = new Ner()
 
       try {
-        await ner.extractEntities(
-          'en',
-          global.paths.utterance_samples,
-          {
-            utterance: 'Just an utterance',
-            entities: [],
-            classification: {
-              package: 'doesnotmatter',
-              module: 'unittest',
-              action: 'do_not_support_entity',
-              confidence: 1
-            }
+        await ner.extractEntities('en', global.paths.utterance_samples, {
+          utterance: 'Just an utterance',
+          entities: [],
+          classification: {
+            package: 'doesnotmatter',
+            module: 'unittest',
+            action: 'do_not_support_entity',
+            confidence: 1
           }
-        )
+        })
       } catch (e) {
         expect(e.code).toBe('random_ner_type_not_supported')
       }
@@ -99,7 +103,10 @@ describe('NER', () => {
 
       const entities = await ner.extractEntities(
         'en',
-        path.join(__dirname, '../../../../packages/calendar/data/expressions/en.json'),
+        path.join(
+          __dirname,
+          '../../../../packages/calendar/data/expressions/en.json'
+        ),
         {
           utterance: 'Create a shopping list',
           entities: [],
@@ -140,7 +147,10 @@ describe('NER', () => {
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
       expect(entities.length).toBe(2)
       expect(entities.map((e) => e.entity)).toEqual(['start', 'animal'])
-      expect(entities.map((e) => e.sourceText)).toEqual(['Please whistle as a', 'bird'])
+      expect(entities.map((e) => e.sourceText)).toEqual([
+        'Please whistle as a',
+        'bird'
+      ])
     })
 
     test('extracts regex custom entities', async () => {
@@ -165,7 +175,11 @@ describe('NER', () => {
       expect(Ner.logExtraction).toHaveBeenCalledTimes(1)
       expect(entities.length).toBe(3)
       expect(entities.map((e) => e.entity)).toEqual(['color', 'color', 'color'])
-      expect(entities.map((e) => e.sourceText)).toEqual(['blue', 'white', 'red'])
+      expect(entities.map((e) => e.sourceText)).toEqual([
+        'blue',
+        'white',
+        'red'
+      ])
     })
   })
 })

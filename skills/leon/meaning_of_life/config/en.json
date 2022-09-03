@@ -6,10 +6,7 @@
         "What is the meaning of life?",
         "Tell me what is the meaning of life"
       ],
-      "answers": [
-        "42.",
-        "1 0 1 0 1 0."
-      ]
+      "answers": ["42.", "1 0 1 0 1 0."]
     }
   }
 }

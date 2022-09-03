@@ -19,10 +19,9 @@ Here are few examples about how you could help on Leon, by:
 - [Improving the documentation](https://github.com/leon-ai/docs.getleon.ai) (translations, typos, better writing, etc.).
 - [Sponsoring Leon](http://sponsor.getleon.ai).
 
-
 ## Pull Requests
 
-**Working on your first Pull Request?** You can learn how from this *free* series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github).
+**Working on your first Pull Request?** You can learn how from this _free_ series [How to Contribute to an Open Source Project on GitHub](https://egghead.io/courses/how-to-contribute-to-an-open-source-project-on-github).
 
 - **Please first discuss** the change you wish to make via [issue](https://github.com/leon-ai/leon/issues),
   email, or any other method with the owners of this repository before making a change.
@@ -32,18 +31,18 @@ Here are few examples about how you could help on Leon, by:
   against the `master` branch**.
 
 - Ensure your code **respect our coding standards** (cf. [.eslintrc.json](https://github.com/leon-ai/leon/blob/develop/.eslintrc.json)).
-To do so, you can run:
+  To do so, you can run:
 
   ```sh
   npm run lint
   ```
-  
+
 - Make sure your **code passes the tests**. You can run the tests via the following command:
-  
+
   ```sh
   npm test
   ```
-  
+
   If you're adding new features to Leon, please include tests.
 
 ## Development Setup
@@ -106,19 +105,19 @@ The commit message guideline is adapted from the [AngularJS Git Commit Guideline
 
 Types define which kind of changes you made to the project.
 
-| Types         | Description |
-| ------------- |-------------|
-| BREAKING      | Changes including breaking changes. |
-| build         | New build version. |
-| chore         | Changes to the build process or auxiliary tools such as changelog generation. No production code change. |
-| ci            | Changes related to continuous integration only (GitHub Actions, CircleCI, etc.). |
-| docs          | Documentation only changes. |
-| feat          | A new feature. |
-| fix           | A bug fix. |
-| perf          | A code change that improves performance. |
-| refactor      | A code change that neither fixes a bug nor adds a feature. |
-| style         | Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc.). |
-| test          | Adding missing or correcting existing tests. |
+| Types    | Description                                                                                              |
+| -------- | -------------------------------------------------------------------------------------------------------- |
+| BREAKING | Changes including breaking changes.                                                                      |
+| build    | New build version.                                                                                       |
+| chore    | Changes to the build process or auxiliary tools such as changelog generation. No production code change. |
+| ci       | Changes related to continuous integration only (GitHub Actions, CircleCI, etc.).                         |
+| docs     | Documentation only changes.                                                                              |
+| feat     | A new feature.                                                                                           |
+| fix      | A bug fix.                                                                                               |
+| perf     | A code change that improves performance.                                                                 |
+| refactor | A code change that neither fixes a bug nor adds a feature.                                               |
+| style    | Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc.). |
+| test     | Adding missing or correcting existing tests.                                                             |
 
 ### Scopes
 
@@ -150,4 +149,4 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 
 ## Spread the Word
 
-Use [#LeonAI](https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query) if you tweet about Leon and/or mention [@grenlouis](https://twitter.com/grenlouis).
+Use [#LeonAI](<https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query>) if you tweet about Leon and/or mention [@grenlouis](https://twitter.com/grenlouis).

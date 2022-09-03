@@ -10,7 +10,7 @@ import string from '@/helpers/string'
 
 log.title('Google Cloud TTS Synthesizer')
 
-const synthesizer = { }
+const synthesizer = {}
 const voices = {
   'en-US': {
     languageCode: 'en-US',
@@ -24,7 +24,7 @@ const voices = {
     ssmlGender: 'MALE'
   }
 }
-let client = { }
+let client = {}
 
 synthesizer.conf = {
   voice: '',
@@ -38,7 +38,10 @@ synthesizer.conf = {
  * The env variable "GOOGLE_APPLICATION_CREDENTIALS" provides the JSON file path
  */
 synthesizer.init = (lang) => {
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'core/config/voice/google-cloud.json')
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(
+    process.cwd(),
+    'core/config/voice/google-cloud.json'
+  )
   synthesizer.conf.voice = voices[lang]
 
   try {

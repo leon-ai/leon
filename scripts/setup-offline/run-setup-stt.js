@@ -1,11 +1,11 @@
 import log from '@/helpers/log'
 
-import setupStt from './setup-stt';
+import setupStt from './setup-stt'
 
 /**
  * Execute the setup offline STT script
  */
-(async () => {
+;(async () => {
   try {
     await setupStt()
   } catch (e) {

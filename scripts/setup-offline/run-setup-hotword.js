@@ -1,11 +1,11 @@
 import log from '@/helpers/log'
 
-import setupHotword from './setup-hotword';
+import setupHotword from './setup-hotword'
 
 /**
  * Execute the setup offline hotword script
  */
-(async () => {
+;(async () => {
   try {
     await setupHotword()
   } catch (e) {

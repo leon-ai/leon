@@ -5,7 +5,7 @@ import cleanTestDbs from './clean-test-dbs'
 /**
  * Execute the cleaning test DBs script
  */
-(async () => {
+;(async () => {
   try {
     await cleanTestDbs()
   } catch (e) {

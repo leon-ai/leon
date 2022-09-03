@@ -1,6 +1,6 @@
 import { langs } from '@@/core/langs.json'
 
-const lang = { }
+const lang = {}
 
 lang.getShortLangs = () => Object.keys(langs).map((lang) => langs[lang].short)
 

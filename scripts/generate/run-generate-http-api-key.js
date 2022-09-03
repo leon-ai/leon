@@ -5,7 +5,7 @@ import generateHttpApiKey from './generate-http-api-key'
 /**
  * Execute the generating HTTP API key script
  */
-(async () => {
+;(async () => {
   try {
     await generateHttpApiKey()
   } catch (e) {

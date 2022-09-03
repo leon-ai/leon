@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-const json = { }
+const json = {}
 
 json.loadConfigData = async (configFilePath, lang) => {
   const sharedDataPath = path.join(process.cwd(), 'core/data', lang)
@@ -14,7 +14,9 @@ json.loadConfigData = async (configFilePath, lang) => {
 
     entitiesKeys.forEach((entity) => {
       if (typeof entities[entity] === 'string') {
-        entities[entity] = JSON.parse(fs.readFileSync(path.join(sharedDataPath, entities[entity]), 'utf8'))
+        entities[entity] = JSON.parse(
+          fs.readFileSync(path.join(sharedDataPath, entities[entity]), 'utf8')
+        )
       }
     })
 

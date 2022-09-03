@@ -3,17 +3,13 @@
     "rouge": {
       "synonyms": ["rouge"],
       "data": {
-        "usage": [
-          "..."
-        ]
+        "usage": ["..."]
       }
     },
     "bleu": {
       "synonyms": ["bleu"],
       "data": {
-        "usage": [
-          "..."
-        ]
+        "usage": ["..."]
       }
     }
   }

@@ -11,7 +11,7 @@ import string from '@/helpers/string'
 
 log.title('Watson TTS Synthesizer')
 
-const synthesizer = { }
+const synthesizer = {}
 const voices = {
   'en-US': {
     voice: 'en-US_MichaelV3Voice'
@@ -20,7 +20,7 @@ const voices = {
     voice: 'fr-FR_NicolasV3Voice'
   }
 }
-let client = { }
+let client = {}
 
 synthesizer.conf = {
   voice: '',
@@ -31,7 +31,12 @@ synthesizer.conf = {
  * Initialize Watson Text-to-Speech based on credentials in the JSON file
  */
 synthesizer.init = (lang) => {
-  const config = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'core/config/voice/watson-tts.json'), 'utf8'))
+  const config = JSON.parse(
+    fs.readFileSync(
+      path.join(process.cwd(), 'core/config/voice/watson-tts.json'),
+      'utf8'
+    )
+  )
   synthesizer.conf.voice = voices[lang].voice
 
   try {
@@ -54,7 +59,8 @@ synthesizer.save = (speech, em, cb) => {
 
   synthesizer.conf.text = speech
 
-  client.synthesize(synthesizer.conf)
+  client
+    .synthesize(synthesizer.conf)
     .then(({ result }) => {
       const wStream = fs.createWriteStream(file)
 

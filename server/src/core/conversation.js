@@ -9,7 +9,7 @@ const defaultActiveContext = {
   intent: null,
   currentEntities: [],
   entities: [],
-  slots: { },
+  slots: {},
   isInActionLoop: false,
   nextAction: null,
   originalUtterance: null,
@@ -17,28 +17,28 @@ const defaultActiveContext = {
 }
 
 class Conversation {
-  constructor (id = 'conv0') {
+  constructor(id = 'conv0') {
     // Identify conversations to allow more features in the future (multiple speakers, etc.)
     this._id = id
     this._activeContext = defaultActiveContext
-    this._previousContexts = { }
+    this._previousContexts = {}
 
     log.title('Conversation')
     log.success('New instance')
   }
 
-  get id () {
+  get id() {
     return this._id
   }
 
-  get activeContext () {
+  get activeContext() {
     return this._activeContext
   }
 
   /**
    * Activate context according to the triggered action
    */
-  set activeContext (contextObj) {
+  set activeContext(contextObj) {
     const {
       slots,
       isInActionLoop,
@@ -71,7 +71,7 @@ class Conversation {
           intent,
           currentEntities: [],
           entities: [],
-          slots: { },
+          slots: {},
           isInActionLoop,
           nextAction,
           originalUtterance: contextObj.originalUtterance,
@@ -87,7 +87,10 @@ class Conversation {
       const [skillName] = intent.split('.')
       const newContextName = `${domain}.${skillName}`
 
-      if (this._activeContext.name && this._activeContext.name !== newContextName) {
+      if (
+        this._activeContext.name &&
+        this._activeContext.name !== newContextName
+      ) {
         this.cleanActiveContext()
       }
 
@@ -103,7 +106,7 @@ class Conversation {
           intent,
           currentEntities: entities,
           entities,
-          slots: { },
+          slots: {},
           isInActionLoop,
           nextAction,
           originalUtterance: contextObj.originalUtterance,
@@ -120,21 +123,21 @@ class Conversation {
     }
   }
 
-  get previousContexts () {
+  get previousContexts() {
     return this._previousContexts
   }
 
   /**
    * Check whether there is an active context
    */
-  hasActiveContext () {
+  hasActiveContext() {
     return !!this._activeContext.name
   }
 
   /**
    * Set slots in active context
    */
-  setSlots (lang, entities, slots = this._activeContext.slots) {
+  setSlots(lang, entities, slots = this._activeContext.slots) {
     const slotKeys = Object.keys(slots)
 
     for (let i = 0; i < slotKeys.length; i += 1) {
@@ -147,14 +150,16 @@ class Conversation {
 
       // If it's the first slot setting grabbed from the model or not
       if (isFirstSet) {
-        [slotName, slotEntity] = key.split('#')
+        ;[slotName, slotEntity] = key.split('#')
         questions = slotObj.locales[lang]
       }
 
       // Match the slot with the submitted entity and ensure the slot hasn't been filled yet
-      const [foundEntity] = entities
-        .filter(({ entity }) => entity === slotEntity && !slotObj.isFilled)
-      const pickedQuestion = questions[Math.floor(Math.random() * questions.length)]
+      const [foundEntity] = entities.filter(
+        ({ entity }) => entity === slotEntity && !slotObj.isFilled
+      )
+      const pickedQuestion =
+        questions[Math.floor(Math.random() * questions.length)]
       const slot = this._activeContext.slots[slotName]
       const newSlot = {
         name: slotName,
@@ -171,13 +176,20 @@ class Conversation {
        * or if it already set but the value has changed
        * then set the slot
        */
-      if (!slot || !slot.isFilled
-        || (slot.isFilled && newSlot.isFilled
-          && slot.value.resolution.value !== newSlot.value.resolution.value)
+      if (
+        !slot ||
+        !slot.isFilled ||
+        (slot.isFilled &&
+          newSlot.isFilled &&
+          slot.value.resolution.value !== newSlot.value.resolution.value)
       ) {
         if (newSlot?.isFilled) {
           log.title('Conversation')
-          log.success(`Slot filled: { name: ${newSlot.name}, value: ${JSON.stringify(newSlot.value)} }`)
+          log.success(
+            `Slot filled: { name: ${newSlot.name}, value: ${JSON.stringify(
+              newSlot.value
+            )} }`
+          )
         }
         this._activeContext.slots[slotName] = newSlot
         entities.shift()
@@ -188,10 +200,11 @@ class Conversation {
   /**
    * Get the not yet filled slot if there is any
    */
-  getNotFilledSlot () {
+  getNotFilledSlot() {
     const slotsKeys = Object.keys(this._activeContext.slots)
-    const [notFilledSlotKey] = slotsKeys
-      .filter((slotKey) => !this._activeContext.slots[slotKey].isFilled)
+    const [notFilledSlotKey] = slotsKeys.filter(
+      (slotKey) => !this._activeContext.slots[slotKey].isFilled
+    )
 
     return this._activeContext.slots[notFilledSlotKey]
   }
@@ -199,14 +212,14 @@ class Conversation {
   /**
    * Check whether slots are all filled
    */
-  areSlotsAllFilled () {
+  areSlotsAllFilled() {
     return !this.getNotFilledSlot()
   }
 
   /**
    * Clean up active context
    */
-  cleanActiveContext () {
+  cleanActiveContext() {
     log.title('Conversation')
     log.info('Clean active context')
 
@@ -217,7 +230,7 @@ class Conversation {
   /**
    * Push active context to the previous contexts stack
    */
-  pushToPreviousContextsStack () {
+  pushToPreviousContextsStack() {
     const previousContextsKeys = Object.keys(this._previousContexts)
 
     // Remove the oldest context from the history stack if it reaches the maximum limit

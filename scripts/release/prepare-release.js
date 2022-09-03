@@ -7,13 +7,14 @@ import generateChangelog from './generate-changelog'
 /**
  * Main entry of the release preparation
  */
-(async () => {
+;(async () => {
   loader.start()
   log.info('Preparing for release...')
 
   const { argv } = process
   const version = argv[2].toLowerCase()
-  const semverRegex = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$/
+  const semverRegex =
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$/
 
   if (version.match(semverRegex) !== null) {
     try {
@@ -27,7 +28,9 @@ import generateChangelog from './generate-changelog'
       loader.stop()
     }
   } else {
-    log.error('The version number does match the Semantic Versioning rules (https://semver.org)')
+    log.error(
+      'The version number does match the Semantic Versioning rules (https://semver.org)'
+    )
     loader.stop()
   }
 })()

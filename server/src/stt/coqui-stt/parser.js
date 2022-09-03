@@ -6,8 +6,8 @@ import log from '@/helpers/log'
 
 log.title('Coqui STT Parser')
 
-const parser = { }
-let model = { }
+const parser = {}
+let model = {}
 let desiredSampleRate = 16000
 
 /**
@@ -25,13 +25,17 @@ parser.init = (args) => {
   log.info(`Loading model from file ${args.model}...`)
 
   if (!fs.existsSync(args.model)) {
-    log.error(`Cannot find ${args.model}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
+    log.error(
+      `Cannot find ${args.model}. You can setup the offline STT by running: "npm run setup:offline-stt"`
+    )
 
     return false
   }
 
   if (!fs.existsSync(args.scorer)) {
-    log.error(`Cannot find ${args.scorer}. You can setup the offline STT by running: "npm run setup:offline-stt"`)
+    log.error(
+      `Cannot find ${args.scorer}. You can setup the offline STT by running: "npm run setup:offline-stt"`
+    )
 
     return false
   }
@@ -64,7 +68,9 @@ parser.parse = (buffer, cb) => {
   const wavDecode = wav.decode(buffer)
 
   if (wavDecode.sampleRate < desiredSampleRate) {
-    log.warning(`Original sample rate (${wavDecode.sampleRate}) is lower than ${desiredSampleRate}Hz. Up-sampling might produce erratic speech recognition`)
+    log.warning(
+      `Original sample rate (${wavDecode.sampleRate}) is lower than ${desiredSampleRate}Hz. Up-sampling might produce erratic speech recognition`
+    )
   }
 
   /* istanbul ignore if */

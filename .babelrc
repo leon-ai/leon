@@ -1,23 +1,29 @@
 {
   "presets": [
-    ["@babel/preset-env", {
-      "targets": {
-        "node": "current"
-      }
-    }]
-  ],
-  "plugins": [
-    ["module-resolver", {
-      "alias": {
-        "@@": ".",
-        "@": "./server/src"
-      },
-      "compilerOptions": {
-        "paths": {
-          "@@": ".",
-          "@": "./server/src"
+    [
+      "@babel/preset-env",
+      {
+        "targets": {
+          "node": "current"
         }
       }
-    }]
+    ]
+  ],
+  "plugins": [
+    [
+      "module-resolver",
+      {
+        "alias": {
+          "@@": ".",
+          "@": "./server/src"
+        },
+        "compilerOptions": {
+          "paths": {
+            "@@": ".",
+            "@": "./server/src"
+          }
+        }
+      }
+    ]
   ]
 }

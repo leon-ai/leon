@@ -5,8 +5,8 @@ import log from '@/helpers/log'
 
 log.title('Google Cloud STT Parser')
 
-const parser = { }
-let client = { }
+const parser = {}
+let client = {}
 
 parser.conf = {
   languageCode: process.env.LEON_LANG,
@@ -19,7 +19,10 @@ parser.conf = {
  * the env variable "GOOGLE_APPLICATION_CREDENTIALS" provides the JSON file path
  */
 parser.init = () => {
-  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(process.cwd(), 'core/config/voice/google-cloud.json')
+  process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(
+    process.cwd(),
+    'core/config/voice/google-cloud.json'
+  )
 
   try {
     client = new stt.SpeechClient()
@@ -42,7 +45,9 @@ parser.parse = async (buffer, cb) => {
       audio,
       config: parser.conf
     })
-    const string = res[0].results.map((data) => data.alternatives[0].transcript).join('\n')
+    const string = res[0].results
+      .map((data) => data.alternatives[0].transcript)
+      .join('\n')
 
     cb({ string })
   } catch (e) {

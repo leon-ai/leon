@@ -1,18 +1,84 @@
 @import url(https://fonts.googleapis.com/css?family=Open+Sans:400,600,700,800);
 
-html, body, div, span, applet, object, iframes,
-h1, h2, h3, h4, h5, h6, p, blockquote, pre,
-a, abbr, acronym, address, big, cite, code,
-del, dfn, em, img, ins, kbd, q, s, samp,
-small, strike, sub, sup, tt, var,
-u, i, center,
-dl, dt, dd, ol, ul, li,
-fieldset, form, label, legend,
-table, caption, tbody, tfoot, thead, tr, th, td,
-article, aside, canvas, details, embed,
-figure, figcaption, footer, header, hgroup,
-menu, nav, output, ruby, section, summary,
-time, mark, audio, video {
+html,
+body,
+div,
+span,
+applet,
+object,
+iframes,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+sub,
+sup,
+tt,
+var,
+u,
+i,
+center,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td,
+article,
+aside,
+canvas,
+details,
+embed,
+figure,
+figcaption,
+footer,
+header,
+hgroup,
+menu,
+nav,
+output,
+ruby,
+section,
+summary,
+time,
+mark,
+audio,
+video {
   margin: 0;
   padding: 0;
   border: 0;
@@ -21,17 +87,29 @@ time, mark, audio, video {
   vertical-align: baseline;
 }
 
-article, aside, details, figcaption, figure,
-footer, header, hgroup, menu, nav, section {
+article,
+aside,
+details,
+figcaption,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
   display: block;
 }
 
-blockquote, q {
+blockquote,
+q {
   quotes: none;
 }
 
-blockquote:before, blockquote:after,
-q:before, q:after {
+blockquote:before,
+blockquote:after,
+q:before,
+q:after {
   content: '';
   content: none;
 }
@@ -48,7 +126,7 @@ table {
 
 :root {
   --black-color: #151718;
-  --white-color: #FFF;
+  --white-color: #fff;
 }
 
 a {
@@ -66,7 +144,7 @@ body {
   font-weight: 400;
 }
 body > * {
-  transition: opacity .5s;
+  transition: opacity 0.5s;
 }
 body.settingup > * {
   opacity: 0;
@@ -81,14 +159,14 @@ body.settingup::after {
   left: 50%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  animation: scaleout .6s infinite ease-in-out;
+  animation: scaleout 0.6s infinite ease-in-out;
 }
 @keyframes scaleout {
   0% {
     transform: scale(0);
   }
   100% {
-    transform: scale(1.0);
+    transform: scale(1);
     opacity: 0;
   }
 }
@@ -124,7 +202,7 @@ input {
 
 small {
   color: var(--white-color);
-  font-size: .7em;
+  font-size: 0.7em;
 }
 
 .hide {
@@ -151,7 +229,7 @@ small {
   width: 6px;
 }
 #feed::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, .2);
+  background-color: rgba(255, 255, 255, 0.2);
   border-radius: 12px;
 }
 
@@ -166,7 +244,7 @@ small {
   padding: 0 8px;
   opacity: 0;
   margin-top: 20px;
-  transition: opacity .3s;
+  transition: opacity 0.3s;
 }
 #is-typing.on {
   opacity: 1;
@@ -181,16 +259,16 @@ small {
   transform: scale(1);
 }
 #is-typing .circle:nth-child(1) {
-  animation: typing .2s linear infinite alternate;
-  background-color: #0071F0;
+  animation: typing 0.2s linear infinite alternate;
+  background-color: #0071f0;
 }
 #is-typing .circle:nth-child(2) {
-  animation: typing .2s .2s linear infinite alternate;
+  animation: typing 0.2s 0.2s linear infinite alternate;
   background-color: var(--white-color);
 }
 #is-typing .circle:nth-child(3) {
-  animation: typing .2s linear infinite alternate;
-  background-color: #EC297A;
+  animation: typing 0.2s linear infinite alternate;
+  background-color: #ec297a;
 }
 @keyframes typing {
   100% {
@@ -216,15 +294,15 @@ small {
   word-break: break-word;
   text-align: left;
   opacity: 0;
-  animation: fadeIn .2s ease-in forwards;
+  animation: fadeIn 0.2s ease-in forwards;
 }
 #feed .me .bubble {
-  background-color: #1C75DB;
+  background-color: #1c75db;
   color: var(--white-color);
   right: 0;
 }
 #feed .leon .bubble {
-  background-color: #EEE;
+  background-color: #eee;
   color: var(--black-color);
 }
 @keyframes fadeIn {
@@ -251,7 +329,7 @@ small {
   padding: 2px 8px;
   font-size: inherit;
   cursor: pointer;
-  transition: background-color .2s, color .2s;
+  transition: background-color 0.2s, color 0.2s;
 }
 .suggestion:hover {
   color: var(--black-color);
@@ -284,7 +362,7 @@ small {
   background-color: #888;
   -webkit-mask-image: url(../img/mic.svg);
   mask-image: url(../img/mic.svg);
-  transition: background-color .2s;
+  transition: background-color 0.2s;
 }
 #mic-button:not(.enabled) {
   margin-left: -26px;
@@ -293,13 +371,13 @@ small {
   background-color: var(--white-color);
 }
 #mic-button.enabled {
-  background-color: #00E676;
+  background-color: #00e676;
 }
 #mic-button.enabled + #sonar {
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  opacity: .3;
+  opacity: 0.3;
   background-color: #575757;
   pointer-events: none;
   animation: sonar 1.3s linear infinite;

@@ -30,198 +30,131 @@
           "value": "1_a"
         },
         "1_b": {
-          "utterance_samples": [
-            "Interact with a few",
-            "Known to [me|you]"
-          ],
+          "utterance_samples": ["Interact with a few", "Known to [me|you]"],
           "value": "1_b"
         },
         "2_a": {
-          "utterance_samples": [
-            "See how others are useful"
-          ],
+          "utterance_samples": ["See how others are useful"],
           "value": "2_a"
         },
         "2_b": {
-          "utterance_samples": [
-            "See how others see"
-          ],
+          "utterance_samples": ["See how others see"],
           "value": "2_b"
         },
         "3_a": {
-          "utterance_samples": [
-            "[Your|My] head"
-          ],
+          "utterance_samples": ["[Your|My] head"],
           "value": "3_a"
         },
         "3_b": {
-          "utterance_samples": [
-            "[Your|my] heart"
-          ],
+          "utterance_samples": ["[Your|my] heart"],
           "value": "3_b"
         },
         "4_a": {
-          "utterance_samples": [
-            "Carefully"
-          ],
+          "utterance_samples": ["Carefully"],
           "value": "4_a"
         },
         "4_b": {
-          "utterance_samples": [
-            "Impulsively"
-          ],
+          "utterance_samples": ["Impulsively"],
           "value": "4_b"
         },
         "5_a": {
-          "utterance_samples": [
-            "Stay [late|later] with increasing energy"
-          ],
+          "utterance_samples": ["Stay [late|later] with increasing energy"],
           "value": "5_a"
         },
         "5_b": {
-          "utterance_samples": [
-            "Leave [early|earlier] with decreased energy"
-          ],
+          "utterance_samples": ["Leave [early|earlier] with decreased energy"],
           "value": "5_b"
         },
         "6_a": {
-          "utterance_samples": [
-            "What is actual"
-          ],
+          "utterance_samples": ["What is actual"],
           "value": "6_a"
         },
         "6_b": {
-          "utterance_samples": [
-            "What is possible"
-          ],
+          "utterance_samples": ["What is possible"],
           "value": "6_b"
         },
         "7_a": {
-          "utterance_samples": [
-            "Principles"
-          ],
+          "utterance_samples": ["Principles"],
           "value": "7_a"
         },
         "7_b": {
-          "utterance_samples": [
-            "Emotions"
-          ],
+          "utterance_samples": ["Emotions"],
           "value": "7_b"
         },
         "8_a": {
-          "utterance_samples": [
-            "Incomplete"
-          ],
+          "utterance_samples": ["Incomplete"],
           "value": "8_a"
         },
         "8_b": {
-          "utterance_samples": [
-            "Completed"
-          ],
+          "utterance_samples": ["Completed"],
           "value": "8_b"
         },
         "9_a": {
-          "utterance_samples": [
-            "Keep abreast of [other|others] happenings"
-          ],
+          "utterance_samples": ["Keep abreast of [other|others] happenings"],
           "value": "9_a"
         },
         "9_b": {
-          "utterance_samples": [
-            "Get behind on the news"
-          ],
+          "utterance_samples": ["Get behind on the news"],
           "value": "9_b"
         },
         "10_a": {
-          "utterance_samples": [
-            "Production and distribution"
-          ],
+          "utterance_samples": ["Production and distribution"],
           "value": "10_a"
         },
         "10_b": {
-          "utterance_samples": [
-            "Design and research"
-          ],
+          "utterance_samples": ["Design and research"],
           "value": "10_b"
         },
         "11_a": {
-          "utterance_samples": [
-            "Logical judgments"
-          ],
+          "utterance_samples": ["Logical judgments"],
           "value": "11_a"
         },
         "11_b": {
-          "utterance_samples": [
-            "Value judgments"
-          ],
+          "utterance_samples": ["Value judgments"],
           "value": "11_b"
         },
         "12_a": {
-          "utterance_samples": [
-            "Serious and determined"
-          ],
+          "utterance_samples": ["Serious and determined"],
           "value": "12_a"
         },
         "12_b": {
-          "utterance_samples": [
-            "Easy-going",
-            "Easy going"
-          ],
+          "utterance_samples": ["Easy-going", "Easy going"],
           "value": "12_b"
         },
         "13_a": {
-          "utterance_samples": [
-            "Stimulate and energize [you|me]"
-          ],
+          "utterance_samples": ["Stimulate and energize [you|me]"],
           "value": "13_a"
         },
         "13_b": {
-          "utterance_samples": [
-            "Tax [your|my] reserves"
-          ],
+          "utterance_samples": ["Tax [your|my] reserves"],
           "value": "13_b"
         },
         "14_a": {
-          "utterance_samples": [
-            "Somewhat annoying"
-          ],
+          "utterance_samples": ["Somewhat annoying"],
           "value": "14_a"
         },
         "14_b": {
-          "utterance_samples": [
-            "Rather fascinating"
-          ],
+          "utterance_samples": ["Rather fascinating"],
           "value": "14_b"
         },
         "15_a": {
-          "utterance_samples": [
-            "Unjust"
-          ],
+          "utterance_samples": ["Unjust"],
           "value": "15_a"
         },
         "15_b": {
-          "utterance_samples": [
-            "Merciless"
-          ],
+          "utterance_samples": ["Merciless"],
           "value": "15_b"
         },
         "16_a": {
-          "utterance_samples": [
-            "Having purchased",
-            "After a purchase"
-          ],
+          "utterance_samples": ["Having purchased", "After a purchase"],
           "value": "16_a"
         },
         "16_b": {
-          "utterance_samples": [
-            "Having the option to buy"
-          ],
+          "utterance_samples": ["Having the option to buy"],
           "value": "16_b"
         },
         "17_a": {
-          "utterance_samples": [
-            "Initiate conversation"
-          ],
+          "utterance_samples": ["Initiate conversation"],
           "value": "17_a"
         },
         "17_b": {
@@ -232,69 +165,97 @@
           "value": "17_b"
         },
         "18_a": {
-          "utterance_samples": [
-            "Make themselves useful enough"
-          ],
+          "utterance_samples": ["Make themselves useful enough"],
           "value": "18_a"
         },
         "18_b": {
-          "utterance_samples": [
-            "Exercise their fantasy enough"
-          ],
+          "utterance_samples": ["Exercise their fantasy enough"],
           "value": "18_b"
         },
         "19_a": {
-          "utterance_samples": [
-            "Firm than gentle"
-          ],
+          "utterance_samples": ["Firm than gentle"],
           "value": "19_a"
         },
         "19_b": {
-          "utterance_samples": [
-            "Gentle than firm"
-          ],
+          "utterance_samples": ["Gentle than firm"],
           "value": "19_b"
         },
         "20_a": {
-          "utterance_samples": [
-            "After a decision"
-          ],
+          "utterance_samples": ["After a decision"],
           "value": "20_a"
         },
         "20_b": {
-          "utterance_samples": [
-            "Before a decision"
-          ],
+          "utterance_samples": ["Before a decision"],
           "value": "20_b"
         }
       }
     }
   },
   "answers": {
-    "1": ["%question%/20<br>At a party do you:<ul><li>a. Interact with many, including strangers</li><li>b. Interact with a few, known to you</li></ul>"],
-    "2": ["%question%/20<br>Are you more likely to:<ul><li>a. See how others are useful</li><li>b. See how others see</li></ul>"],
-    "3": ["%question%/20<br>Which rules you more:<ul><li>a. Your head</li><li>b. Your heart</li></ul>"],
-    "4": ["%question%/20<br>Do you tend to choose:<ul><li>a. Rather carefully</li><li>b. Somewhat impulsively</li></ul>"],
+    "1": [
+      "%question%/20<br>At a party do you:<ul><li>a. Interact with many, including strangers</li><li>b. Interact with a few, known to you</li></ul>"
+    ],
+    "2": [
+      "%question%/20<br>Are you more likely to:<ul><li>a. See how others are useful</li><li>b. See how others see</li></ul>"
+    ],
+    "3": [
+      "%question%/20<br>Which rules you more:<ul><li>a. Your head</li><li>b. Your heart</li></ul>"
+    ],
+    "4": [
+      "%question%/20<br>Do you tend to choose:<ul><li>a. Rather carefully</li><li>b. Somewhat impulsively</li></ul>"
+    ],
 
-    "5": ["%question%/20<br>At parties do you:<ul><li>a. Stay late, with increasing energy</li><li>b. Leave early with decreased energy</li></ul>"],
-    "6": ["%question%/20<br>Are you more interested in:<ul><li>a. What is actual</li><li>b. What is possible</li></ul>"],
-    "7": ["%question%/20<br>Are you more impressed by:<ul><li>a. Principles</li><li>b. Emotions</li></ul>"],
-    "8": ["%question%/20<br>Does it bother you more having things:<ul><li>a. Incomplete</li><li>b. Completed</li></ul>"],
+    "5": [
+      "%question%/20<br>At parties do you:<ul><li>a. Stay late, with increasing energy</li><li>b. Leave early with decreased energy</li></ul>"
+    ],
+    "6": [
+      "%question%/20<br>Are you more interested in:<ul><li>a. What is actual</li><li>b. What is possible</li></ul>"
+    ],
+    "7": [
+      "%question%/20<br>Are you more impressed by:<ul><li>a. Principles</li><li>b. Emotions</li></ul>"
+    ],
+    "8": [
+      "%question%/20<br>Does it bother you more having things:<ul><li>a. Incomplete</li><li>b. Completed</li></ul>"
+    ],
 
-    "9": ["%question%/20<br>In your social groups do you:<ul><li>a. Keep abreast of other's happenings</li><li>b. Get behind on the news</li></ul>"],
-    "10": ["%question%/20<br>Are you more interested in:<ul><li>a. Production and distribution</li><li>b. Design and research</li></ul>"],
-    "11": ["%question%/20<br>Are you more comfortable in making:<ul><li>a. Logical judgments</li><li>b. Value judgments</li></ul>"],
-    "12": ["%question%/20<br>Would you say you are more:<ul><li>a. Serious and determined</li><li>b. Easy-going</li></ul>"],
+    "9": [
+      "%question%/20<br>In your social groups do you:<ul><li>a. Keep abreast of other's happenings</li><li>b. Get behind on the news</li></ul>"
+    ],
+    "10": [
+      "%question%/20<br>Are you more interested in:<ul><li>a. Production and distribution</li><li>b. Design and research</li></ul>"
+    ],
+    "11": [
+      "%question%/20<br>Are you more comfortable in making:<ul><li>a. Logical judgments</li><li>b. Value judgments</li></ul>"
+    ],
+    "12": [
+      "%question%/20<br>Would you say you are more:<ul><li>a. Serious and determined</li><li>b. Easy-going</li></ul>"
+    ],
 
-    "13": ["%question%/20<br>Does new and non-routine interaction with others:<ul><li>a. Stimulate and energize you</li><li>b. Tax your reserves</li></ul>"],
-    "14": ["%question%/20<br>Are visionaries:<ul><li>a. Somewhat annoying</li><li>b. Rather fascinating</li></ul>"],
-    "15": ["%question%/20<br>Is it worse to be:<ul><li>a. Unjust</li><li>b. Merciless</li></ul>"],
-    "16": ["%question%/20<br>Do you feel better about:<ul><li>a. Having purchased</li><li>b. Having the option to buy</li></ul>"],
+    "13": [
+      "%question%/20<br>Does new and non-routine interaction with others:<ul><li>a. Stimulate and energize you</li><li>b. Tax your reserves</li></ul>"
+    ],
+    "14": [
+      "%question%/20<br>Are visionaries:<ul><li>a. Somewhat annoying</li><li>b. Rather fascinating</li></ul>"
+    ],
+    "15": [
+      "%question%/20<br>Is it worse to be:<ul><li>a. Unjust</li><li>b. Merciless</li></ul>"
+    ],
+    "16": [
+      "%question%/20<br>Do you feel better about:<ul><li>a. Having purchased</li><li>b. Having the option to buy</li></ul>"
+    ],
 
-    "17": ["%question%/20<br>In company do you:<ul><li>a. Initiate conversation</li><li>b. Wait to be approached</li></ul>"],
-    "18": ["%question%/20<br>Children often do not:<ul><li>a. Make themselves useful enough</li><li>b. Exercise their fantasy enough</li></ul>"],
-    "19": ["%question%/20<br>Are you more:<ul><li>a. Firm than gentle</li><li>b. Gentle than firm</li></ul>"],
-    "20": ["%question%/20<br>Are you more comfortable:<ul><li>a. After a decision</li><li>b. Before a decision</li></ul>"],
+    "17": [
+      "%question%/20<br>In company do you:<ul><li>a. Initiate conversation</li><li>b. Wait to be approached</li></ul>"
+    ],
+    "18": [
+      "%question%/20<br>Children often do not:<ul><li>a. Make themselves useful enough</li><li>b. Exercise their fantasy enough</li></ul>"
+    ],
+    "19": [
+      "%question%/20<br>Are you more:<ul><li>a. Firm than gentle</li><li>b. Gentle than firm</li></ul>"
+    ],
+    "20": [
+      "%question%/20<br>Are you more comfortable:<ul><li>a. After a decision</li><li>b. Before a decision</li></ul>"
+    ],
 
     "result": [
       "Your personality type is: <a href=\"https://www.16personalities.com/%type_url%-personality\" target=\"_blank\">%type%</a>."

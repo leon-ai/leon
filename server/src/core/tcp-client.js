@@ -6,7 +6,7 @@ import log from '@/helpers/log'
 const interval = 3000 // ms
 
 export default class TcpClient {
-  constructor (host, port) {
+  constructor(host, port) {
     this.host = host
     this.port = port
     this.reconnectCounter = 0
@@ -68,19 +68,19 @@ export default class TcpClient {
     }, interval)
   }
 
-  get status () {
+  get status() {
     return this._status
   }
 
-  get ee () {
+  get ee() {
     return this._ee
   }
 
-  get isConnected () {
+  get isConnected() {
     return this._isConnected
   }
 
-  emit (topic, data) {
+  emit(topic, data) {
     const obj = {
       topic,
       data
@@ -89,7 +89,7 @@ export default class TcpClient {
     this.tcpSocket.write(JSON.stringify(obj))
   }
 
-  connect () {
+  connect() {
     this.tcpSocket.connect({
       host: this.host,
       port: this.port

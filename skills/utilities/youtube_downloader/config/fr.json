@@ -2,9 +2,7 @@
   "actions": {
     "run": {
       "type": "logic",
-      "utterance_samples": [
-        "Télécharge les nouvelles vidéos depuis YouTube"
-      ]
+      "utterance_samples": ["Télécharge les nouvelles vidéos depuis YouTube"]
     }
   },
   "answers": {

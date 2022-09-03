@@ -1,6 +1,6 @@
 import o from 'os'
 
-const os = { }
+const os = {}
 
 /**
  * Returns information about your OS

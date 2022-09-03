@@ -9,4 +9,4 @@ declare global {
   var tcpClient: TcpClient
 }
 
-export { }
+export {}

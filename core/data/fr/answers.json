@@ -1,45 +1,43 @@
 {
-	"answers": {
-		"success": {
-
-		},
-		"errors": {
-			"not_found": "Désolé, il semblerait que je n'arrive pas à trouver ça",
-			"nlu": "L'erreur semble provenir de ma compréhension de langage naturel. Voici plus de détails au sujet de cette dernière : \"%error%\""
-		},
+  "answers": {
+    "success": {},
+    "errors": {
+      "not_found": "Désolé, il semblerait que je n'arrive pas à trouver ça",
+      "nlu": "L'erreur semble provenir de ma compréhension de langage naturel. Voici plus de détails au sujet de cette dernière : \"%error%\""
+    },
     "synchronizer": {
       "syncing_direct": "Je vais maintenant synchroniser le contenu téléchargé sur votre appareil actuel. Ne vous inquiétez pas, je vous préviendrai lorsque j'aurai terminé",
       "synced_direct": "Le nouveau contenu a été synchronisé sur votre appareil",
       "syncing_google_drive": "Je vais maintenant synchroniser le contenu téléchargé sur Google Drive. Ne vous inquiétez pas, je vous préviendrai lorsque j'aurai terminé",
       "synced_google_drive": "Le nouveau contenu est maintenant disponible sur Google Drive"
     },
-		"random_errors": [
-			"Désolé, il y a un problème avec mon système",
-			"Désolé, je ne fonctionne pas correctement",
-			"Désolé, vous devez me réparer",
-			"Désolé, je ne peux aboutir à votre demande parce que je suis cassé"
-		],
-		"random_skill_errors": [
-			"Désolé, il semblerait y avoir un problème avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
-			"Désolé, j'ai un problème avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
-			"Désolé, j'ai une erreur avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
-			"Désolé, le skill \"%skill_name%\" du domaine \"%domain_name%\" est cassé"
-		],
-		"random_unknown_intents": [
-			"Désolé, je ne connais pas encore ça, mais vous pouvez m'aider à comprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
-			"Désolé, vous devriez m'apprendre cette requête. Vous pouvez m'apprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
-			"Désolé, je ne peux pas répondre à ça. Laissez moi vous répondre à l'avenir en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
-			"Désolé, vous devez m'éduquer un peu plus. Vous pouvez m'aider avec ça en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">contribuant à mon code</a>",
-			"Désolé, je ne comprends pas votre requête",
+    "random_errors": [
+      "Désolé, il y a un problème avec mon système",
+      "Désolé, je ne fonctionne pas correctement",
+      "Désolé, vous devez me réparer",
+      "Désolé, je ne peux aboutir à votre demande parce que je suis cassé"
+    ],
+    "random_skill_errors": [
+      "Désolé, il semblerait y avoir un problème avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
+      "Désolé, j'ai un problème avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
+      "Désolé, j'ai une erreur avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",
+      "Désolé, le skill \"%skill_name%\" du domaine \"%domain_name%\" est cassé"
+    ],
+    "random_unknown_intents": [
+      "Désolé, je ne connais pas encore ça, mais vous pouvez m'aider à comprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
+      "Désolé, vous devriez m'apprendre cette requête. Vous pouvez m'apprendre en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
+      "Désolé, je ne peux pas répondre à ça. Laissez moi vous répondre à l'avenir en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">créant une pull request</a>",
+      "Désolé, vous devez m'éduquer un peu plus. Vous pouvez m'aider avec ça en <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">contribuant à mon code</a>",
+      "Désolé, je ne comprends pas votre requête",
       "Désolé, je suis encore très jeune, je n'ai pas compris votre demande"
-		],
-		"random_not_sure": [
-			"Désolé, vous pouvez répéter d'une autre façon",
-			"Désolé, je ne suis pas sûr de comprendre",
-			"Désolé, je ne suis pas certain de votre demande, merci de répéter d'une manière différente",
-			"Désolé, merci de répéter à nouveau en formulant différemment",
-			"Désolé, je n'ai pas nettoyé mes oreilles correctement ! Attendez-voir, je suis votre assistant personnel, je vous prie donc de répéter d'une nouvelle façon"
-		],
+    ],
+    "random_not_sure": [
+      "Désolé, vous pouvez répéter d'une autre façon",
+      "Désolé, je ne suis pas sûr de comprendre",
+      "Désolé, je ne suis pas certain de votre demande, merci de répéter d'une manière différente",
+      "Désolé, merci de répéter à nouveau en formulant différemment",
+      "Désolé, je n'ai pas nettoyé mes oreilles correctement ! Attendez-voir, je suis votre assistant personnel, je vous prie donc de répéter d'une nouvelle façon"
+    ],
     "random_not_able": [
       "Désolé, je ne suis pas capable de répondre. J'ai compris ce que vous avez dit, mais je vous prie de répéter d'une autre façon",
       "Désolé, j'ai un trou de mémoire, je ne peux pas répondre à ça. J'ai compris ce que vous disiez, mais essayez voir d'une autre façon s'il vous plaît"
@@ -58,5 +56,5 @@
       "Vous êtes génial, mais je n'ai pas encore appris cette langue",
       "Ça ressemble à une lautre langue que je ne peux pas comprendre pour le moment"
     ]
-	}
+  }
 }

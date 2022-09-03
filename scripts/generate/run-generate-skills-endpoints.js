@@ -5,7 +5,7 @@ import generateSkillsEndpoints from './generate-skills-endpoints'
 /**
  * Execute the generating skills endpoints script
  */
-(async () => {
+;(async () => {
   try {
     await generateSkillsEndpoints()
   } catch (e) {

@@ -17,10 +17,15 @@ import Brain from '@/core/brain'
 jest.setTimeout(60000) // Specify jest.setTimeout here as this test does not have config file
 
 describe('NLU modules', () => {
-  const { langs } = JSON.parse(fs.readFileSync(path.join(global.paths.root, 'core', 'langs.json'), 'utf8'))
+  const { langs } = JSON.parse(
+    fs.readFileSync(path.join(global.paths.root, 'core', 'langs.json'), 'utf8')
+  )
   const langKeys = Object.keys(langs)
-  const packages = fs.readdirSync(global.paths.packages)
-    .filter((entity) => fs.statSync(path.join(global.paths.packages, entity)).isDirectory())
+  const packages = fs
+    .readdirSync(global.paths.packages)
+    .filter((entity) =>
+      fs.statSync(path.join(global.paths.packages, entity)).isDirectory()
+    )
 
   for (let i = 0; i < langKeys.length; i += 1) {
     // eslint-disable-next-line no-loop-func
@@ -28,9 +33,13 @@ describe('NLU modules', () => {
       const lang = langs[langKeys[i]]
       const nlu = new Nlu()
       const brain = new Brain(lang.short)
-      let utteranceSamplesObj = { }
+      let utteranceSamplesObj = {}
 
-      nlu.brain = { wernicke: jest.fn(), talk: jest.fn(), socket: { emit: jest.fn() } }
+      nlu.brain = {
+        wernicke: jest.fn(),
+        talk: jest.fn(),
+        socket: { emit: jest.fn() }
+      }
       brain.talk = jest.fn()
 
       beforeAll(async () => {
@@ -46,7 +55,9 @@ describe('NLU modules', () => {
         // eslint-disable-next-line no-loop-func
         describe(`${packages[j]} package`, () => {
           const utteranceSamplesFile = `${global.paths.packages}/${packages[j]}/data/expressions/${lang.short}.json`
-          utteranceSamplesObj = JSON.parse(fs.readFileSync(utteranceSamplesFile, 'utf8'))
+          utteranceSamplesObj = JSON.parse(
+            fs.readFileSync(utteranceSamplesFile, 'utf8')
+          )
 
           const modules = Object.keys(utteranceSamplesObj)
           for (let k = 0; k < modules.length; k += 1) {
@@ -57,7 +68,8 @@ describe('NLU modules', () => {
             describe(`${module} module`, () => {
               for (let l = 0; l < actions.length; l += 1) {
                 const action = actions[l]
-                const exprs = utteranceSamplesObj[module][action].utterance_samples
+                const exprs =
+                  utteranceSamplesObj[module][action].utterance_samples
 
                 for (let m = 0; m < exprs.length; m += 1) {
                   // eslint-disable-next-line no-loop-func

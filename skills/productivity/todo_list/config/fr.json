@@ -234,12 +234,8 @@
       "Désolé je ne peux pas car la liste \"%list%\" n'éxiste pas.",
       "Je ne peux pas parce que la liste \"%list%\" n'éxiste pas."
     ],
-    "list_already_exists": [
-      "Vous avez déjà une liste nommée \"%list%\"."
-    ],
-    "list_renamed": [
-      "J'ai renommé la liste \"%old_list%\" en \"%new_list%\"."
-    ],
+    "list_already_exists": ["Vous avez déjà une liste nommée \"%list%\"."],
+    "list_renamed": ["J'ai renommé la liste \"%old_list%\" en \"%new_list%\"."],
     "list_deleted": [
       "J'ai supprimé la liste \"%list%\" et tous les éléments qu'elle contenait."
     ],
@@ -265,12 +261,8 @@
     "completed_todos_listed": [
       "Et voici les éléments complétés de votre liste \"%list%\" :<br><br><ul>%result%</ul>"
     ],
-    "list_todo_element": [
-      "<li>%todo%.</li>"
-    ],
-    "list_completed_todo_element": [
-      "<li><s>%todo%</s>.</li>"
-    ],
+    "list_todo_element": ["<li>%todo%.</li>"],
+    "list_completed_todo_element": ["<li><s>%todo%</s>.</li>"],
     "todos_added": [
       "Entendu, j'ai ajouté ceci à votre liste \"%list%\" :<br><br><ul>%result%</ul>",
       "Ce qui suit vient d'être ajouté à votre liste \"%list%\" :<br><br><ul>%result%</ul>"

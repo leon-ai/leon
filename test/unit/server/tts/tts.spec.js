@@ -3,7 +3,7 @@ import Tts from '@/tts/tts'
 describe('TTS', () => {
   describe('constructor()', () => {
     test('creates a new instance of tts', () => {
-      const tts = new Tts({ }, 'flite')
+      const tts = new Tts({}, 'flite')
 
       expect(tts).toBeInstanceOf(Tts)
     })
@@ -11,13 +11,13 @@ describe('TTS', () => {
 
   describe('init()', () => {
     test('returns error provider does not exist or not yet supported', () => {
-      const tts = new Tts({ }, 'fake-provider')
+      const tts = new Tts({}, 'fake-provider')
 
       expect(tts.init()).toBeFalsy()
     })
 
     test('initializes the TTS synthesizer', () => {
-      const tts = new Tts({ }, 'flite')
+      const tts = new Tts({}, 'flite')
 
       expect(tts.init(() => null)).toBeTruthy()
     })
@@ -25,7 +25,7 @@ describe('TTS', () => {
 
   describe('forward()', () => {
     test('forwards buffer audio file to the client', () => {
-      const tts = new Tts({ }, '')
+      const tts = new Tts({}, '')
       tts.synthesizer = { default: { save: jest.fn() } }
       tts.socket = { emit: jest.fn() }
 
@@ -36,7 +36,7 @@ describe('TTS', () => {
 
   describe('onSaved()', () => {
     test('shifts the queue', async () => {
-      const tts = new Tts({ }, 'flite')
+      const tts = new Tts({}, 'flite')
       tts.forward = jest.fn()
 
       tts.speeches.push('Hello', 'Hello again')
@@ -53,14 +53,14 @@ describe('TTS', () => {
 
   describe('add()', () => {
     test('fixes Flite ', async () => {
-      const tts = new Tts({ }, 'flite')
+      const tts = new Tts({}, 'flite')
       tts.forward = jest.fn()
 
       expect(tts.add('Hello', true)[0].text.substr('Hello'.length)).toBe(' ')
     })
 
     test('adds speech to the queue ', async () => {
-      const tts = new Tts({ }, 'flite')
+      const tts = new Tts({}, 'flite')
       tts.forward = jest.fn()
 
       tts.speeches.push('Hello')
@@ -68,7 +68,7 @@ describe('TTS', () => {
     })
 
     test('forwards speech latest speech', async () => {
-      const tts = new Tts({ }, 'flite')
+      const tts = new Tts({}, 'flite')
       tts.forward = jest.fn()
 
       tts.add('Hello')

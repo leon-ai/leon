@@ -5,7 +5,7 @@ import train from './train'
 /**
  * Execute the training scripts
  */
-(async () => {
+;(async () => {
   try {
     await train()
   } catch (e) {

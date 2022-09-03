@@ -16,11 +16,7 @@
             "What thematic would you like to play with?",
             "What thematic do you choose?"
           ],
-          "suggestions": [
-            "Characters",
-            "Objects",
-            "Animals"
-          ]
+          "suggestions": ["Characters", "Objects", "Animals"]
         }
       ],
       "entities": [
@@ -54,13 +50,7 @@
           "name": "answer"
         }
       },
-      "suggestions": [
-        "Yes",
-        "No",
-        "Don't know",
-        "Probably",
-        "Probably not"
-      ],
+      "suggestions": ["Yes", "No", "Don't know", "Probably", "Probably not"],
       "next_action": "retry"
     },
     "retry": {
@@ -71,27 +61,18 @@
           "name": "affirmation_denial"
         }
       },
-      "suggestions": [
-        "Yes",
-        "No thanks"
-      ]
+      "suggestions": ["Yes", "No thanks"]
     }
   },
   "resolvers": {
     "answer": {
       "intents": {
         "yes": {
-          "utterance_samples": [
-            "[Yes|Yep|Yup|Yeah]",
-            "Sure",
-            "Correct"
-          ],
+          "utterance_samples": ["[Yes|Yep|Yup|Yeah]", "Sure", "Correct"],
           "value": "y"
         },
         "no": {
-          "utterance_samples": [
-            "[No|Nope|Nah]"
-          ],
+          "utterance_samples": ["[No|Nope|Nah]"],
           "value": "n"
         },
         "idk": {
@@ -105,16 +86,11 @@
           "value": "idk"
         },
         "probably": {
-          "utterance_samples": [
-            "Probably",
-            "Probably yes"
-          ],
+          "utterance_samples": ["Probably", "Probably yes"],
           "value": "p"
         },
         "probably_not": {
-          "utterance_samples": [
-            "Probably [no|not]"
-          ],
+          "utterance_samples": ["Probably [no|not]"],
           "value": "pn"
         }
       }
@@ -142,10 +118,7 @@
       "Do you want to go for another one?",
       "Should we go for another try?"
     ],
-    "confirm_retry": [
-      "Gotcha!",
-      "Let's go for another try then!"
-    ],
+    "confirm_retry": ["Gotcha!", "Let's go for another try then!"],
     "deny_retry": [
       "Got it, take care.",
       "Let me know anytime you want I call Akinator."

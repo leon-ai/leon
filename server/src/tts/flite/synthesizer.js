@@ -9,7 +9,7 @@ import string from '@/helpers/string'
 
 log.title('Flite Synthesizer')
 
-const synthesizer = { }
+const synthesizer = {}
 
 synthesizer.conf = {
   int_f0_target_mean: 115.0, // Intonation (85-180 Hz men; 165-255 Hz women)
@@ -26,12 +26,16 @@ synthesizer.init = (lang) => {
 
   /* istanbul ignore if */
   if (lang !== 'en-US') {
-    log.warning('The Flite synthesizer only accepts the "en-US" language for the moment')
+    log.warning(
+      'The Flite synthesizer only accepts the "en-US" language for the moment'
+    )
   }
 
   /* istanbul ignore if */
   if (!fs.existsSync(flitePath)) {
-    log.error(`Cannot find ${flitePath} You can setup the offline TTS by running: "npm run setup:offline-tts"`)
+    log.error(
+      `Cannot find ${flitePath} You can setup the offline TTS by running: "npm run setup:offline-tts"`
+    )
     return false
   }
 
@@ -47,11 +51,16 @@ synthesizer.save = (speech, em, cb) => {
   const file = `${__dirname}/../../tmp/${Date.now()}-${string.random(4)}.wav`
   const process = spawn('bin/flite/flite', [
     speech,
-    '--setf', `int_f0_target_mean=${synthesizer.conf.int_f0_target_mean}`,
-    '--setf', `f0_shift=${synthesizer.conf.f0_shift}`,
-    '--setf', `duration_stretch=${synthesizer.conf.duration_stretch}`,
-    '--setf', `int_f0_target_stddev=${synthesizer.conf.int_f0_target_stddev}`,
-    '-o', file
+    '--setf',
+    `int_f0_target_mean=${synthesizer.conf.int_f0_target_mean}`,
+    '--setf',
+    `f0_shift=${synthesizer.conf.f0_shift}`,
+    '--setf',
+    `duration_stretch=${synthesizer.conf.duration_stretch}`,
+    '--setf',
+    `int_f0_target_stddev=${synthesizer.conf.int_f0_target_stddev}`,
+    '-o',
+    file
   ])
 
   /* istanbul ignore next */
