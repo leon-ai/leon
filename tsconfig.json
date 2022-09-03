@@ -1,9 +1,6 @@
 {
+  "extends": "@tsconfig/node16-strictest/tsconfig.json",
   "compilerOptions": {
-    "target": "esnext",
-    "module": "commonjs",
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "rootDir": ".",
     "outDir": "./server/dist",
     "baseUrl": ".",
@@ -12,6 +9,7 @@
       "@/*": ["./server/src/*"]
     },
     "allowJs": true,
+    "checkJs": false,
     "resolveJsonModule": true
   },
   "ts-node": {
