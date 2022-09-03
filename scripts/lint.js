@@ -12,16 +12,18 @@ import loader from '@/helpers/loader'
 
   try {
     const globs = [
-      '"app/src/js/*.js"',
-      '"hotword/index.js"',
+      '"app/src/js/*.{ts,js}"',
+      // TODO: deal with it once handling new hotword
+      // '"hotword/index.{ts,js}"',
       // TODO: put it back once tests have been reintroduced into skills
       // '"skills/**/*.js"',
-      '"scripts/**/*.js"',
-      '"server/src/**/*.js"',
-      '"test/*.js"',
-      '"test/e2e/**/*.js"',
-      '"test/json/**/*.js"',
-      '"test/unit/**/*.js"'
+      '"scripts/**/*.{ts,js}"',
+      '"server/src/**/*.{ts,js}"'
+      // TODO: put it back once tests need to be written
+      /*'"test/!*.js"',
+      '"test/e2e/!**!/!*.js"',
+      '"test/json/!**!/!*.js"',
+      '"test/unit/!**!/!*.js"'*/
     ]
 
     await command(`npx eslint ${globs.join(' ')}`, { shell: true })

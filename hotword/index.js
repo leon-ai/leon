@@ -3,8 +3,6 @@
  * You can consider to run this file on a different hardware
  */
 
-/* eslint-disable import/no-unresolved */
-
 const request = require('superagent')
 const record = require('node-record-lpcm16')
 const { Detector, Models } = require('@bugsounet/snowboy')
@@ -48,8 +46,8 @@ request.get(`${url}/api/v1/info`)
         applyFrontend: true
       })
 
-      detector.on('silence', () => {
-      })
+      /*detector.on('silence', () => {
+      })*/
 
       detector.on('sound', (/* buffer */) => {
         /**

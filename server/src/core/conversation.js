@@ -35,17 +35,6 @@ class Conversation {
     return this._activeContext
   }
 
-  get previousContexts () {
-    return this._previousContexts
-  }
-
-  /**
-   * Check whether there is an active context
-   */
-  hasActiveContext () {
-    return !!this._activeContext.name
-  }
-
   /**
    * Activate context according to the triggered action
    */
@@ -129,6 +118,17 @@ class Conversation {
         this._activeContext.entities.push(...entities)
       }
     }
+  }
+
+  get previousContexts () {
+    return this._previousContexts
+  }
+
+  /**
+   * Check whether there is an active context
+   */
+  hasActiveContext () {
+    return !!this._activeContext.name
   }
 
   /**
