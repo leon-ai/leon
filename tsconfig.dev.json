@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "ts-node": {
+    "swc": false
+  }
+}
