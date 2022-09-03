@@ -10,5 +10,5 @@
     "server/src/tmp",
     "server/dist"
   ],
-  "exec": "ts-node --project tsconfig.dev.json server/src/index.ts"
+  "exec": "ts-node server/src/index.ts"
 }

@@ -18,6 +18,6 @@
     "files": true
   },
   "files": ["server/src/global.d.ts"],
-  "include": ["server/src/**/*"],
+  "include": ["server/src/*"],
   "exclude": ["node_modules", "server/dist"]
 }
