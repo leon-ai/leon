@@ -1,5 +1,5 @@
 import Fastify from 'fastify'
-import fastifyStatic from 'fastify-static'
+import fastifyStatic from '@fastify/static'
 import socketio from 'socket.io'
 import { join } from 'path'
 
@@ -289,9 +289,13 @@ server.listen = async (port) => {
 
   io.on('connection', server.handleOnConnection)
 
-  await server.fastify.listen(port, '0.0.0.0')
-  log.title('Initialization')
-  log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
+  server.fastify.listen({
+    port,
+    host: '0.0.0.0'
+  }, () => {
+    log.title('Initialization')
+    log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
+  })
 }
 
 /**

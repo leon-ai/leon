@@ -4,6 +4,7 @@ import { spawn } from 'child_process'
 import lang from '@/helpers/lang'
 import TcpClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
+
 ;(async () => {
   dotenv.config()
 
