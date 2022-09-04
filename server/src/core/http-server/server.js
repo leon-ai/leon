@@ -6,6 +6,7 @@ import { join } from 'path'
 import { version } from '@@/package.json'
 import { endpoints } from '@@/core/skills-endpoints.json'
 import {
+  HAS_OVER_HTTP,
   HAS_STT,
   HAS_TTS,
   HOST,
@@ -327,7 +328,7 @@ server.bootstrap = async () => {
   server.fastify.register(infoPlugin, { apiVersion })
   server.fastify.register(downloadsPlugin, { apiVersion })
 
-  if (process.env.LEON_OVER_HTTP === 'true') {
+  if (HAS_OVER_HTTP) {
     server.fastify.register((instance, opts, next) => {
       instance.addHook('preHandler', keyMidd)
 
