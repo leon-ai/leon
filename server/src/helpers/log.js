@@ -1,5 +1,6 @@
 import fs from 'fs'
 
+import { IS_TESTING_ENV } from '@/constants'
 import date from '@/helpers/date'
 
 const log = {}
@@ -13,7 +14,7 @@ log.error = (value) => {
   const errMessage = 'Not able to log the error'
   const data = `${date.dateTime()} - ${value}`
 
-  if (process.env.LEON_NODE_ENV !== 'testing') {
+  if (!IS_TESTING_ENV) {
     /* istanbul ignore next */
     if (!fs.existsSync(path)) {
       fs.writeFile(path, data, { flags: 'wx' }, (err) => {

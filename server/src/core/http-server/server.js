@@ -17,6 +17,7 @@ import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
+import { IS_DEVELOPMENT_ENV } from '@/constants'
 
 const server = {}
 
@@ -280,12 +281,11 @@ server.handleOnConnection = (socket) => {
  * Launch server
  */
 server.listen = async (port) => {
-  const io =
-    process.env.LEON_NODE_ENV === 'development'
-      ? socketio(server.httpServer, {
-          cors: { origin: `${process.env.LEON_HOST}:3000` }
-        })
-      : socketio(server.httpServer)
+  const io = IS_DEVELOPMENT_ENV
+    ? socketio(server.httpServer, {
+        cors: { origin: `${process.env.LEON_HOST}:3000` }
+      })
+    : socketio(server.httpServer)
 
   io.on('connection', server.handleOnConnection)
 

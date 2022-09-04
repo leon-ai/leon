@@ -2,6 +2,7 @@ import wav from 'node-wav'
 import fs from 'fs'
 import { Model } from 'stt'
 
+import { IS_TESTING_ENV } from '@/constants'
 import log from '@/helpers/log'
 
 log.title('Coqui STT Parser')
@@ -41,7 +42,7 @@ parser.init = (args) => {
   }
 
   /* istanbul ignore if */
-  if (process.env.LEON_NODE_ENV !== 'testing') {
+  if (!IS_TESTING_ENV) {
     try {
       model = new Model(args.model)
     } catch (error) {
@@ -74,7 +75,7 @@ parser.parse = (buffer, cb) => {
   }
 
   /* istanbul ignore if */
-  if (process.env.LEON_NODE_ENV !== 'testing') {
+  if (!IS_TESTING_ENV) {
     const string = model.stt(buffer)
 
     cb({ string })

@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
+import { IS_TESTING_ENV } from '@/constants'
 import Asr from '@/core/asr'
 import log from '@/helpers/log'
 
@@ -50,7 +51,7 @@ class Stt {
     }
 
     /* istanbul ignore if */
-    if (process.env.LEON_NODE_ENV !== 'testing') {
+    if (!IS_TESTING_ENV) {
       // Dynamically attribute the parser
       this.parser = require(`${__dirname}/${this.provider}/parser`) // eslint-disable-line global-require
       this.parser.default.init(this.parser.default.conf)
@@ -93,7 +94,7 @@ class Stt {
 
     const buffer = fs.readFileSync(file)
     /* istanbul ignore if */
-    if (process.env.LEON_NODE_ENV !== 'testing') {
+    if (!IS_TESTING_ENV) {
       this.parser.default.parse(buffer, (data) => {
         if (data.string !== '') {
           // Forward the string to the client
