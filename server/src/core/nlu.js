@@ -115,8 +115,6 @@ class Nlu {
           )
         })
       } else {
-        log.title('NLU')
-
         try {
           const container = await containerBootstrap()
 
@@ -161,8 +159,6 @@ class Nlu {
           )
         })
       } else {
-        log.title('NLU')
-
         try {
           const container = await containerBootstrap()
 

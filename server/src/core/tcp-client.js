@@ -1,9 +1,13 @@
 import Net from 'net'
 import { EventEmitter } from 'events'
 
+import { IS_PRODUCTION_ENV } from '@/constants'
 import log from '@/helpers/log'
 
-const interval = 3000 // ms
+// Time interval between each try (in ms)
+const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 300
+// Number of retries to connect to the TCP server
+const RETRIES_NB = IS_PRODUCTION_ENV ? 5 : 15
 
 export default class TcpClient {
   constructor(host, port) {
@@ -41,7 +45,7 @@ export default class TcpClient {
       if (err.code === 'ECONNREFUSED') {
         this.reconnectCounter += 1
 
-        if (this.reconnectCounter >= 5) {
+        if (this.reconnectCounter >= RETRIES_NB) {
           log.error('Failed to connect to the TCP server')
           this.tcpSocket.end()
         }
@@ -51,7 +55,7 @@ export default class TcpClient {
 
           setTimeout(() => {
             this.connect()
-          }, interval * this.reconnectCounter)
+          }, INTERVAL * this.reconnectCounter)
         }
       } else {
         log.error(`Failed to connect to the TCP server: ${err}`)
@@ -65,7 +69,7 @@ export default class TcpClient {
 
     setTimeout(() => {
       this.connect()
-    }, interval)
+    }, INTERVAL)
   }
 
   get status() {
