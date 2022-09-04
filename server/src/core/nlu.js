@@ -10,7 +10,12 @@ import kill from 'tree-kill'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
-import { HAS_LOGGER, IS_TESTING_ENV } from '@/constants'
+import {
+  HAS_LOGGER,
+  IS_TESTING_ENV,
+  TCP_SERVER_HOST,
+  TCP_SERVER_PORT
+} from '@/constants'
 import Ner from '@/core/ner'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
@@ -226,10 +231,7 @@ class Nlu {
         { shell: true }
       )
 
-      global.tcpClient = new TcpClient(
-        process.env.LEON_PY_TCP_SERVER_HOST,
-        process.env.LEON_PY_TCP_SERVER_PORT
-      )
+      global.tcpClient = new TcpClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
 
       global.tcpClient.ee.removeListener('connected', connectedHandler)
       global.tcpClient.ee.on('connected', connectedHandler)

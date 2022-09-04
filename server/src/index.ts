@@ -1,6 +1,7 @@
 import { spawn } from 'child_process'
 
 // import { IS_DEVELOPMENT_ENV } from '@/constants'
+import { TCP_SERVER_HOST, TCP_SERVER_PORT } from '@/constants'
 import lang from '@/helpers/lang'
 import TcpClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
@@ -21,10 +22,7 @@ import server from '@/core/http-server/server'
 
   }*/
 
-  global.tcpClient = new TcpClient(
-    process.env['LEON_PY_TCP_SERVER_HOST'],
-    process.env['LEON_PY_TCP_SERVER_PORT']
-  )
+  global.tcpClient = new TcpClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
 
   await server.init()
 })()

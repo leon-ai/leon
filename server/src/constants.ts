@@ -30,3 +30,6 @@ export const HTTP_API_KEY = process.env['LEON_HTTP_API_KEY']
 export const HTTP_API_LANG = process.env['LEON_HTTP_API_LANG']
 
 export const HAS_LOGGER = process.env['LEON_LOGGER'] === 'true'
+
+export const TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
+export const TCP_SERVER_PORT = process.env['LEON_PY_TCP_SERVER_PORT']
