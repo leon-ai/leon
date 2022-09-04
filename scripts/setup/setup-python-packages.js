@@ -43,6 +43,12 @@ export default () =>
         const pipfileMtime = fs.statSync(pipfilePath).mtime
         const isDotVenvExist = fs.existsSync(dotVenvPath)
         const installPythonPackages = async () => {
+          if (isDotVenvExist) {
+            log.info(`Deleting ${dotVenvPath}...`)
+            fs.rmSync(dotVenvPath, { recursive: true, force: true })
+            log.success(`${dotVenvPath} deleted`)
+          }
+
           // Installing Python packages
           log.info('Installing Python packages from bridges/python/Pipfile...')
 
