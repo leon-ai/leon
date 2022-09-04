@@ -1,9 +1,9 @@
-import { IS_PRODUCTION_ENV } from '@/constants'
+import { HOST, IS_PRODUCTION_ENV } from '@/constants'
 
 const corsMidd = async (request, reply) => {
-  // Allow only a specific client to request to the API (depending of the env)
+  // Allow only a specific client to request to the API (depending on the env)
   if (!IS_PRODUCTION_ENV) {
-    reply.header('Access-Control-Allow-Origin', `${process.env.LEON_HOST}:3000`)
+    reply.header('Access-Control-Allow-Origin', `${HOST}:3000`)
   }
 
   // Allow several headers for our requests

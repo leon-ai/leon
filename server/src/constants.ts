@@ -8,3 +8,6 @@ export const IS_DEVELOPMENT_ENV =
 export const IS_TESTING_ENV = process.env['LEON_NODE_ENV'] === TESTING_ENV
 
 export const LANG = process.env['LEON_LANG']
+
+export const HOST = process.env['LEON_HOST']
+export const PORT = process.env['LEON_PORT']

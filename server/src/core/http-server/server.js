@@ -17,7 +17,7 @@ import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
-import { IS_DEVELOPMENT_ENV } from '@/constants'
+import { HOST, IS_DEVELOPMENT_ENV, PORT } from '@/constants'
 
 const server = {}
 
@@ -283,7 +283,7 @@ server.handleOnConnection = (socket) => {
 server.listen = async (port) => {
   const io = IS_DEVELOPMENT_ENV
     ? socketio(server.httpServer, {
-        cors: { origin: `${process.env.LEON_HOST}:3000` }
+        cors: { origin: `${HOST}:3000` }
       })
     : socketio(server.httpServer)
 
@@ -296,7 +296,7 @@ server.listen = async (port) => {
     },
     () => {
       log.title('Initialization')
-      log.success(`Server is available at ${process.env.LEON_HOST}:${port}`)
+      log.success(`Server is available at ${HOST}:${port}`)
     }
   )
 }
@@ -351,7 +351,7 @@ server.bootstrap = async () => {
   server.httpServer = server.fastify.server
 
   try {
-    await server.listen(process.env.LEON_PORT)
+    await server.listen(PORT)
   } catch (e) {
     log.error(e.message)
   }
