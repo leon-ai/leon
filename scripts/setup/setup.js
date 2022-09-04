@@ -11,7 +11,7 @@ import setupPythonPackages from './setup-python-packages'
 // Do not load ".env" file because it is not created yet
 
 /**
- * Main entry to setup Leon
+ * Main entry to set up Leon
  */
 ;(async () => {
   try {
