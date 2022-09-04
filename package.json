@@ -81,7 +81,7 @@
     "socket.io": "^4.5.2",
     "socket.io-client": "^4.5.2",
     "stt": "^1.1.0",
-    "superagent": "^6.1.0",
+    "superagent": "^8.0.0",
     "tree-kill": "^1.2.2"
   },
   "devDependencies": {
