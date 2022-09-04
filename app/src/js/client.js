@@ -1,4 +1,5 @@
 import { io } from 'socket.io-client'
+
 import Chatbot from './chatbot'
 
 export default class Client {
@@ -46,7 +47,7 @@ export default class Client {
     })
 
     this.socket.on('suggest', (data) => {
-      data.forEach((suggestionText) => {
+      data?.forEach((suggestionText) => {
         this.addSuggestion(suggestionText)
       })
     })
