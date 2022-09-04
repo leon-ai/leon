@@ -1,4 +1,3 @@
-import dotenv from 'dotenv'
 import { spawn } from 'child_process'
 
 // import { IS_DEVELOPMENT_ENV } from '@/constants'
@@ -6,8 +5,6 @@ import lang from '@/helpers/lang'
 import TcpClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
 ;(async () => {
-  dotenv.config()
-
   process.title = 'leon'
 
   global.tcpServerProcess = spawn(

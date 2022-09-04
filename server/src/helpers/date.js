@@ -1,5 +1,7 @@
 import moment from 'moment-timezone'
 
+import { TIME_ZONE } from '@/constants'
+
 const date = {}
 
 date.dateTime = () => moment().tz(date.timeZone()).format()
@@ -7,11 +9,8 @@ date.dateTime = () => moment().tz(date.timeZone()).format()
 date.timeZone = () => {
   let timeZone = moment.tz.guess()
 
-  if (
-    process.env.LEON_TIME_ZONE &&
-    !!moment.tz.zone(process.env.LEON_TIME_ZONE)
-  ) {
-    timeZone = process.env.LEON_TIME_ZONE
+  if (TIME_ZONE && !!moment.tz.zone(TIME_ZONE)) {
+    timeZone = TIME_ZONE
   }
 
   return timeZone

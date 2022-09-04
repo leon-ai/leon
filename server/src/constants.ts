@@ -1,3 +1,7 @@
+import dotenv from 'dotenv'
+
+dotenv.config()
+
 const PRODUCTION_ENV = 'production'
 const DEVELOPMENT_ENV = 'development'
 const TESTING_ENV = 'testing'
@@ -11,3 +15,5 @@ export const LANG = process.env['LEON_LANG']
 
 export const HOST = process.env['LEON_HOST']
 export const PORT = process.env['LEON_PORT']
+
+export const TIME_ZONE = process.env['LEON_TIME_ZONE']
