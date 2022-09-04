@@ -5,6 +5,15 @@ import { join } from 'path'
 
 import { version } from '@@/package.json'
 import { endpoints } from '@@/core/skills-endpoints.json'
+import {
+  HAS_STT,
+  HAS_TTS,
+  HOST,
+  IS_DEVELOPMENT_ENV,
+  PORT,
+  STT_PROVIDER,
+  TTS_PROVIDER
+} from '@/constants'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
 import Asr from '@/core/asr'
@@ -17,7 +26,6 @@ import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
 import date from '@/helpers/date'
-import { HOST, IS_DEVELOPMENT_ENV, PORT } from '@/constants'
 
 const server = {}
 
@@ -229,16 +237,16 @@ server.handleOnConnection = (socket) => {
       provider.brain.socket = socket
 
       /* istanbul ignore if */
-      if (process.env.LEON_STT === 'true') {
+      if (HAS_STT) {
         sttState = 'enabled'
 
-        provider.brain.stt = new Stt(socket, process.env.LEON_STT_PROVIDER)
+        provider.brain.stt = new Stt(socket, STT_PROVIDER)
         provider.brain.stt.init(() => null)
       }
-      if (process.env.LEON_TTS === 'true') {
+      if (HAS_TTS) {
         ttsState = 'enabled'
 
-        provider.brain.tts = new Tts(socket, process.env.LEON_TTS_PROVIDER)
+        provider.brain.tts = new Tts(socket, TTS_PROVIDER)
         provider.brain.tts.init('en', () => null)
       }
 

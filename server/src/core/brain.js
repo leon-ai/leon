@@ -3,6 +3,7 @@ import path from 'path'
 import { spawn } from 'child_process'
 
 import { langs } from '@@/core/langs.json'
+import { HAS_TTS } from '@/constants'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
@@ -68,7 +69,7 @@ class Brain {
       )
     )
 
-    if (process.env.LEON_TTS === 'true') {
+    if (HAS_TTS) {
       this._tts.init(this._lang, () => {
         log.title('Brain')
         log.info('Language has changed')
@@ -97,7 +98,7 @@ class Brain {
     log.info('Talking...')
 
     if (rawSpeech !== '') {
-      if (process.env.LEON_TTS === 'true') {
+      if (HAS_TTS) {
         // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
         const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, ' ')
 
