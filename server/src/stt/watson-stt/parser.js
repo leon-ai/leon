@@ -4,6 +4,7 @@ import fs from 'fs'
 import path from 'path'
 import { Duplex } from 'stream'
 
+import { LANG } from '@/constants'
 import log from '@/helpers/log'
 
 log.title('Watson STT Parser')
@@ -13,7 +14,7 @@ let client = {}
 
 parser.conf = {
   contentType: 'audio/wav',
-  model: `${process.env.LEON_LANG}_BroadbandModel`
+  model: `${LANG}_BroadbandModel`
 }
 
 /**

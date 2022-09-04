@@ -1,6 +1,7 @@
 import path from 'path'
 import stt from '@google-cloud/speech'
 
+import { LANG } from '@/constants'
 import log from '@/helpers/log'
 
 log.title('Google Cloud STT Parser')
@@ -9,7 +10,7 @@ const parser = {}
 let client = {}
 
 parser.conf = {
-  languageCode: process.env.LEON_LANG,
+  languageCode: LANG,
   encoding: 'LINEAR16',
   sampleRateHertz: 16000
 }
