@@ -92,7 +92,7 @@
     "@typescript-eslint/eslint-plugin": "^5.36.1",
     "@typescript-eslint/parser": "^5.36.1",
     "cli-spinner": "^0.2.10",
-    "eslint": "^8.22.0",
+    "eslint": "8.22.0",
     "eslint-config-prettier": "^8.5.0",
     "git-changelog": "^2.0.0",
     "husky": "^7.0.0",
