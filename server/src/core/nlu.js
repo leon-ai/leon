@@ -10,7 +10,7 @@ import kill from 'tree-kill'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
-import { IS_TESTING_ENV } from '@/constants'
+import { HAS_LOGGER, IS_TESTING_ENV } from '@/constants'
 import Ner from '@/core/ner'
 import log from '@/helpers/log'
 import string from '@/helpers/string'
@@ -243,7 +243,7 @@ class Nlu {
    */
   sendLog(utterance) {
     /* istanbul ignore next */
-    if (process.env.LEON_LOGGER === 'true' && !IS_TESTING_ENV) {
+    if (HAS_LOGGER && !IS_TESTING_ENV) {
       this.request
         .post('https://logger.getleon.ai/v1/expressions')
         .set('X-Origin', 'leon-core')

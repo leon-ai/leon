@@ -6,6 +6,7 @@ import { join } from 'path'
 import { version } from '@@/package.json'
 import { endpoints } from '@@/core/skills-endpoints.json'
 import {
+  HAS_LOGGER,
   HAS_OVER_HTTP,
   HAS_STT,
   HAS_TTS,
@@ -379,7 +380,7 @@ server.init = async () => {
 
   log.success(`The current time zone is ${date.timeZone()}`)
 
-  const sLogger = process.env.LEON_LOGGER !== 'true' ? 'disabled' : 'enabled'
+  const sLogger = !HAS_LOGGER ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
 
   await addProvider('1')

@@ -28,3 +28,5 @@ export const TTS_PROVIDER = process.env['LEON_TTS_PROVIDER']
 export const HAS_OVER_HTTP = process.env['LEON_OVER_HTTP'] === 'true'
 export const HTTP_API_KEY = process.env['LEON_HTTP_API_KEY']
 export const HTTP_API_LANG = process.env['LEON_HTTP_API_LANG']
+
+export const HAS_LOGGER = process.env['LEON_LOGGER'] === 'true'

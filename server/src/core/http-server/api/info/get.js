@@ -1,6 +1,7 @@
 import { version } from '@@/package.json'
 import {
   HAS_AFTER_SPEECH,
+  HAS_LOGGER,
   HAS_STT,
   HAS_TTS,
   STT_PROVIDER,
@@ -22,7 +23,7 @@ const getInfo = async (fastify, options) => {
       code: 'info_pulled',
       message,
       after_speech: HAS_AFTER_SPEECH,
-      logger: process.env.LEON_LOGGER === 'true',
+      logger: HAS_LOGGER,
       stt: {
         enabled: HAS_STT,
         provider: STT_PROVIDER
