@@ -72,9 +72,10 @@ If you want to, Leon can communicate with you by being **offline to protect your
 ### What is Leon able to do?
 
 > Today, the most interesting part is about his core and the way he can scale up. He is pretty young but can easily scale to have new features (skills).
-> You can find what he is able to do by browsing the [packages list](https://github.com/leon-ai/leon/tree/develop/packages).
+> You can find what he is able to do by browsing the [skills list](https://github.com/leon-ai/leon/tree/develop/skills).<br>
+> Please do know that after the official release, we will build many skills along with the community. Feel free to [join us on Discord](https://discord.gg/MNQqqKg) to be part of the journey.
 
-Sounds good for you? Then let's get started!
+Sounds good to you? Then let's get started!
 
 ## ☁️ Try with a Single-Click
 
