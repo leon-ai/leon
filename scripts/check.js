@@ -33,6 +33,11 @@ export default () =>
         can_run: { title: 'Run', type: 'error', v: true },
         can_run_skill: { title: 'Run skills', type: 'error', v: true },
         can_text: { title: 'Reply you by texting', type: 'error', v: true },
+        has_spacy_model: {
+          title: 'spaCy model is installed',
+          type: 'error',
+          v: true
+        },
         can_amazon_polly_tts: {
           title: 'Amazon Polly text-to-speech',
           type: 'warning',
@@ -72,12 +77,16 @@ export default () =>
 
       log.title('Checking')
 
-      // Leon version checking
+      /**
+       * Leon version checking
+       */
 
       log.info('Leon version')
       log.success(`${version}\n`)
 
-      // Environment checking
+      /**
+       * Environment checking
+       */
       ;(
         await Promise.all([
           command('node --version', { shell: true }),
@@ -143,7 +152,9 @@ export default () =>
         }
       })
 
-      // Skill execution checking
+      /**
+       * Skill execution checking
+       */
 
       try {
         const p = await command(
@@ -158,9 +169,31 @@ export default () =>
         log.error(`${e}\n`)
       }
 
-      // Global resolvers NLP model checking
+      /**
+       * spaCy model checking
+       */
+
+      try {
+        const p = await command(
+          'pipenv run python -c "import en_core_web_trf"',
+          { shell: true }
+        )
+        log.info(p.command)
+        log.success(`spaCy model installed\n`)
+      } catch (e) {
+        log.info(e.command)
+        report.has_spacy_model.v = false
+        log.error(
+          'No spaCy model is installed. It is recommended to run the following command: "npm run clean:python-deps"\n'
+        )
+      }
+
+      /**
+       * Global resolvers NLP model checking
+       */
 
       log.info('Global resolvers NLP model state')
+
       if (
         !fs.existsSync(globalResolversNlpModelPath) ||
         !Object.keys(fs.readFileSync(globalResolversNlpModelPath)).length
@@ -177,9 +210,12 @@ export default () =>
         log.success('Found and valid\n')
       }
 
-      // Skills resolvers NLP model checking
+      /**
+       * Skills resolvers NLP model checking
+       */
 
       log.info('Skills resolvers NLP model state')
+
       if (
         !fs.existsSync(skillsResolversNlpModelPath) ||
         !Object.keys(fs.readFileSync(skillsResolversNlpModelPath)).length
@@ -196,9 +232,12 @@ export default () =>
         log.success('Found and valid\n')
       }
 
-      // Main NLP model checking
+      /**
+       * Main NLP model checking
+       */
 
       log.info('Main NLP model state')
+
       if (
         !fs.existsSync(mainNlpModelPath) ||
         !Object.keys(fs.readFileSync(mainNlpModelPath)).length
@@ -215,9 +254,12 @@ export default () =>
         log.success('Found and valid\n')
       }
 
-      // TTS checking
+      /**
+       * TTS/STT checking
+       */
 
       log.info('Amazon Polly TTS')
+
       try {
         const json = JSON.parse(fs.readFileSync(amazonPath))
         if (
@@ -235,6 +277,7 @@ export default () =>
       }
 
       log.info('Google Cloud TTS/STT')
+
       try {
         const json = JSON.parse(fs.readFileSync(googleCloudPath))
         const results = []
@@ -255,6 +298,7 @@ export default () =>
       }
 
       log.info('Watson TTS')
+
       try {
         const json = JSON.parse(fs.readFileSync(watsonTtsPath))
         const results = []
@@ -273,6 +317,7 @@ export default () =>
       }
 
       log.info('Offline TTS')
+
       if (!fs.existsSync(flitePath)) {
         report.can_offline_tts.v = false
         log.warning(
@@ -283,6 +328,7 @@ export default () =>
       }
 
       log.info('Watson STT')
+
       try {
         const json = JSON.parse(fs.readFileSync(watsonSttPath))
         const results = []
@@ -301,6 +347,7 @@ export default () =>
       }
 
       log.info('Offline STT')
+
       if (!fs.existsSync(coquiLanguageModelPath)) {
         report.can_offline_stt.v = false
         log.warning(
@@ -310,7 +357,10 @@ export default () =>
         log.success(`Found Coqui language model at ${coquiLanguageModelPath}`)
       }
 
-      // Report
+      /**
+       * Report
+       */
+
       log.title('Report')
 
       log.info('Here is the diagnosis about your current setup')
@@ -323,7 +373,12 @@ export default () =>
       })
 
       log.default('')
-      if (report.can_run.v && report.can_run_skill.v && report.can_text.v) {
+      if (
+        report.can_run.v &&
+        report.can_run_skill.v &&
+        report.can_text.v &&
+        report.has_spacy_model.v
+      ) {
         log.success('Hooray! Leon can run correctly')
         log.info(
           'If you have some yellow warnings, it is all good. It means some entities are not yet configured'

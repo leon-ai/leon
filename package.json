@@ -40,6 +40,7 @@
     "dev:server": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development tsc-watch --noClear --onSuccess \"nodemon\"",
     "wake": "cross-env LEON_HOST=http://localhost LEON_PORT=1337 node hotword/index.js",
     "delete-dist:server": "shx rm -rf ./server/dist",
+    "clean:python-deps": "shx rm -rf ./bridges/python/.venv && npm run postinstall",
     "prepare": "husky install",
     "generate:skills-endpoints": "ts-node scripts/generate/run-generate-skills-endpoints.js",
     "generate:http-api-key": "ts-node scripts/generate/run-generate-http-api-key.js",
