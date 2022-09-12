@@ -1,7 +1,7 @@
 import fs from 'fs'
 
 import { IS_TESTING_ENV } from '@/constants'
-import date from '@/helpers/date'
+import { getDateTime } from '@/helpers/date'
 
 const log = {}
 
@@ -12,7 +12,7 @@ log.info = (value) => console.info('\x1b[36mℹ️  %s\x1b[0m', value)
 log.error = (value) => {
   const path = `${__dirname}/../../../logs/errors.log`
   const errMessage = 'Not able to log the error'
-  const data = `${date.dateTime()} - ${value}`
+  const data = `${getDateTime()} - ${value}`
 
   if (!IS_TESTING_ENV) {
     /* istanbul ignore next */

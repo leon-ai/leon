@@ -27,7 +27,7 @@ import keyMidd from '@/core/http-server/plugins/key'
 import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 import log from '@/helpers/log'
-import date from '@/helpers/date'
+import { getDateTime, getTimeZone } from '@/helpers/date'
 
 const server = {}
 
@@ -378,7 +378,7 @@ server.init = async () => {
   log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
   log.success(`The current version is ${version}`)
 
-  log.success(`The current time zone is ${date.timeZone()}`)
+  log.success(`The current time zone is ${getTimeZone()}`)
 
   const sLogger = !HAS_LOGGER ? 'disabled' : 'enabled'
   log.success(`Collaborative logger ${sLogger}`)
