@@ -5,7 +5,7 @@ import { prompt } from 'inquirer'
 import path from 'path'
 
 import log from '@/helpers/log'
-import string from '@/helpers/string'
+import { randomString } from '@/helpers/string'
 
 dotenv.config()
 
@@ -19,7 +19,7 @@ const generateHttpApiKey = () =>
 
     try {
       const shasum = crypto.createHash('sha1')
-      const str = string.random(11)
+      const str = randomString(11)
       const dotEnvPath = path.join(process.cwd(), '.env')
       const envVarKey = 'LEON_HTTP_API_KEY'
       let content = fs.readFileSync(dotEnvPath, 'utf8')

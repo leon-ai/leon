@@ -5,7 +5,7 @@ import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
 
 import log from '@/helpers/log'
-import string from '@/helpers/string'
+import { randomString } from '@/helpers/string'
 
 log.title('Flite Synthesizer')
 
@@ -48,7 +48,7 @@ synthesizer.init = (lang) => {
  * Save string to audio file
  */
 synthesizer.save = (speech, em, cb) => {
-  const file = `${__dirname}/../../tmp/${Date.now()}-${string.random(4)}.wav`
+  const file = `${__dirname}/../../tmp/${Date.now()}-${randomString(4)}.wav`
   const process = spawn('bin/flite/flite', [
     speech,
     '--setf',

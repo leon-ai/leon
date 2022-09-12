@@ -6,7 +6,7 @@
 import fs from 'fs'
 
 import log from '@/helpers/log'
-import string from '@/helpers/string'
+import { removeEndPunctuation, snakeToPascalCase } from '@/helpers/string'
 
 class Ner {
   constructor(ner) {
@@ -34,7 +34,7 @@ class Ner {
 
       const { classification } = obj
       // Remove end-punctuation and add an end-whitespace
-      const utterance = `${string.removeEndPunctuation(obj.utterance)} `
+      const utterance = `${removeEndPunctuation(obj.utterance)} `
       const { actions } = JSON.parse(
         fs.readFileSync(utteranceSamplesFilePath, 'utf8')
       )
@@ -116,7 +116,7 @@ class Ner {
     return new Promise((resolve) => {
       for (let j = 0; j < entity.conditions.length; j += 1) {
         const condition = entity.conditions[j]
-        const conditionMethod = `add${string.snakeToPascalCase(
+        const conditionMethod = `add${snakeToPascalCase(
           condition.type
         )}Condition`
 

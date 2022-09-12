@@ -6,7 +6,7 @@ import fs from 'fs'
 import path from 'path'
 
 import log from '@/helpers/log'
-import string from '@/helpers/string'
+import { randomString } from '@/helpers/string'
 
 log.title('Google Cloud TTS Synthesizer')
 
@@ -57,7 +57,7 @@ synthesizer.init = (lang) => {
  * Save string to audio file
  */
 synthesizer.save = (speech, em, cb) => {
-  const file = `${__dirname}/../../tmp/${Date.now()}-${string.random(4)}.mp3`
+  const file = `${__dirname}/../../tmp/${Date.now()}-${randomString(4)}.mp3`
 
   synthesizer.conf.input = { text: speech }
 

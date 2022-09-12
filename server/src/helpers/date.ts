@@ -8,10 +8,20 @@ import log from '@/helpers/log'
 dayjs.extend(utc)
 dayjs.extend(timezone)
 
+/**
+ * Get date time
+ *
+ * @example getDateTime() // 2022-09-12T12:42:57+08:00
+ */
 export function getDateTime() {
   return dayjs().tz(getTimeZone()).format()
 }
 
+/**
+ * Get time zone
+ *
+ * @example getTimeZone() // Asia/Shanghai
+ */
 export function getTimeZone() {
   let { timeZone } = Intl.DateTimeFormat().resolvedOptions()
 
