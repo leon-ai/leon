@@ -1,5 +1,6 @@
 import dotenv from 'dotenv'
 import fs from 'fs'
+import os from 'os'
 import { command } from 'execa'
 import semver from 'semver'
 
@@ -87,6 +88,16 @@ export default () =>
       /**
        * Environment checking
        */
+      log.info('OS')
+
+      const osInfo = {
+        type: os.type(),
+        platform: os.platform(),
+        arch: os.arch(),
+        cpus: os.cpus().length,
+        release: os.release()
+      }
+      log.success(`${JSON.stringify(osInfo)}\n`)
       ;(
         await Promise.all([
           command('node --version', { shell: true }),
