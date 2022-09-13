@@ -8,7 +8,7 @@ import log from '@/helpers/log'
 import { findAndMap, randomString } from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
 import lang from '@/helpers/lang'
-import domain from '@/helpers/domain'
+import { getSkillDomainInfo, getSkillInfo } from '@/helpers/skill-domain'
 import json from '@/helpers/json'
 
 class Brain {
@@ -236,8 +236,8 @@ class Brain {
 
           const domainName = obj.classification.domain
           const skillName = obj.classification.skill
-          const { name: domainFriendlyName } = domain.getDomainInfo(domainName)
-          const { name: skillFriendlyName } = domain.getSkillInfo(
+          const { name: domainFriendlyName } = getSkillDomainInfo(domainName)
+          const { name: skillFriendlyName } = getSkillInfo(
             domainName,
             skillName
           )

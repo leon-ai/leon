@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 import log from '@/helpers/log'
-import domain from '@/helpers/domain'
+import { getSkillDomains } from '@/helpers/skill-domain'
 
 /**
  * Setup skills configuration
@@ -12,13 +12,9 @@ export default () =>
   new Promise(async (resolve, reject) => {
     log.info('Setting up skills configuration...')
 
-    const [domainKeys, domains] = await Promise.all([
-      domain.list(),
-      domain.getDomainsObj()
-    ])
+    const skillDomains = await getSkillDomains()
 
-    for (let i = 0; i < domainKeys.length; i += 1) {
-      const currentDomain = domains[domainKeys[i]]
+    for (const currentDomain of skillDomains.values()) {
       const skillKeys = Object.keys(currentDomain.skills)
 
       // Browse skills

@@ -5,7 +5,7 @@ import { composeFromPattern } from '@nlpjs/utils'
 import log from '@/helpers/log'
 import json from '@/helpers/json'
 import { findAndMap } from '@/helpers/string'
-import domain from '@/helpers/domain'
+import { getSkillDomains } from '@/helpers/skill-domain'
 
 /**
  * Train skills actions
@@ -15,16 +15,12 @@ export default (lang, nlp) =>
     log.title('Skills actions training')
 
     const supportedActionTypes = ['dialog', 'logic']
-    const [domainKeys, domains] = await Promise.all([
-      domain.list(),
-      domain.getDomainsObj()
-    ])
+    const skillDomains = await getSkillDomains()
 
-    for (let i = 0; i < domainKeys.length; i += 1) {
-      const currentDomain = domains[domainKeys[i]]
+    for (const [domainName, currentDomain] of skillDomains) {
       const skillKeys = Object.keys(currentDomain.skills)
 
-      log.info(`[${lang}] Training "${domainKeys[i]}" domain model...`)
+      log.info(`[${lang}] Training "${domainName}" domain model...`)
 
       for (let j = 0; j < skillKeys.length; j += 1) {
         const { name: skillName } = currentDomain.skills[skillKeys[j]]
@@ -126,7 +122,7 @@ export default (lang, nlp) =>
         }
       }
 
-      log.success(`[${lang}] "${domainKeys[i]}" domain trained`)
+      log.success(`[${lang}] "${domainName}" domain trained`)
     }
 
     resolve()

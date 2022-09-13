@@ -3,7 +3,7 @@ import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
 import log from '@/helpers/log'
-import domain from '@/helpers/domain'
+import { getSkillDomains } from '@/helpers/skill-domain'
 import json from '@/helpers/json'
 
 /**
@@ -13,13 +13,9 @@ export default (lang, nlp) =>
   new Promise(async (resolve) => {
     log.title('Skills resolvers training')
 
-    const [domainKeys, domains] = await Promise.all([
-      domain.list(),
-      domain.getDomainsObj()
-    ])
+    const skillDomains = await getSkillDomains()
 
-    domainKeys.forEach((domainName) => {
-      const currentDomain = domains[domainName]
+    skillDomains.forEach((currentDomain) => {
       const skillKeys = Object.keys(currentDomain.skills)
 
       skillKeys.forEach(async (skillName) => {

@@ -5,7 +5,7 @@ import path from 'path'
 import log from '@/helpers/log'
 
 import { langs } from '@@/core/langs.json'
-import domain from '@/helpers/domain'
+import { getSkillDomains } from '@/helpers/skill-domain'
 
 dotenv.config()
 
@@ -30,10 +30,7 @@ export default () =>
     const lang = langs[process.env.LEON_HTTP_API_LANG].short
 
     try {
-      const [domainKeys, domains] = await Promise.all([
-        domain.list(),
-        domain.getDomainsObj()
-      ])
+      const skillDomains = await getSkillDomains()
       const finalObj = {
         endpoints: []
       }
@@ -44,8 +41,8 @@ export default () =>
       if (fs.existsSync(outputFilePath)) {
         const mtimeEndpoints = fs.statSync(outputFilePath).mtime.getTime()
 
-        for (let i = 0; i < domainKeys.length; i += 1) {
-          const currentDomain = domains[domainKeys[i]]
+        let i = 0
+        for (const currentDomain of skillDomains.values()) {
           const skillKeys = Object.keys(currentDomain.skills)
 
           // Browse skills
@@ -67,10 +64,12 @@ export default () =>
             break
           }
 
-          if (i + 1 === domainKeys.length) {
+          if (i + 1 === skillDomains.size) {
             log.success(`${outputFile} is already up-to-date`)
             isFileNeedToBeGenerated = false
           }
+
+          i += 1
         }
       }
 
@@ -78,8 +77,7 @@ export default () =>
       if (isFileNeedToBeGenerated) {
         log.info('Parsing skills configuration...')
 
-        for (let i = 0; i < domainKeys.length; i += 1) {
-          const currentDomain = domains[domainKeys[i]]
+        for (const currentDomain of skillDomains.values()) {
           const skillKeys = Object.keys(currentDomain.skills)
 
           // Browse skills
