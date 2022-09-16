@@ -1,4 +1,4 @@
-import loader from '@/helpers/loader'
+import { loader } from '@/helpers/loader'
 import { log } from '@/helpers/log'
 
 import train from '../train/train'

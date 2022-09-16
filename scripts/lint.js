@@ -1,7 +1,7 @@
 import { command } from 'execa'
 
 import { log } from '@/helpers/log'
-import loader from '@/helpers/loader'
+import { loader } from '@/helpers/loader'
 
 /**
  * This script ensures the correct coding syntax of the whole project

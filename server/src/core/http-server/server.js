@@ -27,7 +27,7 @@ import keyMidd from '@/core/http-server/plugins/key'
 import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 import { log } from '@/helpers/log'
-import { getDateTime, getTimeZone } from '@/helpers/date'
+import { getTimeZone } from '@/helpers/date'
 
 const server = {}
 

@@ -1,4 +1,4 @@
-import loader from '@/helpers/loader'
+import { loader } from '@/helpers/loader'
 
 import check from './check'
 

@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 
-import loader from '@/helpers/loader'
+import { loader } from '@/helpers/loader'
 import { log } from '@/helpers/log'
 
 import checkOs from '../check-os'

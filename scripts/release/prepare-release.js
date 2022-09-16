@@ -1,5 +1,5 @@
 import { log } from '@/helpers/log'
-import loader from '@/helpers/loader'
+import { loader } from '@/helpers/loader'
 
 import updateVersion from './update-version'
 import generateChangelog from './generate-changelog'
