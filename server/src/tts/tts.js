@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 import log from '@/helpers/log'
-import lang from '@/helpers/lang'
+import { getLongLanguageCode } from '@/helpers/lang'
 
 class Tts {
   constructor(socket, provider) {
@@ -57,7 +57,7 @@ class Tts {
 
     // Dynamically attribute the synthesizer
     this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`) // eslint-disable-line global-require
-    this.synthesizer.default.init(lang.getLongCode(this.lang))
+    this.synthesizer.default.init(getLongLanguageCode(this.lang))
 
     this.onSaved()
 

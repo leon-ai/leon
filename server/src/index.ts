@@ -3,17 +3,18 @@ import { spawn } from 'child_process'
 import {
   TCP_SERVER_HOST,
   TCP_SERVER_PORT,
-  IS_DEVELOPMENT_ENV
+  IS_DEVELOPMENT_ENV,
+  LANG
 } from '@/constants'
-import lang from '@/helpers/lang'
+import { getShortLanguageCode } from '@/helpers/lang'
 import TcpClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
 ;(async () => {
   process.title = 'leon'
 
   global.tcpServerProcess = spawn(
-    `pipenv run python bridges/python/tcp_server/main.py ${lang.getShortCode(
-      process.env['LEON_LANG']
+    `pipenv run python bridges/python/tcp_server/main.py ${getShortLanguageCode(
+      LANG
     )}`,
     {
       shell: true,

@@ -4,7 +4,7 @@ import { LangAll } from '@nlpjs/lang-all'
 import dotenv from 'dotenv'
 
 import log from '@/helpers/log'
-import lang from '@/helpers/lang'
+import { getShortLanguages } from '@/helpers/lang'
 import trainGlobalResolvers from './train-resolvers-model/train-global-resolvers'
 import trainSkillsResolvers from './train-resolvers-model/train-skills-resolvers'
 import trainGlobalEntities from './train-main-model/train-global-entities'
@@ -84,7 +84,7 @@ export default () =>
       /**
        * Training phases
        */
-      const shortLangs = lang.getShortLangs()
+      const shortLangs = getShortLanguages()
       for (let h = 0; h < shortLangs.length; h += 1) {
         const lang = shortLangs[h]
 
