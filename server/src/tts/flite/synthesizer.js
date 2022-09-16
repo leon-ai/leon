@@ -4,7 +4,7 @@ import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { randomString } from '@/helpers/string'
 
 log.title('Flite Synthesizer')

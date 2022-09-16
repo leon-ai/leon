@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 /**
  * Setup Leon's core configuration

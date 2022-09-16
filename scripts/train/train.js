@@ -3,7 +3,7 @@ import { Nlp } from '@nlpjs/nlp'
 import { LangAll } from '@nlpjs/lang-all'
 import dotenv from 'dotenv'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { getShortLanguages } from '@/helpers/lang'
 import trainGlobalResolvers from './train-resolvers-model/train-global-resolvers'
 import trainSkillsResolvers from './train-resolvers-model/train-skills-resolvers'

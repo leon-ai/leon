@@ -2,7 +2,7 @@ import path from 'path'
 import stt from '@google-cloud/speech'
 
 import { LANG } from '@/constants'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 log.title('Google Cloud STT Parser')
 

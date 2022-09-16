@@ -5,7 +5,7 @@ import { command } from 'execa'
 import semver from 'semver'
 
 import { version } from '@@/package.json'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 dotenv.config()
 

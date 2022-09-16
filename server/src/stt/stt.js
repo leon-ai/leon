@@ -3,7 +3,7 @@ import path from 'path'
 
 import { IS_TESTING_ENV } from '@/constants'
 import Asr from '@/core/asr'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 class Stt {
   constructor(socket, provider) {

@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import archiver from 'archiver'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { ucFirst } from '@/helpers/string'
 
 const getDownloads = async (fastify, options) => {

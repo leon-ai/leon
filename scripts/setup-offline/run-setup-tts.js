@@ -1,4 +1,4 @@
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 import setupTts from './setup-tts'
 

@@ -1,4 +1,4 @@
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 const otherMidd = async (request, reply) => {
   // Disable from the header, else it makes hacker's life easier to know more about our system

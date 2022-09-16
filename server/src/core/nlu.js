@@ -17,7 +17,7 @@ import {
   TCP_SERVER_PORT
 } from '@/constants'
 import Ner from '@/core/ner'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { ucFirst } from '@/helpers/string'
 import { getShortLanguages, getLongLanguageCode } from '@/helpers/lang'
 import TcpClient from '@/core/tcp-client'

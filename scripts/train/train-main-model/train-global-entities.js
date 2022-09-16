@@ -1,7 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 /**
  * Train global entities

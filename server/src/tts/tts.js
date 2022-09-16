@@ -2,7 +2,7 @@ import events from 'events'
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { getLongLanguageCode } from '@/helpers/lang'
 
 class Tts {

@@ -4,7 +4,7 @@ import { spawn } from 'child_process'
 
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS } from '@/constants'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { findAndMap, randomString } from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
 import { getLongLanguageCode } from '@/helpers/lang'

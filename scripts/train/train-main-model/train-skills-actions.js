@@ -2,7 +2,7 @@ import path from 'path'
 import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import json from '@/helpers/json'
 import { findAndMap } from '@/helpers/string'
 import { getSkillDomains } from '@/helpers/skill-domain'

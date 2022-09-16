@@ -1,6 +1,6 @@
 import { Spinner } from 'cli-spinner'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 const sentences = [
   'This process takes time, please go for a coffee (or a fruit juice)',

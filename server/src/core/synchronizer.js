@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { waterfall } from 'async'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 class Synchronizer {
   constructor(brain, classification, sync) {

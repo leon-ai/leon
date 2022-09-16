@@ -1,5 +1,5 @@
 import loader from '@/helpers/loader'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 import train from '../train/train'
 import generateHttpApiKey from '../generate/generate-http-api-key'

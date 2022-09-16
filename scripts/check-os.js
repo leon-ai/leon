@@ -1,6 +1,6 @@
 import execa from 'execa'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import os from '@/helpers/os'
 
 /**

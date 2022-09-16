@@ -1,6 +1,6 @@
 import { command } from 'execa'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 /**
  * Update version number in files which need version number

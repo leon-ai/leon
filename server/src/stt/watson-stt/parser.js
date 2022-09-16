@@ -5,7 +5,7 @@ import path from 'path'
 import { Duplex } from 'stream'
 
 import { LANG } from '@/constants'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 log.title('Watson STT Parser')
 

@@ -3,7 +3,7 @@ import fs from 'fs'
 import { Model } from 'stt'
 
 import { IS_TESTING_ENV } from '@/constants'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 log.title('Coqui STT Parser')
 

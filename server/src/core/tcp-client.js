@@ -2,7 +2,7 @@ import Net from 'net'
 import { EventEmitter } from 'events'
 
 import { IS_PRODUCTION_ENV } from '@/constants'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 // Time interval between each try (in ms)
 const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 300

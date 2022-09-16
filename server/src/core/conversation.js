@@ -1,6 +1,6 @@
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 const maxContextHistory = 5
 const defaultActiveContext = {

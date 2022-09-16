@@ -2,7 +2,7 @@ import path from 'path'
 import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 /**
  * Train global resolvers

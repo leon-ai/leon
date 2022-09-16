@@ -5,7 +5,7 @@ import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { randomString } from '@/helpers/string'
 
 log.title('Amazon Polly Synthesizer')

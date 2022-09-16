@@ -1,4 +1,4 @@
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 import generateHttpApiKey from './generate-http-api-key'
 

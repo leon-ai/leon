@@ -2,7 +2,7 @@ import { command } from 'execa'
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 /**
  * Download and setup Leon's Python packages dependencies

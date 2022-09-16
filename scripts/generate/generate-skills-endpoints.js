@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 import { langs } from '@@/core/langs.json'
 import { getSkillDomains } from '@/helpers/skill-domain'

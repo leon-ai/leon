@@ -1,6 +1,6 @@
 import { command } from 'execa'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import loader from '@/helpers/loader'
 
 /**

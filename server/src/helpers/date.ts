@@ -3,7 +3,7 @@ import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 
 import { TIME_ZONE } from '@/constants'
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)

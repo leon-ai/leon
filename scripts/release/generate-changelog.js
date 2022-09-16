@@ -1,7 +1,7 @@
 import { command } from 'execa'
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 /**
  * Update version number in files which need version number

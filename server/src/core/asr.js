@@ -2,7 +2,7 @@ import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import Ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 const audios = {
   webm: `${__dirname}/../tmp/speech.webm`,

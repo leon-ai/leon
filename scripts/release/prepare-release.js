@@ -1,4 +1,4 @@
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import loader from '@/helpers/loader'
 
 import updateVersion from './update-version'

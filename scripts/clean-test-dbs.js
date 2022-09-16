@@ -1,7 +1,7 @@
 import fs from 'fs'
 import { join } from 'path'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { getSkillDomains } from '@/helpers/skill-domain'
 
 /**

@@ -1,7 +1,7 @@
 import { command } from 'execa'
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import os from '@/helpers/os'
 
 /**

@@ -1,7 +1,7 @@
 import { prompt } from 'inquirer'
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 
 /**
  * Duplicate the .env.sample to .env file

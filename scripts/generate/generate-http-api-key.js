@@ -4,7 +4,7 @@ import fs from 'fs'
 import { prompt } from 'inquirer'
 import path from 'path'
 
-import log from '@/helpers/log'
+import { log } from '@/helpers/log'
 import { randomString } from '@/helpers/string'
 
 dotenv.config()
