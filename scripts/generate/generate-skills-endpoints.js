@@ -98,7 +98,7 @@ export default () =>
             for (let k = 0; k < actionsKeys.length; k += 1) {
               const action = actionsKeys[k]
               const actionObj = actions[action]
-              const { entities, http_api } = actionObj // eslint-disable-line camelcase
+              const { entities, http_api } = actionObj
               let finalMethod = entities || http_api?.entities ? 'POST' : 'GET'
 
               // Only generate this route if it is not disabled from the skill config

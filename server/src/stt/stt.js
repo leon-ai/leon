@@ -53,7 +53,7 @@ class Stt {
     /* istanbul ignore if */
     if (!IS_TESTING_ENV) {
       // Dynamically attribute the parser
-      this.parser = require(`${__dirname}/${this.provider}/parser`) // eslint-disable-line global-require
+      this.parser = require(`${__dirname}/${this.provider}/parser`)
       this.parser.default.init(this.parser.default.conf)
     }
 

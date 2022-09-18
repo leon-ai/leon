@@ -114,7 +114,6 @@ class Synchronizer {
                 folderId = list.data.files[i].id
                 return cb(null, true, folderId)
               } else if (i + 1 === list.data.files.length) {
-                // eslint-disable-line no-else-return
                 return cb(null, false, folderId)
               }
               // TODO: UI toolbox to reach this scope

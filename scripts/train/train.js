@@ -89,17 +89,13 @@ export default () =>
         const lang = shortLangs[h]
 
         globalResolversNlp.addLanguage(lang)
-        // eslint-disable-next-line no-await-in-loop
         await trainGlobalResolvers(lang, globalResolversNlp)
 
         skillsResolversNlp.addLanguage(lang)
-        // eslint-disable-next-line no-await-in-loop
         await trainSkillsResolvers(lang, skillsResolversNlp)
 
         mainNlp.addLanguage(lang)
-        // eslint-disable-next-line no-await-in-loop
         await trainGlobalEntities(lang, mainNlp)
-        // eslint-disable-next-line no-await-in-loop
         await trainSkillsActions(lang, mainNlp)
       }
 

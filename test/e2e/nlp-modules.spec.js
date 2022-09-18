@@ -28,7 +28,6 @@ describe('NLU modules', () => {
     )
 
   for (let i = 0; i < langKeys.length; i += 1) {
-    // eslint-disable-next-line no-loop-func
     describe(`${langKeys[i]} language`, () => {
       const lang = langs[langKeys[i]]
       const nlu = new Nlu()
@@ -52,7 +51,6 @@ describe('NLU modules', () => {
       })
 
       for (let j = 0; j < packages.length; j += 1) {
-        // eslint-disable-next-line no-loop-func
         describe(`${packages[j]} package`, () => {
           const utteranceSamplesFile = `${global.paths.packages}/${packages[j]}/data/expressions/${lang.short}.json`
           utteranceSamplesObj = JSON.parse(
@@ -64,7 +62,6 @@ describe('NLU modules', () => {
             const module = modules[k]
             const actions = Object.keys(utteranceSamplesObj[module])
 
-            // eslint-disable-next-line no-loop-func
             describe(`${module} module`, () => {
               for (let l = 0; l < actions.length; l += 1) {
                 const action = actions[l]
@@ -72,7 +69,6 @@ describe('NLU modules', () => {
                   utteranceSamplesObj[module][action].utterance_samples
 
                 for (let m = 0; m < exprs.length; m += 1) {
-                  // eslint-disable-next-line no-loop-func
                   test(`"${exprs[m]}" queries this module`, async () => {
                     // Need to redefine the NLU brain execution to update the mocking
                     nlu.brain.execute = jest.fn()

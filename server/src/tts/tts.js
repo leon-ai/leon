@@ -56,7 +56,7 @@ class Tts {
     }
 
     // Dynamically attribute the synthesizer
-    this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`) // eslint-disable-line global-require
+    this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`)
     this.synthesizer.default.init(lang.getLongCode(this.lang))
 
     this.onSaved()
