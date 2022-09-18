@@ -26,7 +26,7 @@ export function ucFirst(str: string) {
  * Transform snake_case string to PascalCase
  *
  * @param str String to transform
- * @example snakeToPascalCase('hello_world') // => HelloWorld
+ * @example snakeToPascalCase('hello_world') // HelloWorld
  */
 export function snakeToPascalCase(str: string) {
   return str

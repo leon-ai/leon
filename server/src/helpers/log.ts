@@ -8,7 +8,7 @@ import { getDateTime } from '@/helpers/date'
  * Log Singleton Class.
  */
 export class Log {
-  static readonly ERROR_PATH = path.join(
+  static readonly ERRORS_PATH = path.join(
     __dirname,
     '..',
     '..',
@@ -48,10 +48,10 @@ export class Log {
   public error(value: string): void {
     const data = `${getDateTime()} - ${value}`
     if (!IS_TESTING_ENV) {
-      if (fs.existsSync(Log.ERROR_PATH)) {
-        fs.appendFileSync(Log.ERROR_PATH, `\n${data}`)
+      if (fs.existsSync(Log.ERRORS_PATH)) {
+        fs.appendFileSync(Log.ERRORS_PATH, `\n${data}`)
       } else {
-        fs.writeFileSync(Log.ERROR_PATH, data, { flag: 'wx' })
+        fs.writeFileSync(Log.ERRORS_PATH, data, { flag: 'wx' })
       }
     }
     console.error('\x1b[31m🚨 %s\x1b[0m', value)
