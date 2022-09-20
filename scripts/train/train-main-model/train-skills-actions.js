@@ -1,11 +1,8 @@
-import path from 'path'
-import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
 import { log } from '@/helpers/log'
-import json from '@/helpers/json'
 import { findAndMap } from '@/helpers/string'
-import { getSkillDomains } from '@/helpers/skill-domain'
+import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
 
 /**
  * Train skills actions
@@ -24,21 +21,17 @@ export default (lang, nlp) =>
 
       for (let j = 0; j < skillKeys.length; j += 1) {
         const { name: skillName } = currentDomain.skills[skillKeys[j]]
-        const currentSkill = currentDomain.skills[skillKeys[j]]
 
         log.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
 
-        const configFilePath = path.join(
-          currentSkill.path,
-          'config',
-          `${lang}.json`
-        )
+        const skillConfigData = await getSkillConfig({
+          domain: currentDomain.name,
+          skill: skillName,
+          lang
+        })
 
-        if (fs.existsSync(configFilePath)) {
-          const { actions, variables } = await json.loadConfigData(
-            configFilePath,
-            lang
-          ) // eslint-disable-line no-await-in-loop
+        if (skillConfigData != null) {
+          const { actions, variables } = skillConfigData
           const actionsKeys = Object.keys(actions)
 
           for (let k = 0; k < actionsKeys.length; k += 1) {

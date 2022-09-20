@@ -1,8 +1,37 @@
 import fs from 'fs'
 import path from 'path'
 
+import type { ShortLanguageCode } from '@/helpers/lang'
+
 enum SkillBridges {
   Python = 'python'
+}
+
+interface SkillConfig {
+  answers?: Record<string, string[]>
+  entities?: Record<string, string>
+  variables?: Record<string, string>
+  actions: Record<
+    string,
+    {
+      type: 'logic' | 'dialog'
+      utterance_samples?: string[]
+      answers?: string[]
+      unknown_answers?: string[]
+      suggestions?: string[]
+      next_action?: string
+    }
+  >
+}
+
+interface GlobalEntity {
+  options: Record<
+    string,
+    {
+      synonyms: string[]
+      data: Record<string, string[]>
+    }
+  >
 }
 
 interface Skill {
@@ -94,4 +123,64 @@ export function getSkillInfo(
   return JSON.parse(
     fs.readFileSync(path.join(DOMAINS_DIR, domain, skill, 'skill.json'), 'utf8')
   )
+}
+
+export interface GetSkillConfigOptions {
+  domain: SkillDomain['name']
+  skill: Skill['name']
+  lang: ShortLanguageCode
+}
+
+export interface SkillConfigWithGlobalEntities
+  extends Omit<SkillConfig, 'entities'> {
+  entities: Record<string, GlobalEntity>
+}
+
+/**
+ * Get skill config
+ *
+ * @param options Information about the skill to get config from
+ * @returns Skill config with global entities loaded or null if the config is not found
+ */
+export async function getSkillConfig(
+  options: GetSkillConfigOptions
+): Promise<SkillConfigWithGlobalEntities | null> {
+  const { domain, skill, lang } = options
+  const configFilePath = path.join(
+    process.cwd(),
+    'skills',
+    domain,
+    skill,
+    'config',
+    `${lang}.json`
+  )
+  if (!fs.existsSync(configFilePath)) {
+    return null
+  }
+  const sharedDataPath = path.join(process.cwd(), 'core', 'data', lang)
+  const configRawData = await fs.promises.readFile(configFilePath, {
+    encoding: 'utf8'
+  })
+  const configData = JSON.parse(configRawData) as SkillConfig
+  const result: SkillConfigWithGlobalEntities = {
+    ...configData,
+    entities: {}
+  }
+  if (configData.entities != null) {
+    const entitiesKeys = Object.keys(configData.entities)
+    for (const entity of entitiesKeys) {
+      if (typeof configData.entities[entity] === 'string') {
+        const entityFilePath = path.join(
+          sharedDataPath,
+          configData.entities[entity] as string
+        )
+        const entityRawData = await fs.promises.readFile(entityFilePath, {
+          encoding: 'utf8'
+        })
+        const entityData = JSON.parse(entityRawData) as GlobalEntity
+        result.entities[entity] = entityData
+      }
+    }
+  }
+  return result
 }

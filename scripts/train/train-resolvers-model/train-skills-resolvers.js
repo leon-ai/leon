@@ -1,10 +1,7 @@
-import path from 'path'
-import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
 import { log } from '@/helpers/log'
-import { getSkillDomains } from '@/helpers/skill-domain'
-import json from '@/helpers/json'
+import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
 
 /**
  * Train skills resolvers
@@ -20,16 +17,16 @@ export default (lang, nlp) =>
 
       skillKeys.forEach(async (skillName) => {
         const currentSkill = currentDomain.skills[skillName]
-        const configFilePath = path.join(
-          currentSkill.path,
-          'config',
-          `${lang}.json`
-        )
+        const skillConfigData = await getSkillConfig({
+          domain: currentDomain.name,
+          skill: skillName,
+          lang
+        })
 
-        if (fs.existsSync(configFilePath)) {
-          const { resolvers } = await json.loadConfigData(configFilePath, lang)
+        if (skillConfigData != null) {
+          const { resolvers } = skillConfigData
 
-          if (resolvers) {
+          if (resolvers != null) {
             const resolversKeys = Object.keys(resolvers)
 
             resolversKeys.forEach((resolverName) => {
