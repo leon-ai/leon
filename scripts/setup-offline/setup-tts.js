@@ -2,7 +2,7 @@ import { command } from 'execa'
 import fs from 'fs'
 
 import { log } from '@/helpers/log'
-import os from '@/helpers/os'
+import { getOSInformation, getNumberOfCPUCores } from '@/helpers/os'
 
 /**
  * Setup offline text-to-speech
@@ -14,11 +14,11 @@ export default () =>
     const destFliteFolder = 'bin/flite'
     const tmpDir = 'scripts/tmp'
     let makeCores = ''
-    if (os.cpus().length > 2) {
-      makeCores = `-j ${os.cpus().length - 2}`
+    if (getNumberOfCPUCores() > 2) {
+      makeCores = `-j ${getNumberOfCPUCores() - 2}`
     }
     let downloader = 'wget'
-    if (os.get().type === 'macos') {
+    if (getOSInformation().type === 'macos') {
       downloader = 'curl -L -O'
     }
 

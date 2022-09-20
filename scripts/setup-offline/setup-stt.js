@@ -2,7 +2,7 @@ import { command } from 'execa'
 import fs from 'fs'
 
 import { log } from '@/helpers/log'
-import os from '@/helpers/os'
+import { getOSInformation } from '@/helpers/os'
 
 /**
  * Setup offline speech-to-text
@@ -16,7 +16,7 @@ export default () =>
     // check this repo for updates: https://github.com/coqui-ai/STT-models/tree/main/english/coqui
     const coquiModelVersion = '1.0.0'
     let downloader = 'wget'
-    if (os.get().type === 'macos') {
+    if (getOSInformation().type === 'macos') {
       downloader = 'curl -L -O'
     }
 

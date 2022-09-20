@@ -1,7 +1,7 @@
 import execa from 'execa'
 
 import { log } from '@/helpers/log'
-import os from '@/helpers/os'
+import { getOSInformation } from '@/helpers/os'
 
 /**
  * Check OS environment
@@ -10,7 +10,7 @@ export default () =>
   new Promise(async (resolve, reject) => {
     log.info('Checking OS environment...')
 
-    const info = os.get()
+    const info = getOSInformation()
 
     if (info.type === 'windows') {
       log.error('Voice offline mode is not available on Windows')
