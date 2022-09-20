@@ -9,6 +9,7 @@ bridges/python/.venv/*
 downloads/*
 logs/*
 core/config/**/*.json
+core/skills-endpoints.json
 bin/coqui/*
 bin/flite/*
 
