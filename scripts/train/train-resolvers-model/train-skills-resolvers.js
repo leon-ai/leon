@@ -1,6 +1,6 @@
 import { composeFromPattern } from '@nlpjs/utils'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
 
 /**
@@ -8,7 +8,7 @@ import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
  */
 export default (lang, nlp) =>
   new Promise(async (resolve) => {
-    log.title('Skills resolvers training')
+    LOG.title('Skills resolvers training')
 
     const skillDomains = await getSkillDomains()
 
@@ -33,7 +33,7 @@ export default (lang, nlp) =>
               const resolver = resolvers[resolverName]
               const intentKeys = Object.keys(resolver.intents)
 
-              log.info(
+              LOG.info(
                 `[${lang}] Training ${skillName} "${resolverName}" resolver...`
               )
 
@@ -54,7 +54,7 @@ export default (lang, nlp) =>
                 })
               })
 
-              log.success(
+              LOG.success(
                 `[${lang}] ${skillName} "${resolverName}" resolver trained`
               )
             })

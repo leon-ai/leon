@@ -5,9 +5,9 @@ import path from 'path'
 import { Duplex } from 'stream'
 
 import { LANG } from '@/constants'
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
-log.title('Watson STT Parser')
+LOG.title('Watson STT Parser')
 
 const parser = {}
 let client = {}
@@ -34,9 +34,9 @@ parser.init = () => {
       serviceUrl: config.url
     })
 
-    log.success('Parser initialized')
+    LOG.success('Parser initialized')
   } catch (e) {
-    log.error(`Watson STT: ${e}`)
+    LOG.error(`Watson STT: ${e}`)
   }
 }
 
@@ -59,12 +59,12 @@ parser.parse = async (buffer, cb) => {
       cb({ string })
     })
     .catch((err) => {
-      log.error(`Watson STT: ${err}`)
+      LOG.error(`Watson STT: ${err}`)
     })
 
   client.recognize(parser.conf, (err, res) => {
     if (err) {
-      log.error(`Watson STT: ${err}`)
+      LOG.error(`Watson STT: ${err}`)
     } else {
       const string = res.results
         .map((data) => data.alternatives[0].transcript)

@@ -13,6 +13,9 @@ export type Language = Languages[LongLanguageCode]
 
 export type ShortLanguageCode = Language['short']
 
+/**
+ * TODO
+ */
 export function getShortLanguages(): ShortLanguageCode[] {
   const longLanguages = Object.keys(langs) as LongLanguageCode[]
   return longLanguages.map((lang) => {
@@ -20,19 +23,27 @@ export function getShortLanguages(): ShortLanguageCode[] {
   })
 }
 
+/**
+ * TODO
+ */
 export function getLongLanguageCode(
   shortLanguage: ShortLanguageCode
 ): LongLanguageCode | null {
   for (const longLanguage in langs) {
     const longLanguageType = longLanguage as LongLanguageCode
     const lang = langs[longLanguageType]
+
     if (lang.short === shortLanguage) {
       return longLanguageType
     }
   }
+
   return null
 }
 
+/**
+ * TODO
+ */
 export function getShortLanguageCode(
   longLanguage: LongLanguageCode
 ): ShortLanguageCode {

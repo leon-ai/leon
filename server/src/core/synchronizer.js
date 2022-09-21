@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import { waterfall } from 'async'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 class Synchronizer {
   constructor(brain, classification, sync) {
@@ -12,8 +12,8 @@ class Synchronizer {
     this.sync = sync
     this.downloadDir = `${__dirname}/../../../downloads/${this.classification.domain}/${this.classification.skill}`
 
-    log.title('Synchronizer')
-    log.success('New instance')
+    LOG.title('Synchronizer')
+    LOG.success('New instance')
   }
 
   /**
@@ -92,7 +92,7 @@ class Synchronizer {
           (cb) => {
             drive.files.list({}, (err, list) => {
               if (err) {
-                log.error(`Error during listing: ${err}`)
+                LOG.error(`Error during listing: ${err}`)
                 return reject(err)
               }
               cb(null, list)
@@ -121,7 +121,7 @@ class Synchronizer {
               // Delete Drive files
               /* setTimeout(() => {
               drive.files.delete({ fileId: list.data.files[i].id })
-              log.title('Synchronizer'); log.success(`"${list.data.files[i].id}" deleted`)
+              LOG.title('Synchronizer'); LOG.success(`"${list.data.files[i].id}" deleted`)
             }, 200 * i) */
             }
 
@@ -140,13 +140,13 @@ class Synchronizer {
                 },
                 (err, folder) => {
                   if (err) {
-                    log.error(`Error during the folder creation: ${err}`)
+                    LOG.error(`Error during the folder creation: ${err}`)
                     return reject(err)
                   }
 
                   folderId = folder.data.id
-                  log.title('Synchronizer')
-                  log.success(
+                  LOG.title('Synchronizer')
+                  LOG.success(
                     `"${driveFolderName}" folder created on Google Drive`
                   )
 
@@ -165,12 +165,12 @@ class Synchronizer {
                     },
                     (err) => {
                       if (err) {
-                        log.error(
+                        LOG.error(
                           `Error during the folder permission creation: ${err}`
                         )
                         return reject(err)
                       }
-                      log.success(`"${driveFolderName}" ownership transferred`)
+                      LOG.success(`"${driveFolderName}" ownership transferred`)
                       cb(null, folderId)
                       return true
                     }
@@ -200,14 +200,14 @@ class Synchronizer {
                 },
                 (err) => {
                   if (err) {
-                    log.error(
+                    LOG.error(
                       `Error during the "${entities[i]}" file creation: ${err}`
                     )
                     return reject(err)
                   }
                   iEntities += 1
-                  log.title('Synchronizer')
-                  log.success(`"${entities[i]}" file added to Google Drive`)
+                  LOG.title('Synchronizer')
+                  LOG.success(`"${entities[i]}" file added to Google Drive`)
                   if (iEntities === entities.length) {
                     cb(null)
                   }
@@ -224,7 +224,7 @@ class Synchronizer {
         ],
         (err) => {
           if (err) {
-            log.error(err)
+            LOG.error(err)
             return reject(err)
           }
           // Content available on Google Drive

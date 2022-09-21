@@ -1,14 +1,14 @@
 import { command } from 'execa'
 
-import { log } from '@/helpers/log'
-import { loader } from '@/helpers/loader'
+import { LOG } from '@/helpers/log'
+import { LOADER } from '@/helpers/loader'
 
 /**
  * This script ensures the correct coding syntax of the whole project
  */
 ;(async () => {
-  loader.start()
-  log.info('Linting...')
+  LOADER.start()
+  LOG.info('Linting...')
 
   try {
     const globs = [
@@ -32,11 +32,11 @@ import { loader } from '@/helpers/loader'
       { shell: true }
     )
 
-    log.success('Looks great')
-    loader.stop()
+    LOG.success('Looks great')
+    LOADER.stop()
   } catch (e) {
-    log.error(`Does not look great: ${e.message}`)
-    loader.stop()
+    LOG.error(`Does not look great: ${e.message}`)
+    LOADER.stop()
     process.exit(1)
   }
 })()

@@ -5,10 +5,10 @@ import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
 import path from 'path'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 import { randomString } from '@/helpers/string'
 
-log.title('Google Cloud TTS Synthesizer')
+LOG.title('Google Cloud TTS Synthesizer')
 
 const synthesizer = {}
 const voices = {
@@ -47,9 +47,9 @@ synthesizer.init = (lang) => {
   try {
     client = new tts.TextToSpeechClient()
 
-    log.success('Synthesizer initialized')
+    LOG.success('Synthesizer initialized')
   } catch (e) {
-    log.error(`Google Cloud TTS: ${e}`)
+    LOG.error(`Google Cloud TTS: ${e}`)
   }
 }
 
@@ -63,13 +63,13 @@ synthesizer.save = (speech, em, cb) => {
 
   client.synthesizeSpeech(synthesizer.conf, (err, res) => {
     if (err) {
-      log.error(`Google Cloud TTS: ${err}`)
+      LOG.error(`Google Cloud TTS: ${err}`)
       return
     }
 
     fs.writeFile(file, res.audioContent, 'binary', (err) => {
       if (err) {
-        log.error(`Google Cloud TTS: ${err}`)
+        LOG.error(`Google Cloud TTS: ${err}`)
         return
       }
 
@@ -79,7 +79,7 @@ synthesizer.save = (speech, em, cb) => {
 
       // Get file duration thanks to ffprobe
       ffmpeg.input(file).ffprobe((err, data) => {
-        if (err) log.error(err)
+        if (err) LOG.error(err)
         else {
           const duration = data.streams[0].duration * 1000
           em.emit('saved', duration)

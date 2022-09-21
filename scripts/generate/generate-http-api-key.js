@@ -4,7 +4,7 @@ import fs from 'fs'
 import { prompt } from 'inquirer'
 import path from 'path'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 import { randomString } from '@/helpers/string'
 
 dotenv.config()
@@ -15,7 +15,7 @@ dotenv.config()
  */
 const generateHttpApiKey = () =>
   new Promise(async (resolve, reject) => {
-    log.info('Generating the HTTP API key...')
+    LOG.info('Generating the HTTP API key...')
 
     try {
       const shasum = crypto.createHash('sha1')
@@ -39,11 +39,11 @@ const generateHttpApiKey = () =>
       content = lines.join('\n')
 
       fs.writeFileSync(dotEnvPath, content)
-      log.success('HTTP API key generated')
+      LOG.success('HTTP API key generated')
 
       resolve()
     } catch (e) {
-      log.error(e.message)
+      LOG.error(e.message)
       reject(e)
     }
   })

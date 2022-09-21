@@ -3,7 +3,7 @@ import utc from 'dayjs/plugin/utc'
 import timezone from 'dayjs/plugin/timezone'
 
 import { TIME_ZONE } from '@/constants'
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 dayjs.extend(utc)
 dayjs.extend(timezone)
@@ -31,7 +31,7 @@ export function getTimeZone() {
       Intl.DateTimeFormat(undefined, { timeZone: TIME_ZONE })
       timeZone = TIME_ZONE
     } catch (e) {
-      log.warning(
+      LOG.warning(
         `The time zone "${TIME_ZONE}" is not valid. Falling back to "${timeZone}"`
       )
     }

@@ -2,20 +2,20 @@ import fs from 'fs'
 import path from 'path'
 import archiver from 'archiver'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 import { ucFirst } from '@/helpers/string'
 
 const getDownloads = async (fastify, options) => {
   fastify.get(`/api/${options.apiVersion}/downloads`, (request, reply) => {
-    log.title('GET /downloads')
+    LOG.title('GET /downloads')
 
     const clean = (dir, files) => {
-      log.info('Cleaning skill download directory...')
+      LOG.info('Cleaning skill download directory...')
       for (let i = 0; i < files.length; i += 1) {
         fs.unlinkSync(`${dir}/${files[i]}`)
       }
       fs.rmdirSync(dir)
-      log.success('Downloads directory cleaned')
+      LOG.success('Downloads directory cleaned')
     }
     let message = ''
 
@@ -27,18 +27,18 @@ const getDownloads = async (fastify, options) => {
       )
       const skill = path.join(dlDomainDir, `${request.query.skill}.py`)
 
-      log.info(
+      LOG.info(
         `Checking existence of the ${ucFirst(request.query.skill)} skill...`
       )
       if (fs.existsSync(skill)) {
-        log.success(`${ucFirst(request.query.skill)} skill exists`)
+        LOG.success(`${ucFirst(request.query.skill)} skill exists`)
         const downloadsDir = `${dlDomainDir}/${request.query.skill}`
 
-        log.info('Reading downloads directory...')
+        LOG.info('Reading downloads directory...')
         fs.readdir(downloadsDir, (err, files) => {
           if (err && err.code === 'ENOENT') {
             message = 'There is no content to download for this skill.'
-            log.error(message)
+            LOG.error(message)
             reply.code(404).send({
               success: false,
               status: 404,
@@ -46,16 +46,16 @@ const getDownloads = async (fastify, options) => {
               message
             })
           } else {
-            if (err) log.error(err)
+            if (err) LOG.error(err)
 
             // Download the file if there is only one
             if (files.length === 1) {
-              log.info(`${files[0]} is downloading...`)
+              LOG.info(`${files[0]} is downloading...`)
               reply.download(`${downloadsDir}/${files[0]}`)
-              log.success(`${files[0]} downloaded`)
+              LOG.success(`${files[0]} downloaded`)
               clean(downloadsDir, files)
             } else {
-              log.info('Deleting previous archives...')
+              LOG.info('Deleting previous archives...')
               const zipSlug = `leon-${request.query.domain}-${request.query.skill}`
               const domainsFiles = fs.readdirSync(dlDomainDir)
 
@@ -65,11 +65,11 @@ const getDownloads = async (fastify, options) => {
                   domainsFiles[i].indexOf(zipSlug) !== -1
                 ) {
                   fs.unlinkSync(`${dlDomainDir}/${domainsFiles[i]}`)
-                  log.success(`${domainsFiles[i]} archive deleted`)
+                  LOG.success(`${domainsFiles[i]} archive deleted`)
                 }
               }
 
-              log.info('Preparing new archive...')
+              LOG.info('Preparing new archive...')
               const zipName = `${zipSlug}-${Date.now()}.zip`
               const zipFile = `${dlDomainDir}/${zipName}`
               const output = fs.createWriteStream(zipFile)
@@ -77,35 +77,35 @@ const getDownloads = async (fastify, options) => {
 
               // When the archive is ready
               output.on('close', () => {
-                log.info(`${zipName} is downloading...`)
+                LOG.info(`${zipName} is downloading...`)
                 reply.download(zipFile, (err) => {
-                  if (err) log.error(err)
+                  if (err) LOG.error(err)
 
-                  log.success(`${zipName} downloaded`)
+                  LOG.success(`${zipName} downloaded`)
 
                   clean(downloadsDir, files)
                 })
               })
               archive.on('error', (err) => {
-                log.error(err)
+                LOG.error(err)
               })
 
               // Add the content to the archive
-              log.info('Adding content...')
+              LOG.info('Adding content...')
               archive.directory(downloadsDir, false)
 
               // Inject stream data to the archive
-              log.info('Injecting stream data...')
+              LOG.info('Injecting stream data...')
               archive.pipe(output)
 
-              log.info('Finalizing...')
+              LOG.info('Finalizing...')
               archive.finalize()
             }
           }
         })
       } else {
         message = 'This skill does not exist.'
-        log.error(message)
+        LOG.error(message)
         reply.code(404).send({
           success: false,
           status: 404,
@@ -115,7 +115,7 @@ const getDownloads = async (fastify, options) => {
       }
     } else {
       message = 'Bad request.'
-      log.error(message)
+      LOG.error(message)
       reply.code(400).send({
         success: false,
         status: 400,

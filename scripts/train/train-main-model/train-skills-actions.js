@@ -1,6 +1,6 @@
 import { composeFromPattern } from '@nlpjs/utils'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 import { findAndMap } from '@/helpers/string'
 import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
 
@@ -9,7 +9,7 @@ import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
  */
 export default (lang, nlp) =>
   new Promise(async (resolve) => {
-    log.title('Skills actions training')
+    LOG.title('Skills actions training')
 
     const supportedActionTypes = ['dialog', 'logic']
     const skillDomains = await getSkillDomains()
@@ -17,12 +17,12 @@ export default (lang, nlp) =>
     for (const [domainName, currentDomain] of skillDomains) {
       const skillKeys = Object.keys(currentDomain.skills)
 
-      log.info(`[${lang}] Training "${domainName}" domain model...`)
+      LOG.info(`[${lang}] Training "${domainName}" domain model...`)
 
       for (let j = 0; j < skillKeys.length; j += 1) {
         const { name: skillName } = currentDomain.skills[skillKeys[j]]
 
-        log.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
+        LOG.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
 
         const skillConfigData = await getSkillConfig({
           domain: currentDomain.name,
@@ -48,7 +48,7 @@ export default (lang, nlp) =>
               !actionObj.type ||
               !supportedActionTypes.includes(actionObj.type)
             ) {
-              log.error(`This action type isn't supported: ${actionObj.type}`)
+              LOG.error(`This action type isn't supported: ${actionObj.type}`)
               process.exit(1)
             }
 
@@ -115,7 +115,7 @@ export default (lang, nlp) =>
         }
       }
 
-      log.success(`[${lang}] "${domainName}" domain trained`)
+      LOG.success(`[${lang}] "${domainName}" domain trained`)
     }
 
     resolve()

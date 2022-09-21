@@ -1,4 +1,4 @@
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 import cleanTestDbs from './clean-test-dbs'
 
@@ -9,6 +9,6 @@ import cleanTestDbs from './clean-test-dbs'
   try {
     await cleanTestDbs()
   } catch (e) {
-    log.error(`Failed to clean test DBs: ${e}`)
+    LOG.error(`Failed to clean test DBs: ${e}`)
   }
 })()

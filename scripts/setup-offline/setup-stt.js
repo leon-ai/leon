@@ -1,7 +1,7 @@
 import { command } from 'execa'
 import fs from 'fs'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 import { getOSInformation } from '@/helpers/os'
 
 /**
@@ -9,7 +9,7 @@ import { getOSInformation } from '@/helpers/os'
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    log.info('Setting up offline speech-to-text...')
+    LOG.info('Setting up offline speech-to-text...')
 
     const destCoquiFolder = 'bin/coqui'
     const tmpDir = 'scripts/tmp'
@@ -22,7 +22,7 @@ export default () =>
 
     if (!fs.existsSync(`${destCoquiFolder}/model.tflite`)) {
       try {
-        log.info('Downloading pre-trained model...')
+        LOG.info('Downloading pre-trained model...')
         await command(
           `cd ${tmpDir} && ${downloader} https://github.com/coqui-ai/STT-models/releases/download/english/coqui/v${coquiModelVersion}-huge-vocab/model.tflite`,
           { shell: true }
@@ -31,8 +31,8 @@ export default () =>
           `cd ${tmpDir} && ${downloader} https://github.com/coqui-ai/STT-models/releases/download/english/coqui/v${coquiModelVersion}-huge-vocab/huge-vocabulary.scorer`,
           { shell: true }
         )
-        log.success('Pre-trained model download done')
-        log.info('Moving...')
+        LOG.success('Pre-trained model download done')
+        LOG.info('Moving...')
         await command(
           `mv -f ${tmpDir}/model.tflite ${destCoquiFolder}/model.tflite`,
           { shell: true }
@@ -41,16 +41,16 @@ export default () =>
           `mv -f ${tmpDir}/huge-vocabulary.scorer ${destCoquiFolder}/huge-vocabulary.scorer`,
           { shell: true }
         )
-        log.success('Move done')
-        log.success('Offline speech-to-text installed')
+        LOG.success('Move done')
+        LOG.success('Offline speech-to-text installed')
 
         resolve()
       } catch (e) {
-        log.error(`Failed to install offline speech-to-text: ${e}`)
+        LOG.error(`Failed to install offline speech-to-text: ${e}`)
         reject(e)
       }
     } else {
-      log.success('Offline speech-to-text is already installed')
+      LOG.success('Offline speech-to-text is already installed')
       resolve()
     }
   })

@@ -2,14 +2,14 @@ import path from 'path'
 import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
-import { log } from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 /**
  * Train global resolvers
  */
 export default (lang, nlp) =>
   new Promise((resolve) => {
-    log.title('Global resolvers training')
+    LOG.title('Global resolvers training')
 
     const resolversPath = path.join(
       process.cwd(),
@@ -27,7 +27,7 @@ export default (lang, nlp) =>
       )
       const intentKeys = Object.keys(resolverIntents)
 
-      log.info(`[${lang}] Training "${resolverName}" resolver...`)
+      LOG.info(`[${lang}] Training "${resolverName}" resolver...`)
 
       for (let j = 0; j < intentKeys.length; j += 1) {
         const intentName = intentKeys[j]
@@ -47,7 +47,7 @@ export default (lang, nlp) =>
         }
       }
 
-      log.success(`[${lang}] "${resolverName}" resolver trained`)
+      LOG.success(`[${lang}] "${resolverName}" resolver trained`)
     }
 
     resolve()
