@@ -2,31 +2,30 @@ import path from 'path'
 import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
-import log from '@/helpers/log'
-import json from '@/helpers/json'
-import { findAndMap } from '@/helpers/string'
-import { getSkillDomains } from '@/helpers/skill-domain'
+import { LOG } from '@/helpers/log'
+import { STRING } from '@/helpers/string'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
  * Train skills actions
  */
 export default (lang, nlp) =>
   new Promise(async (resolve) => {
-    log.title('Skills actions training')
+    LOG.title('Skills actions training')
 
     const supportedActionTypes = ['dialog', 'logic']
-    const skillDomains = await getSkillDomains()
+    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
 
     for (const [domainName, currentDomain] of skillDomains) {
       const skillKeys = Object.keys(currentDomain.skills)
 
-      log.info(`[${lang}] Training "${domainName}" domain model...`)
+      LOG.info(`[${lang}] Training "${domainName}" domain model...`)
 
       for (let j = 0; j < skillKeys.length; j += 1) {
         const { name: skillName } = currentDomain.skills[skillKeys[j]]
         const currentSkill = currentDomain.skills[skillKeys[j]]
 
-        log.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
+        LOG.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
 
         const configFilePath = path.join(
           currentSkill.path,
@@ -35,7 +34,7 @@ export default (lang, nlp) =>
         )
 
         if (fs.existsSync(configFilePath)) {
-          const { actions, variables } = await json.loadConfigData(
+          const { actions, variables } = await SKILL_DOMAIN.getSkillConfig(
             configFilePath,
             lang
           ) // eslint-disable-line no-await-in-loop
@@ -55,7 +54,7 @@ export default (lang, nlp) =>
               !actionObj.type ||
               !supportedActionTypes.includes(actionObj.type)
             ) {
-              log.error(`This action type isn't supported: ${actionObj.type}`)
+              LOG.error(`This action type isn't supported: ${actionObj.type}`)
               process.exit(1)
             }
 
@@ -112,7 +111,7 @@ export default (lang, nlp) =>
               for (let l = 0; l < answers?.length; l += 1) {
                 const variableKeys = Object.keys(variablesObj)
                 if (variableKeys.length > 0) {
-                  answers[l] = findAndMap(answers[l], variablesObj)
+                  answers[l] = STRING.findAndMap(answers[l], variablesObj)
                 }
 
                 nlp.addAnswer(lang, `${skillName}.${actionName}`, answers[l])
@@ -122,7 +121,7 @@ export default (lang, nlp) =>
         }
       }
 
-      log.success(`[${lang}] "${domainName}" domain trained`)
+      LOG.success(`[${lang}] "${domainName}" domain trained`)
     }
 
     resolve()

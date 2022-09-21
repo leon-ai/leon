@@ -4,12 +4,11 @@ import { spawn } from 'child_process'
 
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS } from '@/constants'
-import log from '@/helpers/log'
-import { findAndMap, randomString } from '@/helpers/string'
+import { LOG } from '@/helpers/log'
+import { STRING } from '@/helpers/string'
+import { LANG } from '@/helpers/lang'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 import Synchronizer from '@/core/synchronizer'
-import lang from '@/helpers/lang'
-import { getSkillDomainInfo, getSkillInfo } from '@/helpers/skill-domain'
-import json from '@/helpers/json'
 
 class Brain {
   constructor() {
@@ -27,8 +26,8 @@ class Brain {
     this._stt = {}
     this._tts = {}
 
-    log.title('Brain')
-    log.success('New instance')
+    LOG.title('Brain')
+    LOG.success('New instance')
   }
 
   get socket() {
@@ -71,8 +70,8 @@ class Brain {
 
     if (HAS_TTS) {
       this._tts.init(this._lang, () => {
-        log.title('Brain')
-        log.info('Language has changed')
+        LOG.title('Brain')
+        LOG.info('Language has changed')
       })
     }
   }
@@ -86,7 +85,7 @@ class Brain {
         fs.unlinkSync(intentObjectPath)
       }
     } catch (e) {
-      log.error(`Failed to delete intent object file: ${e}`)
+      LOG.error(`Failed to delete intent object file: ${e}`)
     }
   }
 
@@ -94,8 +93,8 @@ class Brain {
    * Make Leon talk
    */
   talk(rawSpeech, end = false) {
-    log.title('Leon')
-    log.info('Talking...')
+    LOG.title('Leon')
+    LOG.info('Talking...')
 
     if (rawSpeech !== '') {
       if (HAS_TTS) {
@@ -130,7 +129,7 @@ class Brain {
 
     // Parse sentence's value(s) and replace with the given object
     if (typeof obj !== 'undefined' && Object.keys(obj).length > 0) {
-      answer = findAndMap(answer, obj)
+      answer = STRING.findAndMap(answer, obj)
     }
 
     return answer
@@ -147,7 +146,7 @@ class Brain {
     }
 
     return new Promise(async (resolve, reject) => {
-      const utteranceId = `${Date.now()}-${randomString(4)}`
+      const utteranceId = `${Date.now()}-${STRING.random(4)}`
       const intentObjectPath = path.join(
         __dirname,
         `../tmp/${utteranceId}.json`
@@ -157,7 +156,7 @@ class Brain {
       // Ask to repeat if Leon is not sure about the request
       if (
         obj.classification.confidence <
-        langs[lang.getLongCode(this._lang)].min_confidence
+        langs[LANG.getLongCode(this._lang)].min_confidence
       ) {
         if (!opts.mute) {
           const speech = `${this.wernicke('random_not_sure')}.`
@@ -230,14 +229,15 @@ class Brain {
                 { shell: true }
               )
             } catch (e) {
-              log.error(`Failed to save intent object: ${e}`)
+              LOG.error(`Failed to save intent object: ${e}`)
             }
           }
 
           const domainName = obj.classification.domain
           const skillName = obj.classification.skill
-          const { name: domainFriendlyName } = getSkillDomainInfo(domainName)
-          const { name: skillFriendlyName } = getSkillInfo(
+          const { name: domainFriendlyName } =
+            SKILL_DOMAIN.getSkillDomainInfo(domainName)
+          const { name: skillFriendlyName } = SKILL_DOMAIN.getSkillInfo(
             domainName,
             skillName
           )
@@ -253,8 +253,8 @@ class Brain {
 
               if (typeof obj === 'object') {
                 if (obj.output.type === 'inter') {
-                  log.title(`${skillFriendlyName} skill`)
-                  log.info(data.toString())
+                  LOG.title(`${skillFriendlyName} skill`)
+                  LOG.info(data.toString())
 
                   this.interOutput = obj.output
 
@@ -278,8 +278,8 @@ class Brain {
                 })
               }
             } catch (e) {
-              log.title('Brain')
-              log.debug(`process.stdout: ${String(data)}`)
+              LOG.title('Brain')
+              LOG.debug(`process.stdout: ${String(data)}`)
 
               /* istanbul ignore next */
               reject({
@@ -307,8 +307,8 @@ class Brain {
 
             Brain.deleteIntentObjFile(intentObjectPath)
 
-            log.title(`${skillFriendlyName} skill`)
-            log.error(data.toString())
+            LOG.title(`${skillFriendlyName} skill`)
+            LOG.error(data.toString())
 
             const executionTimeEnd = Date.now()
             const executionTime = executionTimeEnd - executionTimeStart
@@ -322,8 +322,8 @@ class Brain {
 
           // Catch the end of the skill execution
           this.process.stdout.on('end', () => {
-            log.title(`${skillFriendlyName} skill`)
-            log.info(output)
+            LOG.title(`${skillFriendlyName} skill`)
+            LOG.info(output)
 
             this.finalOutput = output
 
@@ -411,7 +411,7 @@ class Brain {
             'config',
             `${this._lang}.json`
           )
-          const { actions, entities } = await json.loadConfigData(
+          const { actions, entities } = await SKILL_DOMAIN.getSkillConfig(
             configFilePath,
             this._lang
           )
@@ -450,7 +450,7 @@ class Brain {
              */
             if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
               obj.currentEntities.forEach((entityObj) => {
-                answer = findAndMap(answer, {
+                answer = STRING.findAndMap(answer, {
                   [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value
                 })
 
@@ -469,7 +469,7 @@ class Brain {
                     const valuesArr =
                       entities[entity].options[entityObj.option].data[dataKey]
 
-                    answer = findAndMap(answer, {
+                    answer = STRING.findAndMap(answer, {
                       [match]:
                         valuesArr[Math.floor(Math.random() * valuesArr.length)]
                     })

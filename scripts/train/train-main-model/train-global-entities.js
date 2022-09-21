@@ -1,7 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 
-import log from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 /**
  * Train global entities
@@ -9,7 +9,7 @@ import log from '@/helpers/log'
  */
 export default (lang, nlp) =>
   new Promise((resolve) => {
-    log.title('Global entities training')
+    LOG.title('Global entities training')
 
     const globalEntitiesPath = path.join(
       process.cwd(),
@@ -31,7 +31,7 @@ export default (lang, nlp) =>
       const optionKeys = Object.keys(options)
       const optionsObj = {}
 
-      log.info(`[${lang}] Adding "${entityName}" global entity...`)
+      LOG.info(`[${lang}] Adding "${entityName}" global entity...`)
 
       optionKeys.forEach((optionKey) => {
         const { synonyms } = options[optionKey]
@@ -40,7 +40,7 @@ export default (lang, nlp) =>
       })
 
       newEntitiesObj[entityName] = { options: optionsObj }
-      log.success(`[${lang}] "${entityName}" global entity added`)
+      LOG.success(`[${lang}] "${entityName}" global entity added`)
     }
 
     nlp.addEntities(newEntitiesObj, lang)

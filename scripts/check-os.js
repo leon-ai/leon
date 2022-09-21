@@ -1,56 +1,56 @@
 import execa from 'execa'
 
-import log from '@/helpers/log'
-import os from '@/helpers/os'
+import { LOG } from '@/helpers/log'
+import { OS } from '@/helpers/os'
 
 /**
  * Check OS environment
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    log.info('Checking OS environment...')
+    LOG.info('Checking OS environment...')
 
-    const info = os.get()
+    const info = OS.getInformation()
 
     if (info.type === 'windows') {
-      log.error('Voice offline mode is not available on Windows')
+      LOG.error('Voice offline mode is not available on Windows')
       reject()
     } else if (info.type === 'unknown') {
-      log.error(
+      LOG.error(
         'This OS is unknown, please open an issue to let us know about it'
       )
       reject()
     } else {
       try {
-        log.success(`You are running ${info.name}`)
-        log.info('Checking tools...')
+        LOG.success(`You are running ${info.name}`)
+        LOG.info('Checking tools...')
 
         await execa('tar', ['--version'])
-        log.success('"tar" found')
+        LOG.success('"tar" found')
         await execa('make', ['--version'])
-        log.success('"make" found')
+        LOG.success('"make" found')
 
         if (info.type === 'macos') {
           await execa('brew', ['--version'])
-          log.success('"brew" found')
+          LOG.success('"brew" found')
           await execa('curl', ['--version'])
-          log.success('"curl" found')
+          LOG.success('"curl" found')
         } else if (info.type === 'linux') {
           await execa('apt-get', ['--version'])
-          log.success('"apt-get" found')
+          LOG.success('"apt-get" found')
           await execa('wget', ['--version'])
-          log.success('"wget" found')
+          LOG.success('"wget" found')
         }
 
         resolve()
       } catch (e) {
         if (e.cmd) {
           const cmd = e.cmd.substr(0, e.cmd.indexOf(' '))
-          log.error(
+          LOG.error(
             `The following command has failed: "${e.cmd}". "${cmd}" is maybe missing. To continue this setup, please install the required tool. More details about the failure: ${e}`
           )
         } else {
-          log.error(`Failed to prepare the environment: ${e}`)
+          LOG.error(`Failed to prepare the environment: ${e}`)
         }
 
         reject(e)

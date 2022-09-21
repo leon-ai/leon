@@ -1,4 +1,4 @@
-import log from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 import setupHotword from './setup-hotword'
 
@@ -9,6 +9,6 @@ import setupHotword from './setup-hotword'
   try {
     await setupHotword()
   } catch (e) {
-    log.error(`Failed to setup offline hotword: ${e}`)
+    LOG.error(`Failed to setup offline hotword: ${e}`)
   }
 })()

@@ -2,17 +2,17 @@ import { commandSync } from 'execa'
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
-import { getSkillDomains } from '@/helpers/skill-domain'
+import { LOG } from '@/helpers/log'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
  * Setup skills configuration
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    log.info('Setting up skills configuration...')
+    LOG.info('Setting up skills configuration...')
 
-    const skillDomains = await getSkillDomains()
+    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
 
     for (const currentDomain of skillDomains.values()) {
       const skillKeys = Object.keys(currentDomain.skills)
@@ -46,7 +46,7 @@ export default () =>
               for (let j = 0; j < configSampleKeys.length; j += 1) {
                 // Check if the current config key does not exist
                 if (configKeys.includes(configSampleKeys[j]) === false) {
-                  log.info(
+                  LOG.info(
                     `Adding new configuration key "${configSampleKeys[j]}" for the ${skillFriendlyName} skill...`
                   )
 
@@ -63,11 +63,11 @@ export default () =>
                       }=${JSON.stringify(configKey[configSampleKeys[j]])}'`,
                       { shell: true }
                     )
-                    log.success(
+                    LOG.success(
                       `"${configSampleKeys[j]}" configuration key added to ${configFile}`
                     )
                   } catch (e) {
-                    log.error(
+                    LOG.error(
                       `Error while adding "${configSampleKeys[j]}" configuration key to ${configFile}: ${e}`
                     )
                     reject()
@@ -77,7 +77,7 @@ export default () =>
             }
           } else if (!fs.existsSync(configSampleFile)) {
             // Stop the setup if the config.sample.json of the current skill does not exist
-            log.error(
+            LOG.error(
               `The "${skillFriendlyName}" skill configuration file does not exist. Try to pull the project (git pull)`
             )
             reject()
@@ -87,7 +87,7 @@ export default () =>
               fs.createWriteStream(`${configDir}/config.json`)
             )
 
-            log.success(
+            LOG.success(
               `"${skillFriendlyName}" skill configuration file created`
             )
             resolve()
@@ -96,6 +96,6 @@ export default () =>
       }
     }
 
-    log.success('Skills configured')
+    LOG.success('Skills configured')
     resolve()
   })

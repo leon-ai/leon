@@ -1,4 +1,4 @@
-import log from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 import setupTts from './setup-tts'
 
@@ -9,6 +9,6 @@ import setupTts from './setup-tts'
   try {
     await setupTts()
   } catch (e) {
-    log.error(`Failed to setup offline TTS: ${e}`)
+    LOG.error(`Failed to setup offline TTS: ${e}`)
   }
 })()

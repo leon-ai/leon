@@ -1,6 +1,6 @@
 import { command } from 'execa'
 
-import log from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 /**
  * Build web app
@@ -12,6 +12,6 @@ export default () =>
       stdout: 'inherit'
     })
 
-    log.success('Web app built')
+    LOG.success('Web app built')
     resolve()
   })

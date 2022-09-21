@@ -5,22 +5,22 @@
  */
 import fs from 'fs'
 
-import log from '@/helpers/log'
-import { removeEndPunctuation, snakeToPascalCase } from '@/helpers/string'
+import { LOG } from '@/helpers/log'
+import { STRING } from '@/helpers/string'
 
 class Ner {
   constructor(ner) {
     this.ner = ner
 
-    log.title('NER')
-    log.success('New instance')
+    LOG.title('NER')
+    LOG.success('New instance')
   }
 
   static logExtraction(entities) {
-    log.title('NER')
-    log.success('Entities found:')
+    LOG.title('NER')
+    LOG.success('Entities found:')
     entities.forEach((ent) =>
-      log.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`)
+      LOG.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`)
     )
   }
 
@@ -29,12 +29,12 @@ class Ner {
    */
   extractEntities(lang, utteranceSamplesFilePath, obj) {
     return new Promise(async (resolve) => {
-      log.title('NER')
-      log.info('Searching for entities...')
+      LOG.title('NER')
+      LOG.info('Searching for entities...')
 
       const { classification } = obj
       // Remove end-punctuation and add an end-whitespace
-      const utterance = `${removeEndPunctuation(obj.utterance)} `
+      const utterance = `${STRING.removeEndPunctuation(obj.utterance)} `
       const { actions } = JSON.parse(
         fs.readFileSync(utteranceSamplesFilePath, 'utf8')
       )
@@ -84,8 +84,8 @@ class Ner {
         return resolve(entities)
       }
 
-      log.title('NER')
-      log.info('No entity found')
+      LOG.title('NER')
+      LOG.info('No entity found')
       return resolve([])
     })
   }
@@ -116,7 +116,7 @@ class Ner {
     return new Promise((resolve) => {
       for (let j = 0; j < entity.conditions.length; j += 1) {
         const condition = entity.conditions[j]
-        const conditionMethod = `add${snakeToPascalCase(
+        const conditionMethod = `add${STRING.snakeToPascalCase(
           condition.type
         )}Condition`
 

@@ -1,17 +1,17 @@
 import fs from 'fs'
 import { join } from 'path'
 
-import log from '@/helpers/log'
-import { getSkillDomains } from '@/helpers/skill-domain'
+import { LOG } from '@/helpers/log'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
  * This script delete test DB files if they exist
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    log.info('Cleaning test DB files...')
+    LOG.info('Cleaning test DB files...')
 
-    const skillDomains = await getSkillDomains()
+    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
 
     for (const currentDomain of skillDomains.values()) {
       const skillKeys = Object.keys(currentDomain.skills)
@@ -27,17 +27,17 @@ export default () =>
             .filter((entity) => entity.indexOf('.spec.json') !== -1)
 
           if (dbTestFiles.length > 0) {
-            log.info(`Deleting ${dbTestFiles[0]}...`)
+            LOG.info(`Deleting ${dbTestFiles[0]}...`)
             fs.unlinkSync(join(dbFolder, dbTestFiles[0]))
-            log.success(`${dbTestFiles[0]} deleted`)
+            LOG.success(`${dbTestFiles[0]} deleted`)
           }
         } catch (e) {
-          log.error(`Failed to clean: "${skillKeys[j]}" test DB file`)
+          LOG.error(`Failed to clean: "${skillKeys[j]}" test DB file`)
           reject(e)
         }
       }
     }
 
-    log.success('Cleaning done')
+    LOG.success('Cleaning done')
     resolve()
   })

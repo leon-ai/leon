@@ -1,7 +1,7 @@
 import { command } from 'execa'
 
-import log from '@/helpers/log'
-import loader from '@/helpers/loader'
+import { LOG } from '@/helpers/log'
+import { LOADER } from '@/helpers/loader'
 
 /**
  * Specific module testing script
@@ -15,18 +15,18 @@ import loader from '@/helpers/loader'
   const [pkg, module] = arr
 
   try {
-    loader.start()
+    LOADER.start()
     await command('npm run train en', { shell: true })
     const cmd = await command(
       `cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --silent --config=./test/e2e/modules/e2e.modules.jest.json packages/${pkg}/test/${module}.spec.js && npm run train`,
       { shell: true }
     )
 
-    log.default(cmd.stdout)
-    log.default(cmd.stderr)
-    loader.stop()
+    LOG.default(cmd.stdout)
+    LOG.default(cmd.stderr)
+    LOADER.stop()
   } catch (e) {
-    log.default(e.message)
-    loader.stop()
+    LOG.default(e.message)
+    LOADER.stop()
   }
 })()

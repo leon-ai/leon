@@ -4,8 +4,8 @@ import fs from 'fs'
 import { prompt } from 'inquirer'
 import path from 'path'
 
-import log from '@/helpers/log'
-import { randomString } from '@/helpers/string'
+import { LOG } from '@/helpers/log'
+import { STRING } from '@/helpers/string'
 
 dotenv.config()
 
@@ -15,11 +15,11 @@ dotenv.config()
  */
 const generateHttpApiKey = () =>
   new Promise(async (resolve, reject) => {
-    log.info('Generating the HTTP API key...')
+    LOG.info('Generating the HTTP API key...')
 
     try {
       const shasum = crypto.createHash('sha1')
-      const str = randomString(11)
+      const str = STRING.random(11)
       const dotEnvPath = path.join(process.cwd(), '.env')
       const envVarKey = 'LEON_HTTP_API_KEY'
       let content = fs.readFileSync(dotEnvPath, 'utf8')
@@ -39,11 +39,11 @@ const generateHttpApiKey = () =>
       content = lines.join('\n')
 
       fs.writeFileSync(dotEnvPath, content)
-      log.success('HTTP API key generated')
+      LOG.success('HTTP API key generated')
 
       resolve()
     } catch (e) {
-      log.error(e.message)
+      LOG.error(e.message)
       reject(e)
     }
   })

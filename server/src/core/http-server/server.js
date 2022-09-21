@@ -26,8 +26,8 @@ import otherMidd from '@/core/http-server/plugins/other'
 import keyMidd from '@/core/http-server/plugins/key'
 import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
-import log from '@/helpers/log'
-import { getDateTime, getTimeZone } from '@/helpers/date'
+import { LOG } from '@/helpers/log'
+import { DATE } from '@/helpers/date'
 
 const server = {}
 
@@ -61,7 +61,7 @@ const createProvider = async (id) => {
       nlu
     }
   } catch (e) {
-    log[e.type](e.obj.message)
+    LOG[e.type](e.obj.message)
 
     return null
   }
@@ -171,7 +171,7 @@ server.generateSkillsRoutes = (instance) => {
               success: true
             })
           } catch (e) /* istanbul ignore next */ {
-            log[e.type](e.obj.message)
+            LOG[e.type](e.obj.message)
             reply.statusCode = 500
             reply.send({
               ...responseData,
@@ -204,13 +204,13 @@ server.generateSkillsRoutes = (instance) => {
  * Bootstrap socket
  */
 server.handleOnConnection = (socket) => {
-  log.title('Client')
-  log.success('Connected')
+  LOG.title('Client')
+  LOG.success('Connected')
 
   // Init
   socket.on('init', async (data) => {
-    log.info(`Type: ${data}`)
-    log.info(`Socket id: ${socket.id}`)
+    LOG.info(`Type: ${data}`)
+    LOG.info(`Socket id: ${socket.id}`)
 
     const provider = await addProvider(socket.id)
 
@@ -226,8 +226,8 @@ server.handleOnConnection = (socket) => {
     if (data === 'hotword-node') {
       // Hotword triggered
       socket.on('hotword-detected', (data) => {
-        log.title('Socket')
-        log.success(`Hotword ${data.hotword} detected`)
+        LOG.title('Socket')
+        LOG.success(`Hotword ${data.hotword} detected`)
 
         socket.broadcast.emit('enable-record')
       })
@@ -252,14 +252,14 @@ server.handleOnConnection = (socket) => {
         provider.brain.tts.init('en', () => null)
       }
 
-      log.title('Initialization')
-      log.success(`STT ${sttState}`)
-      log.success(`TTS ${ttsState}`)
+      LOG.title('Initialization')
+      LOG.success(`STT ${sttState}`)
+      LOG.success(`TTS ${ttsState}`)
 
       // Listen for new utterance
       socket.on('utterance', async (data) => {
-        log.title('Socket')
-        log.info(`${data.client} emitted: ${data.value}`)
+        LOG.title('Socket')
+        LOG.info(`${data.client} emitted: ${data.value}`)
 
         socket.emit('is-typing', true)
 
@@ -276,7 +276,7 @@ server.handleOnConnection = (socket) => {
         try {
           await asr.run(data, provider.brain.stt)
         } catch (e) {
-          log[e.type](e.obj.message)
+          LOG[e.type](e.obj.message)
         }
       })
     }
@@ -305,8 +305,8 @@ server.listen = async (port) => {
       host: '0.0.0.0'
     },
     () => {
-      log.title('Initialization')
-      log.success(`Server is available at ${HOST}:${port}`)
+      LOG.title('Initialization')
+      LOG.success(`Server is available at ${HOST}:${port}`)
     }
   )
 }
@@ -363,7 +363,7 @@ server.bootstrap = async () => {
   try {
     await server.listen(PORT)
   } catch (e) {
-    log.error(e.message)
+    LOG.error(e.message)
   }
 }
 
@@ -374,14 +374,14 @@ server.init = async () => {
   server.fastify.addHook('onRequest', corsMidd)
   server.fastify.addHook('preValidation', otherMidd)
 
-  log.title('Initialization')
-  log.success(`The current env is ${process.env.LEON_NODE_ENV}`)
-  log.success(`The current version is ${version}`)
+  LOG.title('Initialization')
+  LOG.success(`The current env is ${process.env.LEON_NODE_ENV}`)
+  LOG.success(`The current version is ${version}`)
 
-  log.success(`The current time zone is ${getTimeZone()}`)
+  LOG.success(`The current time zone is ${DATE.getTimeZone()}`)
 
   const sLogger = !HAS_LOGGER ? 'disabled' : 'enabled'
-  log.success(`Collaborative logger ${sLogger}`)
+  LOG.success(`Collaborative logger ${sLogger}`)
 
   await addProvider('1')
 

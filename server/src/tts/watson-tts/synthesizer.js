@@ -6,10 +6,10 @@ import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
-import { randomString } from '@/helpers/string'
+import { LOG } from '@/helpers/log'
+import { STRING } from '@/helpers/string'
 
-log.title('Watson TTS Synthesizer')
+LOG.title('Watson TTS Synthesizer')
 
 const synthesizer = {}
 const voices = {
@@ -45,9 +45,9 @@ synthesizer.init = (lang) => {
       serviceUrl: config.url
     })
 
-    log.success('Synthesizer initialized')
+    LOG.success('Synthesizer initialized')
   } catch (e) {
-    log.error(`Watson TTS: ${e}`)
+    LOG.error(`Watson TTS: ${e}`)
   }
 }
 
@@ -55,7 +55,7 @@ synthesizer.init = (lang) => {
  * Save string to audio file
  */
 synthesizer.save = (speech, em, cb) => {
-  const file = `${__dirname}/../../tmp/${Date.now()}-${randomString(4)}.wav`
+  const file = `${__dirname}/../../tmp/${Date.now()}-${STRING.random(4)}.wav`
 
   synthesizer.conf.text = speech
 
@@ -73,7 +73,7 @@ synthesizer.save = (speech, em, cb) => {
 
         // Get file duration thanks to ffprobe
         ffmpeg.input(file).ffprobe((err, data) => {
-          if (err) log.error(err)
+          if (err) LOG.error(err)
           else {
             const duration = data.streams[0].duration * 1000
             em.emit('saved', duration)
@@ -83,11 +83,11 @@ synthesizer.save = (speech, em, cb) => {
       })
 
       wStream.on('error', (err) => {
-        log.error(`Watson TTS: ${err}`)
+        LOG.error(`Watson TTS: ${err}`)
       })
     })
     .catch((err) => {
-      log.error(`Watson TTS: ${err}`)
+      LOG.error(`Watson TTS: ${err}`)
     })
 }
 

@@ -3,8 +3,8 @@ import { Nlp } from '@nlpjs/nlp'
 import { LangAll } from '@nlpjs/lang-all'
 import dotenv from 'dotenv'
 
-import log from '@/helpers/log'
-import lang from '@/helpers/lang'
+import { LOG } from '@/helpers/log'
+import { LANG } from '@/helpers/lang'
 import trainGlobalResolvers from './train-resolvers-model/train-global-resolvers'
 import trainSkillsResolvers from './train-resolvers-model/train-skills-resolvers'
 import trainGlobalEntities from './train-main-model/train-global-entities'
@@ -84,7 +84,7 @@ export default () =>
       /**
        * Training phases
        */
-      const shortLangs = lang.getShortLangs()
+      const shortLangs = LANG.getShortCodes()
       for (let h = 0; h < shortLangs.length; h += 1) {
         const lang = shortLangs[h]
 
@@ -106,38 +106,38 @@ export default () =>
       try {
         await globalResolversNlp.train()
 
-        log.success(
+        LOG.success(
           `Global resolvers NLP model saved in ${globalResolversModelFileName}`
         )
         resolve()
       } catch (e) {
-        log.error(`Failed to save global resolvers NLP model: ${e}`)
+        LOG.error(`Failed to save global resolvers NLP model: ${e}`)
         reject()
       }
 
       try {
         await skillsResolversNlp.train()
 
-        log.success(
+        LOG.success(
           `Skills resolvers NLP model saved in ${skillsResolversModelFileName}`
         )
         resolve()
       } catch (e) {
-        log.error(`Failed to save skills resolvers NLP model: ${e}`)
+        LOG.error(`Failed to save skills resolvers NLP model: ${e}`)
         reject()
       }
 
       try {
         await mainNlp.train()
 
-        log.success(`Main NLP model saved in ${mainModelFileName}`)
+        LOG.success(`Main NLP model saved in ${mainModelFileName}`)
         resolve()
       } catch (e) {
-        log.error(`Failed to save main NLP model: ${e}`)
+        LOG.error(`Failed to save main NLP model: ${e}`)
         reject()
       }
     } catch (e) {
-      log.error(e.message)
+      LOG.error(e.message)
       reject(e)
     }
   })

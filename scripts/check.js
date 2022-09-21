@@ -5,7 +5,7 @@ import { command } from 'execa'
 import semver from 'semver'
 
 import { version } from '@@/package.json'
-import log from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 dotenv.config()
 
@@ -76,19 +76,19 @@ export default () =>
         }
       }
 
-      log.title('Checking')
+      LOG.title('Checking')
 
       /**
        * Leon version checking
        */
 
-      log.info('Leon version')
-      log.success(`${version}\n`)
+      LOG.info('Leon version')
+      LOG.success(`${version}\n`)
 
       /**
        * Environment checking
        */
-      log.info('OS')
+      LOG.info('OS')
 
       const osInfo = {
         type: os.type(),
@@ -97,7 +97,7 @@ export default () =>
         cpus: os.cpus().length,
         release: os.release()
       }
-      log.success(`${JSON.stringify(osInfo)}\n`)
+      LOG.success(`${JSON.stringify(osInfo)}\n`)
       ;(
         await Promise.all([
           command('node --version', { shell: true }),
@@ -105,7 +105,7 @@ export default () =>
           command('pipenv --version', { shell: true })
         ])
       ).forEach((p) => {
-        log.info(p.command)
+        LOG.info(p.command)
 
         if (
           p.command.indexOf('node --version') !== -1 &&
@@ -117,7 +117,7 @@ export default () =>
           Object.keys(report).forEach((item) => {
             if (report[item].type === 'error') report[item].v = false
           })
-          log.error(
+          LOG.error(
             `${p.stdout}\nThe Node.js version must be >=${nodeMinRequiredVersion}. Please install it: https://nodejs.org (or use nvm)\n`
           )
         } else if (
@@ -130,11 +130,11 @@ export default () =>
           Object.keys(report).forEach((item) => {
             if (report[item].type === 'error') report[item].v = false
           })
-          log.error(
+          LOG.error(
             `${p.stdout}\nThe npm version must be >=${npmMinRequiredVersion}. Please install it: https://www.npmjs.com/get-npm (or use nvm)\n`
           )
         } else {
-          log.success(`${p.stdout}\n`)
+          LOG.success(`${p.stdout}\n`)
         }
       })
       ;(
@@ -143,7 +143,7 @@ export default () =>
           command('pipenv run python --version', { shell: true })
         ])
       ).forEach((p) => {
-        log.info(p.command)
+        LOG.info(p.command)
 
         if (
           p.command.indexOf('pipenv run python --version') !== -1 &&
@@ -155,11 +155,11 @@ export default () =>
           Object.keys(report).forEach((item) => {
             if (report[item].type === 'error') report[item].v = false
           })
-          log.error(
+          LOG.error(
             `${p.stdout}\nThe Python version must be >=${pythonMinRequiredVersion}. Please install it: https://www.python.org/downloads\n`
           )
         } else {
-          log.success(`${p.stdout}\n`)
+          LOG.success(`${p.stdout}\n`)
         }
       })
 
@@ -172,12 +172,12 @@ export default () =>
           'pipenv run python bridges/python/main.py scripts/assets/intent-object.json',
           { shell: true }
         )
-        log.info(p.command)
-        log.success(`${p.stdout}\n`)
+        LOG.info(p.command)
+        LOG.success(`${p.stdout}\n`)
       } catch (e) {
-        log.info(e.command)
+        LOG.info(e.command)
         report.can_run_skill.v = false
-        log.error(`${e}\n`)
+        LOG.error(`${e}\n`)
       }
 
       /**
@@ -189,12 +189,12 @@ export default () =>
           'pipenv run python -c "import en_core_web_trf"',
           { shell: true }
         )
-        log.info(p.command)
-        log.success(`spaCy model installed\n`)
+        LOG.info(p.command)
+        LOG.success(`spaCy model installed\n`)
       } catch (e) {
-        log.info(e.command)
+        LOG.info(e.command)
         report.has_spacy_model.v = false
-        log.error(
+        LOG.error(
           'No spaCy model is installed. It is recommended to run the following command: "npm run clean:python-deps"\n'
         )
       }
@@ -203,7 +203,7 @@ export default () =>
        * Global resolvers NLP model checking
        */
 
-      log.info('Global resolvers NLP model state')
+      LOG.info('Global resolvers NLP model state')
 
       if (
         !fs.existsSync(globalResolversNlpModelPath) ||
@@ -214,18 +214,18 @@ export default () =>
           if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1)
             report[item].v = false
         })
-        log.error(
+        LOG.error(
           'Global resolvers NLP model not found or broken. Try to generate a new one: "npm run train"\n'
         )
       } else {
-        log.success('Found and valid\n')
+        LOG.success('Found and valid\n')
       }
 
       /**
        * Skills resolvers NLP model checking
        */
 
-      log.info('Skills resolvers NLP model state')
+      LOG.info('Skills resolvers NLP model state')
 
       if (
         !fs.existsSync(skillsResolversNlpModelPath) ||
@@ -236,18 +236,18 @@ export default () =>
           if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1)
             report[item].v = false
         })
-        log.error(
+        LOG.error(
           'Skills resolvers NLP model not found or broken. Try to generate a new one: "npm run train"\n'
         )
       } else {
-        log.success('Found and valid\n')
+        LOG.success('Found and valid\n')
       }
 
       /**
        * Main NLP model checking
        */
 
-      log.info('Main NLP model state')
+      LOG.info('Main NLP model state')
 
       if (
         !fs.existsSync(mainNlpModelPath) ||
@@ -258,18 +258,18 @@ export default () =>
           if (item.indexOf('stt') !== -1 || item.indexOf('tts') !== -1)
             report[item].v = false
         })
-        log.error(
+        LOG.error(
           'Main NLP model not found or broken. Try to generate a new one: "npm run train"\n'
         )
       } else {
-        log.success('Found and valid\n')
+        LOG.success('Found and valid\n')
       }
 
       /**
        * TTS/STT checking
        */
 
-      log.info('Amazon Polly TTS')
+      LOG.info('Amazon Polly TTS')
 
       try {
         const json = JSON.parse(fs.readFileSync(amazonPath))
@@ -278,16 +278,16 @@ export default () =>
           json.credentials.secretAccessKey === ''
         ) {
           report.can_amazon_polly_tts.v = false
-          log.warning('Amazon Polly TTS is not yet configured\n')
+          LOG.warning('Amazon Polly TTS is not yet configured\n')
         } else {
-          log.success('Configured\n')
+          LOG.success('Configured\n')
         }
       } catch (e) {
         report.can_amazon_polly_tts.v = false
-        log.warning(`Amazon Polly TTS is not yet configured: ${e}\n`)
+        LOG.warning(`Amazon Polly TTS is not yet configured: ${e}\n`)
       }
 
-      log.info('Google Cloud TTS/STT')
+      LOG.info('Google Cloud TTS/STT')
 
       try {
         const json = JSON.parse(fs.readFileSync(googleCloudPath))
@@ -298,17 +298,17 @@ export default () =>
         if (results.includes(false)) {
           report.can_google_cloud_tts.v = false
           report.can_google_cloud_stt.v = false
-          log.warning('Google Cloud TTS/STT is not yet configured\n')
+          LOG.warning('Google Cloud TTS/STT is not yet configured\n')
         } else {
-          log.success('Configured\n')
+          LOG.success('Configured\n')
         }
       } catch (e) {
         report.can_google_cloud_tts.v = false
         report.can_google_cloud_stt.v = false
-        log.warning(`Google Cloud TTS/STT is not yet configured: ${e}\n`)
+        LOG.warning(`Google Cloud TTS/STT is not yet configured: ${e}\n`)
       }
 
-      log.info('Watson TTS')
+      LOG.info('Watson TTS')
 
       try {
         const json = JSON.parse(fs.readFileSync(watsonTtsPath))
@@ -318,27 +318,27 @@ export default () =>
         })
         if (results.includes(false)) {
           report.can_watson_tts.v = false
-          log.warning('Watson TTS is not yet configured\n')
+          LOG.warning('Watson TTS is not yet configured\n')
         } else {
-          log.success('Configured\n')
+          LOG.success('Configured\n')
         }
       } catch (e) {
         report.can_watson_tts.v = false
-        log.warning(`Watson TTS is not yet configured: ${e}\n`)
+        LOG.warning(`Watson TTS is not yet configured: ${e}\n`)
       }
 
-      log.info('Offline TTS')
+      LOG.info('Offline TTS')
 
       if (!fs.existsSync(flitePath)) {
         report.can_offline_tts.v = false
-        log.warning(
+        LOG.warning(
           `Cannot find ${flitePath}. You can setup the offline TTS by running: "npm run setup:offline-tts"\n`
         )
       } else {
-        log.success(`Found Flite at ${flitePath}\n`)
+        LOG.success(`Found Flite at ${flitePath}\n`)
       }
 
-      log.info('Watson STT')
+      LOG.info('Watson STT')
 
       try {
         const json = JSON.parse(fs.readFileSync(watsonSttPath))
@@ -348,59 +348,59 @@ export default () =>
         })
         if (results.includes(false)) {
           report.can_watson_stt.v = false
-          log.warning('Watson STT is not yet configured\n')
+          LOG.warning('Watson STT is not yet configured\n')
         } else {
-          log.success('Configured\n')
+          LOG.success('Configured\n')
         }
       } catch (e) {
         report.can_watson_stt.v = false
-        log.warning(`Watson STT is not yet configured: ${e}`)
+        LOG.warning(`Watson STT is not yet configured: ${e}`)
       }
 
-      log.info('Offline STT')
+      LOG.info('Offline STT')
 
       if (!fs.existsSync(coquiLanguageModelPath)) {
         report.can_offline_stt.v = false
-        log.warning(
+        LOG.warning(
           `Cannot find ${coquiLanguageModelPath}. You can setup the offline STT by running: "npm run setup:offline-stt"`
         )
       } else {
-        log.success(`Found Coqui language model at ${coquiLanguageModelPath}`)
+        LOG.success(`Found Coqui language model at ${coquiLanguageModelPath}`)
       }
 
       /**
        * Report
        */
 
-      log.title('Report')
+      LOG.title('Report')
 
-      log.info('Here is the diagnosis about your current setup')
+      LOG.info('Here is the diagnosis about your current setup')
       Object.keys(report).forEach((item) => {
         if (report[item].v === true) {
-          log.success(report[item].title)
+          LOG.success(report[item].title)
         } else {
-          log[report[item].type](report[item].title)
+          LOG[report[item].type](report[item].title)
         }
       })
 
-      log.default('')
+      LOG.default('')
       if (
         report.can_run.v &&
         report.can_run_skill.v &&
         report.can_text.v &&
         report.has_spacy_model.v
       ) {
-        log.success('Hooray! Leon can run correctly')
-        log.info(
+        LOG.success('Hooray! Leon can run correctly')
+        LOG.info(
           'If you have some yellow warnings, it is all good. It means some entities are not yet configured'
         )
       } else {
-        log.error('Please fix the errors above')
+        LOG.error('Please fix the errors above')
       }
 
       resolve()
     } catch (e) {
-      log.error(e)
+      LOG.error(e)
       reject()
     }
   })

@@ -1,14 +1,14 @@
 import fs from 'fs'
 import path from 'path'
 
-import log from '@/helpers/log'
+import { LOG } from '@/helpers/log'
 
 /**
  * Setup Leon's core configuration
  */
 export default () =>
   new Promise((resolve) => {
-    log.info('Configuring core...')
+    LOG.info('Configuring core...')
 
     const dir = 'core/config'
     const list = (dir) => {
@@ -30,12 +30,12 @@ export default () =>
             fs.createWriteStream(`${dir}/${file}`)
           )
 
-          log.success(`${file} file created`)
+          LOG.success(`${file} file created`)
         } else if (
           entities[i].indexOf('.sample.json') !== -1 &&
           fs.existsSync(`${dir}/${file}`)
         ) {
-          log.success(`${file} already exists`)
+          LOG.success(`${file} already exists`)
         }
       }
     }

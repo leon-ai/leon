@@ -1,4 +1,4 @@
-import loader from '@/helpers/loader'
+import { LOADER } from '@/helpers/loader'
 
 jest.useFakeTimers()
 
@@ -8,14 +8,14 @@ describe('loader helper', () => {
     jest.spyOn(global, 'setInterval')
 
     test('starts spinner', () => {
-      expect(loader.start()).toBeObject()
+      expect(LOADER.start()).toBeObject()
       expect(setInterval).toHaveBeenCalledTimes(1)
     })
   })
 
   describe('stop()', () => {
     test('stops spinner', () => {
-      expect(loader.stop()).toBeObject()
+      expect(LOADER.stop()).toBeObject()
     })
   })
 })
