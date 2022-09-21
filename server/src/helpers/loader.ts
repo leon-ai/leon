@@ -6,7 +6,7 @@ function randomNumber(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-class Loader {
+class LoaderHelper {
   static readonly SENTENCES = [
     'This process takes time, please go for a coffee (or a fruit juice)',
     'This may take a while, grab a drink and come back later',
@@ -15,7 +15,7 @@ class Loader {
     'Leon will be ready for you in a moment'
   ]
 
-  private static instance: Loader
+  private static instance: LoaderHelper
 
   private spinner = new Spinner('\x1b[95m%s\x1b[0m\r').setSpinnerString(18)
 
@@ -26,11 +26,11 @@ class Loader {
   }
 
   public static getInstance() {
-    if (Loader.instance == null) {
-      Loader.instance = new Loader()
+    if (LoaderHelper.instance == null) {
+      LoaderHelper.instance = new LoaderHelper()
     }
 
-    return Loader.instance
+    return LoaderHelper.instance
   }
 
   /**
@@ -39,8 +39,11 @@ class Loader {
   public start() {
     this.interval = setInterval(() => {
       if (this.spinner.isSpinning()) {
-        const randomSentenceIndex = randomNumber(0, Loader.SENTENCES.length - 1)
-        const randomSentence = Loader.SENTENCES[randomSentenceIndex]
+        const randomSentenceIndex = randomNumber(
+          0,
+          LoaderHelper.SENTENCES.length - 1
+        )
+        const randomSentence = LoaderHelper.SENTENCES[randomSentenceIndex]
 
         LOG.info(randomSentence ?? 'Loading...')
       }
@@ -59,4 +62,4 @@ class Loader {
   }
 }
 
-export const LOADER = Loader.getInstance()
+export const LOADER = LoaderHelper.getInstance()

@@ -8,19 +8,19 @@ interface GetInformation {
   name: OSName
 }
 
-class OperatingSystem {
-  private static instance: OperatingSystem
+class OSHelper {
+  private static instance: OSHelper
 
   private constructor() {
     // Singleton
   }
 
   public static getInstance() {
-    if (OperatingSystem.instance == null) {
-      OperatingSystem.instance = new OperatingSystem()
+    if (OSHelper.instance == null) {
+      OSHelper.instance = new OSHelper()
     }
 
-    return OperatingSystem.instance
+    return OSHelper.instance
   }
 
   /**
@@ -54,4 +54,4 @@ class OperatingSystem {
   }
 }
 
-export const OS = OperatingSystem.getInstance()
+export const OS = OSHelper.getInstance()

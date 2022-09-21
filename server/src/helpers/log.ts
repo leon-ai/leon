@@ -4,7 +4,7 @@ import path from 'node:path'
 import { IS_TESTING_ENV } from '@/constants'
 import { DATE } from '@/helpers/date'
 
-class Log {
+class LogHelper {
   static readonly ERRORS_PATH = path.join(
     __dirname,
     '..',
@@ -14,18 +14,18 @@ class Log {
     'errors.log'
   )
 
-  private static instance: Log
+  private static instance: LogHelper
 
   private constructor() {
     // Singleton
   }
 
   public static getInstance() {
-    if (Log.instance == null) {
-      Log.instance = new Log()
+    if (LogHelper.instance == null) {
+      LogHelper.instance = new LogHelper()
     }
 
-    return Log.instance
+    return LogHelper.instance
   }
 
   /**
@@ -63,10 +63,10 @@ class Log {
     const data = `${DATE.getDateTime()} - ${value}`
 
     if (!IS_TESTING_ENV) {
-      if (fs.existsSync(Log.ERRORS_PATH)) {
-        fs.appendFileSync(Log.ERRORS_PATH, `\n${data}`)
+      if (fs.existsSync(LogHelper.ERRORS_PATH)) {
+        fs.appendFileSync(LogHelper.ERRORS_PATH, `\n${data}`)
       } else {
-        fs.writeFileSync(Log.ERRORS_PATH, data, { flag: 'wx' })
+        fs.writeFileSync(LogHelper.ERRORS_PATH, data, { flag: 'wx' })
       }
     }
 
@@ -88,4 +88,4 @@ class Log {
   }
 }
 
-export const LOG = Log.getInstance()
+export const LOG = LogHelper.getInstance()

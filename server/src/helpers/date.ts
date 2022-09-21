@@ -8,19 +8,19 @@ import { LOG } from '@/helpers/log'
 dayjs.extend(utc)
 dayjs.extend(timezone)
 
-class Date {
-  private static instance: Date
+class DateHelper {
+  private static instance: DateHelper
 
   private constructor() {
     // Singleton
   }
 
   public static getInstance() {
-    if (Date.instance == null) {
-      Date.instance = new Date()
+    if (DateHelper.instance == null) {
+      DateHelper.instance = new DateHelper()
     }
 
-    return Date.instance
+    return DateHelper.instance
   }
 
   /**
@@ -54,4 +54,4 @@ class Date {
   }
 }
 
-export const DATE = Date.getInstance()
+export const DATE = DateHelper.getInstance()

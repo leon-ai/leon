@@ -11,19 +11,19 @@ export type LongLanguageCode = keyof Languages
 type Language = Languages[LongLanguageCode]
 export type ShortLanguageCode = Language['short']
 
-class Lang {
-  private static instance: Lang
+class LangHelper {
+  private static instance: LangHelper
 
   private constructor() {
     // Singleton
   }
 
   public static getInstance() {
-    if (Lang.instance == null) {
-      Lang.instance = new Lang()
+    if (LangHelper.instance == null) {
+      LangHelper.instance = new LangHelper()
     }
 
-    return Lang.instance
+    return LangHelper.instance
   }
 
   /**
@@ -64,4 +64,4 @@ class Lang {
   }
 }
 
-export const LANG = Lang.getInstance()
+export const LANG = LangHelper.getInstance()
