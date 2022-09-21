@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { IS_TESTING_ENV } from '@/constants'
-import { getDateTime } from '@/helpers/date'
+import { DATE } from '@/helpers/date'
 
 class Log {
   static readonly ERRORS_PATH = path.join(
@@ -63,7 +63,7 @@ class Log {
    * TODO
    */
   public error(value: string) {
-    const data = `${getDateTime()} - ${value}`
+    const data = `${DATE.getDateTime()} - ${value}`
 
     if (!IS_TESTING_ENV) {
       if (fs.existsSync(Log.ERRORS_PATH)) {
