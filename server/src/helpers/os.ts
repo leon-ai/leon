@@ -1,35 +1,57 @@
 import nodeOS from 'node:os'
 
-export type GetOSType = 'windows' | 'macos' | 'linux' | 'unknown'
-export type GetOSName = 'Windows' | 'macOS' | 'Linux' | 'Unknown'
+type OSType = 'windows' | 'macos' | 'linux' | 'unknown'
+type OSName = 'Windows' | 'macOS' | 'Linux' | 'Unknown'
 
-export interface GetOSInformation {
-  type: GetOSType
-  name: GetOSName
+interface GetInformation {
+  type: OSType
+  name: OSName
 }
 
-/**
- * Returns information about your OS
- */
-export const getOSInformation = (): GetOSInformation => {
-  let type: GetOSType = 'unknown'
-  let name: GetOSName = 'Unknown'
-  if (nodeOS.type().indexOf('Windows') !== -1) {
-    type = 'windows'
-    name = 'Windows'
-  } else if (nodeOS.type() === 'Darwin') {
-    type = 'macos'
-    name = 'macOS'
-  } else if (nodeOS.type() === 'Linux') {
-    type = 'linux'
-    name = 'Linux'
+class OperatingSystem {
+  private static instance: OperatingSystem
+
+  private constructor() {
+    // Singleton
   }
-  return { type, name }
+
+  public static getInstance() {
+    if (OperatingSystem.instance == null) {
+      OperatingSystem.instance = new OperatingSystem()
+    }
+
+    return OperatingSystem.instance
+  }
+
+  /**
+   * Get information about your OS
+   * @example getInformation() // { type: 'linux', name: 'Linux' }
+   */
+  public getInformation(): GetInformation {
+    let type: OSType = 'unknown'
+    let name: OSName = 'Unknown'
+
+    if (nodeOS.type().indexOf('Windows') !== -1) {
+      type = 'windows'
+      name = 'Windows'
+    } else if (nodeOS.type() === 'Darwin') {
+      type = 'macos'
+      name = 'macOS'
+    } else if (nodeOS.type() === 'Linux') {
+      type = 'linux'
+      name = 'Linux'
+    }
+
+    return { type, name }
+  }
+
+  /**
+   * Get the number of cores on your machine
+   * @example getNumberOfCPUCores() // 8
+   */
+  public getNumberOfCPUCores() {
+    return nodeOS.cpus().length
+  }
 }
 
-/**
- * Returns the number of cores on your machine
- */
-export const getNumberOfCPUCores = (): number => {
-  return nodeOS.cpus().length
-}
+export const OS = OperatingSystem.getInstance()
