@@ -7,7 +7,7 @@ import { HAS_TTS } from '@/constants'
 import { LOG } from '@/helpers/log'
 import { findAndMap, randomString } from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
-import { getLongLanguageCode } from '@/helpers/lang'
+import { LANG } from '@/helpers/lang'
 import {
   getSkillDomainInfo,
   getSkillInfo,
@@ -160,7 +160,7 @@ class Brain {
       // Ask to repeat if Leon is not sure about the request
       if (
         obj.classification.confidence <
-        langs[getLongLanguageCode(this._lang)].min_confidence
+        langs[LANG.getLongLanguageCode(this._lang)].min_confidence
       ) {
         if (!opts.mute) {
           const speech = `${this.wernicke('random_not_sure')}.`

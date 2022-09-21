@@ -1,51 +1,69 @@
 import { langs } from '@@/core/langs.json'
 
-export type Languages = typeof langs
-
 /**
  * ISO 639-1 (Language codes) - ISO 3166-1 (Country Codes)
  * @see https://www.iso.org/iso-639-language-codes.html
  * @see https://www.iso.org/iso-3166-country-codes.html
  */
+
+type Languages = typeof langs
 export type LongLanguageCode = keyof Languages
-
-export type Language = Languages[LongLanguageCode]
-
+type Language = Languages[LongLanguageCode]
 export type ShortLanguageCode = Language['short']
 
-/**
- * TODO
- */
-export function getShortLanguages(): ShortLanguageCode[] {
-  const longLanguages = Object.keys(langs) as LongLanguageCode[]
-  return longLanguages.map((lang) => {
-    return langs[lang].short
-  })
-}
+class Lang {
+  private static instance: Lang
 
-/**
- * TODO
- */
-export function getLongLanguageCode(
-  shortLanguage: ShortLanguageCode
-): LongLanguageCode | null {
-  for (const longLanguage in langs) {
-    const longLanguageType = longLanguage as LongLanguageCode
-    const lang = langs[longLanguageType]
-
-    if (lang.short === shortLanguage) {
-      return longLanguageType
-    }
+  private constructor() {
+    // Singleton
   }
 
-  return null
+  public static getInstance() {
+    if (Lang.instance == null) {
+      Lang.instance = new Lang()
+    }
+
+    return Lang.instance
+  }
+
+  /**
+   * Get short language codes
+   * @example getShortLanguages() // ["en", "fr"]
+   */
+  public getShortLanguages(): ShortLanguageCode[] {
+    const longLanguages = Object.keys(langs) as LongLanguageCode[]
+
+    return longLanguages.map((lang) => langs[lang].short)
+  }
+
+  /**
+   * Get long language code of the given short language code
+   * @param shortLanguageCode The short language code of the language
+   * @example getLongLanguageCode('en') // en-US
+   */
+  public getLongLanguageCode(shortLanguageCode: ShortLanguageCode) {
+    for (const longLanguage in langs) {
+      const longLanguageType = longLanguage as LongLanguageCode
+      const lang = langs[longLanguageType]
+
+      if (lang.short === shortLanguageCode) {
+        return longLanguageType
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Get short language code of the given long language code
+   * @param longLanguageCode The long language code of the language
+   * @example getShortLanguageCode('en-US') // en
+   */
+  public getShortLanguageCode(
+    longLanguageCode: LongLanguageCode
+  ): ShortLanguageCode {
+    return langs[longLanguageCode].short
+  }
 }
 
-/**
- * TODO
- */
-export function getShortLanguageCode(
-  longLanguage: LongLanguageCode
-): ShortLanguageCode {
-  return langs[longLanguage].short
-}
+export const LANG = Lang.getInstance()
