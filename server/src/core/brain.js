@@ -6,13 +6,9 @@ import { langs } from '@@/core/langs.json'
 import { HAS_TTS } from '@/constants'
 import { LOG } from '@/helpers/log'
 import { STRING } from '@/helpers/string'
-import Synchronizer from '@/core/synchronizer'
 import { LANG } from '@/helpers/lang'
-import {
-  getSkillDomainInfo,
-  getSkillInfo,
-  getSkillConfig
-} from '@/helpers/skill-domain'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
+import Synchronizer from '@/core/synchronizer'
 
 class Brain {
   constructor() {
@@ -239,8 +235,9 @@ class Brain {
 
           const domainName = obj.classification.domain
           const skillName = obj.classification.skill
-          const { name: domainFriendlyName } = getSkillDomainInfo(domainName)
-          const { name: skillFriendlyName } = getSkillInfo(
+          const { name: domainFriendlyName } =
+            SKILL_DOMAIN.getSkillDomainInfo(domainName)
+          const { name: skillFriendlyName } = SKILL_DOMAIN.getSkillInfo(
             domainName,
             skillName
           )
@@ -405,107 +402,106 @@ class Brain {
           /**
            * "Dialog" action skill execution
            */
-          const skillConfigData = await getSkillConfig({
-            domain: obj.classification.domain,
-            skill: obj.classification.skill,
-            lang: this._lang
-          })
 
-          if (skillConfigData != null) {
-            const { actions, entities } = skillConfigData
+          const configFilePath = path.join(
+            process.cwd(),
+            'skills',
+            obj.classification.domain,
+            obj.classification.skill,
+            'config',
+            `${this._lang}.json`
+          )
+          const { actions, entities } = await SKILL_DOMAIN.getSkillConfig(
+            configFilePath,
+            this._lang
+          )
+          const utteranceHasEntities = obj.entities.length > 0
+          const { answers: rawAnswers } = obj
+          let answers = rawAnswers
+          let answer = ''
 
-            const utteranceHasEntities = obj.entities.length > 0
-            const { answers: rawAnswers } = obj
-            let answers = rawAnswers
-            let answer = ''
-
-            if (!utteranceHasEntities) {
-              answers = answers.filter(
-                ({ answer }) => answer.indexOf('{{') === -1
-              )
-            } else {
-              answers = answers.filter(
-                ({ answer }) => answer.indexOf('{{') !== -1
-              )
-            }
-
-            // When answers are simple without required entity
-            if (answers.length === 0) {
-              answer =
-                rawAnswers[Math.floor(Math.random() * rawAnswers.length)]
-                  ?.answer
-
-              // In case the expected answer requires a known entity
-              if (answer.indexOf('{{') !== -1) {
-                // TODO
-                answers = actions[obj.classification.action]?.unknown_answers
-                answer = answers[Math.floor(Math.random() * answers.length)]
-              }
-            } else {
-              answer =
-                answers[Math.floor(Math.random() * answers.length)]?.answer
-
-              /**
-               * In case the utterance contains entities, and the picked up answer too,
-               * then map them (utterance <-> answer)
-               */
-              if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
-                obj.currentEntities.forEach((entityObj) => {
-                  answer = STRING.findAndMap(answer, {
-                    [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value
-                  })
-
-                  // Find matches and map deeper data from the NLU file (global entities)
-                  const matches = answer.match(/{{.+?}}/g)
-
-                  matches?.forEach((match) => {
-                    let newStr = match.substring(3)
-
-                    newStr = newStr.substring(0, newStr.indexOf('}}') - 1)
-
-                    const [entity, dataKey] = newStr.split('.')
-
-                    if (entity === entityObj.entity) {
-                      // e.g. entities.color.options.red.data.usage
-                      const valuesArr =
-                        entities[entity].options[entityObj.option].data[dataKey]
-
-                      answer = STRING.findAndMap(answer, {
-                        [match]:
-                          valuesArr[
-                            Math.floor(Math.random() * valuesArr.length)
-                          ]
-                      })
-                    }
-                  })
-                })
-              }
-            }
-
-            const executionTimeEnd = Date.now()
-            const executionTime = executionTimeEnd - executionTimeStart
-
-            if (!opts.mute) {
-              this.talk(answer, true)
-              this._socket.emit('is-typing', false)
-            }
-
-            // Send suggestions to the client
-            if (nextAction?.suggestions) {
-              this._socket.emit('suggest', nextAction.suggestions)
-            }
-
-            resolve({
-              utteranceId,
-              lang: this._lang,
-              ...obj,
-              speeches: [answer],
-              core: this.finalOutput.core,
-              action,
-              nextAction,
-              executionTime // In ms, skill execution time only
-            })
+          if (!utteranceHasEntities) {
+            answers = answers.filter(
+              ({ answer }) => answer.indexOf('{{') === -1
+            )
+          } else {
+            answers = answers.filter(
+              ({ answer }) => answer.indexOf('{{') !== -1
+            )
           }
+
+          // When answers are simple without required entity
+          if (answers.length === 0) {
+            answer =
+              rawAnswers[Math.floor(Math.random() * rawAnswers.length)]?.answer
+
+            // In case the expected answer requires a known entity
+            if (answer.indexOf('{{') !== -1) {
+              // TODO
+              answers = actions[obj.classification.action]?.unknown_answers
+              answer = answers[Math.floor(Math.random() * answers.length)]
+            }
+          } else {
+            answer = answers[Math.floor(Math.random() * answers.length)]?.answer
+
+            /**
+             * In case the utterance contains entities, and the picked up answer too,
+             * then map them (utterance <-> answer)
+             */
+            if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
+              obj.currentEntities.forEach((entityObj) => {
+                answer = STRING.findAndMap(answer, {
+                  [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value
+                })
+
+                // Find matches and map deeper data from the NLU file (global entities)
+                const matches = answer.match(/{{.+?}}/g)
+
+                matches?.forEach((match) => {
+                  let newStr = match.substring(3)
+
+                  newStr = newStr.substring(0, newStr.indexOf('}}') - 1)
+
+                  const [entity, dataKey] = newStr.split('.')
+
+                  if (entity === entityObj.entity) {
+                    // e.g. entities.color.options.red.data.usage
+                    const valuesArr =
+                      entities[entity].options[entityObj.option].data[dataKey]
+
+                    answer = STRING.findAndMap(answer, {
+                      [match]:
+                        valuesArr[Math.floor(Math.random() * valuesArr.length)]
+                    })
+                  }
+                })
+              })
+            }
+          }
+
+          const executionTimeEnd = Date.now()
+          const executionTime = executionTimeEnd - executionTimeStart
+
+          if (!opts.mute) {
+            this.talk(answer, true)
+            this._socket.emit('is-typing', false)
+          }
+
+          // Send suggestions to the client
+          if (nextAction?.suggestions) {
+            this._socket.emit('suggest', nextAction.suggestions)
+          }
+
+          resolve({
+            utteranceId,
+            lang: this._lang,
+            ...obj,
+            speeches: [answer],
+            core: this.finalOutput.core,
+            action,
+            nextAction,
+            executionTime // In ms, skill execution time only
+          })
         }
       }
     })

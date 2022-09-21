@@ -2,7 +2,7 @@ import fs from 'fs'
 import { join } from 'path'
 
 import { LOG } from '@/helpers/log'
-import { getSkillDomains } from '@/helpers/skill-domain'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
  * This script delete test DB files if they exist
@@ -11,7 +11,7 @@ export default () =>
   new Promise(async (resolve, reject) => {
     LOG.info('Cleaning test DB files...')
 
-    const skillDomains = await getSkillDomains()
+    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
 
     for (const currentDomain of skillDomains.values()) {
       const skillKeys = Object.keys(currentDomain.skills)

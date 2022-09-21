@@ -1,8 +1,10 @@
+import path from 'path'
+import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
 import { LOG } from '@/helpers/log'
 import { STRING } from '@/helpers/string'
-import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
  * Train skills actions
@@ -12,7 +14,7 @@ export default (lang, nlp) =>
     LOG.title('Skills actions training')
 
     const supportedActionTypes = ['dialog', 'logic']
-    const skillDomains = await getSkillDomains()
+    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
 
     for (const [domainName, currentDomain] of skillDomains) {
       const skillKeys = Object.keys(currentDomain.skills)
@@ -21,17 +23,21 @@ export default (lang, nlp) =>
 
       for (let j = 0; j < skillKeys.length; j += 1) {
         const { name: skillName } = currentDomain.skills[skillKeys[j]]
+        const currentSkill = currentDomain.skills[skillKeys[j]]
 
         LOG.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
 
-        const skillConfigData = await getSkillConfig({
-          domain: currentDomain.name,
-          skill: skillName,
-          lang
-        })
+        const configFilePath = path.join(
+          currentSkill.path,
+          'config',
+          `${lang}.json`
+        )
 
-        if (skillConfigData != null) {
-          const { actions, variables } = skillConfigData
+        if (fs.existsSync(configFilePath)) {
+          const { actions, variables } = await SKILL_DOMAIN.getSkillConfig(
+            configFilePath,
+            lang
+          ) // eslint-disable-line no-await-in-loop
           const actionsKeys = Object.keys(actions)
 
           for (let k = 0; k < actionsKeys.length; k += 1) {

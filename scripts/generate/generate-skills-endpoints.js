@@ -5,7 +5,7 @@ import path from 'path'
 import { LOG } from '@/helpers/log'
 
 import { langs } from '@@/core/langs.json'
-import { getSkillDomains } from '@/helpers/skill-domain'
+import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 dotenv.config()
 
@@ -30,7 +30,7 @@ export default () =>
     const lang = langs[process.env.LEON_HTTP_API_LANG].short
 
     try {
-      const skillDomains = await getSkillDomains()
+      const skillDomains = await SKILL_DOMAIN.getSkillDomains()
       const finalObj = {
         endpoints: []
       }
