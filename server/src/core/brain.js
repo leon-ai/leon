@@ -5,7 +5,7 @@ import { spawn } from 'child_process'
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS } from '@/constants'
 import { LOG } from '@/helpers/log'
-import { findAndMap, randomString } from '@/helpers/string'
+import { STRING } from '@/helpers/string'
 import Synchronizer from '@/core/synchronizer'
 import { LANG } from '@/helpers/lang'
 import {
@@ -133,7 +133,7 @@ class Brain {
 
     // Parse sentence's value(s) and replace with the given object
     if (typeof obj !== 'undefined' && Object.keys(obj).length > 0) {
-      answer = findAndMap(answer, obj)
+      answer = STRING.findAndMap(answer, obj)
     }
 
     return answer
@@ -150,7 +150,7 @@ class Brain {
     }
 
     return new Promise(async (resolve, reject) => {
-      const utteranceId = `${Date.now()}-${randomString(4)}`
+      const utteranceId = `${Date.now()}-${STRING.random(4)}`
       const intentObjectPath = path.join(
         __dirname,
         `../tmp/${utteranceId}.json`
@@ -451,7 +451,7 @@ class Brain {
                */
               if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
                 obj.currentEntities.forEach((entityObj) => {
-                  answer = findAndMap(answer, {
+                  answer = STRING.findAndMap(answer, {
                     [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value
                   })
 
@@ -470,7 +470,7 @@ class Brain {
                       const valuesArr =
                         entities[entity].options[entityObj.option].data[dataKey]
 
-                      answer = findAndMap(answer, {
+                      answer = STRING.findAndMap(answer, {
                         [match]:
                           valuesArr[
                             Math.floor(Math.random() * valuesArr.length)

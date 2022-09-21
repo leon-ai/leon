@@ -1,7 +1,7 @@
 import { composeFromPattern } from '@nlpjs/utils'
 
 import { LOG } from '@/helpers/log'
-import { findAndMap } from '@/helpers/string'
+import { STRING } from '@/helpers/string'
 import { getSkillDomains, getSkillConfig } from '@/helpers/skill-domain'
 
 /**
@@ -105,7 +105,7 @@ export default (lang, nlp) =>
               for (let l = 0; l < answers?.length; l += 1) {
                 const variableKeys = Object.keys(variablesObj)
                 if (variableKeys.length > 0) {
-                  answers[l] = findAndMap(answers[l], variablesObj)
+                  answers[l] = STRING.findAndMap(answers[l], variablesObj)
                 }
 
                 nlp.addAnswer(lang, `${skillName}.${actionName}`, answers[l])

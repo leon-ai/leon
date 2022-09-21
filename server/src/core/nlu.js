@@ -18,7 +18,7 @@ import {
 } from '@/constants'
 import Ner from '@/core/ner'
 import { LOG } from '@/helpers/log'
-import { ucFirst } from '@/helpers/string'
+import { STRING } from '@/helpers/string'
 import { LANG } from '@/helpers/lang'
 import TcpClient from '@/core/tcp-client'
 import Conversation from '@/core/conversation'
@@ -270,7 +270,7 @@ class Nlu {
         const spacyEntity = {
           [entity]: {
             options: {
-              [resolution.value]: [ucFirst(resolution.value)]
+              [resolution.value]: [STRING.ucFirst(resolution.value)]
             }
           }
         }
