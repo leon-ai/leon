@@ -14,7 +14,7 @@ if (fs.existsSync(commitEditMsgFile)) {
   try {
     const commitMessage = fs.readFileSync(commitEditMsgFile, 'utf8')
     const regex =
-      '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|docker|server|hotword|skill\\/([\\w-]+)))?\\)?: .{1,50}' // eslint-disable-line no-useless-escape
+      '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|docker|server|hotword|skill\\/([\\w-]+)))?\\)?: .{1,50}'
 
     if (commitMessage.match(regex) !== null) {
       LOG.success('Commit message validated')

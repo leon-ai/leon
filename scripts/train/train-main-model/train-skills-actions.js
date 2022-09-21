@@ -37,7 +37,7 @@ export default (lang, nlp) =>
           const { actions, variables } = await SKILL_DOMAIN.getSkillConfig(
             configFilePath,
             lang
-          ) // eslint-disable-line no-await-in-loop
+          )
           const actionsKeys = Object.keys(actions)
 
           for (let k = 0; k < actionsKeys.length; k += 1) {
