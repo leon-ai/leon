@@ -539,7 +539,7 @@ class Nlu {
         }
       }
 
-      const isSupportedLanguage = LANG.getShortLanguages().includes(locale)
+      const isSupportedLanguage = LANG.getShortCodes().includes(locale)
       if (!isSupportedLanguage) {
         this.brain.talk(
           `${this.brain.wernicke('random_language_not_supported')}.`,
@@ -558,7 +558,7 @@ class Nlu {
 
       if (intent === 'None') {
         const fallback = this.fallback(
-          langs[LANG.getLongLanguageCode(locale)].fallbacks
+          langs[LANG.getLongCode(locale)].fallbacks
         )
 
         if (fallback === false) {

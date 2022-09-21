@@ -84,7 +84,7 @@ export default () =>
       /**
        * Training phases
        */
-      const shortLangs = LANG.getShortLanguages()
+      const shortLangs = LANG.getShortCodes()
       for (let h = 0; h < shortLangs.length; h += 1) {
         const lang = shortLangs[h]
 

@@ -2,7 +2,7 @@ import { Spinner } from 'cli-spinner'
 
 import { LOG } from '@/helpers/log'
 
-function randomNumber(min: number, max: number): number {
+function randomNumber(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 

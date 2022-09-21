@@ -160,7 +160,7 @@ class Brain {
       // Ask to repeat if Leon is not sure about the request
       if (
         obj.classification.confidence <
-        langs[LANG.getLongLanguageCode(this._lang)].min_confidence
+        langs[LANG.getLongCode(this._lang)].min_confidence
       ) {
         if (!opts.mute) {
           const speech = `${this.wernicke('random_not_sure')}.`

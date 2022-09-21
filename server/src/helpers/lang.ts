@@ -28,9 +28,9 @@ class Lang {
 
   /**
    * Get short language codes
-   * @example getShortLanguages() // ["en", "fr"]
+   * @example getShortCodes() // ["en", "fr"]
    */
-  public getShortLanguages(): ShortLanguageCode[] {
+  public getShortCodes(): ShortLanguageCode[] {
     const longLanguages = Object.keys(langs) as LongLanguageCode[]
 
     return longLanguages.map((lang) => langs[lang].short)
@@ -38,15 +38,15 @@ class Lang {
 
   /**
    * Get long language code of the given short language code
-   * @param shortLanguageCode The short language code of the language
-   * @example getLongLanguageCode('en') // en-US
+   * @param shortCode The short language code of the language
+   * @example getLongCode('en') // en-US
    */
-  public getLongLanguageCode(shortLanguageCode: ShortLanguageCode) {
+  public getLongCode(shortCode: ShortLanguageCode) {
     for (const longLanguage in langs) {
       const longLanguageType = longLanguage as LongLanguageCode
       const lang = langs[longLanguageType]
 
-      if (lang.short === shortLanguageCode) {
+      if (lang.short === shortCode) {
         return longLanguageType
       }
     }
@@ -56,13 +56,11 @@ class Lang {
 
   /**
    * Get short language code of the given long language code
-   * @param longLanguageCode The long language code of the language
-   * @example getShortLanguageCode('en-US') // en
+   * @param longCode The long language code of the language
+   * @example getShortCode('en-US') // en
    */
-  public getShortLanguageCode(
-    longLanguageCode: LongLanguageCode
-  ): ShortLanguageCode {
-    return langs[longLanguageCode].short
+  public getShortCode(longCode: LongLanguageCode): ShortLanguageCode {
+    return langs[longCode].short
   }
 }
 
