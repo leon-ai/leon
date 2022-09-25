@@ -11,16 +11,10 @@ dayjs.extend(timezone)
 class DateHelper {
   private static instance: DateHelper
 
-  private constructor() {
-    // Singleton
-  }
-
-  public static getInstance() {
+  constructor() {
     if (DateHelper.instance == null) {
-      DateHelper.instance = new DateHelper()
+      DateHelper.instance = this
     }
-
-    return DateHelper.instance
   }
 
   /**
@@ -54,4 +48,4 @@ class DateHelper {
   }
 }
 
-export const DATE = DateHelper.getInstance()
+export const DATE = new DateHelper()

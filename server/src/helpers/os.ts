@@ -11,16 +11,10 @@ interface GetInformation {
 class OSHelper {
   private static instance: OSHelper
 
-  private constructor() {
-    // Singleton
-  }
-
-  public static getInstance() {
+  constructor() {
     if (OSHelper.instance == null) {
-      OSHelper.instance = new OSHelper()
+      OSHelper.instance = this
     }
-
-    return OSHelper.instance
   }
 
   /**
@@ -54,4 +48,4 @@ class OSHelper {
   }
 }
 
-export const OS = OSHelper.getInstance()
+export const OS = new OSHelper()

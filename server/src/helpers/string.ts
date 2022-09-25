@@ -1,16 +1,10 @@
 class StringHelper {
   private static instance: StringHelper
 
-  private constructor() {
-    // Singleton
-  }
-
-  public static getInstance() {
+  constructor() {
     if (StringHelper.instance == null) {
-      StringHelper.instance = new StringHelper()
+      StringHelper.instance = this
     }
-
-    return StringHelper.instance
   }
 
   /**
@@ -82,4 +76,4 @@ class StringHelper {
   }
 }
 
-export const STRING = StringHelper.getInstance()
+export const STRING = new StringHelper()

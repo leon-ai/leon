@@ -21,16 +21,10 @@ class LoaderHelper {
 
   private interval: NodeJS.Timer | undefined
 
-  private constructor() {
-    // Singleton
-  }
-
-  public static getInstance() {
+  constructor() {
     if (LoaderHelper.instance == null) {
-      LoaderHelper.instance = new LoaderHelper()
+      LoaderHelper.instance = this
     }
-
-    return LoaderHelper.instance
   }
 
   /**
@@ -62,4 +56,4 @@ class LoaderHelper {
   }
 }
 
-export const LOADER = LoaderHelper.getInstance()
+export const LOADER = new LoaderHelper()

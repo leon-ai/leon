@@ -16,16 +16,10 @@ class LogHelper {
 
   private static instance: LogHelper
 
-  private constructor() {
-    // Singleton
-  }
-
-  public static getInstance() {
+  constructor() {
     if (LogHelper.instance == null) {
-      LogHelper.instance = new LogHelper()
+      LogHelper.instance = this
     }
-
-    return LogHelper.instance
   }
 
   /**
@@ -88,4 +82,4 @@ class LogHelper {
   }
 }
 
-export const LOG = LogHelper.getInstance()
+export const LOG = new LogHelper()

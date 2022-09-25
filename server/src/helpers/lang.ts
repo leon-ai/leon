@@ -14,16 +14,10 @@ export type ShortLanguageCode = Language['short']
 class LangHelper {
   private static instance: LangHelper
 
-  private constructor() {
-    // Singleton
-  }
-
-  public static getInstance() {
+  constructor() {
     if (LangHelper.instance == null) {
-      LangHelper.instance = new LangHelper()
+      LangHelper.instance = this
     }
-
-    return LangHelper.instance
   }
 
   /**
@@ -64,4 +58,4 @@ class LangHelper {
   }
 }
 
-export const LANG = LangHelper.getInstance()
+export const LANG = new LangHelper()

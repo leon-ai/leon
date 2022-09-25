@@ -26,16 +26,10 @@ const DOMAINS_DIR = path.join(process.cwd(), 'skills')
 class SkillDomainHelper {
   private static instance: SkillDomainHelper
 
-  private constructor() {
-    // Singleton
-  }
-
-  public static getInstance() {
+  constructor() {
     if (SkillDomainHelper.instance == null) {
-      SkillDomainHelper.instance = new SkillDomainHelper()
+      SkillDomainHelper.instance = this
     }
-
-    return SkillDomainHelper.instance
   }
 
   /**
@@ -140,4 +134,4 @@ class SkillDomainHelper {
   }
 }
 
-export const SKILL_DOMAIN = SkillDomainHelper.getInstance()
+export const SKILL_DOMAIN = new SkillDomainHelper()
