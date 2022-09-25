@@ -1,19 +1,11 @@
-class StringHelper {
-  private static instance: StringHelper
-
-  constructor() {
-    if (StringHelper.instance == null) {
-      StringHelper.instance = this
-    }
-  }
-
+export class StringHelper {
   /**
    * Parse, map (with object) and replace value(s) in a string
    * @param toReplace The string containing the placeholders to replace
    * @param obj The object containing the value(s) to replace with
    * @example findAndMap('Hello %name%!', { '%name%': 'Louis' }) // Hello Louis!
    */
-  public findAndMap(toReplace: string, obj: Record<string, unknown>) {
+  public static findAndMap(toReplace: string, obj: Record<string, unknown>) {
     return toReplace.replace(
       new RegExp(Object.keys(obj).join('|'), 'gi'),
       (matched) => obj[matched] as string
@@ -25,7 +17,7 @@ class StringHelper {
    * @param str String to transform
    * @example ucFirst('hello world') // Hello world
    */
-  public ucFirst(str: string) {
+  public static ucFirst(str: string) {
     return str.charAt(0).toUpperCase() + str.slice(1)
   }
 
@@ -34,7 +26,7 @@ class StringHelper {
    * @param str String to transform
    * @example snakeToPascalCase('hello_world') // HelloWorld
    */
-  public snakeToPascalCase(str: string) {
+  public static snakeToPascalCase(str: string) {
     return str
       .split('_')
       .map((chunk) => this.ucFirst(chunk))
@@ -46,7 +38,7 @@ class StringHelper {
    * @param length Length of the string
    * @example random(6) // 4f3a2b
    */
-  public random(length: number) {
+  public static random(length: number) {
     return Math.random().toString(36).slice(-length)
   }
 
@@ -55,7 +47,7 @@ class StringHelper {
    * @param str String to remove accents
    * @example removeAccents('éèà') // eea
    */
-  public removeAccents(str: string) {
+  public static removeAccents(str: string) {
     return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
   }
 
@@ -64,7 +56,7 @@ class StringHelper {
    * @param str String to remove punctuation
    * @example removeEndPunctuation('Hello world!') // Hello world
    */
-  public removeEndPunctuation(str: string) {
+  public static removeEndPunctuation(str: string) {
     const punctuations = ['.', ';', ':', '?', '!']
     const lastChar = str.charAt(str.length - 1)
 
@@ -75,5 +67,3 @@ class StringHelper {
     return str
   }
 }
-
-export const STRING = new StringHelper()

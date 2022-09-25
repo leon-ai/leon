@@ -3,7 +3,7 @@ import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
 import { LOG } from '@/helpers/log'
-import { STRING } from '@/helpers/string'
+import { StringHelper } from '@/helpers/string-helper'
 import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
@@ -111,7 +111,7 @@ export default (lang, nlp) =>
               for (let l = 0; l < answers?.length; l += 1) {
                 const variableKeys = Object.keys(variablesObj)
                 if (variableKeys.length > 0) {
-                  answers[l] = STRING.findAndMap(answers[l], variablesObj)
+                  answers[l] = StringHelper.findAndMap(answers[l], variablesObj)
                 }
 
                 nlp.addAnswer(lang, `${skillName}.${actionName}`, answers[l])

@@ -3,7 +3,7 @@ import path from 'path'
 import archiver from 'archiver'
 
 import { LOG } from '@/helpers/log'
-import { STRING } from '@/helpers/string'
+import { StringHelper } from '@/helpers/string-helper'
 
 const getDownloads = async (fastify, options) => {
   fastify.get(`/api/${options.apiVersion}/downloads`, (request, reply) => {
@@ -28,12 +28,12 @@ const getDownloads = async (fastify, options) => {
       const skill = path.join(dlDomainDir, `${request.query.skill}.py`)
 
       LOG.info(
-        `Checking existence of the ${STRING.ucFirst(
+        `Checking existence of the ${StringHelper.ucFirst(
           request.query.skill
         )} skill...`
       )
       if (fs.existsSync(skill)) {
-        LOG.success(`${STRING.ucFirst(request.query.skill)} skill exists`)
+        LOG.success(`${StringHelper.ucFirst(request.query.skill)} skill exists`)
         const downloadsDir = `${dlDomainDir}/${request.query.skill}`
 
         LOG.info('Reading downloads directory...')
