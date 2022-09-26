@@ -8,20 +8,12 @@ interface GetInformation {
   name: OSName
 }
 
-class OSHelper {
-  private static instance: OSHelper
-
-  constructor() {
-    if (OSHelper.instance == null) {
-      OSHelper.instance = this
-    }
-  }
-
+export class OSHelper {
   /**
    * Get information about your OS
    * @example getInformation() // { type: 'linux', name: 'Linux' }
    */
-  public getInformation(): GetInformation {
+  public static getInformation(): GetInformation {
     let type: OSType = 'unknown'
     let name: OSName = 'Unknown'
 
@@ -43,9 +35,7 @@ class OSHelper {
    * Get the number of cores on your machine
    * @example getNumberOfCPUCores() // 8
    */
-  public getNumberOfCPUCores() {
+  public static getNumberOfCPUCores() {
     return nodeOS.cpus().length
   }
 }
-
-export const OS = new OSHelper()
