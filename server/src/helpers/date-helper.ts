@@ -13,7 +13,7 @@ export class DateHelper {
    * Get date time
    * @example getDateTime() // 2022-09-12T12:42:57+08:00
    */
-  public static getDateTime() {
+  public static getDateTime(): string {
     return dayjs().tz(this.getTimeZone()).format()
   }
 
@@ -21,7 +21,7 @@ export class DateHelper {
    * Get time zone
    * @example getTimeZone() // Asia/Shanghai
    */
-  public static getTimeZone() {
+  public static getTimeZone(): string {
     let { timeZone } = Intl.DateTimeFormat().resolvedOptions()
 
     if (TIME_ZONE) {
@@ -36,6 +36,6 @@ export class DateHelper {
       }
     }
 
-    return timeZone as string
+    return timeZone
   }
 }

@@ -35,7 +35,7 @@ export class OSHelper {
    * Get the number of cores on your machine
    * @example getNumberOfCPUCores() // 8
    */
-  public static getNumberOfCPUCores() {
+  public static getNumberOfCPUCores(): number {
     return nodeOS.cpus().length
   }
 }

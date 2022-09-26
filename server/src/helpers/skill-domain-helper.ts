@@ -27,7 +27,7 @@ export class SkillDomainHelper {
   /**
    * List all skills domains with skills data inside
    */
-  public static async getSkillDomains() {
+  public static async getSkillDomains(): Promise<Map<string, SkillDomain>> {
     const skillDomains = new Map<string, SkillDomain>()
 
     await Promise.all(
@@ -77,7 +77,7 @@ export class SkillDomainHelper {
    * Get information of a specific domain
    * @param domain Domain to get info from
    */
-  public static getSkillDomainInfo(domain: SkillDomain['name']) {
+  public static getSkillDomainInfo(domain: SkillDomain['name']): unknown {
     return JSON.parse(
       fs.readFileSync(path.join(DOMAINS_DIR, domain, 'domain.json'), 'utf8')
     )
@@ -91,7 +91,7 @@ export class SkillDomainHelper {
   public static getSkillInfo(
     domain: SkillDomain['name'],
     skill: Skill['name']
-  ) {
+  ): unknown {
     return JSON.parse(
       fs.readFileSync(
         path.join(DOMAINS_DIR, domain, skill, 'skill.json'),
@@ -108,7 +108,7 @@ export class SkillDomainHelper {
   public static getSkillConfig(
     configFilePath: string,
     lang: ShortLanguageCode
-  ) {
+  ): unknown {
     const sharedDataPath = path.join(process.cwd(), 'core/data', lang)
     const configData = JSON.parse(fs.readFileSync(configFilePath, 'utf8'))
     const { entities } = configData

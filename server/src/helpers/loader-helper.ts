@@ -2,7 +2,7 @@ import { Spinner } from 'cli-spinner'
 
 import { LogHelper } from '@/helpers/log-helper'
 
-function randomNumber(min: number, max: number) {
+function randomNumber(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
@@ -24,7 +24,7 @@ export class LoaderHelper {
   /**
    * Start the loader
    */
-  public static start() {
+  public static start(): void {
     this.interval = setInterval(() => {
       if (this.spinner.isSpinning()) {
         const randomSentenceIndex = randomNumber(
@@ -43,7 +43,7 @@ export class LoaderHelper {
   /**
    * Stop the loader
    */
-  public static stop() {
+  public static stop(): void {
     clearInterval(this.interval)
 
     this.spinner.stop()

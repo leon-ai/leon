@@ -27,7 +27,9 @@ export class LangHelper {
    * @param shortCode The short language code of the language
    * @example getLongCode('en') // en-US
    */
-  public static getLongCode(shortCode: ShortLanguageCode) {
+  public static getLongCode(
+    shortCode: ShortLanguageCode
+  ): LongLanguageCode | null {
     for (const longLanguage in langs) {
       const longLanguageType = longLanguage as LongLanguageCode
       const lang = langs[longLanguageType]

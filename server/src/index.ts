@@ -9,7 +9,7 @@ import {
 import { LangHelper } from '@/helpers/lang-helper'
 import TcpClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
-;(async () => {
+;(async (): Promise<void> => {
   process.title = 'leon'
 
   global.tcpServerProcess = spawn(

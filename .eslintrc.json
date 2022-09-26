@@ -23,6 +23,15 @@
     "prefer-destructuring": ["error"],
     "comma-dangle": ["error", "never"],
     "semi": ["error", "never"],
-    "object-curly-spacing": ["error", "always"]
-  }
+    "object-curly-spacing": ["error", "always"],
+    "@typescript-eslint/explicit-function-return-type": "off"
+  },
+  "overrides": [
+    {
+      "files": ["*.ts"],
+      "rules": {
+        "@typescript-eslint/explicit-function-return-type": "error"
+      }
+    }
+  ]
 }
