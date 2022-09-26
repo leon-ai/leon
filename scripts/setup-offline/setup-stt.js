@@ -1,5 +1,6 @@
-import { command } from 'execa'
 import fs from 'node:fs'
+
+import { command } from 'execa'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { OSHelper } from '@/helpers/os-helper'

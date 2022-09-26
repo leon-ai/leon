@@ -5,6 +5,7 @@ import dotenv from 'dotenv'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
+
 import trainGlobalResolvers from './train-resolvers-model/train-global-resolvers'
 import trainSkillsResolvers from './train-resolvers-model/train-skills-resolvers'
 import trainGlobalEntities from './train-main-model/train-global-entities'

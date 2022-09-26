@@ -1,8 +1,9 @@
-import Stt from 'ibm-watson/speech-to-text/v1'
-import { IamAuthenticator } from 'ibm-watson/auth'
 import fs from 'node:fs'
 import path from 'node:path'
 import { Duplex } from 'node:stream'
+
+import Stt from 'ibm-watson/speech-to-text/v1'
+import { IamAuthenticator } from 'ibm-watson/auth'
 
 import { LANG } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'

@@ -3,6 +3,7 @@ import { LogHelper } from '@/helpers/log-helper'
 
 import train from '../train/train'
 import generateHttpApiKey from '../generate/generate-http-api-key'
+
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupSkillsConfig from './setup-skills-config'

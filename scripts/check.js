@@ -1,8 +1,9 @@
+import fs from 'node:fs'
+import os from 'node:os'
+
 import dotenv from 'dotenv'
 import { command } from 'execa'
 import semver from 'semver'
-import fs from 'node:fs'
-import os from 'node:os'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'

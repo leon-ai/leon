@@ -1,9 +1,10 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import tts from '@google-cloud/text-to-speech'
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
-import fs from 'node:fs'
-import path from 'node:path'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'

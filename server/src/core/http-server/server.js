@@ -1,7 +1,8 @@
+import { join } from 'node:path'
+
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
 import socketio from 'socket.io'
-import { join } from 'node:path'
 
 import { version } from '@@/package.json'
 import { endpoints } from '@@/core/skills-endpoints.json'

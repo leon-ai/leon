@@ -4,6 +4,7 @@ import { LoaderHelper } from '@/helpers/loader-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
 import checkOs from '../check-os'
+
 import setupHotword from './setup-hotword'
 import setupTts from './setup-tts'
 import setupStt from './setup-stt'

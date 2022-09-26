@@ -4,10 +4,10 @@ import { spawn } from 'node:child_process'
 
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS } from '@/constants'
-import { LogHelper } from '@/helpers/log-helper'
-import { StringHelper } from '@/helpers/string-helper'
 import { LangHelper } from '@/helpers/lang-helper'
+import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
+import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
 
 class Brain {

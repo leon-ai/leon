@@ -1,12 +1,13 @@
+import fs from 'node:fs'
+import { join } from 'node:path'
+import { spawn } from 'node:child_process'
+
 import { containerBootstrap } from '@nlpjs/core-loader'
 import { Nlp } from '@nlpjs/nlp'
 import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
 import { LangAll } from '@nlpjs/lang-all'
 import request from 'superagent'
 import kill from 'tree-kill'
-import fs from 'node:fs'
-import { join } from 'node:path'
-import { spawn } from 'node:child_process'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'

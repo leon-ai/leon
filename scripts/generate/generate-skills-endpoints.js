@@ -1,10 +1,10 @@
-import dotenv from 'dotenv'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { LogHelper } from '@/helpers/log-helper'
+import dotenv from 'dotenv'
 
 import { langs } from '@@/core/langs.json'
+import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 dotenv.config()

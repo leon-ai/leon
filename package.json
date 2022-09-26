@@ -96,6 +96,8 @@
     "cli-spinner": "^0.2.10",
     "eslint": "8.22.0",
     "eslint-config-prettier": "^8.5.0",
+    "eslint-import-resolver-typescript": "^3.5.1",
+    "eslint-plugin-import": "^2.26.0",
     "git-changelog": "^2.0.0",
     "husky": "^7.0.0",
     "inquirer": "^8.1.0",

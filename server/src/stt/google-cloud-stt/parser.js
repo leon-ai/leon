@@ -1,5 +1,6 @@
-import stt from '@google-cloud/speech'
 import path from 'node:path'
+
+import stt from '@google-cloud/speech'
 
 import { LANG } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'

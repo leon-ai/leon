@@ -1,6 +1,7 @@
-import { commandSync } from 'execa'
 import fs from 'node:fs'
 import path from 'node:path'
+
+import { commandSync } from 'execa'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'

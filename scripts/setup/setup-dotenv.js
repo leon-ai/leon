@@ -1,5 +1,6 @@
-import { prompt } from 'inquirer'
 import fs from 'node:fs'
+
+import { prompt } from 'inquirer'
 
 import { LogHelper } from '@/helpers/log-helper'
 
