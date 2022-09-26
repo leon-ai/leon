@@ -4,7 +4,7 @@ import { composeFromPattern } from '@nlpjs/utils'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
-import { SKILL_DOMAIN } from '@/helpers/skill-domain'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 /**
  * Train skills actions
@@ -14,7 +14,7 @@ export default (lang, nlp) =>
     LogHelper.title('Skills actions training')
 
     const supportedActionTypes = ['dialog', 'logic']
-    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
+    const skillDomains = await SkillDomainHelper.getSkillDomains()
 
     for (const [domainName, currentDomain] of skillDomains) {
       const skillKeys = Object.keys(currentDomain.skills)
@@ -34,7 +34,7 @@ export default (lang, nlp) =>
         )
 
         if (fs.existsSync(configFilePath)) {
-          const { actions, variables } = await SKILL_DOMAIN.getSkillConfig(
+          const { actions, variables } = await SkillDomainHelper.getSkillConfig(
             configFilePath,
             lang
           )

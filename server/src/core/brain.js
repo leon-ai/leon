@@ -7,7 +7,7 @@ import { HAS_TTS } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { LangHelper } from '@/helpers/lang-helper'
-import { SKILL_DOMAIN } from '@/helpers/skill-domain'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import Synchronizer from '@/core/synchronizer'
 
 class Brain {
@@ -236,8 +236,8 @@ class Brain {
           const domainName = obj.classification.domain
           const skillName = obj.classification.skill
           const { name: domainFriendlyName } =
-            SKILL_DOMAIN.getSkillDomainInfo(domainName)
-          const { name: skillFriendlyName } = SKILL_DOMAIN.getSkillInfo(
+            SkillDomainHelper.getSkillDomainInfo(domainName)
+          const { name: skillFriendlyName } = SkillDomainHelper.getSkillInfo(
             domainName,
             skillName
           )
@@ -411,7 +411,7 @@ class Brain {
             'config',
             `${this._lang}.json`
           )
-          const { actions, entities } = await SKILL_DOMAIN.getSkillConfig(
+          const { actions, entities } = await SkillDomainHelper.getSkillConfig(
             configFilePath,
             this._lang
           )

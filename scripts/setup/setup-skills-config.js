@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 import { LogHelper } from '@/helpers/log-helper'
-import { SKILL_DOMAIN } from '@/helpers/skill-domain'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 /**
  * Setup skills configuration
@@ -12,7 +12,7 @@ export default () =>
   new Promise(async (resolve, reject) => {
     LogHelper.info('Setting up skills configuration...')
 
-    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
+    const skillDomains = await SkillDomainHelper.getSkillDomains()
 
     for (const currentDomain of skillDomains.values()) {
       const skillKeys = Object.keys(currentDomain.skills)

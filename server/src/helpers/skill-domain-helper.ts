@@ -23,19 +23,11 @@ interface SkillDomain {
 
 const DOMAINS_DIR = path.join(process.cwd(), 'skills')
 
-class SkillDomainHelper {
-  private static instance: SkillDomainHelper
-
-  constructor() {
-    if (SkillDomainHelper.instance == null) {
-      SkillDomainHelper.instance = this
-    }
-  }
-
+export class SkillDomainHelper {
   /**
    * List all skills domains with skills data inside
    */
-  public async getSkillDomains() {
+  public static async getSkillDomains() {
     const skillDomains = new Map<string, SkillDomain>()
 
     await Promise.all(
@@ -85,7 +77,7 @@ class SkillDomainHelper {
    * Get information of a specific domain
    * @param domain Domain to get info from
    */
-  public getSkillDomainInfo(domain: SkillDomain['name']) {
+  public static getSkillDomainInfo(domain: SkillDomain['name']) {
     return JSON.parse(
       fs.readFileSync(path.join(DOMAINS_DIR, domain, 'domain.json'), 'utf8')
     )
@@ -96,7 +88,10 @@ class SkillDomainHelper {
    * @param domain Domain where the skill belongs
    * @param skill Skill to get info from
    */
-  public getSkillInfo(domain: SkillDomain['name'], skill: Skill['name']) {
+  public static getSkillInfo(
+    domain: SkillDomain['name'],
+    skill: Skill['name']
+  ) {
     return JSON.parse(
       fs.readFileSync(
         path.join(DOMAINS_DIR, domain, skill, 'skill.json'),
@@ -110,7 +105,10 @@ class SkillDomainHelper {
    * @param configFilePath Path of the skill config file
    * @param lang Language short code
    */
-  public getSkillConfig(configFilePath: string, lang: ShortLanguageCode) {
+  public static getSkillConfig(
+    configFilePath: string,
+    lang: ShortLanguageCode
+  ) {
     const sharedDataPath = path.join(process.cwd(), 'core/data', lang)
     const configData = JSON.parse(fs.readFileSync(configFilePath, 'utf8'))
     const { entities } = configData
@@ -133,5 +131,3 @@ class SkillDomainHelper {
     return configData
   }
 }
-
-export const SKILL_DOMAIN = new SkillDomainHelper()

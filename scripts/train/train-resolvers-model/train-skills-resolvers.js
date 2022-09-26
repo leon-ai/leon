@@ -3,7 +3,7 @@ import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
 import { LogHelper } from '@/helpers/log-helper'
-import { SKILL_DOMAIN } from '@/helpers/skill-domain'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 /**
  * Train skills resolvers
@@ -12,7 +12,7 @@ export default (lang, nlp) =>
   new Promise(async (resolve) => {
     LogHelper.title('Skills resolvers training')
 
-    const skillDomains = await SKILL_DOMAIN.getSkillDomains()
+    const skillDomains = await SkillDomainHelper.getSkillDomains()
 
     skillDomains.forEach((currentDomain) => {
       const skillKeys = Object.keys(currentDomain.skills)
@@ -26,7 +26,7 @@ export default (lang, nlp) =>
         )
 
         if (fs.existsSync(configFilePath)) {
-          const { resolvers } = await SKILL_DOMAIN.getSkillConfig(
+          const { resolvers } = await SkillDomainHelper.getSkillConfig(
             configFilePath,
             lang
           )
