@@ -2,7 +2,7 @@ import events from 'events'
 import fs from 'fs'
 import path from 'path'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 
 class Tts {
@@ -15,20 +15,20 @@ class Tts {
     this.speeches = []
     this.lang = 'en'
 
-    LOG.title('TTS')
-    LOG.success('New instance')
+    LogHelper.title('TTS')
+    LogHelper.success('New instance')
   }
 
   /**
    * Initialize the TTS provider
    */
   init(newLang, cb) {
-    LOG.info('Initializing TTS...')
+    LogHelper.info('Initializing TTS...')
 
     this.lang = newLang || this.lang
 
     if (!this.providers.includes(this.provider)) {
-      LOG.error(
+      LogHelper.error(
         `The TTS provider "${this.provider}" does not exist or is not yet supported`
       )
 
@@ -50,7 +50,7 @@ class Tts {
         'google-cloud.json'
       ) === -1
     ) {
-      LOG.warning(
+      LogHelper.warning(
         `The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`
       )
     }
@@ -61,8 +61,8 @@ class Tts {
 
     this.onSaved()
 
-    LOG.title('TTS')
-    LOG.success('TTS initialized')
+    LogHelper.title('TTS')
+    LogHelper.success('TTS initialized')
 
     cb(this)
 

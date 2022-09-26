@@ -4,7 +4,7 @@ import { spawn } from 'child_process'
 
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS } from '@/constants'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { SKILL_DOMAIN } from '@/helpers/skill-domain'
@@ -26,8 +26,8 @@ class Brain {
     this._stt = {}
     this._tts = {}
 
-    LOG.title('Brain')
-    LOG.success('New instance')
+    LogHelper.title('Brain')
+    LogHelper.success('New instance')
   }
 
   get socket() {
@@ -70,8 +70,8 @@ class Brain {
 
     if (HAS_TTS) {
       this._tts.init(this._lang, () => {
-        LOG.title('Brain')
-        LOG.info('Language has changed')
+        LogHelper.title('Brain')
+        LogHelper.info('Language has changed')
       })
     }
   }
@@ -85,7 +85,7 @@ class Brain {
         fs.unlinkSync(intentObjectPath)
       }
     } catch (e) {
-      LOG.error(`Failed to delete intent object file: ${e}`)
+      LogHelper.error(`Failed to delete intent object file: ${e}`)
     }
   }
 
@@ -93,8 +93,8 @@ class Brain {
    * Make Leon talk
    */
   talk(rawSpeech, end = false) {
-    LOG.title('Leon')
-    LOG.info('Talking...')
+    LogHelper.title('Leon')
+    LogHelper.info('Talking...')
 
     if (rawSpeech !== '') {
       if (HAS_TTS) {
@@ -229,7 +229,7 @@ class Brain {
                 { shell: true }
               )
             } catch (e) {
-              LOG.error(`Failed to save intent object: ${e}`)
+              LogHelper.error(`Failed to save intent object: ${e}`)
             }
           }
 
@@ -253,8 +253,8 @@ class Brain {
 
               if (typeof obj === 'object') {
                 if (obj.output.type === 'inter') {
-                  LOG.title(`${skillFriendlyName} skill`)
-                  LOG.info(data.toString())
+                  LogHelper.title(`${skillFriendlyName} skill`)
+                  LogHelper.info(data.toString())
 
                   this.interOutput = obj.output
 
@@ -278,8 +278,8 @@ class Brain {
                 })
               }
             } catch (e) {
-              LOG.title('Brain')
-              LOG.debug(`process.stdout: ${String(data)}`)
+              LogHelper.title('Brain')
+              LogHelper.debug(`process.stdout: ${String(data)}`)
 
               /* istanbul ignore next */
               reject({
@@ -307,8 +307,8 @@ class Brain {
 
             Brain.deleteIntentObjFile(intentObjectPath)
 
-            LOG.title(`${skillFriendlyName} skill`)
-            LOG.error(data.toString())
+            LogHelper.title(`${skillFriendlyName} skill`)
+            LogHelper.error(data.toString())
 
             const executionTimeEnd = Date.now()
             const executionTime = executionTimeEnd - executionTimeStart
@@ -322,8 +322,8 @@ class Brain {
 
           // Catch the end of the skill execution
           this.process.stdout.on('end', () => {
-            LOG.title(`${skillFriendlyName} skill`)
-            LOG.info(output)
+            LogHelper.title(`${skillFriendlyName} skill`)
+            LogHelper.info(output)
 
             this.finalOutput = output
 

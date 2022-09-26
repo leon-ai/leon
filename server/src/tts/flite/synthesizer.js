@@ -4,10 +4,10 @@ import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
-LOG.title('Flite Synthesizer')
+LogHelper.title('Flite Synthesizer')
 
 const synthesizer = {}
 
@@ -26,20 +26,20 @@ synthesizer.init = (lang) => {
 
   /* istanbul ignore if */
   if (lang !== 'en-US') {
-    LOG.warning(
+    LogHelper.warning(
       'The Flite synthesizer only accepts the "en-US" language for the moment'
     )
   }
 
   /* istanbul ignore if */
   if (!fs.existsSync(flitePath)) {
-    LOG.error(
+    LogHelper.error(
       `Cannot find ${flitePath} You can setup the offline TTS by running: "npm run setup:offline-tts"`
     )
     return false
   }
 
-  LOG.success('Synthesizer initialized')
+  LogHelper.success('Synthesizer initialized')
 
   return true
 }
@@ -68,7 +68,7 @@ synthesizer.save = (speech, em, cb) => {
   /* istanbul ignore next */
   // Handle error
   process.stderr.on('data', (data) => {
-    LOG.error(data.toString())
+    LogHelper.error(data.toString())
   })
 
   process.stdout.on('end', () => {
@@ -79,7 +79,7 @@ synthesizer.save = (speech, em, cb) => {
     // Get file duration thanks to ffprobe
     ffmpeg.input(file).ffprobe((err, data) => {
       /* istanbul ignore if */
-      if (err) LOG.error(err)
+      if (err) LogHelper.error(err)
       else {
         const duration = data.streams[0].duration * 1000
         em.emit('saved', duration)

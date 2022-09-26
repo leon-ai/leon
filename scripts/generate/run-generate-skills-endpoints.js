@@ -1,4 +1,4 @@
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import generateSkillsEndpoints from './generate-skills-endpoints'
 
@@ -9,6 +9,6 @@ import generateSkillsEndpoints from './generate-skills-endpoints'
   try {
     await generateSkillsEndpoints()
   } catch (e) {
-    LOG.error(`Failed to generate skills endpoints: ${e}`)
+    LogHelper.error(`Failed to generate skills endpoints: ${e}`)
   }
 })()

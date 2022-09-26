@@ -2,7 +2,7 @@ import dotenv from 'dotenv'
 import fs from 'fs'
 import path from 'path'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import { langs } from '@@/core/langs.json'
 import { SKILL_DOMAIN } from '@/helpers/skill-domain'
@@ -65,7 +65,7 @@ export default () =>
           }
 
           if (i + 1 === skillDomains.size) {
-            LOG.success(`${outputFile} is already up-to-date`)
+            LogHelper.success(`${outputFile} is already up-to-date`)
             isFileNeedToBeGenerated = false
           }
 
@@ -75,7 +75,7 @@ export default () =>
 
       // Force if a language is given
       if (isFileNeedToBeGenerated) {
-        LOG.info('Parsing skills configuration...')
+        LogHelper.info('Parsing skills configuration...')
 
         for (const currentDomain of skillDomains.values()) {
           const skillKeys = Object.keys(currentDomain.skills)
@@ -143,17 +143,17 @@ export default () =>
           }
         }
 
-        LOG.info(`Writing ${outputFile} file...`)
+        LogHelper.info(`Writing ${outputFile} file...`)
         try {
           fs.writeFileSync(outputFilePath, JSON.stringify(finalObj, null, 2))
-          LOG.success(`${outputFile} file generated`)
+          LogHelper.success(`${outputFile} file generated`)
           resolve()
         } catch (e) {
           reject(`Failed to generate ${outputFile} file: ${e.message}`)
         }
       }
     } catch (e) {
-      LOG.error(e.message)
+      LogHelper.error(e.message)
       reject(e)
     }
   })

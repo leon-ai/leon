@@ -2,7 +2,7 @@ import Net from 'net'
 import { EventEmitter } from 'events'
 
 import { IS_PRODUCTION_ENV } from '@/constants'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 // Time interval between each try (in ms)
 const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 300
@@ -20,51 +20,53 @@ export default class TcpClient {
     this._status = this.tcpSocket.readyState
     this._isConnected = false
 
-    LOG.title('TCP Client')
-    LOG.success('New instance')
+    LogHelper.title('TCP Client')
+    LogHelper.success('New instance')
 
     this.tcpSocket.on('connect', () => {
-      LOG.title('TCP Client')
-      LOG.success(`Connected to the TCP server tcp://${this.host}:${this.port}`)
+      LogHelper.title('TCP Client')
+      LogHelper.success(
+        `Connected to the TCP server tcp://${this.host}:${this.port}`
+      )
 
       this._isConnected = true
       this._ee.emit('connected', null)
     })
 
     this.tcpSocket.on('data', (chunk) => {
-      LOG.title('TCP Client')
-      LOG.info(`Received data: ${chunk.toString()}`)
+      LogHelper.title('TCP Client')
+      LogHelper.info(`Received data: ${chunk.toString()}`)
 
       const data = JSON.parse(chunk)
       this._ee.emit(data.topic, data.data)
     })
 
     this.tcpSocket.on('error', (err) => {
-      LOG.title('TCP Client')
+      LogHelper.title('TCP Client')
 
       if (err.code === 'ECONNREFUSED') {
         this.reconnectCounter += 1
 
         if (this.reconnectCounter >= RETRIES_NB) {
-          LOG.error('Failed to connect to the TCP server')
+          LogHelper.error('Failed to connect to the TCP server')
           this.tcpSocket.end()
         }
 
         if (this.reconnectCounter >= 1) {
-          LOG.info('Trying to connect to the TCP server...')
+          LogHelper.info('Trying to connect to the TCP server...')
 
           setTimeout(() => {
             this.connect()
           }, INTERVAL * this.reconnectCounter)
         }
       } else {
-        LOG.error(`Failed to connect to the TCP server: ${err}`)
+        LogHelper.error(`Failed to connect to the TCP server: ${err}`)
       }
     })
 
     this.tcpSocket.on('end', () => {
-      LOG.title('TCP Client')
-      LOG.success('Disconnected from the TCP server')
+      LogHelper.title('TCP Client')
+      LogHelper.success('Disconnected from the TCP server')
     })
 
     setTimeout(() => {

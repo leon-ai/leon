@@ -1,4 +1,4 @@
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import buildApp from './build-app'
 
@@ -9,6 +9,6 @@ import buildApp from './build-app'
   try {
     await buildApp()
   } catch (e) {
-    LOG.error(`Failed to build: ${e}`)
+    LogHelper.error(`Failed to build: ${e}`)
   }
 })()

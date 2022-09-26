@@ -2,18 +2,18 @@ import { command } from 'execa'
 import fs from 'fs'
 import path from 'path'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 /**
  * Download and setup Leon's Python packages dependencies
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    LOG.info('Checking Python env...')
+    LogHelper.info('Checking Python env...')
 
     // Check if the Pipfile exists
     if (fs.existsSync('bridges/python/Pipfile')) {
-      LOG.success('bridges/python/Pipfile found')
+      LogHelper.success('bridges/python/Pipfile found')
 
       try {
         // Check if Pipenv is installed
@@ -29,9 +29,9 @@ export default () =>
           pipenvVersion = `${pipenvVersion} version`
         }
 
-        LOG.success(`Pipenv ${pipenvVersion} found`)
+        LogHelper.success(`Pipenv ${pipenvVersion} found`)
       } catch (e) {
-        LOG.error(
+        LogHelper.error(
           `${e}\nPlease install Pipenv: "pip install pipenv" or read the documentation https://docs.pipenv.org`
         )
         reject(e)
@@ -44,18 +44,20 @@ export default () =>
         const isDotVenvExist = fs.existsSync(dotVenvPath)
         const installPythonPackages = async () => {
           if (isDotVenvExist) {
-            LOG.info(`Deleting ${dotVenvPath}...`)
+            LogHelper.info(`Deleting ${dotVenvPath}...`)
             fs.rmSync(dotVenvPath, { recursive: true, force: true })
-            LOG.success(`${dotVenvPath} deleted`)
+            LogHelper.success(`${dotVenvPath} deleted`)
           }
 
           // Installing Python packages
-          LOG.info('Installing Python packages from bridges/python/Pipfile...')
+          LogHelper.info(
+            'Installing Python packages from bridges/python/Pipfile...'
+          )
 
           await command('pipenv install --site-packages', { shell: true })
-          LOG.success('Python packages installed')
+          LogHelper.success('Python packages installed')
 
-          LOG.info('Installing spaCy models...')
+          LogHelper.info('Installing spaCy models...')
           // Find new spaCy models:  https://github.com/explosion/spacy-models/releases
           await Promise.all([
             command(
@@ -68,7 +70,7 @@ export default () =>
             )
           ])
 
-          LOG.success('spaCy models installed')
+          LogHelper.success('spaCy models installed')
         }
 
         if (!isDotVenvExist) {
@@ -85,7 +87,7 @@ export default () =>
             if (pipfileMtime > dotProjectMtime) {
               await installPythonPackages()
             } else {
-              LOG.success('Python packages are up-to-date')
+              LogHelper.success('Python packages are up-to-date')
             }
           } else {
             await installPythonPackages()
@@ -94,11 +96,11 @@ export default () =>
 
         resolve()
       } catch (e) {
-        LOG.error(`Failed to install the Python packages: ${e}`)
+        LogHelper.error(`Failed to install the Python packages: ${e}`)
         reject(e)
       }
     } else {
-      LOG.error(
+      LogHelper.error(
         'bridges/python/Pipfile does not exist. Try to pull the project (git pull)'
       )
       reject()

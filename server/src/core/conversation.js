@@ -1,6 +1,6 @@
 import fs from 'fs'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 const maxContextHistory = 5
 const defaultActiveContext = {
@@ -23,8 +23,8 @@ class Conversation {
     this._activeContext = defaultActiveContext
     this._previousContexts = {}
 
-    LOG.title('Conversation')
-    LOG.success('New instance')
+    LogHelper.title('Conversation')
+    LogHelper.success('New instance')
   }
 
   get id() {
@@ -78,8 +78,8 @@ class Conversation {
           activatedAt: Date.now()
         }
 
-        LOG.title('Conversation')
-        LOG.info(`New active context: ${newContextName}`)
+        LogHelper.title('Conversation')
+        LogHelper.info(`New active context: ${newContextName}`)
       }
 
       this.setSlots(lang, entities, slots)
@@ -113,8 +113,8 @@ class Conversation {
           activatedAt: Date.now()
         }
 
-        LOG.title('Conversation')
-        LOG.info(`New active context: ${newContextName}`)
+        LogHelper.title('Conversation')
+        LogHelper.info(`New active context: ${newContextName}`)
       } else {
         this._activeContext.currentEntities = entities
         // Add new entities at the end of the context entities array
@@ -184,8 +184,8 @@ class Conversation {
           slot.value.resolution.value !== newSlot.value.resolution.value)
       ) {
         if (newSlot?.isFilled) {
-          LOG.title('Conversation')
-          LOG.success(
+          LogHelper.title('Conversation')
+          LogHelper.success(
             `Slot filled: { name: ${newSlot.name}, value: ${JSON.stringify(
               newSlot.value
             )} }`
@@ -220,8 +220,8 @@ class Conversation {
    * Clean up active context
    */
   cleanActiveContext() {
-    LOG.title('Conversation')
-    LOG.info('Clean active context')
+    LogHelper.title('Conversation')
+    LogHelper.info('Clean active context')
 
     this.pushToPreviousContextsStack()
     this._activeContext = defaultActiveContext

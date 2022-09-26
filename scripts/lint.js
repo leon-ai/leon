@@ -1,6 +1,6 @@
 import { command } from 'execa'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 
 const globs = [
@@ -34,7 +34,7 @@ async function prettier() {
  */
 ;(async () => {
   LoaderHelper.start()
-  LOG.info('Linting...')
+  LogHelper.info('Linting...')
 
   try {
     await Promise.all([
@@ -45,10 +45,10 @@ async function prettier() {
       })
     ])
 
-    LOG.success('Looks great')
+    LogHelper.success('Looks great')
     LoaderHelper.stop()
   } catch (e) {
-    LOG.error(`Does not look great: ${e.message}`)
+    LogHelper.error(`Does not look great: ${e.message}`)
     LoaderHelper.stop()
     process.exit(1)
   }

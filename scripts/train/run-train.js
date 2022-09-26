@@ -1,4 +1,4 @@
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import train from './train'
 
@@ -9,6 +9,6 @@ import train from './train'
   try {
     await train()
   } catch (e) {
-    LOG.error(`Failed to train: ${e}`)
+    LogHelper.error(`Failed to train: ${e}`)
   }
 })()

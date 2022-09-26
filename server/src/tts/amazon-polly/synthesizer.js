@@ -5,10 +5,10 @@ import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 import fs from 'fs'
 import path from 'path'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
-LOG.title('Amazon Polly Synthesizer')
+LogHelper.title('Amazon Polly Synthesizer')
 
 const synthesizer = {}
 const voices = {
@@ -41,9 +41,9 @@ synthesizer.init = (lang) => {
   try {
     client = new Polly(config)
 
-    LOG.success('Synthesizer initialized')
+    LogHelper.success('Synthesizer initialized')
   } catch (e) {
-    LOG.error(`Amazon Polly: ${e}`)
+    LogHelper.error(`Amazon Polly: ${e}`)
   }
 }
 
@@ -71,7 +71,7 @@ synthesizer.save = (speech, em, cb) => {
 
         // Get file duration thanks to ffprobe
         ffmpeg.input(file).ffprobe((err, data) => {
-          if (err) LOG.error(err)
+          if (err) LogHelper.error(err)
           else {
             const duration = data.streams[0].duration * 1000
             em.emit('saved', duration)
@@ -81,16 +81,16 @@ synthesizer.save = (speech, em, cb) => {
       })
 
       wStream.on('error', (err) => {
-        LOG.error(`Amazon Polly: ${err}`)
+        LogHelper.error(`Amazon Polly: ${err}`)
       })
     })
     .catch((err) => {
       if (err.code === 'UnknownEndpoint') {
-        LOG.error(
+        LogHelper.error(
           `Amazon Polly: the region "${err.region}" does not exist or does not support the Polly service`
         )
       } else {
-        LOG.error(`Amazon Polly: ${err.message}`)
+        LogHelper.error(`Amazon Polly: ${err.message}`)
       }
     })
 }

@@ -1,4 +1,4 @@
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 
 import updateVersion from './update-version'
@@ -9,7 +9,7 @@ import generateChangelog from './generate-changelog'
  */
 ;(async () => {
   LoaderHelper.start()
-  LOG.info('Preparing for release...')
+  LogHelper.info('Preparing for release...')
 
   const { argv } = process
   const version = argv[2].toLowerCase()
@@ -21,14 +21,14 @@ import generateChangelog from './generate-changelog'
       await updateVersion(version)
       await generateChangelog(version)
 
-      LOG.success('Hooray! Leon is ready to be released!')
+      LogHelper.success('Hooray! Leon is ready to be released!')
       LoaderHelper.stop()
     } catch (e) {
-      LOG.error(e)
+      LogHelper.error(e)
       LoaderHelper.stop()
     }
   } else {
-    LOG.error(
+    LogHelper.error(
       'The version number does match the Semantic Versioning rules (https://semver.org)'
     )
     LoaderHelper.stop()

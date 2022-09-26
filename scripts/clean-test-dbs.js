@@ -1,7 +1,7 @@
 import fs from 'fs'
 import { join } from 'path'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
@@ -9,7 +9,7 @@ import { SKILL_DOMAIN } from '@/helpers/skill-domain'
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    LOG.info('Cleaning test DB files...')
+    LogHelper.info('Cleaning test DB files...')
 
     const skillDomains = await SKILL_DOMAIN.getSkillDomains()
 
@@ -27,17 +27,17 @@ export default () =>
             .filter((entity) => entity.indexOf('.spec.json') !== -1)
 
           if (dbTestFiles.length > 0) {
-            LOG.info(`Deleting ${dbTestFiles[0]}...`)
+            LogHelper.info(`Deleting ${dbTestFiles[0]}...`)
             fs.unlinkSync(join(dbFolder, dbTestFiles[0]))
-            LOG.success(`${dbTestFiles[0]} deleted`)
+            LogHelper.success(`${dbTestFiles[0]} deleted`)
           }
         } catch (e) {
-          LOG.error(`Failed to clean: "${skillKeys[j]}" test DB file`)
+          LogHelper.error(`Failed to clean: "${skillKeys[j]}" test DB file`)
           reject(e)
         }
       }
     }
 
-    LOG.success('Cleaning done')
+    LogHelper.success('Cleaning done')
     resolve()
   })

@@ -1,4 +1,4 @@
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import setupStt from './setup-stt'
 
@@ -9,6 +9,6 @@ import setupStt from './setup-stt'
   try {
     await setupStt()
   } catch (e) {
-    LOG.error(`Failed to setup offline STT: ${e}`)
+    LogHelper.error(`Failed to setup offline STT: ${e}`)
   }
 })()

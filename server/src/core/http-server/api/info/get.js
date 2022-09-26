@@ -7,15 +7,15 @@ import {
   STT_PROVIDER,
   TTS_PROVIDER
 } from '@/constants'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 const getInfo = async (fastify, options) => {
   fastify.get(`/api/${options.apiVersion}/info`, (request, reply) => {
-    LOG.title('GET /info')
+    LogHelper.title('GET /info')
 
     const message = 'Information pulled.'
 
-    LOG.success(message)
+    LogHelper.success(message)
 
     reply.send({
       success: true,

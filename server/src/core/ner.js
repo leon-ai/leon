@@ -5,22 +5,22 @@
  */
 import fs from 'fs'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
 class Ner {
   constructor(ner) {
     this.ner = ner
 
-    LOG.title('NER')
-    LOG.success('New instance')
+    LogHelper.title('NER')
+    LogHelper.success('New instance')
   }
 
   static logExtraction(entities) {
-    LOG.title('NER')
-    LOG.success('Entities found:')
+    LogHelper.title('NER')
+    LogHelper.success('Entities found:')
     entities.forEach((ent) =>
-      LOG.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`)
+      LogHelper.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`)
     )
   }
 
@@ -29,8 +29,8 @@ class Ner {
    */
   extractEntities(lang, utteranceSamplesFilePath, obj) {
     return new Promise(async (resolve) => {
-      LOG.title('NER')
-      LOG.info('Searching for entities...')
+      LogHelper.title('NER')
+      LogHelper.info('Searching for entities...')
 
       const { classification } = obj
       // Remove end-punctuation and add an end-whitespace
@@ -84,8 +84,8 @@ class Ner {
         return resolve(entities)
       }
 
-      LOG.title('NER')
-      LOG.info('No entity found')
+      LogHelper.title('NER')
+      LogHelper.info('No entity found')
       return resolve([])
     })
   }

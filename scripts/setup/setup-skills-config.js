@@ -2,7 +2,7 @@ import { commandSync } from 'execa'
 import fs from 'fs'
 import path from 'path'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
 /**
@@ -10,7 +10,7 @@ import { SKILL_DOMAIN } from '@/helpers/skill-domain'
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    LOG.info('Setting up skills configuration...')
+    LogHelper.info('Setting up skills configuration...')
 
     const skillDomains = await SKILL_DOMAIN.getSkillDomains()
 
@@ -46,7 +46,7 @@ export default () =>
               for (let j = 0; j < configSampleKeys.length; j += 1) {
                 // Check if the current config key does not exist
                 if (configKeys.includes(configSampleKeys[j]) === false) {
-                  LOG.info(
+                  LogHelper.info(
                     `Adding new configuration key "${configSampleKeys[j]}" for the ${skillFriendlyName} skill...`
                   )
 
@@ -63,11 +63,11 @@ export default () =>
                       }=${JSON.stringify(configKey[configSampleKeys[j]])}'`,
                       { shell: true }
                     )
-                    LOG.success(
+                    LogHelper.success(
                       `"${configSampleKeys[j]}" configuration key added to ${configFile}`
                     )
                   } catch (e) {
-                    LOG.error(
+                    LogHelper.error(
                       `Error while adding "${configSampleKeys[j]}" configuration key to ${configFile}: ${e}`
                     )
                     reject()
@@ -77,7 +77,7 @@ export default () =>
             }
           } else if (!fs.existsSync(configSampleFile)) {
             // Stop the setup if the config.sample.json of the current skill does not exist
-            LOG.error(
+            LogHelper.error(
               `The "${skillFriendlyName}" skill configuration file does not exist. Try to pull the project (git pull)`
             )
             reject()
@@ -87,7 +87,7 @@ export default () =>
               fs.createWriteStream(`${configDir}/config.json`)
             )
 
-            LOG.success(
+            LogHelper.success(
               `"${skillFriendlyName}" skill configuration file created`
             )
             resolve()
@@ -96,6 +96,6 @@ export default () =>
       }
     }
 
-    LOG.success('Skills configured')
+    LogHelper.success('Skills configured')
     resolve()
   })

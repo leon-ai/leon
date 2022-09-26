@@ -1,7 +1,7 @@
 import { command } from 'execa'
 import fs from 'fs'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { OS } from '@/helpers/os'
 
 /**
@@ -9,7 +9,7 @@ import { OS } from '@/helpers/os'
  */
 export default () =>
   new Promise(async (resolve, reject) => {
-    LOG.info('Setting up offline text-to-speech...')
+    LogHelper.info('Setting up offline text-to-speech...')
 
     const destFliteFolder = 'bin/flite'
     const tmpDir = 'scripts/tmp'
@@ -24,44 +24,44 @@ export default () =>
 
     if (!fs.existsSync(`${destFliteFolder}/flite`)) {
       try {
-        LOG.info('Downloading run-time synthesis engine...')
+        LogHelper.info('Downloading run-time synthesis engine...')
         await command(
           `cd ${tmpDir} && ${downloader} http://ports.ubuntu.com/pool/universe/f/flite/flite_2.1-release.orig.tar.bz2`,
           { shell: true }
         )
-        LOG.success('Run-time synthesis engine download done')
-        LOG.info('Unpacking...')
+        LogHelper.success('Run-time synthesis engine download done')
+        LogHelper.info('Unpacking...')
         await command(
           `cd ${tmpDir} && tar xfvj flite_2.1-release.orig.tar.bz2 && cp ../assets/leon.lv flite-2.1-release/config`,
           { shell: true }
         )
-        LOG.success('Unpack done')
-        LOG.info('Configuring...')
+        LogHelper.success('Unpack done')
+        LogHelper.info('Configuring...')
         await command(
           `cd ${tmpDir}/flite-2.1-release && ./configure --with-langvox=leon`,
           { shell: true }
         )
-        LOG.success('Configure done')
-        LOG.info('Building...')
+        LogHelper.success('Configure done')
+        LogHelper.info('Building...')
         await command(`cd ${tmpDir}/flite-2.1-release && make ${makeCores}`, {
           shell: true
         })
-        LOG.success('Build done')
-        LOG.info('Cleaning...')
+        LogHelper.success('Build done')
+        LogHelper.info('Cleaning...')
         await command(
           `cp -f ${tmpDir}/flite-2.1-release/bin/flite ${destFliteFolder} && rm -rf ${tmpDir}/flite-2.1-release*`,
           { shell: true }
         )
-        LOG.success('Clean done')
-        LOG.success('Offline text-to-speech installed')
+        LogHelper.success('Clean done')
+        LogHelper.success('Offline text-to-speech installed')
 
         resolve()
       } catch (e) {
-        LOG.error(`Failed to install offline text-to-speech: ${e}`)
+        LogHelper.error(`Failed to install offline text-to-speech: ${e}`)
         reject(e)
       }
     } else {
-      LOG.success('Offline text-to-speech is already installed')
+      LogHelper.success('Offline text-to-speech is already installed')
       resolve()
     }
   })

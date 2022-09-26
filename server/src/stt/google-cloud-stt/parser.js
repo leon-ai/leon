@@ -2,9 +2,9 @@ import path from 'path'
 import stt from '@google-cloud/speech'
 
 import { LANG } from '@/constants'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
-LOG.title('Google Cloud STT Parser')
+LogHelper.title('Google Cloud STT Parser')
 
 const parser = {}
 let client = {}
@@ -28,9 +28,9 @@ parser.init = () => {
   try {
     client = new stt.SpeechClient()
 
-    LOG.success('Parser initialized')
+    LogHelper.success('Parser initialized')
   } catch (e) {
-    LOG.error(`Google Cloud STT: ${e}`)
+    LogHelper.error(`Google Cloud STT: ${e}`)
   }
 }
 
@@ -52,7 +52,7 @@ parser.parse = async (buffer, cb) => {
 
     cb({ string })
   } catch (e) {
-    LOG.error(`Google Cloud STT: ${e}`)
+    LogHelper.error(`Google Cloud STT: ${e}`)
   }
 }
 

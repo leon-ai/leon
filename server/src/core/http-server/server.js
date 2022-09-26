@@ -26,7 +26,7 @@ import otherMidd from '@/core/http-server/plugins/other'
 import keyMidd from '@/core/http-server/plugins/key'
 import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 
 const server = {}
@@ -61,7 +61,7 @@ const createProvider = async (id) => {
       nlu
     }
   } catch (e) {
-    LOG[e.type](e.obj.message)
+    LogHelper[e.type](e.obj.message)
 
     return null
   }
@@ -171,7 +171,7 @@ server.generateSkillsRoutes = (instance) => {
               success: true
             })
           } catch (e) /* istanbul ignore next */ {
-            LOG[e.type](e.obj.message)
+            LogHelper[e.type](e.obj.message)
             reply.statusCode = 500
             reply.send({
               ...responseData,
@@ -204,13 +204,13 @@ server.generateSkillsRoutes = (instance) => {
  * Bootstrap socket
  */
 server.handleOnConnection = (socket) => {
-  LOG.title('Client')
-  LOG.success('Connected')
+  LogHelper.title('Client')
+  LogHelper.success('Connected')
 
   // Init
   socket.on('init', async (data) => {
-    LOG.info(`Type: ${data}`)
-    LOG.info(`Socket id: ${socket.id}`)
+    LogHelper.info(`Type: ${data}`)
+    LogHelper.info(`Socket id: ${socket.id}`)
 
     const provider = await addProvider(socket.id)
 
@@ -226,8 +226,8 @@ server.handleOnConnection = (socket) => {
     if (data === 'hotword-node') {
       // Hotword triggered
       socket.on('hotword-detected', (data) => {
-        LOG.title('Socket')
-        LOG.success(`Hotword ${data.hotword} detected`)
+        LogHelper.title('Socket')
+        LogHelper.success(`Hotword ${data.hotword} detected`)
 
         socket.broadcast.emit('enable-record')
       })
@@ -252,14 +252,14 @@ server.handleOnConnection = (socket) => {
         provider.brain.tts.init('en', () => null)
       }
 
-      LOG.title('Initialization')
-      LOG.success(`STT ${sttState}`)
-      LOG.success(`TTS ${ttsState}`)
+      LogHelper.title('Initialization')
+      LogHelper.success(`STT ${sttState}`)
+      LogHelper.success(`TTS ${ttsState}`)
 
       // Listen for new utterance
       socket.on('utterance', async (data) => {
-        LOG.title('Socket')
-        LOG.info(`${data.client} emitted: ${data.value}`)
+        LogHelper.title('Socket')
+        LogHelper.info(`${data.client} emitted: ${data.value}`)
 
         socket.emit('is-typing', true)
 
@@ -276,7 +276,7 @@ server.handleOnConnection = (socket) => {
         try {
           await asr.run(data, provider.brain.stt)
         } catch (e) {
-          LOG[e.type](e.obj.message)
+          LogHelper[e.type](e.obj.message)
         }
       })
     }
@@ -305,8 +305,8 @@ server.listen = async (port) => {
       host: '0.0.0.0'
     },
     () => {
-      LOG.title('Initialization')
-      LOG.success(`Server is available at ${HOST}:${port}`)
+      LogHelper.title('Initialization')
+      LogHelper.success(`Server is available at ${HOST}:${port}`)
     }
   )
 }
@@ -363,7 +363,7 @@ server.bootstrap = async () => {
   try {
     await server.listen(PORT)
   } catch (e) {
-    LOG.error(e.message)
+    LogHelper.error(e.message)
   }
 }
 
@@ -374,14 +374,14 @@ server.init = async () => {
   server.fastify.addHook('onRequest', corsMidd)
   server.fastify.addHook('preValidation', otherMidd)
 
-  LOG.title('Initialization')
-  LOG.success(`The current env is ${process.env.LEON_NODE_ENV}`)
-  LOG.success(`The current version is ${version}`)
+  LogHelper.title('Initialization')
+  LogHelper.success(`The current env is ${process.env.LEON_NODE_ENV}`)
+  LogHelper.success(`The current version is ${version}`)
 
-  LOG.success(`The current time zone is ${DateHelper.getTimeZone()}`)
+  LogHelper.success(`The current time zone is ${DateHelper.getTimeZone()}`)
 
   const sLogger = !HAS_LOGGER ? 'disabled' : 'enabled'
-  LOG.success(`Collaborative logger ${sLogger}`)
+  LogHelper.success(`Collaborative logger ${sLogger}`)
 
   await addProvider('1')
 

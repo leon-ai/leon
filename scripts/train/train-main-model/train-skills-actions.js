@@ -2,7 +2,7 @@ import path from 'path'
 import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { SKILL_DOMAIN } from '@/helpers/skill-domain'
 
@@ -11,7 +11,7 @@ import { SKILL_DOMAIN } from '@/helpers/skill-domain'
  */
 export default (lang, nlp) =>
   new Promise(async (resolve) => {
-    LOG.title('Skills actions training')
+    LogHelper.title('Skills actions training')
 
     const supportedActionTypes = ['dialog', 'logic']
     const skillDomains = await SKILL_DOMAIN.getSkillDomains()
@@ -19,13 +19,13 @@ export default (lang, nlp) =>
     for (const [domainName, currentDomain] of skillDomains) {
       const skillKeys = Object.keys(currentDomain.skills)
 
-      LOG.info(`[${lang}] Training "${domainName}" domain model...`)
+      LogHelper.info(`[${lang}] Training "${domainName}" domain model...`)
 
       for (let j = 0; j < skillKeys.length; j += 1) {
         const { name: skillName } = currentDomain.skills[skillKeys[j]]
         const currentSkill = currentDomain.skills[skillKeys[j]]
 
-        LOG.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
+        LogHelper.info(`[${lang}] Using "${skillKeys[j]}" skill config data`)
 
         const configFilePath = path.join(
           currentSkill.path,
@@ -54,7 +54,9 @@ export default (lang, nlp) =>
               !actionObj.type ||
               !supportedActionTypes.includes(actionObj.type)
             ) {
-              LOG.error(`This action type isn't supported: ${actionObj.type}`)
+              LogHelper.error(
+                `This action type isn't supported: ${actionObj.type}`
+              )
               process.exit(1)
             }
 
@@ -121,7 +123,7 @@ export default (lang, nlp) =>
         }
       }
 
-      LOG.success(`[${lang}] "${domainName}" domain trained`)
+      LogHelper.success(`[${lang}] "${domainName}" domain trained`)
     }
 
     resolve()

@@ -1,19 +1,19 @@
 import { prompt } from 'inquirer'
 import fs from 'fs'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 /**
  * Duplicate the .env.sample to .env file
  */
 export default () =>
   new Promise(async (resolve) => {
-    LOG.info('.env file creation...')
+    LogHelper.info('.env file creation...')
 
     const createDotenv = () => {
       fs.createReadStream('.env.sample').pipe(fs.createWriteStream('.env'))
 
-      LOG.success('.env file created')
+      LogHelper.success('.env file created')
     }
 
     if (!fs.existsSync('.env')) {

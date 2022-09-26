@@ -1,6 +1,6 @@
 import { command } from 'execa'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 
 /**
@@ -22,11 +22,11 @@ import { LoaderHelper } from '@/helpers/loader-helper'
       { shell: true }
     )
 
-    LOG.default(cmd.stdout)
-    LOG.default(cmd.stderr)
+    LogHelper.default(cmd.stdout)
+    LogHelper.default(cmd.stderr)
     LoaderHelper.stop()
   } catch (e) {
-    LOG.default(e.message)
+    LogHelper.default(e.message)
     LoaderHelper.stop()
   }
 })()

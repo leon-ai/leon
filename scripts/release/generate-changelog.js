@@ -1,7 +1,7 @@
 import { command } from 'execa'
 import fs from 'fs'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 /**
  * Update version number in files which need version number
@@ -11,7 +11,7 @@ export default (version) =>
     const changelog = 'CHANGELOG.md'
     const tmpChangelog = 'TMP-CHANGELOG.md'
 
-    LOG.info(`Generating ${changelog}...`)
+    LogHelper.info(`Generating ${changelog}...`)
 
     try {
       await command(
@@ -19,13 +19,13 @@ export default (version) =>
         { shell: true }
       )
     } catch (e) {
-      LOG.error(`Error during git-changelog: ${e}`)
+      LogHelper.error(`Error during git-changelog: ${e}`)
       reject(e)
     }
 
     try {
-      LOG.info('Getting remote origin URL...')
-      LOG.info('Getting previous tag...')
+      LogHelper.info('Getting remote origin URL...')
+      LogHelper.info('Getting previous tag...')
 
       const sh = await command(
         'git config --get remote.origin.url && git tag | tail -n1',
@@ -38,23 +38,23 @@ export default (version) =>
       const compareUrl = `${repoUrl}/compare/${previousTag}...v${version}`
       let tmpData = fs.readFileSync(`scripts/tmp/${tmpChangelog}`, 'utf8')
 
-      LOG.success(`Remote origin URL gotten: ${repoUrl}.git`)
-      LOG.success(`Previous tag gotten: ${previousTag}`)
+      LogHelper.success(`Remote origin URL gotten: ${repoUrl}.git`)
+      LogHelper.success(`Previous tag gotten: ${previousTag}`)
 
       if (previousTag !== '') {
         tmpData = tmpData.replace(version, `[${version}](${compareUrl})`)
       }
 
       fs.writeFile(changelog, `${tmpData}${changelogData}`, (err) => {
-        if (err) LOG.error(`Failed to write into file: ${err}`)
+        if (err) LogHelper.error(`Failed to write into file: ${err}`)
         else {
           fs.unlinkSync(`scripts/tmp/${tmpChangelog}`)
-          LOG.success(`${changelog} generated`)
+          LogHelper.success(`${changelog} generated`)
           resolve()
         }
       })
     } catch (e) {
-      LOG.error(`Error during git commands: ${e}`)
+      LogHelper.error(`Error during git commands: ${e}`)
       reject(e)
     }
   })

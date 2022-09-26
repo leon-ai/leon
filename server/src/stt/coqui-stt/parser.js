@@ -3,9 +3,9 @@ import fs from 'fs'
 import { Model } from 'stt'
 
 import { IS_TESTING_ENV } from '@/constants'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
-LOG.title('Coqui STT Parser')
+LogHelper.title('Coqui STT Parser')
 
 const parser = {}
 let model = {}
@@ -23,10 +23,10 @@ parser.conf = {
  * Load models
  */
 parser.init = (args) => {
-  LOG.info(`Loading model from file ${args.model}...`)
+  LogHelper.info(`Loading model from file ${args.model}...`)
 
   if (!fs.existsSync(args.model)) {
-    LOG.error(
+    LogHelper.error(
       `Cannot find ${args.model}. You can setup the offline STT by running: "npm run setup:offline-stt"`
     )
 
@@ -34,7 +34,7 @@ parser.init = (args) => {
   }
 
   if (!fs.existsSync(args.scorer)) {
-    LOG.error(
+    LogHelper.error(
       `Cannot find ${args.scorer}. You can setup the offline STT by running: "npm run setup:offline-stt"`
     )
 
@@ -57,7 +57,7 @@ parser.init = (args) => {
     }
   }
 
-  LOG.success('Model loaded')
+  LogHelper.success('Model loaded')
 
   return true
 }
@@ -69,7 +69,7 @@ parser.parse = (buffer, cb) => {
   const wavDecode = wav.decode(buffer)
 
   if (wavDecode.sampleRate < desiredSampleRate) {
-    LOG.warning(
+    LogHelper.warning(
       `Original sample rate (${wavDecode.sampleRate}) is lower than ${desiredSampleRate}Hz. Up-sampling might produce erratic speech recognition`
     )
   }

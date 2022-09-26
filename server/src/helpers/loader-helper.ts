@@ -1,6 +1,6 @@
 import { Spinner } from 'cli-spinner'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 function randomNumber(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min
@@ -33,7 +33,7 @@ export class LoaderHelper {
         )
         const randomSentence = LoaderHelper.SENTENCES[randomSentenceIndex]
 
-        LOG.info(randomSentence ?? 'Loading...')
+        LogHelper.info(randomSentence ?? 'Loading...')
       }
     }, 60_000)
 

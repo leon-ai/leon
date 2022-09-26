@@ -1,13 +1,13 @@
 import { command } from 'execa'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 /**
  * Update version number in files which need version number
  */
 export default (version) =>
   new Promise(async (resolve, reject) => {
-    LOG.info('Updating version...')
+    LogHelper.info('Updating version...')
 
     const promises = []
     const files = ['package.json', 'package-lock.json']
@@ -23,10 +23,10 @@ export default (version) =>
     try {
       await Promise.all(promises)
 
-      LOG.success(`Version updated to ${version}`)
+      LogHelper.success(`Version updated to ${version}`)
       resolve()
     } catch (e) {
-      LOG.error(`Error while updating version: ${e.stderr}`)
+      LogHelper.error(`Error while updating version: ${e.stderr}`)
       reject(e)
     }
   })

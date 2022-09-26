@@ -3,7 +3,7 @@ import { Nlp } from '@nlpjs/nlp'
 import { LangAll } from '@nlpjs/lang-all'
 import dotenv from 'dotenv'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import trainGlobalResolvers from './train-resolvers-model/train-global-resolvers'
 import trainSkillsResolvers from './train-resolvers-model/train-skills-resolvers'
@@ -102,38 +102,38 @@ export default () =>
       try {
         await globalResolversNlp.train()
 
-        LOG.success(
+        LogHelper.success(
           `Global resolvers NLP model saved in ${globalResolversModelFileName}`
         )
         resolve()
       } catch (e) {
-        LOG.error(`Failed to save global resolvers NLP model: ${e}`)
+        LogHelper.error(`Failed to save global resolvers NLP model: ${e}`)
         reject()
       }
 
       try {
         await skillsResolversNlp.train()
 
-        LOG.success(
+        LogHelper.success(
           `Skills resolvers NLP model saved in ${skillsResolversModelFileName}`
         )
         resolve()
       } catch (e) {
-        LOG.error(`Failed to save skills resolvers NLP model: ${e}`)
+        LogHelper.error(`Failed to save skills resolvers NLP model: ${e}`)
         reject()
       }
 
       try {
         await mainNlp.train()
 
-        LOG.success(`Main NLP model saved in ${mainModelFileName}`)
+        LogHelper.success(`Main NLP model saved in ${mainModelFileName}`)
         resolve()
       } catch (e) {
-        LOG.error(`Failed to save main NLP model: ${e}`)
+        LogHelper.error(`Failed to save main NLP model: ${e}`)
         reject()
       }
     } catch (e) {
-      LOG.error(e.message)
+      LogHelper.error(e.message)
       reject(e)
     }
   })

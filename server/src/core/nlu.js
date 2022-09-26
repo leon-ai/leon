@@ -17,7 +17,7 @@ import {
   TCP_SERVER_PORT
 } from '@/constants'
 import Ner from '@/core/ner'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import TcpClient from '@/core/tcp-client'
@@ -51,8 +51,8 @@ class Nlu {
     this.conv = new Conversation('conv0')
     this.nluResultObj = defaultNluResultObj // TODO
 
-    LOG.title('NLU')
-    LOG.success('New instance')
+    LogHelper.title('NLU')
+    LogHelper.success('New instance')
   }
 
   /**
@@ -61,7 +61,7 @@ class Nlu {
   loadGlobalResolversModel(nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
-        LOG.title('NLU')
+        LogHelper.title('NLU')
         reject({
           type: 'warning',
           obj: new Error(
@@ -69,7 +69,7 @@ class Nlu {
           )
         })
       } else {
-        LOG.title('NLU')
+        LogHelper.title('NLU')
 
         try {
           const container = await containerBootstrap()
@@ -82,7 +82,7 @@ class Nlu {
           nluManager.settings.spellCheck = true
 
           await this.globalResolversNlp.load(nlpModel)
-          LOG.success('Global resolvers NLP model loaded')
+          LogHelper.success('Global resolvers NLP model loaded')
 
           resolve()
         } catch (err) {
@@ -107,7 +107,7 @@ class Nlu {
   loadSkillsResolversModel(nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
-        LOG.title('NLU')
+        LogHelper.title('NLU')
         reject({
           type: 'warning',
           obj: new Error(
@@ -126,7 +126,7 @@ class Nlu {
           nluManager.settings.spellCheck = true
 
           await this.skillsResolversNlp.load(nlpModel)
-          LOG.success('Skills resolvers NLP model loaded')
+          LogHelper.success('Skills resolvers NLP model loaded')
 
           resolve()
         } catch (err) {
@@ -151,7 +151,7 @@ class Nlu {
   loadMainModel(nlpModel) {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
-        LOG.title('NLU')
+        LogHelper.title('NLU')
         reject({
           type: 'warning',
           obj: new Error(
@@ -177,7 +177,7 @@ class Nlu {
           nluManager.settings.spellCheck = true
 
           await this.mainNlp.load(nlpModel)
-          LOG.success('Main NLP model loaded')
+          LogHelper.success('Main NLP model loaded')
 
           this.ner = new Ner(this.mainNlp.ner)
 
@@ -362,11 +362,11 @@ class Nlu {
         (intent.includes('resolver.global') ||
           intent.includes(`resolver.${skillName}`))
       ) {
-        LOG.title('NLU')
-        LOG.success('Resolvers resolved:')
+        LogHelper.title('NLU')
+        LogHelper.success('Resolvers resolved:')
         this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
         this.nluResultObj.resolvers.forEach((resolver) =>
-          LOG.success(`${intent}: ${JSON.stringify(resolver)}`)
+          LogHelper.success(`${intent}: ${JSON.stringify(resolver)}`)
         )
         hasMatchingResolver = this.nluResultObj.resolvers.length > 0
       }
@@ -462,8 +462,8 @@ class Nlu {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
-      LOG.title('NLU')
-      LOG.info('Processing...')
+      LogHelper.title('NLU')
+      LogHelper.info('Processing...')
 
       opts = opts || {
         mute: false // Close Leon mouth e.g. over HTTP
@@ -477,7 +477,7 @@ class Nlu {
 
         const msg =
           'The NLP model is missing, please rebuild the project or if you are in dev run: npm run train'
-        LOG.error(msg)
+        LogHelper.error(msg)
         return reject(msg)
       }
 
@@ -570,9 +570,9 @@ class Nlu {
             this.brain.socket.emit('is-typing', false)
           }
 
-          LOG.title('NLU')
+          LogHelper.title('NLU')
           const msg = 'Intent not found'
-          LOG.warning(msg)
+          LogHelper.warning(msg)
 
           const processingTimeEnd = Date.now()
           const processingTime = processingTimeEnd - processingTimeStart
@@ -586,8 +586,8 @@ class Nlu {
         this.nluResultObj = fallback
       }
 
-      LOG.title('NLU')
-      LOG.success(
+      LogHelper.title('NLU')
+      LogHelper.success(
         `Intent found: ${this.nluResultObj.classification.skill}.${this.nluResultObj.classification.action} (domain: ${this.nluResultObj.classification.domain})`
       )
 
@@ -607,8 +607,8 @@ class Nlu {
           this.nluResultObj
         )
       } catch (e) /* istanbul ignore next */ {
-        if (LOG[e.type]) {
-          LOG[e.type](e.obj.message)
+        if (LogHelper[e.type]) {
+          LogHelper[e.type](e.obj.message)
         }
 
         if (!opts.mute) {
@@ -684,7 +684,7 @@ class Nlu {
           nluProcessingTime: processingTime - processedData?.executionTime // In ms, NLU processing time only
         })
       } catch (e) /* istanbul ignore next */ {
-        LOG[e.type](e.obj.message)
+        LogHelper[e.type](e.obj.message)
 
         if (!opts.mute) {
           this.brain.socket.emit('is-typing', false)
@@ -829,7 +829,7 @@ class Nlu {
     const words = this.nluResultObj.utterance.toLowerCase().split(' ')
 
     if (fallbacks.length > 0) {
-      LOG.info('Looking for fallbacks...')
+      LogHelper.info('Looking for fallbacks...')
       const tmpWords = []
 
       for (let i = 0; i < fallbacks.length; i += 1) {
@@ -846,7 +846,7 @@ class Nlu {
           this.nluResultObj.classification.action = fallbacks[i].action
           this.nluResultObj.classification.confidence = 1
 
-          LOG.success('Fallback found')
+          LogHelper.success('Fallback found')
           return this.nluResultObj
         }
       }

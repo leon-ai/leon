@@ -2,7 +2,7 @@ import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import Ffmpeg from 'fluent-ffmpeg'
 import fs from 'fs'
 
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 const audios = {
   webm: `${__dirname}/../tmp/speech.webm`,
@@ -13,8 +13,8 @@ class Asr {
   constructor() {
     this.blob = {}
 
-    LOG.title('ASR')
-    LOG.success('New instance')
+    LogHelper.title('ASR')
+    LogHelper.success('New instance')
   }
 
   static get audios() {
@@ -27,7 +27,7 @@ class Asr {
    */
   run(blob, stt) {
     return new Promise((resolve, reject) => {
-      LOG.title('ASR')
+      LogHelper.title('ASR')
 
       this.blob = blob
 
@@ -47,10 +47,10 @@ class Asr {
         ffmpeg
           .addInput(audios.webm)
           .on('start', () => {
-            LOG.info('Encoding WebM file to WAVE file...')
+            LogHelper.info('Encoding WebM file to WAVE file...')
           })
           .on('end', () => {
-            LOG.success('Encoding done')
+            LogHelper.success('Encoding done')
 
             if (Object.keys(stt).length === 0) {
               reject({

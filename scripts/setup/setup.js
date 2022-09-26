@@ -1,5 +1,5 @@
 import { LoaderHelper } from '@/helpers/loader-helper'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import train from '../train/train'
 import generateHttpApiKey from '../generate/generate-http-api-key'
@@ -28,11 +28,11 @@ import setupPythonPackages from './setup-python-packages'
     LoaderHelper.start()
     await train()
 
-    LOG.default('')
-    LOG.success('Hooray! Leon is installed and ready to go!')
+    LogHelper.default('')
+    LogHelper.success('Hooray! Leon is installed and ready to go!')
     LoaderHelper.stop()
   } catch (e) {
-    LOG.error(e)
+    LogHelper.error(e)
     LoaderHelper.stop()
   }
 })()

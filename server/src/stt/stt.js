@@ -3,7 +3,7 @@ import path from 'path'
 
 import { IS_TESTING_ENV } from '@/constants'
 import Asr from '@/core/asr'
-import { LOG } from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 class Stt {
   constructor(socket, provider) {
@@ -12,18 +12,18 @@ class Stt {
     this.providers = ['google-cloud-stt', 'watson-stt', 'coqui-stt']
     this.parser = {}
 
-    LOG.title('STT')
-    LOG.success('New instance')
+    LogHelper.title('STT')
+    LogHelper.success('New instance')
   }
 
   /**
    * Initialize the STT provider
    */
   init(cb) {
-    LOG.info('Initializing STT...')
+    LogHelper.info('Initializing STT...')
 
     if (!this.providers.includes(this.provider)) {
-      LOG.error(
+      LogHelper.error(
         `The STT provider "${this.provider}" does not exist or is not yet supported`
       )
 
@@ -45,7 +45,7 @@ class Stt {
         'google-cloud.json'
       ) === -1
     ) {
-      LOG.warning(
+      LogHelper.warning(
         `The "GOOGLE_APPLICATION_CREDENTIALS" env variable is already settled with the following value: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`
       )
     }
@@ -57,8 +57,8 @@ class Stt {
       this.parser.default.init(this.parser.default.conf)
     }
 
-    LOG.title('STT')
-    LOG.success('STT initialized')
+    LogHelper.title('STT')
+    LogHelper.success('STT initialized')
 
     cb(this)
 
@@ -77,17 +77,17 @@ class Stt {
       }
     })
 
-    LOG.success(`Parsing result: ${string}`)
+    LogHelper.success(`Parsing result: ${string}`)
   }
 
   /**
    * Read the speech file and parse
    */
   parse(file) {
-    LOG.info('Parsing WAVE file...')
+    LogHelper.info('Parsing WAVE file...')
 
     if (!fs.existsSync(file)) {
-      LOG.error(`The WAVE file "${file}" does not exist`)
+      LogHelper.error(`The WAVE file "${file}" does not exist`)
 
       return false
     }
