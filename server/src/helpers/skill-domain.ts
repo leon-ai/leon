@@ -1,7 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 
-import type { ShortLanguageCode } from '@/helpers/lang'
+import type { ShortLanguageCode } from '@/helpers/lang-helper'
 
 enum SkillBridges {
   Python = 'python'

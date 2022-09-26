@@ -3,7 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 import { LOG } from '@/helpers/log'
-import { LANG } from '@/helpers/lang'
+import { LangHelper } from '@/helpers/lang-helper'
 
 class Tts {
   constructor(socket, provider) {
@@ -57,7 +57,7 @@ class Tts {
 
     // Dynamically attribute the synthesizer
     this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`)
-    this.synthesizer.default.init(LANG.getLongCode(this.lang))
+    this.synthesizer.default.init(LangHelper.getLongCode(this.lang))
 
     this.onSaved()
 

@@ -19,7 +19,7 @@ import {
 import Ner from '@/core/ner'
 import { LOG } from '@/helpers/log'
 import { StringHelper } from '@/helpers/string-helper'
-import { LANG } from '@/helpers/lang'
+import { LangHelper } from '@/helpers/lang-helper'
 import TcpClient from '@/core/tcp-client'
 import Conversation from '@/core/conversation'
 
@@ -539,7 +539,7 @@ class Nlu {
         }
       }
 
-      const isSupportedLanguage = LANG.getShortCodes().includes(locale)
+      const isSupportedLanguage = LangHelper.getShortCodes().includes(locale)
       if (!isSupportedLanguage) {
         this.brain.talk(
           `${this.brain.wernicke('random_language_not_supported')}.`,
@@ -558,7 +558,7 @@ class Nlu {
 
       if (intent === 'None') {
         const fallback = this.fallback(
-          langs[LANG.getLongCode(locale)].fallbacks
+          langs[LangHelper.getLongCode(locale)].fallbacks
         )
 
         if (fallback === false) {

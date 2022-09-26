@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 
-import type { LongLanguageCode } from '@/helpers/lang'
+import type { LongLanguageCode } from '@/helpers/lang-helper'
 
 dotenv.config()
 
