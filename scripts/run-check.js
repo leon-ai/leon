@@ -1,4 +1,4 @@
-import { LOADER } from '@/helpers/loader'
+import { LoaderHelper } from '@/helpers/loader-helper'
 
 import check from './check'
 
@@ -7,10 +7,10 @@ import check from './check'
  */
 ;(async () => {
   try {
-    LOADER.start()
+    LoaderHelper.start()
     await check()
-    LOADER.stop()
+    LoaderHelper.stop()
   } catch (e) {
-    LOADER.stop()
+    LoaderHelper.stop()
   }
 })()

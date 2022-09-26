@@ -1,6 +1,6 @@
 import dotenv from 'dotenv'
 
-import { LOADER } from '@/helpers/loader'
+import { LoaderHelper } from '@/helpers/loader-helper'
 import { LOG } from '@/helpers/log'
 
 import checkOs from '../check-os'
@@ -15,18 +15,18 @@ dotenv.config()
  */
 ;(async () => {
   try {
-    LOADER.start()
+    LoaderHelper.start()
     await checkOs()
-    LOADER.stop()
+    LoaderHelper.stop()
     await setupHotword()
-    LOADER.start()
+    LoaderHelper.start()
     await setupTts()
     await setupStt()
 
-    LOADER.stop()
+    LoaderHelper.stop()
     LOG.success('Hooray! Offline components are installed!')
   } catch (e) {
     LOG.error(e)
-    LOADER.stop()
+    LoaderHelper.stop()
   }
 })()

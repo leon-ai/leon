@@ -1,4 +1,4 @@
-import { LOADER } from '@/helpers/loader'
+import { LoaderHelper } from '@/helpers/loader-helper'
 import { LOG } from '@/helpers/log'
 
 import train from '../train/train'
@@ -20,19 +20,19 @@ import setupPythonPackages from './setup-python-packages'
     process.env.PIPENV_VENV_IN_PROJECT = 'true'
 
     await setupDotenv()
-    LOADER.start()
+    LoaderHelper.start()
     await Promise.all([setupCore(), setupSkillsConfig()])
     await setupPythonPackages()
-    LOADER.stop()
+    LoaderHelper.stop()
     await generateHttpApiKey()
-    LOADER.start()
+    LoaderHelper.start()
     await train()
 
     LOG.default('')
     LOG.success('Hooray! Leon is installed and ready to go!')
-    LOADER.stop()
+    LoaderHelper.stop()
   } catch (e) {
     LOG.error(e)
-    LOADER.stop()
+    LoaderHelper.stop()
   }
 })()

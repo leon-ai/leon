@@ -1,7 +1,7 @@
 import { command } from 'execa'
 
 import { LOG } from '@/helpers/log'
-import { LOADER } from '@/helpers/loader'
+import { LoaderHelper } from '@/helpers/loader-helper'
 
 const globs = [
   '"app/src/js/*.{ts,js}"',
@@ -33,7 +33,7 @@ async function prettier() {
  * This script ensures the correct coding syntax of the whole project
  */
 ;(async () => {
-  LOADER.start()
+  LoaderHelper.start()
   LOG.info('Linting...')
 
   try {
@@ -46,10 +46,10 @@ async function prettier() {
     ])
 
     LOG.success('Looks great')
-    LOADER.stop()
+    LoaderHelper.stop()
   } catch (e) {
     LOG.error(`Does not look great: ${e.message}`)
-    LOADER.stop()
+    LoaderHelper.stop()
     process.exit(1)
   }
 })()

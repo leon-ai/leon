@@ -6,7 +6,7 @@ function randomNumber(min: number, max: number) {
   return Math.floor(Math.random() * (max - min + 1)) + min
 }
 
-class LoaderHelper {
+export class LoaderHelper {
   static readonly SENTENCES = [
     'This process takes time, please go for a coffee (or a fruit juice)',
     'This may take a while, grab a drink and come back later',
@@ -15,22 +15,16 @@ class LoaderHelper {
     'Leon will be ready for you in a moment'
   ]
 
-  private static instance: LoaderHelper
+  private static spinner = new Spinner('\x1b[95m%s\x1b[0m\r').setSpinnerString(
+    18
+  )
 
-  private spinner = new Spinner('\x1b[95m%s\x1b[0m\r').setSpinnerString(18)
-
-  private interval: NodeJS.Timer | undefined
-
-  constructor() {
-    if (LoaderHelper.instance == null) {
-      LoaderHelper.instance = this
-    }
-  }
+  private static interval: NodeJS.Timer | undefined
 
   /**
    * Start the loader
    */
-  public start() {
+  public static start() {
     this.interval = setInterval(() => {
       if (this.spinner.isSpinning()) {
         const randomSentenceIndex = randomNumber(
@@ -49,11 +43,9 @@ class LoaderHelper {
   /**
    * Stop the loader
    */
-  public stop() {
+  public static stop() {
     clearInterval(this.interval)
 
     this.spinner.stop()
   }
 }
-
-export const LOADER = new LoaderHelper()
