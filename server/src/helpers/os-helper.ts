@@ -1,4 +1,4 @@
-import nodeOS from 'node:os'
+import os from 'os'
 
 type OSType = 'windows' | 'macos' | 'linux' | 'unknown'
 type OSName = 'Windows' | 'macOS' | 'Linux' | 'Unknown'
@@ -17,13 +17,13 @@ export class OSHelper {
     let type: OSType = 'unknown'
     let name: OSName = 'Unknown'
 
-    if (nodeOS.type().indexOf('Windows') !== -1) {
+    if (os.type().indexOf('Windows') !== -1) {
       type = 'windows'
       name = 'Windows'
-    } else if (nodeOS.type() === 'Darwin') {
+    } else if (os.type() === 'Darwin') {
       type = 'macos'
       name = 'macOS'
-    } else if (nodeOS.type() === 'Linux') {
+    } else if (os.type() === 'Linux') {
       type = 'linux'
       name = 'Linux'
     }
@@ -36,6 +36,6 @@ export class OSHelper {
    * @example getNumberOfCPUCores() // 8
    */
   public static getNumberOfCPUCores(): number {
-    return nodeOS.cpus().length
+    return os.cpus().length
   }
 }
