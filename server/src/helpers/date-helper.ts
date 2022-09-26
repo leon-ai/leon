@@ -8,20 +8,12 @@ import { LOG } from '@/helpers/log'
 dayjs.extend(utc)
 dayjs.extend(timezone)
 
-class DateHelper {
-  private static instance: DateHelper
-
-  constructor() {
-    if (DateHelper.instance == null) {
-      DateHelper.instance = this
-    }
-  }
-
+export class DateHelper {
   /**
    * Get date time
    * @example getDateTime() // 2022-09-12T12:42:57+08:00
    */
-  public getDateTime() {
+  public static getDateTime() {
     return dayjs().tz(this.getTimeZone()).format()
   }
 
@@ -29,7 +21,7 @@ class DateHelper {
    * Get time zone
    * @example getTimeZone() // Asia/Shanghai
    */
-  public getTimeZone() {
+  public static getTimeZone() {
     let { timeZone } = Intl.DateTimeFormat().resolvedOptions()
 
     if (TIME_ZONE) {
@@ -47,5 +39,3 @@ class DateHelper {
     return timeZone as string
   }
 }
-
-export const DATE = new DateHelper()

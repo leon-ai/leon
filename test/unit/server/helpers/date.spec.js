@@ -1,11 +1,11 @@
 import moment from 'moment-timezone'
 
-import { DATE } from '@/helpers/date'
+import { DateHelper } from '@/helpers/date-helper'
 
 describe('date helper', () => {
   describe('dateTime()', () => {
     test('returns date time with UTC', () => {
-      expect(DATE.getDateTime()).toBe(
+      expect(DateHelper.getDateTime()).toBe(
         moment().tz(global.date.time_zone).format()
       )
     })
@@ -13,7 +13,7 @@ describe('date helper', () => {
 
   describe('timeZone()', () => {
     test('returns time zone', () => {
-      expect(DATE.getTimeZone()).toBe(global.date.time_zone)
+      expect(DateHelper.getTimeZone()).toBe(global.date.time_zone)
     })
   })
 })

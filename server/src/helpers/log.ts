@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { IS_TESTING_ENV } from '@/constants'
-import { DATE } from '@/helpers/date'
+import { DateHelper } from '@/helpers/date-helper'
 
 class LogHelper {
   static readonly ERRORS_PATH = path.join(
@@ -54,7 +54,7 @@ class LogHelper {
    * Log message on stderr and write in error log file
    */
   public error(value: string) {
-    const data = `${DATE.getDateTime()} - ${value}`
+    const data = `${DateHelper.getDateTime()} - ${value}`
 
     if (!IS_TESTING_ENV) {
       if (fs.existsSync(LogHelper.ERRORS_PATH)) {
