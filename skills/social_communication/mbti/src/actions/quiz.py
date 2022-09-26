@@ -27,7 +27,7 @@ groups = [
 	},
 	{
 		'name': 'tactics',
-		'a': 'J', # Judjing
+		'a': 'J', # Judging
 		'b': 'P', # Perceiving
 		'questions': [4, 8, 12, 16, 20]
 	}

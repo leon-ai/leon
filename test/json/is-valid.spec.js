@@ -1,5 +1,5 @@
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
 
 describe('are JSON files valid', () => {
   const rootFolders = ['core', 'packages', 'core/config', 'server/src/data']

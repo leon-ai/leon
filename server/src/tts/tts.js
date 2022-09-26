@@ -1,6 +1,6 @@
-import events from 'events'
-import fs from 'fs'
-import path from 'path'
+import events from 'node:events'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'

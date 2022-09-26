@@ -3,7 +3,7 @@
  * @nlpjs/core-loader can make use of file system
  * https://github.com/axa-group/nlp.js/issues/766#issuecomment-750315909
  */
-import fs from 'fs'
+import fs from 'node:fs'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'

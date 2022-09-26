@@ -1,6 +1,6 @@
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import Ffmpeg from 'fluent-ffmpeg'
-import fs from 'fs'
+import fs from 'node:fs'
 
 import { LogHelper } from '@/helpers/log-helper'
 

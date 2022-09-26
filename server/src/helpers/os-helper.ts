@@ -1,4 +1,4 @@
-import os from 'os'
+import os from 'node:os'
 
 type OSType = 'windows' | 'macos' | 'linux' | 'unknown'
 type OSName = 'Windows' | 'macOS' | 'Linux' | 'Unknown'

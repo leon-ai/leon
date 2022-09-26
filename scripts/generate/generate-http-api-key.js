@@ -1,8 +1,8 @@
 import dotenv from 'dotenv'
 import crypto from 'crypto'
-import fs from 'fs'
 import { prompt } from 'inquirer'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'

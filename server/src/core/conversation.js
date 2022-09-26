@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from 'node:fs'
 
 import { LogHelper } from '@/helpers/log-helper'
 

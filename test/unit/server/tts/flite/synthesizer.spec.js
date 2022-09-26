@@ -1,5 +1,5 @@
-import fs from 'fs'
-import events from 'events'
+import fs from 'node:fs'
+import events from 'node:events'
 
 import synthesizer from '@/tts/flite/synthesizer'
 

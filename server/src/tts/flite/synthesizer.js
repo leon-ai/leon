@@ -1,8 +1,8 @@
-import { spawn } from 'child_process'
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
-import fs from 'fs'
+import { spawn } from 'node:child_process'
+import fs from 'node:fs'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'

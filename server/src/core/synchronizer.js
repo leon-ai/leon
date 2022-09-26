@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
-import fs from 'fs'
-import path from 'path'
 import { waterfall } from 'async'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { LogHelper } from '@/helpers/log-helper'
 

@@ -1,6 +1,6 @@
-import path from 'path'
-import fs from 'fs'
 import { composeFromPattern } from '@nlpjs/utils'
+import path from 'node:path'
+import fs from 'node:fs'
 
 import { LogHelper } from '@/helpers/log-helper'
 

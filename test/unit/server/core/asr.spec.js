@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from 'node:fs'
 
 import Asr from '@/core/asr'
 import Stt from '@/stt/stt'

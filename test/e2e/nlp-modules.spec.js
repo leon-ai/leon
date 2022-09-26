@@ -1,6 +1,6 @@
-import fs from 'fs'
-import path from 'path'
 import { command } from 'execa'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'

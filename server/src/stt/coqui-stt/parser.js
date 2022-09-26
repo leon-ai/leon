@@ -1,6 +1,6 @@
 import wav from 'node-wav'
-import fs from 'fs'
 import { Model } from 'stt'
+import fs from 'node:fs'
 
 import { IS_TESTING_ENV } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'

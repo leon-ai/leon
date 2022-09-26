@@ -1,5 +1,5 @@
-import Net from 'net'
-import { EventEmitter } from 'events'
+import Net from 'node:net'
+import { EventEmitter } from 'node:events'
 
 import { IS_PRODUCTION_ENV } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'

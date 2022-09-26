@@ -1,5 +1,5 @@
-import fs from 'fs'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
 
 import { IS_TESTING_ENV } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'

@@ -11,7 +11,7 @@ import setupStt from './setup-stt'
 dotenv.config()
 
 /**
- * Main entry to setup offline components
+ * Main entry to set up offline components
  */
 ;(async () => {
   try {

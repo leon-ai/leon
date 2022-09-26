@@ -1,4 +1,4 @@
-import fs from 'fs'
+import fs from 'node:fs'
 
 import parser from '@/stt/coqui-stt/parser'
 
