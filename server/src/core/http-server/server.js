@@ -266,7 +266,10 @@ server.handleOnConnection = (socket) => {
 
         const utterance = data.value
         try {
+          LogHelper.time('Utterance processed in')
           await provider.nlu.process(utterance)
+          LogHelper.title('Execution Time')
+          LogHelper.timeEnd('Utterance processed in')
         } catch (e) {
           /* */
         }
