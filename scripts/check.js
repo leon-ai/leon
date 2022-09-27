@@ -169,10 +169,12 @@ export default () =>
        */
 
       try {
+        LogHelper.time('Skill execution time')
         const p = await command(
           'pipenv run python bridges/python/main.py scripts/assets/intent-object.json',
           { shell: true }
         )
+        LogHelper.timeEnd('Skill execution time')
         LogHelper.info(p.command)
         LogHelper.success(`${p.stdout}\n`)
       } catch (e) {

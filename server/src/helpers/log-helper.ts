@@ -72,4 +72,18 @@ export class LogHelper {
   public static default(value: string): void {
     console.log(value)
   }
+
+  /**
+   * Start a log timer
+   */
+  public static time(value: string): void {
+    console.time(`🕑 \x1b[36m${value}\x1b[0m`)
+  }
+
+  /**
+   * Stop log timer
+   */
+  public static timeEnd(value: string): void {
+    console.timeEnd(`🕑 \x1b[36m${value}\x1b[0m`)
+  }
 }
