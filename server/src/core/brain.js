@@ -225,7 +225,7 @@ class Brain {
             try {
               fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
               this.process = spawn(
-                `pipenv run python bridges/python/main.py ${intentObjectPath}`,
+                `./bridges/python/dist/python-bridge/python-bridge ${intentObjectPath}`,
                 { shell: true }
               )
             } catch (e) {
