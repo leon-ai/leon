@@ -2,10 +2,12 @@ __pycache__/
 .idea/
 .vscode/
 **/dist/
+!bridges/python/dist/
+**/build/
 **/node_modules/
 test/coverage/
 **/tmp/*
-bridges/python/.venv/*
+bridges/python/src/.venv/*
 downloads/*
 logs/*
 core/config/**/*.json
@@ -19,7 +21,7 @@ npm-debug.log
 debug.log
 .env
 !**/.gitkeep
-!bridges/python/.venv/.gitkeep
+!bridges/python/src/.venv/.gitkeep
 !**/*.sample*
 packages/**/config/config.json
 skills/**/src/config.json
