@@ -1,4 +1,3 @@
-import requests.certs
 from cx_Freeze import setup, Executable
 
 options = {
