@@ -1,7 +1,7 @@
 __pycache__/
 .idea/
 .vscode/
-**/dist/
+**/dist/*
 **/build/
 **/node_modules/
 test/coverage/
@@ -19,8 +19,8 @@ bin/flite/*
 npm-debug.log
 debug.log
 .env
-!**/.gitkeep
-!bridges/python/src/.venv/.gitkeep
+!tcp_server/**/.gitkeep
+!bridges/python/**/.gitkeep
 !**/*.sample*
 packages/**/config/config.json
 skills/**/src/config.json
