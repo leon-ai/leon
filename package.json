@@ -47,7 +47,7 @@
     "build": "npm run build:app && npm run build:server",
     "build:app": "cross-env LEON_NODE_ENV=production ts-node scripts/app/run-build-app.js",
     "build:server": "npm run delete-dist:server && npm run train && npm run generate:skills-endpoints && tsc && resolve-tspaths && shx rm -rf server/dist/core server/dist/package.json && shx mv -f server/dist/server/src/* server/dist && shx rm -rf server/dist/server && shx mkdir -p server/dist/tmp",
-    "start:tcp-server": "cross-env PIPENV_PIPFILE=bridges/python/src/Pipfile pipenv run python bridges/python/src/tcp_server/main.py",
+    "start:tcp-server": "cross-env PIPENV_PIPFILE=bridges/python/src/Pipfile pipenv run python tcp_server/src/main.py",
     "start": "cross-env LEON_NODE_ENV=production node ./server/dist/index.js",
     "train": "ts-node scripts/train/run-train.js",
     "prepare-release": "ts-node scripts/release/prepare-release.js",

@@ -58,7 +58,7 @@ export default () =>
             'Installing Python packages from bridges/python/src/Pipfile...'
           )
 
-          await command('pipenv install --site-packages --dev', { shell: true })
+          await command('pipenv install --site-packages', { shell: true })
           LogHelper.success('Python packages installed')
 
           LogHelper.info('Installing spaCy models...')
