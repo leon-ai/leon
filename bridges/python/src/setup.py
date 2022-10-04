@@ -4,14 +4,16 @@ from cx_Freeze import setup, Executable
 options = {
     'build_exe': {
     	# Add common dependencies for skills
-        'includes': ['bs4', 'pytube']
-	},
-	'compiler': {}
+        'includes': [
+        	'bs4',
+        	'pytube'
+        ]
+	}
 }
 
 executables = [
 	Executable(
-		script='main.py',
+		script='bridges/python/src/main.py',
 		target_name='leon-python-bridge'
     )
 ]
