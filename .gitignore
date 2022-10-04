@@ -2,7 +2,6 @@ __pycache__/
 .idea/
 .vscode/
 **/dist/
-!bridges/python/dist/
 **/build/
 **/node_modules/
 test/coverage/

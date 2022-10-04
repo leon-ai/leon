@@ -199,8 +199,8 @@ class Brain {
              *
              * 1. Need to be at the root of the project
              * 2. Edit: server/src/intent-object.sample.json
-             * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
-             *    python bridges/python/main.py server/src/intent-object.sample.json
+             * 3. Run: PIPENV_PIPFILE=bridges/python/src/Pipfile pipenv run
+             *    python bridges/python/src/main.py server/src/intent-object.sample.json
              */
             const slots = {}
             if (obj.slots) {
@@ -225,7 +225,7 @@ class Brain {
             try {
               fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
               this.process = spawn(
-                `./bridges/python/dist/python-bridge/python-bridge ${intentObjectPath}`,
+                `./bridges/python/dist/python-bridge/leon-python-bridge ${intentObjectPath}`,
                 { shell: true }
               )
             } catch (e) {

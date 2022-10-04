@@ -17,7 +17,7 @@ import setupPythonPackages from './setup-python-packages'
 ;(async () => {
   try {
     // Required env vars to setup
-    process.env.PIPENV_PIPFILE = 'bridges/python/Pipfile'
+    process.env.PIPENV_PIPFILE = 'bridges/python/src/Pipfile'
     process.env.PIPENV_VENV_IN_PROJECT = 'true'
 
     await setupDotenv()

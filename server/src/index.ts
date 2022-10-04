@@ -13,7 +13,7 @@ import server from '@/core/http-server/server'
   process.title = 'leon'
 
   global.tcpServerProcess = spawn(
-    `pipenv run python bridges/python/tcp_server/main.py ${LangHelper.getShortCode(
+    `./bridges/python/dist/tcp-server/leon-tcp-server ${LangHelper.getShortCode(
       LEON_LANG
     )}`,
     {
