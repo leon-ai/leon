@@ -224,7 +224,7 @@ class Nlu {
     // Recreate a new TCP server process and reconnect the TCP client
     kill(global.tcpServerProcess.pid, () => {
       global.tcpServerProcess = spawn(
-        `pipenv run python bridges/python/tcp_server/main.py ${locale}`,
+        `./bridges/python/dist/tcp-server/leon-tcp-server ${locale}`,
         { shell: true }
       )
 

@@ -13,8 +13,8 @@ export default () =>
     LogHelper.info('Checking Python env...')
 
     // Check if the Pipfile exists
-    if (fs.existsSync('bridges/python/Pipfile')) {
-      LogHelper.success('bridges/python/Pipfile found')
+    if (fs.existsSync('bridges/python/src/Pipfile')) {
+      LogHelper.success('bridges/python/src/Pipfile found')
 
       try {
         // Check if Pipenv is installed
@@ -39,8 +39,11 @@ export default () =>
       }
 
       try {
-        const dotVenvPath = path.join(process.cwd(), 'bridges/python/.venv')
-        const pipfilePath = path.join(process.cwd(), 'bridges/python/Pipfile')
+        const dotVenvPath = path.join(process.cwd(), 'bridges/python/src/.venv')
+        const pipfilePath = path.join(
+          process.cwd(),
+          'bridges/python/src/Pipfile'
+        )
         const pipfileMtime = fs.statSync(pipfilePath).mtime
         const isDotVenvExist = fs.existsSync(dotVenvPath)
         const installPythonPackages = async () => {
@@ -52,10 +55,10 @@ export default () =>
 
           // Installing Python packages
           LogHelper.info(
-            'Installing Python packages from bridges/python/Pipfile...'
+            'Installing Python packages from bridges/python/src/Pipfile...'
           )
 
-          await command('pipenv install --site-packages', { shell: true })
+          await command('pipenv install --site-packages --dev', { shell: true })
           LogHelper.success('Python packages installed')
 
           LogHelper.info('Installing spaCy models...')
@@ -79,7 +82,7 @@ export default () =>
         } else {
           const dotProjectPath = path.join(
             process.cwd(),
-            'bridges/python/.venv/.project'
+            'bridges/python/src/.venv/.project'
           )
           if (fs.existsSync(dotProjectPath)) {
             const dotProjectMtime = fs.statSync(dotProjectPath).mtime
@@ -102,7 +105,7 @@ export default () =>
       }
     } else {
       LogHelper.error(
-        'bridges/python/Pipfile does not exist. Try to pull the project (git pull)'
+        'bridges/python/src/Pipfile does not exist. Try to pull the project (git pull)'
       )
       reject()
     }

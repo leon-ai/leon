@@ -18,7 +18,7 @@ import { LoaderHelper } from '@/helpers/loader-helper'
     LoaderHelper.start()
     await command('npm run train en', { shell: true })
     const cmd = await command(
-      `cross-env PIPENV_PIPFILE=bridges/python/Pipfile LEON_NODE_ENV=testing jest --silent --config=./test/e2e/modules/e2e.modules.jest.json packages/${pkg}/test/${module}.spec.js && npm run train`,
+      `cross-env PIPENV_PIPFILE=bridges/python/src/Pipfile LEON_NODE_ENV=testing jest --silent --config=./test/e2e/modules/e2e.modules.jest.json packages/${pkg}/test/${module}.spec.js && npm run train`,
       { shell: true }
     )
 

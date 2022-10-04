@@ -171,7 +171,7 @@ export default () =>
       try {
         LogHelper.time('Skill execution time')
         const p = await command(
-          './bridges/python/dist/python-bridge/python-bridge scripts/assets/intent-object.json',
+          './bridges/python/dist/python-bridge/leon-python-bridge scripts/assets/intent-object.json',
           { shell: true }
         )
         LogHelper.timeEnd('Skill execution time')
