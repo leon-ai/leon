@@ -12,6 +12,9 @@ options = {
         	'srsly.msgpack.util',
         	'blis',
         	'cymem'
+        ],
+        'include_files': [
+        	'tcp_server/src/.venv/lib/python3.9/site-packages/tokenizers',
         ]
 	}
 }

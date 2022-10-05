@@ -7,8 +7,9 @@ name = "pypi"
 python_version = "3.9.10"
 
 [packages]
+cx-freeze = "==6.11.1"
 spacy = "==3.4.0"
-setuptools = "==65.4.1"
+setuptools = "==60.9.3"
 wheel = "==0.37.1"
 torch = "==1.12.1"
 python-dotenv = "==0.19.2"
