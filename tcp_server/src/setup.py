@@ -1,4 +1,5 @@
 from cx_Freeze import setup, Executable
+import sysconfig
 
 options = {
     'build_exe': {
@@ -12,12 +13,13 @@ options = {
         	'srsly.msgpack.util',
         	'blis',
         	'cymem'
-        ],
-        'include_files': [
-        	'tcp_server/src/.venv/lib/python3.9/site-packages/tokenizers',
         ]
 	}
 }
+
+# Include private libraries from the tokenizers package for Linux
+if 'linux' in sysconfig.get_platform():
+	options['build_exe']['include_files'] = 'tcp_server/src/.venv/lib/python3.9/site-packages/tokenizers.libs'
 
 executables = [
 	Executable(
