@@ -28,7 +28,7 @@ const PIPFILE_PATH = 'bridges/python/src/Pipfile'
     LogHelper.success('Python packages installed')
     LogHelper.success('Python bridge development environment ready')
   } catch (e) {
-    LogHelper.error(`Failed to set up Python bridge: ${e}`)
+    LogHelper.error(`Failed to set up the Python bridge: ${e}`)
   } finally {
     LoaderHelper.stop()
   }
