@@ -1,6 +1,8 @@
 import path from 'node:path'
+import fs from 'node:fs'
 
 import { command } from 'execa'
+import archiver from 'archiver'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
@@ -16,10 +18,13 @@ import { OSHelper, OSTypes } from '@/helpers/os-helper'
 
 const PIPFILE_PATH = 'bridges/python/src/Pipfile'
 const SETUP_FILE_PATH = 'bridges/python/src/setup.py'
-const DIST_PATH = path.join(
-  'bridges/python/dist',
-  OSHelper.getBinariesFolderName()
-)
+const DIST_PATH = 'bridges/python/dist'
+
+const BINARIES_FOLDER_NAME = OSHelper.getBinariesFolderName()
+const BUILD_PATH = path.join(DIST_PATH, BINARIES_FOLDER_NAME)
+
+const ARCHIVE_NAME = `leon-python-bridge-${BINARIES_FOLDER_NAME}.zip`
+const ARCHIVE_PATH = path.join(DIST_PATH, ARCHIVE_NAME)
 
 ;(async () => {
   LoaderHelper.start()
@@ -50,7 +55,7 @@ const DIST_PATH = path.join(
     LogHelper.info('Building the Python bridge...')
 
     await command(
-      `pipenv run python ${SETUP_FILE_PATH} build --build-exe ${DIST_PATH}`,
+      `pipenv run python ${SETUP_FILE_PATH} build --build-exe ${BUILD_PATH}`,
       {
         shell: true
       }
@@ -59,7 +64,29 @@ const DIST_PATH = path.join(
     LogHelper.success('Python bridge built')
   } catch (e) {
     LogHelper.error(`Failed to build the Python bridge: ${e}`)
-  } finally {
-    LoaderHelper.stop()
   }
+
+  LogHelper.info(`Packing to ${ARCHIVE_PATH}...`)
+
+  const output = fs.createWriteStream(ARCHIVE_PATH)
+  const archive = archiver('zip')
+
+  output.on('close', () => {
+    LogHelper.success(`Python bridge packed to ${ARCHIVE_PATH}`)
+    LogHelper.success(
+      `Python bridge archive size: ${(archive.pointer() / 1_000_000).toFixed(
+        1
+      )} MB`
+    )
+    process.exit(0)
+  })
+
+  archive.on('error', (err) => {
+    LogHelper.error(`Failed to pack the Python bridge: ${err}`)
+  })
+
+  archive.pipe(output)
+  archive.directory(BUILD_PATH, BINARIES_FOLDER_NAME)
+
+  await archive.finalize()
 })()
