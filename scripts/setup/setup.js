@@ -7,7 +7,7 @@ import generateHttpApiKey from '../generate/generate-http-api-key'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupSkillsConfig from './setup-skills-config'
-import setupPythonPackages from './setup-python-packages'
+// import setupPythonPackages from './setup-python-packages'
 
 // Do not load ".env" file because it is not created yet
 
@@ -16,14 +16,12 @@ import setupPythonPackages from './setup-python-packages'
  */
 ;(async () => {
   try {
-    // Required env vars to setup
-    process.env.PIPENV_PIPFILE = 'bridges/python/src/Pipfile'
-    process.env.PIPENV_VENV_IN_PROJECT = 'true'
-
     await setupDotenv()
     LoaderHelper.start()
     await Promise.all([setupCore(), setupSkillsConfig()])
-    await setupPythonPackages()
+    // TODO: download Python bridge archive; unpack it; remove archive
+    // TODO: download TCP server archive; unpack it; remove archive
+    // await setupPythonPackages()
     LoaderHelper.stop()
     await generateHttpApiKey()
     LoaderHelper.start()
