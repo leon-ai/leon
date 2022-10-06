@@ -70,7 +70,7 @@
     "@nlpjs/core-loader": "^4.22.7",
     "@nlpjs/lang-all": "^4.22.12",
     "@nlpjs/nlp": "^4.22.17",
-    "archiver": "^5.3.0",
+    "archiver": "^5.3.1",
     "async": "^3.2.0",
     "cross-env": "^7.0.3",
     "dayjs": "^1.11.5",
