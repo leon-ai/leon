@@ -35,6 +35,7 @@
     "setup:offline-tts": "ts-node scripts/setup-offline/run-setup-tts.js",
     "setup:offline-hotword": "ts-node scripts/setup-offline/run-setup-hotword.js",
     "setup:python-bridge": "ts-node scripts/python-bridge/setup-python-bridge.js",
+    "setup:tcp-server": "ts-node scripts/tcp-server/setup-tcp-server.js",
     "preinstall": "node scripts/setup/preinstall.js",
     "postinstall": "ts-node scripts/setup/setup.js",
     "dev:app": "vite --config app/vite.config.js",

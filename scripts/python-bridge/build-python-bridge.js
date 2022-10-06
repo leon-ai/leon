@@ -34,6 +34,9 @@ const ARCHIVE_PATH = path.join(DIST_PATH, ARCHIVE_NAME)
 
   const { type } = OSHelper.getInformation()
 
+  /**
+   * Install requirements
+   */
   try {
     if (type === OSTypes.Linux) {
       LogHelper.info('Checking whether the "patchelf" utility can be found...')
@@ -51,6 +54,9 @@ const ARCHIVE_PATH = path.join(DIST_PATH, ARCHIVE_NAME)
     process.exit(1)
   }
 
+  /**
+   * Build Python bridge
+   */
   try {
     LogHelper.info('Building the Python bridge...')
 
@@ -66,6 +72,9 @@ const ARCHIVE_PATH = path.join(DIST_PATH, ARCHIVE_NAME)
     LogHelper.error(`Failed to build the Python bridge: ${e}`)
   }
 
+  /**
+   * Pack distribution entities into a ZIP archive
+   */
   LogHelper.info(`Packing to ${ARCHIVE_PATH}...`)
 
   const output = fs.createWriteStream(ARCHIVE_PATH)
