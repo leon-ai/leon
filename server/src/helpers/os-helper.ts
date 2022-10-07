@@ -19,8 +19,8 @@ enum OSNames {
 enum BinaryFolderNames {
   Linux64Bit = 'linux-x86_64', // Linux 64-bit (Intel)
   LinuxARM64 = 'linux-aarch64', // Linux 64-bit (ARM)
-  MacOS64Bit = 'macos-x86_64', // Apple 64-bit (Intel)
-  MacOSARM64 = 'macos-arm64', // Apple silicon (64-bit) (ARM - M1)
+  MacOS64Bit = 'macosx-x86_64', // Apple 64-bit (Intel)
+  MacOSARM64 = 'macosx-arm64', // Apple silicon (64-bit) (ARM - M1)
   Windows64Bit = 'win-amd64', // Windows 64-bit
   Unknown = 'unknown'
 }
