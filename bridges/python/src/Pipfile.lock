@@ -1,7 +1,7 @@
 {
   "_meta": {
     "hash": {
-      "sha256": "b48ed0e3cdaa0957210de48fd36d6811b7cb0bed8835f82ec113abf2215d6d4a"
+      "sha256": "745d8b990cd0a0f8544d8b47219622efc5d9c972a3df4c37a4b0f7b8a9070bee"
     },
     "pipfile-spec": 6,
     "requires": {
@@ -96,6 +96,18 @@
       "markers": "python_version >= '3.6'",
       "version": "==21.3"
     },
+    "patchelf": {
+      "hashes": [
+        "sha256:08e5e30a9415a8628de47726fbf15bfcd89be35df51c8a0a12372aebd0c5b4f6",
+        "sha256:0f8dcf0df0ba919ce37e8aef67a08bde5326897098451df94ab3a5eedc9e08d9",
+        "sha256:4ce9d08119816bc4316c8ecc5f33da42384934fc0fc9cfbdded53a4930705466",
+        "sha256:52e48c08110f2988a9761a5a383f7ae35b1e8e06a140e320d18386d3510697ed",
+        "sha256:ae19b0f91aabc9af2608a4ca0395533f1df9122e6abc11ef2c8db6e4db0f98c2",
+        "sha256:f3f87aee44d1d1b2209e38c4227b0316bb03538df68d20b3d96205aa87868d95"
+      ],
+      "markers": "sys_platform == 'linux'",
+      "version": "==0.15.0.0"
+    },
     "pyparsing": {
       "hashes": [
         "sha256:2b020ecf7d21b687f219b71ecad3631f644a47f01403fa1d1036b0c6416d70fb",
@@ -122,11 +134,11 @@
     },
     "setuptools": {
       "hashes": [
-        "sha256:2347b2b432c891a863acadca2da9ac101eae6169b1d3dfee2ec605ecd50dbfe5",
-        "sha256:e4f30b9f84e5ab3decf945113119649fec09c1fc3507c6ebffec75646c56e62b"
+        "sha256:6599055eeb23bfef457d5605d33a4d68804266e6cb430b0fb12417c5efeae36c",
+        "sha256:782ef48d58982ddb49920c11a0c5c9c0b02e7d7d1c2ad0aa44e1a1e133051c96"
       ],
       "index": "pypi",
-      "version": "==60.9.3"
+      "version": "==60.10.0"
     },
     "soupsieve": {
       "hashes": [
@@ -149,7 +161,7 @@
         "sha256:3fa96cf423e6987997fc326ae8df396db2a8b7c667747d47ddd8ecba91f4a74e",
         "sha256:b930dd878d5a8afb066a637fbb35144fe7901e3b209d1cd4f524bd0e9deee997"
       ],
-      "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5' and python_version < '4.0'",
+      "markers": "python_version >= '2.7' and python_version not in '3.0, 3.1, 3.2, 3.3, 3.4, 3.5' and python_version < '4'",
       "version": "==1.26.12"
     },
     "wheel": {
