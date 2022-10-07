@@ -7,7 +7,7 @@ import semver from 'semver'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
-import { PYTHON_BRIDGE_BIN_PATH } from '@/constants'
+import { PYTHON_BRIDGE_BIN_PATH, EN_SPACY_MODEL_NAME } from '@/constants'
 
 dotenv.config()
 
@@ -190,7 +190,7 @@ export default () =>
 
       try {
         const p = await command(
-          'pipenv run python -c "import en_core_web_trf"',
+          `pipenv run python -c "import ${EN_SPACY_MODEL_NAME}"`,
           { shell: true }
         )
         LogHelper.info(p.command)
