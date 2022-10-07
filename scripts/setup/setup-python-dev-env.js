@@ -3,7 +3,14 @@ import path from 'node:path'
 
 import { command } from 'execa'
 
-import { PYTHON_BRIDGE_SRC_PATH, TCP_SERVER_SRC_PATH } from '@/constants'
+import {
+  EN_SPACY_MODEL_NAME,
+  EN_SPACY_MODEL_VERSION,
+  FR_SPACY_MODEL_NAME,
+  FR_SPACY_MODEL_VERSION,
+  PYTHON_BRIDGE_SRC_PATH,
+  TCP_SERVER_SRC_PATH
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 import { OSHelper, OSTypes } from '@/helpers/os-helper'
@@ -17,9 +24,25 @@ import { OSHelper, OSTypes } from '@/helpers/os-helper'
  * 5. Install spaCy models if the targeted development environment is the TCP server
  */
 
+// Define mirror to download models installation file
+function getModelInstallationFileUrl(model, mirror = undefined) {
+  const { name, version } = SPACY_MODELS.get(model)
+  const suffix = 'py3-none-any.whl'
+  let urlPrefix = 'https://github.com/explosion/spacy-models/releases/download'
+
+  if (mirror === 'cn') {
+    LogHelper.info(
+      'Using Chinese mirror to download model installation file...'
+    )
+    urlPrefix =
+      'https://download.fastgit.org/explosion/spacy-models/releases/download'
+  }
+
+  return `${urlPrefix}/${name}-${version}/${name}-${version}-${suffix}`
+}
+
 const SETUP_TARGETS = new Map()
-// Find new spaCy models:  https://github.com/explosion/spacy-models/releases
-const SPACY_MODELS = ['en_core_web_trf-3.4.0', 'fr_core_news_md-3.4.0']
+const SPACY_MODELS = new Map()
 
 SETUP_TARGETS.set('python-bridge', {
   name: 'Python bridge',
@@ -33,11 +56,22 @@ SETUP_TARGETS.set('tcp-server', {
   dotVenvPath: path.join(TCP_SERVER_SRC_PATH, '.venv'),
   dotProjectPath: path.join(TCP_SERVER_SRC_PATH, '.venv', '.project')
 })
+
+SPACY_MODELS.set('en', {
+  name: EN_SPACY_MODEL_NAME,
+  version: EN_SPACY_MODEL_VERSION
+})
+SPACY_MODELS.set('fr', {
+  name: FR_SPACY_MODEL_NAME,
+  version: FR_SPACY_MODEL_VERSION
+})
 ;(async () => {
   LoaderHelper.start()
 
   const { argv } = process
   const givenSetupTarget = argv[2].toLowerCase()
+  // cn
+  const givenMirror = argv[3]?.toLowerCase()
 
   if (!SETUP_TARGETS.has(givenSetupTarget)) {
     LogHelper.error(
@@ -170,8 +204,13 @@ SETUP_TARGETS.set('tcp-server', {
         LogHelper.info('Installing spaCy models...')
 
         // Install models one by one to avoid network throttling
-        for (const model of SPACY_MODELS) {
-          await command(`pipenv run spacy download ${model} --direct`, {
+        for (const modelLanguage of SPACY_MODELS.keys()) {
+          const modelInstallationFileUrl = getModelInstallationFileUrl(
+            modelLanguage,
+            givenMirror
+          )
+
+          await command(`pipenv run pip install ${modelInstallationFileUrl}`, {
             shell: true,
             stdio: 'inherit'
           })
@@ -187,11 +226,9 @@ SETUP_TARGETS.set('tcp-server', {
     LogHelper.info('Checking whether all spaCy models are installed...')
 
     try {
-      for (let model of SPACY_MODELS) {
-        ;[model] = model.split('-')
-
+      for (const { name: modelName } of SPACY_MODELS.values()) {
         const { stderr } = await command(
-          `pipenv run python -c "import ${model}"`,
+          `pipenv run python -c "import ${modelName}"`,
           { shell: true }
         )
 
