@@ -14,6 +14,7 @@ import { version } from '@@/package.json'
 import {
   HAS_LOGGER,
   IS_TESTING_ENV,
+  TCP_SERVER_BIN_PATH,
   TCP_SERVER_HOST,
   TCP_SERVER_PORT
 } from '@/constants'
@@ -223,10 +224,9 @@ class Nlu {
 
     // Recreate a new TCP server process and reconnect the TCP client
     kill(global.tcpServerProcess.pid, () => {
-      global.tcpServerProcess = spawn(
-        `./bridges/python/dist/tcp-server/leon-tcp-server ${locale}`,
-        { shell: true }
-      )
+      global.tcpServerProcess = spawn(`${TCP_SERVER_BIN_PATH} ${locale}`, {
+        shell: true
+      })
 
       global.tcpClient = new TcpClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
 

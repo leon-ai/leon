@@ -7,6 +7,7 @@ import semver from 'semver'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
+import { PYTHON_BRIDGE_BIN_PATH } from '@/constants'
 
 dotenv.config()
 
@@ -171,7 +172,7 @@ export default () =>
       try {
         LogHelper.time('Skill execution time')
         const p = await command(
-          './bridges/python/dist/python-bridge/leon-python-bridge scripts/assets/intent-object.json',
+          `${PYTHON_BRIDGE_BIN_PATH} scripts/assets/intent-object.json`,
           { shell: true }
         )
         LogHelper.timeEnd('Skill execution time')

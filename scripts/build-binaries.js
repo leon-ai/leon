@@ -5,6 +5,15 @@ import { command } from 'execa'
 import archiver from 'archiver'
 import prettyBytes from 'pretty-bytes'
 
+import {
+  PYTHON_BRIDGE_SRC_PATH,
+  TCP_SERVER_SRC_PATH,
+  BINARIES_FOLDER_NAME,
+  PYTHON_BRIDGE_DIST_PATH,
+  TCP_SERVER_DIST_PATH,
+  PYTHON_BRIDGE_BIN_NAME,
+  TCP_SERVER_BIN_NAME
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 import { OSHelper, OSTypes } from '@/helpers/os-helper'
@@ -18,24 +27,20 @@ import { OSHelper, OSTypes } from '@/helpers/os-helper'
  */
 
 const BUILD_TARGETS = new Map()
-const PYTHON_BRIDGE_SRC_PATH = 'bridges/python/src'
-const TCP_SERVER_SRC_PATH = 'tcp_server/src'
-
-const BINARIES_FOLDER_NAME = OSHelper.getBinariesFolderName()
 
 BUILD_TARGETS.set('python-bridge', {
   name: 'Python bridge',
   pipfilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'Pipfile'),
   setupFilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'setup.py'),
-  distPath: 'bridges/python/dist',
-  archiveName: `leon-python-bridge-${BINARIES_FOLDER_NAME}.zip`
+  distPath: PYTHON_BRIDGE_DIST_PATH,
+  archiveName: `${PYTHON_BRIDGE_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`
 })
 BUILD_TARGETS.set('tcp-server', {
   name: 'TCP server',
   pipfilePath: path.join(TCP_SERVER_SRC_PATH, 'Pipfile'),
   setupFilePath: path.join(TCP_SERVER_SRC_PATH, 'setup.py'),
-  distPath: 'tcp_server/dist',
-  archiveName: `leon-tcp-server-${BINARIES_FOLDER_NAME}.zip`
+  distPath: TCP_SERVER_DIST_PATH,
+  archiveName: `${TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`
 })
 ;(async () => {
   LoaderHelper.start()
