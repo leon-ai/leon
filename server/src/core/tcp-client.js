@@ -3,11 +3,12 @@ import { EventEmitter } from 'node:events'
 
 import { IS_PRODUCTION_ENV } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { OSHelper, OSTypes } from '@/helpers/os-helper'
 
 // Time interval between each try (in ms)
-const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 300
+const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
 // Number of retries to connect to the TCP server
-const RETRIES_NB = IS_PRODUCTION_ENV ? 5 : 15
+const RETRIES_NB = IS_PRODUCTION_ENV ? 8 : 30
 
 export default class TcpClient {
   constructor(host, port) {
@@ -47,6 +48,8 @@ export default class TcpClient {
       if (err.code === 'ECONNREFUSED') {
         this.reconnectCounter += 1
 
+        const { type: osType } = OSHelper.getInformation()
+
         if (this.reconnectCounter >= RETRIES_NB) {
           LogHelper.error('Failed to connect to the TCP server')
           this.tcpSocket.end()
@@ -54,6 +57,14 @@ export default class TcpClient {
 
         if (this.reconnectCounter >= 1) {
           LogHelper.info('Trying to connect to the TCP server...')
+
+          if (this.reconnectCounter >= 5) {
+            if (osType === OSTypes.MacOS) {
+              LogHelper.warning(
+                'The cold start of the TCP server can take a few more seconds on macOS. It should be a one time think, no worries'
+              )
+            }
+          }
 
           setTimeout(() => {
             this.connect()
