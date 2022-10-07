@@ -124,25 +124,6 @@ SETUP_TARGETS.set('tcp-server', {
 
       process.exit(1)
     }
-
-    try {
-      if (givenSetupTarget === 'tcp-server') {
-        LogHelper.info('Installing spaCy models...')
-
-        // Install models one by one to avoid network throttling
-        for (const model of SPACY_MODELS) {
-          await command(`pipenv run spacy download ${model} --direct`, {
-            shell: true,
-            stdio: 'inherit'
-          })
-        }
-
-        LogHelper.success('spaCy models installed')
-      }
-    } catch (e) {
-      LogHelper.error(`Failed to install spaCy models: ${e}`)
-      process.exit(1)
-    }
   }
 
   /**
@@ -185,6 +166,25 @@ SETUP_TARGETS.set('tcp-server', {
   }
 
   if (givenSetupTarget === 'tcp-server') {
+    const installSpacyModels = async () => {
+      try {
+        LogHelper.info('Installing spaCy models...')
+
+        // Install models one by one to avoid network throttling
+        for (const model of SPACY_MODELS) {
+          await command(`pipenv run spacy download ${model} --direct`, {
+            shell: true,
+            stdio: 'inherit'
+          })
+        }
+
+        LogHelper.success('spaCy models installed')
+      } catch (e) {
+        LogHelper.error(`Failed to install spaCy models: ${e}`)
+        process.exit(1)
+      }
+    }
+
     LogHelper.info('Checking whether all spaCy models are installed...')
 
     try {
@@ -197,7 +197,7 @@ SETUP_TARGETS.set('tcp-server', {
       LogHelper.success('All spaCy models are already installed')
     } catch (e) {
       LogHelper.info('Not all spaCy models are installed')
-      await installPythonPackages()
+      await installSpacyModels()
     }
   }
 
