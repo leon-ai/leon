@@ -33,14 +33,16 @@ BUILD_TARGETS.set('python-bridge', {
   pipfilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'Pipfile'),
   setupFilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'setup.py'),
   distPath: PYTHON_BRIDGE_DIST_PATH,
-  archiveName: `${PYTHON_BRIDGE_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`
+  archiveName: `${PYTHON_BRIDGE_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
+  dotVenvPath: path.join(PYTHON_BRIDGE_SRC_PATH, '.venv')
 })
 BUILD_TARGETS.set('tcp-server', {
   name: 'TCP server',
   pipfilePath: path.join(TCP_SERVER_SRC_PATH, 'Pipfile'),
   setupFilePath: path.join(TCP_SERVER_SRC_PATH, 'setup.py'),
   distPath: TCP_SERVER_DIST_PATH,
-  archiveName: `${TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`
+  archiveName: `${TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
+  dotVenvPath: path.join(TCP_SERVER_SRC_PATH, '.venv')
 })
 ;(async () => {
   LoaderHelper.start()
@@ -62,7 +64,8 @@ BUILD_TARGETS.set('tcp-server', {
     pipfilePath,
     setupFilePath,
     distPath,
-    archiveName
+    archiveName,
+    dotVenvPath
   } = BUILD_TARGETS.get(givenBuildTarget)
   const buildPath = path.join(distPath, BINARIES_FOLDER_NAME)
 
@@ -108,7 +111,9 @@ BUILD_TARGETS.set('tcp-server', {
 
     LogHelper.success(`The ${buildTarget} has been built`)
   } catch (e) {
-    LogHelper.error(`An error occurred while building the ${buildTarget}: ${e}`)
+    LogHelper.error(
+      `An error occurred while building the ${buildTarget}. Try to delete the ${dotVenvPath} folder, run the setup command then build again: ${e}`
+    )
     process.exit(1)
   }
 
