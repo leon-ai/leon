@@ -140,84 +140,33 @@ SETUP_TARGETS.set('tcp-server', {
    * Verify if a fresh development environment installation is necessary
    */
 
+  // Required environment variables to set up
+  process.env.PIPENV_PIPFILE = pipfilePath
+  process.env.PIPENV_VENV_IN_PROJECT = true
+
+  if (givenSetupTarget === 'python-bridge') {
+    // As per: https://github.com/marcelotduarte/cx_Freeze/issues/1548
+    process.env.PIP_NO_BINARY = 'cx_Freeze'
+  }
+
   try {
-    // Required environment variables to set up
-    process.env.PIPENV_PIPFILE = pipfilePath
-    process.env.PIPENV_VENV_IN_PROJECT = true
-
-    if (givenSetupTarget === 'python-bridge') {
-      // As per: https://github.com/marcelotduarte/cx_Freeze/issues/1548
-      process.env.PIP_NO_BINARY = 'cx_Freeze'
-    }
-
     if (!hasDotVenv) {
       await installPythonPackages()
-    } else if (givenSetupTarget === 'tcp-server') {
-      /**
-       * When TCP server setup target, verify whether all spaCy models are installed
-       */
-      let hasAllSpacyModelsInstalled = false
+    } else {
+      if (fs.existsSync(dotProjectPath)) {
+        const dotProjectMtime = fs.statSync(dotProjectPath).mtime
 
-      if (givenSetupTarget === 'tcp-server') {
-        LogHelper.info('Checking whether all spaCy models are installed...')
-
-        const toGraphModelName = (model) => {
-          const [name, version] = model.split('-')
-
-          return `${name.replaceAll('_', '-')}==${version}`
-        }
-        let { stdout: graph } = await command('pipenv graph', { shell: true })
-        graph = graph.split('\n')
-
-        const models = new Map()
-        SPACY_MODELS.forEach((model) =>
-          models.set(toGraphModelName(model), { isInstalled: false })
-        )
-
-        SPACY_MODELS.forEach((model) => {
-          /**
-           * From the deps graph, models appear like this: fr-core-news-md==3.4.0
-           * So we need to comply to this format on the fly
-           */
-
-          model = toGraphModelName(model)
-
-          if (graph.includes(model)) {
-            models.set(model, { isInstalled: true })
-          }
-        })
-
-        for (const { isInstalled } of models.values()) {
-          if (!isInstalled) {
-            break
-          }
-
-          hasAllSpacyModelsInstalled = true
-        }
-
-        if (!hasAllSpacyModelsInstalled) {
-          LogHelper.info('Not all spaCy models are installed')
+        // Check if Python deps tree has been modified since the initial setup
+        if (pipfileMtime > dotProjectMtime) {
+          LogHelper.info('The development environment is not up-to-date')
           await installPythonPackages()
         } else {
-          LogHelper.success('All spaCy models are already installed')
+          LogHelper.success('Python packages are up-to-date')
         }
-      }
-    }
-
-    if (fs.existsSync(dotProjectPath)) {
-      const dotProjectMtime = fs.statSync(dotProjectPath).mtime
-
-      // Check if Python deps tree has been modified since the initial setup
-      if (pipfileMtime > dotProjectMtime) {
-        await installPythonPackages()
       } else {
-        LogHelper.success('Python packages are up-to-date')
+        await installPythonPackages()
       }
-    } else {
-      await installPythonPackages()
     }
-
-    LogHelper.success(`${setupTarget} development environment ready`)
   } catch (e) {
     LogHelper.error(
       `Failed to set up the ${setupTarget} development environment: ${e}`
@@ -225,4 +174,23 @@ SETUP_TARGETS.set('tcp-server', {
   } finally {
     LoaderHelper.stop()
   }
+
+  if (givenSetupTarget === 'tcp-server') {
+    LogHelper.info('Checking whether all spaCy models are installed...')
+
+    try {
+      for (let model of SPACY_MODELS) {
+        ;[model] = model.split('-')
+
+        await command(`pipenv run python -c "import ${model}"`, { shell: true })
+      }
+
+      LogHelper.success('All spaCy models are already installed')
+    } catch (e) {
+      LogHelper.info('Not all spaCy models are installed')
+      await installPythonPackages()
+    }
+  }
+
+  LogHelper.success(`${setupTarget} development environment ready`)
 })()

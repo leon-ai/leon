@@ -51,7 +51,7 @@
     "build:server": "npm run delete-dist:server && npm run train && npm run generate:skills-endpoints && tsc && resolve-tspaths && shx rm -rf server/dist/core server/dist/package.json && shx mv -f server/dist/server/src/* server/dist && shx rm -rf server/dist/server && shx mkdir -p server/dist/tmp",
     "build:python-bridge": "ts-node scripts/build-binaries.js python-bridge",
     "build:tcp-server": "ts-node scripts/build-binaries.js tcp-server",
-    "start:tcp-server": "cross-env PIPENV_PIPFILE=bridges/python/src/Pipfile pipenv run python tcp_server/src/main.py",
+    "start:tcp-server": "cross-env PIPENV_PIPFILE=tcp_server/src/Pipfile pipenv run python tcp_server/src/main.py",
     "start": "cross-env LEON_NODE_ENV=production node ./server/dist/index.js",
     "train": "ts-node scripts/train/run-train.js",
     "prepare-release": "ts-node scripts/release/prepare-release.js",
