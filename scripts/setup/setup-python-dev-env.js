@@ -94,10 +94,9 @@ SETUP_TARGETS.set('tcp-server', {
 
   const pipfileMtime = fs.statSync(pipfilePath).mtime
   const hasDotVenv = fs.existsSync(dotVenvPath)
+  const { type: osType } = OSHelper.getInformation()
   const installPythonPackages = async () => {
     LogHelper.info(`Installing Python packages from ${pipfilePath}.lock...`)
-
-    const { type: osType } = OSHelper.getInformation()
 
     // Delete .venv directory to reset the development environment
     if (hasDotVenv) {
@@ -191,7 +190,18 @@ SETUP_TARGETS.set('tcp-server', {
       for (let model of SPACY_MODELS) {
         ;[model] = model.split('-')
 
-        await command(`pipenv run python -c "import ${model}"`, { shell: true })
+        const { stderr } = await command(
+          `pipenv run python -c "import ${model}"`,
+          { shell: true }
+        )
+
+        // Check stderr output for Windows as no exception is thrown
+        if (osType === OSTypes.Windows) {
+          if (String(stderr).length > 0) {
+            await installSpacyModels()
+            break
+          }
+        }
       }
 
       LogHelper.success('All spaCy models are already installed')
