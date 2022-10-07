@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { command } from 'execa'
 
+import { PYTHON_BRIDGE_SRC_PATH, TCP_SERVER_SRC_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 
@@ -18,8 +19,6 @@ import { LoaderHelper } from '@/helpers/loader-helper'
 const SETUP_TARGETS = new Map()
 // Find new spaCy models:  https://github.com/explosion/spacy-models/releases
 const SPACY_MODELS = ['en_core_web_trf-3.4.0', 'fr_core_news_md-3.4.0']
-const PYTHON_BRIDGE_SRC_PATH = 'bridges/python/src'
-const TCP_SERVER_SRC_PATH = 'tcp_server/src'
 
 SETUP_TARGETS.set('python-bridge', {
   name: 'Python bridge',
