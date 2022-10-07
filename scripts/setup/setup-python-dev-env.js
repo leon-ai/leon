@@ -6,6 +6,7 @@ import { command } from 'execa'
 import { PYTHON_BRIDGE_SRC_PATH, TCP_SERVER_SRC_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
+import { OSHelper, OSTypes } from '@/helpers/os-helper'
 
 /**
  * Set up development environment according to the given setup target
@@ -96,6 +97,8 @@ SETUP_TARGETS.set('tcp-server', {
   const installPythonPackages = async () => {
     LogHelper.info(`Installing Python packages from ${pipfilePath}.lock...`)
 
+    const { type: osType } = OSHelper.getInformation()
+
     // Delete .venv directory to reset the development environment
     if (hasDotVenv) {
       LogHelper.info(`Deleting ${dotVenvPath}...`)
@@ -112,6 +115,13 @@ SETUP_TARGETS.set('tcp-server', {
       LogHelper.success('Python packages installed')
     } catch (e) {
       LogHelper.error(`Failed to install Python packages: ${e}`)
+
+      if (osType === OSTypes.Windows) {
+        LogHelper.error(
+          'Please check the error above. It might be related to Microsoft C++ Build Tools. If it is, you can check here: "https://stackoverflow.com/a/64262038/1768162" then restart your machine and retry'
+        )
+      }
+
       process.exit(1)
     }
 
