@@ -1,5 +1,7 @@
 from cx_Freeze import setup, Executable
 
+from version import __version__
+
 options = {
     'build_exe': {
     	# Add common dependencies for skills
@@ -19,6 +21,7 @@ executables = [
 
 setup(
     name='leon-python-bridge',
+    version=__version__,
     executables=executables,
     options=options
 )
