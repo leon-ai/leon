@@ -1,6 +1,8 @@
 from cx_Freeze import setup, Executable
 import sysconfig
 
+from version import __version__
+
 options = {
     'build_exe': {
     	'packages': [
@@ -30,6 +32,7 @@ executables = [
 
 setup(
     name='leon-tcp-server',
+    version=__version__,
     executables=executables,
     options=options
 )
