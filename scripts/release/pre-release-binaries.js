@@ -66,6 +66,8 @@ BUILD_TARGETS.set('tcp-server', {
     LogHelper.success(
       'Once the pre-release is done, go to the GitHub releases to double-check information and hit release'
     )
+
+    process.exit(0)
   } catch (e) {
     LogHelper.error(
       `An error occurred while triggering the GitHub workflow: ${e}`
