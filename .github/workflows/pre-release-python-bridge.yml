@@ -2,6 +2,10 @@ name: Pre-release Python bridge
 
 on: workflow_dispatch
 
+env:
+  PIPENV_PIPFILE: bridges/python/src
+  PIPENV_VENV_IN_PROJECT: true
+
 jobs:
   pre-release:
     name: Pre-release
@@ -29,7 +33,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Set Python bridge version
-        working-directory: ./bridges/python/src
+        working-directory: bridges/python/src
         run: |
           echo "PYTHON_BRIDGE_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
           echo "Python bridge version: ${{ env.PYTHON_BRIDGE_VERSION }}"
