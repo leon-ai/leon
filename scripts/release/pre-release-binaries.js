@@ -8,9 +8,9 @@ import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 
 /**
- * Release binaries via GitHub Actions
+ * Pre-release binaries via GitHub Actions
  * 1. Ask for confirmation whether the binary version has been bumped
- * 2. Trigger GitHub workflow to release binaries
+ * 2. Trigger GitHub workflow to pre-release binaries
  */
 
 const BUILD_TARGETS = new Map()
@@ -57,7 +57,12 @@ BUILD_TARGETS.set('tcp-server', {
       stdout: 'inherit'
     })
 
-    LogHelper.success('GitHub workflow triggered. The release is on its way!')
+    LogHelper.success(
+      'GitHub workflow triggered. The pre-release is on its way!'
+    )
+    LogHelper.success(
+      'Once the pre-release is done, go to the GitHub releases to double-check information and hit release'
+    )
   } catch (e) {
     LogHelper.error(
       `An error occurred while triggering the GitHub workflow: ${e}`
