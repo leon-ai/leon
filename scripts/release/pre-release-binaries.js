@@ -14,7 +14,6 @@ import { LoaderHelper } from '@/helpers/loader-helper'
  */
 
 const BUILD_TARGETS = new Map()
-const WORKFLOWS_PATH = path.join('.github', 'workflows')
 
 BUILD_TARGETS.set('python-bridge', {
   workflowFileName: 'pre-release-python-bridge.yml',
@@ -29,9 +28,9 @@ BUILD_TARGETS.set('tcp-server', {
 
   const { argv } = process
   const givenReleaseTarget = argv[2].toLowerCase()
+  const givenBranch = argv[3]?.toLowerCase()
   const { workflowFileName, setupFilePath } =
     BUILD_TARGETS.get(givenReleaseTarget)
-  const workflowFilePath = path.join(WORKFLOWS_PATH, workflowFileName)
 
   LoaderHelper.stop()
   const answer = await prompt({
@@ -52,7 +51,11 @@ BUILD_TARGETS.set('tcp-server', {
   try {
     LogHelper.info('Triggering the GitHub workflow...')
 
-    await command(`gh workflow run ${workflowFilePath}`, {
+    const runWorkflowCommand = !givenBranch
+      ? `gh workflow run ${workflowFileName}`
+      : `gh workflow run ${workflowFileName} --ref ${givenBranch}`
+
+    await command(runWorkflowCommand, {
       shell: true,
       stdout: 'inherit'
     })
