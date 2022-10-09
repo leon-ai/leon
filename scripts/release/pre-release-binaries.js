@@ -17,11 +17,11 @@ const BUILD_TARGETS = new Map()
 const WORKFLOWS_PATH = path.join('.github', 'workflows')
 
 BUILD_TARGETS.set('python-bridge', {
-  workflowFileName: 'build-python-bridge.yml',
+  workflowFileName: 'pre-release-python-bridge.yml',
   setupFilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'setup.py')
 })
 BUILD_TARGETS.set('tcp-server', {
-  workflowFileName: 'build-tcp-server.yml',
+  workflowFileName: 'pre-release-tcp-server.yml',
   setupFilePath: path.join(TCP_SERVER_SRC_PATH, 'setup.py')
 })
 ;(async () => {
