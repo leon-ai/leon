@@ -26,6 +26,9 @@ jobs:
           python-version: 3.9.10
           cache: pipenv
 
+      - name: Install Pipenv
+        run: pip install --upgrade pip && pip install pipenv
+
       - name: Install Node.js
         uses: actions/setup-node@v3
         with:
