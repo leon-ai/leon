@@ -1,0 +1,54 @@
+name: Pre-release TCP server
+
+on: workflow_dispatch
+
+jobs:
+  pre-release:
+    name: Pre-release
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9.10
+          cache: pipenv
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Set TCP server version
+        working-directory: ./tcp_server/src
+        run: |
+          echo "TCP_SERVER_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
+          echo "TCP server version: ${{ env.TCP_SERVER_VERSION }}"
+
+      - name: Install core
+        run: npm ci
+
+      - name: Setup TCP server
+        run: npm run setup:tcp-server
+
+      - name: Build TCP server
+        run: npm run build:tcp-server
+
+      - uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          automatic_release_tag: tcp-server_v${{ env.TCP_SERVER_VERSION }}
+          draft: true
+          prerelease: false
+          title: TCP Server ${{ env.TCP_SERVER_VERSION }}
+          files: |
+            tcp_server/dist/*.zip
