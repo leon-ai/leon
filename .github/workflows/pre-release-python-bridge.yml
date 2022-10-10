@@ -77,6 +77,7 @@ jobs:
         run: |
           echo "PYTHON_BRIDGE_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
           echo "Python bridge version: ${{ env.PYTHON_BRIDGE_VERSION }}"
+
       - name: Download Python bridge
         uses: actions/download-artifact@v3
         with:
@@ -89,4 +90,4 @@ jobs:
           draft: true
           prerelease: false
           title: Python Bridge ${{ env.PYTHON_BRIDGE_VERSION }}
-          files: bridges/python/dist/*.zip
+          files: bridges/python/dist/artifact/*.zip
