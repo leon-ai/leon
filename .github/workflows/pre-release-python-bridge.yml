@@ -29,9 +29,6 @@ jobs:
           python-version: 3.9.10
           # cache: pipenv
 
-      - name: Delete Pipfile.lock
-        run: rm -rf bridges/python/src/Pipfile.lock
-
       - name: Install Pipenv
         run: pip install --upgrade pip && pip install pipenv
 
