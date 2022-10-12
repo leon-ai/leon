@@ -140,7 +140,13 @@ SPACY_MODELS.set('fr', {
     }
 
     try {
-      await command(`pipenv install --deploy`, {
+      let pipenvInstallCommand = `pipenv install --site-packages`
+
+      if (osType === OSTypes.Windows) {
+        pipenvInstallCommand = `${pipenvInstallCommand} --skip-lock`
+      }
+
+      await command(pipenvInstallCommand, {
         shell: true,
         stdio: 'inherit'
       })
@@ -152,6 +158,9 @@ SPACY_MODELS.set('fr', {
       if (osType === OSTypes.Windows) {
         LogHelper.error(
           'Please check the error above. It might be related to Microsoft C++ Build Tools. If it is, you can check here: "https://stackoverflow.com/a/64262038/1768162" then restart your machine and retry'
+        )
+        LogHelper.error(
+          'If it is related to some hash mismatch, you can try by installing Pipenv 2022.7.24: pip install pipenv==2022.7.24'
         )
       }
 

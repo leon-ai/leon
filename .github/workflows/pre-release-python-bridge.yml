@@ -30,7 +30,7 @@ jobs:
           # cache: pipenv
 
       - name: Install Pipenv
-        run: pip install --upgrade pip && pip install pipenv
+        run: pip install --upgrade pip && pip install pipenv==2022.7.24
 
       - name: Install Node.js
         uses: actions/setup-node@v3
