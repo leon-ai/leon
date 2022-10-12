@@ -5,7 +5,6 @@ on: workflow_dispatch
 env:
   PIPENV_PIPFILE: bridges/python/src
   PIPENV_VENV_IN_PROJECT: true
-  PIP_NO_BINARY: 'cx_Freeze'
 
 jobs:
   build:
