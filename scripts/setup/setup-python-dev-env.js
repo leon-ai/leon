@@ -140,13 +140,7 @@ SPACY_MODELS.set('fr', {
     }
 
     try {
-      let pipenvInstallCommand = `pipenv install --verbose --site-packages`
-
-      if (osType === OSTypes.Windows) {
-        pipenvInstallCommand = `${pipenvInstallCommand} --skip-lock`
-      }
-
-      await command(pipenvInstallCommand, {
+      await command(`pipenv install --verbose --site-packages`, {
         shell: true,
         stdio: 'inherit'
       })
