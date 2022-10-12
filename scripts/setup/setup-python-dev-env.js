@@ -139,7 +139,7 @@ SPACY_MODELS.set('fr', {
       LogHelper.success(`${dotVenvPath} deleted`)
     }
 
-    await command(`pipenv install --site-packages`, {
+    await command(`pipenv install --system --deploy`, {
       shell: true,
       stdio: 'inherit'
     })
