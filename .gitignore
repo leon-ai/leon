@@ -19,6 +19,8 @@ bin/flite/*
 npm-debug.log
 debug.log
 .env
+bridges/python/src/Pipfile.lock
+tcp_server/src/Pipfile.lock
 !tcp_server/**/.gitkeep
 !bridges/python/**/.gitkeep
 !**/*.sample*
