@@ -5,6 +5,7 @@ on: workflow_dispatch
 env:
   PIPENV_PIPFILE: bridges/python/src
   PIPENV_VENV_IN_PROJECT: true
+  PIP_NO_BINARY: 'cx_Freeze'
 
 jobs:
   build:
@@ -27,7 +28,8 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: 3.9.10
-          # cache: pipenv
+          cache: pipenv
+          cache-dependency-path: bridges/python/src/Pipfile.lock
 
       - name: Install Pipenv
         run: pip install --upgrade pip && pip install pipenv==2022.7.24
@@ -46,10 +48,6 @@ jobs:
 
       - name: Install core
         run: npm ci
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1.1
-        if: matrix.os == 'windows-latest'
 
       - name: Setup Python bridge
         run: npm run setup:python-bridge
@@ -75,8 +73,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: 3.9.10
-          cache: pipenv
-          cache-dependency-path: bridges/python/src/Pipfile.lock
 
       - name: Set Python bridge version
         working-directory: bridges/python/src
