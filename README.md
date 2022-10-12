@@ -208,12 +208,18 @@ By sponsoring the project you make the project sustainable and faster to develop
 The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process and so on...
 
 ### Special Thanks
+http://localhost:3000/img/thanks/mac-stadium.svg
 
-<a href="https://www.aoz.studio">
-  <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" alt="AOZ Studio" width="64" />
-</a>
 <a href="https://vercel.com/?utm_source=leon-ai&utm_campaign=oss">
   <img src="https://i.imgur.com/S5olXWh.png" alt="Vercel" width="128" />
+</a>
+&nbsp; &nbsp; &nbsp;
+<a href="https://www.macstadium.com/">
+  <img src="https://getleon.ai/img/thanks/mac-stadium.svg" alt="MacStadium" width="128" />
+</a>
+&nbsp; &nbsp; &nbsp;
+<a href="https://www.aoz.studio">
+  <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" alt="AOZ Studio" width="64" />
 </a>
 
 ## 📝 License
