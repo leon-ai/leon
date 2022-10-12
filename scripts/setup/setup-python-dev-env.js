@@ -139,12 +139,24 @@ SPACY_MODELS.set('fr', {
       LogHelper.success(`${dotVenvPath} deleted`)
     }
 
-    await command(`pipenv install --system --deploy`, {
-      shell: true,
-      stdio: 'inherit'
-    })
+    try {
+      await command(`pipenv install --deploy`, {
+        shell: true,
+        stdio: 'inherit'
+      })
 
-    LogHelper.success('Python packages installed')
+      LogHelper.success('Python packages installed')
+    } catch (e) {
+      LogHelper.error(`Failed to install Python packages: ${e}`)
+
+      if (osType === OSTypes.Windows) {
+        LogHelper.error(
+          'Please check the error above. It might be related to Microsoft C++ Build Tools. If it is, you can check here: "https://stackoverflow.com/a/64262038/1768162" then restart your machine and retry'
+        )
+      }
+
+      process.exit(1)
+    }
   }
 
   /**
