@@ -1,5 +1,6 @@
 __pycache__/
 .idea/
+.fleet/
 .vscode/
 **/dist/*
 **/build/
