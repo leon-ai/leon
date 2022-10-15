@@ -6,7 +6,7 @@ export enum OSTypes {
   Linux = 'linux',
   Unknown = 'unknown'
 }
-enum CPUArchitectures {
+export enum CPUArchitectures {
   X64 = 'x64',
   ARM64 = 'arm64'
 }

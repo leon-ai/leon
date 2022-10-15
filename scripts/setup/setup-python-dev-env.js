@@ -13,7 +13,7 @@ import {
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
-import { OSHelper, OSTypes } from '@/helpers/os-helper'
+import { CPUArchitectures, OSHelper, OSTypes } from '@/helpers/os-helper'
 
 /**
  * Set up development environment according to the given setup target
@@ -128,7 +128,7 @@ SPACY_MODELS.set('fr', {
 
   const pipfileMtime = fs.statSync(pipfilePath).mtime
   const hasDotVenv = fs.existsSync(dotVenvPath)
-  const { type: osType } = OSHelper.getInformation()
+  const { type: osType, cpuArchitecture } = OSHelper.getInformation()
   const installPythonPackages = async () => {
     LogHelper.info(`Installing Python packages from ${pipfilePath}.lock...`)
 
@@ -144,6 +144,48 @@ SPACY_MODELS.set('fr', {
         shell: true,
         stdio: 'inherit'
       })
+
+      if (
+        osType === OSTypes.MacOS &&
+        cpuArchitecture === CPUArchitectures.ARM64
+      ) {
+        LogHelper.info('macOS ARM64 detected')
+
+        LogHelper.info(
+          'Forcing setuptools and wheel Python packages to be installed as latest version...'
+        )
+        await command(`pipenv run pip install --upgrade setuptools wheel`, {
+          shell: true,
+          stdio: 'inherit'
+        })
+        LogHelper.success(
+          'setuptools and wheel Python packages installed as latest version'
+        )
+
+        LogHelper.info(
+          'Installing Rust installer as it is needed for the "tokenizers" package for macOS ARM64 architecture...'
+        )
+        await command(`curl https://sh.rustup.rs -sSf | sh -s -- -y`, {
+          shell: true,
+          stdio: 'inherit'
+        })
+        LogHelper.success('Rust installer installed')
+
+        LogHelper.info('Reloading configuration from "$HOME/.cargo/env"...')
+        await command(`source "$HOME/.cargo/env"`, {
+          shell: true,
+          stdio: 'inherit'
+        })
+        LogHelper.success('Configuration reloaded')
+
+        LogHelper.info('Checking Rust compiler version...')
+        const rustCompilerVersionChild = await command(`rustc --version`, {
+          shell: true,
+          stdio: 'inherit'
+        })
+        const rustCompilerVersion = String(rustCompilerVersionChild.stdout)
+        LogHelper.success(`Rust compiler version: ${rustCompilerVersion}`)
+      }
 
       LogHelper.success('Python packages installed')
     } catch (e) {
