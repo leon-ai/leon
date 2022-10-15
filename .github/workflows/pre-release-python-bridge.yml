@@ -58,51 +58,9 @@ jobs:
         with:
           path: bridges/python/dist/*.zip
 
-  build-linux-aarch64:
-    name: Build on Linux AArch64
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Clone repository
-        uses: actions/checkout@v3
-
-      - name: Install Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.9.10
-
-      - name: Set Python bridge version
-        working-directory: bridges/python/src
-        run: |
-          echo "PYTHON_BRIDGE_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
-
-      - name: Display Python bridge version
-        run: |
-          echo "Python bridge version: ${{ env.PYTHON_BRIDGE_VERSION }}"
-
-      - name: Install Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: lts/*
-          cache: npm
-
-      - uses: uraimo/run-on-arch-action@v2
-        name: Run commands on AArch64
-        with:
-          arch: aarch64
-          distro: ubuntu_latest
-
-          githubToken: ${{ secrets.GITHUB_TOKEN }}
-
-          install: |
-            apt update -y
-
-          run: |
-            echo "Test..."
-
   draft-release:
     name: Draft-release
-    needs: [build, build-linux-aarch64]
+    needs: [build]
     runs-on: ubuntu-latest
 
     steps:
