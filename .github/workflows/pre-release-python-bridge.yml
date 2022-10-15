@@ -58,10 +58,9 @@ jobs:
         with:
           path: bridges/python/dist/*.zip
 
-  build-macos-arm64:
-    name: Build on macOS ARM64
-
-    runs-on: [self-hosted, macOS, ARM64]
+  build-linux-aarch64:
+    name: Build on Linux AArch64
+    runs-on: ubuntu-latest
 
     steps:
       - name: Clone repository
@@ -72,15 +71,6 @@ jobs:
         with:
           python-version: 3.9.10
 
-      - name: Install Pipenv
-        run: pip install --upgrade pip && pip install pipenv==2022.7.24
-
-      - name: Install Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: lts/*
-          cache: npm
-
       - name: Set Python bridge version
         working-directory: bridges/python/src
         run: |
@@ -90,14 +80,29 @@ jobs:
         run: |
           echo "Python bridge version: ${{ env.PYTHON_BRIDGE_VERSION }}"
 
-      - name: Install core
-        run: npm ci
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+          cache: npm
 
-      - name: Set up Python bridge
-        run: npm run setup:python-bridge
+      - uses: uraimo/run-on-arch-action@v2
+        name: Run commands on AArch64
+        with:
+          arch: aarch64
+          distro: ubuntu_latest
 
-      - name: Build Python bridge
-        run: npm run build:python-bridge
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+          run: |
+            echo "Install Pipenv"
+            pip install --upgrade pip && pip install pipenv==2022.7.24
+            echo "Install core"
+            npm ci
+            echo "Set up Python bridge"
+            npm run setup:python-bridge
+            echo "Build Python bridge"
+            npm run build:python-bridge
 
       - name: Upload Python bridge
         uses: actions/upload-artifact@v3
@@ -106,7 +111,7 @@ jobs:
 
   draft-release:
     name: Draft-release
-    needs: [build, build-macos-arm64]
+    needs: [build, build-linux-aarch64]
     runs-on: ubuntu-latest
 
     steps:
