@@ -179,12 +179,11 @@ SPACY_MODELS.set('fr', {
         LogHelper.success('Configuration reloaded')
 
         LogHelper.info('Checking Rust compiler version...')
-        const rustCompilerVersionChild = await command(`rustc --version`, {
+        await command(`rustc --version`, {
           shell: true,
           stdio: 'inherit'
         })
-        const rustCompilerVersion = String(rustCompilerVersionChild.stdout)
-        LogHelper.success(`Rust compiler version: ${rustCompilerVersion}`)
+        LogHelper.success('Rust compiler OK')
       }
 
       LogHelper.success('Python packages installed')
