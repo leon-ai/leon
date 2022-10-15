@@ -94,20 +94,11 @@ jobs:
 
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 
-          run: |
-            echo "Install Pipenv"
-            pip install --upgrade pip && pip install pipenv==2022.7.24
-            echo "Install core"
-            npm ci
-            echo "Set up Python bridge"
-            npm run setup:python-bridge
-            echo "Build Python bridge"
-            npm run build:python-bridge
+          install: |
+            apt update -y
 
-      - name: Upload Python bridge
-        uses: actions/upload-artifact@v3
-        with:
-          path: bridges/python/dist/*.zip
+          run: |
+            echo "Test..."
 
   draft-release:
     name: Draft-release
