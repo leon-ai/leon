@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest, self-hosted]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -58,9 +58,55 @@ jobs:
         with:
           path: bridges/python/dist/*.zip
 
+  build-macos-arm64:
+    name: Build on macOS ARM64
+
+    runs-on: [self-hosted, macOS, ARM64]
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9.10
+
+      - name: Install Pipenv
+        run: pip install --upgrade pip && pip install pipenv==2022.7.24
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Set Python bridge version
+        working-directory: bridges/python/src
+        run: |
+          echo "PYTHON_BRIDGE_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
+
+      - name: Display Python bridge version
+        run: |
+          echo "Python bridge version: ${{ env.PYTHON_BRIDGE_VERSION }}"
+
+      - name: Install core
+        run: npm ci
+
+      - name: Set up Python bridge
+        run: npm run setup:python-bridge
+
+      - name: Build Python bridge
+        run: npm run build:python-bridge
+
+      - name: Upload Python bridge
+        uses: actions/upload-artifact@v3
+        with:
+          path: bridges/python/dist/*.zip
+
   draft-release:
     name: Draft-release
-    needs: [build]
+    needs: [build, build-macos-arm64]
     runs-on: ubuntu-latest
 
     steps:
