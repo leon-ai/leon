@@ -7,7 +7,7 @@ import semver from 'semver'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
-import { PYTHON_BRIDGE_BIN_PATH, EN_SPACY_MODEL_NAME } from '@/constants'
+import { PYTHON_BRIDGE_BIN_PATH } from '@/constants'
 
 dotenv.config()
 
@@ -20,7 +20,6 @@ export default () =>
     try {
       const nodeMinRequiredVersion = '10'
       const npmMinRequiredVersion = '5'
-      const pythonMinRequiredVersion = '3'
       const flitePath = 'bin/flite/flite'
       const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
       const amazonPath = 'core/config/voice/amazon.json'
@@ -36,11 +35,6 @@ export default () =>
         can_run: { title: 'Run', type: 'error', v: true },
         can_run_skill: { title: 'Run skills', type: 'error', v: true },
         can_text: { title: 'Reply you by texting', type: 'error', v: true },
-        has_spacy_model: {
-          title: 'spaCy model is installed',
-          type: 'error',
-          v: true
-        },
         can_amazon_polly_tts: {
           title: 'Amazon Polly text-to-speech',
           type: 'warning',
@@ -90,6 +84,7 @@ export default () =>
       /**
        * Environment checking
        */
+
       LogHelper.info('OS')
 
       const osInfo = {
@@ -103,8 +98,7 @@ export default () =>
       ;(
         await Promise.all([
           command('node --version', { shell: true }),
-          command('npm --version', { shell: true }),
-          command('pipenv --version', { shell: true })
+          command('npm --version', { shell: true })
         ])
       ).forEach((p) => {
         LogHelper.info(p.command)
@@ -139,31 +133,6 @@ export default () =>
           LogHelper.success(`${p.stdout}\n`)
         }
       })
-      ;(
-        await Promise.all([
-          command('pipenv --where', { shell: true }),
-          command('pipenv run python --version', { shell: true })
-        ])
-      ).forEach((p) => {
-        LogHelper.info(p.command)
-
-        if (
-          p.command.indexOf('pipenv run python --version') !== -1 &&
-          !semver.satisfies(
-            p.stdout.split(' ')[1],
-            `>=${pythonMinRequiredVersion}`
-          )
-        ) {
-          Object.keys(report).forEach((item) => {
-            if (report[item].type === 'error') report[item].v = false
-          })
-          LogHelper.error(
-            `${p.stdout}\nThe Python version must be >=${pythonMinRequiredVersion}. Please install it: https://www.python.org/downloads\n`
-          )
-        } else {
-          LogHelper.success(`${p.stdout}\n`)
-        }
-      })
 
       /**
        * Skill execution checking
@@ -182,25 +151,6 @@ export default () =>
         LogHelper.info(e.command)
         report.can_run_skill.v = false
         LogHelper.error(`${e}\n`)
-      }
-
-      /**
-       * spaCy model checking
-       */
-
-      try {
-        const p = await command(
-          `pipenv run python -c "import ${EN_SPACY_MODEL_NAME}"`,
-          { shell: true }
-        )
-        LogHelper.info(p.command)
-        LogHelper.success(`spaCy model installed\n`)
-      } catch (e) {
-        LogHelper.info(e.command)
-        report.has_spacy_model.v = false
-        LogHelper.error(
-          'No spaCy model is installed. It is recommended to run the following command: "npm run clean:python-deps"\n'
-        )
       }
 
       /**
@@ -390,12 +340,7 @@ export default () =>
       })
 
       LogHelper.default('')
-      if (
-        report.can_run.v &&
-        report.can_run_skill.v &&
-        report.can_text.v &&
-        report.has_spacy_model.v
-      ) {
+      if (report.can_run.v && report.can_run_skill.v && report.can_text.v) {
         LogHelper.success('Hooray! Leon can run correctly')
         LogHelper.info(
           'If you have some yellow warnings, it is all good. It means some entities are not yet configured'
