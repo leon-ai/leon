@@ -21,7 +21,8 @@ class TCPServer:
 		self.tcp_socket.listen()
 
 		while True:
-			print('Waiting for connection...')
+			# Flush buffered output to make it IPC friendly (readable on stdout)
+			print('Waiting for connection...', flush=True)
 
 			# Our TCP server only needs to support one connection
 			self.conn, self.addr = self.tcp_socket.accept()

@@ -57,7 +57,7 @@
     "prepare-release": "ts-node scripts/release/prepare-release.js",
     "pre-release:python-bridge": "ts-node scripts/release/pre-release-binaries.js python-bridge",
     "pre-release:tcp-server": "ts-node scripts/release/pre-release-binaries.js tcp-server",
-    "check": "ts-node scripts/run-check.js",
+    "check": "ts-node scripts/check.js",
     "docker:build": "docker build -t leon-ai/leon .",
     "docker:run": "docker compose up",
     "docker:dev": "docker compose --file=docker-compose.dev.yml up",
