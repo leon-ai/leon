@@ -1,4 +1,5 @@
 import path from 'node:path'
+import fs from 'node:fs'
 
 import dotenv from 'dotenv'
 
@@ -20,6 +21,21 @@ export const TCP_SERVER_DIST_PATH = path.join('tcp_server', 'dist')
 
 export const PYTHON_BRIDGE_SRC_PATH = path.join('bridges', 'python', 'src')
 export const TCP_SERVER_SRC_PATH = path.join('tcp_server', 'src')
+
+const PYTHON_BRIDGE_VERSION_FILE_PATH = path.join(
+  PYTHON_BRIDGE_SRC_PATH,
+  'version.py'
+)
+const TCP_SERVER_VERSION_FILE_PATH = path.join(
+  TCP_SERVER_SRC_PATH,
+  'version.py'
+)
+export const [, PYTHON_BRIDGE_VERSION] = fs
+  .readFileSync(PYTHON_BRIDGE_VERSION_FILE_PATH, 'utf8')
+  .split("'")
+export const [, TCP_SERVER_VERSION] = fs
+  .readFileSync(TCP_SERVER_VERSION_FILE_PATH, 'utf8')
+  .split("'")
 
 export const PYTHON_BRIDGE_BIN_NAME = 'leon-python-bridge'
 export const TCP_SERVER_BIN_NAME = 'leon-tcp-server'

@@ -9,7 +9,12 @@ import kill from 'tree-kill'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
-import { PYTHON_BRIDGE_BIN_PATH, TCP_SERVER_BIN_PATH } from '@/constants'
+import {
+  PYTHON_BRIDGE_BIN_PATH,
+  TCP_SERVER_BIN_PATH,
+  TCP_SERVER_VERSION,
+  PYTHON_BRIDGE_VERSION
+} from '@/constants'
 
 dotenv.config()
 
@@ -44,13 +49,15 @@ dotenv.config()
         skillsResolversModelState: null,
         mainModelState: null
       },
-      skillExecution: {
+      pythonBridge: {
+        version: null,
         executionTime: null,
         command: null,
         output: null,
         error: null
       },
       tcpServer: {
+        version: null,
         startTime: null,
         command: null,
         output: null,
@@ -171,6 +178,8 @@ dotenv.config()
      * Skill execution checking
      */
 
+    LogHelper.success(`Python bridge version: ${PYTHON_BRIDGE_VERSION}`)
+    pastebinData.pythonBridge.version = PYTHON_BRIDGE_VERSION
     LogHelper.info('Executing a skill...')
 
     try {
@@ -182,21 +191,24 @@ dotenv.config()
       const executionEnd = Date.now()
       const executionTime = executionEnd - executionStart
       LogHelper.info(p.command)
-      pastebinData.skillExecution.command = p.command
+      pastebinData.pythonBridge.command = p.command
       LogHelper.success(p.stdout)
-      pastebinData.skillExecution.output = p.stdout
+      pastebinData.pythonBridge.output = p.stdout
       LogHelper.info(`Skill execution time: ${executionTime}ms\n`)
-      pastebinData.skillExecution.executionTime = `${executionTime}ms`
+      pastebinData.pythonBridge.executionTime = `${executionTime}ms`
     } catch (e) {
       LogHelper.info(e.command)
       report.can_run_skill.v = false
       LogHelper.error(`${e}\n`)
-      pastebinData.skillExecution.error = JSON.stringify(e)
+      pastebinData.pythonBridge.error = JSON.stringify(e)
     }
 
     /**
      * TCP server startup checking
      */
+
+    LogHelper.success(`TCP server version: ${TCP_SERVER_VERSION}`)
+    pastebinData.tcpServer.version = TCP_SERVER_VERSION
 
     LogHelper.info('Starting the TCP server...')
 
@@ -472,8 +484,6 @@ dotenv.config()
       }
 
       pastebinData.report = report
-
-      console.log('pastebinData', pastebinData)
 
       process.exit(0)
     })
