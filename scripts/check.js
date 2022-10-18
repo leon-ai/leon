@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import { command } from 'execa'
 import semver from 'semver'
 import kill from 'tree-kill'
+import request from 'superagent'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
@@ -256,7 +257,7 @@ dotenv.config()
       report.can_start_tcp_server.v = false
     }, timeout)
 
-    p.stdout.on('end', () => {
+    p.stdout.on('end', async () => {
       const tcpServerEnd = Date.now()
       pastebinData.tcpServer.output = tcpServerOutput
       pastebinData.tcpServer.startTime = `${tcpServerEnd - tcpServerStart}ms`
@@ -484,6 +485,23 @@ dotenv.config()
       }
 
       pastebinData.report = report
+
+      LogHelper.title('REPORT URL')
+
+      LogHelper.info('Sending report...')
+
+      try {
+        const { body } = await request
+          .post('http://localhost:3000/api/report')
+          .send({
+            report: pastebinData
+          })
+        const { data: reportData } = body
+
+        LogHelper.success(`Report URL: ${reportData.reportUrl}`)
+      } catch (e) {
+        LogHelper.error(`Failed to send report: ${e}`)
+      }
 
       process.exit(0)
     })
