@@ -492,7 +492,7 @@ dotenv.config()
 
       try {
         const { body } = await request
-          .post('http://localhost:3000/api/report')
+          .post('https://getleon.ai/api/report')
           .send({
             report: pastebinData
           })
