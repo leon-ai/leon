@@ -12,6 +12,8 @@ const PRODUCTION_ENV = 'production'
 const DEVELOPMENT_ENV = 'development'
 const TESTING_ENV = 'testing'
 
+export const GITHUB_URL = 'https://github.com/leon-ai/leon'
+
 /**
  * Binaries / distribution
  */
