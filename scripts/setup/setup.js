@@ -7,7 +7,7 @@ import generateHttpApiKey from '../generate/generate-http-api-key'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupSkillsConfig from './setup-skills-config'
-// import setupPythonPackages from './setup-python-packages'
+import setupPythonPackages from './setup-python-packages'
 
 // Do not load ".env" file because it is not created yet
 
@@ -18,10 +18,7 @@ import setupSkillsConfig from './setup-skills-config'
   try {
     await setupDotenv()
     LoaderHelper.start()
-    await Promise.all([setupCore(), setupSkillsConfig()])
-    // TODO: download Python bridge archive; unpack it; remove archive
-    // TODO: download TCP server archive; unpack it; remove archive
-    // await setupPythonPackages()
+    await Promise.all([setupCore(), setupSkillsConfig(), setupPythonPackages()])
     LoaderHelper.stop()
     await generateHttpApiKey()
     LoaderHelper.start()
