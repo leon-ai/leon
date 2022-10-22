@@ -262,7 +262,7 @@ dotenv.config()
       pastebinData.tcpServer.output = tcpServerOutput
       pastebinData.tcpServer.startTime = `${tcpServerEnd - tcpServerStart}ms`
       LogHelper.info(
-        `TCP server startup time: ${pastebinData.tcpServer.startTime}ms\n`
+        `TCP server startup time: ${pastebinData.tcpServer.startTime}\n`
       )
 
       /**
