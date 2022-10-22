@@ -1,8 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import stream from 'node:stream'
+import readline from 'node:readline'
 
 import axios from 'axios'
+import prettyBytes from 'pretty-bytes'
+import prettyMilliseconds from 'pretty-ms'
 import extractZip from 'extract-zip'
 
 import {
@@ -41,9 +44,6 @@ PYTHON_TARGETS.set('tcp-server', {
 
 const setupPythonBinaries = async (key) => {
   const { name, distPath, archiveName, version } = PYTHON_TARGETS.get(key)
-
-  LogHelper.info(`Setting up ${name}...`)
-
   const buildPath = path.join(distPath, BINARIES_FOLDER_NAME)
   const archivePath = path.join(distPath, archiveName)
 
@@ -53,17 +53,45 @@ const setupPythonBinaries = async (key) => {
   ])
 
   try {
+    LogHelper.info(`Downloading ${name}...`)
+
     const archiveWriter = fs.createWriteStream(archivePath)
     const latestReleaseAssetURL = `${GITHUB_URL}/releases/download/${key}_v${version}/${archiveName}`
     const { data } = await axios.get(latestReleaseAssetURL, {
-      responseType: 'stream'
+      responseType: 'stream',
+      onDownloadProgress: ({ loaded, total, progress, estimated, rate }) => {
+        const percentage = Math.floor(progress * 100)
+        const downloadedSize = prettyBytes(loaded)
+        const totalSize = prettyBytes(total)
+        const estimatedTime = !estimated
+          ? 0
+          : prettyMilliseconds(estimated * 1_000, { secondsDecimalDigits: 0 })
+        const downloadRate = !rate ? 0 : prettyBytes(rate)
+
+        readline.clearLine(process.stdout, 0)
+        readline.cursorTo(process.stdout, 0, null)
+        process.stdout.write(
+          `Download progress: ${percentage}% (${downloadedSize}/${totalSize} | ${downloadRate}/s | ${estimatedTime} ETA)`
+        )
+
+        if (percentage === 100) {
+          process.stdout.write('\n')
+        }
+      }
     })
 
     data.pipe(archiveWriter)
     await stream.promises.finished(archiveWriter)
 
+    LogHelper.success(`${name} downloaded`)
+    LogHelper.info(`Extracting ${name}...`)
+
     const absoluteDistPath = path.resolve(distPath)
     await extractZip(archivePath, { dir: absoluteDistPath })
+
+    LogHelper.success(`${name} extracted`)
+
+    await fs.promises.rm(archivePath, { recursive: true, force: true })
 
     LogHelper.success(`${name} ready`)
   } catch (error) {

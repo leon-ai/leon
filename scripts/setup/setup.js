@@ -18,8 +18,9 @@ import setupPythonBinaries from './setup-python-binaries'
   try {
     await setupDotenv()
     LoaderHelper.start()
-    await Promise.all([setupCore(), setupSkillsConfig(), setupPythonBinaries()])
+    await Promise.all([setupCore(), setupSkillsConfig()])
     LoaderHelper.stop()
+    await setupPythonBinaries()
     await generateHttpApiKey()
     LoaderHelper.start()
     await train()
