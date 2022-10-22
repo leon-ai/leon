@@ -216,6 +216,9 @@ dotenv.config()
     const tcpServerCommand = `${TCP_SERVER_BIN_PATH} en`
     const tcpServerStart = Date.now()
     const p = spawn(tcpServerCommand, { shell: true })
+    const ignoredWarnings = [
+      'UserWarning: Unable to retrieve source for @torch.jit._overload function'
+    ]
 
     LogHelper.info(tcpServerCommand)
     pastebinData.tcpServer.command = tcpServerCommand
@@ -240,10 +243,14 @@ dotenv.config()
 
     p.stderr.on('data', (data) => {
       const newData = data.toString()
-      tcpServerOutput += newData
-      report.can_start_tcp_server.v = false
-      pastebinData.tcpServer.error = newData
-      LogHelper.error(`Cannot start the TCP server: ${newData}`)
+
+      // Ignore given warnings on stderr output
+      if (!ignoredWarnings.some((w) => newData.includes(w))) {
+        tcpServerOutput += newData
+        report.can_start_tcp_server.v = false
+        pastebinData.tcpServer.error = newData
+        LogHelper.error(`Cannot start the TCP server: ${newData}`)
+      }
     })
 
     const timeout = 3 * 60_000
