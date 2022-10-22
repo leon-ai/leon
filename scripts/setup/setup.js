@@ -7,7 +7,7 @@ import generateHttpApiKey from '../generate/generate-http-api-key'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupSkillsConfig from './setup-skills-config'
-import setupPythonPackages from './setup-python-packages'
+import setupPythonBinaries from './setup-python-binaries'
 
 // Do not load ".env" file because it is not created yet
 
@@ -18,7 +18,7 @@ import setupPythonPackages from './setup-python-packages'
   try {
     await setupDotenv()
     LoaderHelper.start()
-    await Promise.all([setupCore(), setupSkillsConfig(), setupPythonPackages()])
+    await Promise.all([setupCore(), setupSkillsConfig(), setupPythonBinaries()])
     LoaderHelper.stop()
     await generateHttpApiKey()
     LoaderHelper.start()
