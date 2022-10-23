@@ -3,7 +3,7 @@
  * You can consider to run this file on a different hardware
  */
 
-const request = require('superagent')
+const axios = require('axios')
 const record = require('node-record-lpcm16')
 const { Detector, Models } = require('@bugsounet/snowboy')
 const { io } = require('socket.io-client')
@@ -21,15 +21,10 @@ socket.on('connect', () => {
   console.log('Connected to the server')
   console.log('Waiting for hotword...')
 })
+;(async () => {
+  try {
+    await axios.get(`${url}/api/v1/info`)
 
-request.get(`${url}/api/v1/info`).end((err, res) => {
-  if (err || !res.ok) {
-    if (!err.response) {
-      console.error(`Failed to reach the server: ${err}`)
-    } else {
-      console.error(err.response.error.message)
-    }
-  } else {
     const models = new Models()
 
     models.add({
@@ -78,5 +73,11 @@ request.get(`${url}/api/v1/info`).end((err, res) => {
     })
 
     mic.pipe(detector)
+  } catch (e) {
+    if (!e.response) {
+      console.error(`Failed to reach the server: ${e}`)
+    } else {
+      console.error(e)
+    }
   }
-})
+})()

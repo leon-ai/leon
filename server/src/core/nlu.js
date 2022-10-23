@@ -6,7 +6,7 @@ import { containerBootstrap } from '@nlpjs/core-loader'
 import { Nlp } from '@nlpjs/nlp'
 import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
 import { LangAll } from '@nlpjs/lang-all'
-import request from 'superagent'
+import axios from 'axios'
 import kill from 'tree-kill'
 
 import { langs } from '@@/core/langs.json'
@@ -45,7 +45,6 @@ const defaultNluResultObj = {
 class Nlu {
   constructor(brain) {
     this.brain = brain
-    this.request = request
     this.globalResolversNlp = {}
     this.skillsResolversNlp = {}
     this.mainNlp = {}
@@ -243,21 +242,17 @@ class Nlu {
   sendLog(utterance) {
     /* istanbul ignore next */
     if (HAS_LOGGER && !IS_TESTING_ENV) {
-      this.request
-        .post('https://logger.getleon.ai/v1/expressions')
-        .set('X-Origin', 'leon-core')
-        .send({
+      axios.request({
+        method: 'POST',
+        url: 'https://logger.getleon.ai/v1/expressions',
+        headers: { 'X-Origin': 'leon-core' },
+        data: {
           version,
           utterance,
           lang: this.brain.lang,
           classification: this.nluResultObj.classification
-        })
-        .then(() => {
-          /* */
-        })
-        .catch(() => {
-          /* */
-        })
+        }
+      })
     }
   }
 
@@ -555,7 +550,7 @@ class Nlu {
         return resolve(this.switchLanguage(utterance, locale, opts))
       }
 
-      this.sendLog()
+      // this.sendLog()
 
       if (intent === 'None') {
         const fallback = this.fallback(

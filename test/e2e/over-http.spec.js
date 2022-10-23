@@ -1,4 +1,4 @@
-import superagent from 'superagent'
+import axios from 'axios'
 
 import server from '@/core/http-server/server'
 
@@ -17,19 +17,28 @@ const actionSkillUrl = `${urlPrefix}/p/leon/randomnumber/run`
 
 describe('Over HTTP', () => {
   test(`Request query endpoint POST ${queryUrl}`, async () => {
-    const { body } = await superagent
-      .post(queryUrl)
-      .send({ utterance: 'Hello' })
-      .set('X-API-Key', process.env.LEON_HTTP_API_KEY)
+    const { data } = await axios.post(
+      queryUrl,
+      {
+        utterance: 'Hello'
+      },
+      {
+        headers: {
+          'X-API-Key': process.env.LEON_HTTP_API_KEY
+        }
+      }
+    )
 
-    expect(body).toHaveProperty('success', true)
+    expect(data).toHaveProperty('success', true)
   })
 
   test(`Request an action skill: GET ${actionSkillUrl}`, async () => {
-    const { body } = await superagent
-      .get(actionSkillUrl)
-      .set('X-API-Key', process.env.LEON_HTTP_API_KEY)
+    const { data } = await axios.get(actionSkillUrl, {
+      headers: {
+        'X-API-Key': process.env.LEON_HTTP_API_KEY
+      }
+    })
 
-    expect(body).toHaveProperty('success', true)
+    expect(data).toHaveProperty('success', true)
   })
 })
