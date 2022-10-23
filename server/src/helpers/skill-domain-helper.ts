@@ -2,23 +2,25 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ShortLanguageCode } from '@/helpers/lang-helper'
-
-enum SkillBridges {
-  Python = 'python'
-}
-
-interface Skill {
-  name: string
-  path: string
-  bridge: `${SkillBridges}`
-}
+import type { Domain } from '@/models/domain'
+import type { GlobalEntity } from '@/models/global-entities'
+import type { SkillConfig } from '@/models/skill-config'
+import type { Skill, SkillBridge } from '@/models/skill'
 
 interface SkillDomain {
   name: string
   path: string
   skills: {
-    [key: string]: Skill
+    [key: string]: {
+      name: string
+      path: string
+      bridge: SkillBridge
+    }
   }
+}
+
+interface SkillConfigWithGlobalEntities extends Omit<SkillConfig, 'entities'> {
+  entities: Record<string, GlobalEntity>
 }
 
 const DOMAINS_DIR = path.join(process.cwd(), 'skills')
@@ -38,7 +40,7 @@ export class SkillDomainHelper {
           const skills: SkillDomain['skills'] = {}
           const { name: domainName } = (await import(
             path.join(domainPath, 'domain.json')
-          )) as SkillDomain
+          )) as Domain
           const skillFolders = fs.readdirSync(domainPath)
 
           for (let i = 0; i < skillFolders.length; i += 1) {
@@ -77,7 +79,7 @@ export class SkillDomainHelper {
    * Get information of a specific domain
    * @param domain Domain to get info from
    */
-  public static getSkillDomainInfo(domain: SkillDomain['name']): unknown {
+  public static getSkillDomainInfo(domain: SkillDomain['name']): Domain {
     return JSON.parse(
       fs.readFileSync(path.join(DOMAINS_DIR, domain, 'domain.json'), 'utf8')
     )
@@ -91,7 +93,7 @@ export class SkillDomainHelper {
   public static getSkillInfo(
     domain: SkillDomain['name'],
     skill: Skill['name']
-  ): unknown {
+  ): Skill {
     return JSON.parse(
       fs.readFileSync(
         path.join(DOMAINS_DIR, domain, skill, 'skill.json'),
@@ -108,9 +110,15 @@ export class SkillDomainHelper {
   public static getSkillConfig(
     configFilePath: string,
     lang: ShortLanguageCode
-  ): unknown {
-    const sharedDataPath = path.join(process.cwd(), 'core/data', lang)
-    const configData = JSON.parse(fs.readFileSync(configFilePath, 'utf8'))
+  ): SkillConfigWithGlobalEntities {
+    const sharedDataPath = path.join(process.cwd(), 'core', 'data', lang)
+    const configData = JSON.parse(
+      fs.readFileSync(configFilePath, 'utf8')
+    ) as SkillConfig
+    const result: SkillConfigWithGlobalEntities = {
+      ...configData,
+      entities: {}
+    }
     const { entities } = configData
 
     // Load shared data entities if entity = 'xxx.json'
@@ -119,15 +127,21 @@ export class SkillDomainHelper {
 
       entitiesKeys.forEach((entity) => {
         if (typeof entities[entity] === 'string') {
-          entities[entity] = JSON.parse(
-            fs.readFileSync(path.join(sharedDataPath, entities[entity]), 'utf8')
+          const entityFilePath = path.join(
+            sharedDataPath,
+            entities[entity] as string
           )
+          const entityRawData = fs.readFileSync(entityFilePath, {
+            encoding: 'utf8'
+          })
+          const entityData = JSON.parse(entityRawData) as GlobalEntity
+          result.entities[entity] = entityData
         }
       })
 
       configData.entities = entities
     }
 
-    return configData
+    return result
   }
 }
