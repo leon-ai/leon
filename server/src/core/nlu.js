@@ -6,7 +6,7 @@ import { containerBootstrap } from '@nlpjs/core-loader'
 import { Nlp } from '@nlpjs/nlp'
 import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
 import { LangAll } from '@nlpjs/lang-all'
-import request from 'superagent'
+import axios from 'axios'
 import kill from 'tree-kill'
 
 import { langs } from '@@/core/langs.json'
@@ -14,6 +14,7 @@ import { version } from '@@/package.json'
 import {
   HAS_LOGGER,
   IS_TESTING_ENV,
+  TCP_SERVER_BIN_PATH,
   TCP_SERVER_HOST,
   TCP_SERVER_PORT
 } from '@/constants'
@@ -44,7 +45,6 @@ const defaultNluResultObj = {
 class Nlu {
   constructor(brain) {
     this.brain = brain
-    this.request = request
     this.globalResolversNlp = {}
     this.skillsResolversNlp = {}
     this.mainNlp = {}
@@ -223,10 +223,9 @@ class Nlu {
 
     // Recreate a new TCP server process and reconnect the TCP client
     kill(global.tcpServerProcess.pid, () => {
-      global.tcpServerProcess = spawn(
-        `pipenv run python bridges/python/tcp_server/main.py ${locale}`,
-        { shell: true }
-      )
+      global.tcpServerProcess = spawn(`${TCP_SERVER_BIN_PATH} ${locale}`, {
+        shell: true
+      })
 
       global.tcpClient = new TcpClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
 
@@ -243,21 +242,17 @@ class Nlu {
   sendLog(utterance) {
     /* istanbul ignore next */
     if (HAS_LOGGER && !IS_TESTING_ENV) {
-      this.request
-        .post('https://logger.getleon.ai/v1/expressions')
-        .set('X-Origin', 'leon-core')
-        .send({
+      axios.request({
+        method: 'POST',
+        url: 'https://logger.getleon.ai/v1/expressions',
+        headers: { 'X-Origin': 'leon-core' },
+        data: {
           version,
           utterance,
           lang: this.brain.lang,
           classification: this.nluResultObj.classification
-        })
-        .then(() => {
-          /* */
-        })
-        .catch(() => {
-          /* */
-        })
+        }
+      })
     }
   }
 
@@ -555,7 +550,7 @@ class Nlu {
         return resolve(this.switchLanguage(utterance, locale, opts))
       }
 
-      this.sendLog()
+      // this.sendLog()
 
       if (intent === 'None') {
         const fallback = this.fallback(

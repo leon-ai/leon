@@ -19,5 +19,5 @@
   },
   "files": ["server/src/global.d.ts"],
   "include": ["server/src/**/*"],
-  "exclude": ["node_modules", "server/dist"]
+  "exclude": ["node_modules", "server/dist", "bridges/python", "tcp_server"]
 }

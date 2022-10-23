@@ -1,6 +1,10 @@
+import path from 'node:path'
+import fs from 'node:fs'
+
 import dotenv from 'dotenv'
 
 import type { LongLanguageCode } from '@/helpers/lang-helper'
+import { OSHelper } from '@/helpers/os-helper'
 
 dotenv.config()
 
@@ -8,11 +12,67 @@ const PRODUCTION_ENV = 'production'
 const DEVELOPMENT_ENV = 'development'
 const TESTING_ENV = 'testing'
 
+export const GITHUB_URL = 'https://github.com/leon-ai/leon'
+
+/**
+ * Binaries / distribution
+ */
+export const BINARIES_FOLDER_NAME = OSHelper.getBinariesFolderName()
+export const PYTHON_BRIDGE_DIST_PATH = path.join('bridges', 'python', 'dist')
+export const TCP_SERVER_DIST_PATH = path.join('tcp_server', 'dist')
+
+export const PYTHON_BRIDGE_SRC_PATH = path.join('bridges', 'python', 'src')
+export const TCP_SERVER_SRC_PATH = path.join('tcp_server', 'src')
+
+const PYTHON_BRIDGE_VERSION_FILE_PATH = path.join(
+  PYTHON_BRIDGE_SRC_PATH,
+  'version.py'
+)
+const TCP_SERVER_VERSION_FILE_PATH = path.join(
+  TCP_SERVER_SRC_PATH,
+  'version.py'
+)
+export const [, PYTHON_BRIDGE_VERSION] = fs
+  .readFileSync(PYTHON_BRIDGE_VERSION_FILE_PATH, 'utf8')
+  .split("'")
+export const [, TCP_SERVER_VERSION] = fs
+  .readFileSync(TCP_SERVER_VERSION_FILE_PATH, 'utf8')
+  .split("'")
+
+export const PYTHON_BRIDGE_BIN_NAME = 'leon-python-bridge'
+export const TCP_SERVER_BIN_NAME = 'leon-tcp-server'
+
+export const TCP_SERVER_BIN_PATH = path.join(
+  TCP_SERVER_DIST_PATH,
+  BINARIES_FOLDER_NAME,
+  TCP_SERVER_BIN_NAME
+)
+export const PYTHON_BRIDGE_BIN_PATH = path.join(
+  PYTHON_BRIDGE_DIST_PATH,
+  BINARIES_FOLDER_NAME,
+  PYTHON_BRIDGE_BIN_NAME
+)
+
+/**
+ * spaCy models
+ * Find new spaCy models: https://github.com/explosion/spacy-models/releases
+ */
+export const EN_SPACY_MODEL_NAME = 'en_core_web_trf'
+export const EN_SPACY_MODEL_VERSION = '3.4.0'
+export const FR_SPACY_MODEL_NAME = 'fr_core_news_md'
+export const FR_SPACY_MODEL_VERSION = '3.4.0'
+
+/**
+ * Environments
+ */
 export const IS_PRODUCTION_ENV = process.env['LEON_NODE_ENV'] === PRODUCTION_ENV
 export const IS_DEVELOPMENT_ENV =
   process.env['LEON_NODE_ENV'] === DEVELOPMENT_ENV
 export const IS_TESTING_ENV = process.env['LEON_NODE_ENV'] === TESTING_ENV
 
+/**
+ * Leon environment preferences
+ */
 export const LANG = process.env['LEON_LANG'] as LongLanguageCode
 
 export const HOST = process.env['LEON_HOST']

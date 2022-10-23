@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 import lib.nlp as nlp
 from lib.TCPServer import TCPServer
 
-dotenv_path = join(dirname(__file__), '../../../.env')
+dotenv_path = join(dirname(__file__), '../../../../../.env')
 load_dotenv(dotenv_path)
 
 nlp.load_spacy_model()

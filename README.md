@@ -68,6 +68,8 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > - Skills
 > - The web app
 > - The hotword node
+> - The TCP server (for inter-process communication between Leon and third-party processes such as spaCy)
+> - The Python bridge (the connector between Python core and skills)
 
 ### What is Leon able to do?
 

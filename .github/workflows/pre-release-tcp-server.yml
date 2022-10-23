@@ -2,22 +2,32 @@ name: Pre-release TCP server
 
 on: workflow_dispatch
 
+env:
+  PIPENV_PIPFILE: tcp_server/src
+  PIPENV_VENV_IN_PROJECT: true
+
 jobs:
-  pre-release:
-    name: Pre-release
+  build:
+    name: Build
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
       - name: Install Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.9.10
-          cache: pipenv
+
+      - name: Install Pipenv
+        run: pip install --upgrade pip && pip install pipenv==2022.7.24
 
       - name: Install Node.js
         uses: actions/setup-node@v3
@@ -25,23 +35,52 @@ jobs:
           node-version: lts/*
           cache: npm
 
-      - name: Clone repository
-        uses: actions/checkout@v3
-
       - name: Set TCP server version
-        working-directory: ./tcp_server/src
+        working-directory: tcp_server/src
         run: |
           echo "TCP_SERVER_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
+
+      - name: Display TCP server version
+        run: |
           echo "TCP server version: ${{ env.TCP_SERVER_VERSION }}"
 
       - name: Install core
         run: npm ci
 
-      - name: Setup TCP server
+      - name: Set up TCP server
         run: npm run setup:tcp-server
 
       - name: Build TCP server
         run: npm run build:tcp-server
+
+      - name: Upload TCP server
+        uses: actions/upload-artifact@v3
+        with:
+          path: tcp_server/dist/*.zip
+
+  draft-release:
+    name: Draft-release
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9.10
+
+      - name: Set TCP server version
+        working-directory: tcp_server/src
+        run: |
+          echo "TCP_SERVER_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
+
+      - name: Download TCP server
+        uses: actions/download-artifact@v3
+        with:
+          path: tcp_server/dist
 
       - uses: marvinpinto/action-automatic-releases@latest
         with:
@@ -50,5 +89,4 @@ jobs:
           draft: true
           prerelease: false
           title: TCP Server ${{ env.TCP_SERVER_VERSION }}
-          files: |
-            tcp_server/dist/*.zip
+          files: tcp_server/dist/artifact/*.zip

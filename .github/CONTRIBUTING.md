@@ -125,6 +125,8 @@ Scopes define high-level nodes of Leon.
 
 - web app
 - server
+- tcp server
+- python bridge
 - hotword
 - skill/skill_name
 

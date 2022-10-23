@@ -12,6 +12,6 @@ services:
     tty: true
     command: 'npm run dev:server && npm run dev:app'
     volumes:
-      - './:/app'
-      - '/app/node_modules'
+      - './:/home/docker/leon'
+      - '/home/docker/leon/node_modules'
     network_mode: 'host'

@@ -1,4 +1,4 @@
-import request from 'superagent'
+import axios from 'axios'
 
 import Loader from './loader'
 import Client from './client'
@@ -18,119 +18,100 @@ const serverUrl =
     ? ''
     : `${config.server_host}:${config.server_port}`
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const loader = new Loader()
 
   loader.start()
 
-  request.get(`${serverUrl}/api/v1/info`).end((err, res) => {
-    if (err || !res.ok) {
-      console.error(err.response.error.message)
-    } else {
-      const input = document.querySelector('#utterance')
-      const mic = document.querySelector('#mic-button')
-      const v = document.querySelector('#version small')
-      const client = new Client(config.app, serverUrl, input, res.body)
-      let rec = {}
-      let chunks = []
+  try {
+    const response = await axios.get(`${serverUrl}/api/v1/info`)
+    const input = document.querySelector('#utterance')
+    const mic = document.querySelector('#mic-button')
+    const v = document.querySelector('#version small')
+    const client = new Client(config.app, serverUrl, input, response.data)
+    let rec = {}
+    let chunks = []
 
-      v.innerHTML += client.info.version
+    v.innerHTML += client.info.version
 
-      client.init(loader)
+    client.init(loader)
 
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices
-          .getUserMedia({ audio: true })
-          .then((stream) => {
-            if (MediaRecorder) {
-              rec = new Recorder(stream, mic, client.info)
-              client.recorder = rec
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          if (MediaRecorder) {
+            rec = new Recorder(stream, mic, client.info)
+            client.recorder = rec
 
-              rec.ondataavailable((e) => {
-                chunks.push(e.data)
-              })
+            rec.ondataavailable((e) => {
+              chunks.push(e.data)
+            })
 
-              rec.onstart(() => {
-                /* */
-              })
+            rec.onstart(() => {
+              /* */
+            })
 
-              rec.onstop(() => {
-                const blob = new Blob(chunks)
-                chunks = []
-                rec.enabled = false
+            rec.onstop(() => {
+              const blob = new Blob(chunks)
+              chunks = []
+              rec.enabled = false
 
-                // Ensure there are some data
-                if (blob.size >= 1000) {
-                  client.socket.emit('recognize', blob)
-                }
-              })
+              // Ensure there are some data
+              if (blob.size >= 1000) {
+                client.socket.emit('recognize', blob)
+              }
+            })
 
-              listener.listening(
-                stream,
-                config.min_decibels,
-                config.max_blank_time,
-                () => {
-                  // Noise detected
-                  rec.noiseDetected = true
-                },
-                () => {
-                  // Noise ended
+            listener.listening(
+              stream,
+              config.min_decibels,
+              config.max_blank_time,
+              () => {
+                // Noise detected
+                rec.noiseDetected = true
+              },
+              () => {
+                // Noise ended
 
-                  rec.noiseDetected = false
-                  if (rec.enabled && !rec.hotwordTriggered) {
-                    rec.stop()
-                    rec.enabled = false
-                    rec.hotwordTriggered = false
-                    rec.countSilenceAfterTalk = 0
-                  }
-                }
-              )
-
-              client.socket.on('enable-record', () => {
-                rec.hotwordTriggered = true
-                rec.start()
-                setTimeout(() => {
+                rec.noiseDetected = false
+                if (rec.enabled && !rec.hotwordTriggered) {
+                  rec.stop()
+                  rec.enabled = false
                   rec.hotwordTriggered = false
-                }, config.max_blank_time)
-                rec.enabled = true
-              })
-            } else {
-              console.error('MediaRecorder is not supported on your browser.')
-            }
-          })
-          .catch((err) => {
-            console.error(
-              'MediaDevices.getUserMedia() threw the following error:',
-              err
+                  rec.countSilenceAfterTalk = 0
+                }
+              }
             )
-          })
-      } else {
-        console.error(
-          'MediaDevices.getUserMedia() is not supported on your browser.'
-        )
-      }
 
-      document.addEventListener('keydown', (e) => {
-        onkeydowndocument(e, () => {
-          if (rec.enabled === false) {
-            input.value = ''
-            rec.start()
-            rec.enabled = true
+            client.socket.on('enable-record', () => {
+              rec.hotwordTriggered = true
+              rec.start()
+              setTimeout(() => {
+                rec.hotwordTriggered = false
+              }, config.max_blank_time)
+              rec.enabled = true
+            })
           } else {
-            rec.stop()
-            rec.enabled = false
+            console.error('MediaRecorder is not supported on your browser.')
           }
         })
-      })
+        .catch((err) => {
+          console.error(
+            'MediaDevices.getUserMedia() threw the following error:',
+            err
+          )
+        })
+    } else {
+      console.error(
+        'MediaDevices.getUserMedia() is not supported on your browser.'
+      )
+    }
 
-      input.addEventListener('keydown', (e) => {
-        onkeydowninput(e, client)
-      })
-
-      mic.addEventListener('click', (e) => {
-        e.preventDefault()
-
+    document.addEventListener('keydown', (e) => {
+      onkeydowndocument(e, () => {
         if (rec.enabled === false) {
+          input.value = ''
           rec.start()
           rec.enabled = true
         } else {
@@ -138,6 +119,25 @@ document.addEventListener('DOMContentLoaded', () => {
           rec.enabled = false
         }
       })
-    }
-  })
+    })
+
+    input.addEventListener('keydown', (e) => {
+      onkeydowninput(e, client)
+    })
+
+    mic.addEventListener('click', (e) => {
+      e.preventDefault()
+
+      if (rec.enabled === false) {
+        rec.start()
+        rec.enabled = true
+      } else {
+        rec.stop()
+        rec.enabled = false
+      }
+    })
+  } catch (e) {
+    alert(`Error: ${e.message}; ${JSON.stringify(e.response.data)}`)
+    console.error(e)
+  }
 })
