@@ -6,7 +6,7 @@ import dotenv from 'dotenv'
 import { command } from 'execa'
 import semver from 'semver'
 import kill from 'tree-kill'
-import request from 'superagent'
+import axios from 'axios'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
@@ -498,12 +498,10 @@ dotenv.config()
       LogHelper.info('Sending report...')
 
       try {
-        const { body } = await request
-          .post('https://getleon.ai/api/report')
-          .send({
-            report: pastebinData
-          })
-        const { data: reportData } = body
+        const { data } = await axios.post('https://getleon.ai/api/report', {
+          report: pastebinData
+        })
+        const { data: reportData } = data
 
         LogHelper.success(`Report URL: ${reportData.reportUrl}`)
       } catch (e) {
