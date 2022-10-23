@@ -2,22 +2,32 @@ name: Pre-release Python bridge
 
 on: workflow_dispatch
 
+env:
+  PIPENV_PIPFILE: bridges/python/src
+  PIPENV_VENV_IN_PROJECT: true
+
 jobs:
-  pre-release:
-    name: Pre-release
+  build:
+    name: Build
 
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
     steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
       - name: Install Python
         uses: actions/setup-python@v4
         with:
           python-version: 3.9.10
-          cache: pipenv
+
+      - name: Install Pipenv
+        run: pip install --upgrade pip && pip install pipenv==2022.7.24
 
       - name: Install Node.js
         uses: actions/setup-node@v3
@@ -25,23 +35,52 @@ jobs:
           node-version: lts/*
           cache: npm
 
-      - name: Clone repository
-        uses: actions/checkout@v3
-
       - name: Set Python bridge version
-        working-directory: ./bridges/python/src
+        working-directory: bridges/python/src
         run: |
           echo "PYTHON_BRIDGE_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
+
+      - name: Display Python bridge version
+        run: |
           echo "Python bridge version: ${{ env.PYTHON_BRIDGE_VERSION }}"
 
       - name: Install core
         run: npm ci
 
-      - name: Setup Python bridge
+      - name: Set up Python bridge
         run: npm run setup:python-bridge
 
       - name: Build Python bridge
         run: npm run build:python-bridge
+
+      - name: Upload Python bridge
+        uses: actions/upload-artifact@v3
+        with:
+          path: bridges/python/dist/*.zip
+
+  draft-release:
+    name: Draft-release
+    needs: [build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Install Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.9.10
+
+      - name: Set Python bridge version
+        working-directory: bridges/python/src
+        run: |
+          echo "PYTHON_BRIDGE_VERSION=$(python -c "from version import __version__; print(__version__)")" >> $GITHUB_ENV
+
+      - name: Download Python bridge
+        uses: actions/download-artifact@v3
+        with:
+          path: bridges/python/dist
 
       - uses: marvinpinto/action-automatic-releases@latest
         with:
@@ -50,5 +89,4 @@ jobs:
           draft: true
           prerelease: false
           title: Python Bridge ${{ env.PYTHON_BRIDGE_VERSION }}
-          files: |
-            bridges/python/dist/*.zip
+          files: bridges/python/dist/artifact/*.zip

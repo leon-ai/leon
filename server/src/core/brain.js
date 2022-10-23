@@ -3,7 +3,7 @@ import path from 'node:path'
 import { spawn } from 'node:child_process'
 
 import { langs } from '@@/core/langs.json'
-import { HAS_TTS } from '@/constants'
+import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
@@ -199,8 +199,8 @@ class Brain {
              *
              * 1. Need to be at the root of the project
              * 2. Edit: server/src/intent-object.sample.json
-             * 3. Run: PIPENV_PIPFILE=bridges/python/Pipfile pipenv run
-             *    python bridges/python/main.py server/src/intent-object.sample.json
+             * 3. Run: PIPENV_PIPFILE=bridges/python/src/Pipfile pipenv run
+             *    python bridges/python/src/main.py server/src/intent-object.sample.json
              */
             const slots = {}
             if (obj.slots) {
@@ -225,7 +225,7 @@ class Brain {
             try {
               fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
               this.process = spawn(
-                `pipenv run python bridges/python/main.py ${intentObjectPath}`,
+                `${PYTHON_BRIDGE_BIN_PATH} ${intentObjectPath}`,
                 { shell: true }
               )
             } catch (e) {
