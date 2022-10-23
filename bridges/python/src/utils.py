@@ -9,7 +9,6 @@ from tinydb import TinyDB, Query, table, operations
 from time import sleep
 import sys
 import os
-import sqlite3
 import requests
 import re
 
