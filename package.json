@@ -75,6 +75,7 @@
     "@nlpjs/lang-all": "^4.22.12",
     "@nlpjs/nlp": "^4.22.17",
     "archiver": "^5.3.1",
+    "@sinclair/typebox": "0.24.49",
     "async": "^3.2.0",
     "axios": "1.1.2",
     "cross-env": "^7.0.3",
