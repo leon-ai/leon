@@ -193,6 +193,13 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
         <sub><sup>10 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
+        <a href="https://github.com/andrinmeier">
+          <img src="https://github.com/andrinmeier.png?size=128" />
+          Andrin Meier
+        </a><br>
+        <sub><sup>10 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
       	<a href="http://sponsor.getleon.ai/">
           You?
         </a>
