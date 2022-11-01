@@ -7,6 +7,8 @@ import { command } from 'execa'
 import semver from 'semver'
 import kill from 'tree-kill'
 import axios from 'axios'
+import osName from 'os-name'
+import getos from 'getos'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
@@ -133,9 +135,20 @@ dotenv.config()
       platform: os.platform(),
       arch: os.arch(),
       cpus: os.cpus().length,
-      release: os.release()
+      release: os.release(),
+      osName: osName(),
+      distro: null
     }
-    LogHelper.success(`${JSON.stringify(osInfo)}\n`)
+
+    if (osInfo.platform === 'linux') {
+      getos((e, os) => {
+        osInfo.distro = os
+        LogHelper.success(`${JSON.stringify(osInfo)}\n`)
+      })
+    } else {
+      LogHelper.success(`${JSON.stringify(osInfo)}\n`)
+    }
+
     pastebinData.environment.osDetails = osInfo
     ;(
       await Promise.all([
