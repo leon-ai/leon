@@ -173,6 +173,13 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
   <tbody>
     <tr>
       <td align="center" valign="middle" width="128">
+        <a href="https://github.com/Appwrite">
+          <img src="https://github.com/Appwrite.png?size=128" />
+          Appwrite
+        </a><br>
+        <sub><sup>250 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
         <img src="https://getleon.ai/img/anonymous.svg" width="128" />
         Anonymous
         <br>
@@ -227,7 +234,7 @@ The focus is not only limited to the activity you see on GitHub but also a lot o
 </a>
 &nbsp; &nbsp; &nbsp;
 <a href="https://www.aoz.studio">
-  <img src="https://user-images.githubusercontent.com/1731544/153794939-c42f1b10-a15d-4e82-b448-dc95bfe85b1c.png" alt="AOZ Studio" width="64" />
+  <img src="https://getleon.ai/_next/image?url=%2Fimg%2Fthanks%2Faoz-studio.png&w=384&q=75" alt="AOZ Studio" width="128" />
 </a>
 
 ## 📝 License
