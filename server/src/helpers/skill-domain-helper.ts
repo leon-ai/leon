@@ -2,10 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ShortLanguageCode } from '@/helpers/lang-helper'
-import type { Domain } from '@/models/domain'
 import type { GlobalEntity } from '@@/core/data/schemas'
-import type { SkillConfig } from '@/models/skill-config'
-import type { Skill, SkillBridge } from '@/models/skill'
+import type { Domain, Skill, SkillConfig, SkillBridge } from '@@/skills/schemas'
 
 interface SkillDomain {
   name: string
