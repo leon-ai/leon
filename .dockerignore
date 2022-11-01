@@ -1,3 +1,9 @@
-node_modules/
-bridges/python/src/.venv/*
-dist/*
+__pycache__/
+**/dist/*
+**/build/
+**/node_modules/
+**/tmp/*
+**/src/.venv/*
+logs/*
+*.pyc
+.DS_Store
