@@ -125,8 +125,10 @@ table {
 }
 
 :root {
-  --black-color: #151718;
+  --black-color: #000;
+  --light-black-color: #222426;
   --white-color: #fff;
+  --grey-color: #323739;
 }
 
 a {
@@ -193,7 +195,7 @@ input {
   color: var(--white-color);
   width: 100%;
   border: none;
-  border-bottom: 2px solid var(--white-color);
+  border-bottom: 2px solid var(--grey-color);
   background: none;
   font-weight: 400;
   font-size: 4em;
@@ -222,7 +224,7 @@ small {
   top: 10%;
   height: 50%;
   overflow-y: auto;
-  border: 2px solid var(--white-color);
+  border: 2px solid var(--grey-color);
   border-radius: 12px;
 }
 #feed::-webkit-scrollbar {
@@ -302,8 +304,8 @@ small {
   right: 0;
 }
 #feed .leon .bubble {
-  background-color: #eee;
-  color: var(--black-color);
+  background-color: var(--light-black-color);
+  color: var(--white-color);
 }
 @keyframes fadeIn {
   100% {
