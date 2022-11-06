@@ -137,7 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     })
   } catch (e) {
-    alert(`Error: ${e.message}; ${JSON.stringify(e.response.data)}`)
+    alert(`Error: ${e.message}; ${JSON.stringify(e.response?.data)}`)
     console.error(e)
   }
 })
