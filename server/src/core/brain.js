@@ -224,7 +224,7 @@ class Brain {
             try {
               fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
               this.process = spawn(
-                `${PYTHON_BRIDGE_BIN_PATH} ${intentObjectPath}`,
+                `${PYTHON_BRIDGE_BIN_PATH} "${intentObjectPath}"`,
                 { shell: true }
               )
             } catch (e) {

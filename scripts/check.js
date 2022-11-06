@@ -199,7 +199,7 @@ dotenv.config()
     try {
       const executionStart = Date.now()
       const p = await command(
-        `${PYTHON_BRIDGE_BIN_PATH} scripts/assets/intent-object.json`,
+        `${PYTHON_BRIDGE_BIN_PATH} "scripts/assets/intent-object.json"`,
         { shell: true }
       )
       const executionEnd = Date.now()
