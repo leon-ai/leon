@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
 
@@ -199,7 +200,10 @@ dotenv.config()
     try {
       const executionStart = Date.now()
       const p = await command(
-        `${PYTHON_BRIDGE_BIN_PATH} "scripts/assets/intent-object.json"`,
+        `${PYTHON_BRIDGE_BIN_PATH} "${path.join(
+          process.cwd(),
+          'scripts/assets/intent-object.json'
+        )}"`,
         { shell: true }
       )
       const executionEnd = Date.now()
