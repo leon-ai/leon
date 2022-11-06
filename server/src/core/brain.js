@@ -199,8 +199,7 @@ class Brain {
              *
              * 1. Need to be at the root of the project
              * 2. Edit: server/src/intent-object.sample.json
-             * 3. Run: PIPENV_PIPFILE=bridges/python/src/Pipfile pipenv run
-             *    python bridges/python/src/main.py server/src/intent-object.sample.json
+             * 3. Run: npm run python-bridge
              */
             const slots = {}
             if (obj.slots) {
