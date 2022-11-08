@@ -118,4 +118,12 @@ export class OSHelper {
   public static getNumberOfCPUCores(): number {
     return os.cpus().length
   }
+
+  /**
+   * Get the total amount of memory (in GB) on your machine
+   * @example getTotalRAM() // 4
+   */
+  public static getTotalRAM(): number {
+    return Number((os.totalmem() / (1_024 * 1_024 * 1_024)).toFixed(2))
+  }
 }
