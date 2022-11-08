@@ -13,6 +13,7 @@ import getos from 'getos'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
+import { OSHelper } from '@/helpers/os-helper'
 import {
   PYTHON_BRIDGE_BIN_PATH,
   TCP_SERVER_BIN_PATH,
@@ -30,6 +31,7 @@ dotenv.config()
   try {
     const nodeMinRequiredVersion = '16'
     const npmMinRequiredVersion = '5'
+    const minimumRequiredRAM = 4
     const flitePath = 'bin/flite/flite'
     const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
     const amazonPath = 'core/config/voice/amazon.json'
@@ -129,7 +131,7 @@ dotenv.config()
      * Environment checking
      */
 
-    LogHelper.info('OS')
+    LogHelper.info('Environment')
 
     const osInfo = {
       type: os.type(),
@@ -139,6 +141,16 @@ dotenv.config()
       release: os.release(),
       osName: osName(),
       distro: null
+    }
+    const totalRAMInGB = OSHelper.getTotalRAM()
+
+    if (totalRAMInGB < minimumRequiredRAM) {
+      report.can_run.v = false
+      LogHelper.error(
+        `Total RAM: ${totalRAMInGB} GB. Leon needs at least ${minimumRequiredRAM} GB of RAM`
+      )
+    } else {
+      LogHelper.success(`Total RAM: ${totalRAMInGB} GB`)
     }
 
     if (osInfo.platform === 'linux') {
@@ -151,6 +163,7 @@ dotenv.config()
     }
 
     pastebinData.environment.osDetails = osInfo
+    pastebinData.environment.totalRAMInGB = totalRAMInGB
     ;(
       await Promise.all([
         command('node --version', { shell: true }),
