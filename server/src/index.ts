@@ -8,7 +8,7 @@ import {
   TCP_SERVER_BIN_PATH
 } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
-import TcpClient from '@/core/tcp-client'
+import TCPClient from '@/core/tcp-client'
 import server from '@/core/http-server/server'
 ;(async (): Promise<void> => {
   process.title = 'leon'
@@ -23,7 +23,7 @@ import server from '@/core/http-server/server'
   )
 
   // Start the TCP client
-  global.tcpClient = new TcpClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
+  global.tcpClient = new TCPClient(String(TCP_SERVER_HOST), TCP_SERVER_PORT)
 
   // Start the core server
   await server.init()

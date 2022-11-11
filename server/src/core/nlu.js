@@ -22,7 +22,7 @@ import Ner from '@/core/ner'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { LangHelper } from '@/helpers/lang-helper'
-import TcpClient from '@/core/tcp-client'
+import TCPClient from '@/core/tcp-client'
 import Conversation from '@/core/conversation'
 
 const defaultNluResultObj = {
@@ -227,7 +227,7 @@ class Nlu {
         shell: true
       })
 
-      global.tcpClient = new TcpClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
+      global.tcpClient = new TCPClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
 
       global.tcpClient.ee.removeListener('connected', connectedHandler)
       global.tcpClient.ee.on('connected', connectedHandler)

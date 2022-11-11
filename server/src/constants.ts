@@ -76,7 +76,7 @@ export const IS_TESTING_ENV = process.env['LEON_NODE_ENV'] === TESTING_ENV
 export const LANG = process.env['LEON_LANG'] as LongLanguageCode
 
 export const HOST = process.env['LEON_HOST']
-export const PORT = process.env['LEON_PORT']
+export const PORT = Number(process.env['LEON_PORT'])
 
 export const TIME_ZONE = process.env['LEON_TIME_ZONE']
 
@@ -94,7 +94,7 @@ export const HTTP_API_LANG = process.env['LEON_HTTP_API_LANG']
 export const HAS_LOGGER = process.env['LEON_LOGGER'] === 'true'
 
 export const TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
-export const TCP_SERVER_PORT = process.env['LEON_PY_TCP_SERVER_PORT']
+export const TCP_SERVER_PORT = Number(process.env['LEON_PY_TCP_SERVER_PORT'])
 
 /**
  * Paths

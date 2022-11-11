@@ -10,16 +10,18 @@ const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
 // Number of retries to connect to the TCP server
 const RETRIES_NB = IS_PRODUCTION_ENV ? 8 : 30
 
-export default class TcpClient {
-  constructor(host, port) {
+export default class TCPClient {
+  private readonly host: string
+  private readonly port: number
+  private reconnectCounter = 0
+  private tcpSocket = new Net.Socket()
+  public ee = new EventEmitter()
+  public status = this.tcpSocket.readyState
+  public isConnected = false
+
+  constructor(host: string, port: number) {
     this.host = host
     this.port = port
-    this.reconnectCounter = 0
-    this.attempts = []
-    this.tcpSocket = new Net.Socket()
-    this._ee = new EventEmitter()
-    this._status = this.tcpSocket.readyState
-    this._isConnected = false
 
     LogHelper.title('TCP Client')
     LogHelper.success('New instance')
@@ -30,19 +32,19 @@ export default class TcpClient {
         `Connected to the TCP server tcp://${this.host}:${this.port}`
       )
 
-      this._isConnected = true
-      this._ee.emit('connected', null)
+      this.isConnected = true
+      this.ee.emit('connected', null)
     })
 
-    this.tcpSocket.on('data', (chunk) => {
+    this.tcpSocket.on('data', (chunk: { topic: string; data: unknown }) => {
       LogHelper.title('TCP Client')
-      LogHelper.info(`Received data: ${chunk.toString()}`)
+      LogHelper.info(`Received data: ${String(chunk)}`)
 
-      const data = JSON.parse(chunk)
-      this._ee.emit(data.topic, data.data)
+      const data = JSON.parse(String(chunk))
+      this.ee.emit(data.topic, data.data)
     })
 
-    this.tcpSocket.on('error', (err) => {
+    this.tcpSocket.on('error', (err: NodeJS.ErrnoException) => {
       LogHelper.title('TCP Client')
 
       if (err.code === 'ECONNREFUSED') {
@@ -85,19 +87,7 @@ export default class TcpClient {
     }, INTERVAL)
   }
 
-  get status() {
-    return this._status
-  }
-
-  get ee() {
-    return this._ee
-  }
-
-  get isConnected() {
-    return this._isConnected
-  }
-
-  emit(topic, data) {
+  public emit(topic: string, data: unknown): void {
     const obj = {
       topic,
       data
@@ -106,7 +96,7 @@ export default class TcpClient {
     this.tcpSocket.write(JSON.stringify(obj))
   }
 
-  connect() {
+  public connect(): void {
     this.tcpSocket.connect({
       host: this.host,
       port: this.port
