@@ -2,8 +2,13 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ShortLanguageCode } from '@/helpers/lang-helper'
-import type { GlobalEntity } from '@@/core/data/schemas'
-import type { Domain, Skill, SkillConfig, SkillBridge } from '@@/skills/schemas'
+import type { GlobalEntity } from '@/schemas/global-data-schemas'
+import type {
+  Domain,
+  Skill,
+  SkillConfig,
+  SkillBridge
+} from '@/schemas/skill-schemas'
 
 interface SkillDomain {
   name: string
@@ -132,8 +137,8 @@ export class SkillDomainHelper {
           const entityRawData = fs.readFileSync(entityFilePath, {
             encoding: 'utf8'
           })
-          const entityData = JSON.parse(entityRawData) as GlobalEntity
-          result.entities[entity] = entityData
+
+          result.entities[entity] = JSON.parse(entityRawData) as GlobalEntity
         }
       })
 

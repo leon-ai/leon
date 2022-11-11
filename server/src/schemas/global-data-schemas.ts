@@ -1,16 +1,16 @@
 import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
 
-const globalEntity = {
+export const globalEntitySchemaObject = Type.Object({
   options: Type.Record(
     Type.String(),
     Type.Object({
       synonyms: Type.Array(Type.String()),
-      data: Type.Record(Type.String(), Type.Array(Type.String()))
+      data: Type.Optional(Type.Record(Type.String(), Type.Array(Type.String())))
     })
   )
-}
-const globalResolver = {
+})
+export const globalResolverSchemaObject = Type.Object({
   name: Type.String(),
   intents: Type.Record(
     Type.String(),
@@ -19,8 +19,8 @@ const globalResolver = {
       value: Type.Unknown()
     })
   )
-}
-const answers = {
+})
+export const answersSchemaObject = Type.Object({
   answers: Type.Record(
     Type.String(),
     Type.Union([
@@ -28,17 +28,7 @@ const answers = {
       Type.Array(Type.String())
     ])
   )
-}
-
-const globalEntitySchemaObject = Type.Strict(
-  Type.Object(globalEntity, { additionalProperties: false })
-)
-const globalResolverSchemaObject = Type.Strict(
-  Type.Object(globalResolver, { additionalProperties: false })
-)
-const answersSchemaObject = Type.Strict(
-  Type.Object(answers, { additionalProperties: false })
-)
+})
 
 export type GlobalEntity = Static<typeof globalEntitySchemaObject>
 export type GlobalResolver = Static<typeof globalResolverSchemaObject>
