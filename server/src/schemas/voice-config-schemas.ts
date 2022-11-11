@@ -30,3 +30,7 @@ export type GoogleCloudVoiceConfiguration = Static<
   typeof googleCloudVoiceConfiguration
 >
 export type WatsonVoiceConfiguration = Static<typeof watsonVoiceConfiguration>
+export type VoiceConfiguration =
+  | AmazonVoiceConfiguration
+  | GoogleCloudVoiceConfiguration
+  | WatsonVoiceConfiguration

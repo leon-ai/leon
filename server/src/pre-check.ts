@@ -6,17 +6,24 @@ import { TypeCompiler } from '@sinclair/typebox/compiler'
 import {
   amazonVoiceConfiguration,
   googleCloudVoiceConfiguration,
-  watsonVoiceConfiguration
+  watsonVoiceConfiguration,
+  VoiceConfiguration
 } from '@/schemas/voice-config-schemas'
 import {
-  answersSchemaObject,
+  globalAnswersSchemaObject,
   globalEntitySchemaObject,
-  globalResolverSchemaObject
+  globalResolverSchemaObject,
+  GlobalEntity,
+  GlobalResolver,
+  GlobalAnswers
 } from '@/schemas/global-data-schemas'
 import {
   domainSchemaObject,
   skillSchemaObject,
-  skillConfigSchemaObject
+  skillConfigSchemaObject,
+  Domain,
+  Skill,
+  SkillConfig
 } from '@/schemas/skill-schemas'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -35,7 +42,7 @@ const VOICE_CONFIG_SCHEMAS = {
   'watson-tts': watsonVoiceConfiguration
 }
 const GLOBAL_DATA_SCHEMAS = {
-  answers: answersSchemaObject,
+  answers: globalAnswersSchemaObject,
   globalEntities: globalEntitySchemaObject,
   globalResolvers: globalResolverSchemaObject
 }
@@ -53,7 +60,7 @@ const GLOBAL_DATA_SCHEMAS = {
   ).filter((file) => file.endsWith('.json') && !file.includes('.sample.'))
 
   for (const file of voiceConfigFiles) {
-    const config = JSON.parse(
+    const config: VoiceConfiguration = JSON.parse(
       await fs.promises.readFile(path.join(VOICE_CONFIG_PATH, file), 'utf8')
     )
     const [configName] = file.split('.') as [keyof typeof VOICE_CONFIG_SCHEMAS]
@@ -84,7 +91,7 @@ const GLOBAL_DATA_SCHEMAS = {
     ).filter((file) => file.endsWith('.json'))
 
     for (const file of globalEntityFiles) {
-      const globalEntity = JSON.parse(
+      const globalEntity: GlobalEntity = JSON.parse(
         await fs.promises.readFile(path.join(globalEntitiesPath, file), 'utf8')
       )
       const result = TypeCompiler.Compile(globalEntitySchemaObject)
@@ -106,7 +113,7 @@ const GLOBAL_DATA_SCHEMAS = {
     ).filter((file) => file.endsWith('.json'))
 
     for (const file of globalResolverFiles) {
-      const globalResolver = JSON.parse(
+      const globalResolver: GlobalResolver = JSON.parse(
         await fs.promises.readFile(path.join(globalResolversPath, file), 'utf8')
       )
       const result = TypeCompiler.Compile(globalResolverSchemaObject)
@@ -122,7 +129,7 @@ const GLOBAL_DATA_SCHEMAS = {
     /**
      * Global answers checking
      */
-    const answers = JSON.parse(
+    const answers: GlobalAnswers = JSON.parse(
       await fs.promises.readFile(
         path.join(GLOBAL_DATA_PATH, lang, 'answers.json'),
         'utf8'
@@ -152,7 +159,7 @@ const GLOBAL_DATA_SCHEMAS = {
      * Domain checking
      */
     const pathToDomain = path.join(currentDomain.path, 'domain.json')
-    const domainObject = JSON.parse(
+    const domainObject: Domain = JSON.parse(
       await fs.promises.readFile(pathToDomain, 'utf8')
     )
     const domainResult = TypeCompiler.Compile(domainSchemaObject)
@@ -174,7 +181,7 @@ const GLOBAL_DATA_SCHEMAS = {
        */
       if (currentSkill) {
         const pathToSkill = path.join(currentSkill.path, 'skill.json')
-        const skillObject = JSON.parse(
+        const skillObject: Skill = JSON.parse(
           await fs.promises.readFile(pathToSkill, 'utf8')
         )
         const skillResult = TypeCompiler.Compile(skillSchemaObject)
@@ -196,7 +203,7 @@ const GLOBAL_DATA_SCHEMAS = {
 
         for (const file of skillConfigFiles) {
           const skillConfigPath = path.join(pathToSkillConfig, file)
-          const skillConfig = JSON.parse(
+          const skillConfig: SkillConfig = JSON.parse(
             await fs.promises.readFile(skillConfigPath, 'utf8')
           )
           const result = TypeCompiler.Compile(skillConfigSchemaObject)

@@ -20,7 +20,7 @@ export const globalResolverSchemaObject = Type.Object({
     })
   )
 })
-export const answersSchemaObject = Type.Object({
+export const globalAnswersSchemaObject = Type.Object({
   answers: Type.Record(
     Type.String(),
     Type.Union([
@@ -32,4 +32,4 @@ export const answersSchemaObject = Type.Object({
 
 export type GlobalEntity = Static<typeof globalEntitySchemaObject>
 export type GlobalResolver = Static<typeof globalResolverSchemaObject>
-export type Answers = Static<typeof answersSchemaObject>
+export type GlobalAnswers = Static<typeof globalAnswersSchemaObject>
