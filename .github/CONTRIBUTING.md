@@ -149,6 +149,76 @@ By sponsoring the project you make the project sustainable and faster to develop
 
 The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process and so on...
 
+## Contributing to the Python Bridge or TCP Server
+
+Leon makes use of two binaries, the Python bridge and the TCP server. These binaries are compiled from Python sources.
+
+The Python bridge is used to communicate between the core and skills made with Python.
+
+The TCP server is used to communicate between the core and third-party nodes, such as spaCy.
+
+### Set Up the Python Environment
+
+To contribute to these parts, you need to set up a Python environment running with a specific Python version and a specific Pipenv version.
+
+It is recommended to use Pyenv to manage your Python versions.
+If you are on Linux, you can run the following to install Pyenv, otherwise, please refer to the [Pyenv documentation to install it](https://github.com/pyenv/pyenv#installation):
+
+```bash
+# Update registry
+sudo apt-get update
+
+# Install Pyenv deps
+sudo apt-get install make build-essential libssl-dev zlib1g-dev \
+libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm \
+libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
+
+# Install Pyenv
+curl https://pyenv.run | bash
+
+# Add output lines to .bashrc
+
+# Restart shell
+exec "$SHELL"
+```
+
+Once Pyenv installed, run:
+
+```bash
+# Install Python
+pyenv install 3.9.10 --force
+pyenv global 3.9.10
+
+# Install Pipenv
+pip install pipenv==2022.7.24
+```
+
+Your Python environment should be ready now. So now you can set up the respective environments according to what you are going to contribute to and build them:
+
+```bash
+# Set up the Python bridge environment
+npm run setup:python-bridge
+
+# Set up the TCP server environment
+npm run setup:tcp-server
+# If you are in China, you can run this to download models faster:
+npm run setup:tcp-server cn
+
+# Once your code changes are done, you can build via:
+
+# Build the Python bridge
+npm run build:python-bridge
+
+# Build the TCP server
+npm run build:tcp-server
+
+# Run the Python bridge
+./bridges/python/dist/{OS-CPU_ARCH}/leon-python-bridge server/src/intent-object.sample.json
+
+# Run the TCP server
+./tcp_server/dist/{OS-CPU_ARCH}/leon-tcp-server en
+```
+
 ## Spread the Word
 
 Use [#LeonAI](<https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query>) if you tweet about Leon and/or mention [@grenlouis](https://twitter.com/grenlouis).
