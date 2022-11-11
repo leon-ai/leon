@@ -95,3 +95,9 @@ export const HAS_LOGGER = process.env['LEON_LOGGER'] === 'true'
 
 export const TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
 export const TCP_SERVER_PORT = process.env['LEON_PY_TCP_SERVER_PORT']
+
+/**
+ * Paths
+ */
+export const GLOBAL_DATA_PATH = path.join('core', 'data')
+export const VOICE_CONFIG_PATH = path.join('core', 'config', 'voice')

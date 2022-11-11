@@ -13,6 +13,7 @@ import server from '@/core/http-server/server'
 ;(async (): Promise<void> => {
   process.title = 'leon'
 
+  // Start the TCP server
   global.tcpServerProcess = spawn(
     `${TCP_SERVER_BIN_PATH} ${LangHelper.getShortCode(LEON_LANG)}`,
     {
@@ -21,7 +22,9 @@ import server from '@/core/http-server/server'
     }
   )
 
+  // Start the TCP client
   global.tcpClient = new TcpClient(TCP_SERVER_HOST, TCP_SERVER_PORT)
 
+  // Start the core server
   await server.init()
 })()
