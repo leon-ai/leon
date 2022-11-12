@@ -19,20 +19,16 @@ class TCPClient {
 
   private reconnectCounter = 0
   private tcpSocket = new Net.Socket()
-  private _ee = new EventEmitter()
-  private _status = this.tcpSocket.readyState
   private _isConnected = false
 
-  get ee(): EventEmitter {
-    return this._ee
-  }
-
-  get status(): Net.SocketReadyState {
-    return this._status
-  }
+  public readonly ee = new EventEmitter()
 
   get isConnected(): boolean {
     return this._isConnected
+  }
+
+  get status(): Net.SocketReadyState {
+    return this.tcpSocket.readyState
   }
 
   constructor(private readonly host: string, private readonly port: number) {
@@ -54,7 +50,7 @@ class TCPClient {
 
       this.reconnectCounter = 0
       this._isConnected = true
-      this._ee.emit('connected', null)
+      this.ee.emit('connected', null)
     })
 
     this.tcpSocket.on('data', (chunk: { topic: string; data: unknown }) => {
@@ -62,7 +58,7 @@ class TCPClient {
       LogHelper.info(`Received data: ${String(chunk)}`)
 
       const data = JSON.parse(String(chunk))
-      this._ee.emit(data.topic, data.data)
+      this.ee.emit(data.topic, data.data)
     })
 
     this.tcpSocket.on('error', (err: NodeJS.ErrnoException) => {
