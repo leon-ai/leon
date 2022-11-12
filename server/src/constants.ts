@@ -65,10 +65,10 @@ export const FR_SPACY_MODEL_VERSION = '3.4.0'
 /**
  * Environments
  */
-export const IS_PRODUCTION_ENV = process.env['LEON_NODE_ENV'] === PRODUCTION_ENV
-export const IS_DEVELOPMENT_ENV =
-  process.env['LEON_NODE_ENV'] === DEVELOPMENT_ENV
-export const IS_TESTING_ENV = process.env['LEON_NODE_ENV'] === TESTING_ENV
+export const LEON_NODE_ENV = process.env['LEON_NODE_ENV'] || PRODUCTION_ENV
+export const IS_PRODUCTION_ENV = LEON_NODE_ENV === PRODUCTION_ENV
+export const IS_DEVELOPMENT_ENV = LEON_NODE_ENV === DEVELOPMENT_ENV
+export const IS_TESTING_ENV = LEON_NODE_ENV === TESTING_ENV
 
 /**
  * Leon environment preferences

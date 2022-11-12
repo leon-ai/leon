@@ -13,6 +13,7 @@ import {
   HAS_TTS,
   HOST,
   IS_DEVELOPMENT_ENV,
+  LEON_NODE_ENV,
   PORT,
   STT_PROVIDER,
   TTS_PROVIDER
@@ -380,7 +381,7 @@ server.init = async () => {
   server.fastify.addHook('preValidation', otherMidd)
 
   LogHelper.title('Initialization')
-  LogHelper.success(`The current env is ${process.env.LEON_NODE_ENV}`)
+  LogHelper.success(`The current env is ${LEON_NODE_ENV}`)
   LogHelper.success(`The current version is ${version}`)
 
   LogHelper.success(`The current time zone is ${DateHelper.getTimeZone()}`)
