@@ -17,17 +17,25 @@ const RETRIES_NB = IS_PRODUCTION_ENV ? 8 : 30
 class TCPClient {
   private static instance: TCPClient
 
-  private readonly host: string
-  private readonly port: number
-
   private reconnectCounter = 0
   private tcpSocket = new Net.Socket()
+  private _ee = new EventEmitter()
+  private _status = this.tcpSocket.readyState
+  private _isConnected = false
 
-  public ee = new EventEmitter()
-  public status = this.tcpSocket.readyState
-  public isConnected = false
+  get ee(): EventEmitter {
+    return this._ee
+  }
 
-  constructor(host: string, port: number) {
+  get status(): Net.SocketReadyState {
+    return this._status
+  }
+
+  get isConnected(): boolean {
+    return this._isConnected
+  }
+
+  constructor(private readonly host: string, private readonly port: number) {
     if (!TCPClient.instance) {
       LogHelper.title('TCP Client')
       LogHelper.success('New instance')
@@ -45,8 +53,8 @@ class TCPClient {
       )
 
       this.reconnectCounter = 0
-      this.isConnected = true
-      this.ee.emit('connected', null)
+      this._isConnected = true
+      this._ee.emit('connected', null)
     })
 
     this.tcpSocket.on('data', (chunk: { topic: string; data: unknown }) => {
@@ -54,7 +62,7 @@ class TCPClient {
       LogHelper.info(`Received data: ${String(chunk)}`)
 
       const data = JSON.parse(String(chunk))
-      this.ee.emit(data.topic, data.data)
+      this._ee.emit(data.topic, data.data)
     })
 
     this.tcpSocket.on('error', (err: NodeJS.ErrnoException) => {
@@ -89,14 +97,14 @@ class TCPClient {
         LogHelper.error(`Failed to connect to the TCP server: ${err}`)
       }
 
-      this.isConnected = false
+      this._isConnected = false
     })
 
     this.tcpSocket.on('end', () => {
       LogHelper.title('TCP Client')
       LogHelper.success('Disconnected from the TCP server')
 
-      this.isConnected = false
+      this._isConnected = false
     })
   }
 
