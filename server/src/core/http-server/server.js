@@ -29,6 +29,7 @@ import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
+import { TCP_CLIENT } from '@/core/tcp-client'
 
 const server = {}
 
@@ -216,10 +217,10 @@ server.handleOnConnection = (socket) => {
     const provider = await addProvider(socket.id)
 
     // Check whether the TCP client is connected to the TCP server
-    if (global.tcpClient.isConnected) {
+    if (TCP_CLIENT.isConnected) {
       socket.emit('ready')
     } else {
-      global.tcpClient.ee.on('connected', () => {
+      TCP_CLIENT.ee.on('connected', () => {
         socket.emit('ready')
       })
     }

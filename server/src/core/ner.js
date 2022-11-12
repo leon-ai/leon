@@ -7,6 +7,7 @@ import fs from 'node:fs'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
+import { TCP_CLIENT } from '@/core/tcp-client'
 
 class Ner {
   constructor(ner) {
@@ -99,13 +100,10 @@ class Ner {
         resolve(spacyEntities)
       }
 
-      global.tcpClient.ee.removeAllListeners()
-      global.tcpClient.ee.on(
-        'spacy-entities-received',
-        spacyEntitiesReceivedHandler
-      )
+      TCP_CLIENT.ee.removeAllListeners()
+      TCP_CLIENT.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
 
-      global.tcpClient.emit('get-spacy-entities', utterance)
+      TCP_CLIENT.emit('get-spacy-entities', utterance)
     })
   }
 

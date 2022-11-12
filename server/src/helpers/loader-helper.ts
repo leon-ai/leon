@@ -18,7 +18,6 @@ export class LoaderHelper {
   private static spinner = new Spinner('\x1b[95m%s\x1b[0m\r').setSpinnerString(
     18
   )
-
   private static interval: NodeJS.Timer | undefined
 
   /**

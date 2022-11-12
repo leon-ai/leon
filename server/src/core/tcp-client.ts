@@ -1,7 +1,11 @@
 import Net from 'node:net'
 import { EventEmitter } from 'node:events'
 
-import { IS_PRODUCTION_ENV } from '@/constants'
+import {
+  IS_PRODUCTION_ENV,
+  TCP_SERVER_HOST,
+  TCP_SERVER_PORT
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { OSHelper, OSTypes } from '@/helpers/os-helper'
 
@@ -10,21 +14,29 @@ const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
 // Number of retries to connect to the TCP server
 const RETRIES_NB = IS_PRODUCTION_ENV ? 8 : 30
 
-export default class TCPClient {
+class TCPClient {
+  private static instance: TCPClient
+
   private readonly host: string
   private readonly port: number
+
   private reconnectCounter = 0
   private tcpSocket = new Net.Socket()
+
   public ee = new EventEmitter()
   public status = this.tcpSocket.readyState
   public isConnected = false
 
   constructor(host: string, port: number) {
+    if (!TCPClient.instance) {
+      LogHelper.title('TCP Client')
+      LogHelper.success('New instance')
+
+      TCPClient.instance = this
+    }
+
     this.host = host
     this.port = port
-
-    LogHelper.title('TCP Client')
-    LogHelper.success('New instance')
 
     this.tcpSocket.on('connect', () => {
       LogHelper.title('TCP Client')
@@ -81,7 +93,9 @@ export default class TCPClient {
       LogHelper.title('TCP Client')
       LogHelper.success('Disconnected from the TCP server')
     })
+  }
 
+  public init(): void {
     setTimeout(() => {
       this.connect()
     }, INTERVAL)
@@ -103,3 +117,8 @@ export default class TCPClient {
     })
   }
 }
+
+export const TCP_CLIENT = new TCPClient(
+  String(TCP_SERVER_HOST),
+  TCP_SERVER_PORT
+)
