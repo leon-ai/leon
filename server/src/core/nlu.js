@@ -12,11 +12,11 @@ import kill from 'tree-kill'
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
 import { HAS_LOGGER, IS_TESTING_ENV, TCP_SERVER_BIN_PATH } from '@/constants'
+import { TCP_CLIENT } from '@/core'
 import Ner from '@/core/ner'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { LangHelper } from '@/helpers/lang-helper'
-import { TCP_CLIENT } from '@/core/tcp-client'
 import Conversation from '@/core/conversation'
 
 const defaultNluResultObj = {

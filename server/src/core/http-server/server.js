@@ -18,6 +18,7 @@ import {
   STT_PROVIDER,
   TTS_PROVIDER
 } from '@/constants'
+import { TCP_CLIENT } from '@/core'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
 import Asr from '@/core/asr'
@@ -30,7 +31,6 @@ import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
-import { TCP_CLIENT } from '@/core/tcp-client'
 
 const server = {}
 

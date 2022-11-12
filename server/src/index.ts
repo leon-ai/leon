@@ -5,8 +5,8 @@ import {
   LANG as LEON_LANG,
   TCP_SERVER_BIN_PATH
 } from '@/constants'
+import { TCP_CLIENT } from '@/core'
 import { LangHelper } from '@/helpers/lang-helper'
-import { TCP_CLIENT } from '@/core/tcp-client'
 import server from '@/core/http-server/server'
 ;(async (): Promise<void> => {
   process.title = 'leon'

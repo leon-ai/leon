@@ -1,11 +1,7 @@
 import Net from 'node:net'
 import { EventEmitter } from 'node:events'
 
-import {
-  IS_PRODUCTION_ENV,
-  TCP_SERVER_HOST,
-  TCP_SERVER_PORT
-} from '@/constants'
+import { IS_PRODUCTION_ENV } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { OSHelper, OSTypes } from '@/helpers/os-helper'
 
@@ -14,7 +10,7 @@ const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
 // Number of retries to connect to the TCP server
 const RETRIES_NB = IS_PRODUCTION_ENV ? 8 : 30
 
-class TCPClient {
+export default class TCPClient {
   private static instance: TCPClient
 
   private reconnectCounter = 0
@@ -126,8 +122,3 @@ class TCPClient {
     })
   }
 }
-
-export const TCP_CLIENT = new TCPClient(
-  String(TCP_SERVER_HOST),
-  TCP_SERVER_PORT
-)

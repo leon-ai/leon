@@ -5,9 +5,9 @@
  */
 import fs from 'node:fs'
 
+import { TCP_CLIENT } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
-import { TCP_CLIENT } from '@/core/tcp-client'
 
 class Ner {
   constructor(ner) {
@@ -45,7 +45,7 @@ class Ner {
 
       /**
        * Browse action entities
-       * Dynamic injection of the action entities depending of the entity type
+       * Dynamic injection of the action entities depending on the entity type
        */
       for (let i = 0; i < actionEntities.length; i += 1) {
         const entity = actionEntities[i]
