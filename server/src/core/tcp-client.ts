@@ -44,6 +44,7 @@ class TCPClient {
         `Connected to the TCP server tcp://${this.host}:${this.port}`
       )
 
+      this.reconnectCounter = 0
       this.isConnected = true
       this.ee.emit('connected', null)
     })
@@ -87,11 +88,15 @@ class TCPClient {
       } else {
         LogHelper.error(`Failed to connect to the TCP server: ${err}`)
       }
+
+      this.isConnected = false
     })
 
     this.tcpSocket.on('end', () => {
       LogHelper.title('TCP Client')
       LogHelper.success('Disconnected from the TCP server')
+
+      this.isConnected = false
     })
   }
 
