@@ -81,7 +81,7 @@ class TCPClient {
           }
 
           setTimeout(() => {
-            this.connect()
+            this.connectSocket()
           }, INTERVAL * this.reconnectCounter)
         }
       } else {
@@ -95,9 +95,9 @@ class TCPClient {
     })
   }
 
-  public init(): void {
+  public connect(): void {
     setTimeout(() => {
-      this.connect()
+      this.connectSocket()
     }, INTERVAL)
   }
 
@@ -110,7 +110,7 @@ class TCPClient {
     this.tcpSocket.write(JSON.stringify(obj))
   }
 
-  public connect(): void {
+  private connectSocket(): void {
     this.tcpSocket.connect({
       host: this.host,
       port: this.port

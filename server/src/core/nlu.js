@@ -221,7 +221,7 @@ class Nlu {
         shell: true
       })
 
-      TCP_CLIENT.init()
+      TCP_CLIENT.connect()
       TCP_CLIENT.ee.removeListener('connected', connectedHandler)
       TCP_CLIENT.ee.on('connected', connectedHandler)
     })

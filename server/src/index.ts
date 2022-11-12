@@ -20,8 +20,8 @@ import server from '@/core/http-server/server'
     }
   )
 
-  // Start the TCP client
-  TCP_CLIENT.init()
+  // Connect the TCP client to the TCP server
+  TCP_CLIENT.connect()
 
   // Start the core server
   await server.init()
