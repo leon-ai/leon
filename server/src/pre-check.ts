@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { TypeCompiler } from '@sinclair/typebox/compiler'
+import { AggregateAjvError } from '@segment/ajv-human-errors'
 
+import { ajv } from '@/ajv'
 import {
   amazonVoiceConfiguration,
   googleCloudVoiceConfiguration,
@@ -30,6 +31,29 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { VOICE_CONFIG_PATH, GLOBAL_DATA_PATH } from '@/constants'
 import { getGlobalEntitiesPath, getGlobalResolversPath } from '@/utilities'
+
+interface ObjectUnknown {
+  [key: string]: unknown
+}
+
+const validateSchema = (
+  schema: ObjectUnknown,
+  contentToValidate: ObjectUnknown,
+  customErrorMesage: string
+): void => {
+  const validate = ajv.compile(schema)
+  const isValid = validate(contentToValidate)
+  if (!isValid) {
+    const errors = new AggregateAjvError(validate.errors ?? [])
+    const messages: string[] = []
+    for (const error of errors) {
+      messages.push(error.message)
+    }
+    LogHelper.error(customErrorMesage)
+    LogHelper.error(messages.join('\n'))
+    process.exit(1)
+  }
+}
 
 /**
  * Pre-checking
@@ -64,14 +88,11 @@ const GLOBAL_DATA_SCHEMAS = {
       await fs.promises.readFile(path.join(VOICE_CONFIG_PATH, file), 'utf8')
     )
     const [configName] = file.split('.') as [keyof typeof VOICE_CONFIG_SCHEMAS]
-    const result = TypeCompiler.Compile(VOICE_CONFIG_SCHEMAS[configName])
-    const errors = [...result.Errors(config)]
-
-    if (errors.length > 0) {
-      LogHelper.error(`The voice configuration schema "${file}" is not valid:`)
-      LogHelper.error(JSON.stringify(errors, null, 2))
-      process.exit(1)
-    }
+    validateSchema(
+      VOICE_CONFIG_SCHEMAS[configName],
+      config,
+      `The voice configuration schema "${file}" is not valid:`
+    )
   }
   LogHelper.success('Voice configuration schemas checked')
 
@@ -94,14 +115,11 @@ const GLOBAL_DATA_SCHEMAS = {
       const globalEntity: GlobalEntity = JSON.parse(
         await fs.promises.readFile(path.join(globalEntitiesPath, file), 'utf8')
       )
-      const result = TypeCompiler.Compile(globalEntitySchemaObject)
-      const errors = [...result.Errors(globalEntity)]
-
-      if (errors.length > 0) {
-        LogHelper.error(`The global entity schema "${file}" is not valid:`)
-        LogHelper.error(JSON.stringify(errors, null, 2))
-        process.exit(1)
-      }
+      validateSchema(
+        globalEntitySchemaObject,
+        globalEntity,
+        `The global entity schema "${file}" is not valid:`
+      )
     }
 
     /**
@@ -116,14 +134,11 @@ const GLOBAL_DATA_SCHEMAS = {
       const globalResolver: GlobalResolver = JSON.parse(
         await fs.promises.readFile(path.join(globalResolversPath, file), 'utf8')
       )
-      const result = TypeCompiler.Compile(globalResolverSchemaObject)
-      const errors = [...result.Errors(globalResolver)]
-
-      if (errors.length > 0) {
-        LogHelper.error(`The global resolver schema "${file}" is not valid:`)
-        LogHelper.error(JSON.stringify(errors, null, 2))
-        process.exit(1)
-      }
+      validateSchema(
+        globalResolverSchemaObject,
+        globalResolver,
+        `The global resolver schema "${file}" is not valid:`
+      )
     }
 
     /**
@@ -135,15 +150,11 @@ const GLOBAL_DATA_SCHEMAS = {
         'utf8'
       )
     )
-    const result = TypeCompiler.Compile(GLOBAL_DATA_SCHEMAS.answers)
-
-    const errors = [...result.Errors(answers)]
-
-    if (errors.length > 0) {
-      LogHelper.error(`The global answers schema "answers.json" is not valid:`)
-      LogHelper.error(JSON.stringify(errors, null, 2))
-      process.exit(1)
-    }
+    validateSchema(
+      GLOBAL_DATA_SCHEMAS.answers,
+      answers,
+      `The global answers schema "answers.json" is not valid:`
+    )
   }
   LogHelper.success('Global data schemas checked')
 
@@ -162,14 +173,11 @@ const GLOBAL_DATA_SCHEMAS = {
     const domainObject: Domain = JSON.parse(
       await fs.promises.readFile(pathToDomain, 'utf8')
     )
-    const domainResult = TypeCompiler.Compile(domainSchemaObject)
-    const domainErrors = [...domainResult.Errors(domainObject)]
-
-    if (domainErrors.length > 0) {
-      LogHelper.error(`The domain schema "${pathToDomain}" is not valid:`)
-      LogHelper.error(JSON.stringify(domainErrors, null, 2))
-      process.exit(1)
-    }
+    validateSchema(
+      domainSchemaObject,
+      domainObject,
+      `The domain schema "${pathToDomain}" is not valid:`
+    )
 
     const skillKeys = Object.keys(currentDomain.skills)
 
@@ -184,14 +192,11 @@ const GLOBAL_DATA_SCHEMAS = {
         const skillObject: Skill = JSON.parse(
           await fs.promises.readFile(pathToSkill, 'utf8')
         )
-        const skillResult = TypeCompiler.Compile(skillSchemaObject)
-        const skillErrors = [...skillResult.Errors(skillObject)]
-
-        if (skillErrors.length > 0) {
-          LogHelper.error(`The skill schema "${pathToSkill}" is not valid:`)
-          LogHelper.error(JSON.stringify(skillErrors, null, 2))
-          process.exit(1)
-        }
+        validateSchema(
+          skillSchemaObject,
+          skillObject,
+          `The skill schema "${pathToSkill}" is not valid:`
+        )
 
         /**
          * Skills config checking
@@ -206,16 +211,11 @@ const GLOBAL_DATA_SCHEMAS = {
           const skillConfig: SkillConfig = JSON.parse(
             await fs.promises.readFile(skillConfigPath, 'utf8')
           )
-          const result = TypeCompiler.Compile(skillConfigSchemaObject)
-          const errors = [...result.Errors(skillConfig)]
-
-          if (errors.length > 0) {
-            LogHelper.error(
-              `The skill config schema "${skillConfigPath}" is not valid:`
-            )
-            LogHelper.error(JSON.stringify(errors, null, 2))
-            process.exit(1)
-          }
+          validateSchema(
+            skillConfigSchemaObject,
+            skillConfig,
+            `The skill config schema "${skillConfigPath}" is not valid:`
+          )
         }
       }
     }
