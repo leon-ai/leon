@@ -81,7 +81,7 @@ const GLOBAL_DATA_SCHEMAS = {
 
   const voiceConfigFiles = (
     await fs.promises.readdir(VOICE_CONFIG_PATH)
-  ).filter((file) => file.endsWith('.json') && !file.includes('.sample.'))
+  ).filter((file) => file.endsWith('.json'))
 
   for (const file of voiceConfigFiles) {
     const config: VoiceConfiguration = JSON.parse(
