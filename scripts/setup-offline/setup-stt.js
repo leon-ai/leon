@@ -6,7 +6,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { OSHelper } from '@/helpers/os-helper'
 
 /**
- * Setup offline speech-to-text
+ * Set up offline speech-to-text
  */
 export default () =>
   new Promise(async (resolve, reject) => {

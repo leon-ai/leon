@@ -4,7 +4,7 @@ import path from 'node:path'
 import { LogHelper } from '@/helpers/log-helper'
 
 /**
- * Setup Leon's core configuration
+ * Set up Leon's core configuration
  */
 export default () =>
   new Promise((resolve) => {

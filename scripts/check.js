@@ -453,7 +453,7 @@ dotenv.config()
       if (!fs.existsSync(flitePath)) {
         report.can_offline_tts.v = false
         LogHelper.warning(
-          `Cannot find ${flitePath}. You can setup the offline TTS by running: "npm run setup:offline-tts"\n`
+          `Cannot find ${flitePath}. You can set up the offline TTS by running: "npm run setup:offline-tts"\n`
         )
       } else {
         LogHelper.success(`Found Flite at ${flitePath}\n`)

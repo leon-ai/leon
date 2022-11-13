@@ -28,7 +28,7 @@ parser.init = (args) => {
 
   if (!fs.existsSync(args.model)) {
     LogHelper.error(
-      `Cannot find ${args.model}. You can setup the offline STT by running: "npm run setup:offline-stt"`
+      `Cannot find ${args.model}. You can set up the offline STT by running: "npm run setup:offline-stt"`
     )
 
     return false

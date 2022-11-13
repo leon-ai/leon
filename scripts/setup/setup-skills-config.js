@@ -7,7 +7,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 /**
- * Setup skills configuration
+ * Set up skills configuration
  */
 export default () =>
   new Promise(async (resolve, reject) => {

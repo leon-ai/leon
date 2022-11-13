@@ -35,7 +35,7 @@ synthesizer.init = (lang) => {
   /* istanbul ignore if */
   if (!fs.existsSync(flitePath)) {
     LogHelper.error(
-      `Cannot find ${flitePath} You can setup the offline TTS by running: "npm run setup:offline-tts"`
+      `Cannot find ${flitePath} You can set up the offline TTS by running: "npm run setup:offline-tts"`
     )
     return false
   }

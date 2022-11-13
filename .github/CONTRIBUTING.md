@@ -51,7 +51,7 @@ Choose the setup method you want to go for.
 
 ### Single-Click
 
-Gitpod will automatically setup an environment and run an instance for you.
+Gitpod will automatically set up an environment and run an instance for you.
 
 [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
 
@@ -149,7 +149,7 @@ By sponsoring the project you make the project sustainable and faster to develop
 
 The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process and so on...
 
-## Contributing to the Python Bridge or TCP Server
+## Contributing to the Python Bridge or TCP HttpServer
 
 Leon makes use of two binaries, the Python bridge and the TCP server. These binaries are compiled from Python sources.
 
