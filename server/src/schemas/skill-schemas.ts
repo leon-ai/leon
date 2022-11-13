@@ -126,6 +126,22 @@ export const skillConfigSchemaObject = Type.Strict(
                 { additionalProperties: false }
               )
             ),
+            http_api: Type.Optional(
+              Type.Object(
+                {
+                  entities: Type.Array(
+                    Type.Object(
+                      {
+                        entity: Type.String(),
+                        resolution: Type.Array(Type.String())
+                      },
+                      { additionalProperties: false }
+                    )
+                  )
+                },
+                { additionalProperties: false }
+              )
+            ),
             utterance_samples: Type.Optional(Type.Array(Type.String())),
             answers: Type.Optional(Type.Array(Type.String())),
             unknown_answers: Type.Optional(Type.Array(Type.String())),
