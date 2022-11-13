@@ -44,13 +44,11 @@ const validateSchema = (
   const validate = ajv.compile(schema)
   const isValid = validate(contentToValidate)
   if (!isValid) {
-    const errors = new AggregateAjvError(validate.errors ?? [])
-    const messages: string[] = []
-    for (const error of errors) {
-      messages.push(error.message)
-    }
     LogHelper.error(customErrorMesage)
-    LogHelper.error(messages.join('\n'))
+    const errors = new AggregateAjvError(validate.errors ?? [])
+    for (const error of errors) {
+      LogHelper.error(error.message)
+    }
     process.exit(1)
   }
 }
@@ -84,14 +82,15 @@ const GLOBAL_DATA_SCHEMAS = {
   ).filter((file) => file.endsWith('.json'))
 
   for (const file of voiceConfigFiles) {
+    const voiceConfigPath = path.join(VOICE_CONFIG_PATH, file)
     const config: VoiceConfiguration = JSON.parse(
-      await fs.promises.readFile(path.join(VOICE_CONFIG_PATH, file), 'utf8')
+      await fs.promises.readFile(voiceConfigPath, 'utf8')
     )
     const [configName] = file.split('.') as [keyof typeof VOICE_CONFIG_SCHEMAS]
     validateSchema(
       VOICE_CONFIG_SCHEMAS[configName],
       config,
-      `The voice configuration schema "${file}" is not valid:`
+      `The voice configuration schema "${voiceConfigPath}" is not valid:`
     )
   }
   LogHelper.success('Voice configuration schemas checked')
@@ -112,13 +111,14 @@ const GLOBAL_DATA_SCHEMAS = {
     ).filter((file) => file.endsWith('.json'))
 
     for (const file of globalEntityFiles) {
+      const globalEntityPath = path.join(globalEntitiesPath, file)
       const globalEntity: GlobalEntity = JSON.parse(
-        await fs.promises.readFile(path.join(globalEntitiesPath, file), 'utf8')
+        await fs.promises.readFile(globalEntityPath, 'utf8')
       )
       validateSchema(
         globalEntitySchemaObject,
         globalEntity,
-        `The global entity schema "${file}" is not valid:`
+        `The global entity schema "${globalEntityPath}" is not valid:`
       )
     }
 
@@ -131,29 +131,31 @@ const GLOBAL_DATA_SCHEMAS = {
     ).filter((file) => file.endsWith('.json'))
 
     for (const file of globalResolverFiles) {
+      const globalResolverPath = path.join(globalResolversPath, file)
       const globalResolver: GlobalResolver = JSON.parse(
-        await fs.promises.readFile(path.join(globalResolversPath, file), 'utf8')
+        await fs.promises.readFile(globalResolverPath, 'utf8')
       )
       validateSchema(
         globalResolverSchemaObject,
         globalResolver,
-        `The global resolver schema "${file}" is not valid:`
+        `The global resolver schema "${globalResolverPath}" is not valid:`
       )
     }
 
     /**
      * Global answers checking
      */
+    const globalAnswersPath = path.join(GLOBAL_DATA_PATH, lang, 'answers.json')
     const answers: GlobalAnswers = JSON.parse(
       await fs.promises.readFile(
-        path.join(GLOBAL_DATA_PATH, lang, 'answers.json'),
+        globalAnswersPath,
         'utf8'
       )
     )
     validateSchema(
       GLOBAL_DATA_SCHEMAS.answers,
       answers,
-      `The global answers schema "answers.json" is not valid:`
+      `The global answers schema "${globalAnswersPath}" is not valid:`
     )
   }
   LogHelper.success('Global data schemas checked')
