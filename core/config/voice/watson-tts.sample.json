@@ -1,4 +1,4 @@
 {
   "apikey": "",
-  "url": "https://api.eu.apiconnect.ibmcloud.com/ibmcloud/ibmcloud-dev/sb/api/RESTs"
+  "url": "https://stream.watsonplatform.net/text-to-speech/api"
 }
