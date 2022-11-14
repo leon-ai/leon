@@ -162,7 +162,8 @@ The TCP server is used to communicate between the core and third-party nodes, su
 To contribute to these parts, you need to set up a Python environment running with a specific Python version and a specific Pipenv version.
 
 It is recommended to use Pyenv to manage your Python versions.
-If you are on Linux, you can run the following to install Pyenv, otherwise, please refer to the [Pyenv documentation to install it](https://github.com/pyenv/pyenv#installation):
+
+If you are on GNU/Linux Ubuntu, you can run the following to install Pyenv, otherwise, please refer to the [Pyenv documentation to install it](https://github.com/pyenv/pyenv#installation):
 
 ```bash
 # Update registry
