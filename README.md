@@ -186,13 +186,6 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
         <sub><sup>100 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
-        <a href="https://github.com/phareal">
-          <img src="https://github.com/phareal.png?size=128" />
-          phareal
-        </a><br>
-        <sub><sup>30 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
         <a href="https://github.com/KeithIMyers">
           <img src="https://github.com/KeithIMyers.png?size=128" />
           Keith Myers
