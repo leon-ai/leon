@@ -147,10 +147,7 @@ const GLOBAL_DATA_SCHEMAS = {
      */
     const globalAnswersPath = path.join(GLOBAL_DATA_PATH, lang, 'answers.json')
     const answers: GlobalAnswers = JSON.parse(
-      await fs.promises.readFile(
-        globalAnswersPath,
-        'utf8'
-      )
+      await fs.promises.readFile(globalAnswersPath, 'utf8')
     )
     validateSchema(
       GLOBAL_DATA_SCHEMAS.answers,
