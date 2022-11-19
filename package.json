@@ -116,7 +116,7 @@
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-unicorn": "43.0.2",
     "git-changelog": "^2.0.0",
-    "husky": "^7.0.0",
+    "husky": "^8.0.2",
     "inquirer": "^8.1.0",
     "jest": "^27.4.7",
     "jest-canvas-mock": "^2.3.1",
