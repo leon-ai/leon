@@ -16,8 +16,8 @@ export default class SocketServer {
     }
   }
 
-  public init(): void {
-    /*const { httpServer, host } = HTTP_SERVER
+  /*public init(): void {
+    const { httpServer, host } = HTTP_SERVER
     const io = IS_DEVELOPMENT_ENV
       ? new SocketIOServer(httpServer, {
           cors: { origin: `${this.host}:3000` }
@@ -27,6 +27,6 @@ export default class SocketServer {
     // TODO: instantiate new socket server
     io.on('connection', (socket) => {
 
-    })*/
-  }
+    })
+  }*/
 }
