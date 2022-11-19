@@ -51,6 +51,7 @@ export default class HTTPServer {
     const sLogger = !HAS_LOGGER ? 'disabled' : 'enabled'
     LogHelper.info(`Collaborative logger ${sLogger}`)
 
+    // TODO
     // await addProvider('1')
 
     await this.bootstrap()
