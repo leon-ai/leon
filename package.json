@@ -85,7 +85,7 @@
     "cross-env": "^7.0.3",
     "dayjs": "^1.11.5",
     "dotenv": "^10.0.0",
-    "execa": "^5.0.0",
+    "execa": "^6.1.0",
     "extract-zip": "2.0.1",
     "fastify": "^4.5.3",
     "fluent-ffmpeg": "^2.1.2",
