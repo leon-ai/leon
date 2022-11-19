@@ -14,6 +14,7 @@ core/config/**/*.json
 bin/coqui/*
 bin/flite/*
 
+package-lock.json
 *.pyc
 .DS_Store
 *.sublime-workspace
