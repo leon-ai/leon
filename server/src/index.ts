@@ -5,7 +5,7 @@ import {
   LANG as LEON_LANG,
   TCP_SERVER_BIN_PATH
 } from '@/constants'
-import { TCP_CLIENT, HTTP_SERVER } from '@/core'
+import { TCP_CLIENT, HTTP_SERVER, SOCKET_SERVER } from '@/core'
 import { LangHelper } from '@/helpers/lang-helper'
 ;(async (): Promise<void> => {
   process.title = 'leon'
@@ -35,5 +35,5 @@ import { LangHelper } from '@/helpers/lang-helper'
 
   // TODO
   // Start the socket server
-  // SOCKET_SERVER.init(httpServer)
+  SOCKET_SERVER.init()
 })()

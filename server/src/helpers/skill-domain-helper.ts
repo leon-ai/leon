@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { ShortLanguageCode } from '@/helpers/lang-helper'
+import type { ShortLanguageCode } from '@/types'
 import type { GlobalEntity } from '@/schemas/global-data-schemas'
 import type {
   Domain,

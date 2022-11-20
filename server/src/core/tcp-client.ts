@@ -2,8 +2,9 @@ import Net from 'node:net'
 import { EventEmitter } from 'node:events'
 
 import { IS_PRODUCTION_ENV } from '@/constants'
+import { OSTypes } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
-import { OSHelper, OSTypes } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 // Time interval between each try (in ms)
 const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
@@ -63,7 +64,7 @@ export default class TCPClient {
       if (err.code === 'ECONNREFUSED') {
         this.reconnectCounter += 1
 
-        const { type: osType } = OSHelper.getInformation()
+        const { type: osType } = SystemHelper.getInformation()
 
         if (this.reconnectCounter >= RETRIES_NB) {
           LogHelper.error('Failed to connect to the TCP server')

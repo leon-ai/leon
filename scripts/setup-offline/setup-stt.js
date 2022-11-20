@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { command } from 'execa'
 
 import { LogHelper } from '@/helpers/log-helper'
-import { OSHelper } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 /**
  * Set up offline speech-to-text
@@ -17,7 +17,7 @@ export default () =>
     // check this repo for updates: https://github.com/coqui-ai/STT-models/tree/main/english/coqui
     const coquiModelVersion = '1.0.0'
     let downloader = 'wget'
-    if (OSHelper.getInformation().type === 'macos') {
+    if (SystemHelper.getInformation().type === 'macos') {
       downloader = 'curl -L -O'
     }
 

@@ -13,7 +13,7 @@ import getos from 'getos'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
-import { OSHelper } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 import {
   PYTHON_BRIDGE_BIN_PATH,
   TCP_SERVER_BIN_PATH,
@@ -142,7 +142,7 @@ dotenv.config()
       osName: osName(),
       distro: null
     }
-    const totalRAMInGB = OSHelper.getTotalRAM()
+    const totalRAMInGB = SystemHelper.getTotalRAM()
 
     if (totalRAMInGB < minimumRequiredRAM) {
       report.can_run.v = false

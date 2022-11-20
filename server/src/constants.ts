@@ -3,8 +3,8 @@ import fs from 'node:fs'
 
 import dotenv from 'dotenv'
 
-import type { LongLanguageCode } from '@/helpers/lang-helper'
-import { OSHelper } from '@/helpers/os-helper'
+import type { LongLanguageCode } from '@/types'
+import { SystemHelper } from '@/helpers/system-helper'
 
 dotenv.config()
 
@@ -17,7 +17,7 @@ export const GITHUB_URL = 'https://github.com/leon-ai/leon'
 /**
  * Binaries / distribution
  */
-export const BINARIES_FOLDER_NAME = OSHelper.getBinariesFolderName()
+export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
 export const PYTHON_BRIDGE_DIST_PATH = path.join('bridges', 'python', 'dist')
 export const TCP_SERVER_DIST_PATH = path.join('tcp_server', 'dist')
 

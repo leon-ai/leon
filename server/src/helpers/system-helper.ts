@@ -1,15 +1,7 @@
 import os from 'node:os'
 
-export enum OSTypes {
-  Windows = 'windows',
-  MacOS = 'macos',
-  Linux = 'linux',
-  Unknown = 'unknown'
-}
-export enum CPUArchitectures {
-  X64 = 'x64',
-  ARM64 = 'arm64'
-}
+import { OSTypes, CPUArchitectures } from '@/types'
+
 enum OSNames {
   Windows = 'Windows',
   MacOS = 'macOS',
@@ -39,7 +31,7 @@ type PartialInformation = {
   }
 }
 
-export class OSHelper {
+export class SystemHelper {
   /**
    * Get information about your OS
    * N.B. Node.js returns info based on the compiled binary we are running on. Not based our machine hardware

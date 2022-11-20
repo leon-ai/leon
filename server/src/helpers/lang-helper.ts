@@ -1,15 +1,5 @@
 import { langs } from '@@/core/langs.json'
-
-/**
- * ISO 639-1 (Language codes) - ISO 3166-1 (Country Codes)
- * @see https://www.iso.org/iso-639-language-codes.html
- * @see https://www.iso.org/iso-3166-country-codes.html
- */
-
-type Languages = typeof langs
-export type LongLanguageCode = keyof Languages
-type Language = Languages[LongLanguageCode]
-export type ShortLanguageCode = Language['short']
+import type { LongLanguageCode, ShortLanguageCode } from '@/types'
 
 export class LangHelper {
   /**

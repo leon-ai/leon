@@ -1,7 +1,7 @@
 import { command } from 'execa'
 
 import { LogHelper } from '@/helpers/log-helper'
-import { OSHelper } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 /**
  * Setup offline hotword detection
@@ -10,7 +10,7 @@ export default () =>
   new Promise(async (resolve, reject) => {
     LogHelper.info('Setting up offline hotword detection...')
 
-    const info = OSHelper.getInformation()
+    const info = SystemHelper.getInformation()
     let pkgm = 'apt-get install'
     if (info.type === 'macos') {
       pkgm = 'brew'

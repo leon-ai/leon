@@ -11,9 +11,10 @@ import {
   PYTHON_BRIDGE_SRC_PATH,
   TCP_SERVER_SRC_PATH
 } from '@/constants'
+import { CPUArchitectures, OSTypes } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
-import { CPUArchitectures, OSHelper, OSTypes } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 /**
  * Set up development environment according to the given setup target
@@ -128,7 +129,7 @@ SPACY_MODELS.set('fr', {
 
   const pipfileMtime = fs.statSync(pipfilePath).mtime
   const hasDotVenv = fs.existsSync(dotVenvPath)
-  const { type: osType, cpuArchitecture } = OSHelper.getInformation()
+  const { type: osType, cpuArchitecture } = SystemHelper.getInformation()
   const installPythonPackages = async () => {
     LogHelper.info(`Installing Python packages from ${pipfilePath}.lock...`)
 
