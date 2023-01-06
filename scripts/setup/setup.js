@@ -3,6 +3,7 @@ import { LogHelper } from '@/helpers/log-helper'
 
 import train from '../train/train'
 import generateHttpApiKey from '../generate/generate-http-api-key'
+import generateJsonSchemas from '../generate/generate-json-schemas'
 
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
@@ -22,6 +23,7 @@ import setupPythonBinaries from './setup-python-binaries'
     LoaderHelper.stop()
     await setupPythonBinaries()
     await generateHttpApiKey()
+    await generateJsonSchemas()
     LoaderHelper.start()
     await train()
 
