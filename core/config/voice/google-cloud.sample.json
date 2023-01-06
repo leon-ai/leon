@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/voice-config-schemas/google-cloud.json",
   "type": "service_account",
   "project_id": "",
   "private_key_id": "",

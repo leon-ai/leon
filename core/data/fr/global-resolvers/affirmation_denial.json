@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/global-data/global-resolver.json",
   "name": "affirmation_denial",
   "intents": {
     "affirmation": {

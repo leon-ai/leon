@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/skill-schemas/skill.json",
   "name": "GitHub Trends",
   "bridge": "python",
   "version": "1.0.0",

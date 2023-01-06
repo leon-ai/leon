@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/skill-schemas/skill.json",
   "name": "Product Hunt Trends",
   "bridge": "python",
   "version": "1.0.0",
