@@ -37,14 +37,24 @@ interface ObjectUnknown {
 }
 
 const validateSchema = (
+  schemaName: string,
   schema: ObjectUnknown,
   contentToValidate: ObjectUnknown,
   customErrorMesage: string
 ): void => {
+  const schemaFile = `${schemaName}.json`
   const validate = ajv.compile(schema)
-  const isValid = validate(contentToValidate)
+  const isValidSchemaKey =
+    typeof contentToValidate['$schema'] === 'string' &&
+    contentToValidate['$schema'].endsWith(schemaFile)
+  const isValid = validate(contentToValidate) && isValidSchemaKey
   if (!isValid) {
     LogHelper.error(customErrorMesage)
+    if (!isValidSchemaKey) {
+      LogHelper.error(
+        `The schema key "$schema" is not valid. Expected "${schemaName}", but got "${contentToValidate['$schema']}".`
+      )
+    }
     const errors = new AggregateAjvError(validate.errors ?? [])
     for (const error of errors) {
       LogHelper.error(error.message)
@@ -88,6 +98,7 @@ const GLOBAL_DATA_SCHEMAS = {
     )
     const [configName] = file.split('.') as [keyof typeof VOICE_CONFIG_SCHEMAS]
     validateSchema(
+      `voice-config-schemas/${configName}`,
       VOICE_CONFIG_SCHEMAS[configName],
       config,
       `The voice configuration schema "${voiceConfigPath}" is not valid:`
@@ -116,6 +127,7 @@ const GLOBAL_DATA_SCHEMAS = {
         await fs.promises.readFile(globalEntityPath, 'utf8')
       )
       validateSchema(
+        'global-data/global-entity',
         globalEntitySchemaObject,
         globalEntity,
         `The global entity schema "${globalEntityPath}" is not valid:`
@@ -136,6 +148,7 @@ const GLOBAL_DATA_SCHEMAS = {
         await fs.promises.readFile(globalResolverPath, 'utf8')
       )
       validateSchema(
+        'global-data/global-resolver',
         globalResolverSchemaObject,
         globalResolver,
         `The global resolver schema "${globalResolverPath}" is not valid:`
@@ -147,12 +160,10 @@ const GLOBAL_DATA_SCHEMAS = {
      */
     const globalAnswersPath = path.join(GLOBAL_DATA_PATH, lang, 'answers.json')
     const answers: GlobalAnswers = JSON.parse(
-      await fs.promises.readFile(
-        globalAnswersPath,
-        'utf8'
-      )
+      await fs.promises.readFile(globalAnswersPath, 'utf8')
     )
     validateSchema(
+      'global-data/global-answers',
       GLOBAL_DATA_SCHEMAS.answers,
       answers,
       `The global answers schema "${globalAnswersPath}" is not valid:`
@@ -176,6 +187,7 @@ const GLOBAL_DATA_SCHEMAS = {
       await fs.promises.readFile(pathToDomain, 'utf8')
     )
     validateSchema(
+      'skill-schemas/domain',
       domainSchemaObject,
       domainObject,
       `The domain schema "${pathToDomain}" is not valid:`
@@ -195,6 +207,7 @@ const GLOBAL_DATA_SCHEMAS = {
           await fs.promises.readFile(pathToSkill, 'utf8')
         )
         validateSchema(
+          'skill-schemas/skill',
           skillSchemaObject,
           skillObject,
           `The skill schema "${pathToSkill}" is not valid:`
@@ -214,6 +227,7 @@ const GLOBAL_DATA_SCHEMAS = {
             await fs.promises.readFile(skillConfigPath, 'utf8')
           )
           validateSchema(
+            'skill-schemas/skill-config',
             skillConfigSchemaObject,
             skillConfig,
             `The skill config schema "${skillConfigPath}" is not valid:`
