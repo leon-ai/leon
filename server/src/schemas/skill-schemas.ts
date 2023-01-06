@@ -79,8 +79,7 @@ export const domainSchemaObject = Type.Strict(
   Type.Object(
     {
       name: Type.String({ minLength: 1 })
-    },
-    { additionalProperties: false }
+    }
   )
 )
 export const skillSchemaObject = Type.Strict(
@@ -102,8 +101,7 @@ export const skillSchemaObject = Type.Strict(
         },
         { additionalProperties: false }
       )
-    },
-    { additionalProperties: false }
+    }
   )
 )
 export const skillConfigSchemaObject = Type.Strict(
@@ -186,8 +184,7 @@ export const skillConfigSchemaObject = Type.Strict(
           )
         )
       )
-    },
-    { additionalProperties: false }
+    }
   )
 )
 

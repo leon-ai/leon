@@ -16,8 +16,7 @@ export const globalEntitySchemaObject = Type.Strict(
           { additionalProperties: false }
         )
       )
-    },
-    { additionalProperties: false }
+    }
   )
 )
 export const globalResolverSchemaObject = Type.Strict(
@@ -34,8 +33,7 @@ export const globalResolverSchemaObject = Type.Strict(
           { additionalProperties: false }
         )
       )
-    },
-    { additionalProperties: false }
+    }
   )
 )
 export const globalAnswersSchemaObject = Type.Strict(
@@ -48,8 +46,7 @@ export const globalAnswersSchemaObject = Type.Strict(
           Type.Array(Type.String())
         ])
       )
-    },
-    { additionalProperties: false }
+    }
   )
 )
 
