@@ -120,7 +120,7 @@
     "inquirer": "^8.1.0",
     "jest": "^27.4.7",
     "jest-canvas-mock": "^2.3.1",
-    "jest-extended": "^2.0.0",
+    "jest-extended": "^3.2.2",
     "json": "^10.0.0",
     "lint-staged": "^13.0.3",
     "nodemon": "^2.0.19",
