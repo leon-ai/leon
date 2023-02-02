@@ -200,6 +200,13 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
         <sub><sup>10 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
+        <a href="https://github.com/herbundkraut">
+          <img src="https://github.com/herbundkraut.png?size=128" />
+          herbundkraut
+        </a><br>
+        <sub><sup>10 USD / month</sup></sub>
+      </td>
+      <td align="center" valign="middle" width="128">
       	<a href="http://sponsor.getleon.ai/">
           You?
         </a>
