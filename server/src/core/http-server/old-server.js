@@ -21,7 +21,7 @@ import {
 import { TCP_CLIENT } from '@/core'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
-import Asr from '@/core/asr'
+import Asr from '@/core/asr/asr'
 import Stt from '@/stt/stt'
 import Tts from '@/tts/tts'
 import corsMidd from '@/core/http-server/plugins/cors'

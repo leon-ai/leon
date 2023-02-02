@@ -35,7 +35,6 @@ class Tts {
       return false
     }
 
-    /* istanbul ignore next */
     if (
       this.provider === 'google-cloud-tts' &&
       typeof process.env.GOOGLE_APPLICATION_CREDENTIALS === 'undefined'
@@ -59,6 +58,7 @@ class Tts {
     this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`)
     this.synthesizer.default.init(LangHelper.getLongCode(this.lang))
 
+    // TODO: do not use event emitter; and use async/await
     this.onSaved()
 
     LogHelper.title('TTS')
@@ -75,9 +75,8 @@ class Tts {
    */
   forward(speech) {
     this.synthesizer.default.save(speech.text, this.em, (file, duration) => {
-      /* istanbul ignore next */
       const bitmap = fs.readFileSync(file)
-      /* istanbul ignore next */
+
       this.socket.emit(
         'audio-forwarded',
         {

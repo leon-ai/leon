@@ -266,7 +266,6 @@ class Brain {
                   output += data
                 }
               } else {
-                /* istanbul ignore next */
                 reject({
                   type: 'warning',
                   obj: new Error(
@@ -280,7 +279,6 @@ class Brain {
               LogHelper.title('Brain')
               LogHelper.debug(`process.stdout: ${String(data)}`)
 
-              /* istanbul ignore next */
               reject({
                 type: 'error',
                 obj: new Error(
@@ -338,7 +336,6 @@ class Brain {
                 }
                 speeches.push(speech)
 
-                /* istanbul ignore next */
                 // Synchronize the downloaded content if enabled
                 if (
                   this.finalOutput.type === 'end' &&

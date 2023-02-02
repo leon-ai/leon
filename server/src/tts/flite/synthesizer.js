@@ -1,10 +1,12 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import path from 'node:path'
 
 import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 
+import { TMP_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
@@ -25,14 +27,12 @@ synthesizer.conf = {
 synthesizer.init = (lang) => {
   const flitePath = 'bin/flite/flite'
 
-  /* istanbul ignore if */
   if (lang !== 'en-US') {
     LogHelper.warning(
       'The Flite synthesizer only accepts the "en-US" language for the moment'
     )
   }
 
-  /* istanbul ignore if */
   if (!fs.existsSync(flitePath)) {
     LogHelper.error(
       `Cannot find ${flitePath} You can set up the offline TTS by running: "npm run setup:offline-tts"`
@@ -49,9 +49,10 @@ synthesizer.init = (lang) => {
  * Save string to audio file
  */
 synthesizer.save = (speech, em, cb) => {
-  const file = `${__dirname}/../../tmp/${Date.now()}-${StringHelper.random(
-    4
-  )}.wav`
+  const file = path.join(
+    TMP_PATH,
+    `${Date.now()}-${StringHelper.random(4)}.wav`
+  )
   const process = spawn('bin/flite/flite', [
     speech,
     '--setf',
@@ -66,7 +67,6 @@ synthesizer.save = (speech, em, cb) => {
     file
   ])
 
-  /* istanbul ignore next */
   // Handle error
   process.stderr.on('data', (data) => {
     LogHelper.error(data.toString())
@@ -79,10 +79,9 @@ synthesizer.save = (speech, em, cb) => {
 
     // Get file duration thanks to ffprobe
     ffmpeg.input(file).ffprobe((err, data) => {
-      /* istanbul ignore if */
       if (err) LogHelper.error(err)
       else {
-        const duration = data.streams[0].duration * 1000
+        const duration = data.streams[0].duration * 1_000
         em.emit('saved', duration)
         cb(file, duration)
       }

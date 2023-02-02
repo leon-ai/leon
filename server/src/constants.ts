@@ -99,5 +99,11 @@ export const TCP_SERVER_PORT = Number(process.env['LEON_PY_TCP_SERVER_PORT'])
 /**
  * Paths
  */
+export const BIN_PATH = path.join('bin')
 export const GLOBAL_DATA_PATH = path.join('core', 'data')
 export const VOICE_CONFIG_PATH = path.join('core', 'config', 'voice')
+export const SERVER_PATH = path.join(
+  'server',
+  IS_PRODUCTION_ENV ? 'dist' : 'src'
+)
+export const TMP_PATH = path.join(SERVER_PATH, 'tmp')

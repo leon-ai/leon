@@ -60,7 +60,6 @@ class Synchronizer {
    * Google Drive synchronization method
    */
   googleDrive() {
-    /* istanbul ignore next */
     return new Promise((resolve, reject) => {
       const driveFolderName = `leon-${this.classification.domain}-${this.classification.skill}`
       const folderMimeType = 'application/vnd.google-apps.folder'

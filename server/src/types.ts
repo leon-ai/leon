@@ -2,7 +2,7 @@ import type { langs } from '@@/core/langs.json'
 
 /**
  * Contain common/shared types that are universal across the project
- * and cannot be placed in the respective core chunks
+ * and cannot be placed in the respective core nodes
  */
 
 /**

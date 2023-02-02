@@ -233,7 +233,6 @@ class Nlu {
    * Collaborative logger request
    */
   sendLog(utterance) {
-    /* istanbul ignore next */
     if (HAS_LOGGER && !IS_TESTING_ENV) {
       axios.request({
         method: 'POST',
@@ -402,7 +401,7 @@ class Nlu {
       }
 
       return processedData
-    } catch (e) /* istanbul ignore next */ {
+    } catch (e) {
       return null
     }
   }
@@ -595,7 +594,7 @@ class Nlu {
           configDataFilePath,
           this.nluResultObj
         )
-      } catch (e) /* istanbul ignore next */ {
+      } catch (e) {
         if (LogHelper[e.type]) {
           LogHelper[e.type](e.obj.message)
         }
@@ -672,7 +671,7 @@ class Nlu {
           ...processedData,
           nluProcessingTime: processingTime - processedData?.executionTime // In ms, NLU processing time only
         })
-      } catch (e) /* istanbul ignore next */ {
+      } catch (e) {
         LogHelper[e.type](e.obj.message)
 
         if (!opts.mute) {

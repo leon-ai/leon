@@ -1,4 +1,5 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-npx lint-staged
+# TODO: add lint-staged back in when JavaScript to TypeScript is complete
+# npx lint-staged

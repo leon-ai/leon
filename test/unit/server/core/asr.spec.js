@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-import Asr from '@/core/asr'
+import Asr from '@/core/asr/asr'
 import Stt from '@/stt/stt'
 
 describe('ASR', () => {

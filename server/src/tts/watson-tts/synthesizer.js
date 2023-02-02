@@ -7,6 +7,7 @@ import Ffmpeg from 'fluent-ffmpeg'
 import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
 import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 
+import { TMP_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
@@ -56,9 +57,10 @@ synthesizer.init = (lang) => {
  * Save string to audio file
  */
 synthesizer.save = (speech, em, cb) => {
-  const file = `${__dirname}/../../tmp/${Date.now()}-${StringHelper.random(
-    4
-  )}.wav`
+  const file = path.join(
+    TMP_PATH,
+    `${Date.now()}-${StringHelper.random(4)}.wav`
+  )
 
   synthesizer.conf.text = speech
 
@@ -78,7 +80,7 @@ synthesizer.save = (speech, em, cb) => {
         ffmpeg.input(file).ffprobe((err, data) => {
           if (err) LogHelper.error(err)
           else {
-            const duration = data.streams[0].duration * 1000
+            const duration = data.streams[0].duration * 1_000
             em.emit('saved', duration)
             cb(file, duration)
           }

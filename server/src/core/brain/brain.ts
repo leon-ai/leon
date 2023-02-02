@@ -1,16 +1,14 @@
 // TODO: remove ignore
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
 
-import type { Socket } from 'node:net'
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 
+import { langs } from '@@/core/langs.json'
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswers } from '@/schemas/global-data-schemas'
-import { langs } from '@@/core/langs.json'
-import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH } from '@/constants'
+import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
+import { SOCKET_SERVER } from '@/core'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
@@ -19,7 +17,8 @@ import Synchronizer from '@/core/synchronizer'
 
 // TODO: split class
 
-class Brain {
+export default class Brain {
+  private static instance: Brain
   private _lang: ShortLanguageCode = 'en'
   private broca: GlobalAnswers = JSON.parse(
     fs.readFileSync(
@@ -33,15 +32,16 @@ class Brain {
   // TODO: type
   private finalOutput: unknown
 
-  // TODO: not readonly?
-  public readonly socket: Socket
-
   constructor() {
     this._stt = {}
     this._tts = {}
 
-    LogHelper.title('Brain')
-    LogHelper.success('New instance')
+    if (!Brain.instance) {
+      LogHelper.title('Brain')
+      LogHelper.success('New instance')
+
+      Brain.instance = this
+    }
   }
 
   // TODO: handle return type
@@ -113,7 +113,7 @@ class Brain {
         this._tts.add(speech, end)
       }
 
-      this._socket.emit('answer', rawSpeech)
+      SOCKET_SERVER.socket.emit('answer', rawSpeech)
     }
   }
 
@@ -157,10 +157,7 @@ class Brain {
 
     return new Promise(async (resolve, reject) => {
       const utteranceId = `${Date.now()}-${StringHelper.random(4)}`
-      const intentObjectPath = path.join(
-        __dirname,
-        `../tmp/${utteranceId}.json`
-      )
+      const intentObjectPath = path.join(TMP_PATH, `${utteranceId}.json`)
       const speeches = []
 
       // Ask to repeat if Leon is not sure about the request
@@ -173,7 +170,7 @@ class Brain {
 
           speeches.push(speech)
           this.talk(speech, true)
-          this._socket.emit('is-typing', false)
+          SOCKET_SERVER.socket.emit('is-typing', false)
         }
 
         const executionTimeEnd = Date.now()
@@ -276,7 +273,6 @@ class Brain {
                   output += data
                 }
               } else {
-                /* istanbul ignore next */
                 reject({
                   type: 'warning',
                   obj: new Error(
@@ -290,7 +286,6 @@ class Brain {
               LogHelper.title('Brain')
               LogHelper.debug(`process.stdout: ${String(data)}`)
 
-              /* istanbul ignore next */
               reject({
                 type: 'error',
                 obj: new Error(
@@ -310,7 +305,7 @@ class Brain {
             })}!`
             if (!opts.mute) {
               this.talk(speech)
-              this._socket.emit('is-typing', false)
+              SOCKET_SERVER.socket.emit('is-typing', false)
             }
             speeches.push(speech)
 
@@ -348,7 +343,6 @@ class Brain {
                 }
                 speeches.push(speech)
 
-                /* istanbul ignore next */
                 // Synchronize the downloaded content if enabled
                 if (
                   this.finalOutput.type === 'end' &&
@@ -376,7 +370,7 @@ class Brain {
             Brain.deleteIntentObjFile(intentObjectPath)
 
             if (!opts.mute) {
-              this._socket.emit('is-typing', false)
+              SOCKET_SERVER.socket.emit('is-typing', false)
             }
 
             const executionTimeEnd = Date.now()
@@ -387,10 +381,10 @@ class Brain {
               nextAction?.suggestions &&
               this.finalOutput.core?.showNextActionSuggestions
             ) {
-              this._socket.emit('suggest', nextAction.suggestions)
+              SOCKET_SERVER.socket.emit('suggest', nextAction.suggestions)
             }
             if (action?.suggestions && this.finalOutput.core?.showSuggestions) {
-              this._socket.emit('suggest', action.suggestions)
+              SOCKET_SERVER.socket.emit('suggest', action.suggestions)
             }
 
             resolve({
@@ -493,12 +487,12 @@ class Brain {
 
           if (!opts.mute) {
             this.talk(answer, true)
-            this._socket.emit('is-typing', false)
+            SOCKET_SERVER.socket.emit('is-typing', false)
           }
 
           // Send suggestions to the client
           if (nextAction?.suggestions) {
-            this._socket.emit('suggest', nextAction.suggestions)
+            SOCKET_SERVER.socket.emit('suggest', nextAction.suggestions)
           }
 
           resolve({
@@ -516,5 +510,3 @@ class Brain {
     })
   }
 }
-
-export default Brain

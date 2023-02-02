@@ -106,10 +106,7 @@ export default class HTTPServer {
     try {
       await this.listen()
     } catch (e) {
-      // TODO: remove ts-ignore
-      // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
-      LogHelper.error(e.message)
+      LogHelper.error((e as Error).message)
     }
   }
 
@@ -123,7 +120,7 @@ export default class HTTPServer {
         })
       : new SocketIOServer(this.httpServer)
 
-    // TODO: instanciate new socket server
+    // TODO: instantiate new socket server
     io.on('connection', server.handleOnConnection)
 
     this.fastify.listen(
