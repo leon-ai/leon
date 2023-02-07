@@ -2,16 +2,14 @@ import type { Stream } from 'node:stream'
 import path from 'node:path'
 import fs from 'node:fs'
 
-import Ffmpeg from 'fluent-ffmpeg'
 import { Polly, SynthesizeSpeechCommand } from '@aws-sdk/client-polly'
-import { path as ffmpegPath } from '@ffmpeg-installer/ffmpeg'
-import { path as ffprobePath } from '@ffprobe-installer/ffprobe'
 
 import type { LongLanguageCode } from '@/types'
 import type { TTSSynthesizerFacade, SynthesizeResult } from '@/core/tts/types'
 import type { AmazonVoiceConfiguration } from '@/schemas/voice-config-schemas'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
 import { TTS } from '@/core'
+import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
@@ -24,12 +22,14 @@ const VOICES = {
   }
 }
 
-export class AmazonPollyTTSSynthesizer implements TTSSynthesizerFacade {
+export class AmazonPollyTTSSynthesizer extends TTSSynthesizerBase implements TTSSynthesizerFacade {
   private readonly name = 'Amazon Polly TTS Synthesizer'
   private readonly client: Polly | undefined = undefined
   private readonly lang: LongLanguageCode = LANG as LongLanguageCode
 
   constructor(lang: LongLanguageCode) {
+    super()
+
     LogHelper.title(this.name)
     LogHelper.success('New instance')
 
@@ -79,13 +79,7 @@ export class AmazonPollyTTSSynthesizer implements TTSSynthesizerFacade {
           wStream.on('error', reject)
         })
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ffmpeg = new (Ffmpeg as any)()
-        ffmpeg.setFfmpegPath(ffmpegPath)
-        ffmpeg.setFfprobePath(ffprobePath)
-
-        const data = await ffmpeg.input(audioFilePath).ffprobe()
-        const duration = data.streams[0].duration * 1_000
+        const duration = await this.getAudioDuration(audioFilePath)
 
         TTS.em.emit('saved', duration)
 

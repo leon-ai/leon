@@ -1,4 +1,5 @@
 import type { AmazonPollyTTSSynthesizer } from '@/core/tts/synthesizers/amazon-polly-synthesizer'
+import type { FliteTTSSynthesizer } from '@/core/tts/synthesizers/flite-synthesizer'
 
 export enum TTSProviders {
   AmazonPolly = 'amazon-polly',
@@ -21,7 +22,7 @@ export type SynthesizeResult = {
 
 // TODO
 // export type TTSSynthesizer = AmazonPollyTTSSynthesizer | FliteTTSSynthesizer | GoogleCloudTTSSynthesizer | WatsonTTSSynthesizer | undefined
-export type TTSSynthesizer = AmazonPollyTTSSynthesizer | undefined
+export type TTSSynthesizer = AmazonPollyTTSSynthesizer | FliteTTSSynthesizer | undefined
 
 export interface TTSSynthesizerFacade {
   synthesize(speech: string): Promise<SynthesizeResult | null>
