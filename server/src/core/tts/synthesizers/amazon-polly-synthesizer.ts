@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import { Polly, SynthesizeSpeechCommand } from '@aws-sdk/client-polly'
 
 import type { LongLanguageCode } from '@/types'
-import type { TTSSynthesizerFacade, SynthesizeResult } from '@/core/tts/types'
+import type { SynthesizeResult } from '@/core/tts/types'
 import type { AmazonVoiceConfiguration } from '@/schemas/voice-config-schemas'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
 import { TTS } from '@/core'
@@ -22,10 +22,10 @@ const VOICES = {
   }
 }
 
-export class AmazonPollyTTSSynthesizer extends TTSSynthesizerBase implements TTSSynthesizerFacade {
-  private readonly name = 'Amazon Polly TTS Synthesizer'
-  private readonly client: Polly | undefined = undefined
-  private readonly lang: LongLanguageCode = LANG as LongLanguageCode
+export class AmazonPollyTTSSynthesizer extends TTSSynthesizerBase {
+  protected readonly name = 'Amazon Polly TTS Synthesizer'
+  protected readonly lang = LANG as LongLanguageCode
+  protected readonly client: Polly | undefined = undefined
 
   constructor(lang: LongLanguageCode) {
     super()

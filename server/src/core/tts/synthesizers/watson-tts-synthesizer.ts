@@ -1,10 +1,10 @@
 import path from 'node:path'
 import fs from 'node:fs'
 
-import type { TextToSpeechClient } from '@google-cloud/text-to-speech'
-import tts from '@google-cloud/text-to-speech'
-import { google } from '@google-cloud/text-to-speech/build/protos/protos'
+import Tts from 'ibm-watson/text-to-speech/v1'
+import { IamAuthenticator } from 'ibm-watson/auth'
 
+import type { WatsonVoiceConfiguration } from '@/schemas/voice-config-schemas'
 import type { LongLanguageCode } from '@/types'
 import type { SynthesizeResult } from '@/core/tts/types'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
@@ -13,26 +13,19 @@ import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
-import SsmlVoiceGender = google.cloud.texttospeech.v1.SsmlVoiceGender
-
 const VOICES = {
   'en-US': {
-    languageCode: 'en-US',
-    name: 'en-US-Wavenet-A',
-    // name: 'en-GB-Standard-B', // Standard
-    ssmlGender: SsmlVoiceGender.MALE
+    voice: 'en-US_MichaelV3Voice'
   },
   'fr-FR': {
-    languageCode: 'fr-FR',
-    name: 'fr-FR-Wavenet-B',
-    ssmlGender: SsmlVoiceGender.MALE
+    voice: 'fr-FR_NicolasV3Voice'
   }
 }
 
-export class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
-  protected readonly name = 'Google Cloud TTS Synthesizer'
-  protected readonly lang = LANG as LongLanguageCode
-  private readonly client: TextToSpeechClient | undefined = undefined
+export class WatsonTTSSynthesizer extends TTSSynthesizerBase {
+  protected readonly name = 'Watson TTS Synthesizer'
+  protected readonly lang: LongLanguageCode = LANG as LongLanguageCode
+  private readonly client: Tts | undefined = undefined
 
   constructor(lang: LongLanguageCode) {
     super()
@@ -40,14 +33,16 @@ export class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
     LogHelper.title(this.name)
     LogHelper.success('New instance')
 
-    process.env['GOOGLE_APPLICATION_CREDENTIALS'] = path.join(
-      VOICE_CONFIG_PATH,
-      'google-cloud.json'
+    const config: WatsonVoiceConfiguration = JSON.parse(
+      fs.readFileSync(path.join(VOICE_CONFIG_PATH, 'watson-stt.json'), 'utf8')
     )
 
     try {
       this.lang = lang
-      this.client = new tts.TextToSpeechClient()
+      this.client = new Tts({
+        authenticator: new IamAuthenticator({ apikey: config.apikey }),
+        serviceUrl: config.url
+      })
 
       LogHelper.success('Synthesizer initialized')
     } catch (e) {
@@ -63,17 +58,19 @@ export class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
 
     try {
       if (this.client) {
-        const [response] = await this.client.synthesizeSpeech({
-          input: {
-            text: speech
-          },
-          voice: VOICES[this.lang],
-          audioConfig: {
-            audioEncoding: 'MP3'
-          }
+        const { result } = await this.client.synthesize({
+          voice: VOICES[this.lang].voice,
+          text: speech,
+          accept: 'audio/wav'
         })
 
-        await fs.promises.writeFile(audioFilePath, response.audioContent as Uint8Array | string, 'binary')
+        const wStream = fs.createWriteStream(audioFilePath)
+        result.pipe(wStream)
+
+        await new Promise((resolve, reject) => {
+          wStream.on('finish', resolve)
+          wStream.on('error', reject)
+        })
 
         const duration = await this.getAudioDuration(audioFilePath)
 

@@ -138,4 +138,28 @@ export default class TTS {
       }, duration)
     })
   }
+
+  /**
+   * Add speeches to the queue
+   */
+  public async add(text: Speech['text'], isFinalAnswer: Speech['isFinalAnswer']): Promise<Speech[]> {
+    /**
+     * Flite fix. When the string is only one word,
+     * Flite cannot save to a file. So we add a space at the end of the string
+     */
+    if (TTS_PROVIDER === TTSProviders.Flite && text.indexOf(' ') === -1) {
+      text += ' '
+    }
+
+    const speech = { text, isFinalAnswer }
+
+    if (this.speeches.length > 0) {
+      this.speeches.push(speech)
+    } else {
+      this.speeches.push(speech)
+      await this.forward(speech)
+    }
+
+    return this.speeches
+  }
 }

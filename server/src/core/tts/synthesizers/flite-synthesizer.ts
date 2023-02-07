@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { spawn } from 'node:child_process'
 
 import type { LongLanguageCode } from '@/types'
-import type { TTSSynthesizerFacade, SynthesizeResult } from '@/core/tts/types'
+import type { SynthesizeResult } from '@/core/tts/types'
 import { LANG, TMP_PATH, BIN_PATH } from '@/constants'
 import { TTS } from '@/core'
 import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
@@ -17,10 +17,10 @@ const FLITE_CONFIG = {
   int_f0_target_stddev: 15.0 // Pitch variability (lower = more flat)
 }
 
-export class FliteTTSSynthesizer extends TTSSynthesizerBase implements TTSSynthesizerFacade {
-  private readonly name = 'Flite TTS Synthesizer'
+export class FliteTTSSynthesizer extends TTSSynthesizerBase {
+  protected readonly name = 'Flite TTS Synthesizer'
+  protected readonly lang = LANG as LongLanguageCode
   private readonly binPath = path.join(BIN_PATH, 'flite', 'flite')
-  private readonly lang: LongLanguageCode = LANG as LongLanguageCode
 
   constructor(lang: LongLanguageCode) {
     super()
