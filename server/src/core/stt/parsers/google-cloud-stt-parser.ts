@@ -3,14 +3,17 @@ import path from 'node:path'
 import stt, { SpeechClient } from '@google-cloud/speech'
 
 import type { STTParserFacade } from '@/core/stt/types'
+import { STTParserBase } from '@/core/stt/stt-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export class GoogleCloudSTTParser implements STTParserFacade {
+export class GoogleCloudSTTParser extends STTParserBase implements STTParserFacade {
   private readonly name = 'Google Cloud STT Parser'
   private readonly client: SpeechClient | undefined = undefined
 
   constructor() {
+    super()
+
     LogHelper.title(this.name)
     LogHelper.success('New instance')
 

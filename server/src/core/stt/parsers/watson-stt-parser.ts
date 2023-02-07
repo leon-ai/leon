@@ -7,14 +7,17 @@ import { IamAuthenticator } from 'ibm-watson/auth'
 
 import type { STTParserFacade } from '@/core/stt/types'
 import type { WatsonVoiceConfiguration } from '@/schemas/voice-config-schemas'
+import { STTParserBase } from '@/core/stt/stt-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export class WatsonSTTParser implements STTParserFacade {
+export class WatsonSTTParser extends STTParserBase implements STTParserFacade {
   private readonly name = 'Watson STT Parser'
   private readonly client: Stt | undefined = undefined
 
   constructor() {
+    super()
+
     LogHelper.title(this.name)
     LogHelper.success('New instance')
 
