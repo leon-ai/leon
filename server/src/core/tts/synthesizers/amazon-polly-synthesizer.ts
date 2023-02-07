@@ -25,7 +25,7 @@ const VOICES = {
 export class AmazonPollyTTSSynthesizer extends TTSSynthesizerBase {
   protected readonly name = 'Amazon Polly TTS Synthesizer'
   protected readonly lang = LANG as LongLanguageCode
-  protected readonly client: Polly | undefined = undefined
+  private readonly client: Polly | undefined = undefined
 
   constructor(lang: LongLanguageCode) {
     super()

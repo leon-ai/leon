@@ -19,7 +19,3 @@ export type STTParser =
   | WatsonSTTParser
   | CoquiSTTParser
   | undefined
-
-export interface STTParserFacade {
-  parse(buffer: Buffer): Promise<string | null>
-}

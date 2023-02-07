@@ -4,13 +4,12 @@ import fs from 'node:fs'
 import wav from 'node-wav'
 import { Model } from 'stt'
 
-import type { STTParserFacade } from '@/core/stt/types'
 import { STTParserBase } from '@/core/stt/stt-parser-base'
 import { BIN_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export class CoquiSTTParser extends STTParserBase implements STTParserFacade {
-  private readonly name = 'Coqui STT Parser'
+export class CoquiSTTParser extends STTParserBase {
+  protected readonly name = 'Coqui STT Parser'
   private readonly model: Model | undefined = undefined
   private readonly desiredSampleRate: number = 16_000
 

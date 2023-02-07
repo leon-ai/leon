@@ -5,14 +5,13 @@ import { Duplex } from 'node:stream'
 import Stt from 'ibm-watson/speech-to-text/v1'
 import { IamAuthenticator } from 'ibm-watson/auth'
 
-import type { STTParserFacade } from '@/core/stt/types'
 import type { WatsonVoiceConfiguration } from '@/schemas/voice-config-schemas'
 import { STTParserBase } from '@/core/stt/stt-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export class WatsonSTTParser extends STTParserBase implements STTParserFacade {
-  private readonly name = 'Watson STT Parser'
+export class WatsonSTTParser extends STTParserBase {
+  protected readonly name = 'Watson STT Parser'
   private readonly client: Stt | undefined = undefined
 
   constructor() {

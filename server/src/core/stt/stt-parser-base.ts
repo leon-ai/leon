@@ -1,3 +1,5 @@
-export class STTParserBase {
-  // Common methods and props for STT parsers
+export abstract class STTParserBase {
+  protected abstract name: string
+
+  protected abstract parse(buffer: Buffer): Promise<string | null>
 }
