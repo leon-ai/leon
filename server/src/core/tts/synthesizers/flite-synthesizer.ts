@@ -40,6 +40,8 @@ export class FliteTTSSynthesizer extends TTSSynthesizerBase implements TTSSynthe
       LogHelper.error(
         `Cannot find ${this.binPath} You can set up the offline TTS by running: "npm run setup:offline-tts"`
       )
+    } else {
+      LogHelper.success('Synthesizer initialized')
     }
   }
 
@@ -62,22 +64,18 @@ export class FliteTTSSynthesizer extends TTSSynthesizerBase implements TTSSynthe
       audioFilePath
     ])
 
-    // Handle error
-    process.stderr.on('data', (data) => {
-      LogHelper.error(data.toString())
+    await new Promise((resolve, reject) => {
+      process.stdout.on('end', resolve)
+      process.stderr.on('data', reject)
     })
 
-    process.stdout.on('end', async () => {
-      const duration = await this.getAudioDuration(audioFilePath)
+    const duration = await this.getAudioDuration(audioFilePath)
 
-      TTS.em.emit('saved', duration)
+    TTS.em.emit('saved', duration)
 
-      return {
-        audioFilePath,
-        duration
-      }
-    })
-
-    return null
+    return {
+      audioFilePath,
+      duration
+    }
   }
 }

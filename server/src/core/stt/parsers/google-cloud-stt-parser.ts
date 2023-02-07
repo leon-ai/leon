@@ -1,6 +1,7 @@
 import path from 'node:path'
 
-import stt, { SpeechClient } from '@google-cloud/speech'
+import type { SpeechClient } from '@google-cloud/speech'
+import stt from '@google-cloud/speech'
 
 import type { STTParserFacade } from '@/core/stt/types'
 import { STTParserBase } from '@/core/stt/stt-parser-base'
