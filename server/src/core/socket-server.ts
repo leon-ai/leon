@@ -7,6 +7,7 @@ import type { Socket } from 'node:net'
 import { Server as SocketIOServer } from 'socket.io'
 
 import {
+  LANG,
   HAS_STT,
   HAS_TTS,
   IS_DEVELOPMENT_ENV,
@@ -15,6 +16,7 @@ import {
 } from '@/constants'
 import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
+import { LangHelper } from '@/helpers/lang-helper'
 import Asr from '@/core/asr/asr'
 // import Stt from '@/stt/stt'
 // import Tts from '@/tts/tts'
@@ -93,7 +95,9 @@ export default class SocketServer {
             // TODO
             // provider.brain.tts = new Tts(socket, TTS_PROVIDER)
             // provider.brain.tts.init('en', () => null)
-            await TTS.init()
+            await TTS.init(
+              LangHelper.getShortCode(LANG)
+            )
           }
 
           LogHelper.title('Initialization')
