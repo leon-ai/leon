@@ -12,7 +12,7 @@ import kill from 'tree-kill'
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
 import { HAS_LOGGER, IS_TESTING_ENV, TCP_SERVER_BIN_PATH } from '@/constants'
-import { TCP_CLIENT } from '@/core'
+import { TCP_CLIENT, BRAIN, SOCKET_SERVER } from '@/core'
 import Ner from '@/core/ner'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -36,18 +36,23 @@ const defaultNluResultObj = {
   }
 }
 
-class Nlu {
-  constructor(brain) {
-    this.brain = brain
-    this.globalResolversNlp = {}
-    this.skillsResolversNlp = {}
-    this.mainNlp = {}
-    this.ner = {}
-    this.conv = new Conversation('conv0')
-    this.nluResultObj = defaultNluResultObj // TODO
+export default class NLU {
+  private static instance: NLU
 
-    LogHelper.title('NLU')
-    LogHelper.success('New instance')
+  constructor() {
+    if (!NLU.instance) {
+      this.globalResolversNlp = {}
+      this.skillsResolversNlp = {}
+      this.mainNlp = {}
+      this.ner = {}
+      this.conv = new Conversation('conv0')
+      this.nluResultObj = defaultNluResultObj // TODO
+
+      LogHelper.title('NLU')
+      LogHelper.success('New instance')
+
+      NLU.instance = this
+    }
   }
 
   /**
@@ -81,14 +86,14 @@ class Nlu {
 
           resolve()
         } catch (err) {
-          this.brain.talk(
-            `${this.brain.wernicke('random_errors')}! ${this.brain.wernicke(
+          BRAIN.talk(
+            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
               'errors',
               'nlu',
               { '%error%': err.message }
             )}.`
           )
-          this.brain.socket.emit('is-typing', false)
+          SOCKET_SERVER.socket.emit('is-typing', false)
 
           reject({ type: 'error', obj: err })
         }
@@ -125,14 +130,14 @@ class Nlu {
 
           resolve()
         } catch (err) {
-          this.brain.talk(
-            `${this.brain.wernicke('random_errors')}! ${this.brain.wernicke(
+          BRAIN.talk(
+            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
               'errors',
               'nlu',
               { '%error%': err.message }
             )}.`
           )
-          this.brain.socket.emit('is-typing', false)
+          SOCKET_SERVER.socket.emit('is-typing', false)
 
           reject({ type: 'error', obj: err })
         }
@@ -178,14 +183,14 @@ class Nlu {
 
           resolve()
         } catch (err) {
-          this.brain.talk(
-            `${this.brain.wernicke('random_errors')}! ${this.brain.wernicke(
+          BRAIN.talk(
+            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
               'errors',
               'nlu',
               { '%error%': err.message }
             )}.`
           )
-          this.brain.socket.emit('is-typing', false)
+          SOCKET_SERVER.socket.emit('is-typing', false)
 
           reject({ type: 'error', obj: err })
         }
@@ -212,8 +217,8 @@ class Nlu {
       await this.process(utterance, opts)
     }
 
-    this.brain.lang = locale
-    this.brain.talk(`${this.brain.wernicke('random_language_switch')}.`, true)
+    BRAIN.lang = locale
+    BRAIN.talk(`${BRAIN.wernicke('random_language_switch')}.`, true)
 
     // Recreate a new TCP server process and reconnect the TCP client
     kill(global.tcpServerProcess.pid, () => {
@@ -241,7 +246,7 @@ class Nlu {
         data: {
           version,
           utterance,
-          lang: this.brain.lang,
+          lang: BRAIN.lang,
           classification: this.nluResultObj.classification
         }
       })
@@ -263,7 +268,7 @@ class Nlu {
           }
         }
 
-        this.mainNlp.addEntities(spacyEntity, this.brain.lang)
+        this.mainNlp.addEntities(spacyEntity, BRAIN.lang)
       })
     }
   }
@@ -279,7 +284,7 @@ class Nlu {
       'skills',
       domain,
       skillName,
-      `config/${this.brain.lang}.json`
+      `config/${BRAIN.lang}.json`
     )
     this.nluResultObj = {
       ...defaultNluResultObj, // Reset entities, slots, etc.
@@ -294,7 +299,7 @@ class Nlu {
       }
     }
     this.nluResultObj.entities = await this.ner.extractEntities(
-      this.brain.lang,
+      BRAIN.lang,
       configDataFilePath,
       this.nluResultObj
     )
@@ -325,7 +330,7 @@ class Nlu {
         const resolversPath = join(
           process.cwd(),
           'core/data',
-          this.brain.lang,
+          BRAIN.lang,
           'global-resolvers'
         )
         // Load the skill resolver or the global resolver
@@ -362,14 +367,14 @@ class Nlu {
 
     // Ensure expected items are in the utterance, otherwise clean context and reprocess
     if (!hasMatchingEntity && !hasMatchingResolver) {
-      this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+      BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
       this.conv.cleanActiveContext()
       await this.process(utterance, opts)
       return null
     }
 
     try {
-      const processedData = await this.brain.execute(this.nluResultObj, {
+      const processedData = await BRAIN.execute(this.nluResultObj, {
         mute: opts.mute
       })
       // Reprocess with the original utterance that triggered the context at first
@@ -425,7 +430,7 @@ class Nlu {
       // Set new context with the next action if there is one
       if (processedData.action.next_action) {
         this.conv.activeContext = {
-          lang: this.brain.lang,
+          lang: BRAIN.lang,
           slots: processedData.slots,
           isInActionLoop: !!processedData.nextAction.loop,
           originalUtterance: processedData.utterance,
@@ -459,8 +464,8 @@ class Nlu {
 
       if (!this.hasNlpModels()) {
         if (!opts.mute) {
-          this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
-          this.brain.socket.emit('is-typing', false)
+          BRAIN.talk(`${BRAIN.wernicke('random_errors')}!`)
+          SOCKET_SERVER.socket.emit('is-typing', false)
         }
 
         const msg =
@@ -529,16 +534,16 @@ class Nlu {
 
       const isSupportedLanguage = LangHelper.getShortCodes().includes(locale)
       if (!isSupportedLanguage) {
-        this.brain.talk(
-          `${this.brain.wernicke('random_language_not_supported')}.`,
+        BRAIN.talk(
+          `${BRAIN.wernicke('random_language_not_supported')}.`,
           true
         )
-        this.brain.socket.emit('is-typing', false)
+        SOCKET_SERVER.socket.emit('is-typing', false)
         return resolve({})
       }
 
       // Trigger language switching
-      if (this.brain.lang !== locale) {
+      if (BRAIN.lang !== locale) {
         return resolve(this.switchLanguage(utterance, locale, opts))
       }
 
@@ -551,11 +556,11 @@ class Nlu {
 
         if (fallback === false) {
           if (!opts.mute) {
-            this.brain.talk(
-              `${this.brain.wernicke('random_unknown_intents')}.`,
+            BRAIN.talk(
+              `${BRAIN.wernicke('random_unknown_intents')}.`,
               true
             )
-            this.brain.socket.emit('is-typing', false)
+            SOCKET_SERVER.socket.emit('is-typing', false)
           }
 
           LogHelper.title('NLU')
@@ -584,13 +589,13 @@ class Nlu {
         'skills',
         this.nluResultObj.classification.domain,
         this.nluResultObj.classification.skill,
-        `config/${this.brain.lang}.json`
+        `config/${BRAIN.lang}.json`
       )
       this.nluResultObj.configDataFilePath = configDataFilePath
 
       try {
         this.nluResultObj.entities = await this.ner.extractEntities(
-          this.brain.lang,
+          BRAIN.lang,
           configDataFilePath,
           this.nluResultObj
         )
@@ -600,7 +605,7 @@ class Nlu {
         }
 
         if (!opts.mute) {
-          this.brain.talk(`${this.brain.wernicke(e.code, '', e.data)}!`)
+          BRAIN.talk(`${BRAIN.wernicke(e.code, '', e.data)}!`)
         }
       }
 
@@ -626,7 +631,7 @@ class Nlu {
         this.conv.cleanActiveContext()
       }
       this.conv.activeContext = {
-        lang: this.brain.lang,
+        lang: BRAIN.lang,
         slots: {},
         isInActionLoop: false,
         originalUtterance: this.nluResultObj.utterance,
@@ -643,7 +648,7 @@ class Nlu {
       this.nluResultObj.entities = this.conv.activeContext.entities
 
       try {
-        const processedData = await this.brain.execute(this.nluResultObj, {
+        const processedData = await BRAIN.execute(this.nluResultObj, {
           mute: opts.mute
         })
 
@@ -651,7 +656,7 @@ class Nlu {
         if (processedData.nextAction) {
           this.conv.cleanActiveContext()
           this.conv.activeContext = {
-            lang: this.brain.lang,
+            lang: BRAIN.lang,
             slots: {},
             isInActionLoop: !!processedData.nextAction.loop,
             originalUtterance: processedData.utterance,
@@ -675,7 +680,7 @@ class Nlu {
         LogHelper[e.type](e.obj.message)
 
         if (!opts.mute) {
-          this.brain.socket.emit('is-typing', false)
+          SOCKET_SERVER.socket.emit('is-typing', false)
         }
 
         return reject(e.obj)
@@ -699,7 +704,7 @@ class Nlu {
       'skills',
       domain,
       skillName,
-      `config/${this.brain.lang}.json`
+      `config/${BRAIN.lang}.json`
     )
 
     this.nluResultObj = {
@@ -712,7 +717,7 @@ class Nlu {
       }
     }
     const entities = await this.ner.extractEntities(
-      this.brain.lang,
+      BRAIN.lang,
       configDataFilePath,
       this.nluResultObj
     )
@@ -725,12 +730,12 @@ class Nlu {
       )
 
       if (hasMatch) {
-        this.conv.setSlots(this.brain.lang, entities)
+        this.conv.setSlots(BRAIN.lang, entities)
 
         notFilledSlot = this.conv.getNotFilledSlot()
         if (notFilledSlot) {
-          this.brain.talk(notFilledSlot.pickedQuestion)
-          this.brain.socket.emit('is-typing', false)
+          BRAIN.talk(notFilledSlot.pickedQuestion)
+          SOCKET_SERVER.socket.emit('is-typing', false)
 
           return {}
         }
@@ -738,7 +743,7 @@ class Nlu {
     }
 
     if (!this.conv.areSlotsAllFilled()) {
-      this.brain.talk(`${this.brain.wernicke('random_context_out_of_topic')}.`)
+      BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
     } else {
       this.nluResultObj = {
         ...defaultNluResultObj, // Reset entities, slots, etc.
@@ -758,7 +763,7 @@ class Nlu {
 
       this.conv.cleanActiveContext()
 
-      return this.brain.execute(this.nluResultObj, { mute: opts.mute })
+      return BRAIN.execute(this.nluResultObj, { mute: opts.mute })
     }
 
     this.conv.cleanActiveContext()
@@ -777,7 +782,7 @@ class Nlu {
 
     if (hasMandatorySlots) {
       this.conv.activeContext = {
-        lang: this.brain.lang,
+        lang: BRAIN.lang,
         slots,
         isInActionLoop: false,
         originalUtterance: this.nluResultObj.utterance,
@@ -798,9 +803,9 @@ class Nlu {
           this.nluResultObj.classification.action
         ].slots.filter(({ name }) => name === notFilledSlot.name)
 
-        this.brain.socket.emit('suggest', currentSlot.suggestions)
-        this.brain.talk(notFilledSlot.pickedQuestion)
-        this.brain.socket.emit('is-typing', false)
+        SOCKET_SERVER.socket.emit('suggest', currentSlot.suggestions)
+        BRAIN.talk(notFilledSlot.pickedQuestion)
+        SOCKET_SERVER.socket.emit('is-typing', false)
 
         return true
       }
@@ -843,5 +848,3 @@ class Nlu {
     return false
   }
 }
-
-export default Nlu
