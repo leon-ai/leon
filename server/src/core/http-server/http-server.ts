@@ -5,6 +5,7 @@ import fastifyStatic from '@fastify/static'
 import { Server as SocketIOServer } from 'socket.io'
 
 import { version } from '@@/package.json'
+import { SOCKET_SERVER } from '@/core'
 import { LEON_NODE_ENV, HAS_LOGGER, IS_DEVELOPMENT_ENV } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
@@ -120,8 +121,7 @@ export default class HTTPServer {
         })
       : new SocketIOServer(this.httpServer)
 
-    // TODO: instantiate new socket server
-    io.on('connection', server.handleOnConnection)
+    io.on('connection', SOCKET_SERVER.init)
 
     this.fastify.listen(
       {

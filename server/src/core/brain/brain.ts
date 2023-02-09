@@ -8,7 +8,7 @@ import { langs } from '@@/core/langs.json'
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswers } from '@/schemas/global-data-schemas'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
-import { SOCKET_SERVER } from '@/core'
+import { SOCKET_SERVER, TTS } from '@/core'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
@@ -33,9 +33,6 @@ export default class Brain {
   private finalOutput: unknown
 
   constructor() {
-    this._stt = {}
-    this._tts = {}
-
     if (!Brain.instance) {
       LogHelper.title('Brain')
       LogHelper.success('New instance')
@@ -44,30 +41,11 @@ export default class Brain {
     }
   }
 
-  // TODO: handle return type
-  get stt(): unknown {
-    return this._stt
-  }
-
-  set stt(newStt) {
-    this._stt = newStt
-  }
-
-  // TODO: handle return type
-  get tts(): unknown {
-    return this._tts
-  }
-
-  set tts(newTts) {
-    this._tts = newTts
-  }
-
-  // TODO: handle return type
-  get lang(): unknown {
+  get lang(): ShortLanguageCode {
     return this._lang
   }
 
-  set lang(newLang) {
+  set lang(newLang: ShortLanguageCode) {
     this._lang = newLang
     // Update broca
     this.broca = JSON.parse(
@@ -78,17 +56,21 @@ export default class Brain {
     )
 
     if (HAS_TTS) {
-      this._tts.init(this._lang, () => {
-        LogHelper.title('Brain')
-        LogHelper.info('Language has changed')
-      })
+      this.updateTTSLang(this._lang)
     }
+  }
+
+  private async updateTTSLang(newLang: ShortLanguageCode): Promise<void> {
+    await TTS.init(newLang)
+
+    LogHelper.title('Brain')
+    LogHelper.info('Language has changed')
   }
 
   /**
    * Delete intent object file
    */
-  static deleteIntentObjFile(intentObjectPath): void {
+  static deleteIntentObjFile(intentObjectPath: string): void {
     try {
       if (fs.existsSync(intentObjectPath)) {
         fs.unlinkSync(intentObjectPath)
@@ -101,7 +83,7 @@ export default class Brain {
   /**
    * Make Leon talk
    */
-  talk(rawSpeech, end = false): void {
+  async talk(rawSpeech: string, end = false): Promise<void> {
     LogHelper.title('Leon')
     LogHelper.info('Talking...')
 
@@ -110,7 +92,7 @@ export default class Brain {
         // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
         const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, ' ')
 
-        this._tts.add(speech, end)
+        await TTS.add(speech, end)
       }
 
       SOCKET_SERVER.socket.emit('answer', rawSpeech)
@@ -121,12 +103,13 @@ export default class Brain {
    * Pickup speech info we need to return
    */
   // TODO: handle return type
-  wernicke(type, key, obj): unknown {
-    let answer = ''
+  wernicke(type: string, key: string, obj: Record<string, unknown>): unknown {
+    let answer
 
     // Choose a random answer or a specific one
-    const property = this.broca.answers[type]
-    if (property.constructor === [].constructor) {
+    let property = this.broca.answers[type]
+    if (property?.constructor === [].constructor) {
+      property = property as string[]
       answer = property[Math.floor(Math.random() * property.length)]
     } else {
       answer = property
@@ -149,7 +132,7 @@ export default class Brain {
    * Execute Python skills
    * TODO: split into several methods
    */
-  execute(obj, opts): void {
+  execute(obj, opts): Promise<void> {
     const executionTimeStart = Date.now()
     opts = opts || {
       mute: false // Close Leon mouth e.g. over HTTP
