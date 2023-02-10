@@ -5,6 +5,7 @@ import SocketServer from '@/core/socket-server'
 import SpeechToText from '@/core/stt/stt'
 import TextToSpeech from '@/core/tts/tts'
 import AutomaticSpeechRecognition from '@/core/asr/asr'
+import NaturalLanguageUnderstanding from '@/core/nlu/nlu'
 import Brain from '@/core/brain/brain'
 
 /**
@@ -25,5 +26,7 @@ export const STT = new SpeechToText()
 export const TTS = new TextToSpeech()
 
 export const ASR = new AutomaticSpeechRecognition()
+
+export const NLU = new NaturalLanguageUnderstanding()
 
 export const BRAIN = new Brain()

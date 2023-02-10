@@ -103,7 +103,7 @@ export default class Brain {
    * Pickup speech info we need to return
    */
   // TODO: handle return type
-  wernicke(type: string, key: string, obj: Record<string, unknown>): unknown {
+  wernicke(type: string, key: string, obj: Record<string, unknown>): string {
     let answer
 
     // Choose a random answer or a specific one
@@ -141,7 +141,7 @@ export default class Brain {
     return new Promise(async (resolve, reject) => {
       const utteranceId = `${Date.now()}-${StringHelper.random(4)}`
       const intentObjectPath = path.join(TMP_PATH, `${utteranceId}.json`)
-      const speeches = []
+      const speeches: string[] = []
 
       // Ask to repeat if Leon is not sure about the request
       if (

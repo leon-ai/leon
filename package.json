@@ -40,6 +40,7 @@
     "postinstall": "ts-node scripts/setup/setup.js",
     "dev:app": "vite --config app/vite.config.js",
     "dev:server": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development tsc-watch --noClear --onSuccess \"nodemon\"",
+    "dev:server:no-lint": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development \"nodemon\"",
     "wake": "cross-env LEON_HOST=http://localhost LEON_PORT=1337 node hotword/index.js",
     "delete-dist:server": "shx rm -rf ./server/dist",
     "clean:python-deps": "shx rm -rf ./bridges/python/src/.venv && npm run postinstall",
