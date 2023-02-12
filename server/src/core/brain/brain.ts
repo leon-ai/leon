@@ -4,9 +4,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 
-import { langs } from '@@/core/langs.json'
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswers } from '@/schemas/global-data-schemas'
+import { langs } from '@@/core/langs.json'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
 import { SOCKET_SERVER, TTS } from '@/core'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -14,6 +14,16 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
+
+interface BrainProcessResult extends NLUResult {
+  speeches: string[]
+  executionTime: number
+  utteranceId? : string
+  lang?: ShortLanguageCode,
+  // core: this.finalOutput.core,
+  action: NLUResult['action'],
+  nextAction,
+}
 
 // TODO: split class
 
@@ -103,7 +113,7 @@ export default class Brain {
    * Pickup speech info we need to return
    */
   // TODO: handle return type
-  wernicke(type: string, key: string, obj: Record<string, unknown>): string {
+  wernicke(type: string, key?: string, obj?: Record<string, unknown>): string {
     let answer
 
     // Choose a random answer or a specific one
@@ -132,7 +142,7 @@ export default class Brain {
    * Execute Python skills
    * TODO: split into several methods
    */
-  execute(obj, opts): Promise<void> {
+  execute(obj: NLUResult, opts): Promise<void> {
     const executionTimeStart = Date.now()
     opts = opts || {
       mute: false // Close Leon mouth e.g. over HTTP
@@ -233,7 +243,7 @@ export default class Brain {
           let output = ''
 
           // Read output
-          this.skillProcess.stdout.on('data', (data) => {
+          this.skillProcess?.stdout.on('data', (data) => {
             const executionTimeEnd = Date.now()
             const executionTime = executionTimeEnd - executionTimeStart
 
@@ -281,7 +291,7 @@ export default class Brain {
           })
 
           // Handle error
-          this.skillProcess.stderr.on('data', (data) => {
+          this.skillProcess?.stderr.on('data', (data) => {
             const speech = `${this.wernicke('random_skill_errors', '', {
               '%skill_name%': skillFriendlyName,
               '%domain_name%': domainFriendlyName
@@ -308,7 +318,7 @@ export default class Brain {
           })
 
           // Catch the end of the skill execution
-          this.skillProcess.stdout.on('end', () => {
+          this.skillProcess?.stdout.on('end', () => {
             LogHelper.title(`${skillFriendlyName} skill`)
             LogHelper.info(output)
 

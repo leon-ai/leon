@@ -19,7 +19,7 @@ export class LangHelper {
    */
   public static getLongCode(
     shortCode: ShortLanguageCode
-  ): LongLanguageCode | null {
+  ): LongLanguageCode {
     for (const longLanguage in langs) {
       const longLanguageType = longLanguage as LongLanguageCode
       const lang = langs[longLanguageType]
@@ -29,7 +29,7 @@ export class LangHelper {
       }
     }
 
-    return null
+    return 'en-US'
   }
 
   /**
