@@ -20,7 +20,7 @@ interface BrainProcessResult extends NLUResult {
   executionTime: number
   utteranceId? : string
   lang?: ShortLanguageCode,
-  // core: this.finalOutput.core,
+  // core: this.skillFinalOutput.core,
   action: NLUResult['action'],
   nextAction,
 }
@@ -36,11 +36,11 @@ export default class Brain {
       'utf8'
     )
   )
-  private skillProcess: ChildProcessWithoutNullStreams | undefined
+  private skillProcess: ChildProcessWithoutNullStreams | undefined = undefined
   // TODO: type
-  private intermediateOutput: unknown
+  private skillIntermediateOutput: unknown
   // TODO: type
-  private finalOutput: unknown
+  private skillFinalOutput: unknown
 
   constructor() {
     if (!Brain.instance) {
@@ -193,7 +193,7 @@ export default class Brain {
            */
 
           // Ensure the process is empty (to be able to execute other processes outside of Brain)
-          if (Object.keys(this.skillProcess).length === 0) {
+          if (!this.skillProcess) {
             /**
              * Execute a skill in a standalone way (CLI):
              *
@@ -255,7 +255,7 @@ export default class Brain {
                   LogHelper.title(`${skillFriendlyName} skill`)
                   LogHelper.info(data.toString())
 
-                  this.intermediateOutput = obj.output
+                  this.skillIntermediateOutput = obj.output
 
                   const speech = obj.output.speech.toString()
                   if (!opts.mute) {
@@ -322,13 +322,13 @@ export default class Brain {
             LogHelper.title(`${skillFriendlyName} skill`)
             LogHelper.info(output)
 
-            this.finalOutput = output
+            this.skillFinalOutput = output
 
             // Check if there is an output (no skill error)
-            if (this.finalOutput !== '') {
-              this.finalOutput = JSON.parse(this.finalOutput).output
+            if (this.skillFinalOutput !== '') {
+              this.skillFinalOutput = JSON.parse(this.skillFinalOutput).output
 
-              let { speech } = this.finalOutput
+              let { speech } = this.skillFinalOutput
               if (speech) {
                 speech = speech.toString()
                 if (!opts.mute) {
@@ -338,15 +338,15 @@ export default class Brain {
 
                 // Synchronize the downloaded content if enabled
                 if (
-                  this.finalOutput.type === 'end' &&
-                  this.finalOutput.options.synchronization &&
-                  this.finalOutput.options.synchronization.enabled &&
-                  this.finalOutput.options.synchronization.enabled === true
+                  this.skillFinalOutput.type === 'end' &&
+                  this.skillFinalOutput.options.synchronization &&
+                  this.skillFinalOutput.options.synchronization.enabled &&
+                  this.skillFinalOutput.options.synchronization.enabled === true
                 ) {
                   const sync = new Synchronizer(
                     this,
                     obj.classification,
-                    this.finalOutput.options.synchronization
+                    this.skillFinalOutput.options.synchronization
                   )
 
                   // When the synchronization is finished
@@ -372,11 +372,11 @@ export default class Brain {
             // Send suggestions to the client
             if (
               nextAction?.suggestions &&
-              this.finalOutput.core?.showNextActionSuggestions
+              this.skillFinalOutput.core?.showNextActionSuggestions
             ) {
               SOCKET_SERVER.socket.emit('suggest', nextAction.suggestions)
             }
-            if (action?.suggestions && this.finalOutput.core?.showSuggestions) {
+            if (action?.suggestions && this.skillFinalOutput.core?.showSuggestions) {
               SOCKET_SERVER.socket.emit('suggest', action.suggestions)
             }
 
@@ -385,7 +385,7 @@ export default class Brain {
               lang: this._lang,
               ...obj,
               speeches,
-              core: this.finalOutput.core,
+              core: this.skillFinalOutput.core,
               action,
               nextAction,
               executionTime // In ms, skill execution time only
@@ -493,7 +493,7 @@ export default class Brain {
             lang: this._lang,
             ...obj,
             speeches: [answer],
-            core: this.finalOutput.core,
+            core: this.skillFinalOutput.core,
             action,
             nextAction,
             executionTime // In ms, skill execution time only

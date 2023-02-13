@@ -14,7 +14,7 @@ import {
   STT_PROVIDER,
   TTS_PROVIDER
 } from '@/constants'
-import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS } from '@/core'
+import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS, NLU } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import Asr from '@/core/asr/asr'
@@ -104,6 +104,8 @@ export default class SocketServer {
           LogHelper.success(`STT ${sttState}`)
           LogHelper.success(`TTS ${ttsState}`)
 
+          await NLU.loadNLPModels()
+
           // Listen for new utterance
           this.socket.on('utterance', async (data) => {
             LogHelper.title('Socket')
@@ -112,9 +114,11 @@ export default class SocketServer {
             this.socket.emit('is-typing', true)
 
             // TODO
-            // const utterance = data.value
+            const utterance = data.value
             try {
               LogHelper.time('Utterance processed in')
+
+              await NLU.process(utterance)
               // TODO
               // await provider.nlu.process(utterance)
               LogHelper.title('Execution Time')

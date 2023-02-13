@@ -1,3 +1,4 @@
+import type { Stream } from 'node:stream'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -22,7 +23,7 @@ const VOICES = {
   }
 }
 
-export class WatsonTTSSynthesizer extends TTSSynthesizerBase {
+export default class WatsonTTSSynthesizer extends TTSSynthesizerBase {
   protected readonly name = 'Watson TTS Synthesizer'
   protected readonly lang: LongLanguageCode = LANG as LongLanguageCode
   private readonly client: Tts | undefined = undefined
@@ -58,11 +59,12 @@ export class WatsonTTSSynthesizer extends TTSSynthesizerBase {
 
     try {
       if (this.client) {
-        const { result } = await this.client.synthesize({
+        const response = await this.client.synthesize({
           voice: VOICES[this.lang].voice,
           text: speech,
           accept: 'audio/wav'
         })
+        const result = response.result as Stream
 
         const wStream = fs.createWriteStream(audioFilePath)
         result.pipe(wStream)

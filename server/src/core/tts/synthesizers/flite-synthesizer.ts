@@ -17,7 +17,7 @@ const FLITE_CONFIG = {
   int_f0_target_stddev: 15.0 // Pitch variability (lower = more flat)
 }
 
-export class FliteTTSSynthesizer extends TTSSynthesizerBase {
+export default class FliteSynthesizer extends TTSSynthesizerBase {
   protected readonly name = 'Flite TTS Synthesizer'
   protected readonly lang = LANG as LongLanguageCode
   private readonly binPath = path.join(BIN_PATH, 'flite', 'flite')

@@ -8,6 +8,12 @@ import { SOCKET_SERVER, ASR } from '@/core'
 import { STTParserNames, STTProviders } from '@/core/stt/types'
 import { LogHelper } from '@/helpers/log-helper'
 
+const PROVIDERS_MAP = {
+  [STTProviders.GoogleCloudSTT]: STTParserNames.GoogleCloudSTT,
+  [STTProviders.WatsonSTT]: STTParserNames.WatsonSTT,
+  [STTProviders.CoquiSTT]: STTParserNames.CoquiSTT
+}
+
 export default class STT {
   private static instance: STT
 
@@ -60,11 +66,11 @@ export default class STT {
     }
 
     // Dynamically attribute the parser
-    const parser = await import(
+    const { default: parser } = await import(
       path.join(
         __dirname,
         'parsers',
-        STTParserNames[STT_PROVIDER as keyof typeof STTParserNames]
+        PROVIDERS_MAP[STT_PROVIDER as STTProviders]
       )
     )
     this.parser = new parser() as STTParser

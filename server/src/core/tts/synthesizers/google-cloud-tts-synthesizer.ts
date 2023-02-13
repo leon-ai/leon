@@ -29,7 +29,7 @@ const VOICES = {
   }
 }
 
-export class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
+export default class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
   protected readonly name = 'Google Cloud TTS Synthesizer'
   protected readonly lang = LANG as LongLanguageCode
   private readonly client: TextToSpeechClient | undefined = undefined

@@ -55,10 +55,24 @@ export default class NLU {
     }
   }
 
+  public loadNLPModels(): Promise<[void, void, void]> {
+    return Promise.all([
+      this.loadGlobalResolversModel(
+        join(process.cwd(), 'core/data/models/leon-global-resolvers-model.nlp')
+      ),
+      this.loadSkillsResolversModel(
+        join(process.cwd(), 'core/data/models/leon-skills-resolvers-model.nlp')
+      ),
+      this.loadMainModel(
+        join(process.cwd(), 'core/data/models/leon-main-model.nlp')
+      )
+    ])
+  }
+
   /**
    * Load the global resolvers NLP model from the latest training
    */
-  loadGlobalResolversModel(nlpModel) {
+  private loadGlobalResolversModel(nlpModel): Promise<void> {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         LogHelper.title('NLU')
@@ -104,7 +118,7 @@ export default class NLU {
   /**
    * Load the skills resolvers NLP model from the latest training
    */
-  loadSkillsResolversModel(nlpModel) {
+  private loadSkillsResolversModel(nlpModel): Promise<void> {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         LogHelper.title('NLU')
@@ -148,7 +162,7 @@ export default class NLU {
   /**
    * Load the main NLP model from the latest training
    */
-  loadMainModel(nlpModel) {
+  private loadMainModel(nlpModel): Promise<void> {
     return new Promise(async (resolve, reject) => {
       if (!fs.existsSync(nlpModel)) {
         LogHelper.title('NLU')

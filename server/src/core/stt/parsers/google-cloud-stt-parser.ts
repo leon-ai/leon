@@ -7,7 +7,7 @@ import { STTParserBase } from '@/core/stt/stt-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export class GoogleCloudSTTParser extends STTParserBase {
+export default class GoogleCloudSTTParser extends STTParserBase {
   protected readonly name = 'Google Cloud STT Parser'
   private readonly client: SpeechClient | undefined = undefined
 

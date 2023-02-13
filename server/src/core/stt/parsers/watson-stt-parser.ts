@@ -10,7 +10,7 @@ import { STTParserBase } from '@/core/stt/stt-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export class WatsonSTTParser extends STTParserBase {
+export default class WatsonSTTParser extends STTParserBase {
   protected readonly name = 'Watson STT Parser'
   private readonly client: Stt | undefined = undefined
 

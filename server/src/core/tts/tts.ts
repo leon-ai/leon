@@ -15,6 +15,13 @@ type Speech = {
   isFinalAnswer: boolean
 }
 
+const PROVIDERS_MAP = {
+  [TTSProviders.GoogleCloudTTS]: TTSSynthesizers.GoogleCloudTTS,
+  [TTSProviders.WatsonTTS]: TTSSynthesizers.WatsonTTS,
+  [TTSProviders.AmazonPolly]: TTSSynthesizers.AmazonPolly,
+  [TTSProviders.Flite]: TTSSynthesizers.Flite
+}
+
 export default class TTS {
   private static instance: TTS
 
@@ -69,11 +76,11 @@ export default class TTS {
     }
 
     // Dynamically attribute the synthesizer
-    const synthesizer = await import(
+    const { default: synthesizer } = await import(
       path.join(
         __dirname,
         'synthesizers',
-        TTSSynthesizers[TTS_PROVIDER as keyof typeof TTSSynthesizers]
+        PROVIDERS_MAP[TTS_PROVIDER as TTSProviders]
       )
     )
     this.synthesizer = new synthesizer(
