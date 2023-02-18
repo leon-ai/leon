@@ -15,14 +15,31 @@ import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
 import type { SkillConfig } from '@/schemas/skill-schemas'
 
+interface BrainSkillOutput {
+  domain: string // leon
+  skill: string // greeting
+  action: string // run
+  lang: string // en
+  utterance: string // hi
+  entities: [] // [] // TODO
+  slots: object // {} // TODO
+  output: {
+    type: 'inter' | 'end'
+    codes: string[]
+    speech: string
+    core: object // TODO
+    options: object // TODO
+  }
+}
+
 interface BrainProcessResult extends NLUResult {
   speeches: string[]
   executionTime: number
   utteranceId? : string
-  lang?: ShortLanguageCode,
+  lang?: ShortLanguageCode
   // TODO
-  // core: this.skillFinalOutput.core,
-  action?: NLUResult['classification']['action'],
+  // core: this.skillFinalOutput.core
+  action?: NLUResult['classification']['action']
   // TODO
   // nextAction?: {,
 }
@@ -330,6 +347,8 @@ export default class Brain {
             LogHelper.info(output)
 
             this.skillFinalOutput = output
+
+            console.log('output', output)
 
             // Check if there is an output (no skill error)
             if (this.skillFinalOutput !== '') {
