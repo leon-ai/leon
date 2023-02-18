@@ -85,9 +85,9 @@ export default class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
         }
       }
 
-      LogHelper.error(`${this.name}: client is not defined yet`)
+      LogHelper.error(`${this.name} - client is not defined yet`)
     } catch (e) {
-      LogHelper.error(`${this.name}: Failed to synthesize speech: ${e} `)
+      LogHelper.error(`${this.name} - Failed to synthesize speech: ${e} `)
     }
 
     return null

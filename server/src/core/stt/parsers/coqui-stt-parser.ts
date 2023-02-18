@@ -39,7 +39,7 @@ export default class CoquiSTTParser extends STTParserBase {
     try {
       this.model = new Model(modelPath)
     } catch (e) {
-      throw Error(`${this.name}: failed to load the model. ${e}`)
+      throw Error(`${this.name} - Failed to load the model: ${e}`)
     }
 
     this.desiredSampleRate = this.model.sampleRate()
@@ -47,7 +47,7 @@ export default class CoquiSTTParser extends STTParserBase {
     try {
       this.model.enableExternalScorer(scorerPath)
     } catch (e) {
-      throw Error(`${this.name}: failed to enable external scorer. ${e}`)
+      throw Error(`${this.name} - Failed to enable external scorer: ${e}`)
     }
 
     LogHelper.success('Parser initialized')

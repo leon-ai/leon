@@ -32,7 +32,7 @@ export default class GoogleCloudSTTParser extends STTParserBase {
 
       LogHelper.success('Parser initialized')
     } catch (e) {
-      LogHelper.error(`${this.name}: ${e}`)
+      LogHelper.error(`${this.name} - Failed to initialize: ${e}`)
     }
   }
 
@@ -59,10 +59,10 @@ export default class GoogleCloudSTTParser extends STTParserBase {
           .map((data) => data.alternatives && data.alternatives[0]?.transcript)
           .join('\n')
       } catch (e) {
-        LogHelper.error(`${this.name}: ${e}`)
+        LogHelper.error(`${this.name} - Failed to parse: ${e}`)
       }
     } else {
-      LogHelper.error(`${this.name}: not initialized`)
+      LogHelper.error(`${this.name} - Not initialized`)
     }
 
     return null

@@ -43,7 +43,7 @@ export default class AmazonPollySynthesizer extends TTSSynthesizerBase {
 
       LogHelper.success('Synthesizer initialized')
     } catch (e) {
-      LogHelper.error(`${this.name}: ${e}`)
+      LogHelper.error(`${this.name} - Failed to initialize: ${e}`)
     }
   }
 
@@ -66,7 +66,7 @@ export default class AmazonPollySynthesizer extends TTSSynthesizerBase {
         const AudioStream = result.AudioStream as Stream
 
         if (!AudioStream) {
-          LogHelper.error(`${this.name}: AudioStream is undefined`)
+          LogHelper.error(`${this.name} - AudioStream is undefined`)
 
           return null
         }
@@ -89,9 +89,9 @@ export default class AmazonPollySynthesizer extends TTSSynthesizerBase {
         }
       }
 
-      LogHelper.error(`${this.name}: client is not defined yet`)
+      LogHelper.error(`${this.name} - Client is not defined yet`)
     } catch (e) {
-      LogHelper.error(`${this.name}: Failed to synthesize speech: ${e} `)
+      LogHelper.error(`${this.name} - Failed to synthesize speech: ${e} `)
     }
 
     return null

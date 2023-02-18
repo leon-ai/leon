@@ -113,14 +113,12 @@ export default class SocketServer {
 
             this.socket.emit('is-typing', true)
 
-            // TODO
             const utterance = data.value
             try {
               LogHelper.time('Utterance processed in')
 
               await NLU.process(utterance)
-              // TODO
-              // await provider.nlu.process(utterance)
+
               LogHelper.title('Execution Time')
               LogHelper.timeEnd('Utterance processed in')
             } catch (e) {
