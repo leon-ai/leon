@@ -113,7 +113,7 @@ export default class SocketServer {
 
             this.socket.emit('is-typing', true)
 
-            const utterance = data.value
+            const { value: utterance } = data
             try {
               LogHelper.time('Utterance processed in')
 

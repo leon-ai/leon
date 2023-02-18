@@ -493,7 +493,7 @@ export default class Brain {
             lang: this._lang,
             ...obj,
             speeches: [answer],
-            core: this.skillFinalOutput.core,
+            core: this.skillFinalOutput?.core,
             action,
             nextAction,
             executionTime // In ms, skill execution time only
