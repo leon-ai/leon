@@ -1,11 +1,10 @@
-// TODO: remove ignore
-
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswers } from '@/schemas/global-data-schemas'
+import type { NLUResult } from '@/core/nlu/types'
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
 import { SOCKET_SERVER, TTS } from '@/core'
@@ -14,15 +13,22 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
+import type { SkillConfig } from '@/schemas/skill-schemas'
 
 interface BrainProcessResult extends NLUResult {
   speeches: string[]
   executionTime: number
   utteranceId? : string
   lang?: ShortLanguageCode,
+  // TODO
   // core: this.skillFinalOutput.core,
-  action: NLUResult['action'],
-  nextAction,
+  action?: NLUResult['classification']['action'],
+  // TODO
+  // nextAction?: {,
+}
+
+interface BrainExecutionOptions {
+  mute?: boolean
 }
 
 // TODO: split class
@@ -114,20 +120,21 @@ export default class Brain {
    */
   // TODO: handle return type
   wernicke(type: string, key?: string, obj?: Record<string, unknown>): string {
-    let answer
+    let answerObject: Record<string, string> = {}
+    let answer = ''
 
     // Choose a random answer or a specific one
     let property = this.broca.answers[type]
     if (property?.constructor === [].constructor) {
       property = property as string[]
-      answer = property[Math.floor(Math.random() * property.length)]
+      answer = property[Math.floor(Math.random() * property.length)] as string
     } else {
-      answer = property
+      answerObject = property as Record<string, string>
     }
 
     // Select a specific key
     if (key !== '' && typeof key !== 'undefined') {
-      answer = answer[key]
+      answer = answerObject[key] as string
     }
 
     // Parse sentence's value(s) and replace with the given object
@@ -142,10 +149,10 @@ export default class Brain {
    * Execute Python skills
    * TODO: split into several methods
    */
-  execute(obj: NLUResult, opts): Promise<void> {
+  execute(obj: NLUResult, opts: BrainExecutionOptions): Promise<Partial<BrainProcessResult>> {
     const executionTimeStart = Date.now()
     opts = opts || {
-      mute: false // Close Leon mouth e.g. over HTTP
+      mute: false // Close Leon's mouth e.g. over HTTP
     }
 
     return new Promise(async (resolve, reject) => {
@@ -178,10 +185,10 @@ export default class Brain {
           configDataFilePath,
           classification: { action: actionName }
         } = obj
-        const { actions } = JSON.parse(
+        const { actions }: { actions: SkillConfig['actions'] } = JSON.parse(
           fs.readFileSync(configDataFilePath, 'utf8')
         )
-        const action = actions[actionName]
+        const action = actions[actionName] as SkillConfig['actions'][string]
         const { type: actionType } = action
         const nextAction = action.next_action
           ? actions[action.next_action]

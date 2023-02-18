@@ -1,5 +1,5 @@
 // TODO
-interface NLUResult {
+export interface NLUResult {
   currentEntities: [],
   entities: []
   currentResolvers: []
