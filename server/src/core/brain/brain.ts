@@ -16,6 +16,8 @@ import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
 
+type SkillOutputType = 'inter' | 'end'
+
 interface SkillResult {
   domain: string // leon
   skill: string // greeting
@@ -25,7 +27,7 @@ interface SkillResult {
   entities: NEREntity[]
   slots: object // {} // TODO
   output: {
-    type: 'inter' | 'end'
+    type: SkillOutputType
     codes: string[]
     speech: string
     core: object // TODO
