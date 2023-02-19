@@ -6,7 +6,7 @@ import { Polly, SynthesizeSpeechCommand } from '@aws-sdk/client-polly'
 
 import type { LongLanguageCode } from '@/types'
 import type { SynthesizeResult } from '@/core/tts/types'
-import type { AmazonVoiceConfiguration } from '@/schemas/voice-config-schemas'
+import type { AmazonVoiceConfigurationSchema } from '@/schemas/voice-config-schemas'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
 import { TTS } from '@/core'
 import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
@@ -33,7 +33,7 @@ export default class AmazonPollySynthesizer extends TTSSynthesizerBase {
     LogHelper.title(this.name)
     LogHelper.success('New instance')
 
-    const config: AmazonVoiceConfiguration = JSON.parse(
+    const config: AmazonVoiceConfigurationSchema = JSON.parse(
       fs.readFileSync(path.join(VOICE_CONFIG_PATH, 'amazon.json'), 'utf8')
     )
 

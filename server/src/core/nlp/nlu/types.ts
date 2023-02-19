@@ -1,4 +1,5 @@
 import type { NEREntity } from '@/core/nlp/ner/types'
+import type { NLPAction, NLPDomain, NLPSkill, NLPUtterance } from '@/core/nlp/types'
 
 export interface NLUSlot {
   name: string
@@ -9,21 +10,24 @@ export interface NLUSlot {
   pickedQuestion: string
 }
 
+export interface NLUClassification {
+  domain: NLPDomain
+  skill: NLPSkill
+  action: NLPAction
+  confidence: number
+}
+
 // TODO
 export interface NLUResult {
-  currentEntities: []
-  entities: []
+  currentEntities: NEREntity[]
+  entities: NEREntity[]
   currentResolvers: []
   resolvers: []
   slots: ''
-  utterance: string
+  utterance: NLPUtterance
   configDataFilePath: string
-  classification: {
-    domain: string
-    skill: string
-    action: string
-    confidence: number
-  }
+  answers: { answer: string }[]
+  classification: NLUClassification
 }
 
 export type NLUSlots = Record<string, NLUSlot>

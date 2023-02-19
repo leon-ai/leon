@@ -3,9 +3,10 @@ import path from 'node:path'
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { ShortLanguageCode } from '@/types'
-import type { GlobalAnswers } from '@/schemas/global-data-schemas'
+import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
+import type { NLPAction, NLPDomain, NLPSkill, NLPUtterance } from '@/core/nlp/types'
 import type { NLUResult, NLUSlots } from '@/core/nlp/nlu/types'
-import type { SkillConfig } from '@/schemas/skill-schemas'
+import type { SkillConfigSchema } from '@/schemas/skill-schemas'
 import type { NEREntity } from '@/core/nlp/ner/types'
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
@@ -16,22 +17,32 @@ import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
 
-type SkillOutputType = 'inter' | 'end'
+enum SkillOutputType {
+  Intermediate = 'inter',
+  End = 'end'
+}
+
+interface SkillCoreData {
+  restart?: boolean
+  isInActionLoop?: boolean
+  showNextActionSuggestions?: boolean
+  showSuggestions?: boolean
+}
 
 interface SkillResult {
-  domain: string // leon
-  skill: string // greeting
-  action: string // run
-  lang: ShortLanguageCode // en
-  utterance: string // hi
+  domain: NLPDomain
+  skill: NLPSkill
+  action: NLPAction
+  lang: ShortLanguageCode
+  utterance: NLPUtterance
   entities: NEREntity[]
   slots: NLUSlots
   output: {
     type: SkillOutputType
     codes: string[]
     speech: string
-    core: object // TODO
-    options: object // TODO
+    core: SkillCoreData
+    options: unknown
   }
 }
 
@@ -40,11 +51,9 @@ interface BrainProcessResult extends NLUResult {
   executionTime: number
   utteranceId? : string
   lang?: ShortLanguageCode
-  // TODO
-  // core: this.skillFinalOutput.core
-  action?: NLUResult['classification']['action']
-  // TODO
-  // nextAction?: {,
+  core?: SkillCoreData
+  action?: SkillConfigSchema['actions'][0]
+  nextAction?: SkillConfigSchema['actions'][0]
 }
 
 interface BrainExecutionOptions {
@@ -56,7 +65,7 @@ interface BrainExecutionOptions {
 export default class Brain {
   private static instance: Brain
   private _lang: ShortLanguageCode = 'en'
-  private broca: GlobalAnswers = JSON.parse(
+  private broca: GlobalAnswersSchema = JSON.parse(
     fs.readFileSync(
       path.join(process.cwd(), 'core/data', this._lang, 'answers.json'),
       'utf8'
@@ -205,10 +214,10 @@ export default class Brain {
           configDataFilePath,
           classification: { action: actionName }
         } = obj
-        const { actions }: { actions: SkillConfig['actions'] } = JSON.parse(
+        const { actions }: { actions: SkillConfigSchema['actions'] } = JSON.parse(
           fs.readFileSync(configDataFilePath, 'utf8')
         )
-        const action = actions[actionName] as SkillConfig['actions'][string]
+        const action = actions[actionName] as SkillConfigSchema['actions'][string]
         const { type: actionType } = action
         const nextAction = action.next_action
           ? actions[action.next_action]
@@ -278,7 +287,7 @@ export default class Brain {
               const obj = JSON.parse(data.toString())
 
               if (typeof obj === 'object') {
-                if (obj.output.type === 'inter') {
+                if (obj.output.type === SkillOutputType.Intermediate) {
                   LogHelper.title(`${skillFriendlyName} skill`)
                   LogHelper.info(data.toString())
 
@@ -365,7 +374,7 @@ export default class Brain {
 
                 // Synchronize the downloaded content if enabled
                 if (
-                  this.skillFinalOutput.type === 'end' &&
+                  this.skillFinalOutput.type === SkillOutputType.End &&
                   this.skillFinalOutput.options.synchronization &&
                   this.skillFinalOutput.options.synchronization.enabled &&
                   this.skillFinalOutput.options.synchronization.enabled === true

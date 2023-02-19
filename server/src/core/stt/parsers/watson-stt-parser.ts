@@ -5,7 +5,7 @@ import { Duplex } from 'node:stream'
 import Stt from 'ibm-watson/speech-to-text/v1'
 import { IamAuthenticator } from 'ibm-watson/auth'
 
-import type { WatsonVoiceConfiguration } from '@/schemas/voice-config-schemas'
+import type { WatsonVoiceConfigurationSchema } from '@/schemas/voice-config-schemas'
 import { STTParserBase } from '@/core/stt/stt-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
@@ -20,7 +20,7 @@ export default class WatsonSTTParser extends STTParserBase {
     LogHelper.title(this.name)
     LogHelper.success('New instance')
 
-    const config: WatsonVoiceConfiguration = JSON.parse(
+    const config: WatsonVoiceConfigurationSchema = JSON.parse(
       fs.readFileSync(path.join(VOICE_CONFIG_PATH, 'watson-stt.json'), 'utf8')
     )
 

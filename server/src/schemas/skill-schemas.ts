@@ -191,7 +191,7 @@ export const skillConfigSchemaObject = Type.Strict(
   )
 )
 
-export type Domain = Static<typeof domainSchemaObject>
-export type Skill = Static<typeof skillSchemaObject>
-export type SkillConfig = Static<typeof skillConfigSchemaObject>
-export type SkillBridge = Static<typeof skillSchemaObject.bridge>
+export type DomainSchema = Static<typeof domainSchemaObject>
+export type SkillSchema = Static<typeof skillSchemaObject>
+export type SkillConfigSchema = Static<typeof skillConfigSchemaObject>
+export type SkillBridgeSchema = Static<typeof skillSchemaObject.bridge>

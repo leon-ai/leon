@@ -5,7 +5,7 @@ import fs from 'node:fs'
 import Tts from 'ibm-watson/text-to-speech/v1'
 import { IamAuthenticator } from 'ibm-watson/auth'
 
-import type { WatsonVoiceConfiguration } from '@/schemas/voice-config-schemas'
+import type { WatsonVoiceConfigurationSchema } from '@/schemas/voice-config-schemas'
 import type { LongLanguageCode } from '@/types'
 import type { SynthesizeResult } from '@/core/tts/types'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
@@ -34,7 +34,7 @@ export default class WatsonTTSSynthesizer extends TTSSynthesizerBase {
     LogHelper.title(this.name)
     LogHelper.success('New instance')
 
-    const config: WatsonVoiceConfiguration = JSON.parse(
+    const config: WatsonVoiceConfigurationSchema = JSON.parse(
       fs.readFileSync(path.join(VOICE_CONFIG_PATH, 'watson-stt.json'), 'utf8')
     )
 

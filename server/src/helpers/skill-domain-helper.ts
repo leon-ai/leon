@@ -2,12 +2,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ShortLanguageCode } from '@/types'
-import type { GlobalEntity } from '@/schemas/global-data-schemas'
+import type { GlobalEntitySchema } from '@/schemas/global-data-schemas'
 import type {
-  Domain,
-  Skill,
-  SkillConfig,
-  SkillBridge
+  DomainSchema,
+  SkillSchema,
+  SkillConfigSchema,
+  SkillBridgeSchema
 } from '@/schemas/skill-schemas'
 
 interface SkillDomain {
@@ -17,13 +17,13 @@ interface SkillDomain {
     [key: string]: {
       name: string
       path: string
-      bridge: SkillBridge
+      bridge: SkillBridgeSchema
     }
   }
 }
 
-interface SkillConfigWithGlobalEntities extends Omit<SkillConfig, 'entities'> {
-  entities: Record<string, GlobalEntity>
+interface SkillConfigWithGlobalEntities extends Omit<SkillConfigSchema, 'entities'> {
+  entities: Record<string, GlobalEntitySchema>
 }
 
 const DOMAINS_DIR = path.join(process.cwd(), 'skills')
@@ -43,7 +43,7 @@ export class SkillDomainHelper {
           const skills: SkillDomain['skills'] = {}
           const { name: domainName } = (await import(
             path.join(domainPath, 'domain.json')
-          )) as Domain
+          )) as DomainSchema
           const skillFolders = fs.readdirSync(domainPath)
 
           for (let i = 0; i < skillFolders.length; i += 1) {
@@ -53,7 +53,7 @@ export class SkillDomainHelper {
             if (fs.statSync(skillPath).isDirectory()) {
               const { name: skillName, bridge: skillBridge } = JSON.parse(
                 fs.readFileSync(path.join(skillPath, 'skill.json'), 'utf8')
-              ) as Skill
+              ) as SkillSchema
 
               skills[skillName] = {
                 name: skillAliasName,
@@ -82,7 +82,7 @@ export class SkillDomainHelper {
    * Get information of a specific domain
    * @param domain Domain to get info from
    */
-  public static getSkillDomainInfo(domain: SkillDomain['name']): Domain {
+  public static getSkillDomainInfo(domain: SkillDomain['name']): DomainSchema {
     return JSON.parse(
       fs.readFileSync(path.join(DOMAINS_DIR, domain, 'domain.json'), 'utf8')
     )
@@ -95,8 +95,8 @@ export class SkillDomainHelper {
    */
   public static getSkillInfo(
     domain: SkillDomain['name'],
-    skill: Skill['name']
-  ): Skill {
+    skill: SkillSchema['name']
+  ): SkillSchema {
     return JSON.parse(
       fs.readFileSync(
         path.join(DOMAINS_DIR, domain, skill, 'skill.json'),
@@ -117,7 +117,7 @@ export class SkillDomainHelper {
     const sharedDataPath = path.join(process.cwd(), 'core', 'data', lang)
     const configData = JSON.parse(
       fs.readFileSync(configFilePath, 'utf8')
-    ) as SkillConfig
+    ) as SkillConfigSchema
     const result: SkillConfigWithGlobalEntities = {
       ...configData,
       entities: {}
@@ -138,7 +138,7 @@ export class SkillDomainHelper {
             encoding: 'utf8'
           })
 
-          result.entities[entity] = JSON.parse(entityRawData) as GlobalEntity
+          result.entities[entity] = JSON.parse(entityRawData) as GlobalEntitySchema
         }
       })
 
