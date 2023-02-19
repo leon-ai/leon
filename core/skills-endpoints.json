@@ -3,7 +3,9 @@
     {
       "method": "POST",
       "route": "/api/action/games/akinator/choose_thematic",
-      "params": ["thematic"],
+      "params": [
+        "thematic"
+      ],
       "entitiesType": "trim"
     },
     {
@@ -44,7 +46,9 @@
     {
       "method": "POST",
       "route": "/api/action/games/rochambeau/play",
-      "params": ["handsign"],
+      "params": [
+        "handsign"
+      ],
       "entitiesType": "trim"
     },
     {
@@ -73,9 +77,12 @@
       "params": []
     },
     {
-      "method": "GET",
+      "method": "POST",
       "route": "/api/action/leon/greeting/run",
-      "params": []
+      "params": [
+        "pet"
+      ],
+      "entitiesType": "trim"
     },
     {
       "method": "GET",
@@ -120,7 +127,10 @@
     {
       "method": "POST",
       "route": "/api/action/news/github_trends/run",
-      "params": ["number", "daterange"],
+      "params": [
+        "number",
+        "daterange"
+      ],
       "entitiesType": "builtIn"
     },
     {
@@ -131,7 +141,9 @@
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/create_list",
-      "params": ["list"],
+      "params": [
+        "list"
+      ],
       "entitiesType": "trim"
     },
     {
@@ -142,37 +154,53 @@
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/view_list",
-      "params": ["list"],
+      "params": [
+        "list"
+      ],
       "entitiesType": "trim"
     },
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/rename_list",
-      "params": ["old_list", "new_list"],
+      "params": [
+        "old_list",
+        "new_list"
+      ],
       "entitiesType": "trim"
     },
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/delete_list",
-      "params": ["list"],
+      "params": [
+        "list"
+      ],
       "entitiesType": "trim"
     },
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/add_todos",
-      "params": ["todos", "list"],
+      "params": [
+        "todos",
+        "list"
+      ],
       "entitiesType": "trim"
     },
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/complete_todos",
-      "params": ["todos", "list"],
+      "params": [
+        "todos",
+        "list"
+      ],
       "entitiesType": "trim"
     },
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/uncheck_todos",
-      "params": ["todos", "list"],
+      "params": [
+        "todos",
+        "list"
+      ],
       "entitiesType": "trim"
     },
     {
@@ -193,7 +221,9 @@
     {
       "method": "POST",
       "route": "/api/action/utilities/is_it_down/run",
-      "params": ["url"],
+      "params": [
+        "url"
+      ],
       "entitiesType": "builtIn"
     },
     {

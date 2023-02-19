@@ -4,7 +4,9 @@ import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswers } from '@/schemas/global-data-schemas'
-import type { NLUResult } from '@/core/nlu/types'
+import type { NLUResult } from '@/core/nlp/nlu/types'
+import type { SkillConfig } from '@/schemas/skill-schemas'
+import type { NEREntity } from '@/core/nlp/ner/types'
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
 import { SOCKET_SERVER, TTS } from '@/core'
@@ -13,15 +15,14 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
-import type { SkillConfig } from '@/schemas/skill-schemas'
 
-interface BrainSkillOutput {
+interface SkillResult {
   domain: string // leon
   skill: string // greeting
   action: string // run
-  lang: string // en
+  lang: ShortLanguageCode // en
   utterance: string // hi
-  entities: [] // [] // TODO
+  entities: NEREntity[]
   slots: object // {} // TODO
   output: {
     type: 'inter' | 'end'
@@ -347,8 +348,6 @@ export default class Brain {
             LogHelper.info(output)
 
             this.skillFinalOutput = output
-
-            console.log('output', output)
 
             // Check if there is an output (no skill error)
             if (this.skillFinalOutput !== '') {

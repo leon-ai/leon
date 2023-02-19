@@ -5,7 +5,7 @@ import SocketServer from '@/core/socket-server'
 import SpeechToText from '@/core/stt/stt'
 import TextToSpeech from '@/core/tts/tts'
 import AutomaticSpeechRecognition from '@/core/asr/asr'
-import NaturalLanguageUnderstanding from '@/core/nlu/nlu'
+import NaturalLanguageUnderstanding from '@/core/nlp/nlu/nlu'
 import Brain from '@/core/brain/brain'
 
 /**
