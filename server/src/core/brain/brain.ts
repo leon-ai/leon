@@ -52,8 +52,8 @@ interface BrainProcessResult extends NLUResult {
   utteranceId? : string
   lang?: ShortLanguageCode
   core?: SkillCoreData
-  action?: SkillConfigSchema['actions'][0]
-  nextAction?: SkillConfigSchema['actions'][0]
+  action?: SkillConfigSchema['actions'][string]
+  nextAction?: SkillConfigSchema['actions'][string]
 }
 
 interface BrainExecutionOptions {
