@@ -1,3 +1,14 @@
+import type { NEREntity } from '@/core/nlp/ner/types'
+
+export interface NLUSlot {
+  name: string
+  expectedEntity: string
+  value: NEREntity
+  isFilled: boolean
+  questions: string[]
+  pickedQuestion: string
+}
+
 // TODO
 export interface NLUResult {
   currentEntities: []
@@ -14,3 +25,5 @@ export interface NLUResult {
     confidence: number
   }
 }
+
+export type NLUSlots = Record<string, NLUSlot>

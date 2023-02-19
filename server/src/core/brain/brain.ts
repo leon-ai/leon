@@ -4,7 +4,7 @@ import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswers } from '@/schemas/global-data-schemas'
-import type { NLUResult } from '@/core/nlp/nlu/types'
+import type { NLUResult, NLUSlots } from '@/core/nlp/nlu/types'
 import type { SkillConfig } from '@/schemas/skill-schemas'
 import type { NEREntity } from '@/core/nlp/ner/types'
 import { langs } from '@@/core/langs.json'
@@ -25,7 +25,7 @@ interface SkillResult {
   lang: ShortLanguageCode // en
   utterance: string // hi
   entities: NEREntity[]
-  slots: object // {} // TODO
+  slots: NLUSlots
   output: {
     type: SkillOutputType
     codes: string[]
