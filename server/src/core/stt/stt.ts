@@ -36,6 +36,7 @@ export default class STT {
    * Initialize the STT provider
    */
   public async init(): Promise<boolean> {
+    LogHelper.title('STT')
     LogHelper.info('Initializing STT...')
 
     if (!Object.values(STTProviders).includes(STT_PROVIDER as STTProviders)) {

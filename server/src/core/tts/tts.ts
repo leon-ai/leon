@@ -44,6 +44,7 @@ export default class TTS {
    * Initialize the TTS provider
    */
   public async init(newLang: ShortLanguageCode): Promise<boolean> {
+    LogHelper.title('TTS')
     LogHelper.info('Initializing TTS...')
 
     this.lang = newLang || this.lang

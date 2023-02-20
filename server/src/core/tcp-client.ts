@@ -50,7 +50,7 @@ export default class TCPClient {
       this.ee.emit('connected', null)
     })
 
-    this.tcpSocket.on('data', (chunk: { topic: string; data: unknown }) => {
+    this.tcpSocket.on('data', (chunk: { topic: string, data: unknown }) => {
       LogHelper.title('TCP Client')
       LogHelper.info(`Received data: ${String(chunk)}`)
 
@@ -77,7 +77,7 @@ export default class TCPClient {
           if (this.reconnectCounter >= 5) {
             if (osType === OSTypes.MacOS) {
               LogHelper.warning(
-                'The cold start of the TCP server can take a few more seconds on macOS. It should be a one time think, no worries'
+                'The cold start of the TCP server can take a few more seconds on macOS. It should be a one-time thing, no worries'
               )
             }
           }

@@ -127,11 +127,11 @@ export default class SocketServer {
           })
 
           // Handle automatic speech recognition
-          this.socket.on('recognize', async (data) => {
+          this.socket.on('recognize', async (data: Buffer) => {
             try {
               await ASR.encode(data)
             } catch (e) {
-              LogHelper[e.type](e.obj.message)
+              LogHelper.error(`ASR - Failed to encode audio blob to WAVE file: ${e.stack}`)
             }
           })
         }
