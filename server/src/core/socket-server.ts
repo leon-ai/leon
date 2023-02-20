@@ -35,13 +35,44 @@ export default class SocketServer {
     }
   }
 
-  public init(): void {
+  public async init(): void {
     const { httpServer, host } = HTTP_SERVER
     const io = IS_DEVELOPMENT_ENV
       ? new SocketIOServer(httpServer, {
           cors: { origin: `${host}:3000` }
         })
       : new SocketIOServer(httpServer)
+
+    let sttState = 'disabled'
+    let ttsState = 'disabled'
+
+    // TODO
+    // provider.brain.socket = socket
+
+    if (HAS_STT) {
+      sttState = 'enabled'
+
+      // TODO
+      // provider.brain.stt = new Stt(socket, STT_PROVIDER)
+      // provider.brain.stt.init(() => null)
+      await STT.init()
+    }
+    if (HAS_TTS) {
+      ttsState = 'enabled'
+
+      // TODO
+      // provider.brain.tts = new Tts(socket, TTS_PROVIDER)
+      // provider.brain.tts.init('en', () => null)
+      await TTS.init(
+        LangHelper.getShortCode(LANG)
+      )
+    }
+
+    LogHelper.title('Initialization')
+    LogHelper.success(`STT ${sttState}`)
+    LogHelper.success(`TTS ${ttsState}`)
+
+    await NLU.loadNLPModels()
 
     io.on('connection', (socket) => {
       LogHelper.title('Client')
@@ -50,9 +81,9 @@ export default class SocketServer {
       this.socket = socket
 
       // Init
-      this.socket.on('init', async (data) => {
+      this.socket.on('init', (data) => {
         LogHelper.info(`Type: ${data}`)
-        LogHelper.info(`Socket id: ${this.socket.id}`)
+        LogHelper.info(`Socket ID: ${this.socket.id}`)
 
         // TODO
         // const provider = await addProvider(socket.id)
@@ -75,37 +106,6 @@ export default class SocketServer {
             this.socket.broadcast.emit('enable-record')
           })
         } else {
-          let sttState = 'disabled'
-          let ttsState = 'disabled'
-
-          // TODO
-          // provider.brain.socket = socket
-
-          if (HAS_STT) {
-            sttState = 'enabled'
-
-            // TODO
-            // provider.brain.stt = new Stt(socket, STT_PROVIDER)
-            // provider.brain.stt.init(() => null)
-            await STT.init()
-          }
-          if (HAS_TTS) {
-            ttsState = 'enabled'
-
-            // TODO
-            // provider.brain.tts = new Tts(socket, TTS_PROVIDER)
-            // provider.brain.tts.init('en', () => null)
-            await TTS.init(
-              LangHelper.getShortCode(LANG)
-            )
-          }
-
-          LogHelper.title('Initialization')
-          LogHelper.success(`STT ${sttState}`)
-          LogHelper.success(`TTS ${ttsState}`)
-
-          await NLU.loadNLPModels()
-
           // Listen for new utterance
           this.socket.on('utterance', async (data) => {
             LogHelper.title('Socket')
