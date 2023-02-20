@@ -10,16 +10,11 @@ import {
   LANG,
   HAS_STT,
   HAS_TTS,
-  IS_DEVELOPMENT_ENV,
-  STT_PROVIDER,
-  TTS_PROVIDER
+  IS_DEVELOPMENT_ENV
 } from '@/constants'
 import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS, NLU } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
-import Asr from '@/core/asr/asr'
-// import Stt from '@/stt/stt'
-// import Tts from '@/tts/tts'
 
 export default class SocketServer {
   private static instance: SocketServer
@@ -46,23 +41,14 @@ export default class SocketServer {
     let sttState = 'disabled'
     let ttsState = 'disabled'
 
-    // TODO
-    // provider.brain.socket = socket
-
     if (HAS_STT) {
       sttState = 'enabled'
 
-      // TODO
-      // provider.brain.stt = new Stt(socket, STT_PROVIDER)
-      // provider.brain.stt.init(() => null)
       await STT.init()
     }
     if (HAS_TTS) {
       ttsState = 'enabled'
 
-      // TODO
-      // provider.brain.tts = new Tts(socket, TTS_PROVIDER)
-      // provider.brain.tts.init('en', () => null)
       await TTS.init(
         LangHelper.getShortCode(LANG)
       )

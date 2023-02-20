@@ -1,10 +1,13 @@
 /**
  * TODO next:
- * 1. Fix TS errors
+ * 1. Fix brain.ts TS errors
  * 2. Refactor brain.ts; split "execute" into smaller functions:
  * logic type actions (executeLogicAction)
  * dialog type actions (executeDialogAction)
- * ...
+ * 3. Fix nlu.ts TS errors
+ * 4. Refactor nlu.ts; split into smaller functions
+ * 5. Restore multi client support on HTTP server / socket server
+ * 6. Publish to "develop" (or just fix TS errors only and publish first, then refactor)
  */
 
 import fs from 'node:fs'
