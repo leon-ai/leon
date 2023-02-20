@@ -1,3 +1,12 @@
+/**
+ * TODO next:
+ * 1. Fix TS errors
+ * 2. Refactor brain.ts; split "execute" into smaller functions:
+ * logic type actions (executeLogicAction)
+ * dialog type actions (executeDialogAction)
+ * ...
+ */
+
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
