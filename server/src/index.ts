@@ -23,17 +23,12 @@ import { LangHelper } from '@/helpers/lang-helper'
   TCP_CLIENT.connect()
 
   // Start the HTTP server
-  // await server.init()
   await HTTP_SERVER.init()
 
   // TODO
   // Register HTTP API endpoints
   // await HTTP_API.register()
 
-  // TODO
-  // const httpServer = HTTP_SERVER.httpServer
-
-  // TODO
   // Start the socket server
   SOCKET_SERVER.init()
 })()

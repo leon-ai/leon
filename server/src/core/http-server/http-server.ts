@@ -2,11 +2,9 @@ import { join } from 'node:path'
 
 import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
-import { Server as SocketIOServer } from 'socket.io'
 
 import { version } from '@@/package.json'
-import { SOCKET_SERVER } from '@/core'
-import { LEON_NODE_ENV, HAS_LOGGER, IS_DEVELOPMENT_ENV } from '@/constants'
+import { LEON_NODE_ENV, HAS_LOGGER } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import corsMidd from '@/core/http-server/plugins/cors'
@@ -14,7 +12,6 @@ import otherMidd from '@/core/http-server/plugins/other'
 import infoPlugin from '@/core/http-server/api/info'
 import downloadsPlugin from '@/core/http-server/api/downloads'
 // import keyMidd from '@/core/http-server/plugins/key'
-import server from '@/core/http-server/old-server'
 
 const API_VERSION = 'v1'
 
@@ -115,14 +112,6 @@ export default class HTTPServer {
    * Launch server
    */
   private async listen(): Promise<void> {
-    const io = IS_DEVELOPMENT_ENV
-      ? new SocketIOServer(this.httpServer, {
-          cors: { origin: `${this.host}:3000` }
-        })
-      : new SocketIOServer(this.httpServer)
-
-    io.on('connection', SOCKET_SERVER.init)
-
     this.fastify.listen(
       {
         port: this.port,

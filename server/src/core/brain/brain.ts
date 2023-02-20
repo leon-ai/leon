@@ -135,7 +135,7 @@ export default class Brain {
         // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
         const speech = rawSpeech.replace(/<(?:.|\n)*?>/gm, ' ')
 
-        await TTS.add(speech, end)
+        TTS.add(speech, end)
       }
 
       SOCKET_SERVER.socket.emit('answer', rawSpeech)
