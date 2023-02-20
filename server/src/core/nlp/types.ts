@@ -33,7 +33,7 @@ export interface NLUResult {
   entities: NEREntity[]
   currentResolvers: [] // TODO
   resolvers: [] // TODO
-  slots: '' // TODO
+  slots: NLUSlots
   utterance: NLPUtterance
   configDataFilePath: string
   answers: { answer: string }[]
@@ -220,7 +220,7 @@ interface CustomEntity<T> extends Entity {
   type: T
 }
 
-interface CustomEnumEntity extends CustomEntity<'enum'> {
+export interface CustomEnumEntity extends CustomEntity<'enum'> {
   levenshtein: number
   option: string
   resolution: {

@@ -4,7 +4,17 @@ import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
-import type { NLPAction, NLPDomain, NLPSkill, NLPUtterance, NEREntity, NLUResult, NLUSlots } from '@/core/nlp/types'
+import type {
+  NLPAction,
+  NLPDomain,
+  NLPSkill,
+  NLPUtterance,
+  NEREntity,
+  NLUResult,
+  NLUSlots,
+  NLUSlot,
+  NERCustomEntity
+} from '@/core/nlp/types'
 import type { SkillConfigSchema } from '@/schemas/skill-schemas'
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
@@ -43,7 +53,7 @@ interface SkillResult {
     type: SkillOutputType
     codes: string[]
     speech: string
-    core: SkillCoreData
+    core: SkillCoreData | undefined
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     options: Record<string, any>
   }
@@ -54,9 +64,9 @@ interface BrainProcessResult extends NLUResult {
   executionTime: number
   utteranceId? : string
   lang?: ShortLanguageCode
-  core?: SkillCoreData
+  core?: SkillCoreData | undefined
   action?: SkillConfigSchema['actions'][string]
-  nextAction?: SkillConfigSchema['actions'][string]
+  nextAction?: SkillConfigSchema['actions'][string] | null | undefined
 }
 
 interface BrainExecutionOptions {
@@ -127,7 +137,7 @@ export default class Brain {
   /**
    * Make Leon talk
    */
-  async talk(rawSpeech: string, end = false): Promise<void> {
+  talk(rawSpeech: string, end = false): void {
     LogHelper.title('Leon')
     LogHelper.info('Talking...')
 
@@ -236,10 +246,10 @@ export default class Brain {
              * 2. Edit: server/src/intent-object.sample.json
              * 3. Run: npm run python-bridge
              */
-            const slots = {}
+            const slots: { [key: string]: NLUSlot['value'] | undefined } = {}
             if (obj.slots) {
               Object.keys(obj.slots)?.forEach((slotName) => {
-                slots[slotName] = obj.slots[slotName].value
+                slots[slotName] = obj.slots[slotName]?.value
               })
             }
             const intentObj = {
@@ -446,7 +456,7 @@ export default class Brain {
           const utteranceHasEntities = obj.entities.length > 0
           const { answers: rawAnswers } = obj
           let answers = rawAnswers
-          let answer = ''
+          let answer: string | undefined = ''
 
           if (!utteranceHasEntities) {
             answers = answers.filter(
@@ -464,7 +474,7 @@ export default class Brain {
               rawAnswers[Math.floor(Math.random() * rawAnswers.length)]?.answer
 
             // In case the expected answer requires a known entity
-            if (answer.indexOf('{{') !== -1) {
+            if (answer?.indexOf('{{') !== -1) {
               // TODO
               answers = actions[obj.classification.action]?.unknown_answers
               answer = answers[Math.floor(Math.random() * answers.length)]
@@ -476,10 +486,10 @@ export default class Brain {
              * In case the utterance contains entities, and the picked up answer too,
              * then map them (utterance <-> answer)
              */
-            if (utteranceHasEntities && answer.indexOf('{{') !== -1) {
+            if (utteranceHasEntities && answer?.indexOf('{{') !== -1) {
               obj.currentEntities.forEach((entityObj) => {
-                answer = StringHelper.findAndMap(answer, {
-                  [`{{ ${entityObj.entity} }}`]: entityObj.resolution.value
+                answer = StringHelper.findAndMap(answer as string, {
+                  [`{{ ${entityObj.entity} }}`]: (entityObj as NERCustomEntity).resolution.value
                 })
 
                 // Find matches and map deeper data from the NLU file (global entities)
@@ -492,12 +502,12 @@ export default class Brain {
 
                   const [entity, dataKey] = newStr.split('.')
 
-                  if (entity === entityObj.entity) {
+                  if (entity && dataKey && entity === entityObj.entity) {
                     // e.g. entities.color.options.red.data.usage
                     const valuesArr =
                       entities[entity].options[entityObj.option].data[dataKey]
 
-                    answer = StringHelper.findAndMap(answer, {
+                    answer = StringHelper.findAndMap(answer as string, {
                       [match]:
                         valuesArr[Math.floor(Math.random() * valuesArr.length)]
                     })
@@ -511,7 +521,7 @@ export default class Brain {
           const executionTime = executionTimeEnd - executionTimeStart
 
           if (!opts.mute) {
-            this.talk(answer, true)
+            this.talk(answer as string, true)
             SOCKET_SERVER.socket.emit('is-typing', false)
           }
 
@@ -524,7 +534,7 @@ export default class Brain {
             utteranceId,
             lang: this._lang,
             ...obj,
-            speeches: [answer],
+            speeches: [answer as string],
             core: {},
             action,
             nextAction,
