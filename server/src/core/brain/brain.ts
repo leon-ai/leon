@@ -19,6 +19,10 @@ enum SkillOutputType {
   Intermediate = 'inter',
   End = 'end'
 }
+enum SkillActionType {
+  Logic = 'logic',
+  Dialog = 'dialog'
+}
 
 interface SkillCoreData {
   restart?: boolean
@@ -40,7 +44,8 @@ interface SkillResult {
     codes: string[]
     speech: string
     core: SkillCoreData
-    options: unknown
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    options: Record<string, any>
   }
 }
 
@@ -70,10 +75,6 @@ export default class Brain {
     )
   )
   private skillProcess: ChildProcessWithoutNullStreams | undefined = undefined
-  // TODO: type
-  private skillIntermediateOutput: unknown
-  // TODO: type
-  private skillFinalOutput: unknown
 
   constructor() {
     if (!Brain.instance) {
@@ -221,7 +222,7 @@ export default class Brain {
           ? actions[action.next_action]
           : null
 
-        if (actionType === 'logic') {
+        if (actionType === SkillActionType.Logic) {
           /**
            * "Logic" action skill execution
            */
@@ -274,7 +275,7 @@ export default class Brain {
             domainName,
             skillName
           )
-          let output = ''
+          let skillOutput = ''
 
           // Read output
           this.skillProcess?.stdout.on('data', (data) => {
@@ -289,15 +290,13 @@ export default class Brain {
                   LogHelper.title(`${skillFriendlyName} skill`)
                   LogHelper.info(data.toString())
 
-                  this.skillIntermediateOutput = obj.output
-
                   const speech = obj.output.speech.toString()
                   if (!opts.mute) {
                     this.talk(speech)
                   }
                   speeches.push(speech)
                 } else {
-                  output += data
+                  skillOutput += data
                 }
               } else {
                 reject({
@@ -354,37 +353,36 @@ export default class Brain {
           // Catch the end of the skill execution
           this.skillProcess?.stdout.on('end', () => {
             LogHelper.title(`${skillFriendlyName} skill`)
-            LogHelper.info(output)
+            LogHelper.info(skillOutput)
 
-            this.skillFinalOutput = output
+            let skillResult: SkillResult | undefined = undefined
 
             // Check if there is an output (no skill error)
-            if (this.skillFinalOutput !== '') {
-              this.skillFinalOutput = JSON.parse(this.skillFinalOutput).output
+            if (skillOutput !== '') {
+              skillResult = JSON.parse(skillOutput)
 
-              let { speech } = this.skillFinalOutput
-              if (speech) {
-                speech = speech.toString()
+              if (skillResult?.output.speech) {
+                skillResult.output.speech = skillResult.output.speech.toString()
                 if (!opts.mute) {
-                  this.talk(speech, true)
+                  this.talk(skillResult.output.speech, true)
                 }
-                speeches.push(speech)
+                speeches.push(skillResult.output.speech)
 
                 // Synchronize the downloaded content if enabled
                 if (
-                  this.skillFinalOutput.type === SkillOutputType.End &&
-                  this.skillFinalOutput.options.synchronization &&
-                  this.skillFinalOutput.options.synchronization.enabled &&
-                  this.skillFinalOutput.options.synchronization.enabled === true
+                  skillResult.output.type === SkillOutputType.End &&
+                  skillResult.output.options['synchronization'] &&
+                  skillResult.output.options['synchronization'].enabled &&
+                  skillResult.output.options['synchronization'].enabled === true
                 ) {
                   const sync = new Synchronizer(
                     this,
                     obj.classification,
-                    this.skillFinalOutput.options.synchronization
+                    skillResult.output.options['synchronization']
                   )
 
                   // When the synchronization is finished
-                  sync.synchronize((speech) => {
+                  sync.synchronize((speech: string) => {
                     if (!opts.mute) {
                       this.talk(speech)
                     }
@@ -406,11 +404,11 @@ export default class Brain {
             // Send suggestions to the client
             if (
               nextAction?.suggestions &&
-              this.skillFinalOutput.core?.showNextActionSuggestions
+              skillResult?.output.core?.showNextActionSuggestions
             ) {
               SOCKET_SERVER.socket.emit('suggest', nextAction.suggestions)
             }
-            if (action?.suggestions && this.skillFinalOutput.core?.showSuggestions) {
+            if (action?.suggestions && skillResult?.output.core?.showSuggestions) {
               SOCKET_SERVER.socket.emit('suggest', action.suggestions)
             }
 
@@ -419,7 +417,7 @@ export default class Brain {
               lang: this._lang,
               ...obj,
               speeches,
-              core: this.skillFinalOutput.core,
+              core: skillResult?.output.core,
               action,
               nextAction,
               executionTime // In ms, skill execution time only
@@ -527,7 +525,7 @@ export default class Brain {
             lang: this._lang,
             ...obj,
             speeches: [answer],
-            core: this.skillFinalOutput?.core,
+            core: {},
             action,
             nextAction,
             executionTime // In ms, skill execution time only

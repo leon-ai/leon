@@ -77,12 +77,9 @@
       "params": []
     },
     {
-      "method": "POST",
+      "method": "GET",
       "route": "/api/action/leon/greeting/run",
-      "params": [
-        "pet"
-      ],
-      "entitiesType": "trim"
+      "params": []
     },
     {
       "method": "GET",
