@@ -488,8 +488,11 @@ export default class Brain {
             // In case the expected answer requires a known entity
             if (answer?.indexOf('{{') !== -1) {
               // TODO
-              answers = actions[obj.classification.action]?.unknown_answers
-              answer = answers[Math.floor(Math.random() * answers.length)]
+              const unknownAnswers = actions[obj.classification.action]?.unknown_answers
+
+              if (unknownAnswers) {
+                answer = unknownAnswers[Math.floor(Math.random() * unknownAnswers.length)]
+              }
             }
           } else {
             answer = answers[Math.floor(Math.random() * answers.length)]?.answer
