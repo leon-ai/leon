@@ -12,20 +12,21 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
+import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import type {
+  CustomEnumEntity,
+  NERCustomEntity,
+  NEREntity,
   NLPAction,
   NLPDomain,
   NLPSkill,
   NLPUtterance,
-  NEREntity,
   NLUResult,
-  NLUSlots,
   NLUSlot,
-  NERCustomEntity
+  NLUSlots
 } from '@/core/nlp/types'
 import type { SkillConfigSchema } from '@/schemas/skill-schemas'
 import { langs } from '@@/core/langs.json'
@@ -461,7 +462,7 @@ export default class Brain {
             'config',
             `${this._lang}.json`
           )
-          const { actions, entities } = await SkillDomainHelper.getSkillConfig(
+          const { actions, entities: skillConfigEntities } = await SkillDomainHelper.getSkillConfig(
             configFilePath,
             this._lang
           )
@@ -507,7 +508,10 @@ export default class Brain {
                   [`{{ ${entityObj.entity} }}`]: (entityObj as NERCustomEntity).resolution.value
                 })
 
-                // Find matches and map deeper data from the NLU file (global entities)
+                /**
+                 * Find matches and map deeper data from the NLU file (global entities)
+                 * TODO: handle more entity types, not only enums for global entities?
+                 */
                 const matches = answer.match(/{{.+?}}/g)
 
                 matches?.forEach((match) => {
@@ -518,14 +522,23 @@ export default class Brain {
                   const [entity, dataKey] = newStr.split('.')
 
                   if (entity && dataKey && entity === entityObj.entity) {
-                    // e.g. entities.color.options.red.data.usage
-                    const valuesArr =
-                      entities[entity].options[entityObj.option].data[dataKey]
+                    const { option } = entityObj as CustomEnumEntity
 
-                    answer = StringHelper.findAndMap(answer as string, {
-                      [match]:
-                        valuesArr[Math.floor(Math.random() * valuesArr.length)]
-                    })
+                    const entityOption = skillConfigEntities[entity]?.options[option]
+                    const entityOptionData = entityOption?.data
+                    let valuesArr: string[] = []
+
+                    if (entityOptionData) {
+                      // e.g. entities.color.options.red.data.hexa[]
+                      valuesArr = entityOptionData[dataKey] as string[]
+                    }
+
+                    if (valuesArr.length > 0) {
+                      answer = StringHelper.findAndMap(answer as string, {
+                        [match]:
+                          valuesArr[Math.floor(Math.random() * valuesArr.length)]
+                      })
+                    }
                   }
                 })
               })
