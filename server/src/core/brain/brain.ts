@@ -1,6 +1,6 @@
 /**
  * TODO next:
- * 1. Fix brain.ts TS errors
+ * 1. [OK] Fix brain.ts TS errors
  * 2. Refactor brain.ts; split "execute" into smaller functions:
  * logic type actions (executeLogicAction)
  * dialog type actions (executeDialogAction)
@@ -169,7 +169,6 @@ export default class Brain {
   /**
    * Pickup speech info we need to return
    */
-  // TODO: handle return type
   wernicke(type: string, key?: string, obj?: Record<string, unknown>): string {
     let answerObject: Record<string, string> = {}
     let answer = ''
@@ -200,7 +199,7 @@ export default class Brain {
    * Execute Python skills
    * TODO: split into several methods
    */
-  execute(obj: NLUResult, opts: BrainExecutionOptions): Promise<Partial<BrainProcessResult>> {
+  execute(nluResult: NLUResult, opts: BrainExecutionOptions): Promise<Partial<BrainProcessResult>> {
     const executionTimeStart = Date.now()
     opts = opts || {
       mute: false // Close Leon's mouth e.g. over HTTP
@@ -213,7 +212,7 @@ export default class Brain {
 
       // Ask to repeat if Leon is not sure about the request
       if (
-        obj.classification.confidence <
+        nluResult.classification.confidence <
         langs[LangHelper.getLongCode(this._lang)].min_confidence
       ) {
         if (!opts.mute) {
@@ -235,7 +234,7 @@ export default class Brain {
         const {
           configDataFilePath,
           classification: { action: actionName }
-        } = obj
+        } = nluResult
         const { actions }: { actions: SkillConfigSchema['actions'] } = JSON.parse(
           fs.readFileSync(configDataFilePath, 'utf8')
         )
@@ -260,22 +259,22 @@ export default class Brain {
              * 3. Run: npm run python-bridge
              */
             const slots: { [key: string]: NLUSlot['value'] | undefined } = {}
-            if (obj.slots) {
-              Object.keys(obj.slots)?.forEach((slotName) => {
-                slots[slotName] = obj.slots[slotName]?.value
+            if (nluResult.slots) {
+              Object.keys(nluResult.slots)?.forEach((slotName) => {
+                slots[slotName] = nluResult.slots[slotName]?.value
               })
             }
             const intentObj = {
               id: utteranceId,
               lang: this._lang,
-              domain: obj.classification.domain,
-              skill: obj.classification.skill,
-              action: obj.classification.action,
-              utterance: obj.utterance,
-              current_entities: obj.currentEntities,
-              entities: obj.entities,
-              current_resolvers: obj.currentResolvers,
-              resolvers: obj.resolvers,
+              domain: nluResult.classification.domain,
+              skill: nluResult.classification.skill,
+              action: nluResult.classification.action,
+              utterance: nluResult.utterance,
+              current_entities: nluResult.currentEntities,
+              entities: nluResult.entities,
+              current_resolvers: nluResult.currentResolvers,
+              resolvers: nluResult.resolvers,
               slots
             }
 
@@ -290,8 +289,8 @@ export default class Brain {
             }
           }
 
-          const domainName = obj.classification.domain
-          const skillName = obj.classification.skill
+          const domainName = nluResult.classification.domain
+          const skillName = nluResult.classification.skill
           const { name: domainFriendlyName } =
             SkillDomainHelper.getSkillDomainInfo(domainName)
           const { name: skillFriendlyName } = SkillDomainHelper.getSkillInfo(
@@ -400,7 +399,7 @@ export default class Brain {
                 ) {
                   const sync = new Synchronizer(
                     this,
-                    obj.classification,
+                    nluResult.classification,
                     skillResult.output.options['synchronization']
                   )
 
@@ -438,7 +437,7 @@ export default class Brain {
             resolve({
               utteranceId,
               lang: this._lang,
-              ...obj,
+              ...nluResult,
               speeches,
               core: skillResult?.output.core,
               action,
@@ -457,8 +456,8 @@ export default class Brain {
           const configFilePath = path.join(
             process.cwd(),
             'skills',
-            obj.classification.domain,
-            obj.classification.skill,
+            nluResult.classification.domain,
+            nluResult.classification.skill,
             'config',
             `${this._lang}.json`
           )
@@ -466,8 +465,8 @@ export default class Brain {
             configFilePath,
             this._lang
           )
-          const utteranceHasEntities = obj.entities.length > 0
-          const { answers: rawAnswers } = obj
+          const utteranceHasEntities = nluResult.entities.length > 0
+          const { answers: rawAnswers } = nluResult
           let answers = rawAnswers
           let answer: string | undefined = ''
 
@@ -489,7 +488,7 @@ export default class Brain {
             // In case the expected answer requires a known entity
             if (answer?.indexOf('{{') !== -1) {
               // TODO
-              const unknownAnswers = actions[obj.classification.action]?.unknown_answers
+              const unknownAnswers = actions[nluResult.classification.action]?.unknown_answers
 
               if (unknownAnswers) {
                 answer = unknownAnswers[Math.floor(Math.random() * unknownAnswers.length)]
@@ -503,7 +502,7 @@ export default class Brain {
              * then map them (utterance <-> answer)
              */
             if (utteranceHasEntities && answer?.indexOf('{{') !== -1) {
-              obj.currentEntities.forEach((entityObj) => {
+              nluResult.currentEntities.forEach((entityObj) => {
                 answer = StringHelper.findAndMap(answer as string, {
                   [`{{ ${entityObj.entity} }}`]: (entityObj as NERCustomEntity).resolution.value
                 })
@@ -561,7 +560,7 @@ export default class Brain {
           resolve({
             utteranceId,
             lang: this._lang,
-            ...obj,
+            ...nluResult,
             speeches: [answer as string],
             core: {},
             action,
