@@ -137,7 +137,7 @@ export default class Brain {
   /**
    * Delete intent object file
    */
-  static deleteIntentObjFile(intentObjectPath: string): void {
+  private static deleteIntentObjFile(intentObjectPath: string): void {
     try {
       if (fs.existsSync(intentObjectPath)) {
         fs.unlinkSync(intentObjectPath)
@@ -150,7 +150,7 @@ export default class Brain {
   /**
    * Make Leon talk
    */
-  talk(rawSpeech: string, end = false): void {
+  public talk(rawSpeech: string, end = false): void {
     LogHelper.title('Leon')
     LogHelper.info('Talking...')
 
@@ -169,7 +169,7 @@ export default class Brain {
   /**
    * Pickup speech info we need to return
    */
-  wernicke(type: string, key?: string, obj?: Record<string, unknown>): string {
+  public wernicke(type: string, key?: string, obj?: Record<string, unknown>): string {
     let answerObject: Record<string, string> = {}
     let answer = ''
 
@@ -195,11 +195,27 @@ export default class Brain {
     return answer
   }
 
+  private shouldAskToRepeat(nluResult: NLUResult): boolean {
+    return (
+      nluResult.classification.confidence <
+      langs[LangHelper.getLongCode(this._lang)].min_confidence
+    )
+  }
+
+  private handleAskToRepeat(nluResult: NLUResult, opts: BrainExecutionOptions): void {
+    if (!opts.mute) {
+      const speech = `${this.wernicke('random_not_sure')}.`
+
+      this.talk(speech, true)
+      SOCKET_SERVER.socket.emit('ask-to-repeat', nluResult)
+    }
+  }
+
   /**
    * Execute Python skills
    * TODO: split into several methods
    */
-  execute(nluResult: NLUResult, opts: BrainExecutionOptions): Promise<Partial<BrainProcessResult>> {
+  public execute(nluResult: NLUResult, opts: BrainExecutionOptions): Promise<Partial<BrainProcessResult>> {
     const executionTimeStart = Date.now()
     opts = opts || {
       mute: false // Close Leon's mouth e.g. over HTTP
@@ -211,17 +227,8 @@ export default class Brain {
       const speeches: string[] = []
 
       // Ask to repeat if Leon is not sure about the request
-      if (
-        nluResult.classification.confidence <
-        langs[LangHelper.getLongCode(this._lang)].min_confidence
-      ) {
-        if (!opts.mute) {
-          const speech = `${this.wernicke('random_not_sure')}.`
-
-          speeches.push(speech)
-          this.talk(speech, true)
-          SOCKET_SERVER.socket.emit('is-typing', false)
-        }
+      if (this.shouldAskToRepeat(nluResult)) {
+        this.handleAskToRepeat(nluResult, opts)
 
         const executionTimeEnd = Date.now()
         const executionTime = executionTimeEnd - executionTimeStart
