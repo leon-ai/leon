@@ -12,7 +12,7 @@ import {
   HAS_TTS,
   IS_DEVELOPMENT_ENV
 } from '@/constants'
-import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS, NLU } from '@/core'
+import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS, NLU, BRAIN } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 
@@ -103,6 +103,7 @@ export default class SocketServer {
             try {
               LogHelper.time('Utterance processed in')
 
+              BRAIN.isMuted = false
               await NLU.process(utterance)
 
               LogHelper.title('Execution Time')

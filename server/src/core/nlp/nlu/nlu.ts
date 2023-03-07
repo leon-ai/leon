@@ -226,9 +226,9 @@ export default class NLU {
   /**
    * Set new language; recreate a new TCP server with new language; and reprocess understanding
    */
-  switchLanguage(utterance, locale, opts) {
+  switchLanguage(utterance, locale) {
     const connectedHandler = async () => {
-      await this.process(utterance, opts)
+      await this.process(utterance)
     }
 
     BRAIN.lang = locale
@@ -290,7 +290,7 @@ export default class NLU {
   /**
    * Handle in action loop logic before NLU processing
    */
-  async handleActionLoop(utterance, opts) {
+  async handleActionLoop(utterance) {
     const { domain, intent } = this.conv.activeContext
     const [skillName, actionName] = intent.split('.')
     const configDataFilePath = join(
@@ -383,20 +383,18 @@ export default class NLU {
     if (!hasMatchingEntity && !hasMatchingResolver) {
       BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
       this.conv.cleanActiveContext()
-      await this.process(utterance, opts)
+      await this.process(utterance)
       return null
     }
 
     try {
-      const processedData = await BRAIN.execute(this.nluResultObj, {
-        mute: opts.mute
-      })
+      const processedData = await BRAIN.execute(this.nluResultObj)
       // Reprocess with the original utterance that triggered the context at first
       if (processedData.core?.restart === true) {
         const { originalUtterance } = this.conv.activeContext
 
         this.conv.cleanActiveContext()
-        await this.process(originalUtterance, opts)
+        await this.process(originalUtterance)
         return null
       }
 
@@ -428,15 +426,15 @@ export default class NLU {
   /**
    * Handle slot filling
    */
-  async handleSlotFilling(utterance, opts) {
-    const processedData = await this.slotFill(utterance, opts)
+  async handleSlotFilling(utterance) {
+    const processedData = await this.slotFill(utterance)
 
     /**
      * In case the slot filling has been interrupted. e.g. context change, etc.
      * Then reprocess with the new utterance
      */
     if (!processedData) {
-      await this.process(utterance, opts)
+      await this.process(utterance)
       return null
     }
 
@@ -465,19 +463,15 @@ export default class NLU {
    * pick-up the right classification
    * and extract entities
    */
-  process(utterance, opts) {
+  process(utterance) {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
       LogHelper.title('NLU')
       LogHelper.info('Processing...')
 
-      opts = opts || {
-        mute: false // Close Leon mouth e.g. over HTTP
-      }
-
       if (!this.hasNlpModels()) {
-        if (!opts.mute) {
+        if (!BRAIN.isMuted) {
           BRAIN.talk(`${BRAIN.wernicke('random_errors')}!`)
           SOCKET_SERVER.socket.emit('is-typing', false)
         }
@@ -495,13 +489,13 @@ export default class NLU {
       if (this.conv.hasActiveContext()) {
         // When the active context is in an action loop, then directly trigger the action
         if (this.conv.activeContext.isInActionLoop) {
-          return resolve(await this.handleActionLoop(utterance, opts))
+          return resolve(await this.handleActionLoop(utterance))
         }
 
         // When the active context has slots filled
         if (Object.keys(this.conv.activeContext.slots).length > 0) {
           try {
-            return resolve(await this.handleSlotFilling(utterance, opts))
+            return resolve(await this.handleSlotFilling(utterance))
           } catch (e) {
             return reject({})
           }
@@ -558,7 +552,7 @@ export default class NLU {
 
       // Trigger language switching
       if (BRAIN.lang !== locale) {
-        return resolve(this.switchLanguage(utterance, locale, opts))
+        return resolve(this.switchLanguage(utterance, locale))
       }
 
       // this.sendLog()
@@ -569,7 +563,7 @@ export default class NLU {
         )
 
         if (fallback === false) {
-          if (!opts.mute) {
+          if (!BRAIN.isMuted) {
             BRAIN.talk(
               `${BRAIN.wernicke('random_unknown_intents')}.`,
               true
@@ -618,7 +612,7 @@ export default class NLU {
           LogHelper[e.type](e.obj.message)
         }
 
-        if (!opts.mute) {
+        if (!BRAIN.isMuted) {
           BRAIN.talk(`${BRAIN.wernicke(e.code, '', e.data)}!`)
         }
       }
@@ -634,7 +628,7 @@ export default class NLU {
         Object.keys(this.conv.activeContext.slots).length > 0
       ) {
         try {
-          return resolve(await this.handleSlotFilling(utterance, opts))
+          return resolve(await this.handleSlotFilling(utterance))
         } catch (e) {
           return reject({})
         }
@@ -662,9 +656,7 @@ export default class NLU {
       this.nluResultObj.entities = this.conv.activeContext.entities
 
       try {
-        const processedData = await BRAIN.execute(this.nluResultObj, {
-          mute: opts.mute
-        })
+        const processedData = await BRAIN.execute(this.nluResultObj)
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
@@ -691,13 +683,14 @@ export default class NLU {
           nluProcessingTime: processingTime - processedData?.executionTime // In ms, NLU processing time only
         })
       } catch (e) {
-        LogHelper[e.type](e.obj.message)
+        // TODO: TS refactor; verify how this works with the new error handling
+        LogHelper.error(e?.message)
 
-        if (!opts.mute) {
+        if (!BRAIN.isMuted) {
           SOCKET_SERVER.socket.emit('is-typing', false)
         }
 
-        return reject(e.obj)
+        return reject(new Error(e?.message))
       }
     })
   }
@@ -706,7 +699,7 @@ export default class NLU {
    * Build NLU data result object based on slots
    * and ask for more entities if necessary
    */
-  async slotFill(utterance, opts) {
+  async slotFill(utterance) {
     if (!this.conv.activeContext.nextAction) {
       return null
     }
@@ -777,7 +770,7 @@ export default class NLU {
 
       this.conv.cleanActiveContext()
 
-      return BRAIN.execute(this.nluResultObj, { mute: opts.mute })
+      return BRAIN.execute(this.nluResultObj)
     }
 
     this.conv.cleanActiveContext()

@@ -80,7 +80,9 @@ export default class HTTPServer {
           const { utterance } = request.body
 
           try {
-            const data = await mainProvider.nlu.process(utterance, { mute: true })
+            // TODO
+            BRAIN.isMuted = true
+            const data = await mainProvider.nlu.process(utterance)
 
             reply.send({
               ...data,

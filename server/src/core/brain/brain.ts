@@ -2,6 +2,10 @@
  * TODO next:
  * 1. [OK] Fix brain.ts TS errors
  * 2. Refactor brain.ts; split "execute" into smaller functions:
+ *    // [OK] handle this scope into its own method:
+      // - handleLogicActionSkillProcessOutput
+      // - handleLogicActionSkillProcessError
+      // - handleLogicActionSkillProcessClose
  * logic type actions (executeLogicAction)
  * dialog type actions (executeDialogAction)
  * 3. Fix nlu.ts TS errors
@@ -82,10 +86,6 @@ interface BrainProcessResult extends NLUResult {
   nextAction?: SkillConfigSchema['actions'][string] | null | undefined
 }
 
-interface BrainExecutionOptions {
-  mute?: boolean
-}
-
 interface IntentObject {
   id: string
   lang: ShortLanguageCode
@@ -101,7 +101,6 @@ interface IntentObject {
 }
 
 // TODO: split class
-
 export default class Brain {
   private static instance: Brain
   private _lang: ShortLanguageCode = 'en'
@@ -112,6 +111,11 @@ export default class Brain {
     )
   )
   private skillProcess: ChildProcessWithoutNullStreams | undefined = undefined
+  private domainFriendlyName = ''
+  private skillFriendlyName = ''
+  private skillOutput = ''
+  private speeches: string[] = []
+  public isMuted = false // Close Leon mouth if true; e.g. over HTTP
 
   constructor() {
     if (!Brain.instance) {
@@ -216,8 +220,8 @@ export default class Brain {
     )
   }
 
-  private handleAskToRepeat(nluResult: NLUResult, opts: BrainExecutionOptions): void {
-    if (!opts.mute) {
+  private handleAskToRepeat(nluResult: NLUResult): void {
+    if (!this.isMuted) {
       const speech = `${this.wernicke('random_not_sure')}.`
 
       this.talk(speech, true)
@@ -241,6 +245,39 @@ export default class Brain {
       current_resolvers: nluResult.currentResolvers,
       resolvers: nluResult.resolvers,
       slots
+    }
+  }
+
+  /**
+   * Handle the skill process output
+   */
+  private handleLogicActionSkillProcessOutput(data: Buffer): Promise<Error | null> {
+    try {
+      const obj = JSON.parse(data.toString())
+
+      if (typeof obj === 'object') {
+        if (obj.output.type === SkillOutputType.Intermediate) {
+          LogHelper.title(`${this.skillFriendlyName} skill`)
+          LogHelper.info(data.toString())
+
+          const speech = obj.output.speech.toString()
+          if (!this.isMuted) {
+            this.talk(speech)
+          }
+          this.speeches.push(speech)
+        } else {
+          this.skillOutput += data
+        }
+
+        return Promise.resolve(null)
+      } else {
+        return Promise.reject(new Error(`The "${this.skillFriendlyName}" skill from the "${this.domainFriendlyName}" domain is not well configured. Check the configuration file.`))
+      }
+    } catch (e) {
+      LogHelper.title('Brain')
+      LogHelper.debug(`process.stdout: ${String(data)}`)
+
+      return Promise.reject(new Error( `The "${this.skillFriendlyName}" skill from the "${this.domainFriendlyName}" domain isn't returning JSON format.`))
     }
   }
 
@@ -284,11 +321,8 @@ export default class Brain {
    * Execute Python skills
    * TODO: split into several methods
    */
-  public execute(nluResult: NLUResult, opts: BrainExecutionOptions): Promise<Partial<BrainProcessResult>> {
+  public execute(nluResult: NLUResult): Promise<Partial<BrainProcessResult>> {
     const executionTimeStart = Date.now()
-    opts = opts || {
-      mute: false // Close Leon's mouth e.g. over HTTP
-    }
 
     return new Promise(async (resolve, reject) => {
       const utteranceId = `${Date.now()}-${StringHelper.random(4)}`
@@ -297,7 +331,7 @@ export default class Brain {
 
       // Ask to repeat if Leon is not sure about the request
       if (this.shouldAskToRepeat(nluResult)) {
-        this.handleAskToRepeat(nluResult, opts)
+        this.handleAskToRepeat(nluResult)
 
         const executionTimeEnd = Date.now()
         const executionTime = executionTimeEnd - executionTimeStart
@@ -335,61 +369,22 @@ export default class Brain {
             domainName,
             skillName
           )
-          let skillOutput = ''
 
-          // Read output
-          this.skillProcess?.stdout.on('data', (data) => {
-            const executionTimeEnd = Date.now()
-            const executionTime = executionTimeEnd - executionTimeStart
+          this.domainFriendlyName = domainFriendlyName
+          this.skillFriendlyName = skillFriendlyName
 
-            try {
-              const obj = JSON.parse(data.toString())
-
-              if (typeof obj === 'object') {
-                if (obj.output.type === SkillOutputType.Intermediate) {
-                  LogHelper.title(`${skillFriendlyName} skill`)
-                  LogHelper.info(data.toString())
-
-                  const speech = obj.output.speech.toString()
-                  if (!opts.mute) {
-                    this.talk(speech)
-                  }
-                  speeches.push(speech)
-                } else {
-                  skillOutput += data
-                }
-              } else {
-                reject({
-                  type: 'warning',
-                  obj: new Error(
-                    `The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain is not well configured. Check the configuration file.`
-                  ),
-                  speeches,
-                  executionTime
-                })
-              }
-            } catch (e) {
-              LogHelper.title('Brain')
-              LogHelper.debug(`process.stdout: ${String(data)}`)
-
-              reject({
-                type: 'error',
-                obj: new Error(
-                  `The "${skillFriendlyName}" skill from the "${domainFriendlyName}" domain isn't returning JSON format.`
-                ),
-                speeches,
-                executionTime
-              })
-            }
+          // Read skill output
+          this.skillProcess?.stdout.on('data', (data: Buffer) => {
+            this.handleLogicActionSkillProcessOutput(data)
           })
 
           // Handle error
           this.skillProcess?.stderr.on('data', (data) => {
             const speech = `${this.wernicke('random_skill_errors', '', {
-              '%skill_name%': skillFriendlyName,
-              '%domain_name%': domainFriendlyName
+              '%skill_name%': this.skillFriendlyName,
+              '%domain_name%': this.domainFriendlyName
             })}!`
-            if (!opts.mute) {
+            if (!this.isMuted) {
               this.talk(speech)
               SOCKET_SERVER.socket.emit('is-typing', false)
             }
@@ -397,7 +392,7 @@ export default class Brain {
 
             Brain.deleteIntentObjFile(intentObjectPath)
 
-            LogHelper.title(`${skillFriendlyName} skill`)
+            LogHelper.title(`${this.skillFriendlyName} skill`)
             LogHelper.error(data.toString())
 
             const executionTimeEnd = Date.now()
@@ -412,18 +407,18 @@ export default class Brain {
 
           // Catch the end of the skill execution
           this.skillProcess?.stdout.on('end', () => {
-            LogHelper.title(`${skillFriendlyName} skill`)
-            LogHelper.info(skillOutput)
+            LogHelper.title(`${this.skillFriendlyName} skill`)
+            LogHelper.info(this.skillOutput)
 
             let skillResult: SkillResult | undefined = undefined
 
             // Check if there is an output (no skill error)
-            if (skillOutput !== '') {
-              skillResult = JSON.parse(skillOutput)
+            if (this.skillOutput !== '') {
+              skillResult = JSON.parse(this.skillOutput)
 
               if (skillResult?.output.speech) {
                 skillResult.output.speech = skillResult.output.speech.toString()
-                if (!opts.mute) {
+                if (!this.isMuted) {
                   this.talk(skillResult.output.speech, true)
                 }
                 speeches.push(skillResult.output.speech)
@@ -443,7 +438,7 @@ export default class Brain {
 
                   // When the synchronization is finished
                   sync.synchronize((speech: string) => {
-                    if (!opts.mute) {
+                    if (!this.isMuted) {
                       this.talk(speech)
                     }
                     speeches.push(speech)
@@ -454,7 +449,7 @@ export default class Brain {
 
             Brain.deleteIntentObjFile(intentObjectPath)
 
-            if (!opts.mute) {
+            if (!this.isMuted) {
               SOCKET_SERVER.socket.emit('is-typing', false)
             }
 
@@ -585,7 +580,7 @@ export default class Brain {
           const executionTimeEnd = Date.now()
           const executionTime = executionTimeEnd - executionTimeStart
 
-          if (!opts.mute) {
+          if (!this.isMuted) {
             this.talk(answer as string, true)
             SOCKET_SERVER.socket.emit('is-typing', false)
           }
