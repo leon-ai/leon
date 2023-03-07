@@ -86,6 +86,20 @@ interface BrainExecutionOptions {
   mute?: boolean
 }
 
+interface IntentObject {
+  id: string
+  lang: ShortLanguageCode
+  domain: NLPDomain
+  skill: NLPSkill
+  action: NLPAction
+  utterance: NLPUtterance
+  current_entities: NEREntity[]
+  entities: NEREntity[]
+  current_resolvers: NERCustomEntity[]
+  resolvers: NERCustomEntity[]
+  slots: { [key: string]: NLUSlot['value'] | undefined }
+}
+
 // TODO: split class
 
 export default class Brain {
@@ -212,6 +226,61 @@ export default class Brain {
   }
 
   /**
+   * Create the intent object that will be passed to the skill
+   */
+  private createIntentObject(nluResult: NLUResult, utteranceId: string, slots: IntentObject['slots']): IntentObject {
+    return {
+      id: utteranceId,
+      lang: this._lang,
+      domain: nluResult.classification.domain,
+      skill: nluResult.classification.skill,
+      action: nluResult.classification.action,
+      utterance: nluResult.utterance,
+      current_entities: nluResult.currentEntities,
+      entities: nluResult.entities,
+      current_resolvers: nluResult.currentResolvers,
+      resolvers: nluResult.resolvers,
+      slots
+    }
+  }
+
+  /**
+   * Execute an action logic skill in a standalone way (CLI):
+   *
+   * 1. Need to be at the root of the project
+   * 2. Edit: server/src/intent-object.sample.json
+   * 3. Run: npm run python-bridge
+   */
+  private executeLogicActionSkill(
+    nluResult: NLUResult,
+    utteranceId: string,
+    intentObjectPath: string
+  ): void {
+    // Ensure the process is empty (to be able to execute other processes outside of Brain)
+    if (!this.skillProcess) {
+      const slots: IntentObject['slots'] = {}
+
+      if (nluResult.slots) {
+        Object.keys(nluResult.slots)?.forEach((slotName) => {
+          slots[slotName] = nluResult.slots[slotName]?.value
+        })
+      }
+
+      const intentObject = this.createIntentObject(nluResult, utteranceId, slots)
+
+      try {
+        fs.writeFileSync(intentObjectPath, JSON.stringify(intentObject))
+        this.skillProcess = spawn(
+          `${PYTHON_BRIDGE_BIN_PATH} "${intentObjectPath}"`,
+          { shell: true }
+        )
+      } catch (e) {
+        LogHelper.error(`Failed to save intent object: ${e}`)
+      }
+    }
+  }
+
+  /**
    * Execute Python skills
    * TODO: split into several methods
    */
@@ -256,45 +325,7 @@ export default class Brain {
            * "Logic" action skill execution
            */
 
-          // Ensure the process is empty (to be able to execute other processes outside of Brain)
-          if (!this.skillProcess) {
-            /**
-             * Execute a skill in a standalone way (CLI):
-             *
-             * 1. Need to be at the root of the project
-             * 2. Edit: server/src/intent-object.sample.json
-             * 3. Run: npm run python-bridge
-             */
-            const slots: { [key: string]: NLUSlot['value'] | undefined } = {}
-            if (nluResult.slots) {
-              Object.keys(nluResult.slots)?.forEach((slotName) => {
-                slots[slotName] = nluResult.slots[slotName]?.value
-              })
-            }
-            const intentObj = {
-              id: utteranceId,
-              lang: this._lang,
-              domain: nluResult.classification.domain,
-              skill: nluResult.classification.skill,
-              action: nluResult.classification.action,
-              utterance: nluResult.utterance,
-              current_entities: nluResult.currentEntities,
-              entities: nluResult.entities,
-              current_resolvers: nluResult.currentResolvers,
-              resolvers: nluResult.resolvers,
-              slots
-            }
-
-            try {
-              fs.writeFileSync(intentObjectPath, JSON.stringify(intentObj))
-              this.skillProcess = spawn(
-                `${PYTHON_BRIDGE_BIN_PATH} "${intentObjectPath}"`,
-                { shell: true }
-              )
-            } catch (e) {
-              LogHelper.error(`Failed to save intent object: ${e}`)
-            }
-          }
+          this.executeLogicActionSkill(nluResult, utteranceId, intentObjectPath)
 
           const domainName = nluResult.classification.domain
           const skillName = nluResult.classification.skill
