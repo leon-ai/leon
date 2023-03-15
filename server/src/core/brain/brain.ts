@@ -251,7 +251,7 @@ export default class Brain {
   /**
    * Handle the skill process output
    */
-  private handleLogicActionSkillProcessOutput(data: Buffer): Promise<Error | null> {
+  private handleLogicActionSkillProcessOutput(data: Buffer): Promise<Error | null> | void {
     try {
       const obj = JSON.parse(data.toString())
 
@@ -276,9 +276,36 @@ export default class Brain {
     } catch (e) {
       LogHelper.title('Brain')
       LogHelper.debug(`process.stdout: ${String(data)}`)
-
-      return Promise.reject(new Error( `The "${this.skillFriendlyName}" skill from the "${this.domainFriendlyName}" domain isn't returning JSON format.`))
     }
+  }
+
+  /**
+   * Speak about an error happened regarding a specific skill
+   */
+  private speakSkillError(): void {
+    const speech = `${this.wernicke('random_skill_errors', '', {
+      '%skill_name%': this.skillFriendlyName,
+      '%domain_name%': this.domainFriendlyName
+    })}!`
+    if (!this.isMuted) {
+      this.talk(speech)
+      SOCKET_SERVER.socket.emit('is-typing', false)
+    }
+    this.speeches.push(speech)
+  }
+
+  /**
+   * Handle the skill process error
+   */
+  private handleLogicActionSkillProcessError(data: Buffer, intentObjectPath: string): Error {
+    this.speakSkillError()
+
+    Brain.deleteIntentObjFile(intentObjectPath)
+
+    LogHelper.title(`${this.skillFriendlyName} skill`)
+    LogHelper.error(data.toString())
+
+    return new Error(data.toString())
   }
 
   /**
@@ -324,10 +351,13 @@ export default class Brain {
   public execute(nluResult: NLUResult): Promise<Partial<BrainProcessResult>> {
     const executionTimeStart = Date.now()
 
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
       const utteranceId = `${Date.now()}-${StringHelper.random(4)}`
       const intentObjectPath = path.join(TMP_PATH, `${utteranceId}.json`)
       const speeches: string[] = []
+
+      // Reset skill output
+      this.skillOutput = ''
 
       // Ask to repeat if Leon is not sure about the request
       if (this.shouldAskToRepeat(nluResult)) {
@@ -379,30 +409,8 @@ export default class Brain {
           })
 
           // Handle error
-          this.skillProcess?.stderr.on('data', (data) => {
-            const speech = `${this.wernicke('random_skill_errors', '', {
-              '%skill_name%': this.skillFriendlyName,
-              '%domain_name%': this.domainFriendlyName
-            })}!`
-            if (!this.isMuted) {
-              this.talk(speech)
-              SOCKET_SERVER.socket.emit('is-typing', false)
-            }
-            speeches.push(speech)
-
-            Brain.deleteIntentObjFile(intentObjectPath)
-
-            LogHelper.title(`${this.skillFriendlyName} skill`)
-            LogHelper.error(data.toString())
-
-            const executionTimeEnd = Date.now()
-            const executionTime = executionTimeEnd - executionTimeStart
-            reject({
-              type: 'error',
-              obj: new Error(data),
-              speeches,
-              executionTime
-            })
+          this.skillProcess?.stderr.on('data', (data: Buffer) => {
+            this.handleLogicActionSkillProcessError(data, intentObjectPath)
           })
 
           // Catch the end of the skill execution
@@ -414,36 +422,43 @@ export default class Brain {
 
             // Check if there is an output (no skill error)
             if (this.skillOutput !== '') {
-              skillResult = JSON.parse(this.skillOutput)
+              try {
+                skillResult = JSON.parse(this.skillOutput)
 
-              if (skillResult?.output.speech) {
-                skillResult.output.speech = skillResult.output.speech.toString()
-                if (!this.isMuted) {
-                  this.talk(skillResult.output.speech, true)
+                if (skillResult?.output.speech) {
+                  skillResult.output.speech = skillResult.output.speech.toString()
+                  if (!this.isMuted) {
+                    this.talk(skillResult.output.speech, true)
+                  }
+                  speeches.push(skillResult.output.speech)
+
+                  // Synchronize the downloaded content if enabled
+                  if (
+                    skillResult.output.type === SkillOutputType.End &&
+                    skillResult.output.options['synchronization'] &&
+                    skillResult.output.options['synchronization'].enabled &&
+                    skillResult.output.options['synchronization'].enabled === true
+                  ) {
+                    const sync = new Synchronizer(
+                      this,
+                      nluResult.classification,
+                      skillResult.output.options['synchronization']
+                    )
+
+                    // When the synchronization is finished
+                    sync.synchronize((speech: string) => {
+                      if (!this.isMuted) {
+                        this.talk(speech)
+                      }
+                      speeches.push(speech)
+                    })
+                  }
                 }
-                speeches.push(skillResult.output.speech)
+              } catch (e) {
+                LogHelper.title(`${this.skillFriendlyName} skill`)
+                LogHelper.error(`There is an error on the final output: ${String(e)}`)
 
-                // Synchronize the downloaded content if enabled
-                if (
-                  skillResult.output.type === SkillOutputType.End &&
-                  skillResult.output.options['synchronization'] &&
-                  skillResult.output.options['synchronization'].enabled &&
-                  skillResult.output.options['synchronization'].enabled === true
-                ) {
-                  const sync = new Synchronizer(
-                    this,
-                    nluResult.classification,
-                    skillResult.output.options['synchronization']
-                  )
-
-                  // When the synchronization is finished
-                  sync.synchronize((speech: string) => {
-                    if (!this.isMuted) {
-                      this.talk(speech)
-                    }
-                    speeches.push(speech)
-                  })
-                }
+                this.speakSkillError()
               }
             }
 
