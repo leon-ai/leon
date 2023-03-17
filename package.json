@@ -90,7 +90,7 @@
     "fastify": "^4.5.3",
     "fluent-ffmpeg": "^2.1.2",
     "getos": "^3.2.1",
-    "googleapis": "^67.1.1",
+    "googleapis": "^113.0.0",
     "ibm-watson": "^6.1.1",
     "node-wav": "0.0.2",
     "os-name": "^4.0.1",
