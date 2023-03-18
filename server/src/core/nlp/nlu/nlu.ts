@@ -1,18 +1,20 @@
+/**
+ * TODO:
+ * create a "model-loader" class
+ *
+ */
+
 import fs from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 
-import { containerBootstrap } from '@nlpjs/core-loader'
-import { Nlp } from '@nlpjs/nlp'
-import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
-import { LangAll } from '@nlpjs/lang-all'
 import axios from 'axios'
 import kill from 'tree-kill'
 
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
 import { HAS_LOGGER, IS_TESTING_ENV, TCP_SERVER_BIN_PATH } from '@/constants'
-import { TCP_CLIENT, BRAIN, SOCKET_SERVER } from '@/core'
+import { TCP_CLIENT, BRAIN, SOCKET_SERVER, MODEL_LOADER, NER } from '@/core'
 import Ner from '@/core/ner'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -53,174 +55,6 @@ export default class NLU {
 
       NLU.instance = this
     }
-  }
-
-  public loadNLPModels(): Promise<[void, void, void]> {
-    return Promise.all([
-      this.loadGlobalResolversModel(
-        join(process.cwd(), 'core/data/models/leon-global-resolvers-model.nlp')
-      ),
-      this.loadSkillsResolversModel(
-        join(process.cwd(), 'core/data/models/leon-skills-resolvers-model.nlp')
-      ),
-      this.loadMainModel(
-        join(process.cwd(), 'core/data/models/leon-main-model.nlp')
-      )
-    ])
-  }
-
-  /**
-   * Load the global resolvers NLP model from the latest training
-   */
-  private loadGlobalResolversModel(nlpModel): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      if (!fs.existsSync(nlpModel)) {
-        LogHelper.title('NLU')
-        reject({
-          type: 'warning',
-          obj: new Error(
-            'The global resolvers NLP model does not exist, please run: npm run train'
-          )
-        })
-      } else {
-        LogHelper.title('NLU')
-
-        try {
-          const container = await containerBootstrap()
-
-          container.use(Nlp)
-          container.use(LangAll)
-
-          this.globalResolversNlp = container.get('nlp')
-          const nluManager = container.get('nlu-manager')
-          nluManager.settings.spellCheck = true
-
-          await this.globalResolversNlp.load(nlpModel)
-          LogHelper.success('Global resolvers NLP model loaded')
-
-          resolve()
-        } catch (err) {
-          BRAIN.talk(
-            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
-              'errors',
-              'nlu',
-              { '%error%': err.message }
-            )}.`
-          )
-          SOCKET_SERVER.socket.emit('is-typing', false)
-
-          reject({ type: 'error', obj: err })
-        }
-      }
-    })
-  }
-
-  /**
-   * Load the skills resolvers NLP model from the latest training
-   */
-  private loadSkillsResolversModel(nlpModel): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      if (!fs.existsSync(nlpModel)) {
-        LogHelper.title('NLU')
-        reject({
-          type: 'warning',
-          obj: new Error(
-            'The skills resolvers NLP model does not exist, please run: npm run train'
-          )
-        })
-      } else {
-        try {
-          const container = await containerBootstrap()
-
-          container.use(Nlp)
-          container.use(LangAll)
-
-          this.skillsResolversNlp = container.get('nlp')
-          const nluManager = container.get('nlu-manager')
-          nluManager.settings.spellCheck = true
-
-          await this.skillsResolversNlp.load(nlpModel)
-          LogHelper.success('Skills resolvers NLP model loaded')
-
-          resolve()
-        } catch (err) {
-          BRAIN.talk(
-            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
-              'errors',
-              'nlu',
-              { '%error%': err.message }
-            )}.`
-          )
-          SOCKET_SERVER.socket.emit('is-typing', false)
-
-          reject({ type: 'error', obj: err })
-        }
-      }
-    })
-  }
-
-  /**
-   * Load the main NLP model from the latest training
-   */
-  private loadMainModel(nlpModel): Promise<void> {
-    return new Promise(async (resolve, reject) => {
-      if (!fs.existsSync(nlpModel)) {
-        LogHelper.title('NLU')
-        reject({
-          type: 'warning',
-          obj: new Error(
-            'The main NLP model does not exist, please run: npm run train'
-          )
-        })
-      } else {
-        try {
-          const container = await containerBootstrap()
-
-          container.register(
-            'extract-builtin-??',
-            new BuiltinMicrosoft({
-              builtins: Ner.getMicrosoftBuiltinEntities()
-            }),
-            true
-          )
-          container.use(Nlp)
-          container.use(LangAll)
-
-          this.mainNlp = container.get('nlp')
-          const nluManager = container.get('nlu-manager')
-          nluManager.settings.spellCheck = true
-
-          await this.mainNlp.load(nlpModel)
-          LogHelper.success('Main NLP model loaded')
-
-          this.ner = new Ner(this.mainNlp.ner)
-
-          resolve()
-        } catch (err) {
-          BRAIN.talk(
-            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
-              'errors',
-              'nlu',
-              { '%error%': err.message }
-            )}.`
-          )
-          SOCKET_SERVER.socket.emit('is-typing', false)
-
-          reject({ type: 'error', obj: err })
-        }
-      }
-    })
-  }
-
-  /**
-   * Check if NLP models exists
-   */
-  hasNlpModels() {
-    return (
-      Object.keys(this.globalResolversNlp).length > 0 &&
-      Object.keys(this.skillsResolversNlp).length > 0 &&
-      Object.keys(this.mainNlp).length > 0
-    )
   }
 
   /**
@@ -282,7 +116,7 @@ export default class NLU {
           }
         }
 
-        this.mainNlp.addEntities(spacyEntity, BRAIN.lang)
+        MODEL_LOADER.mainNLPContainer.addEntities(spacyEntity, BRAIN.lang)
       })
     }
   }
@@ -312,7 +146,7 @@ export default class NLU {
         confidence: 1
       }
     }
-    this.nluResultObj.entities = await this.ner.extractEntities(
+    this.nluResultObj.entities = await NER.extractEntities(
       BRAIN.lang,
       configDataFilePath,
       this.nluResultObj
@@ -334,8 +168,8 @@ export default class NLU {
         ).length > 0
     } else if (expectedItemType.indexOf('resolver') !== -1) {
       const nlpObjs = {
-        global_resolver: this.globalResolversNlp,
-        skill_resolver: this.skillsResolversNlp
+        global_resolver: MODEL_LOADER.globalResolversNLPContainer,
+        skill_resolver: MODEL_LOADER.skillsResolversNLPContainer
       }
       const result = await nlpObjs[expectedItemType].process(utterance)
       const { intent } = result
@@ -470,7 +304,7 @@ export default class NLU {
       LogHelper.title('NLU')
       LogHelper.info('Processing...')
 
-      if (!this.hasNlpModels()) {
+      if (!MODEL_LOADER.hasNlpModels()) {
         if (!BRAIN.isMuted) {
           BRAIN.talk(`${BRAIN.wernicke('random_errors')}!`)
           SOCKET_SERVER.socket.emit('is-typing', false)
@@ -502,7 +336,7 @@ export default class NLU {
         }
       }
 
-      const result = await this.mainNlp.process(utterance)
+      const result = await MODEL_LOADER.mainNLPContainer.process(utterance)
       const { locale, answers, classifications } = result
       let { score, intent, domain } = result
 
@@ -516,7 +350,7 @@ export default class NLU {
         classifications.forEach(({ intent: newIntent, score: newScore }) => {
           if (newScore > 0.6) {
             const [skillName] = newIntent.split('.')
-            const newDomain = this.mainNlp.getIntentDomain(locale, newIntent)
+            const newDomain = MODEL_LOADER.mainNLPContainer.getIntentDomain(locale, newIntent)
             const contextName = `${newDomain}.${skillName}`
             if (this.conv.activeContext.name === contextName) {
               score = newScore
@@ -602,12 +436,13 @@ export default class NLU {
       this.nluResultObj.configDataFilePath = configDataFilePath
 
       try {
-        this.nluResultObj.entities = await this.ner.extractEntities(
+        this.nluResultObj.entities = await NER.extractEntities(
           BRAIN.lang,
           configDataFilePath,
           this.nluResultObj
         )
       } catch (e) {
+        // TODO: "!" message, just do simple generic error handler
         if (LogHelper[e.type]) {
           LogHelper[e.type](e.obj.message)
         }
@@ -723,7 +558,7 @@ export default class NLU {
         action: actionName
       }
     }
-    const entities = await this.ner.extractEntities(
+    const entities = await NER.extractEntities(
       BRAIN.lang,
       configDataFilePath,
       this.nluResultObj
@@ -784,7 +619,7 @@ export default class NLU {
    * 3. Or go to the brain executor if all slots have been filled in one shot
    */
   async routeSlotFilling(intent) {
-    const slots = await this.mainNlp.slotManager.getMandatorySlots(intent)
+    const slots = await MODEL_LOADER.mainNLPContainer.slotManager.getMandatorySlots(intent)
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
     if (hasMandatorySlots) {

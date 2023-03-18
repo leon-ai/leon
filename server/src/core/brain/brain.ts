@@ -1,13 +1,11 @@
 /**
  * TODO next:
  * 1. [OK] Fix brain.ts TS errors
- * 2. Refactor brain.ts; split "execute" into smaller functions:
+ * 2. [OK] Refactor brain.ts; split "execute" into smaller functions:
  *    // [OK] handle this scope into its own method:
       // - handleLogicActionSkillProcessOutput
       // - handleLogicActionSkillProcessError
       // - handleLogicActionSkillProcessClose
- * logic type actions (executeLogicAction)
- * dialog type actions (executeDialogAction)
  * 3. Fix nlu.ts TS errors
  * 4. Refactor nlu.ts; split into smaller functions
  * 5. Restore multi client support on HTTP server / socket server
@@ -100,7 +98,6 @@ interface IntentObject {
   slots: { [key: string]: NLUSlot['value'] | undefined }
 }
 
-// TODO: split class
 export default class Brain {
   private static instance: Brain
   private _lang: ShortLanguageCode = 'en'
@@ -169,7 +166,7 @@ export default class Brain {
    * Make Leon talk
    */
   public talk(rawSpeech: string, end = false): void {
-    LogHelper.title('Leon')
+    LogHelper.title('Brain')
     LogHelper.info('Talking...')
 
     if (rawSpeech !== '') {
@@ -346,7 +343,6 @@ export default class Brain {
 
   /**
    * Execute Python skills
-   * TODO: split into several methods
    */
   public execute(nluResult: NLUResult): Promise<Partial<BrainProcessResult>> {
     const executionTimeStart = Date.now()

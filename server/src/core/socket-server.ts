@@ -12,7 +12,7 @@ import {
   HAS_TTS,
   IS_DEVELOPMENT_ENV
 } from '@/constants'
-import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS, NLU, BRAIN } from '@/core'
+import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS, NLU, BRAIN, MODEL_LOADER } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 
@@ -58,7 +58,7 @@ export default class SocketServer {
     LogHelper.success(`STT ${sttState}`)
     LogHelper.success(`TTS ${ttsState}`)
 
-    await NLU.loadNLPModels()
+    await MODEL_LOADER.loadNLPModels()
 
     io.on('connection', (socket) => {
       LogHelper.title('Client')
