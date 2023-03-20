@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import axios from 'axios'
 import kill from 'tree-kill'
 
+import type { NLUResult } from '@/core/nlp/types'
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
 import { HAS_LOGGER, IS_TESTING_ENV, TCP_SERVER_BIN_PATH } from '@/constants'
@@ -14,35 +15,30 @@ import { StringHelper } from '@/helpers/string-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import Conversation from '@/core/conversation'
 
-const defaultNluResultObj = {
-  utterance: null,
+const DEFAULT_NLU_RESULT = {
+  utterance: '',
   currentEntities: [],
   entities: [],
   currentResolvers: [],
   resolvers: [],
-  slots: null,
-  configDataFilePath: null,
+  slots: {},
+  configDataFilePath: '',
   answers: [], // For dialog action type
   classification: {
-    domain: null,
-    skill: null,
-    action: null,
+    domain: '',
+    skill: '',
+    action: '',
     confidence: 0
   }
 }
 
 export default class NLU {
   private static instance: NLU
+  private conversation = new Conversation('conv0')
+  private nluResult: NLUResult = DEFAULT_NLU_RESULT
 
   constructor() {
     if (!NLU.instance) {
-      this.globalResolversNlp = {}
-      this.skillsResolversNlp = {}
-      this.mainNlp = {}
-      this.ner = {}
-      this.conv = new Conversation('conv0')
-      this.nluResult = defaultNluResultObj // TODO
-
       LogHelper.title('NLU')
       LogHelper.success('New instance')
 
@@ -118,7 +114,7 @@ export default class NLU {
    * Handle in action loop logic before NLU processing
    */
   async handleActionLoop(utterance) {
-    const { domain, intent } = this.conv.activeContext
+    const { domain, intent } = this.conversation.activeContext
     const [skillName, actionName] = intent.split('.')
     const configDataFilePath = join(
       process.cwd(),
@@ -128,8 +124,8 @@ export default class NLU {
       `config/${BRAIN.lang}.json`
     )
     this.nluResult = {
-      ...defaultNluResultObj, // Reset entities, slots, etc.
-      slots: this.conv.activeContext.slots,
+      ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
+      slots: this.conversation.activeContext.slots,
       utterance,
       configDataFilePath,
       classification: {
@@ -209,7 +205,7 @@ export default class NLU {
     // Ensure expected items are in the utterance, otherwise clean context and reprocess
     if (!hasMatchingEntity && !hasMatchingResolver) {
       BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
-      this.conv.cleanActiveContext()
+      this.conversation.cleanActiveContext()
       await this.process(utterance)
       return null
     }
@@ -218,9 +214,9 @@ export default class NLU {
       const processedData = await BRAIN.execute(this.nluResult)
       // Reprocess with the original utterance that triggered the context at first
       if (processedData.core?.restart === true) {
-        const { originalUtterance } = this.conv.activeContext
+        const { originalUtterance } = this.conversation.activeContext
 
-        this.conv.cleanActiveContext()
+        this.conversation.cleanActiveContext()
         await this.process(originalUtterance)
         return null
       }
@@ -233,15 +229,15 @@ export default class NLU {
         !processedData.action.next_action &&
         processedData.core?.isInActionLoop === false
       ) {
-        this.conv.cleanActiveContext()
+        this.conversation.cleanActiveContext()
         return null
       }
 
       // Break the action loop and prepare for the next action if necessary
       if (processedData.core?.isInActionLoop === false) {
-        this.conv.activeContext.isInActionLoop = !!processedData.action.loop
-        this.conv.activeContext.actionName = processedData.action.next_action
-        this.conv.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`
+        this.conversation.activeContext.isInActionLoop = !!processedData.action.loop
+        this.conversation.activeContext.actionName = processedData.action.next_action
+        this.conversation.activeContext.intent = `${processedData.classification.skill}.${processedData.action.next_action}`
       }
 
       return processedData
@@ -268,7 +264,7 @@ export default class NLU {
     if (processedData && Object.keys(processedData).length > 0) {
       // Set new context with the next action if there is one
       if (processedData.action.next_action) {
-        this.conv.activeContext = {
+        this.conversation.activeContext = {
           lang: BRAIN.lang,
           slots: processedData.slots,
           isInActionLoop: !!processedData.nextAction.loop,
@@ -313,14 +309,14 @@ export default class NLU {
       await this.mergeSpacyEntities(utterance)
 
       // Pre NLU processing according to the active context if there is one
-      if (this.conv.hasActiveContext()) {
+      if (this.conversation.hasActiveContext()) {
         // When the active context is in an action loop, then directly trigger the action
-        if (this.conv.activeContext.isInActionLoop) {
+        if (this.conversation.activeContext.isInActionLoop) {
           return resolve(await this.handleActionLoop(utterance))
         }
 
         // When the active context has slots filled
-        if (Object.keys(this.conv.activeContext.slots).length > 0) {
+        if (Object.keys(this.conversation.activeContext.slots).length > 0) {
           try {
             return resolve(await this.handleSlotFilling(utterance))
           } catch (e) {
@@ -339,13 +335,13 @@ export default class NLU {
        * If there are several "delete it" across skills, Leon needs to make use of
        * the current context ({domain}.{skill}) to define the most accurate classification
        */
-      if (this.conv.hasActiveContext()) {
+      if (this.conversation.hasActiveContext()) {
         classifications.forEach(({ intent: newIntent, score: newScore }) => {
           if (newScore > 0.6) {
             const [skillName] = newIntent.split('.')
             const newDomain = MODEL_LOADER.mainNLPContainer.getIntentDomain(locale, newIntent)
             const contextName = `${newDomain}.${skillName}`
-            if (this.conv.activeContext.name === contextName) {
+            if (this.conversation.activeContext.name === contextName) {
               score = newScore
               intent = newIntent
               domain = newDomain
@@ -356,7 +352,7 @@ export default class NLU {
 
       const [skillName, actionName] = intent.split('.')
       this.nluResult = {
-        ...defaultNluResultObj, // Reset entities, slots, etc.
+        ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
         utterance,
         answers, // For dialog action type
         classification: {
@@ -452,8 +448,8 @@ export default class NLU {
 
       // In case all slots have been filled in the first utterance
       if (
-        this.conv.hasActiveContext() &&
-        Object.keys(this.conv.activeContext.slots).length > 0
+        this.conversation.hasActiveContext() &&
+        Object.keys(this.conversation.activeContext.slots).length > 0
       ) {
         try {
           return resolve(await this.handleSlotFilling(utterance))
@@ -463,10 +459,10 @@ export default class NLU {
       }
 
       const newContextName = `${this.nluResult.classification.domain}.${skillName}`
-      if (this.conv.activeContext.name !== newContextName) {
-        this.conv.cleanActiveContext()
+      if (this.conversation.activeContext.name !== newContextName) {
+        this.conversation.cleanActiveContext()
       }
-      this.conv.activeContext = {
+      this.conversation.activeContext = {
         lang: BRAIN.lang,
         slots: {},
         isInActionLoop: false,
@@ -479,17 +475,17 @@ export default class NLU {
       }
       // Pass current utterance entities to the NLU result object
       this.nluResult.currentEntities =
-        this.conv.activeContext.currentEntities
+        this.conversation.activeContext.currentEntities
       // Pass context entities to the NLU result object
-      this.nluResult.entities = this.conv.activeContext.entities
+      this.nluResult.entities = this.conversation.activeContext.entities
 
       try {
         const processedData = await BRAIN.execute(this.nluResult)
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
-          this.conv.cleanActiveContext()
-          this.conv.activeContext = {
+          this.conversation.cleanActiveContext()
+          this.conversation.activeContext = {
             lang: BRAIN.lang,
             slots: {},
             isInActionLoop: !!processedData.nextAction.loop,
@@ -528,11 +524,11 @@ export default class NLU {
    * and ask for more entities if necessary
    */
   async slotFill(utterance) {
-    if (!this.conv.activeContext.nextAction) {
+    if (!this.conversation.activeContext.nextAction) {
       return null
     }
 
-    const { domain, intent } = this.conv.activeContext
+    const { domain, intent } = this.conversation.activeContext
     const [skillName, actionName] = intent.split('.')
     const configDataFilePath = join(
       process.cwd(),
@@ -543,7 +539,7 @@ export default class NLU {
     )
 
     this.nluResult = {
-      ...defaultNluResultObj, // Reset entities, slots, etc.
+      ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
       utterance,
       classification: {
         domain,
@@ -559,16 +555,16 @@ export default class NLU {
     )
 
     // Continue to loop for questions if a slot has been filled correctly
-    let notFilledSlot = this.conv.getNotFilledSlot()
+    let notFilledSlot = this.conversation.getNotFilledSlot()
     if (notFilledSlot && entities.length > 0) {
       const hasMatch = entities.some(
         ({ entity }) => entity === notFilledSlot.expectedEntity
       )
 
       if (hasMatch) {
-        this.conv.setSlots(BRAIN.lang, entities)
+        this.conversation.setSlots(BRAIN.lang, entities)
 
-        notFilledSlot = this.conv.getNotFilledSlot()
+        notFilledSlot = this.conversation.getNotFilledSlot()
         if (notFilledSlot) {
           BRAIN.talk(notFilledSlot.pickedQuestion)
           SOCKET_SERVER.socket.emit('is-typing', false)
@@ -578,31 +574,31 @@ export default class NLU {
       }
     }
 
-    if (!this.conv.areSlotsAllFilled()) {
+    if (!this.conversation.areSlotsAllFilled()) {
       BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
     } else {
       this.nluResult = {
-        ...defaultNluResultObj, // Reset entities, slots, etc.
+        ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
         // Assign slots only if there is a next action
-        slots: this.conv.activeContext.nextAction
-          ? this.conv.activeContext.slots
+        slots: this.conversation.activeContext.nextAction
+          ? this.conversation.activeContext.slots
           : {},
-        utterance: this.conv.activeContext.originalUtterance,
+        utterance: this.conversation.activeContext.originalUtterance,
         configDataFilePath,
         classification: {
           domain,
           skill: skillName,
-          action: this.conv.activeContext.nextAction,
+          action: this.conversation.activeContext.nextAction,
           confidence: 1
         }
       }
 
-      this.conv.cleanActiveContext()
+      this.conversation.cleanActiveContext()
 
       return BRAIN.execute(this.nluResult)
     }
 
-    this.conv.cleanActiveContext()
+    this.conversation.cleanActiveContext()
     return null
   }
 
@@ -617,7 +613,7 @@ export default class NLU {
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
     if (hasMandatorySlots) {
-      this.conv.activeContext = {
+      this.conversation.activeContext = {
         lang: BRAIN.lang,
         slots,
         isInActionLoop: false,
@@ -629,7 +625,7 @@ export default class NLU {
         entities: this.nluResult.entities
       }
 
-      const notFilledSlot = this.conv.getNotFilledSlot()
+      const notFilledSlot = this.conversation.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
         const { actions } = JSON.parse(

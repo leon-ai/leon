@@ -1,17 +1,3 @@
-/**
- * TODO next:
- * 1. [OK] Fix brain.ts TS errors
- * 2. [OK] Refactor brain.ts; split "execute" into smaller functions:
- *    // [OK] handle this scope into its own method:
-      // - handleLogicActionSkillProcessOutput
-      // - handleLogicActionSkillProcessError
-      // - handleLogicActionSkillProcessClose
- * 3. Fix nlu.ts TS errors
- * 4. Refactor nlu.ts; split into smaller functions
- * 5. Restore multi client support on HTTP server / socket server
- * 6. Publish to "develop" (or just fix TS errors only and publish first, then refactor)
- */
-
 import fs from 'node:fs'
 import path from 'node:path'
 import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
