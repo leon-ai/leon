@@ -58,7 +58,11 @@ export default class SocketServer {
     LogHelper.success(`STT ${sttState}`)
     LogHelper.success(`TTS ${ttsState}`)
 
-    await MODEL_LOADER.loadNLPModels()
+    try {
+      await MODEL_LOADER.loadNLPModels()
+    } catch (e) {
+      LogHelper.error(`Failed to load NLP models: ${e}`)
+    }
 
     io.on('connection', (socket) => {
       LogHelper.title('Client')

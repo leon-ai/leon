@@ -7,7 +7,7 @@ import { BuiltinMicrosoft } from '@nlpjs/builtin-microsoft'
 import { LangAll } from '@nlpjs/lang-all'
 
 import { MODELS_PATH } from '@/constants'
-import { BRAIN, NER, SOCKET_SERVER } from '@/core'
+import { NER } from '@/core'
 import Ner from '@/core/ner'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -65,14 +65,9 @@ export default class ModelLoader {
       if (!fs.existsSync(modelPath)) {
         LogHelper.title('Model Loader')
 
-        reject({
-          type: 'warning',
-          obj: new Error(
-            'The global resolvers NLP model does not exist, please run: npm run train'
-          )
-        })
+        reject(new Error('The global resolvers NLP model does not exist, please run: npm run train'))
       } else {
-        LogHelper.title('NLU')
+        LogHelper.title('Model Loader')
 
         try {
           const container = await containerBootstrap()
@@ -89,16 +84,7 @@ export default class ModelLoader {
 
           resolve()
         } catch (e) {
-          BRAIN.talk(
-            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
-              'errors',
-              'nlu',
-              { '%error%': e.message }
-            )}.`
-          )
-          SOCKET_SERVER.socket.emit('is-typing', false)
-
-          reject({ type: 'error', obj: e })
+          reject(new Error('An error occurred while loading the global resolvers NLP model'))
         }
       }
     })
@@ -134,16 +120,7 @@ export default class ModelLoader {
 
           resolve()
         } catch (e) {
-          BRAIN.talk(
-            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
-              'errors',
-              'nlu',
-              { '%error%': e.message }
-            )}.`
-          )
-          SOCKET_SERVER.socket.emit('is-typing', false)
-
-          reject({ type: 'error', obj: e })
+          reject(new Error('An error occurred while loading the skills resolvers NLP model'))
         }
       }
     })
@@ -188,16 +165,7 @@ export default class ModelLoader {
 
           resolve()
         } catch (e) {
-          BRAIN.talk(
-            `${BRAIN.wernicke('random_errors')}! ${BRAIN.wernicke(
-              'errors',
-              'nlu',
-              { '%error%': e.message }
-            )}.`
-          )
-          SOCKET_SERVER.socket.emit('is-typing', false)
-
-          reject({ type: 'error', obj: e })
+          reject(new Error('An error occurred while loading the main NLP model'))
         }
       }
     })

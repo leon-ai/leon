@@ -311,7 +311,7 @@ export default class NLU {
         }
 
         const msg =
-          'The NLP model is missing, please rebuild the project or if you are in dev run: npm run train'
+          'An NLP model is missing, please rebuild the project or if you are in dev run: npm run train'
         LogHelper.error(msg)
         return reject(msg)
       }
