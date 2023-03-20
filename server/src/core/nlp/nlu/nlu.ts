@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import axios from 'axios'
 import kill from 'tree-kill'
 
-import type { NLUResult } from '@/core/nlp/types'
+import type { NLPUtterance, NLUResult } from '@/core/nlp/types'
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
 import { HAS_LOGGER, IS_TESTING_ENV, TCP_SERVER_BIN_PATH } from '@/constants'
@@ -49,8 +49,8 @@ export default class NLU {
   /**
    * Set new language; recreate a new TCP server with new language; and reprocess understanding
    */
-  switchLanguage(utterance, locale) {
-    const connectedHandler = async () => {
+  private switchLanguage(utterance, locale) {
+    const connectedHandler = async (): Promise<void> => {
       await this.process(utterance)
     }
 
@@ -93,8 +93,9 @@ export default class NLU {
   /**
    * Merge spaCy entities with the current NER instance
    */
-  async mergeSpacyEntities(utterance) {
+  private async mergeSpacyEntities(utterance: NLPUtterance): Promise<void> {
     const spacyEntities = await NER.getSpacyEntities(utterance)
+
     if (spacyEntities.length > 0) {
       spacyEntities.forEach(({ entity, resolution }) => {
         const spacyEntity = {
@@ -113,7 +114,7 @@ export default class NLU {
   /**
    * Handle in action loop logic before NLU processing
    */
-  async handleActionLoop(utterance) {
+  private async handleActionLoop(utterance: NLPUtterance) {
     const { domain, intent } = this.conversation.activeContext
     const [skillName, actionName] = intent.split('.')
     const configDataFilePath = join(
@@ -249,7 +250,7 @@ export default class NLU {
   /**
    * Handle slot filling
    */
-  async handleSlotFilling(utterance) {
+  private async handleSlotFilling(utterance: NLPUtterance) {
     const processedData = await this.slotFill(utterance)
 
     /**
@@ -286,7 +287,7 @@ export default class NLU {
    * pick-up the right classification
    * and extract entities
    */
-  process(utterance) {
+  public process(utterance: NLPUtterance) {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
@@ -523,7 +524,7 @@ export default class NLU {
    * Build NLU data result object based on slots
    * and ask for more entities if necessary
    */
-  async slotFill(utterance) {
+  private async slotFill(utterance: NLPUtterance) {
     if (!this.conversation.activeContext.nextAction) {
       return null
     }
@@ -608,7 +609,7 @@ export default class NLU {
    * 2. If the context is expecting slots, then loop over questions to slot fill
    * 3. Or go to the brain executor if all slots have been filled in one shot
    */
-  async routeSlotFilling(intent) {
+  private async routeSlotFilling(intent) {
     const slots = await MODEL_LOADER.mainNLPContainer.slotManager.getMandatorySlots(intent)
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
@@ -650,7 +651,7 @@ export default class NLU {
    * Pickup and compare the right fallback
    * according to the wished skill action
    */
-  fallback(fallbacks) {
+  private fallback(fallbacks) {
     const words = this.nluResult.utterance.toLowerCase().split(' ')
 
     if (fallbacks.length > 0) {
