@@ -39,12 +39,12 @@ interface ObjectUnknown {
 const validateSchema = (
   schema: ObjectUnknown,
   contentToValidate: ObjectUnknown,
-  customErrorMesage: string
+  customErrorMessage: string
 ): void => {
   const validate = ajv.compile(schema)
   const isValid = validate(contentToValidate)
   if (!isValid) {
-    LogHelper.error(customErrorMesage)
+    LogHelper.error(customErrorMessage)
     const errors = new AggregateAjvError(validate.errors ?? [])
     for (const error of errors) {
       LogHelper.error(error.message)

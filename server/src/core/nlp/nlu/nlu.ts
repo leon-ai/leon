@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import axios from 'axios'
 import kill from 'tree-kill'
 
+import type { ShortLanguageCode } from '@/types'
 import type { NLPUtterance, NLUResult } from '@/core/nlp/types'
 import { langs } from '@@/core/langs.json'
 import { version } from '@@/package.json'
@@ -49,7 +50,7 @@ export default class NLU {
   /**
    * Set new language; recreate a new TCP server with new language; and reprocess understanding
    */
-  private switchLanguage(utterance, locale) {
+  private switchLanguage(utterance: NLPUtterance, locale: ShortLanguageCode) {
     const connectedHandler = async (): Promise<void> => {
       await this.process(utterance)
     }
@@ -86,27 +87,6 @@ export default class NLU {
           lang: BRAIN.lang,
           classification: this.nluResult.classification
         }
-      })
-    }
-  }
-
-  /**
-   * Merge spaCy entities with the current NER instance
-   */
-  private async mergeSpacyEntities(utterance: NLPUtterance): Promise<void> {
-    const spacyEntities = await NER.getSpacyEntities(utterance)
-
-    if (spacyEntities.length > 0) {
-      spacyEntities.forEach(({ entity, resolution }) => {
-        const spacyEntity = {
-          [entity]: {
-            options: {
-              [resolution.value]: [StringHelper.ucFirst(resolution.value)]
-            }
-          }
-        }
-
-        MODEL_LOADER.mainNLPContainer.addEntities(spacyEntity, BRAIN.lang)
       })
     }
   }
@@ -307,7 +287,7 @@ export default class NLU {
       }
 
       // Add spaCy entities
-      await this.mergeSpacyEntities(utterance)
+      await NER.mergeSpacyEntities(utterance)
 
       // Pre NLU processing according to the active context if there is one
       if (this.conversation.hasActiveContext()) {

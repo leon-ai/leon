@@ -8,7 +8,7 @@ import type {
   SkillCustomRegexEntityTypeSchema,
   SkillCustomTrimEntityTypeSchema
 } from '@/schemas/skill-schemas'
-import { TCP_CLIENT } from '@/core'
+import { BRAIN, MODEL_LOADER, TCP_CLIENT } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
@@ -127,9 +127,30 @@ export default class NER {
   }
 
   /**
+   * Merge spaCy entities with the NER instance
+   */
+  public async mergeSpacyEntities(utterance: NLPUtterance): Promise<void> {
+    const spacyEntities = await this.getSpacyEntities(utterance)
+
+    if (spacyEntities.length > 0) {
+      spacyEntities.forEach(({ entity, resolution }) => {
+        const spacyEntity = {
+          [entity]: {
+            options: {
+              [resolution.value]: [StringHelper.ucFirst(resolution.value)]
+            }
+          }
+        }
+
+        MODEL_LOADER.mainNLPContainer.addEntities(spacyEntity, BRAIN.lang)
+      })
+    }
+  }
+
+  /**
    * Get spaCy entities from the TCP server
    */
-  public getSpacyEntities(utterance: NLPUtterance): Promise<NERSpacyEntity[]> {
+  private getSpacyEntities(utterance: NLPUtterance): Promise<NERSpacyEntity[]> {
     return new Promise((resolve) => {
       const spacyEntitiesReceivedHandler =
         async ({ spacyEntities }: { spacyEntities: NERSpacyEntity[] }): Promise<void> => {
