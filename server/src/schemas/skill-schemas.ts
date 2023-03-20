@@ -10,69 +10,66 @@ const skillDataTypes = [
   Type.Literal('global_resolver'),
   Type.Literal('entity')
 ]
-const skillCustomEntityTypes = [
-  Type.Array(
-    Type.Object(
-      {
-        type: Type.Literal('trim'),
-        name: Type.String({ minLength: 1 }),
-        conditions: Type.Array(
-          Type.Object(
-            {
-              type: Type.Union([
-                Type.Literal('between'),
-                Type.Literal('after'),
-                Type.Literal('after_first'),
-                Type.Literal('after_last'),
-                Type.Literal('before'),
-                Type.Literal('before_first'),
-                Type.Literal('before_last')
-              ]),
-              from: Type.Optional(
-                Type.Union([
-                  Type.Array(Type.String({ minLength: 1 })),
-                  Type.String({ minLength: 1 })
-                ])
-              ),
-              to: Type.Optional(
-                Type.Union([
-                  Type.Array(Type.String({ minLength: 1 })),
-                  Type.String({ minLength: 1 })
-                ])
-              )
-            },
-            { additionalProperties: false }
+const skillCustomEnumEntityType = Type.Object(
+  {
+    type: Type.Literal('enum'),
+    name: Type.String(),
+    options: Type.Record(
+      Type.String({ minLength: 1 }),
+      Type.Object({
+        synonyms: Type.Array(Type.String({ minLength: 1 }))
+      })
+    )
+  },
+  { additionalProperties: false }
+)
+const skillCustomRegexEntityType = Type.Object(
+  {
+    type: Type.Literal('regex'),
+    name: Type.String({ minLength: 1 }),
+    regex: Type.String({ minLength: 1 })
+  },
+  { additionalProperties: false }
+)
+const skillCustomTrimEntityType = Type.Object(
+  {
+    type: Type.Literal('trim'),
+    name: Type.String({ minLength: 1 }),
+    conditions: Type.Array(
+      Type.Object(
+        {
+          type: Type.Union([
+            Type.Literal('between'),
+            Type.Literal('after'),
+            Type.Literal('after_first'),
+            Type.Literal('after_last'),
+            Type.Literal('before'),
+            Type.Literal('before_first'),
+            Type.Literal('before_last')
+          ]),
+          from: Type.Optional(
+            Type.Union([
+              Type.Array(Type.String({ minLength: 1 })),
+              Type.String({ minLength: 1 })
+            ])
+          ),
+          to: Type.Optional(
+            Type.Union([
+              Type.Array(Type.String({ minLength: 1 })),
+              Type.String({ minLength: 1 })
+            ])
           )
-        )
-      },
-      { additionalProperties: false }
+        },
+        { additionalProperties: false }
+      )
     )
-  ),
-  Type.Array(
-    Type.Object(
-      {
-        type: Type.Literal('regex'),
-        name: Type.String({ minLength: 1 }),
-        regex: Type.String({ minLength: 1 })
-      },
-      { additionalProperties: false }
-    )
-  ),
-  Type.Array(
-    Type.Object(
-      {
-        type: Type.Literal('enum'),
-        name: Type.String(),
-        options: Type.Record(
-          Type.String({ minLength: 1 }),
-          Type.Object({
-            synonyms: Type.Array(Type.String({ minLength: 1 }))
-          })
-        )
-      },
-      { additionalProperties: false }
-    )
-  )
+  },
+  { additionalProperties: false }
+)
+const skillCustomEntityTypes = [
+  Type.Array(skillCustomTrimEntityType),
+  Type.Array(skillCustomRegexEntityType),
+  Type.Array(skillCustomEnumEntityType)
 ]
 
 export const domainSchemaObject = Type.Strict(
@@ -195,3 +192,6 @@ export type DomainSchema = Static<typeof domainSchemaObject>
 export type SkillSchema = Static<typeof skillSchemaObject>
 export type SkillConfigSchema = Static<typeof skillConfigSchemaObject>
 export type SkillBridgeSchema = Static<typeof skillSchemaObject.bridge>
+export type SkillCustomTrimEntityTypeSchema = Static<typeof skillCustomTrimEntityType>
+export type SkillCustomRegexEntityTypeSchema = Static<typeof skillCustomRegexEntityType>
+export type SkillCustomEnumEntityTypeSchema = Static<typeof skillCustomEnumEntityType>

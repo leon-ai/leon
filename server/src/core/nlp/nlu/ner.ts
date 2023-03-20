@@ -1,6 +1,13 @@
 import fs from 'node:fs'
 
-import type { NEREntity } from '@/core/nlp/types'
+import type { ShortLanguageCode } from '@/types'
+import type { NEREntity, NERSpacyEntity, NLPUtterance, NLUResult } from '@/core/nlp/types'
+import type {
+  SkillConfigSchema,
+  SkillCustomEnumEntityTypeSchema,
+  SkillCustomRegexEntityTypeSchema,
+  SkillCustomTrimEntityTypeSchema
+} from '@/schemas/skill-schemas'
 import { TCP_CLIENT } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -52,20 +59,24 @@ export default class NER {
   /**
    * Grab entities and match them with the utterance
    */
-  public extractEntities(lang, utteranceSamplesFilePath, obj) {
+  public extractEntities(
+    lang: ShortLanguageCode,
+    skillConfigPath: string,
+    nluResult: NLUResult
+  ): Promise<NEREntity[]> {
     return new Promise(async (resolve) => {
       LogHelper.title('NER')
       LogHelper.info('Looking for entities...')
 
-      const { classification } = obj
+      const { classification } = nluResult
       // Remove end-punctuation and add an end-whitespace
-      const utterance = `${StringHelper.removeEndPunctuation(obj.utterance)} `
-      const { actions } = JSON.parse(
-        fs.readFileSync(utteranceSamplesFilePath, 'utf8')
+      const utterance = `${StringHelper.removeEndPunctuation(nluResult.utterance)} `
+      const { actions }: { actions: SkillConfigSchema['actions'] } = JSON.parse(
+        fs.readFileSync(skillConfigPath, 'utf8')
       )
       const { action } = classification
       const promises = []
-      const actionEntities = actions[action].entities || []
+      const actionEntities = actions[action]?.entities || []
 
       /**
        * Browse action entities
@@ -74,18 +85,18 @@ export default class NER {
       for (let i = 0; i < actionEntities.length; i += 1) {
         const entity = actionEntities[i]
 
-        if (entity.type === 'regex') {
+        if (entity?.type === 'regex') {
           promises.push(this.injectRegexEntity(lang, entity))
-        } else if (entity.type === 'trim') {
+        } else if (entity?.type === 'trim') {
           promises.push(this.injectTrimEntity(lang, entity))
-        } else if (entity.type === 'enum') {
+        } else if (entity?.type === 'enum') {
           promises.push(this.injectEnumEntity(lang, entity))
         }
       }
 
       await Promise.all(promises)
 
-      const { entities } = await this.manager.process({
+      const { entities }: { entities: NEREntity[] } = await this.manager.process({
         locale: lang,
         text: utterance
       })
@@ -105,7 +116,6 @@ export default class NER {
       })
 
       if (entities.length > 0) {
-        console.log('entities', entities)
         NER.logExtraction(entities)
         return resolve(entities)
       }
@@ -119,11 +129,12 @@ export default class NER {
   /**
    * Get spaCy entities from the TCP server
    */
-  public getSpacyEntities(utterance) {
+  public getSpacyEntities(utterance: NLPUtterance): Promise<NERSpacyEntity[]> {
     return new Promise((resolve) => {
-      const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
-        resolve(spacyEntities)
-      }
+      const spacyEntitiesReceivedHandler =
+        async ({ spacyEntities }: { spacyEntities: NERSpacyEntity[] }): Promise<void> => {
+          resolve(spacyEntities)
+        }
 
       TCP_CLIENT.ee.removeAllListeners()
       TCP_CLIENT.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
@@ -135,35 +146,38 @@ export default class NER {
   /**
    * Inject trim type entities
    */
-  injectTrimEntity(lang, entity) {
+  private injectTrimEntity(
+    lang: ShortLanguageCode,
+    entityConfig: SkillCustomTrimEntityTypeSchema
+  ): Promise<void> {
     return new Promise((resolve) => {
-      for (let j = 0; j < entity.conditions.length; j += 1) {
-        const condition = entity.conditions[j]
+      for (let j = 0; j < entityConfig.conditions.length; j += 1) {
+        const condition = entityConfig.conditions[j]
         const conditionMethod = `add${StringHelper.snakeToPascalCase(
-          condition.type
+          condition?.type || ''
         )}Condition`
 
-        if (condition.type === 'between') {
+        if (condition?.type === 'between') {
           /**
            * Conditions: https://github.com/axa-group/nlp.js/blob/master/docs/v3/ner-manager.md#trim-named-entities
            * e.g. list.addBetweenCondition('en', 'list', 'create a', 'list')
            */
           this.manager[conditionMethod](
             lang,
-            entity.name,
-            condition.from,
-            condition.to
+            entityConfig.name,
+            condition?.from,
+            condition?.to
           )
-        } else if (condition.type.indexOf('after') !== -1) {
+        } else if (condition?.type.indexOf('after') !== -1) {
           const rule = {
             type: 'afterLast',
-            words: condition.from,
+            words: condition?.from,
             options: {}
           }
-          this.manager.addRule(lang, entity.name, 'trim', rule)
-          this.manager[conditionMethod](lang, entity.name, condition.from)
+          this.manager.addRule(lang, entityConfig.name, 'trim', rule)
+          this.manager[conditionMethod](lang, entityConfig.name, condition?.from)
         } else if (condition.type.indexOf('before') !== -1) {
-          this.manager[conditionMethod](lang, entity.name, condition.to)
+          this.manager[conditionMethod](lang, entityConfig.name, condition.to)
         }
       }
 
@@ -174,9 +188,12 @@ export default class NER {
   /**
    * Inject regex type entities
    */
-  injectRegexEntity(lang, entity) {
+  private injectRegexEntity(
+    lang: ShortLanguageCode,
+    entityConfig: SkillCustomRegexEntityTypeSchema
+  ): Promise<void> {
     return new Promise((resolve) => {
-      this.manager.addRegexRule(lang, entity.name, new RegExp(entity.regex, 'g'))
+      this.manager.addRegexRule(lang, entityConfig.name, new RegExp(entityConfig.regex, 'g'))
 
       resolve()
     })
@@ -185,13 +202,16 @@ export default class NER {
   /**
    * Inject enum type entities
    */
-  injectEnumEntity(lang, entity) {
+  private injectEnumEntity(
+    lang: ShortLanguageCode,
+    entityConfig: SkillCustomEnumEntityTypeSchema
+  ): Promise<void> {
     return new Promise((resolve) => {
-      const { name: entityName, options } = entity
+      const { name: entityName, options } = entityConfig
       const optionKeys = Object.keys(options)
 
       optionKeys.forEach((optionName) => {
-        const { synonyms } = options[optionName]
+        const { synonyms } = options[optionName] as { synonyms: string[] }
 
         this.manager.addRuleOptionTexts(lang, entityName, optionName, synonyms)
       })

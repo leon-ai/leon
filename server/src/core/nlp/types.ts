@@ -27,12 +27,16 @@ export interface NLUClassification {
   confidence: number
 }
 
-// TODO
+export interface NLUResolver {
+  name: string
+  value: string
+}
+
 export interface NLUResult {
   currentEntities: NEREntity[]
   entities: NEREntity[]
-  currentResolvers: [] // TODO
-  resolvers: [] // TODO
+  currentResolvers: NLUResolver[]
+  resolvers: NLUResolver[]
   slots: NLUSlots
   utterance: NLPUtterance
   configDataFilePath: string
@@ -228,7 +232,7 @@ export interface CustomEnumEntity extends CustomEntity<'enum'> {
   }
 }
 type GlobalEntity = CustomEnumEntity
-interface CustomRegexEntity extends CustomEntity<'regex'> {
+export interface CustomRegexEntity extends CustomEntity<'regex'> {
   resolution: {
     value: string
   }

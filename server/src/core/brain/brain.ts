@@ -26,6 +26,7 @@ import type {
   NLPDomain,
   NLPSkill,
   NLPUtterance,
+  NLUResolver,
   NLUResult,
   NLUSlot,
   NLUSlots
@@ -93,8 +94,8 @@ interface IntentObject {
   utterance: NLPUtterance
   current_entities: NEREntity[]
   entities: NEREntity[]
-  current_resolvers: NERCustomEntity[]
-  resolvers: NERCustomEntity[]
+  current_resolvers: NLUResolver[]
+  resolvers: NLUResolver[]
   slots: { [key: string]: NLUSlot['value'] | undefined }
 }
 

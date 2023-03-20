@@ -1,9 +1,3 @@
-/**
- * TODO:
- * create a "model-loader" class
- *
- */
-
 import fs from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -47,7 +41,7 @@ export default class NLU {
       this.mainNlp = {}
       this.ner = {}
       this.conv = new Conversation('conv0')
-      this.nluResultObj = defaultNluResultObj // TODO
+      this.nluResult = defaultNluResultObj // TODO
 
       LogHelper.title('NLU')
       LogHelper.success('New instance')
@@ -94,7 +88,7 @@ export default class NLU {
           version,
           utterance,
           lang: BRAIN.lang,
-          classification: this.nluResultObj.classification
+          classification: this.nluResult.classification
         }
       })
     }
@@ -133,7 +127,7 @@ export default class NLU {
       skillName,
       `config/${BRAIN.lang}.json`
     )
-    this.nluResultObj = {
+    this.nluResult = {
       ...defaultNluResultObj, // Reset entities, slots, etc.
       slots: this.conv.activeContext.slots,
       utterance,
@@ -145,16 +139,16 @@ export default class NLU {
         confidence: 1
       }
     }
-    this.nluResultObj.entities = await NER.extractEntities(
+    this.nluResult.entities = await NER.extractEntities(
       BRAIN.lang,
       configDataFilePath,
-      this.nluResultObj
+      this.nluResult
     )
 
     const { actions, resolvers } = JSON.parse(
       fs.readFileSync(configDataFilePath, 'utf8')
     )
-    const action = actions[this.nluResultObj.classification.action]
+    const action = actions[this.nluResult.classification.action]
     const { name: expectedItemName, type: expectedItemType } =
       action.loop.expected_item
     let hasMatchingEntity = false
@@ -162,7 +156,7 @@ export default class NLU {
 
     if (expectedItemType === 'entity') {
       hasMatchingEntity =
-        this.nluResultObj.entities.filter(
+        this.nluResult.entities.filter(
           ({ entity }) => expectedItemName === entity
         ).length > 0
     } else if (expectedItemType.indexOf('resolver') !== -1) {
@@ -204,11 +198,11 @@ export default class NLU {
       ) {
         LogHelper.title('NLU')
         LogHelper.success('Resolvers resolved:')
-        this.nluResultObj.resolvers = resolveResolvers(expectedItemName, intent)
-        this.nluResultObj.resolvers.forEach((resolver) =>
+        this.nluResult.resolvers = resolveResolvers(expectedItemName, intent)
+        this.nluResult.resolvers.forEach((resolver) =>
           LogHelper.success(`${intent}: ${JSON.stringify(resolver)}`)
         )
-        hasMatchingResolver = this.nluResultObj.resolvers.length > 0
+        hasMatchingResolver = this.nluResult.resolvers.length > 0
       }
     }
 
@@ -221,7 +215,7 @@ export default class NLU {
     }
 
     try {
-      const processedData = await BRAIN.execute(this.nluResultObj)
+      const processedData = await BRAIN.execute(this.nluResult)
       // Reprocess with the original utterance that triggered the context at first
       if (processedData.core?.restart === true) {
         const { originalUtterance } = this.conv.activeContext
@@ -361,7 +355,7 @@ export default class NLU {
       }
 
       const [skillName, actionName] = intent.split('.')
-      this.nluResultObj = {
+      this.nluResult = {
         ...defaultNluResultObj, // Reset entities, slots, etc.
         utterance,
         answers, // For dialog action type
@@ -417,28 +411,28 @@ export default class NLU {
           })
         }
 
-        this.nluResultObj = fallback
+        this.nluResult = fallback
       }
 
       LogHelper.title('NLU')
       LogHelper.success(
-        `Intent found: ${this.nluResultObj.classification.skill}.${this.nluResultObj.classification.action} (domain: ${this.nluResultObj.classification.domain})`
+        `Intent found: ${this.nluResult.classification.skill}.${this.nluResult.classification.action} (domain: ${this.nluResult.classification.domain})`
       )
 
       const configDataFilePath = join(
         process.cwd(),
         'skills',
-        this.nluResultObj.classification.domain,
-        this.nluResultObj.classification.skill,
+        this.nluResult.classification.domain,
+        this.nluResult.classification.skill,
         `config/${BRAIN.lang}.json`
       )
-      this.nluResultObj.configDataFilePath = configDataFilePath
+      this.nluResult.configDataFilePath = configDataFilePath
 
       try {
-        this.nluResultObj.entities = await NER.extractEntities(
+        this.nluResult.entities = await NER.extractEntities(
           BRAIN.lang,
           configDataFilePath,
-          this.nluResultObj
+          this.nluResult
         )
       } catch (e) {
         // TODO: "!" message, just do simple generic error handler
@@ -468,7 +462,7 @@ export default class NLU {
         }
       }
 
-      const newContextName = `${this.nluResultObj.classification.domain}.${skillName}`
+      const newContextName = `${this.nluResult.classification.domain}.${skillName}`
       if (this.conv.activeContext.name !== newContextName) {
         this.conv.cleanActiveContext()
       }
@@ -476,21 +470,21 @@ export default class NLU {
         lang: BRAIN.lang,
         slots: {},
         isInActionLoop: false,
-        originalUtterance: this.nluResultObj.utterance,
-        configDataFilePath: this.nluResultObj.configDataFilePath,
-        actionName: this.nluResultObj.classification.action,
-        domain: this.nluResultObj.classification.domain,
+        originalUtterance: this.nluResult.utterance,
+        configDataFilePath: this.nluResult.configDataFilePath,
+        actionName: this.nluResult.classification.action,
+        domain: this.nluResult.classification.domain,
         intent,
-        entities: this.nluResultObj.entities
+        entities: this.nluResult.entities
       }
       // Pass current utterance entities to the NLU result object
-      this.nluResultObj.currentEntities =
+      this.nluResult.currentEntities =
         this.conv.activeContext.currentEntities
       // Pass context entities to the NLU result object
-      this.nluResultObj.entities = this.conv.activeContext.entities
+      this.nluResult.entities = this.conv.activeContext.entities
 
       try {
-        const processedData = await BRAIN.execute(this.nluResultObj)
+        const processedData = await BRAIN.execute(this.nluResult)
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
@@ -548,7 +542,7 @@ export default class NLU {
       `config/${BRAIN.lang}.json`
     )
 
-    this.nluResultObj = {
+    this.nluResult = {
       ...defaultNluResultObj, // Reset entities, slots, etc.
       utterance,
       classification: {
@@ -557,10 +551,11 @@ export default class NLU {
         action: actionName
       }
     }
+
     const entities = await NER.extractEntities(
       BRAIN.lang,
       configDataFilePath,
-      this.nluResultObj
+      this.nluResult
     )
 
     // Continue to loop for questions if a slot has been filled correctly
@@ -586,7 +581,7 @@ export default class NLU {
     if (!this.conv.areSlotsAllFilled()) {
       BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
     } else {
-      this.nluResultObj = {
+      this.nluResult = {
         ...defaultNluResultObj, // Reset entities, slots, etc.
         // Assign slots only if there is a next action
         slots: this.conv.activeContext.nextAction
@@ -604,7 +599,7 @@ export default class NLU {
 
       this.conv.cleanActiveContext()
 
-      return BRAIN.execute(this.nluResultObj)
+      return BRAIN.execute(this.nluResult)
     }
 
     this.conv.cleanActiveContext()
@@ -626,22 +621,22 @@ export default class NLU {
         lang: BRAIN.lang,
         slots,
         isInActionLoop: false,
-        originalUtterance: this.nluResultObj.utterance,
-        configDataFilePath: this.nluResultObj.configDataFilePath,
-        actionName: this.nluResultObj.classification.action,
-        domain: this.nluResultObj.classification.domain,
+        originalUtterance: this.nluResult.utterance,
+        configDataFilePath: this.nluResult.configDataFilePath,
+        actionName: this.nluResult.classification.action,
+        domain: this.nluResult.classification.domain,
         intent,
-        entities: this.nluResultObj.entities
+        entities: this.nluResult.entities
       }
 
       const notFilledSlot = this.conv.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
         const { actions } = JSON.parse(
-          fs.readFileSync(this.nluResultObj.configDataFilePath, 'utf8')
+          fs.readFileSync(this.nluResult.configDataFilePath, 'utf8')
         )
         const [currentSlot] = actions[
-          this.nluResultObj.classification.action
+          this.nluResult.classification.action
         ].slots.filter(({ name }) => name === notFilledSlot.name)
 
         SOCKET_SERVER.socket.emit('suggest', currentSlot.suggestions)
@@ -660,7 +655,7 @@ export default class NLU {
    * according to the wished skill action
    */
   fallback(fallbacks) {
-    const words = this.nluResultObj.utterance.toLowerCase().split(' ')
+    const words = this.nluResult.utterance.toLowerCase().split(' ')
 
     if (fallbacks.length > 0) {
       LogHelper.info('Looking for fallbacks...')
@@ -674,14 +669,14 @@ export default class NLU {
         }
 
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i].words)) {
-          this.nluResultObj.entities = []
-          this.nluResultObj.classification.domain = fallbacks[i].domain
-          this.nluResultObj.classification.skill = fallbacks[i].skill
-          this.nluResultObj.classification.action = fallbacks[i].action
-          this.nluResultObj.classification.confidence = 1
+          this.nluResult.entities = []
+          this.nluResult.classification.domain = fallbacks[i].domain
+          this.nluResult.classification.skill = fallbacks[i].skill
+          this.nluResult.classification.action = fallbacks[i].action
+          this.nluResult.classification.confidence = 1
 
           LogHelper.success('Fallback found')
-          return this.nluResultObj
+          return this.nluResult
         }
       }
     }
