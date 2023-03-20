@@ -8,7 +8,7 @@ import { LangAll } from '@nlpjs/lang-all'
 
 import { MODELS_PATH } from '@/constants'
 import { NER } from '@/core'
-import Ner from '@/core/ner'
+import { MICROSOFT_BUILT_IN_ENTITIES } from '@/core/nlp/nlu/ner'
 import { LogHelper } from '@/helpers/log-helper'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -147,7 +147,7 @@ export default class ModelLoader {
           container.register(
             'extract-builtin-??',
             new BuiltinMicrosoft({
-              builtins: Ner.getMicrosoftBuiltinEntities()
+              builtins: MICROSOFT_BUILT_IN_ENTITIES
             }),
             true
           )

@@ -1,12 +1,35 @@
 import fs from 'node:fs'
 
+import type { NEREntity } from '@/core/nlp/types'
 import { TCP_CLIENT } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type NERManager = undefined | any
+
+// https://github.com/axa-group/nlp.js/blob/master/packages/builtin-microsoft/src/builtin-microsoft.js
+export const MICROSOFT_BUILT_IN_ENTITIES = [
+  'Number',
+  'Ordinal',
+  'Percentage',
+  'Age',
+  'Currency',
+  'Dimension',
+  'Temperature',
+  'DateTime',
+  'PhoneNumber',
+  'IpAddress',
+  // Disable booleans to handle it ourselves
+  // 'Boolean',
+  'Email',
+  'Hashtag',
+  'URL'
+]
+
 export default class NER {
   private static instance: NER
-  public manager
+  public manager: NERManager
 
   constructor() {
     if (!NER.instance) {
@@ -17,11 +40,12 @@ export default class NER {
     }
   }
 
-  private static logExtraction(entities) {
+  private static logExtraction(entities: NEREntity[]): void {
     LogHelper.title('NER')
     LogHelper.success('Entities found:')
-    entities.forEach((ent) =>
-      LogHelper.success(`{ value: ${ent.sourceText}, entity: ${ent.entity} }`)
+
+    entities.forEach((entity) =>
+      LogHelper.success(`{ value: ${entity.sourceText}, entity: ${entity.entity} }`)
     )
   }
 
@@ -81,6 +105,7 @@ export default class NER {
       })
 
       if (entities.length > 0) {
+        console.log('entities', entities)
         NER.logExtraction(entities)
         return resolve(entities)
       }
@@ -94,7 +119,7 @@ export default class NER {
   /**
    * Get spaCy entities from the TCP server
    */
-  static getSpacyEntities(utterance) {
+  public getSpacyEntities(utterance) {
     return new Promise((resolve) => {
       const spacyEntitiesReceivedHandler = async ({ spacyEntities }) => {
         resolve(spacyEntities)
@@ -173,29 +198,5 @@ export default class NER {
 
       resolve()
     })
-  }
-
-  /**
-   * Get Microsoft builtin entities
-   * https://github.com/axa-group/nlp.js/blob/master/packages/builtin-microsoft/src/builtin-microsoft.js
-   */
-  static getMicrosoftBuiltinEntities() {
-    return [
-      'Number',
-      'Ordinal',
-      'Percentage',
-      'Age',
-      'Currency',
-      'Dimension',
-      'Temperature',
-      'DateTime',
-      'PhoneNumber',
-      'IpAddress',
-      // Disable booleans to handle it ourselves
-      // 'Boolean',
-      'Email',
-      'Hashtag',
-      'URL'
-    ]
   }
 }
