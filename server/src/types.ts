@@ -15,9 +15,9 @@ import type { langs } from '@@/core/langs.json'
  * @see https://www.iso.org/iso-3166-country-codes.html
  */
 
-type Languages = typeof langs
+export type Languages = typeof langs
 export type LongLanguageCode = keyof Languages
-type Language = Languages[LongLanguageCode]
+export type Language = Languages[LongLanguageCode]
 export type ShortLanguageCode = Language['short']
 
 /**

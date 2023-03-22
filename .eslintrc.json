@@ -27,6 +27,7 @@
   "ignorePatterns": "*.spec.js",
   "rules": {
     "quotes": ["error", "single"],
+    "@typescript-eslint/no-non-null-assertion": ["off"],
     "no-async-promise-executor": ["off"],
     "no-underscore-dangle": ["error", { "allowAfterThis": true }],
     "prefer-destructuring": ["error"],
