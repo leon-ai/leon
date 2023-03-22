@@ -18,6 +18,7 @@ export interface NLUSlot {
   isFilled: boolean
   questions: string[]
   pickedQuestion: string
+  locales?: Record<string, string[]> // From NLP.js
 }
 
 export interface NLUClassification {

@@ -6,6 +6,7 @@ import type {
   NLPAction,
   NLPDomain,
   NLPUtterance,
+  NLUSlot,
   NLUSlots
 } from '@/core/nlp/types'
 import type { SkillConfigSchema } from '@/schemas/skill-schemas'
@@ -84,7 +85,7 @@ export default class Conversation {
       fs.readFileSync(skillConfigPath, 'utf8')
     )
     // Grab next action from the NLU data file
-    const { next_action: nextAction } = actions[actionName]
+    const { next_action: nextAction } = actions[actionName] as { next_action: string }
 
     // If slots are required to trigger next actions, then go through the context activation
     if (slotKeys.length > 0) {
@@ -96,6 +97,7 @@ export default class Conversation {
         this.pushToPreviousContextsStack()
         // Activate new context
         this._activeContext = {
+          ...DEFAULT_ACTIVE_CONTEXT,
           name: newContextName,
           domain,
           intent,
@@ -131,6 +133,7 @@ export default class Conversation {
       if (this._activeContext.name !== newContextName) {
         // Activate new context
         this._activeContext = {
+          ...DEFAULT_ACTIVE_CONTEXT,
           name: newContextName,
           domain,
           intent,
@@ -167,12 +170,16 @@ export default class Conversation {
   /**
    * Set slots in active context
    */
-  setSlots(lang, entities, slots = this._activeContext.slots) {
+  public setSlots(
+    lang: ShortLanguageCode,
+    entities: NEREntity[],
+    slots = this._activeContext.slots
+  ): void {
     const slotKeys = Object.keys(slots)
 
     for (let i = 0; i < slotKeys.length; i += 1) {
-      const key = slotKeys[i]
-      const slotObj = slots[key]
+      const key = slotKeys[i] as string
+      const slotObj = slots[key] as NLUSlot
       const isFirstSet = key.includes('#')
       let slotName = slotObj.name
       let slotEntity = slotObj.expectedEntity
@@ -180,8 +187,8 @@ export default class Conversation {
 
       // If it's the first slot setting grabbed from the model or not
       if (isFirstSet) {
-        ;[slotName, slotEntity] = key.split('#')
-        questions = slotObj.locales[lang]
+        [slotName, slotEntity] = key.split('#') as [string, string]
+        questions = slotObj.locales?.[lang] as string[]
       }
 
       // Match the slot with the submitted entity and ensure the slot hasn't been filled yet
@@ -189,7 +196,7 @@ export default class Conversation {
         ({ entity }) => entity === slotEntity && !slotObj.isFilled
       )
       const pickedQuestion =
-        questions[Math.floor(Math.random() * questions.length)]
+        questions[Math.floor(Math.random() * questions.length)] as string
       const slot = this._activeContext.slots[slotName]
       const newSlot = {
         name: slotName,
@@ -211,6 +218,8 @@ export default class Conversation {
         !slot.isFilled ||
         (slot.isFilled &&
           newSlot.isFilled &&
+          'value' in slot.value.resolution &&
+          'value' in newSlot.value.resolution &&
           slot.value.resolution.value !== newSlot.value.resolution.value)
       ) {
         if (newSlot?.isFilled) {
@@ -230,26 +239,30 @@ export default class Conversation {
   /**
    * Get the not yet filled slot if there is any
    */
-  getNotFilledSlot() {
+  public getNotFilledSlot(): NLUSlot | null {
     const slotsKeys = Object.keys(this._activeContext.slots)
     const [notFilledSlotKey] = slotsKeys.filter(
-      (slotKey) => !this._activeContext.slots[slotKey].isFilled
+      (slotKey) => !this._activeContext.slots[slotKey]?.isFilled
     )
 
-    return this._activeContext.slots[notFilledSlotKey]
+    if (notFilledSlotKey !== undefined) {
+      return this._activeContext.slots[notFilledSlotKey] as NLUSlot
+    }
+
+    return null
   }
 
   /**
    * Check whether slots are all filled
    */
-  areSlotsAllFilled() {
+  public areSlotsAllFilled(): boolean {
     return !this.getNotFilledSlot()
   }
 
   /**
    * Clean up active context
    */
-  cleanActiveContext() {
+  public cleanActiveContext(): void {
     LogHelper.title('Conversation')
     LogHelper.info('Clean active context')
 
@@ -260,16 +273,20 @@ export default class Conversation {
   /**
    * Push active context to the previous contexts stack
    */
-  pushToPreviousContextsStack() {
-    const previousContextsKeys = Object.keys(this._previousContexts)
+  private pushToPreviousContextsStack(): void {
+    if (this._previousContexts) {
+      const previousContextsKeys = Object.keys(this._previousContexts)
 
-    // Remove the oldest context from the history stack if it reaches the maximum limit
-    if (previousContextsKeys.length >= MAX_CONTEXT_HISTORY) {
-      delete this._previousContexts[previousContextsKeys[0]]
-    }
+      // Remove the oldest context from the history stack if it reaches the maximum limit
+      if (previousContextsKeys.length >= MAX_CONTEXT_HISTORY) {
+        delete this._previousContexts[previousContextsKeys[0] as string]
+      }
 
-    if (this._activeContext.name) {
-      this._previousContexts[this._activeContext.name] = this._activeContext
+      if (this._activeContext.name) {
+        this._previousContexts[this._activeContext.name] = this._activeContext
+      }
+    } else {
+      LogHelper.warning('No previous context found')
     }
   }
 }
