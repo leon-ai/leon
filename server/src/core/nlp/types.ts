@@ -39,7 +39,7 @@ export interface NLUResult {
   resolvers: NLUResolver[]
   slots: NLUSlots
   utterance: NLPUtterance
-  configDataFilePath: string
+  skillConfigPath: string
   answers: { answer: string }[]
   classification: NLUClassification
 }

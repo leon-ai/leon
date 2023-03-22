@@ -110,11 +110,11 @@ export default class Brain {
     }
   }
 
-  get lang(): ShortLanguageCode {
+  public get lang(): ShortLanguageCode {
     return this._lang
   }
 
-  set lang(newLang: ShortLanguageCode) {
+  public set lang(newLang: ShortLanguageCode) {
     this._lang = newLang
     // Update broca
     this.broca = JSON.parse(
@@ -355,11 +355,11 @@ export default class Brain {
         })
       } else {
         const {
-          configDataFilePath,
+          skillConfigPath,
           classification: { action: actionName }
         } = nluResult
         const { actions }: { actions: SkillConfigSchema['actions'] } = JSON.parse(
-          fs.readFileSync(configDataFilePath, 'utf8')
+          fs.readFileSync(skillConfigPath, 'utf8')
         )
         const action = actions[actionName] as SkillConfigSchema['actions'][string]
         const { type: actionType } = action
