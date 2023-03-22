@@ -7,17 +7,11 @@ import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import type {
   CustomEnumEntity,
   NERCustomEntity,
-  NEREntity,
-  NLPAction,
-  NLPDomain,
-  NLPSkill,
-  NLPUtterance,
-  NLUResolver,
-  NLUResult,
-  NLUSlot,
-  NLUSlots
+  NLUResult
 } from '@/core/nlp/types'
 import type { SkillConfigSchema } from '@/schemas/skill-schemas'
+import type { BrainProcessResult, IntentObject, SkillResult } from '@/core/brain/types'
+import { SkillActionType, SkillOutputType } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
 import { SOCKET_SERVER, TTS } from '@/core'
@@ -26,64 +20,6 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
-
-enum SkillOutputType {
-  Intermediate = 'inter',
-  End = 'end'
-}
-enum SkillActionType {
-  Logic = 'logic',
-  Dialog = 'dialog'
-}
-
-interface SkillCoreData {
-  restart?: boolean
-  isInActionLoop?: boolean
-  showNextActionSuggestions?: boolean
-  showSuggestions?: boolean
-}
-
-interface SkillResult {
-  domain: NLPDomain
-  skill: NLPSkill
-  action: NLPAction
-  lang: ShortLanguageCode
-  utterance: NLPUtterance
-  entities: NEREntity[]
-  slots: NLUSlots
-  output: {
-    type: SkillOutputType
-    codes: string[]
-    speech: string
-    core: SkillCoreData | undefined
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    options: Record<string, any>
-  }
-}
-
-interface BrainProcessResult extends NLUResult {
-  speeches: string[]
-  executionTime: number
-  utteranceId? : string
-  lang?: ShortLanguageCode
-  core?: SkillCoreData | undefined
-  action?: SkillConfigSchema['actions'][string]
-  nextAction?: SkillConfigSchema['actions'][string] | null | undefined
-}
-
-interface IntentObject {
-  id: string
-  lang: ShortLanguageCode
-  domain: NLPDomain
-  skill: NLPSkill
-  action: NLPAction
-  utterance: NLPUtterance
-  current_entities: NEREntity[]
-  entities: NEREntity[]
-  current_resolvers: NLUResolver[]
-  resolvers: NLUResolver[]
-  slots: { [key: string]: NLUSlot['value'] | undefined }
-}
 
 export default class Brain {
   private static instance: Brain

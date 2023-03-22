@@ -2,14 +2,13 @@ import fs from 'node:fs'
 import { join } from 'node:path'
 import { spawn } from 'node:child_process'
 
-import axios from 'axios'
 import kill from 'tree-kill'
 
 import type { ShortLanguageCode } from '@/types'
 import type { NLPUtterance, NLUResult } from '@/core/nlp/types'
+import type { BrainProcessResult } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
-import { version } from '@@/package.json'
-import { HAS_LOGGER, IS_TESTING_ENV, TCP_SERVER_BIN_PATH } from '@/constants'
+import { TCP_SERVER_BIN_PATH } from '@/constants'
 import { TCP_CLIENT, BRAIN, SOCKET_SERVER, MODEL_LOADER, NER } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -49,7 +48,7 @@ export default class NLU {
   /**
    * Set new language; recreate a new TCP server with new language; and reprocess understanding
    */
-  private switchLanguage(utterance: NLPUtterance, locale: ShortLanguageCode) {
+  private switchLanguage(utterance: NLPUtterance, locale: ShortLanguageCode): unknown {
     const connectedHandler = async (): Promise<void> => {
       await this.process(utterance)
     }
@@ -58,7 +57,7 @@ export default class NLU {
     BRAIN.talk(`${BRAIN.wernicke('random_language_switch')}.`, true)
 
     // Recreate a new TCP server process and reconnect the TCP client
-    kill(global.tcpServerProcess.pid, () => {
+    kill(global.tcpServerProcess.pid as number, () => {
       global.tcpServerProcess = spawn(`${TCP_SERVER_BIN_PATH} ${locale}`, {
         shell: true
       })
@@ -72,28 +71,9 @@ export default class NLU {
   }
 
   /**
-   * Collaborative logger request
-   */
-  sendLog(utterance) {
-    if (HAS_LOGGER && !IS_TESTING_ENV) {
-      axios.request({
-        method: 'POST',
-        url: 'https://logger.getleon.ai/v1/expressions',
-        headers: { 'X-Origin': 'leon-core' },
-        data: {
-          version,
-          utterance,
-          lang: BRAIN.lang,
-          classification: this.nluResult.classification
-        }
-      })
-    }
-  }
-
-  /**
    * Handle in action loop logic before NLU processing
    */
-  private async handleActionLoop(utterance: NLPUtterance) {
+  private async handleActionLoop(utterance: NLPUtterance): Promise<Partial<BrainProcessResult> | null> {
     const { domain, intent } = this.conversation.activeContext
     const [skillName, actionName] = intent.split('.')
     const skillConfigPath = join(
