@@ -40,7 +40,7 @@ I wish one day I could work on Leon full time, but it's not possible at the mome
 
 Until then, any financial support by [sponsoring Leon](http://sponsor.getleon.ai) is much appreciated 🙂
 
-### How about LLMs and Leon?
+### How about large language models and Leon?
 
 Since AI gained in popularity and large language models are getting more and more traction, many of you joined our community. A huge welcome to all of you! 🤗
 
