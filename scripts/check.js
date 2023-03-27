@@ -215,7 +215,7 @@ dotenv.config()
       const p = await command(
         `${PYTHON_BRIDGE_BIN_PATH} "${path.join(
           process.cwd(),
-          'scripts/assets/intent-object.json'
+          'scripts', 'assets', 'intent-object.json'
         )}"`,
         { shell: true }
       )

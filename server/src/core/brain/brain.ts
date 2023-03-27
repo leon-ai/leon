@@ -26,7 +26,7 @@ export default class Brain {
   private _lang: ShortLanguageCode = 'en'
   private broca: GlobalAnswersSchema = JSON.parse(
     fs.readFileSync(
-      path.join(process.cwd(), 'core/data', this._lang, 'answers.json'),
+      path.join(process.cwd(), 'core', 'data', this._lang, 'answers.json'),
       'utf8'
     )
   )
@@ -55,7 +55,7 @@ export default class Brain {
     // Update broca
     this.broca = JSON.parse(
       fs.readFileSync(
-        path.join(process.cwd(), 'core/data', this._lang, 'answers.json'),
+        path.join(process.cwd(), 'core', 'data', this._lang, 'answers.json'),
         'utf8'
       )
     )
@@ -424,7 +424,7 @@ export default class Brain {
             nluResult.classification.domain,
             nluResult.classification.skill,
             'config',
-            `${this._lang}.json`
+            this._lang + '.json'
           )
           const { actions, entities: skillConfigEntities } = SkillDomainHelper.getSkillConfig(
             configFilePath,

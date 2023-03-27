@@ -59,7 +59,8 @@ export class SlotFilling {
       'skills',
       domain,
       skillName,
-      `config/${BRAIN.lang}.json`
+      'config',
+      BRAIN.lang + '.json'
     )
 
     NLU.nluResult = {

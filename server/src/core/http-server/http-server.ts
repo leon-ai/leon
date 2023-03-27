@@ -61,7 +61,7 @@ export default class HTTPServer {
   private async bootstrap(): Promise<void> {
     // Render the web app
     this.fastify.register(fastifyStatic, {
-      root: join(process.cwd(), 'app/dist'),
+      root: join(process.cwd(), 'app', 'dist'),
       prefix: '/'
     })
     this.fastify.get('/', (_request, reply) => {

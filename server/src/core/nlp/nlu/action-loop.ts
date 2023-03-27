@@ -22,7 +22,8 @@ export class ActionLoop {
       'skills',
       domain,
       skillName,
-      `config/${BRAIN.lang}.json`
+      'config',
+      BRAIN.lang + '.json'
     )
     NLU.nluResult = {
       ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
@@ -41,7 +42,6 @@ export class ActionLoop {
       skillConfigPath,
       NLU.nluResult
     )
-
 
     const { actions, resolvers } = SkillDomainHelper.getSkillConfig(skillConfigPath, BRAIN.lang)
     const action = actions[NLU.nluResult.classification.action]
@@ -66,7 +66,8 @@ export class ActionLoop {
       const resolveResolvers = (resolver, intent) => {
         const resolversPath = join(
           process.cwd(),
-          'core/data',
+          'core',
+          'data',
           BRAIN.lang,
           'global-resolvers'
         )

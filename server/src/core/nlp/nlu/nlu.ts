@@ -212,7 +212,8 @@ export default class NLU {
         'skills',
         this.nluResult.classification.domain,
         this.nluResult.classification.skill,
-        `config/${BRAIN.lang}.json`
+        'config',
+        BRAIN.lang + '.json'
       )
       this.nluResult.skillConfigPath = skillConfigPath
 

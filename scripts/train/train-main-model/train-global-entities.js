@@ -13,7 +13,8 @@ export default (lang, nlp) =>
 
     const globalEntitiesPath = path.join(
       process.cwd(),
-      'core/data',
+      'core',
+      'data',
       lang,
       'global-entities'
     )

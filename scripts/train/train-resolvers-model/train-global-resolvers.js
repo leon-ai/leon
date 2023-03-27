@@ -14,7 +14,8 @@ export default (lang, nlp) =>
 
     const resolversPath = path.join(
       process.cwd(),
-      'core/data',
+      'core',
+      'data',
       lang,
       'global-resolvers'
     )
