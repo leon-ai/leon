@@ -1,9 +1,6 @@
-import fs from 'node:fs'
-
 import type { ShortLanguageCode } from '@/types'
 import type { NEREntity, NERSpacyEntity, NLPUtterance, NLUResult } from '@/core/nlp/types'
 import type {
-  SkillConfigSchema,
   SkillCustomEnumEntityTypeSchema,
   SkillCustomRegexEntityTypeSchema,
   SkillCustomTrimEntityTypeSchema
@@ -11,6 +8,7 @@ import type {
 import { BRAIN, MODEL_LOADER, TCP_CLIENT } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type NERManager = undefined | any
@@ -71,9 +69,7 @@ export default class NER {
       const { classification } = nluResult
       // Remove end-punctuation and add an end-whitespace
       const utterance = `${StringHelper.removeEndPunctuation(nluResult.utterance)} `
-      const { actions }: { actions: SkillConfigSchema['actions'] } = JSON.parse(
-        fs.readFileSync(skillConfigPath, 'utf8')
-      )
+      const { actions } = SkillDomainHelper.getSkillConfig(skillConfigPath, lang)
       const { action } = classification
       const promises = []
       const actionEntities = actions[action]?.entities || []

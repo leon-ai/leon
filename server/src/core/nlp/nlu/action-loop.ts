@@ -5,6 +5,7 @@ import type { NLPUtterance } from '@/core/nlp/types'
 import type { BrainProcessResult } from '@/core/brain/types'
 import { BRAIN, MODEL_LOADER, NER, NLU } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { DEFAULT_NLU_RESULT } from '@/core/nlp/nlu/nlu'
 
 export class ActionLoop {
@@ -15,7 +16,7 @@ export class ActionLoop {
     utterance: NLPUtterance
   ): Promise<Partial<BrainProcessResult> | null> {
     const { domain, intent } = NLU.conversation.activeContext
-    const [skillName, actionName] = intent.split('.')
+    const [skillName, actionName] = intent.split('.') as [string, string]
     const skillConfigPath = join(
       process.cwd(),
       'skills',
@@ -41,10 +42,8 @@ export class ActionLoop {
       NLU.nluResult
     )
 
-    // TODO: type
-    const { actions, resolvers } = JSON.parse(
-      fs.readFileSync(skillConfigPath, 'utf8')
-    )
+
+    const { actions, resolvers } = SkillDomainHelper.getSkillConfig(skillConfigPath, BRAIN.lang)
     const action = actions[NLU.nluResult.classification.action]
     const { name: expectedItemName, type: expectedItemType } =
       action.loop.expected_item

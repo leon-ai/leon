@@ -5,6 +5,7 @@ import type { NLPUtterance } from '@/core/nlp/types'
 import type { BrainProcessResult } from '@/core/brain/types'
 import { BRAIN, MODEL_LOADER, NER, NLU, SOCKET_SERVER } from '@/core'
 import { DEFAULT_NLU_RESULT } from '@/core/nlp/nlu/nlu'
+import { SkillDomainHelper } from "@/helpers/skill-domain-helper";
 
 export class SlotFilling {
   /**
@@ -151,9 +152,7 @@ export class SlotFilling {
       const notFilledSlot = NLU.conversation.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        const { actions } = JSON.parse(
-          fs.readFileSync(NLU.nluResult.skillConfigPath, 'utf8')
-        )
+        const { actions } = SkillDomainHelper.getSkillConfig(NLU.nluResult.skillConfigPath, BRAIN.lang)
         const [currentSlot] = actions[
           NLU.nluResult.classification.action
         ].slots.filter(({ name }) => name === notFilledSlot.name)

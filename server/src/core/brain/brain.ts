@@ -294,9 +294,7 @@ export default class Brain {
           skillConfigPath,
           classification: { action: actionName }
         } = nluResult
-        const { actions }: { actions: SkillConfigSchema['actions'] } = JSON.parse(
-          fs.readFileSync(skillConfigPath, 'utf8')
-        )
+        const { actions } = SkillDomainHelper.getSkillConfig(skillConfigPath, this._lang)
         const action = actions[actionName] as SkillConfigSchema['actions'][string]
         const { type: actionType } = action
         const nextAction = action.next_action
@@ -428,7 +426,7 @@ export default class Brain {
             'config',
             `${this._lang}.json`
           )
-          const { actions, entities: skillConfigEntities } = await SkillDomainHelper.getSkillConfig(
+          const { actions, entities: skillConfigEntities } = SkillDomainHelper.getSkillConfig(
             configFilePath,
             this._lang
           )

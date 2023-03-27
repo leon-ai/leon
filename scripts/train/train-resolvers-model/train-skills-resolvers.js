@@ -27,7 +27,7 @@ export default (lang, nlp) =>
         )
 
         if (fs.existsSync(configFilePath)) {
-          const { resolvers } = await SkillDomainHelper.getSkillConfig(
+          const { resolvers } = SkillDomainHelper.getSkillConfig(
             configFilePath,
             lang
           )

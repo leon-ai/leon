@@ -1,5 +1,3 @@
-import fs from 'node:fs'
-
 import type { ShortLanguageCode } from '@/types'
 import type {
   NEREntity,
@@ -9,12 +7,12 @@ import type {
   NLUSlot,
   NLUSlots
 } from '@/core/nlp/types'
-import type { SkillConfigSchema } from '@/schemas/skill-schemas'
 import { LogHelper } from '@/helpers/log-helper'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 interface ConversationContext {
   name: string | null
-  domain: NLPDomain | null
+  domain: NLPDomain
   intent: string
   currentEntities: NEREntity[]
   entities: NEREntity[]
@@ -33,7 +31,7 @@ type ConversationPreviousContext = Record<string, ConversationContext> | null
 const MAX_CONTEXT_HISTORY = 5
 const DEFAULT_ACTIVE_CONTEXT = {
   name: null,
-  domain: null,
+  domain: '',
   intent: '',
   currentEntities: [],
   entities: [],
@@ -81,9 +79,7 @@ export default class Conversation {
     const slotKeys = Object.keys(slots)
     const [skillName] = intent.split('.')
     const newContextName = `${domain}.${skillName}`
-    const { actions }: { actions: SkillConfigSchema['actions'] } = JSON.parse(
-      fs.readFileSync(skillConfigPath, 'utf8')
-    )
+    const { actions } = SkillDomainHelper.getSkillConfig(skillConfigPath, lang)
     // Grab next action from the NLU data file
     const { next_action: nextAction } = actions[actionName] as { next_action: string }
 
