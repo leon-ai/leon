@@ -29,7 +29,7 @@ interface ConversationContext {
 type ConversationPreviousContext = Record<string, ConversationContext> | null
 
 const MAX_CONTEXT_HISTORY = 5
-const DEFAULT_ACTIVE_CONTEXT = {
+export const DEFAULT_ACTIVE_CONTEXT = {
   name: null,
   domain: '',
   intent: '',

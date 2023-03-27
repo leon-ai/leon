@@ -1,11 +1,11 @@
-import fs from 'node:fs'
 import { join } from 'node:path'
 
 import type { NLPUtterance } from '@/core/nlp/types'
 import type { BrainProcessResult } from '@/core/brain/types'
 import { BRAIN, MODEL_LOADER, NER, NLU, SOCKET_SERVER } from '@/core'
 import { DEFAULT_NLU_RESULT } from '@/core/nlp/nlu/nlu'
-import { SkillDomainHelper } from "@/helpers/skill-domain-helper";
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
+import { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
 
 export class SlotFilling {
   /**
@@ -25,16 +25,17 @@ export class SlotFilling {
 
     if (processedData && Object.keys(processedData).length > 0) {
       // Set new context with the next action if there is one
-      if (processedData.action.next_action) {
+      if (processedData.action?.next_action) {
         NLU.conversation.activeContext = {
+          ...DEFAULT_ACTIVE_CONTEXT,
           lang: BRAIN.lang,
-          slots: processedData.slots,
-          isInActionLoop: !!processedData.nextAction.loop,
-          originalUtterance: processedData.utterance,
-          skillConfigPath: processedData.skillConfigPath,
+          slots: processedData.slots || {},
+          isInActionLoop: !!processedData.nextAction?.loop,
+          originalUtterance: processedData.utterance ?? null,
+          skillConfigPath: processedData.skillConfigPath || '',
           actionName: processedData.action.next_action,
-          domain: processedData.classification.domain,
-          intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
+          domain: processedData.classification?.domain || '',
+          intent: `${processedData.classification?.skill}.${processedData.action.next_action}`,
           entities: []
         }
       }
@@ -53,7 +54,7 @@ export class SlotFilling {
     }
 
     const { domain, intent } = NLU.conversation.activeContext
-    const [skillName, actionName] = intent.split('.')
+    const [skillName, actionName] = intent.split('.') as [string, string]
     const skillConfigPath = join(
       process.cwd(),
       'skills',
@@ -69,7 +70,8 @@ export class SlotFilling {
       classification: {
         domain,
         skill: skillName,
-        action: actionName
+        action: actionName,
+        confidence: 1
       }
     }
 
@@ -83,7 +85,7 @@ export class SlotFilling {
     let notFilledSlot = NLU.conversation.getNotFilledSlot()
     if (notFilledSlot && entities.length > 0) {
       const hasMatch = entities.some(
-        ({ entity }) => entity === notFilledSlot.expectedEntity
+        ({ entity }) => entity === notFilledSlot?.expectedEntity
       )
 
       if (hasMatch) {
@@ -108,7 +110,7 @@ export class SlotFilling {
         slots: NLU.conversation.activeContext.nextAction
           ? NLU.conversation.activeContext.slots
           : {},
-        utterance: NLU.conversation.activeContext.originalUtterance,
+        utterance: NLU.conversation.activeContext.originalUtterance ?? '',
         skillConfigPath,
         classification: {
           domain,
@@ -139,6 +141,7 @@ export class SlotFilling {
 
     if (hasMandatorySlots) {
       NLU.conversation.activeContext = {
+        ...DEFAULT_ACTIVE_CONTEXT,
         lang: BRAIN.lang,
         slots,
         isInActionLoop: false,
@@ -156,9 +159,9 @@ export class SlotFilling {
         const { actions } = SkillDomainHelper.getSkillConfig(NLU.nluResult.skillConfigPath, BRAIN.lang)
         const [currentSlot] = actions[
           NLU.nluResult.classification.action
-        ].slots.filter(({ name }) => name === notFilledSlot.name)
+        ]?.slots?.filter(({ name }) => name === notFilledSlot.name) ?? []
 
-        SOCKET_SERVER.socket.emit('suggest', currentSlot.suggestions)
+        SOCKET_SERVER.socket.emit('suggest', currentSlot?.suggestions)
         BRAIN.talk(notFilledSlot.pickedQuestion)
         SOCKET_SERVER.socket.emit('is-typing', false)
 
