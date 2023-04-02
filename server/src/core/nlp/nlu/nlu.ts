@@ -5,6 +5,7 @@ import kill from 'tree-kill'
 
 import type { Language, ShortLanguageCode } from '@/types'
 import type { NLPAction, NLPDomain, NLPJSProcessResult, NLPSkill, NLPUtterance, NLUResult } from '@/core/nlp/types'
+import type { BrainProcessResult } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
 import { TCP_SERVER_BIN_PATH } from '@/constants'
 import { TCP_CLIENT, BRAIN, SOCKET_SERVER, MODEL_LOADER, NER } from '@/core'
@@ -13,6 +14,15 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { ActionLoop } from '@/core/nlp/nlu/action-loop'
 import { SlotFilling } from '@/core/nlp/nlu/slot-filling'
 import Conversation, { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
+
+type NLUProcessResult = Promise<
+  Partial<
+    BrainProcessResult & {
+      processingTime: number
+      nluProcessingTime: number
+    }
+  > | null
+>
 
 export const DEFAULT_NLU_RESULT = {
   utterance: '',
@@ -51,7 +61,7 @@ export default class NLU {
   private switchLanguage(
     utterance: NLPUtterance,
     locale: ShortLanguageCode
-  ): unknown {
+  ): void {
     const connectedHandler = async (): Promise<void> => {
       await this.process(utterance)
     }
@@ -69,8 +79,6 @@ export default class NLU {
       TCP_CLIENT.ee.removeListener('connected', connectedHandler)
       TCP_CLIENT.ee.on('connected', connectedHandler)
     })
-
-    return {}
   }
 
   /**
@@ -78,7 +86,9 @@ export default class NLU {
    * pick-up the right classification
    * and extract entities
    */
-  public process(utterance: NLPUtterance) {
+  public process(
+    utterance: NLPUtterance
+  ): NLUProcessResult {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
@@ -167,7 +177,8 @@ export default class NLU {
 
       // Trigger language switching
       if (BRAIN.lang !== locale) {
-        return resolve(this.switchLanguage(utterance, locale))
+        this.switchLanguage(utterance, locale)
+        return resolve(null)
       }
 
       // this.sendLog()
@@ -190,13 +201,7 @@ export default class NLU {
           const msg = 'Intent not found'
           LogHelper.warning(msg)
 
-          const processingTimeEnd = Date.now()
-          const processingTime = processingTimeEnd - processingTimeStart
-
-          return resolve({
-            processingTime,
-            message: msg
-          })
+          return resolve(null)
         }
 
         this.nluResult = fallback
@@ -249,6 +254,7 @@ export default class NLU {
         this.conversation.cleanActiveContext()
       }
       this.conversation.activeContext = {
+        ...DEFAULT_ACTIVE_CONTEXT,
         lang: BRAIN.lang,
         slots: {},
         isInActionLoop: false,
