@@ -12,7 +12,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { ActionLoop } from '@/core/nlp/nlu/action-loop'
 import { SlotFilling } from '@/core/nlp/nlu/slot-filling'
-import Conversation  from '@/core/nlp/conversation'
+import Conversation, { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
 
 export const DEFAULT_NLU_RESULT = {
   utterance: '',
@@ -279,14 +279,15 @@ export default class NLU {
         if (processedData.nextAction) {
           this.conversation.cleanActiveContext()
           this.conversation.activeContext = {
+            ...DEFAULT_ACTIVE_CONTEXT,
             lang: BRAIN.lang,
             slots: {},
             isInActionLoop: !!processedData.nextAction.loop,
-            originalUtterance: processedData.utterance,
-            skillConfigPath: processedData.skillConfigPath,
-            actionName: processedData.action.next_action,
-            domain: processedData.classification.domain,
-            intent: `${processedData.classification.skill}.${processedData.action.next_action}`,
+            originalUtterance: processedData.utterance ?? '',
+            skillConfigPath: processedData.skillConfigPath || '',
+            actionName: processedData.action?.next_action || '',
+            domain: processedData.classification?.domain || '',
+            intent: `${processedData.classification?.skill}.${processedData.action?.next_action}`,
             entities: []
           }
         }
@@ -297,7 +298,7 @@ export default class NLU {
         return resolve({
           processingTime, // In ms, total time
           ...processedData,
-          nluProcessingTime: processingTime - processedData?.executionTime // In ms, NLU processing time only
+          nluProcessingTime: processingTime - (processedData?.executionTime || 0) // In ms, NLU processing time only
         })
       } catch (e) {
         // TODO: TS refactor; verify how this works with the new error handling
