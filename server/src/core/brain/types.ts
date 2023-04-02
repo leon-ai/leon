@@ -5,7 +5,8 @@ import type {
   NLPSkill,
   NLPUtterance,
   NLUResolver,
-  NLUResult, NLUSlot,
+  NLUResult,
+  NLUSlot,
   NLUSlots
 } from '@/core/nlp/types'
 import type { SkillConfigSchema } from '@/schemas/skill-schemas'
@@ -62,7 +63,7 @@ export interface IntentObject {
 export interface BrainProcessResult extends NLUResult {
   speeches: string[]
   executionTime: number
-  utteranceId? : string
+  utteranceId?: string
   lang?: ShortLanguageCode
   core?: SkillCoreData | undefined
   action?: SkillConfigSchema['actions'][string]

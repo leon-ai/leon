@@ -30,7 +30,7 @@ dotenv.config()
 ;(async () => {
   try {
     const nodeMinRequiredVersion = '16'
-    const npmMinRequiredVersion = '5'
+    const npmMinRequiredVersion = '8'
     const minimumRequiredRAM = 4
     const flitePath = 'bin/flite/flite'
     const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
@@ -215,7 +215,9 @@ dotenv.config()
       const p = await command(
         `${PYTHON_BRIDGE_BIN_PATH} "${path.join(
           process.cwd(),
-          'scripts', 'assets', 'intent-object.json'
+          'scripts',
+          'assets',
+          'intent-object.json'
         )}"`,
         { shell: true }
       )

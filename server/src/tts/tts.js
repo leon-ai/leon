@@ -41,7 +41,10 @@ class Tts {
     ) {
       process.env.GOOGLE_APPLICATION_CREDENTIALS = path.join(
         process.cwd(),
-        'core', 'config', 'voice', 'google-cloud.json'
+        'core',
+        'config',
+        'voice',
+        'google-cloud.json'
       )
     } else if (
       typeof process.env.GOOGLE_APPLICATION_CREDENTIALS !== 'undefined' &&

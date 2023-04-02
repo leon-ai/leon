@@ -9,10 +9,10 @@ declare module '@ffprobe-installer/ffprobe' {
  * @see https://github.com/axa-group/nlp.js/tree/master/packages
  */
 interface BuiltinMicrosoft<T> {
-  new(settings: unknown, container: unknown): T
+  new (settings: unknown, container: unknown): T
 }
 interface Nlp<T> {
-  new(settings: unknown, container: unknown): T
+  new (settings: unknown, container: unknown): T
 }
 interface LangAll {
   register(container: unknown)

@@ -192,6 +192,12 @@ export type DomainSchema = Static<typeof domainSchemaObject>
 export type SkillSchema = Static<typeof skillSchemaObject>
 export type SkillConfigSchema = Static<typeof skillConfigSchemaObject>
 export type SkillBridgeSchema = Static<typeof skillSchemaObject.bridge>
-export type SkillCustomTrimEntityTypeSchema = Static<typeof skillCustomTrimEntityType>
-export type SkillCustomRegexEntityTypeSchema = Static<typeof skillCustomRegexEntityType>
-export type SkillCustomEnumEntityTypeSchema = Static<typeof skillCustomEnumEntityType>
+export type SkillCustomTrimEntityTypeSchema = Static<
+  typeof skillCustomTrimEntityType
+>
+export type SkillCustomRegexEntityTypeSchema = Static<
+  typeof skillCustomRegexEntityType
+>
+export type SkillCustomEnumEntityTypeSchema = Static<
+  typeof skillCustomEnumEntityType
+>

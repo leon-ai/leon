@@ -141,7 +141,7 @@ SPACY_MODELS.set('fr', {
     }
 
     try {
-      await command(`pipenv install --verbose --site-packages`, {
+      await command('pipenv install --verbose --site-packages', {
         shell: true,
         stdio: 'inherit'
       })
@@ -155,21 +155,21 @@ SPACY_MODELS.set('fr', {
         LogHelper.info(
           'Installing Rust installer as it is needed for the "tokenizers" package for macOS ARM64 architecture...'
         )
-        await command(`curl https://sh.rustup.rs -sSf | sh -s -- -y`, {
+        await command('curl https://sh.rustup.rs -sSf | sh -s -- -y', {
           shell: true,
           stdio: 'inherit'
         })
         LogHelper.success('Rust installer installed')
 
         LogHelper.info('Reloading configuration from "$HOME/.cargo/env"...')
-        await command(`source "$HOME/.cargo/env"`, {
+        await command('source "$HOME/.cargo/env"', {
           shell: true,
           stdio: 'inherit'
         })
         LogHelper.success('Configuration reloaded')
 
         LogHelper.info('Checking Rust compiler version...')
-        await command(`rustc --version`, {
+        await command('rustc --version', {
           shell: true,
           stdio: 'inherit'
         })

@@ -22,7 +22,8 @@ interface SkillDomain {
   }
 }
 
-interface SkillConfigWithGlobalEntities extends Omit<SkillConfigSchema, 'entities'> {
+interface SkillConfigWithGlobalEntities
+  extends Omit<SkillConfigSchema, 'entities'> {
   entities: Record<string, GlobalEntitySchema>
 }
 
@@ -138,7 +139,9 @@ export class SkillDomainHelper {
             encoding: 'utf8'
           })
 
-          result.entities[entity] = JSON.parse(entityRawData) as GlobalEntitySchema
+          result.entities[entity] = JSON.parse(
+            entityRawData
+          ) as GlobalEntitySchema
         }
       })
 

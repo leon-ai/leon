@@ -10,7 +10,11 @@ import type {
   NLUResult
 } from '@/core/nlp/types'
 import type { SkillConfigSchema } from '@/schemas/skill-schemas'
-import type { BrainProcessResult, IntentObject, SkillResult } from '@/core/brain/types'
+import type {
+  BrainProcessResult,
+  IntentObject,
+  SkillResult
+} from '@/core/brain/types'
 import { SkillActionType, SkillOutputType } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
 import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
@@ -107,7 +111,11 @@ export default class Brain {
   /**
    * Pickup speech info we need to return
    */
-  public wernicke(type: string, key?: string, obj?: Record<string, unknown>): string {
+  public wernicke(
+    type: string,
+    key?: string,
+    obj?: Record<string, unknown>
+  ): string {
     let answerObject: Record<string, string> = {}
     let answer = ''
 
@@ -152,7 +160,11 @@ export default class Brain {
   /**
    * Create the intent object that will be passed to the skill
    */
-  private createIntentObject(nluResult: NLUResult, utteranceId: string, slots: IntentObject['slots']): IntentObject {
+  private createIntentObject(
+    nluResult: NLUResult,
+    utteranceId: string,
+    slots: IntentObject['slots']
+  ): IntentObject {
     return {
       id: utteranceId,
       lang: this._lang,
@@ -171,7 +183,9 @@ export default class Brain {
   /**
    * Handle the skill process output
    */
-  private handleLogicActionSkillProcessOutput(data: Buffer): Promise<Error | null> | void {
+  private handleLogicActionSkillProcessOutput(
+    data: Buffer
+  ): Promise<Error | null> | void {
     try {
       const obj = JSON.parse(data.toString())
 
@@ -191,7 +205,11 @@ export default class Brain {
 
         return Promise.resolve(null)
       } else {
-        return Promise.reject(new Error(`The "${this.skillFriendlyName}" skill from the "${this.domainFriendlyName}" domain is not well configured. Check the configuration file.`))
+        return Promise.reject(
+          new Error(
+            `The "${this.skillFriendlyName}" skill from the "${this.domainFriendlyName}" domain is not well configured. Check the configuration file.`
+          )
+        )
       }
     } catch (e) {
       LogHelper.title('Brain')
@@ -217,7 +235,10 @@ export default class Brain {
   /**
    * Handle the skill process error
    */
-  private handleLogicActionSkillProcessError(data: Buffer, intentObjectPath: string): Error {
+  private handleLogicActionSkillProcessError(
+    data: Buffer,
+    intentObjectPath: string
+  ): Error {
     this.speakSkillError()
 
     Brain.deleteIntentObjFile(intentObjectPath)
@@ -250,7 +271,11 @@ export default class Brain {
         })
       }
 
-      const intentObject = this.createIntentObject(nluResult, utteranceId, slots)
+      const intentObject = this.createIntentObject(
+        nluResult,
+        utteranceId,
+        slots
+      )
 
       try {
         fs.writeFileSync(intentObjectPath, JSON.stringify(intentObject))
@@ -294,8 +319,13 @@ export default class Brain {
           skillConfigPath,
           classification: { action: actionName }
         } = nluResult
-        const { actions } = SkillDomainHelper.getSkillConfig(skillConfigPath, this._lang)
-        const action = actions[actionName] as SkillConfigSchema['actions'][string]
+        const { actions } = SkillDomainHelper.getSkillConfig(
+          skillConfigPath,
+          this._lang
+        )
+        const action = actions[
+          actionName
+        ] as SkillConfigSchema['actions'][string]
         const { type: actionType } = action
         const nextAction = action.next_action
           ? actions[action.next_action]
@@ -343,7 +373,8 @@ export default class Brain {
                 skillResult = JSON.parse(this.skillOutput)
 
                 if (skillResult?.output.speech) {
-                  skillResult.output.speech = skillResult.output.speech.toString()
+                  skillResult.output.speech =
+                    skillResult.output.speech.toString()
                   if (!this.isMuted) {
                     this.talk(skillResult.output.speech, true)
                   }
@@ -354,7 +385,8 @@ export default class Brain {
                     skillResult.output.type === SkillOutputType.End &&
                     skillResult.output.options['synchronization'] &&
                     skillResult.output.options['synchronization'].enabled &&
-                    skillResult.output.options['synchronization'].enabled === true
+                    skillResult.output.options['synchronization'].enabled ===
+                      true
                   ) {
                     const sync = new Synchronizer(
                       this,
@@ -373,7 +405,9 @@ export default class Brain {
                 }
               } catch (e) {
                 LogHelper.title(`${this.skillFriendlyName} skill`)
-                LogHelper.error(`There is an error on the final output: ${String(e)}`)
+                LogHelper.error(
+                  `There is an error on the final output: ${String(e)}`
+                )
 
                 this.speakSkillError()
               }
@@ -395,7 +429,10 @@ export default class Brain {
             ) {
               SOCKET_SERVER.socket.emit('suggest', nextAction.suggestions)
             }
-            if (action?.suggestions && skillResult?.output.core?.showSuggestions) {
+            if (
+              action?.suggestions &&
+              skillResult?.output.core?.showSuggestions
+            ) {
               SOCKET_SERVER.socket.emit('suggest', action.suggestions)
             }
 
@@ -426,10 +463,8 @@ export default class Brain {
             'config',
             this._lang + '.json'
           )
-          const { actions, entities: skillConfigEntities } = SkillDomainHelper.getSkillConfig(
-            configFilePath,
-            this._lang
-          )
+          const { actions, entities: skillConfigEntities } =
+            SkillDomainHelper.getSkillConfig(configFilePath, this._lang)
           const utteranceHasEntities = nluResult.entities.length > 0
           const { answers: rawAnswers } = nluResult
           let answers = rawAnswers
@@ -453,10 +488,14 @@ export default class Brain {
             // In case the expected answer requires a known entity
             if (answer?.indexOf('{{') !== -1) {
               // TODO
-              const unknownAnswers = actions[nluResult.classification.action]?.unknown_answers
+              const unknownAnswers =
+                actions[nluResult.classification.action]?.unknown_answers
 
               if (unknownAnswers) {
-                answer = unknownAnswers[Math.floor(Math.random() * unknownAnswers.length)]
+                answer =
+                  unknownAnswers[
+                    Math.floor(Math.random() * unknownAnswers.length)
+                  ]
               }
             }
           } else {
@@ -469,7 +508,8 @@ export default class Brain {
             if (utteranceHasEntities && answer?.indexOf('{{') !== -1) {
               nluResult.currentEntities.forEach((entityObj) => {
                 answer = StringHelper.findAndMap(answer as string, {
-                  [`{{ ${entityObj.entity} }}`]: (entityObj as NERCustomEntity).resolution.value
+                  [`{{ ${entityObj.entity} }}`]: (entityObj as NERCustomEntity)
+                    .resolution.value
                 })
 
                 /**
@@ -488,7 +528,8 @@ export default class Brain {
                   if (entity && dataKey && entity === entityObj.entity) {
                     const { option } = entityObj as CustomEnumEntity
 
-                    const entityOption = skillConfigEntities[entity]?.options[option]
+                    const entityOption =
+                      skillConfigEntities[entity]?.options[option]
                     const entityOptionData = entityOption?.data
                     let valuesArr: string[] = []
 
@@ -500,7 +541,9 @@ export default class Brain {
                     if (valuesArr.length > 0) {
                       answer = StringHelper.findAndMap(answer as string, {
                         [match]:
-                          valuesArr[Math.floor(Math.random() * valuesArr.length)]
+                          valuesArr[
+                            Math.floor(Math.random() * valuesArr.length)
+                          ]
                       })
                     }
                   }

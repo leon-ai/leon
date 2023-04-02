@@ -11,7 +11,9 @@ export class SlotFilling {
   /**
    * Handle slot filling
    */
-  public static async handle(utterance: NLPUtterance): Promise<Partial<BrainProcessResult> | null> {
+  public static async handle(
+    utterance: NLPUtterance
+  ): Promise<Partial<BrainProcessResult> | null> {
     const processedData = await this.fillSlot(utterance)
 
     /**
@@ -48,7 +50,9 @@ export class SlotFilling {
    * Build NLU data result object based on slots
    * and ask for more entities if necessary
    */
-  public static async fillSlot(utterance: NLPUtterance): Promise<Partial<BrainProcessResult> | null> {
+  public static async fillSlot(
+    utterance: NLPUtterance
+  ): Promise<Partial<BrainProcessResult> | null> {
     if (!NLU.conversation.activeContext.nextAction) {
       return null
     }
@@ -136,7 +140,8 @@ export class SlotFilling {
    * 3. Or go to the brain executor if all slots have been filled in one shot
    */
   public static async route(intent: string): Promise<boolean> {
-    const slots = await MODEL_LOADER.mainNLPContainer.slotManager.getMandatorySlots(intent)
+    const slots =
+      await MODEL_LOADER.mainNLPContainer.slotManager.getMandatorySlots(intent)
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
     if (hasMandatorySlots) {
@@ -156,10 +161,14 @@ export class SlotFilling {
       const notFilledSlot = NLU.conversation.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        const { actions } = SkillDomainHelper.getSkillConfig(NLU.nluResult.skillConfigPath, BRAIN.lang)
-        const [currentSlot] = actions[
-          NLU.nluResult.classification.action
-        ]?.slots?.filter(({ name }) => name === notFilledSlot.name) ?? []
+        const { actions } = SkillDomainHelper.getSkillConfig(
+          NLU.nluResult.skillConfigPath,
+          BRAIN.lang
+        )
+        const [currentSlot] =
+          actions[NLU.nluResult.classification.action]?.slots?.filter(
+            ({ name }) => name === notFilledSlot.name
+          ) ?? []
 
         SOCKET_SERVER.socket.emit('suggest', currentSlot?.suggestions)
         BRAIN.talk(notFilledSlot.pickedQuestion)

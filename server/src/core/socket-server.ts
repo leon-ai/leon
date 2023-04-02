@@ -6,13 +6,17 @@ import type { Socket } from 'node:net'
 
 import { Server as SocketIOServer } from 'socket.io'
 
+import { LANG, HAS_STT, HAS_TTS, IS_DEVELOPMENT_ENV } from '@/constants'
 import {
-  LANG,
-  HAS_STT,
-  HAS_TTS,
-  IS_DEVELOPMENT_ENV
-} from '@/constants'
-import { HTTP_SERVER, TCP_CLIENT, ASR, STT, TTS, NLU, BRAIN, MODEL_LOADER } from '@/core'
+  HTTP_SERVER,
+  TCP_CLIENT,
+  ASR,
+  STT,
+  TTS,
+  NLU,
+  BRAIN,
+  MODEL_LOADER
+} from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 
@@ -48,9 +52,7 @@ export default class SocketServer {
     if (HAS_TTS) {
       ttsState = 'enabled'
 
-      await TTS.init(
-        LangHelper.getShortCode(LANG)
-      )
+      await TTS.init(LangHelper.getShortCode(LANG))
     }
 
     LogHelper.title('Initialization')
@@ -121,7 +123,9 @@ export default class SocketServer {
             try {
               await ASR.encode(data)
             } catch (e) {
-              LogHelper.error(`ASR - Failed to encode audio blob to WAVE file: ${e.stack}`)
+              LogHelper.error(
+                `ASR - Failed to encode audio blob to WAVE file: ${e.stack}`
+              )
             }
           })
         }

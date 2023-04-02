@@ -51,9 +51,7 @@ export default class ModelLoader {
       this.loadSkillsResolversModel(
         path.join(MODELS_PATH, 'leon-skills-resolvers-model.nlp')
       ),
-      this.loadMainModel(
-        path.join(MODELS_PATH, 'leon-main-model.nlp')
-      )
+      this.loadMainModel(path.join(MODELS_PATH, 'leon-main-model.nlp'))
     ])
   }
 
@@ -65,7 +63,11 @@ export default class ModelLoader {
       if (!fs.existsSync(modelPath)) {
         LogHelper.title('Model Loader')
 
-        reject(new Error('The global resolvers NLP model does not exist, please run: npm run train'))
+        reject(
+          new Error(
+            'The global resolvers NLP model does not exist, please run: npm run train'
+          )
+        )
       } else {
         LogHelper.title('Model Loader')
 
@@ -84,7 +86,11 @@ export default class ModelLoader {
 
           resolve()
         } catch (e) {
-          reject(new Error('An error occurred while loading the global resolvers NLP model'))
+          reject(
+            new Error(
+              'An error occurred while loading the global resolvers NLP model'
+            )
+          )
         }
       }
     })
@@ -120,7 +126,11 @@ export default class ModelLoader {
 
           resolve()
         } catch (e) {
-          reject(new Error('An error occurred while loading the skills resolvers NLP model'))
+          reject(
+            new Error(
+              'An error occurred while loading the skills resolvers NLP model'
+            )
+          )
         }
       }
     })
@@ -165,7 +175,9 @@ export default class ModelLoader {
 
           resolve()
         } catch (e) {
-          reject(new Error('An error occurred while loading the main NLP model'))
+          reject(
+            new Error('An error occurred while loading the main NLP model')
+          )
         }
       }
     })

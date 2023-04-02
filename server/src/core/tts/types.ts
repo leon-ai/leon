@@ -17,9 +17,14 @@ export enum TTSSynthesizers {
   Flite = 'flite-synthesizer'
 }
 
-export type SynthesizeResult = {
+export interface SynthesizeResult {
   audioFilePath: string
   duration: number
 }
 
-export type TTSSynthesizer = AmazonPollySynthesizer | FliteSynthesizer | GoogleCloudTTSSynthesizer | WatsonTTSSynthesizer | undefined
+export type TTSSynthesizer =
+  | AmazonPollySynthesizer
+  | FliteSynthesizer
+  | GoogleCloudTTSSynthesizer
+  | WatsonTTSSynthesizer
+  | undefined
