@@ -31,12 +31,11 @@ export default class SocketServer {
   }
 
   public async init(): void {
-    const { httpServer, host } = HTTP_SERVER
     const io = IS_DEVELOPMENT_ENV
-      ? new SocketIOServer(httpServer, {
-          cors: { origin: `${host}:3000` }
+      ? new SocketIOServer(HTTP_SERVER.httpServer, {
+          cors: { origin: `${HTTP_SERVER.host}:3000` }
         })
-      : new SocketIOServer(httpServer)
+      : new SocketIOServer(HTTP_SERVER.httpServer)
 
     let sttState = 'disabled'
     let ttsState = 'disabled'

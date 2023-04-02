@@ -19,9 +19,10 @@ export default class HTTPServer {
   private static instance: HTTPServer
 
   private fastify = Fastify()
-  private httpServer = this.fastify.server
 
-  constructor(private readonly host: string, private readonly port: number) {
+  public httpServer = this.fastify.server
+
+  constructor(public readonly host: string, public readonly port: number) {
     if (!HTTPServer.instance) {
       LogHelper.title('HTTP Server')
       LogHelper.success('New instance')
