@@ -224,14 +224,7 @@ export default class NLU {
           this.nluResult
         )
       } catch (e) {
-        // TODO: "!" message, just do simple generic error handler
-        if (LogHelper[e.type]) {
-          LogHelper[e.type](e.obj.message)
-        }
-
-        if (!BRAIN.isMuted) {
-          BRAIN.talk(`${BRAIN.wernicke(e.code, '', e.data)}!`)
-        }
+        LogHelper.error(`Failed to extract entities: ${e}`)
       }
 
       const shouldSlotLoop = await SlotFilling.route(intent)
@@ -301,14 +294,15 @@ export default class NLU {
           nluProcessingTime: processingTime - (processedData?.executionTime || 0) // In ms, NLU processing time only
         })
       } catch (e) {
-        // TODO: TS refactor; verify how this works with the new error handling
-        LogHelper.error(e?.message)
+        const errorMessage = `Failed to execute action: ${e}`
+
+        LogHelper.error(errorMessage)
 
         if (!BRAIN.isMuted) {
           SOCKET_SERVER.socket.emit('is-typing', false)
         }
 
-        return reject(new Error(e?.message))
+        return reject(new Error(errorMessage))
       }
     })
   }
