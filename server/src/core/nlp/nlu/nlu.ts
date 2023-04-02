@@ -4,7 +4,7 @@ import { spawn } from 'node:child_process'
 import kill from 'tree-kill'
 
 import type { Language, ShortLanguageCode } from '@/types'
-import type { NLPAction, NLPDomain, NLPSkill, NLPUtterance, NLUResult } from '@/core/nlp/types'
+import type { NLPAction, NLPDomain, NLPJSProcessResult, NLPSkill, NLPUtterance, NLUResult } from '@/core/nlp/types'
 import { langs } from '@@/core/langs.json'
 import { TCP_SERVER_BIN_PATH } from '@/constants'
 import { TCP_CLIENT, BRAIN, SOCKET_SERVER, MODEL_LOADER, NER } from '@/core'
@@ -117,7 +117,7 @@ export default class NLU {
         }
       }
 
-      const result = await MODEL_LOADER.mainNLPContainer.process(utterance)
+      const result: NLPJSProcessResult = await MODEL_LOADER.mainNLPContainer.process(utterance)
       const { locale, answers, classifications } = result
       let { score, intent, domain } = result
 
@@ -149,8 +149,8 @@ export default class NLU {
         answers, // For dialog action type
         classification: {
           domain,
-          skill: skillName,
-          action: actionName,
+          skill: skillName || '',
+          action: actionName || '',
           confidence: score
         }
       }

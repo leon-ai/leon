@@ -1,3 +1,5 @@
+import type { ShortLanguageCode } from '@/types'
+
 /**
  * NLP types
  */
@@ -6,6 +8,39 @@ export type NLPDomain = string
 export type NLPSkill = string
 export type NLPAction = string
 export type NLPUtterance = string
+
+export interface NLPJSProcessResult {
+  locale: ShortLanguageCode
+  utterance: NLPUtterance
+  settings: unknown
+  languageGuessed: boolean
+  localeIso2: ShortLanguageCode
+  language: string
+  explanation: []
+  classifications: {
+    intent: string
+    score: number
+  }[]
+  intent: string // E.g. "greeting.run"
+  score: number
+  domain: NLPDomain
+  sourceEntities: unknown[]
+  entities: NEREntity[]
+  answers: {
+    answer: string
+  }[]
+  answer: string | undefined
+  actions: NLPAction[]
+  sentiment: {
+    score: number
+    numWords: number
+    numHits: number
+    average: number
+    type: string
+    locale: ShortLanguageCode
+    vote: string
+  }
+}
 
 /**
  * NLU types
@@ -231,6 +266,7 @@ export interface CustomEnumEntity extends CustomEntity<'enum'> {
   resolution: {
     value: string
   }
+  alias?: string // E.g. "location:country_0"; "location:country_1"
 }
 type GlobalEntity = CustomEnumEntity
 export interface CustomRegexEntity extends CustomEntity<'regex'> {
@@ -247,7 +283,7 @@ interface CustomTrimEntity extends CustomEntity<'trim'> {
 }
 
 /**
- * spaCy entity types
+ * spaCy's entity types
  */
 
 interface SpacyEntity<T> extends CustomEnumEntity {
