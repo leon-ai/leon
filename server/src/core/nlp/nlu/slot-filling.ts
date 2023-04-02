@@ -28,7 +28,7 @@ export class SlotFilling {
     if (processedData && Object.keys(processedData).length > 0) {
       // Set new context with the next action if there is one
       if (processedData.action?.next_action) {
-        NLU.conversation.activeContext = {
+        await NLU.conversation.setActiveContext({
           ...DEFAULT_ACTIVE_CONTEXT,
           lang: BRAIN.lang,
           slots: processedData.slots || {},
@@ -39,7 +39,7 @@ export class SlotFilling {
           domain: processedData.classification?.domain || '',
           intent: `${processedData.classification?.skill}.${processedData.action.next_action}`,
           entities: []
-        }
+        })
       }
     }
 
@@ -124,12 +124,12 @@ export class SlotFilling {
         }
       }
 
-      NLU.conversation.cleanActiveContext()
+      await NLU.conversation.cleanActiveContext()
 
       return BRAIN.execute(NLU.nluResult)
     }
 
-    NLU.conversation.cleanActiveContext()
+    await NLU.conversation.cleanActiveContext()
     return null
   }
 
@@ -145,7 +145,7 @@ export class SlotFilling {
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
     if (hasMandatorySlots) {
-      NLU.conversation.activeContext = {
+      await NLU.conversation.setActiveContext({
         ...DEFAULT_ACTIVE_CONTEXT,
         lang: BRAIN.lang,
         slots,
@@ -156,12 +156,12 @@ export class SlotFilling {
         domain: NLU.nluResult.classification.domain,
         intent,
         entities: NLU.nluResult.entities
-      }
+      })
 
       const notFilledSlot = NLU.conversation.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        const { actions } = SkillDomainHelper.getSkillConfig(
+        const { actions } = await SkillDomainHelper.getSkillConfig(
           NLU.nluResult.skillConfigPath,
           BRAIN.lang
         )

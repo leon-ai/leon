@@ -252,9 +252,9 @@ export default class NLU {
 
       const newContextName = `${this.nluResult.classification.domain}.${skillName}`
       if (this.conversation.activeContext.name !== newContextName) {
-        this.conversation.cleanActiveContext()
+        await this.conversation.cleanActiveContext()
       }
-      this.conversation.activeContext = {
+      await this.conversation.setActiveContext({
         ...DEFAULT_ACTIVE_CONTEXT,
         lang: BRAIN.lang,
         slots: {},
@@ -265,7 +265,7 @@ export default class NLU {
         domain: this.nluResult.classification.domain,
         intent,
         entities: this.nluResult.entities
-      }
+      })
       // Pass current utterance entities to the NLU result object
       this.nluResult.currentEntities =
         this.conversation.activeContext.currentEntities
@@ -277,8 +277,8 @@ export default class NLU {
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
-          this.conversation.cleanActiveContext()
-          this.conversation.activeContext = {
+          await this.conversation.cleanActiveContext()
+          await this.conversation.setActiveContext({
             ...DEFAULT_ACTIVE_CONTEXT,
             lang: BRAIN.lang,
             slots: {},
@@ -289,7 +289,7 @@ export default class NLU {
             domain: processedData.classification?.domain || '',
             intent: `${processedData.classification?.skill}.${processedData.action?.next_action}`,
             entities: []
-          }
+          })
         }
 
         const processingTimeEnd = Date.now()

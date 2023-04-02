@@ -312,7 +312,8 @@ dotenv.config()
 
       if (
         !fs.existsSync(globalResolversNlpModelPath) ||
-        !Object.keys(fs.readFileSync(globalResolversNlpModelPath)).length
+        !Object.keys(await fs.promises.readFile(globalResolversNlpModelPath))
+          .length
       ) {
         const state = 'Global resolvers NLP model not found or broken'
 
@@ -340,7 +341,8 @@ dotenv.config()
 
       if (
         !fs.existsSync(skillsResolversNlpModelPath) ||
-        !Object.keys(fs.readFileSync(skillsResolversNlpModelPath)).length
+        !Object.keys(await fs.promises.readFile(skillsResolversNlpModelPath))
+          .length
       ) {
         const state = 'Skills resolvers NLP model not found or broken'
 
@@ -368,7 +370,7 @@ dotenv.config()
 
       if (
         !fs.existsSync(mainNlpModelPath) ||
-        !Object.keys(fs.readFileSync(mainNlpModelPath)).length
+        !Object.keys(await fs.promises.readFile(mainNlpModelPath)).length
       ) {
         const state = 'Main NLP model not found or broken'
 
@@ -395,7 +397,7 @@ dotenv.config()
       LogHelper.info('Amazon Polly TTS')
 
       try {
-        const json = JSON.parse(fs.readFileSync(amazonPath))
+        const json = JSON.parse(await fs.promises.readFile(amazonPath))
         if (
           json.credentials.accessKeyId === '' ||
           json.credentials.secretAccessKey === ''
@@ -413,7 +415,7 @@ dotenv.config()
       LogHelper.info('Google Cloud TTS/STT')
 
       try {
-        const json = JSON.parse(fs.readFileSync(googleCloudPath))
+        const json = JSON.parse(await fs.promises.readFile(googleCloudPath))
         const results = []
         Object.keys(json).forEach((item) => {
           if (json[item] === '') results.push(false)
@@ -434,7 +436,7 @@ dotenv.config()
       LogHelper.info('Watson TTS')
 
       try {
-        const json = JSON.parse(fs.readFileSync(watsonTtsPath))
+        const json = JSON.parse(await fs.promises.readFile(watsonTtsPath))
         const results = []
         Object.keys(json).forEach((item) => {
           if (json[item] === '') results.push(false)
@@ -464,7 +466,7 @@ dotenv.config()
       LogHelper.info('Watson STT')
 
       try {
-        const json = JSON.parse(fs.readFileSync(watsonSttPath))
+        const json = JSON.parse(await fs.promises.readFile(watsonSttPath))
         const results = []
         Object.keys(json).forEach((item) => {
           if (json[item] === '') results.push(false)

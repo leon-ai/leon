@@ -78,7 +78,7 @@ export default class NER {
       const utterance = `${StringHelper.removeEndPunctuation(
         nluResult.utterance
       )} `
-      const { actions } = SkillDomainHelper.getSkillConfig(
+      const { actions } = await SkillDomainHelper.getSkillConfig(
         skillConfigPath,
         lang
       )

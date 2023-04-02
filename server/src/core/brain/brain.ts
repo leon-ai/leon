@@ -256,11 +256,11 @@ export default class Brain {
    * 2. Edit: server/src/intent-object.sample.json
    * 3. Run: npm run python-bridge
    */
-  private executeLogicActionSkill(
+  private async executeLogicActionSkill(
     nluResult: NLUResult,
     utteranceId: string,
     intentObjectPath: string
-  ): void {
+  ): Promise<void> {
     // Ensure the process is empty (to be able to execute other processes outside of Brain)
     if (!this.skillProcess) {
       const slots: IntentObject['slots'] = {}
@@ -278,7 +278,10 @@ export default class Brain {
       )
 
       try {
-        fs.writeFileSync(intentObjectPath, JSON.stringify(intentObject))
+        await fs.promises.writeFile(
+          intentObjectPath,
+          JSON.stringify(intentObject)
+        )
         this.skillProcess = spawn(
           `${PYTHON_BRIDGE_BIN_PATH} "${intentObjectPath}"`,
           { shell: true }
@@ -319,7 +322,7 @@ export default class Brain {
           skillConfigPath,
           classification: { action: actionName }
         } = nluResult
-        const { actions } = SkillDomainHelper.getSkillConfig(
+        const { actions } = await SkillDomainHelper.getSkillConfig(
           skillConfigPath,
           this._lang
         )
@@ -341,11 +344,9 @@ export default class Brain {
           const domainName = nluResult.classification.domain
           const skillName = nluResult.classification.skill
           const { name: domainFriendlyName } =
-            SkillDomainHelper.getSkillDomainInfo(domainName)
-          const { name: skillFriendlyName } = SkillDomainHelper.getSkillInfo(
-            domainName,
-            skillName
-          )
+            await SkillDomainHelper.getSkillDomainInfo(domainName)
+          const { name: skillFriendlyName } =
+            await SkillDomainHelper.getSkillInfo(domainName, skillName)
 
           this.domainFriendlyName = domainFriendlyName
           this.skillFriendlyName = skillFriendlyName
@@ -464,7 +465,7 @@ export default class Brain {
             this._lang + '.json'
           )
           const { actions, entities: skillConfigEntities } =
-            SkillDomainHelper.getSkillConfig(configFilePath, this._lang)
+            await SkillDomainHelper.getSkillConfig(configFilePath, this._lang)
           const utteranceHasEntities = nluResult.entities.length > 0
           const { answers: rawAnswers } = nluResult
           let answers = rawAnswers

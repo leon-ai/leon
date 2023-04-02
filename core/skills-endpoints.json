@@ -2,8 +2,122 @@
   "endpoints": [
     {
       "method": "POST",
+      "route": "/api/action/news/github_trends/run",
+      "params": [
+        "number",
+        "daterange"
+      ],
+      "entitiesType": "builtIn"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/news/product_hunt_trends/run",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/create_list",
+      "params": [
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/productivity/todo_list/view_lists",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/view_list",
+      "params": [
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/rename_list",
+      "params": [
+        "old_list",
+        "new_list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/delete_list",
+      "params": [
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/add_todos",
+      "params": [
+        "todos",
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/complete_todos",
+      "params": [
+        "todos",
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/productivity/todo_list/uncheck_todos",
+      "params": [
+        "todos",
+        "list"
+      ],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/social_communication/mbti/setup",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/social_communication/mbti/quiz",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/have_i_been_pwned/run",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/utilities/is_it_down/run",
+      "params": [
+        "url"
+      ],
+      "entitiesType": "builtIn"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/speed_test/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/youtube_downloader/run",
+      "params": []
+    },
+    {
+      "method": "POST",
       "route": "/api/action/games/akinator/choose_thematic",
-      "params": ["thematic"],
+      "params": [
+        "thematic"
+      ],
       "entitiesType": "trim"
     },
     {
@@ -44,7 +158,9 @@
     {
       "method": "POST",
       "route": "/api/action/games/rochambeau/play",
-      "params": ["handsign"],
+      "params": [
+        "handsign"
+      ],
       "entitiesType": "trim"
     },
     {
@@ -115,95 +231,6 @@
     {
       "method": "GET",
       "route": "/api/action/leon/welcome/run",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/news/github_trends/run",
-      "params": ["number", "daterange"],
-      "entitiesType": "builtIn"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/news/product_hunt_trends/run",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/productivity/todo_list/create_list",
-      "params": ["list"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/productivity/todo_list/view_lists",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/productivity/todo_list/view_list",
-      "params": ["list"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/productivity/todo_list/rename_list",
-      "params": ["old_list", "new_list"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/productivity/todo_list/delete_list",
-      "params": ["list"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/productivity/todo_list/add_todos",
-      "params": ["todos", "list"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/productivity/todo_list/complete_todos",
-      "params": ["todos", "list"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/productivity/todo_list/uncheck_todos",
-      "params": ["todos", "list"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/social_communication/mbti/setup",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/social_communication/mbti/quiz",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/utilities/have_i_been_pwned/run",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/utilities/is_it_down/run",
-      "params": ["url"],
-      "entitiesType": "builtIn"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/utilities/speed_test/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/utilities/youtube_downloader/run",
       "params": []
     }
   ]

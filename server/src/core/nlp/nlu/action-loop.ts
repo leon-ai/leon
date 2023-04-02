@@ -48,7 +48,7 @@ export class ActionLoop {
       NLU.nluResult
     )
 
-    const { actions, resolvers } = SkillDomainHelper.getSkillConfig(
+    const { actions, resolvers } = await SkillDomainHelper.getSkillConfig(
       skillConfigPath,
       BRAIN.lang
     )
@@ -72,10 +72,10 @@ export class ActionLoop {
         const result = await nlpObjs[expectedItemType].process(utterance)
         const { intent } = result
 
-        const resolveResolvers = (
+        const resolveResolvers = async (
           resolver: string,
           intent: string
-        ): [ResolveResolversResult] => {
+        ): Promise<[ResolveResolversResult]> => {
           const resolversPath = join(
             process.cwd(),
             'core',
@@ -87,7 +87,10 @@ export class ActionLoop {
           const resolvedIntents = !intent.includes('resolver.global')
             ? resolvers && resolvers[resolver]
             : JSON.parse(
-                fs.readFileSync(join(resolversPath, `${resolver}.json`), 'utf8')
+                await fs.promises.readFile(
+                  join(resolversPath, `${resolver}.json`),
+                  'utf8'
+                )
               )
 
           // E.g. resolver.global.denial -> denial
@@ -109,7 +112,10 @@ export class ActionLoop {
         ) {
           LogHelper.title('NLU')
           LogHelper.success('Resolvers resolved:')
-          NLU.nluResult.resolvers = resolveResolvers(expectedItemName, intent)
+          NLU.nluResult.resolvers = await resolveResolvers(
+            expectedItemName,
+            intent
+          )
           NLU.nluResult.resolvers.forEach((resolver) =>
             LogHelper.success(`${intent}: ${JSON.stringify(resolver)}`)
           )
@@ -120,7 +126,7 @@ export class ActionLoop {
       // Ensure expected items are in the utterance, otherwise clean context and reprocess
       if (!hasMatchingEntity && !hasMatchingResolver) {
         BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
-        NLU.conversation.cleanActiveContext()
+        await NLU.conversation.cleanActiveContext()
         await NLU.process(utterance)
         return null
       }
@@ -131,7 +137,7 @@ export class ActionLoop {
         if (processedData.core?.restart === true) {
           const { originalUtterance } = NLU.conversation.activeContext
 
-          NLU.conversation.cleanActiveContext()
+          await NLU.conversation.cleanActiveContext()
 
           if (originalUtterance !== null) {
             await NLU.process(originalUtterance)
@@ -148,7 +154,7 @@ export class ActionLoop {
           !processedData.action?.next_action &&
           processedData.core?.isInActionLoop === false
         ) {
-          NLU.conversation.cleanActiveContext()
+          await NLU.conversation.cleanActiveContext()
           return null
         }
 

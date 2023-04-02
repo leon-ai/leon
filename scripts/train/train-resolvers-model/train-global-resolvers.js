@@ -9,7 +9,7 @@ import { LogHelper } from '@/helpers/log-helper'
  * Train global resolvers
  */
 export default (lang, nlp) =>
-  new Promise((resolve) => {
+  new Promise(async (resolve) => {
     LogHelper.title('Global resolvers training')
 
     const resolversPath = path.join(
@@ -19,13 +19,13 @@ export default (lang, nlp) =>
       lang,
       'global-resolvers'
     )
-    const resolverFiles = fs.readdirSync(resolversPath)
+    const resolverFiles = await fs.promises.readdir(resolversPath)
 
     for (let i = 0; i < resolverFiles.length; i += 1) {
       const resolverFileName = resolverFiles[i]
       const resolverPath = path.join(resolversPath, resolverFileName)
       const { name: resolverName, intents: resolverIntents } = JSON.parse(
-        fs.readFileSync(resolverPath, 'utf8')
+        await fs.promises.readFile(resolverPath, 'utf8')
       )
       const intentKeys = Object.keys(resolverIntents)
 

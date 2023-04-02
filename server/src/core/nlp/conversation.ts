@@ -65,7 +65,9 @@ export default class Conversation {
   /**
    * Activate context according to the triggered action
    */
-  public set activeContext(nluContext: ConversationContext) {
+  public async setActiveContext(
+    nluContext: ConversationContext
+  ): Promise<void> {
     const {
       slots,
       isInActionLoop,
@@ -79,7 +81,10 @@ export default class Conversation {
     const slotKeys = Object.keys(slots)
     const [skillName] = intent.split('.')
     const newContextName = `${domain}.${skillName}`
-    const { actions } = SkillDomainHelper.getSkillConfig(skillConfigPath, lang)
+    const { actions } = await SkillDomainHelper.getSkillConfig(
+      skillConfigPath,
+      lang
+    )
     // Grab next action from the NLU data file
     const { next_action: nextAction } = actions[actionName] as {
       next_action: string
@@ -121,7 +126,7 @@ export default class Conversation {
         this._activeContext.name &&
         this._activeContext.name !== newContextName
       ) {
-        this.cleanActiveContext()
+        await this.cleanActiveContext()
       }
 
       /**
@@ -261,12 +266,12 @@ export default class Conversation {
   /**
    * Clean up active context
    */
-  public cleanActiveContext(): void {
+  public async cleanActiveContext(): Promise<void> {
     LogHelper.title('Conversation')
     LogHelper.info('Clean active context')
 
     this.pushToPreviousContextsStack()
-    this._activeContext = DEFAULT_ACTIVE_CONTEXT
+    await this.setActiveContext(DEFAULT_ACTIVE_CONTEXT)
   }
 
   /**

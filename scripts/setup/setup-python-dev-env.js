@@ -136,7 +136,7 @@ SPACY_MODELS.set('fr', {
     // Delete .venv directory to reset the development environment
     if (hasDotVenv) {
       LogHelper.info(`Deleting ${dotVenvPath}...`)
-      fs.rmSync(dotVenvPath, { recursive: true, force: true })
+      await fs.promises.rm(dotVenvPath, { recursive: true, force: true })
       LogHelper.success(`${dotVenvPath} deleted`)
     }
 
@@ -211,7 +211,7 @@ SPACY_MODELS.set('fr', {
       await installPythonPackages()
     } else {
       if (fs.existsSync(dotProjectPath)) {
-        const dotProjectMtime = fs.statSync(dotProjectPath).mtime
+        const dotProjectMtime = (await fs.promises.stat(dotProjectPath)).mtime
 
         // Check if Python deps tree has been modified since the initial setup
         if (pipfileMtime > dotProjectMtime) {

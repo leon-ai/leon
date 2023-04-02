@@ -60,12 +60,12 @@ class Synchronizer {
    * Google Drive synchronization method
    */
   googleDrive() {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       const driveFolderName = `leon-${this.classification.domain}-${this.classification.skill}`
       const folderMimeType = 'application/vnd.google-apps.folder'
-      const entities = fs.readdirSync(this.downloadDir)
+      const entities = await fs.promises.readdir(this.downloadDir)
       const key = JSON.parse(
-        fs.readFileSync(
+        await fs.promises.readFile(
           path.join(
             process.cwd(),
             'core/config/synchronizer/google-drive.json'
