@@ -61,7 +61,6 @@ class Tts {
     this.synthesizer = require(`${__dirname}/${this.provider}/synthesizer`)
     this.synthesizer.default.init(LangHelper.getLongCode(this.lang))
 
-    // TODO: do not use event emitter; and use async/await
     this.onSaved()
 
     LogHelper.title('TTS')

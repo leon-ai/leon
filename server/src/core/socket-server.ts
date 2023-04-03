@@ -1,7 +1,3 @@
-// TODO: remove ignore
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
-
 import type { Socket } from 'node:net'
 
 import { Server as SocketIOServer } from 'socket.io'

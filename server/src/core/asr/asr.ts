@@ -57,7 +57,7 @@ export default class ASR {
             .on('end', () => {
               LogHelper.success('Encoding done')
 
-              if (STT.isParserReady) {
+              if (!STT.isParserReady) {
                 reject(new Error('The speech recognition is not ready yet'))
               } else {
                 STT.transcribe(this.audioPaths.wav)
