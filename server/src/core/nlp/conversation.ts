@@ -126,7 +126,7 @@ export default class Conversation {
         this._activeContext.name &&
         this._activeContext.name !== newContextName
       ) {
-        await this.cleanActiveContext()
+        this.cleanActiveContext()
       }
 
       /**
@@ -266,12 +266,12 @@ export default class Conversation {
   /**
    * Clean up active context
    */
-  public async cleanActiveContext(): Promise<void> {
+  public cleanActiveContext(): void {
     LogHelper.title('Conversation')
     LogHelper.info('Clean active context')
 
     this.pushToPreviousContextsStack()
-    await this.setActiveContext(DEFAULT_ACTIVE_CONTEXT)
+    this._activeContext = DEFAULT_ACTIVE_CONTEXT
   }
 
   /**

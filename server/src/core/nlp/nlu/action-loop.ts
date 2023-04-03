@@ -126,7 +126,7 @@ export class ActionLoop {
       // Ensure expected items are in the utterance, otherwise clean context and reprocess
       if (!hasMatchingEntity && !hasMatchingResolver) {
         BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
-        await NLU.conversation.cleanActiveContext()
+        NLU.conversation.cleanActiveContext()
         await NLU.process(utterance)
         return null
       }
@@ -137,7 +137,7 @@ export class ActionLoop {
         if (processedData.core?.restart === true) {
           const { originalUtterance } = NLU.conversation.activeContext
 
-          await NLU.conversation.cleanActiveContext()
+          NLU.conversation.cleanActiveContext()
 
           if (originalUtterance !== null) {
             await NLU.process(originalUtterance)
@@ -154,7 +154,7 @@ export class ActionLoop {
           !processedData.action?.next_action &&
           processedData.core?.isInActionLoop === false
         ) {
-          await NLU.conversation.cleanActiveContext()
+          NLU.conversation.cleanActiveContext()
           return null
         }
 

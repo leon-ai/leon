@@ -252,7 +252,7 @@ export default class NLU {
 
       const newContextName = `${this.nluResult.classification.domain}.${skillName}`
       if (this.conversation.activeContext.name !== newContextName) {
-        await this.conversation.cleanActiveContext()
+        this.conversation.cleanActiveContext()
       }
       await this.conversation.setActiveContext({
         ...DEFAULT_ACTIVE_CONTEXT,
@@ -277,7 +277,7 @@ export default class NLU {
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
-          await this.conversation.cleanActiveContext()
+          this.conversation.cleanActiveContext()
           await this.conversation.setActiveContext({
             ...DEFAULT_ACTIVE_CONTEXT,
             lang: BRAIN.lang,

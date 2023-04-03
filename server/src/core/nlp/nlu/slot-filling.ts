@@ -124,12 +124,12 @@ export class SlotFilling {
         }
       }
 
-      await NLU.conversation.cleanActiveContext()
+      NLU.conversation.cleanActiveContext()
 
       return BRAIN.execute(NLU.nluResult)
     }
 
-    await NLU.conversation.cleanActiveContext()
+    NLU.conversation.cleanActiveContext()
     return null
   }
 
