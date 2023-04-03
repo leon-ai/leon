@@ -98,7 +98,7 @@ export class SlotFilling {
         notFilledSlot = NLU.conversation.getNotFilledSlot()
         if (notFilledSlot) {
           BRAIN.talk(notFilledSlot.pickedQuestion)
-          SOCKET_SERVER.socket.emit('is-typing', false)
+          SOCKET_SERVER.socket?.emit('is-typing', false)
 
           return {}
         }
@@ -170,9 +170,9 @@ export class SlotFilling {
             ({ name }) => name === notFilledSlot.name
           ) ?? []
 
-        SOCKET_SERVER.socket.emit('suggest', currentSlot?.suggestions)
+        SOCKET_SERVER.socket?.emit('suggest', currentSlot?.suggestions)
         BRAIN.talk(notFilledSlot.pickedQuestion)
-        SOCKET_SERVER.socket.emit('is-typing', false)
+        SOCKET_SERVER.socket?.emit('is-typing', false)
 
         return true
       }

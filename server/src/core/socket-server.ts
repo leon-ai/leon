@@ -1,10 +1,5 @@
-// TODO: remove ignore
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-nocheck
-
-import type { Socket } from 'node:net'
-
-import { Server as SocketIOServer } from 'socket.io'
+import type { DefaultEventsMap } from 'socket.io/dist/typed-events'
+import { Server as SocketIOServer, Socket } from 'socket.io'
 
 import { LANG, HAS_STT, HAS_TTS, IS_DEVELOPMENT_ENV } from '@/constants'
 import {
@@ -20,10 +15,21 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 
+interface HotwordDataEvent {
+  hotword: string
+  buffer: Buffer
+}
+
+interface UtteranceDataEvent {
+  client: string
+  value: string
+}
+
 export default class SocketServer {
   private static instance: SocketServer
 
-  public socket: Socket
+  public socket: Socket<DefaultEventsMap, DefaultEventsMap> | undefined =
+    undefined
 
   constructor() {
     if (!SocketServer.instance) {
@@ -34,7 +40,7 @@ export default class SocketServer {
     }
   }
 
-  public async init(): void {
+  public async init(): Promise<void> {
     const io = IS_DEVELOPMENT_ENV
       ? new SocketIOServer(HTTP_SERVER.httpServer, {
           cors: { origin: `${HTTP_SERVER.host}:3000` }
@@ -72,37 +78,37 @@ export default class SocketServer {
       this.socket = socket
 
       // Init
-      this.socket.on('init', (data) => {
+      this.socket.on('init', (data: string) => {
         LogHelper.info(`Type: ${data}`)
-        LogHelper.info(`Socket ID: ${this.socket.id}`)
+        LogHelper.info(`Socket ID: ${this.socket?.id}`)
 
         // TODO
         // const provider = await addProvider(socket.id)
 
         // Check whether the TCP client is connected to the TCP server
         if (TCP_CLIENT.isConnected) {
-          this.socket.emit('ready')
+          this.socket?.emit('ready')
         } else {
           TCP_CLIENT.ee.on('connected', () => {
-            this.socket.emit('ready')
+            this.socket?.emit('ready')
           })
         }
 
         if (data === 'hotword-node') {
           // Hotword triggered
-          this.socket.on('hotword-detected', (data) => {
+          this.socket?.on('hotword-detected', (data: HotwordDataEvent) => {
             LogHelper.title('Socket')
             LogHelper.success(`Hotword ${data.hotword} detected`)
 
-            this.socket.broadcast.emit('enable-record')
+            this.socket?.broadcast.emit('enable-record')
           })
         } else {
           // Listen for new utterance
-          this.socket.on('utterance', async (data) => {
+          this.socket?.on('utterance', async (data: UtteranceDataEvent) => {
             LogHelper.title('Socket')
             LogHelper.info(`${data.client} emitted: ${data.value}`)
 
-            this.socket.emit('is-typing', true)
+            this.socket?.emit('is-typing', true)
 
             const { value: utterance } = data
             try {
@@ -114,17 +120,17 @@ export default class SocketServer {
               LogHelper.title('Execution Time')
               LogHelper.timeEnd('Utterance processed in')
             } catch (e) {
-              /* */
+              LogHelper.error(`Failed to process utterance: ${e}`)
             }
           })
 
           // Handle automatic speech recognition
-          this.socket.on('recognize', async (data: Buffer) => {
+          this.socket?.on('recognize', async (data: Buffer) => {
             try {
               await ASR.encode(data)
             } catch (e) {
               LogHelper.error(
-                `ASR - Failed to encode audio blob to WAVE file: ${e.stack}`
+                `ASR - Failed to encode audio blob to WAVE file: ${e}`
               )
             }
           })

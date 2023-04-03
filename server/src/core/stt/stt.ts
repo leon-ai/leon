@@ -112,7 +112,7 @@ export default class STT {
    * and delete audio files once it has been forwarded
    */
   private forward(str: string): void {
-    SOCKET_SERVER.socket.emit('recognized', str, (confirmation: string) => {
+    SOCKET_SERVER.socket?.emit('recognized', str, (confirmation: string) => {
       if (confirmation === 'string-received') {
         this.deleteAudios()
       }

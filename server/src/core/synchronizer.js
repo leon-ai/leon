@@ -1,3 +1,7 @@
+/* eslint-disable */
+
+// TODO: remove the synchronization capability
+
 import fs from 'node:fs'
 import path from 'node:path'
 

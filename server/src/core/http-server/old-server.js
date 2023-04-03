@@ -1,3 +1,7 @@
+/* eslint-disable */
+
+// TODO: delete this file once multi clients are reimplemented
+
 import { join } from 'node:path'
 
 import Fastify from 'fastify'

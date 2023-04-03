@@ -104,7 +104,7 @@ export default class Brain {
         TTS.add(speech, end)
       }
 
-      SOCKET_SERVER.socket.emit('answer', rawSpeech)
+      SOCKET_SERVER.socket?.emit('answer', rawSpeech)
     }
   }
 
@@ -153,7 +153,7 @@ export default class Brain {
       const speech = `${this.wernicke('random_not_sure')}.`
 
       this.talk(speech, true)
-      SOCKET_SERVER.socket.emit('ask-to-repeat', nluResult)
+      SOCKET_SERVER.socket?.emit('ask-to-repeat', nluResult)
     }
   }
 
@@ -227,7 +227,7 @@ export default class Brain {
     })}!`
     if (!this.isMuted) {
       this.talk(speech)
-      SOCKET_SERVER.socket.emit('is-typing', false)
+      SOCKET_SERVER.socket?.emit('is-typing', false)
     }
     this.speeches.push(speech)
   }
@@ -417,7 +417,7 @@ export default class Brain {
             Brain.deleteIntentObjFile(intentObjectPath)
 
             if (!this.isMuted) {
-              SOCKET_SERVER.socket.emit('is-typing', false)
+              SOCKET_SERVER.socket?.emit('is-typing', false)
             }
 
             const executionTimeEnd = Date.now()
@@ -428,13 +428,13 @@ export default class Brain {
               nextAction?.suggestions &&
               skillResult?.output.core?.showNextActionSuggestions
             ) {
-              SOCKET_SERVER.socket.emit('suggest', nextAction.suggestions)
+              SOCKET_SERVER.socket?.emit('suggest', nextAction.suggestions)
             }
             if (
               action?.suggestions &&
               skillResult?.output.core?.showSuggestions
             ) {
-              SOCKET_SERVER.socket.emit('suggest', action.suggestions)
+              SOCKET_SERVER.socket?.emit('suggest', action.suggestions)
             }
 
             resolve({
@@ -558,12 +558,12 @@ export default class Brain {
 
           if (!this.isMuted) {
             this.talk(answer as string, true)
-            SOCKET_SERVER.socket.emit('is-typing', false)
+            SOCKET_SERVER.socket?.emit('is-typing', false)
           }
 
           // Send suggestions to the client
           if (nextAction?.suggestions) {
-            SOCKET_SERVER.socket.emit('suggest', nextAction.suggestions)
+            SOCKET_SERVER.socket?.emit('suggest', nextAction.suggestions)
           }
 
           resolve({
