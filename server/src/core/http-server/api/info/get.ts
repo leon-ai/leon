@@ -1,3 +1,5 @@
+import type { FastifyPluginAsync } from 'fastify'
+
 import { version } from '@@/package.json'
 import {
   HAS_AFTER_SPEECH,
@@ -8,9 +10,13 @@ import {
   TTS_PROVIDER
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import type { APIOptions } from '@/core/http-server/http-server'
 
-const getInfo = async (fastify, options) => {
-  fastify.get(`/api/${options.apiVersion}/info`, (request, reply) => {
+export const getInfo: FastifyPluginAsync<APIOptions> = async (
+  fastify,
+  options
+) => {
+  fastify.get(`/api/${options.apiVersion}/info`, (_request, reply) => {
     LogHelper.title('GET /info')
 
     const message = 'Information pulled.'
@@ -36,5 +42,3 @@ const getInfo = async (fastify, options) => {
     })
   })
 }
-
-export default getInfo

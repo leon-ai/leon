@@ -7,13 +7,17 @@ import { version } from '@@/package.json'
 import { LEON_NODE_ENV, HAS_LOGGER } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
-import corsMidd from '@/core/http-server/plugins/cors'
-import otherMidd from '@/core/http-server/plugins/other'
-import infoPlugin from '@/core/http-server/api/info'
-import downloadsPlugin from '@/core/http-server/api/downloads'
-// import keyMidd from '@/core/http-server/plugins/key'
+import { corsMidd } from '@/core/http-server/plugins/cors'
+import { otherMidd } from '@/core/http-server/plugins/other'
+import { infoPlugin } from '@/core/http-server/api/info'
+import { downloadsPlugin } from '@/core/http-server/api/downloads'
+// import { keyMidd } from '@/core/http-server/plugins/key'
 
 const API_VERSION = 'v1'
+
+export interface APIOptions {
+  apiVersion: string
+}
 
 export default class HTTPServer {
   private static instance: HTTPServer
