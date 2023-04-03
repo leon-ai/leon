@@ -186,7 +186,7 @@ export default class Brain {
           }
           this.speeches.push(speech)
         } else {
-          this.skillOutput += data
+          this.skillOutput = data.toString()
         }
 
         return Promise.resolve(null)

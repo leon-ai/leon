@@ -34,7 +34,7 @@ def guess(params):
 	aki.question_filter = session['question_filter']
 
 	resp = aki._parse_response(response)
-	aki._update(resp, '"step":"0"' in response)
+	aki._update(resp, '"step": "0"' in response)
 
 	if session['progression'] > 80:
 		aki.win()
