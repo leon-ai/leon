@@ -15,6 +15,16 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 
+interface HotwordDataEvent {
+  hotword: string
+  buffer: Buffer
+}
+
+interface UtteranceDataEvent {
+  client: string
+  value: string
+}
+
 export default class SocketServer {
   private static instance: SocketServer
 
@@ -86,39 +96,33 @@ export default class SocketServer {
 
         if (data === 'hotword-node') {
           // Hotword triggered
-          this.socket?.on(
-            'hotword-detected',
-            (data: { hotword: string; buffer: Buffer }) => {
-              LogHelper.title('Socket')
-              LogHelper.success(`Hotword ${data.hotword} detected`)
+          this.socket?.on('hotword-detected', (data: HotwordDataEvent) => {
+            LogHelper.title('Socket')
+            LogHelper.success(`Hotword ${data.hotword} detected`)
 
-              this.socket?.broadcast.emit('enable-record')
-            }
-          )
+            this.socket?.broadcast.emit('enable-record')
+          })
         } else {
           // Listen for new utterance
-          this.socket?.on(
-            'utterance',
-            async (data: { client: string; value: string }) => {
-              LogHelper.title('Socket')
-              LogHelper.info(`${data.client} emitted: ${data.value}`)
+          this.socket?.on('utterance', async (data: UtteranceDataEvent) => {
+            LogHelper.title('Socket')
+            LogHelper.info(`${data.client} emitted: ${data.value}`)
 
-              this.socket?.emit('is-typing', true)
+            this.socket?.emit('is-typing', true)
 
-              const { value: utterance } = data
-              try {
-                LogHelper.time('Utterance processed in')
+            const { value: utterance } = data
+            try {
+              LogHelper.time('Utterance processed in')
 
-                BRAIN.isMuted = false
-                await NLU.process(utterance)
+              BRAIN.isMuted = false
+              await NLU.process(utterance)
 
-                LogHelper.title('Execution Time')
-                LogHelper.timeEnd('Utterance processed in')
-              } catch (e) {
-                LogHelper.error(`Failed to process utterance: ${e}`)
-              }
+              LogHelper.title('Execution Time')
+              LogHelper.timeEnd('Utterance processed in')
+            } catch (e) {
+              LogHelper.error(`Failed to process utterance: ${e}`)
             }
-          )
+          })
 
           // Handle automatic speech recognition
           this.socket?.on('recognize', async (data: Buffer) => {
