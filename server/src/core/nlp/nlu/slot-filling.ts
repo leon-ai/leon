@@ -11,7 +11,9 @@ export class SlotFilling {
   /**
    * Handle slot filling
    */
-  public static async handle(utterance: NLPUtterance): Promise<Partial<BrainProcessResult> | null> {
+  public static async handle(
+    utterance: NLPUtterance
+  ): Promise<Partial<BrainProcessResult> | null> {
     const processedData = await this.fillSlot(utterance)
 
     /**
@@ -26,7 +28,7 @@ export class SlotFilling {
     if (processedData && Object.keys(processedData).length > 0) {
       // Set new context with the next action if there is one
       if (processedData.action?.next_action) {
-        NLU.conversation.activeContext = {
+        await NLU.conversation.setActiveContext({
           ...DEFAULT_ACTIVE_CONTEXT,
           lang: BRAIN.lang,
           slots: processedData.slots || {},
@@ -37,7 +39,7 @@ export class SlotFilling {
           domain: processedData.classification?.domain || '',
           intent: `${processedData.classification?.skill}.${processedData.action.next_action}`,
           entities: []
-        }
+        })
       }
     }
 
@@ -48,7 +50,9 @@ export class SlotFilling {
    * Build NLU data result object based on slots
    * and ask for more entities if necessary
    */
-  public static async fillSlot(utterance: NLPUtterance): Promise<Partial<BrainProcessResult> | null> {
+  public static async fillSlot(
+    utterance: NLPUtterance
+  ): Promise<Partial<BrainProcessResult> | null> {
     if (!NLU.conversation.activeContext.nextAction) {
       return null
     }
@@ -136,11 +140,12 @@ export class SlotFilling {
    * 3. Or go to the brain executor if all slots have been filled in one shot
    */
   public static async route(intent: string): Promise<boolean> {
-    const slots = await MODEL_LOADER.mainNLPContainer.slotManager.getMandatorySlots(intent)
+    const slots =
+      await MODEL_LOADER.mainNLPContainer.slotManager.getMandatorySlots(intent)
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
     if (hasMandatorySlots) {
-      NLU.conversation.activeContext = {
+      await NLU.conversation.setActiveContext({
         ...DEFAULT_ACTIVE_CONTEXT,
         lang: BRAIN.lang,
         slots,
@@ -151,15 +156,19 @@ export class SlotFilling {
         domain: NLU.nluResult.classification.domain,
         intent,
         entities: NLU.nluResult.entities
-      }
+      })
 
       const notFilledSlot = NLU.conversation.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
-        const { actions } = SkillDomainHelper.getSkillConfig(NLU.nluResult.skillConfigPath, BRAIN.lang)
-        const [currentSlot] = actions[
-          NLU.nluResult.classification.action
-        ]?.slots?.filter(({ name }) => name === notFilledSlot.name) ?? []
+        const { actions } = await SkillDomainHelper.getSkillConfig(
+          NLU.nluResult.skillConfigPath,
+          BRAIN.lang
+        )
+        const [currentSlot] =
+          actions[NLU.nluResult.classification.action]?.slots?.filter(
+            ({ name }) => name === notFilledSlot.name
+          ) ?? []
 
         SOCKET_SERVER.socket.emit('suggest', currentSlot?.suggestions)
         BRAIN.talk(notFilledSlot.pickedQuestion)

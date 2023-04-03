@@ -8,6 +8,11 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { DEFAULT_NLU_RESULT } from '@/core/nlp/nlu/nlu'
 
+interface ResolveResolversResult {
+  name: string
+  value: string
+}
+
 export class ActionLoop {
   /**
    * Handle action loop logic before NLU processing
@@ -43,7 +48,10 @@ export class ActionLoop {
       NLU.nluResult
     )
 
-    const { actions, resolvers } = SkillDomainHelper.getSkillConfig(skillConfigPath, BRAIN.lang)
+    const { actions, resolvers } = await SkillDomainHelper.getSkillConfig(
+      skillConfigPath,
+      BRAIN.lang
+    )
     const action = actions[NLU.nluResult.classification.action]
     if (action?.loop) {
       const { name: expectedItemName, type: expectedItemType } =
@@ -64,10 +72,10 @@ export class ActionLoop {
         const result = await nlpObjs[expectedItemType].process(utterance)
         const { intent } = result
 
-        const resolveResolvers = (
+        const resolveResolvers = async (
           resolver: string,
           intent: string
-        ): [{ name: string, value: string }] => {
+        ): Promise<[ResolveResolversResult]> => {
           const resolversPath = join(
             process.cwd(),
             'core',
@@ -77,8 +85,13 @@ export class ActionLoop {
           )
           // Load the skill resolver or the global resolver
           const resolvedIntents = !intent.includes('resolver.global')
-            ? (resolvers && resolvers[resolver])
-            : JSON.parse(fs.readFileSync(join(resolversPath, `${resolver}.json`), 'utf8'))
+            ? resolvers && resolvers[resolver]
+            : JSON.parse(
+                await fs.promises.readFile(
+                  join(resolversPath, `${resolver}.json`),
+                  'utf8'
+                )
+              )
 
           // E.g. resolver.global.denial -> denial
           intent = intent.substring(intent.lastIndexOf('.') + 1)
@@ -99,7 +112,10 @@ export class ActionLoop {
         ) {
           LogHelper.title('NLU')
           LogHelper.success('Resolvers resolved:')
-          NLU.nluResult.resolvers = resolveResolvers(expectedItemName, intent)
+          NLU.nluResult.resolvers = await resolveResolvers(
+            expectedItemName,
+            intent
+          )
           NLU.nluResult.resolvers.forEach((resolver) =>
             LogHelper.success(`${intent}: ${JSON.stringify(resolver)}`)
           )
@@ -144,8 +160,10 @@ export class ActionLoop {
 
         // Break the action loop and prepare for the next action if necessary
         if (processedData.core?.isInActionLoop === false) {
-          NLU.conversation.activeContext.isInActionLoop = !!processedData.action?.loop
-          NLU.conversation.activeContext.actionName = processedData.action?.next_action as string
+          NLU.conversation.activeContext.isInActionLoop =
+            !!processedData.action?.loop
+          NLU.conversation.activeContext.actionName = processedData.action
+            ?.next_action as string
           NLU.conversation.activeContext.intent = `${processedData.classification?.skill}.${processedData.action?.next_action}`
         }
 

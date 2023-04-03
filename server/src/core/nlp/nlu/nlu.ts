@@ -4,7 +4,14 @@ import { spawn } from 'node:child_process'
 import kill from 'tree-kill'
 
 import type { Language, ShortLanguageCode } from '@/types'
-import type { NLPAction, NLPDomain, NLPJSProcessResult, NLPSkill, NLPUtterance, NLUResult } from '@/core/nlp/types'
+import type {
+  NLPAction,
+  NLPDomain,
+  NLPJSProcessResult,
+  NLPSkill,
+  NLPUtterance,
+  NLUResult
+} from '@/core/nlp/types'
 import type { BrainProcessResult } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
 import { TCP_SERVER_BIN_PATH } from '@/constants'
@@ -15,14 +22,12 @@ import { ActionLoop } from '@/core/nlp/nlu/action-loop'
 import { SlotFilling } from '@/core/nlp/nlu/slot-filling'
 import Conversation, { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
 
-type NLUProcessResult = Promise<
-  Partial<
-    BrainProcessResult & {
-      processingTime: number
-      nluProcessingTime: number
-    }
-  > | null
->
+type NLUProcessResult = Promise<Partial<
+  BrainProcessResult & {
+    processingTime: number
+    nluProcessingTime: number
+  }
+> | null>
 
 export const DEFAULT_NLU_RESULT = {
   utterance: '',
@@ -86,9 +91,7 @@ export default class NLU {
    * pick-up the right classification
    * and extract entities
    */
-  public process(
-    utterance: NLPUtterance
-  ): NLUProcessResult {
+  public process(utterance: NLPUtterance): NLUProcessResult {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
@@ -127,7 +130,8 @@ export default class NLU {
         }
       }
 
-      const result: NLPJSProcessResult = await MODEL_LOADER.mainNLPContainer.process(utterance)
+      const result: NLPJSProcessResult =
+        await MODEL_LOADER.mainNLPContainer.process(utterance)
       const { locale, answers, classifications } = result
       let { score, intent, domain } = result
 
@@ -141,7 +145,10 @@ export default class NLU {
         classifications.forEach(({ intent: newIntent, score: newScore }) => {
           if (newScore > 0.6) {
             const [skillName] = newIntent.split('.')
-            const newDomain = MODEL_LOADER.mainNLPContainer.getIntentDomain(locale, newIntent)
+            const newDomain = MODEL_LOADER.mainNLPContainer.getIntentDomain(
+              locale,
+              newIntent
+            )
             const contextName = `${newDomain}.${skillName}`
             if (this.conversation.activeContext.name === contextName) {
               score = newScore
@@ -167,10 +174,7 @@ export default class NLU {
 
       const isSupportedLanguage = LangHelper.getShortCodes().includes(locale)
       if (!isSupportedLanguage) {
-        BRAIN.talk(
-          `${BRAIN.wernicke('random_language_not_supported')}.`,
-          true
-        )
+        BRAIN.talk(`${BRAIN.wernicke('random_language_not_supported')}.`, true)
         SOCKET_SERVER.socket.emit('is-typing', false)
         return resolve({})
       }
@@ -190,10 +194,7 @@ export default class NLU {
 
         if (!fallback) {
           if (!BRAIN.isMuted) {
-            BRAIN.talk(
-              `${BRAIN.wernicke('random_unknown_intents')}.`,
-              true
-            )
+            BRAIN.talk(`${BRAIN.wernicke('random_unknown_intents')}.`, true)
             SOCKET_SERVER.socket.emit('is-typing', false)
           }
 
@@ -253,7 +254,7 @@ export default class NLU {
       if (this.conversation.activeContext.name !== newContextName) {
         this.conversation.cleanActiveContext()
       }
-      this.conversation.activeContext = {
+      await this.conversation.setActiveContext({
         ...DEFAULT_ACTIVE_CONTEXT,
         lang: BRAIN.lang,
         slots: {},
@@ -264,7 +265,7 @@ export default class NLU {
         domain: this.nluResult.classification.domain,
         intent,
         entities: this.nluResult.entities
-      }
+      })
       // Pass current utterance entities to the NLU result object
       this.nluResult.currentEntities =
         this.conversation.activeContext.currentEntities
@@ -277,7 +278,7 @@ export default class NLU {
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
           this.conversation.cleanActiveContext()
-          this.conversation.activeContext = {
+          await this.conversation.setActiveContext({
             ...DEFAULT_ACTIVE_CONTEXT,
             lang: BRAIN.lang,
             slots: {},
@@ -288,7 +289,7 @@ export default class NLU {
             domain: processedData.classification?.domain || '',
             intent: `${processedData.classification?.skill}.${processedData.action?.next_action}`,
             entities: []
-          }
+          })
         }
 
         const processingTimeEnd = Date.now()
@@ -297,7 +298,8 @@ export default class NLU {
         return resolve({
           processingTime, // In ms, total time
           ...processedData,
-          nluProcessingTime: processingTime - (processedData?.executionTime || 0) // In ms, NLU processing time only
+          nluProcessingTime:
+            processingTime - (processedData?.executionTime || 0) // In ms, NLU processing time only
         })
       } catch (e) {
         const errorMessage = `Failed to execute action: ${e}`
@@ -333,9 +335,11 @@ export default class NLU {
 
         if (JSON.stringify(tmpWords) === JSON.stringify(fallbacks[i]?.words)) {
           this.nluResult.entities = []
-          this.nluResult.classification.domain = fallbacks[i]?.domain as NLPDomain
+          this.nluResult.classification.domain = fallbacks[i]
+            ?.domain as NLPDomain
           this.nluResult.classification.skill = fallbacks[i]?.skill as NLPSkill
-          this.nluResult.classification.action = fallbacks[i]?.action as NLPAction
+          this.nluResult.classification.action = fallbacks[i]
+            ?.action as NLPAction
           this.nluResult.classification.confidence = 1
 
           LogHelper.success('Fallback found')

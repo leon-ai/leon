@@ -11,6 +11,11 @@ const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
 // Number of retries to connect to the TCP server
 const RETRIES_NB = IS_PRODUCTION_ENV ? 8 : 30
 
+interface ChunkData {
+  topic: string
+  data: unknown
+}
+
 export default class TCPClient {
   private static instance: TCPClient
 
@@ -50,7 +55,7 @@ export default class TCPClient {
       this.ee.emit('connected', null)
     })
 
-    this.tcpSocket.on('data', (chunk: { topic: string, data: unknown }) => {
+    this.tcpSocket.on('data', (chunk: ChunkData) => {
       LogHelper.title('TCP Client')
       LogHelper.info(`Received data: ${String(chunk)}`)
 

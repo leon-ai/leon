@@ -1,5 +1,10 @@
 import type { ShortLanguageCode } from '@/types'
-import type { NEREntity, NERSpacyEntity, NLPUtterance, NLUResult } from '@/core/nlp/types'
+import type {
+  NEREntity,
+  NERSpacyEntity,
+  NLPUtterance,
+  NLUResult
+} from '@/core/nlp/types'
 import type {
   SkillCustomEnumEntityTypeSchema,
   SkillCustomRegexEntityTypeSchema,
@@ -50,7 +55,9 @@ export default class NER {
     LogHelper.success('Entities found:')
 
     entities.forEach((entity) =>
-      LogHelper.success(`{ value: ${entity.sourceText}, entity: ${entity.entity} }`)
+      LogHelper.success(
+        `{ value: ${entity.sourceText}, entity: ${entity.entity} }`
+      )
     )
   }
 
@@ -68,8 +75,13 @@ export default class NER {
 
       const { classification } = nluResult
       // Remove end-punctuation and add an end-whitespace
-      const utterance = `${StringHelper.removeEndPunctuation(nluResult.utterance)} `
-      const { actions } = SkillDomainHelper.getSkillConfig(skillConfigPath, lang)
+      const utterance = `${StringHelper.removeEndPunctuation(
+        nluResult.utterance
+      )} `
+      const { actions } = await SkillDomainHelper.getSkillConfig(
+        skillConfigPath,
+        lang
+      )
       const { action } = classification
       const promises = []
       const actionEntities = actions[action]?.entities || []
@@ -92,10 +104,11 @@ export default class NER {
 
       await Promise.all(promises)
 
-      const { entities }: { entities: NEREntity[] } = await this.manager.process({
-        locale: lang,
-        text: utterance
-      })
+      const { entities }: { entities: NEREntity[] } =
+        await this.manager.process({
+          locale: lang,
+          text: utterance
+        })
 
       // Normalize entities
       entities.map((entity) => {
@@ -148,10 +161,13 @@ export default class NER {
    */
   private getSpacyEntities(utterance: NLPUtterance): Promise<NERSpacyEntity[]> {
     return new Promise((resolve) => {
-      const spacyEntitiesReceivedHandler =
-        async ({ spacyEntities }: { spacyEntities: NERSpacyEntity[] }): Promise<void> => {
-          resolve(spacyEntities)
-        }
+      const spacyEntitiesReceivedHandler = async ({
+        spacyEntities
+      }: {
+        spacyEntities: NERSpacyEntity[]
+      }): Promise<void> => {
+        resolve(spacyEntities)
+      }
 
       TCP_CLIENT.ee.removeAllListeners()
       TCP_CLIENT.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
@@ -192,7 +208,11 @@ export default class NER {
             options: {}
           }
           this.manager.addRule(lang, entityConfig.name, 'trim', rule)
-          this.manager[conditionMethod](lang, entityConfig.name, condition?.from)
+          this.manager[conditionMethod](
+            lang,
+            entityConfig.name,
+            condition?.from
+          )
         } else if (condition.type.indexOf('before') !== -1) {
           this.manager[conditionMethod](lang, entityConfig.name, condition.to)
         }
@@ -210,7 +230,11 @@ export default class NER {
     entityConfig: SkillCustomRegexEntityTypeSchema
   ): Promise<void> {
     return new Promise((resolve) => {
-      this.manager.addRegexRule(lang, entityConfig.name, new RegExp(entityConfig.regex, 'g'))
+      this.manager.addRegexRule(
+        lang,
+        entityConfig.name,
+        new RegExp(entityConfig.regex, 'g')
+      )
 
       resolve()
     })

@@ -275,8 +275,14 @@ export interface CustomRegexEntity extends CustomEntity<'regex'> {
   }
 }
 interface CustomTrimEntity extends CustomEntity<'trim'> {
-  subtype: 'between' | 'after' | 'afterFirst' | 'afterLast'
-    | 'before' | 'beforeFirst' | 'beforeLast'
+  subtype:
+    | 'between'
+    | 'after'
+    | 'afterFirst'
+    | 'afterLast'
+    | 'before'
+    | 'beforeFirst'
+    | 'beforeLast'
   resolution: {
     value: string
   }

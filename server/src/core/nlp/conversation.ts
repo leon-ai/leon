@@ -65,7 +65,9 @@ export default class Conversation {
   /**
    * Activate context according to the triggered action
    */
-  public set activeContext(nluContext: ConversationContext) {
+  public async setActiveContext(
+    nluContext: ConversationContext
+  ): Promise<void> {
     const {
       slots,
       isInActionLoop,
@@ -79,9 +81,14 @@ export default class Conversation {
     const slotKeys = Object.keys(slots)
     const [skillName] = intent.split('.')
     const newContextName = `${domain}.${skillName}`
-    const { actions } = SkillDomainHelper.getSkillConfig(skillConfigPath, lang)
+    const { actions } = await SkillDomainHelper.getSkillConfig(
+      skillConfigPath,
+      lang
+    )
     // Grab next action from the NLU data file
-    const { next_action: nextAction } = actions[actionName] as { next_action: string }
+    const { next_action: nextAction } = actions[actionName] as {
+      next_action: string
+    }
 
     // If slots are required to trigger next actions, then go through the context activation
     if (slotKeys.length > 0) {
@@ -183,7 +190,7 @@ export default class Conversation {
 
       // If it's the first slot setting grabbed from the model or not
       if (isFirstSet) {
-        [slotName, slotEntity] = key.split('#') as [string, string]
+        ;[slotName, slotEntity] = key.split('#') as [string, string]
         questions = slotObj.locales?.[lang] as string[]
       }
 
@@ -191,8 +198,9 @@ export default class Conversation {
       const [foundEntity] = entities.filter(
         ({ entity }) => entity === slotEntity && !slotObj.isFilled
       )
-      const pickedQuestion =
-        questions[Math.floor(Math.random() * questions.length)] as string
+      const pickedQuestion = questions[
+        Math.floor(Math.random() * questions.length)
+      ] as string
       const slot = this._activeContext.slots[slotName]
       const newSlot = {
         name: slotName,

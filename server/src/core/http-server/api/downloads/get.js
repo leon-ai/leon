@@ -7,69 +7,60 @@ import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 
 const getDownloads = async (fastify, options) => {
-  fastify.get(`/api/${options.apiVersion}/downloads`, (request, reply) => {
-    LogHelper.title('GET /downloads')
+  fastify.get(
+    `/api/${options.apiVersion}/downloads`,
+    async (request, reply) => {
+      LogHelper.title('GET /downloads')
 
-    const clean = (dir, files) => {
-      LogHelper.info('Cleaning skill download directory...')
-      for (let i = 0; i < files.length; i += 1) {
-        fs.unlinkSync(`${dir}/${files[i]}`)
+      const clean = async (dir, files) => {
+        LogHelper.info('Cleaning skill download directory...')
+        for (let i = 0; i < files.length; i += 1) {
+          await fs.promises.unlink(`${dir}/${files[i]}`)
+        }
+        await fs.promises.rmdir(dir)
+        LogHelper.success('Downloads directory cleaned')
       }
-      fs.rmdirSync(dir)
-      LogHelper.success('Downloads directory cleaned')
-    }
-    let message = ''
+      let message = ''
 
-    if (request.query.domain && request.query.skill) {
-      const dlDomainDir = path.join(
-        process.cwd(),
-        'downloads',
-        request.query.domain
-      )
-      const skill = path.join(dlDomainDir, `${request.query.skill}.py`)
-
-      LogHelper.info(
-        `Checking existence of the ${StringHelper.ucFirst(
-          request.query.skill
-        )} skill...`
-      )
-      if (fs.existsSync(skill)) {
-        LogHelper.success(
-          `${StringHelper.ucFirst(request.query.skill)} skill exists`
+      if (request.query.domain && request.query.skill) {
+        const dlDomainDir = path.join(
+          process.cwd(),
+          'downloads',
+          request.query.domain
         )
-        const downloadsDir = `${dlDomainDir}/${request.query.skill}`
+        const skill = path.join(dlDomainDir, `${request.query.skill}.py`)
 
-        LogHelper.info('Reading downloads directory...')
-        fs.readdir(downloadsDir, (err, files) => {
-          if (err && err.code === 'ENOENT') {
-            message = 'There is no content to download for this skill.'
-            LogHelper.error(message)
-            reply.code(404).send({
-              success: false,
-              status: 404,
-              code: 'skill_dir_not_found',
-              message
-            })
-          } else {
-            if (err) LogHelper.error(err)
+        LogHelper.info(
+          `Checking existence of the ${StringHelper.ucFirst(
+            request.query.skill
+          )} skill...`
+        )
+        if (fs.existsSync(skill)) {
+          LogHelper.success(
+            `${StringHelper.ucFirst(request.query.skill)} skill exists`
+          )
+          const downloadsDir = `${dlDomainDir}/${request.query.skill}`
 
+          LogHelper.info('Reading downloads directory...')
+          try {
+            const files = await fs.promises.readdir(downloadsDir)
             // Download the file if there is only one
             if (files.length === 1) {
               LogHelper.info(`${files[0]} is downloading...`)
               reply.download(`${downloadsDir}/${files[0]}`)
               LogHelper.success(`${files[0]} downloaded`)
-              clean(downloadsDir, files)
+              await clean(downloadsDir, files)
             } else {
               LogHelper.info('Deleting previous archives...')
               const zipSlug = `leon-${request.query.domain}-${request.query.skill}`
-              const domainsFiles = fs.readdirSync(dlDomainDir)
+              const domainsFiles = await fs.promises.readdir(dlDomainDir)
 
               for (let i = 0; i < domainsFiles.length; i += 1) {
                 if (
                   domainsFiles[i].indexOf('.zip') !== -1 &&
                   domainsFiles[i].indexOf(zipSlug) !== -1
                 ) {
-                  fs.unlinkSync(`${dlDomainDir}/${domainsFiles[i]}`)
+                  await fs.promises.unlink(`${dlDomainDir}/${domainsFiles[i]}`)
                   LogHelper.success(`${domainsFiles[i]} archive deleted`)
                 }
               }
@@ -83,12 +74,12 @@ const getDownloads = async (fastify, options) => {
               // When the archive is ready
               output.on('close', () => {
                 LogHelper.info(`${zipName} is downloading...`)
-                reply.download(zipFile, (err) => {
+                reply.download(zipFile, async (err) => {
                   if (err) LogHelper.error(err)
 
                   LogHelper.success(`${zipName} downloaded`)
 
-                  clean(downloadsDir, files)
+                  await clean(downloadsDir, files)
                 })
               })
               archive.on('error', (err) => {
@@ -106,29 +97,41 @@ const getDownloads = async (fastify, options) => {
               LogHelper.info('Finalizing...')
               archive.finalize()
             }
+          } catch (error) {
+            if (error.code === 'ENOENT') {
+              message = 'There is no content to download for this skill.'
+              LogHelper.error(message)
+              reply.code(404).send({
+                success: false,
+                status: 404,
+                code: 'skill_dir_not_found',
+                message
+              })
+            }
+            LogHelper.error(message)
           }
-        })
+        } else {
+          message = 'This skill does not exist.'
+          LogHelper.error(message)
+          reply.code(404).send({
+            success: false,
+            status: 404,
+            code: 'skill_not_found',
+            message
+          })
+        }
       } else {
-        message = 'This skill does not exist.'
+        message = 'Bad request.'
         LogHelper.error(message)
-        reply.code(404).send({
+        reply.code(400).send({
           success: false,
-          status: 404,
-          code: 'skill_not_found',
+          status: 400,
+          code: 'bad_request',
           message
         })
       }
-    } else {
-      message = 'Bad request.'
-      LogHelper.error(message)
-      reply.code(400).send({
-        success: false,
-        status: 400,
-        code: 'bad_request',
-        message
-      })
     }
-  })
+  )
 }
 
 export default getDownloads

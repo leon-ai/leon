@@ -26,6 +26,7 @@ tcp_server/src/Pipfile.lock
 !tcp_server/**/.gitkeep
 !bridges/python/**/.gitkeep
 !**/*.sample*
+server/src/core/http-server/old-server.js
 packages/**/config/config.json
 skills/**/src/config.json
 packages/**/data/db/*.json

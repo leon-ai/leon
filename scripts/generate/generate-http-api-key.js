@@ -23,7 +23,7 @@ const generateHttpApiKey = () =>
       const str = StringHelper.random(11)
       const dotEnvPath = path.join(process.cwd(), '.env')
       const envVarKey = 'LEON_HTTP_API_KEY'
-      let content = fs.readFileSync(dotEnvPath, 'utf8')
+      let content = await fs.promises.readFile(dotEnvPath, 'utf8')
 
       shasum.update(str)
       const sha1 = shasum.digest('hex')
@@ -39,7 +39,7 @@ const generateHttpApiKey = () =>
 
       content = lines.join('\n')
 
-      fs.writeFileSync(dotEnvPath, content)
+      await fs.promises.writeFile(dotEnvPath, content)
       LogHelper.success('HTTP API key generated')
 
       resolve()

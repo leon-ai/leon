@@ -39,7 +39,9 @@ export default () =>
 
       // Check if a new routing generation is necessary
       if (fs.existsSync(outputFilePath)) {
-        const mtimeEndpoints = fs.statSync(outputFilePath).mtime.getTime()
+        const mtimeEndpoints = (
+          await fs.promises.stat(outputFilePath)
+        ).mtime.getTime()
 
         let i = 0
         for (const currentDomain of skillDomains.values()) {
@@ -49,7 +51,7 @@ export default () =>
           for (let j = 0; j < skillKeys.length; j += 1) {
             const skillFriendlyName = skillKeys[j]
             const currentSkill = currentDomain.skills[skillFriendlyName]
-            const fileInfo = fs.statSync(
+            const fileInfo = await fs.promises.stat(
               path.join(currentSkill.path, 'config', `${lang}.json`)
             )
             const mtime = fileInfo.mtime.getTime()
@@ -91,7 +93,7 @@ export default () =>
               `${lang}.json`
             )
             const { actions } = JSON.parse(
-              fs.readFileSync(configFilePath, 'utf8')
+              await fs.promises.readFile(configFilePath, 'utf8')
             )
             const actionsKeys = Object.keys(actions)
 
@@ -145,7 +147,10 @@ export default () =>
 
         LogHelper.info(`Writing ${outputFile} file...`)
         try {
-          fs.writeFileSync(outputFilePath, JSON.stringify(finalObj, null, 2))
+          await fs.promises.writeFile(
+            outputFilePath,
+            JSON.stringify(finalObj, null, 2)
+          )
           LogHelper.success(`${outputFile} file generated`)
           resolve()
         } catch (e) {

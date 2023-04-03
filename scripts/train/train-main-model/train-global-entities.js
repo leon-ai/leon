@@ -8,7 +8,7 @@ import { LogHelper } from '@/helpers/log-helper'
  * Add global entities annotations (@...)
  */
 export default (lang, nlp) =>
-  new Promise((resolve) => {
+  new Promise(async (resolve) => {
     LogHelper.title('Global entities training')
 
     const globalEntitiesPath = path.join(
@@ -18,7 +18,7 @@ export default (lang, nlp) =>
       lang,
       'global-entities'
     )
-    const globalEntityFiles = fs.readdirSync(globalEntitiesPath)
+    const globalEntityFiles = await fs.promises.readdir(globalEntitiesPath)
     const newEntitiesObj = {}
 
     for (let i = 0; i < globalEntityFiles.length; i += 1) {
@@ -28,7 +28,9 @@ export default (lang, nlp) =>
         globalEntitiesPath,
         globalEntityFileName
       )
-      const { options } = JSON.parse(fs.readFileSync(globalEntityPath, 'utf8'))
+      const { options } = JSON.parse(
+        await fs.promises.readFile(globalEntityPath, 'utf8')
+      )
       const optionKeys = Object.keys(options)
       const optionsObj = {}
 

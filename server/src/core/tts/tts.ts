@@ -10,7 +10,7 @@ import { TTSSynthesizers, TTSProviders } from '@/core/tts/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 
-type Speech = {
+interface Speech {
   text: string
   isFinalAnswer: boolean
 }
@@ -110,7 +110,7 @@ export default class TTS {
         )
       } else {
         const { audioFilePath, duration } = result
-        const bitmap = fs.readFileSync(audioFilePath)
+        const bitmap = await fs.promises.readFile(audioFilePath)
 
         SOCKET_SERVER.socket.emit(
           'audio-forwarded',
@@ -150,7 +150,10 @@ export default class TTS {
   /**
    * Add speeches to the queue
    */
-  public async add(text: Speech['text'], isFinalAnswer: Speech['isFinalAnswer']): Promise<Speech[]> {
+  public async add(
+    text: Speech['text'],
+    isFinalAnswer: Speech['isFinalAnswer']
+  ): Promise<Speech[]> {
     /**
      * Flite fix. When the string is only one word,
      * Flite cannot save to a file. So we add a space at the end of the string

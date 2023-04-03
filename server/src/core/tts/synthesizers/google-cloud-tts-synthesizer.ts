@@ -73,7 +73,11 @@ export default class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
           }
         })
 
-        await fs.promises.writeFile(audioFilePath, response.audioContent as Uint8Array | string, 'binary')
+        await fs.promises.writeFile(
+          audioFilePath,
+          response.audioContent as Uint8Array | string,
+          'binary'
+        )
 
         const duration = await this.getAudioDuration(audioFilePath)
 

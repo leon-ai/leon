@@ -68,7 +68,12 @@
     "answer": {
       "intents": {
         "yes": {
-          "utterance_samples": ["[Yes|Yep|Yup|Yeah]", "Of course", "Sure", "Correct"],
+          "utterance_samples": [
+            "[Yes|Yep|Yup|Yeah]",
+            "Of course",
+            "Sure",
+            "Correct"
+          ],
           "value": "y"
         },
         "no": {

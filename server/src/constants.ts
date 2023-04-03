@@ -34,10 +34,10 @@ const TCP_SERVER_VERSION_FILE_PATH = path.join(
 )
 export const [, PYTHON_BRIDGE_VERSION] = fs
   .readFileSync(PYTHON_BRIDGE_VERSION_FILE_PATH, 'utf8')
-  .split('\'')
+  .split("'")
 export const [, TCP_SERVER_VERSION] = fs
   .readFileSync(TCP_SERVER_VERSION_FILE_PATH, 'utf8')
-  .split('\'')
+  .split("'")
 
 export const PYTHON_BRIDGE_BIN_NAME = 'leon-python-bridge'
 export const TCP_SERVER_BIN_NAME = 'leon-tcp-server'
