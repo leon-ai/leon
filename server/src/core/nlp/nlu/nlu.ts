@@ -101,7 +101,7 @@ export default class NLU {
       if (!MODEL_LOADER.hasNlpModels()) {
         if (!BRAIN.isMuted) {
           BRAIN.talk(`${BRAIN.wernicke('random_errors')}!`)
-          SOCKET_SERVER.socket.emit('is-typing', false)
+          SOCKET_SERVER.socket?.emit('is-typing', false)
         }
 
         const msg =
@@ -175,7 +175,7 @@ export default class NLU {
       const isSupportedLanguage = LangHelper.getShortCodes().includes(locale)
       if (!isSupportedLanguage) {
         BRAIN.talk(`${BRAIN.wernicke('random_language_not_supported')}.`, true)
-        SOCKET_SERVER.socket.emit('is-typing', false)
+        SOCKET_SERVER.socket?.emit('is-typing', false)
         return resolve({})
       }
 
@@ -195,7 +195,7 @@ export default class NLU {
         if (!fallback) {
           if (!BRAIN.isMuted) {
             BRAIN.talk(`${BRAIN.wernicke('random_unknown_intents')}.`, true)
-            SOCKET_SERVER.socket.emit('is-typing', false)
+            SOCKET_SERVER.socket?.emit('is-typing', false)
           }
 
           LogHelper.title('NLU')
@@ -307,7 +307,7 @@ export default class NLU {
         LogHelper.error(errorMessage)
 
         if (!BRAIN.isMuted) {
-          SOCKET_SERVER.socket.emit('is-typing', false)
+          SOCKET_SERVER.socket?.emit('is-typing', false)
         }
 
         return reject(new Error(errorMessage))

@@ -112,7 +112,7 @@ export default class TTS {
         const { audioFilePath, duration } = result
         const bitmap = await fs.promises.readFile(audioFilePath)
 
-        SOCKET_SERVER.socket.emit(
+        SOCKET_SERVER.socket?.emit(
           'audio-forwarded',
           {
             buffer: Buffer.from(bitmap),
