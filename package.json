@@ -128,7 +128,7 @@
     "json": "10.0.0",
     "lint-staged": "13.0.3",
     "nodemon": "2.0.19",
-    "prettier": "2.7.1",
+    "prettier": "2.8.7",
     "resolve-tspaths": "0.8.8",
     "semver": "7.3.5",
     "shx": "0.3.3",

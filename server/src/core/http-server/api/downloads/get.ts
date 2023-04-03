@@ -10,15 +10,15 @@ import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import type { APIOptions } from '@/core/http-server/http-server'
 
-const querystringSchema = Type.Object({
-  domain: Type.String(),
-  skill: Type.String()
-})
+const getDownloadsSchema = {
+  querystring: Type.Object({
+    domain: Type.String(),
+    skill: Type.String()
+  })
+} satisfies FastifySchema
 
-type QuerystringSchema = Static<typeof querystringSchema>
-
-const schema: FastifySchema = {
-  querystring: querystringSchema
+interface GetDownloadsSchema {
+  querystring: Static<typeof getDownloadsSchema.querystring>
 }
 
 export const getDownloads: FastifyPluginAsync<APIOptions> = async (
@@ -26,11 +26,11 @@ export const getDownloads: FastifyPluginAsync<APIOptions> = async (
   options
 ) => {
   fastify.route<{
-    Querystring: QuerystringSchema
+    Querystring: GetDownloadsSchema['querystring']
   }>({
     method: 'GET',
     url: `/api/${options.apiVersion}/downloads`,
-    schema,
+    schema: getDownloadsSchema,
     handler: async (request, reply) => {
       LogHelper.title('GET /downloads')
 
