@@ -35,9 +35,12 @@ export default (version) =>
 
       const repoUrl = sh.stdout.substr(0, sh.stdout.lastIndexOf('.git'))
       const previousTag = sh.stdout.substr(sh.stdout.indexOf('\n') + 1).trim()
-      const changelogData = fs.readFileSync(changelog, 'utf8')
+      const changelogData = await fs.promises.readFile(changelog, 'utf8')
       const compareUrl = `${repoUrl}/compare/${previousTag}...v${version}`
-      let tmpData = fs.readFileSync(`scripts/tmp/${tmpChangelog}`, 'utf8')
+      let tmpData = await fs.promises.readFile(
+        `scripts/tmp/${tmpChangelog}`,
+        'utf8'
+      )
 
       LogHelper.success(`Remote origin URL gotten: ${repoUrl}.git`)
       LogHelper.success(`Previous tag gotten: ${previousTag}`)
@@ -46,14 +49,14 @@ export default (version) =>
         tmpData = tmpData.replace(version, `[${version}](${compareUrl})`)
       }
 
-      fs.writeFile(changelog, `${tmpData}${changelogData}`, (err) => {
-        if (err) LogHelper.error(`Failed to write into file: ${err}`)
-        else {
-          fs.unlinkSync(`scripts/tmp/${tmpChangelog}`)
-          LogHelper.success(`${changelog} generated`)
-          resolve()
-        }
-      })
+      try {
+        await fs.promises.writeFile(changelog, `${tmpData}${changelogData}`)
+        await fs.promises.unlink(`scripts/tmp/${tmpChangelog}`)
+        LogHelper.success(`${changelog} generated`)
+        resolve()
+      } catch (error) {
+        LogHelper.error(`Failed to write into file: ${error}`)
+      }
     } catch (e) {
       LogHelper.error(`Error during git commands: ${e}`)
       reject(e)

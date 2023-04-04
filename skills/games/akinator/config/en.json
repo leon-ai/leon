@@ -68,11 +68,16 @@
     "answer": {
       "intents": {
         "yes": {
-          "utterance_samples": ["[Yes|Yep|Yup|Yeah]", "Sure", "Correct"],
+          "utterance_samples": [
+            "[Yes|Yep|Yup|Yeah]",
+            "Of course",
+            "Sure",
+            "Correct"
+          ],
           "value": "y"
         },
         "no": {
-          "utterance_samples": ["[No|Nope|Nah]"],
+          "utterance_samples": ["[No|Nope|Nah]", "Not at all", "Of course not"],
           "value": "n"
         },
         "idk": {

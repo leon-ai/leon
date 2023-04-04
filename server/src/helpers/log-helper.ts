@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { IS_TESTING_ENV } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 
 export class LogHelper {
@@ -48,12 +47,10 @@ export class LogHelper {
   public static error(value: string): void {
     const data = `${DateHelper.getDateTime()} - ${value}`
 
-    if (!IS_TESTING_ENV) {
-      if (fs.existsSync(LogHelper.ERRORS_PATH)) {
-        fs.appendFileSync(LogHelper.ERRORS_PATH, `\n${data}`)
-      } else {
-        fs.writeFileSync(LogHelper.ERRORS_PATH, data, { flag: 'wx' })
-      }
+    if (fs.existsSync(LogHelper.ERRORS_PATH)) {
+      fs.appendFileSync(LogHelper.ERRORS_PATH, `\n${data}`)
+    } else {
+      fs.writeFileSync(LogHelper.ERRORS_PATH, data, { flag: 'wx' })
     }
 
     console.error('\x1b[31m🚨 %s\x1b[0m', value)

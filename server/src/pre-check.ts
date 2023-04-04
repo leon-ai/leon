@@ -8,23 +8,23 @@ import {
   amazonVoiceConfiguration,
   googleCloudVoiceConfiguration,
   watsonVoiceConfiguration,
-  VoiceConfiguration
+  VoiceConfigurationSchema
 } from '@/schemas/voice-config-schemas'
 import {
   globalAnswersSchemaObject,
   globalEntitySchemaObject,
   globalResolverSchemaObject,
-  GlobalEntity,
-  GlobalResolver,
-  GlobalAnswers
+  GlobalEntitySchema,
+  GlobalResolverSchema,
+  GlobalAnswersSchema
 } from '@/schemas/global-data-schemas'
 import {
   domainSchemaObject,
   skillSchemaObject,
   skillConfigSchemaObject,
-  Domain,
-  Skill,
-  SkillConfig
+  DomainSchema,
+  SkillSchema,
+  SkillConfigSchema
 } from '@/schemas/skill-schemas'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -39,12 +39,12 @@ interface ObjectUnknown {
 const validateSchema = (
   schema: ObjectUnknown,
   contentToValidate: ObjectUnknown,
-  customErrorMesage: string
+  customErrorMessage: string
 ): void => {
   const validate = ajv.compile(schema)
   const isValid = validate(contentToValidate)
   if (!isValid) {
-    LogHelper.error(customErrorMesage)
+    LogHelper.error(customErrorMessage)
     const errors = new AggregateAjvError(validate.errors ?? [])
     for (const error of errors) {
       LogHelper.error(error.message)
@@ -83,7 +83,7 @@ const GLOBAL_DATA_SCHEMAS = {
 
   for (const file of voiceConfigFiles) {
     const voiceConfigPath = path.join(VOICE_CONFIG_PATH, file)
-    const config: VoiceConfiguration = JSON.parse(
+    const config: VoiceConfigurationSchema = JSON.parse(
       await fs.promises.readFile(voiceConfigPath, 'utf8')
     )
     const [configName] = file.split('.') as [keyof typeof VOICE_CONFIG_SCHEMAS]
@@ -112,7 +112,7 @@ const GLOBAL_DATA_SCHEMAS = {
 
     for (const file of globalEntityFiles) {
       const globalEntityPath = path.join(globalEntitiesPath, file)
-      const globalEntity: GlobalEntity = JSON.parse(
+      const globalEntity: GlobalEntitySchema = JSON.parse(
         await fs.promises.readFile(globalEntityPath, 'utf8')
       )
       validateSchema(
@@ -132,7 +132,7 @@ const GLOBAL_DATA_SCHEMAS = {
 
     for (const file of globalResolverFiles) {
       const globalResolverPath = path.join(globalResolversPath, file)
-      const globalResolver: GlobalResolver = JSON.parse(
+      const globalResolver: GlobalResolverSchema = JSON.parse(
         await fs.promises.readFile(globalResolverPath, 'utf8')
       )
       validateSchema(
@@ -146,11 +146,8 @@ const GLOBAL_DATA_SCHEMAS = {
      * Global answers checking
      */
     const globalAnswersPath = path.join(GLOBAL_DATA_PATH, lang, 'answers.json')
-    const answers: GlobalAnswers = JSON.parse(
-      await fs.promises.readFile(
-        globalAnswersPath,
-        'utf8'
-      )
+    const answers: GlobalAnswersSchema = JSON.parse(
+      await fs.promises.readFile(globalAnswersPath, 'utf8')
     )
     validateSchema(
       GLOBAL_DATA_SCHEMAS.answers,
@@ -172,7 +169,7 @@ const GLOBAL_DATA_SCHEMAS = {
      * Domain checking
      */
     const pathToDomain = path.join(currentDomain.path, 'domain.json')
-    const domainObject: Domain = JSON.parse(
+    const domainObject: DomainSchema = JSON.parse(
       await fs.promises.readFile(pathToDomain, 'utf8')
     )
     validateSchema(
@@ -191,7 +188,7 @@ const GLOBAL_DATA_SCHEMAS = {
        */
       if (currentSkill) {
         const pathToSkill = path.join(currentSkill.path, 'skill.json')
-        const skillObject: Skill = JSON.parse(
+        const skillObject: SkillSchema = JSON.parse(
           await fs.promises.readFile(pathToSkill, 'utf8')
         )
         validateSchema(
@@ -210,7 +207,7 @@ const GLOBAL_DATA_SCHEMAS = {
 
         for (const file of skillConfigFiles) {
           const skillConfigPath = path.join(pathToSkillConfig, file)
-          const skillConfig: SkillConfig = JSON.parse(
+          const skillConfig: SkillConfigSchema = JSON.parse(
             await fs.promises.readFile(skillConfigPath, 'utf8')
           )
           validateSchema(

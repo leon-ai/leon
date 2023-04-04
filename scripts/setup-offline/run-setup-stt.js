@@ -9,6 +9,6 @@ import setupStt from './setup-stt'
   try {
     await setupStt()
   } catch (e) {
-    LogHelper.error(`Failed to setup offline STT: ${e}`)
+    LogHelper.error(`Failed to set up offline STT: ${e}`)
   }
 })()

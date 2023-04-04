@@ -9,6 +9,6 @@ import setupTts from './setup-tts'
   try {
     await setupTts()
   } catch (e) {
-    LogHelper.error(`Failed to setup offline TTS: ${e}`)
+    LogHelper.error(`Failed to set up offline TTS: ${e}`)
   }
 })()

@@ -40,12 +40,16 @@ export const watsonVoiceConfiguration = Type.Strict(
   )
 )
 
-export type AmazonVoiceConfiguration = Static<typeof amazonVoiceConfiguration>
-export type GoogleCloudVoiceConfiguration = Static<
+export type AmazonVoiceConfigurationSchema = Static<
+  typeof amazonVoiceConfiguration
+>
+export type GoogleCloudVoiceConfigurationSchema = Static<
   typeof googleCloudVoiceConfiguration
 >
-export type WatsonVoiceConfiguration = Static<typeof watsonVoiceConfiguration>
-export type VoiceConfiguration =
-  | AmazonVoiceConfiguration
-  | GoogleCloudVoiceConfiguration
-  | WatsonVoiceConfiguration
+export type WatsonVoiceConfigurationSchema = Static<
+  typeof watsonVoiceConfiguration
+>
+export type VoiceConfigurationSchema =
+  | AmazonVoiceConfigurationSchema
+  | GoogleCloudVoiceConfigurationSchema
+  | WatsonVoiceConfigurationSchema

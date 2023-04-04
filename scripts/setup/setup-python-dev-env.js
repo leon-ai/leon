@@ -11,9 +11,10 @@ import {
   PYTHON_BRIDGE_SRC_PATH,
   TCP_SERVER_SRC_PATH
 } from '@/constants'
+import { CPUArchitectures, OSTypes } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
-import { CPUArchitectures, OSHelper, OSTypes } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 /**
  * Set up development environment according to the given setup target
@@ -128,19 +129,19 @@ SPACY_MODELS.set('fr', {
 
   const pipfileMtime = fs.statSync(pipfilePath).mtime
   const hasDotVenv = fs.existsSync(dotVenvPath)
-  const { type: osType, cpuArchitecture } = OSHelper.getInformation()
+  const { type: osType, cpuArchitecture } = SystemHelper.getInformation()
   const installPythonPackages = async () => {
     LogHelper.info(`Installing Python packages from ${pipfilePath}.lock...`)
 
     // Delete .venv directory to reset the development environment
     if (hasDotVenv) {
       LogHelper.info(`Deleting ${dotVenvPath}...`)
-      fs.rmSync(dotVenvPath, { recursive: true, force: true })
+      await fs.promises.rm(dotVenvPath, { recursive: true, force: true })
       LogHelper.success(`${dotVenvPath} deleted`)
     }
 
     try {
-      await command(`pipenv install --verbose --site-packages`, {
+      await command('pipenv install --verbose --site-packages', {
         shell: true,
         stdio: 'inherit'
       })
@@ -154,21 +155,21 @@ SPACY_MODELS.set('fr', {
         LogHelper.info(
           'Installing Rust installer as it is needed for the "tokenizers" package for macOS ARM64 architecture...'
         )
-        await command(`curl https://sh.rustup.rs -sSf | sh -s -- -y`, {
+        await command('curl https://sh.rustup.rs -sSf | sh -s -- -y', {
           shell: true,
           stdio: 'inherit'
         })
         LogHelper.success('Rust installer installed')
 
         LogHelper.info('Reloading configuration from "$HOME/.cargo/env"...')
-        await command(`source "$HOME/.cargo/env"`, {
+        await command('source "$HOME/.cargo/env"', {
           shell: true,
           stdio: 'inherit'
         })
         LogHelper.success('Configuration reloaded')
 
         LogHelper.info('Checking Rust compiler version...')
-        await command(`rustc --version`, {
+        await command('rustc --version', {
           shell: true,
           stdio: 'inherit'
         })
@@ -210,7 +211,7 @@ SPACY_MODELS.set('fr', {
       await installPythonPackages()
     } else {
       if (fs.existsSync(dotProjectPath)) {
-        const dotProjectMtime = fs.statSync(dotProjectPath).mtime
+        const dotProjectMtime = (await fs.promises.stat(dotProjectPath)).mtime
 
         // Check if Python deps tree has been modified since the initial setup
         if (pipfileMtime > dotProjectMtime) {

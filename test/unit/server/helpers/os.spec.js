@@ -1,9 +1,9 @@
-import { OSHelper } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 describe('OS helper', () => {
   describe('get()', () => {
     test('returns information about the OS', () => {
-      const info = OSHelper.getInformation()
+      const info = SystemHelper.getInformation()
 
       expect(info.type).toBeOneOf(['windows', 'linux', 'macos'])
       expect(info.name).toBeOneOf(['Windows', 'Linux', 'macOS'])
@@ -14,7 +14,7 @@ describe('OS helper', () => {
       const o = jest.requireActual('os')
       o.type = jest.fn(() => 'Windows_NT')
 
-      expect(OSHelper.getInformation()).toEqual({
+      expect(SystemHelper.getInformation()).toEqual({
         name: 'Windows',
         type: 'windows'
       })
@@ -25,7 +25,7 @@ describe('OS helper', () => {
       const o = jest.requireActual('os')
       o.type = jest.fn(() => 'Linux')
 
-      expect(OSHelper.getInformation()).toEqual({
+      expect(SystemHelper.getInformation()).toEqual({
         name: 'Linux',
         type: 'linux'
       })
@@ -36,7 +36,7 @@ describe('OS helper', () => {
       const o = jest.requireActual('os')
       o.type = jest.fn(() => 'Darwin')
 
-      expect(OSHelper.getInformation()).toEqual({
+      expect(SystemHelper.getInformation()).toEqual({
         name: 'macOS',
         type: 'macos'
       })
@@ -45,7 +45,7 @@ describe('OS helper', () => {
 
   describe('cpus()', () => {
     test('returns the number of cores on the machine', () => {
-      expect(typeof OSHelper.getNumberOfCPUCores()).toBe('number')
+      expect(typeof SystemHelper.getNumberOfCPUCores()).toBe('number')
     })
   })
 })

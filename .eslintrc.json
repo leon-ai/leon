@@ -26,14 +26,29 @@
   "plugins": ["@typescript-eslint", "unicorn", "import"],
   "ignorePatterns": "*.spec.js",
   "rules": {
+    "@typescript-eslint/no-non-null-assertion": ["off"],
     "no-async-promise-executor": ["off"],
     "no-underscore-dangle": ["error", { "allowAfterThis": true }],
     "prefer-destructuring": ["error"],
     "comma-dangle": ["error", "never"],
     "semi": ["error", "never"],
     "object-curly-spacing": ["error", "always"],
-    "@typescript-eslint/explicit-function-return-type": "off",
     "unicorn/prefer-node-protocol": "error",
+    "@typescript-eslint/member-delimiter-style": [
+      "error",
+      {
+        "multiline": {
+          "delimiter": "none",
+          "requireLast": true
+        },
+        "singleline": {
+          "delimiter": "comma",
+          "requireLast": false
+        }
+      }
+    ],
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/consistent-type-definitions": "error",
     "import/no-named-as-default": "off",
     "import/no-named-as-default-member": "off",
     "import/order": [

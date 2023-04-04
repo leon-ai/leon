@@ -14,9 +14,10 @@ import {
   PYTHON_BRIDGE_BIN_NAME,
   TCP_SERVER_BIN_NAME
 } from '@/constants'
+import { OSTypes } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
-import { OSHelper, OSTypes } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 /**
  * Build binaries for the given OS according to the given build target
@@ -69,7 +70,7 @@ BUILD_TARGETS.set('tcp-server', {
   } = BUILD_TARGETS.get(givenBuildTarget)
   const buildPath = path.join(distPath, BINARIES_FOLDER_NAME)
 
-  const { type: osType } = OSHelper.getInformation()
+  const { type: osType } = SystemHelper.getInformation()
 
   /**
    * Install requirements

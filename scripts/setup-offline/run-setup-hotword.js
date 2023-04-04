@@ -9,6 +9,6 @@ import setupHotword from './setup-hotword'
   try {
     await setupHotword()
   } catch (e) {
-    LogHelper.error(`Failed to setup offline hotword: ${e}`)
+    LogHelper.error(`Failed to set up offline hotword: ${e}`)
   }
 })()

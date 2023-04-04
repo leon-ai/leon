@@ -11,7 +11,7 @@ const config = {
   server_host: import.meta.env.VITE_LEON_HOST,
   server_port: import.meta.env.VITE_LEON_PORT,
   min_decibels: -40, // Noise detection sensitivity
-  max_blank_time: 1000 // Maximum time to consider a blank (ms)
+  max_blank_time: 1_000 // Maximum time to consider a blank (ms)
 }
 const serverUrl =
   import.meta.env.VITE_LEON_NODE_ENV === 'production'
@@ -58,7 +58,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               rec.enabled = false
 
               // Ensure there are some data
-              if (blob.size >= 1000) {
+              if (blob.size >= 1_000) {
                 client.socket.emit('recognize', blob)
               }
             })

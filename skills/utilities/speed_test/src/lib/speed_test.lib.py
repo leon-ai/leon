@@ -323,7 +323,7 @@ class ServersRetrievalError(SpeedtestHTTPError):
 
 
 class InvalidServerIDType(SpeedtestException):
-    """Server ID used for filtering was not an integer"""
+    """HttpServer ID used for filtering was not an integer"""
 
 
 class NoMatchedServers(SpeedtestException):
@@ -335,7 +335,7 @@ class SpeedtestMiniConnectFailure(SpeedtestException):
 
 
 class InvalidSpeedtestMiniServer(SpeedtestException):
-    """Server provided as a speedtest mini server does not actually appear
+    """HttpServer provided as a speedtest mini server does not actually appear
     to be a speedtest mini server
     """
 
@@ -1042,7 +1042,7 @@ class SpeedtestResults(object):
     def csv_header(delimiter=','):
         """Return CSV Headers"""
 
-        row = ['Server ID', 'Sponsor', 'Server Name', 'Timestamp', 'Distance',
+        row = ['HttpServer ID', 'Sponsor', 'HttpServer Name', 'Timestamp', 'Distance',
                'Ping', 'Download', 'Upload', 'Share', 'IP Address']
         out = StringIO()
         writer = csv.writer(out, delimiter=delimiter, lineterminator='')
@@ -1394,7 +1394,7 @@ class Speedtest(object):
                         extension = [ext]
                         break
         if not urlparts or not extension:
-            raise InvalidSpeedtestMiniServer('Invalid Speedtest Mini Server: '
+            raise InvalidSpeedtestMiniServer('Invalid Speedtest Mini HttpServer: '
                                              '%s' % server)
 
         self.servers = [{
@@ -1501,7 +1501,7 @@ class Speedtest(object):
         self.results.server = best
 
         self._best.update(best)
-        printer('Best Server:\n%r' % best, debug=True)
+        printer('Best HttpServer:\n%r' % best, debug=True)
         return best
 
     def download(self, callback=do_nothing, threads=None):

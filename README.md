@@ -100,8 +100,8 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > - Skills
 > - The web app
 > - The hotword node
-> - The TCP server (for inter-process communication between Leon and third-party processes such as spaCy)
-> - The Python bridge (the connector between Python core and skills)
+> - The TCP server (for inter-process communication between Leon and third-party nodes such as spaCy)
+> - The Python bridge (the connector between the core and skills made with Python)
 
 ### What is Leon able to do?
 
@@ -113,7 +113,7 @@ Sounds good to you? Then let's get started!
 
 ## ☁️ Try with a Single-Click
 
-Gitpod will automatically setup an environment and run an instance for you.
+Gitpod will automatically set up an environment and run an instance for you.
 
 [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
 

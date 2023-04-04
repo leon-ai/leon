@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-import server from '@/core/http-server/server'
+import server from '@/core/http-server/http-server'
 
 const urlPrefix = `${process.env.LEON_HOST}:${process.env.LEON_PORT}/api`
 const queryUrl = `${urlPrefix}/query`

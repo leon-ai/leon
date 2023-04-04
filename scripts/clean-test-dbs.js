@@ -22,13 +22,13 @@ export default () =>
         try {
           // TODO: handle case where the memory folder contain multiple DB nodes
           const dbFolder = join(currentSkill.path, 'memory')
-          const dbTestFiles = fs
-            .readdirSync(dbFolder)
-            .filter((entity) => entity.indexOf('.spec.json') !== -1)
+          const dbTestFiles = (await fs.promises.readdir(dbFolder)).filter(
+            (entity) => entity.indexOf('.spec.json') !== -1
+          )
 
           if (dbTestFiles.length > 0) {
             LogHelper.info(`Deleting ${dbTestFiles[0]}...`)
-            fs.unlinkSync(join(dbFolder, dbTestFiles[0]))
+            await fs.promises.unlink(join(dbFolder, dbTestFiles[0]))
             LogHelper.success(`${dbTestFiles[0]} deleted`)
           }
         } catch (e) {
