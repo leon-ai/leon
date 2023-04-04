@@ -8,7 +8,11 @@ export default class Client {
     this._input = input
     this._suggestionContainer = document.querySelector('#suggestions-container')
     this.serverUrl = serverUrl
-    this.socket = io(this.serverUrl)
+    this.socket =
+      window.location.protocol === 'http:'
+        ? new WebSocket(`ws://${this.serverUrl.split('://')[1]}/ws`)
+        : new WebSocket(`wss://${this.serverUrl.split('://')[1]}/ws`)
+    // this.socket = io(this.serverUrl)
     this.history = localStorage.getItem('history')
     this.parsedHistory = []
     this.info = res
@@ -31,39 +35,63 @@ export default class Client {
     return this._recorder
   }
 
+  sendSocketMessage() {
+    // topic, message, id, sentAt, client
+    this.socket.emit('init', this.client)
+  }
+
   init(loader) {
     this.chatbot.init()
 
-    this.socket.on('connect', () => {
+    this.socket.onmessage = (event) => {
+      console.log('client connected', event)
+      // TODO
+      // this.sendSocketMessage('init')
+      // this.socket.emit('init', this.client)
+      // this.socket.send('init')
+    }
+
+    this.socket.addEventListener('open', () => {
+      console.log('client connected')
+      // TODO
+      // this.sendSocketMessage('init')
+      // this.socket.emit('init', this.client)
+      this.socket.send('init')
+    })
+
+    this.socket.addEventListener('connect', () => {
+      console.log('client connected2')
+      // TODO
+      // this.sendSocketMessage('init')
       this.socket.emit('init', this.client)
     })
 
-    this.socket.on('ready', () => {
+    this.socket.addEventListener('ready', () => {
       loader.stop()
     })
 
-    this.socket.on('answer', (data) => {
+    this.socket.addEventListener('answer', (data) => {
       this.chatbot.receivedFrom('leon', data)
     })
 
-    this.socket.on('suggest', (data) => {
+    this.socket.addEventListener('suggest', (data) => {
       data?.forEach((suggestionText) => {
         this.addSuggestion(suggestionText)
       })
     })
 
-    this.socket.on('is-typing', (data) => {
+    this.socket.addEventListener('is-typing', (data) => {
       this.chatbot.isTyping('leon', data)
     })
 
-    this.socket.on('recognized', (data, cb) => {
+    this.socket.addEventListener('recognized', (data, cb) => {
       this._input.value = data
       this.send('utterance')
 
       cb('string-received')
     })
 
-    this.socket.on('audio-forwarded', (data, cb) => {
+    this.socket.addEventListener('audio-forwarded', (data, cb) => {
       const ctx = new AudioContext()
       const source = ctx.createBufferSource()
 
@@ -108,7 +136,7 @@ export default class Client {
       cb('audio-received')
     })
 
-    this.socket.on('download', (data) => {
+    this.socket.addEventListener('download', (data) => {
       window.location = `${this.serverUrl}/api/v1/downloads?domain=${data.domain}&skill=${data.skill}`
     })
 

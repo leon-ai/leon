@@ -1,5 +1,6 @@
 import type { DefaultEventsMap } from 'socket.io/dist/typed-events'
 import { Server as SocketIOServer, Socket } from 'socket.io'
+import { WebSocketServer } from 'ws'
 
 import { LANG, HAS_STT, HAS_TTS, IS_DEVELOPMENT_ENV } from '@/constants'
 import {
@@ -41,11 +42,36 @@ export default class SocketServer {
   }
 
   public async init(): Promise<void> {
-    const io = IS_DEVELOPMENT_ENV
+    /**
+     * @see https://github.com/websockets/ws/blob/HEAD/doc/ws.md#class-websocketserver
+     */
+    const wsServer = new WebSocketServer({
+      server: HTTP_SERVER.httpServer,
+      path: '/ws'
+    })
+
+    wsServer.on('listening', () => {
+      console.log('listening...')
+    })
+
+    wsServer.on('connection', (socket) => {
+      /**
+       * @see https://github.com/websockets/ws/blob/HEAD/doc/ws.md#class-websocket
+       */
+      console.log('connected')
+
+      socket.send('connect')
+
+      socket.onmessage = (event): void => {
+        console.log('MESSAGE RECEIVED', event.data)
+      }
+    })
+
+    /*const io = IS_DEVELOPMENT_ENV
       ? new SocketIOServer(HTTP_SERVER.httpServer, {
           cors: { origin: `${HTTP_SERVER.host}:3000` }
         })
-      : new SocketIOServer(HTTP_SERVER.httpServer)
+      : new SocketIOServer(HTTP_SERVER.httpServer)*/
 
     let sttState = 'disabled'
     let ttsState = 'disabled'
@@ -71,7 +97,8 @@ export default class SocketServer {
       LogHelper.error(`Failed to load NLP models: ${e}`)
     }
 
-    io.on('connection', (socket) => {
+    // TODO
+    /*io.on('connection', (socket) => {
       LogHelper.title('Client')
       LogHelper.success('Connected')
 
@@ -141,6 +168,6 @@ export default class SocketServer {
         // TODO
         // deleteProvider(this.socket.id)
       })
-    })
+    })*/
   }
 }

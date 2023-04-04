@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', async () => {
               }
             )
 
-            client.socket.on('enable-record', () => {
+            client.socket.addEventListener('enable-record', () => {
               rec.hotwordTriggered = true
               rec.start()
               setTimeout(() => {

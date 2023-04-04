@@ -100,7 +100,8 @@
     "socket.io": "4.5.2",
     "socket.io-client": "4.5.2",
     "stt": "1.4.0",
-    "tree-kill": "1.2.2"
+    "tree-kill": "1.2.2",
+    "ws": "8.13.0"
   },
   "devDependencies": {
     "@nlpjs/utils": "4.24.1",
@@ -111,6 +112,7 @@
     "@types/fluent-ffmpeg": "2.1.20",
     "@types/node": "18.7.13",
     "@types/node-wav": "0.0.0",
+    "@types/ws": "8.5.4",
     "@typescript-eslint/eslint-plugin": "5.55.0",
     "@typescript-eslint/parser": "5.55.0",
     "cli-spinner": "0.2.10",
