@@ -118,6 +118,7 @@ export default class HTTPServer {
           }
         })
 
+        // TODO: reimplement skills routes once the new core is ready
         // server.generateSkillsRoutes(instance)
 
         next()
