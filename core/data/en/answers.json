@@ -3,8 +3,7 @@
   "answers": {
     "success": {},
     "errors": {
-      "not_found": "Sorry, it seems I cannot find that",
-      "nlu": "It might come from my natural language understanding, the error returned is: \"%error%\""
+      "not_found": "Sorry, it seems I cannot find that"
     },
     "synchronizer": {
       "syncing_direct": "I will now synchronize the downloaded content on your current device. Don't worry, I will let you know once I'm done",
@@ -13,10 +12,10 @@
       "synced_google_drive": "The new content is now available on Google Drive"
     },
     "random_errors": [
-      "Sorry, there is a problem with my system",
-      "Sorry, I don't work correctly",
-      "Sorry, you need to fix me",
-      "Sorry, I cannot do that because I'm broken"
+      "Sorry, there is a problem with my system. Please check my logs for further details",
+      "Sorry, I don't work correctly. Please look at my logs for more information",
+      "Sorry, you need to fix me. Please take a look at my logs for further information",
+      "Sorry, I cannot do that because I'm broken. Please check my logs for further details"
     ],
     "random_skill_errors": [
       "Sorry, it seems I have a problem with the \"%skill_name%\" skill from the \"%domain_name%\" domain",

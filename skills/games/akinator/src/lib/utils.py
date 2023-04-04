@@ -121,4 +121,4 @@ def raise_connection_error(response):
     elif response == "KO - ELEM LIST IS EMPTY" or response == "WARN - NO QUESTION":
         raise AkiNoQuestions("\"Akinator.step\" reached 79. No more questions")
     else:
-        raise AkiConnectionFailure("An unknown error has occured. Server response: {}".format(response))
+        raise AkiConnectionFailure("An unknown error has occured. HttpServer response: {}".format(response))

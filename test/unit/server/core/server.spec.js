@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 
-import server from '@/core/http-server/server'
+import server from '@/core/http-server/http-server'
 
 describe('server', () => {
   describe('init()', () => {

@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import type { ShortLanguageCode } from '@/helpers/lang-helper'
+import type { ShortLanguageCode } from '@/types'
 import { GLOBAL_DATA_PATH } from '@/constants'
 
 /**

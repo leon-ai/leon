@@ -100,7 +100,7 @@ export default class Client {
                   }
                 }
               }
-            }, 1000)
+            }, 1_000)
           }, data.duration + 500)
         }
       })

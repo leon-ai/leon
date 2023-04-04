@@ -7,7 +7,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 /**
- * Setup skills configuration
+ * Set up skills configuration
  */
 export default () =>
   new Promise(async (resolve, reject) => {
@@ -31,10 +31,10 @@ export default () =>
           // Check if the config and config.sample file exist
           if (fs.existsSync(configFile) && fs.existsSync(configSampleFile)) {
             const config = JSON.parse(
-              fs.readFileSync(configFile, 'utf8')
+              await fs.promises.readFile(configFile, 'utf8')
             )?.configurations
             const configSample = JSON.parse(
-              fs.readFileSync(configSampleFile, 'utf8')
+              await fs.promises.readFile(configSampleFile, 'utf8')
             )?.configurations
             const configKeys = Object.keys(config)
             const configSampleKeys = Object.keys(configSample)

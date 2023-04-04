@@ -50,6 +50,6 @@ export const globalAnswersSchemaObject = Type.Strict(
   })
 )
 
-export type GlobalEntity = Static<typeof globalEntitySchemaObject>
-export type GlobalResolver = Static<typeof globalResolverSchemaObject>
-export type GlobalAnswers = Static<typeof globalAnswersSchemaObject>
+export type GlobalEntitySchema = Static<typeof globalEntitySchemaObject>
+export type GlobalResolverSchema = Static<typeof globalResolverSchemaObject>
+export type GlobalAnswersSchema = Static<typeof globalAnswersSchemaObject>

@@ -13,7 +13,7 @@ import getos from 'getos'
 
 import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
-import { OSHelper } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 import {
   PYTHON_BRIDGE_BIN_PATH,
   TCP_SERVER_BIN_PATH,
@@ -30,7 +30,7 @@ dotenv.config()
 ;(async () => {
   try {
     const nodeMinRequiredVersion = '16'
-    const npmMinRequiredVersion = '5'
+    const npmMinRequiredVersion = '8'
     const minimumRequiredRAM = 4
     const flitePath = 'bin/flite/flite'
     const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
@@ -142,7 +142,7 @@ dotenv.config()
       osName: osName(),
       distro: null
     }
-    const totalRAMInGB = OSHelper.getTotalRAM()
+    const totalRAMInGB = SystemHelper.getTotalRAM()
 
     if (totalRAMInGB < minimumRequiredRAM) {
       report.can_run.v = false
@@ -215,7 +215,9 @@ dotenv.config()
       const p = await command(
         `${PYTHON_BRIDGE_BIN_PATH} "${path.join(
           process.cwd(),
-          'scripts/assets/intent-object.json'
+          'scripts',
+          'assets',
+          'intent-object.json'
         )}"`,
         { shell: true }
       )
@@ -310,7 +312,8 @@ dotenv.config()
 
       if (
         !fs.existsSync(globalResolversNlpModelPath) ||
-        !Object.keys(fs.readFileSync(globalResolversNlpModelPath)).length
+        !Object.keys(await fs.promises.readFile(globalResolversNlpModelPath))
+          .length
       ) {
         const state = 'Global resolvers NLP model not found or broken'
 
@@ -338,7 +341,8 @@ dotenv.config()
 
       if (
         !fs.existsSync(skillsResolversNlpModelPath) ||
-        !Object.keys(fs.readFileSync(skillsResolversNlpModelPath)).length
+        !Object.keys(await fs.promises.readFile(skillsResolversNlpModelPath))
+          .length
       ) {
         const state = 'Skills resolvers NLP model not found or broken'
 
@@ -366,7 +370,7 @@ dotenv.config()
 
       if (
         !fs.existsSync(mainNlpModelPath) ||
-        !Object.keys(fs.readFileSync(mainNlpModelPath)).length
+        !Object.keys(await fs.promises.readFile(mainNlpModelPath)).length
       ) {
         const state = 'Main NLP model not found or broken'
 
@@ -393,7 +397,7 @@ dotenv.config()
       LogHelper.info('Amazon Polly TTS')
 
       try {
-        const json = JSON.parse(fs.readFileSync(amazonPath))
+        const json = JSON.parse(await fs.promises.readFile(amazonPath))
         if (
           json.credentials.accessKeyId === '' ||
           json.credentials.secretAccessKey === ''
@@ -411,7 +415,7 @@ dotenv.config()
       LogHelper.info('Google Cloud TTS/STT')
 
       try {
-        const json = JSON.parse(fs.readFileSync(googleCloudPath))
+        const json = JSON.parse(await fs.promises.readFile(googleCloudPath))
         const results = []
         Object.keys(json).forEach((item) => {
           if (json[item] === '') results.push(false)
@@ -432,7 +436,7 @@ dotenv.config()
       LogHelper.info('Watson TTS')
 
       try {
-        const json = JSON.parse(fs.readFileSync(watsonTtsPath))
+        const json = JSON.parse(await fs.promises.readFile(watsonTtsPath))
         const results = []
         Object.keys(json).forEach((item) => {
           if (json[item] === '') results.push(false)
@@ -453,7 +457,7 @@ dotenv.config()
       if (!fs.existsSync(flitePath)) {
         report.can_offline_tts.v = false
         LogHelper.warning(
-          `Cannot find ${flitePath}. You can setup the offline TTS by running: "npm run setup:offline-tts"\n`
+          `Cannot find ${flitePath}. You can set up the offline TTS by running: "npm run setup:offline-tts"\n`
         )
       } else {
         LogHelper.success(`Found Flite at ${flitePath}\n`)
@@ -462,7 +466,7 @@ dotenv.config()
       LogHelper.info('Watson STT')
 
       try {
-        const json = JSON.parse(fs.readFileSync(watsonSttPath))
+        const json = JSON.parse(await fs.promises.readFile(watsonSttPath))
         const results = []
         Object.keys(json).forEach((item) => {
           if (json[item] === '') results.push(false)

@@ -1,15 +1,5 @@
 import { langs } from '@@/core/langs.json'
-
-/**
- * ISO 639-1 (Language codes) - ISO 3166-1 (Country Codes)
- * @see https://www.iso.org/iso-639-language-codes.html
- * @see https://www.iso.org/iso-3166-country-codes.html
- */
-
-type Languages = typeof langs
-export type LongLanguageCode = keyof Languages
-type Language = Languages[LongLanguageCode]
-export type ShortLanguageCode = Language['short']
+import type { LongLanguageCode, ShortLanguageCode } from '@/types'
 
 export class LangHelper {
   /**
@@ -27,9 +17,7 @@ export class LangHelper {
    * @param shortCode The short language code of the language
    * @example getLongCode('en') // en-US
    */
-  public static getLongCode(
-    shortCode: ShortLanguageCode
-  ): LongLanguageCode | null {
+  public static getLongCode(shortCode: ShortLanguageCode): LongLanguageCode {
     for (const longLanguage in langs) {
       const longLanguageType = longLanguage as LongLanguageCode
       const lang = langs[longLanguageType]
@@ -39,7 +27,7 @@ export class LangHelper {
       }
     }
 
-    return null
+    return 'en-US'
   }
 
   /**

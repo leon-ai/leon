@@ -23,7 +23,14 @@
         "That works",
         "Go ahead",
         "Why not",
-        "Please"
+        "Please",
+        "Absolutely",
+        "Precisely",
+        "Spot on",
+        "Undoubtedly",
+        "Certainly",
+        "Without a doubt",
+        "Definitely"
       ],
       "value": true
     },
@@ -37,7 +44,10 @@
         "No thanks",
         "No I'm fine",
         "Hell no",
-        "Please do not"
+        "Please do not",
+        "I disagree",
+        "Negative",
+        "Not at all"
       ],
       "value": false
     }

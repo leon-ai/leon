@@ -4,23 +4,23 @@ import path from 'node:path'
 import { LogHelper } from '@/helpers/log-helper'
 
 /**
- * Setup Leon's core configuration
+ * Set up Leon's core configuration
  */
 export default () =>
-  new Promise((resolve) => {
+  new Promise(async (resolve) => {
     LogHelper.info('Configuring core...')
 
     const dir = 'core/config'
-    const list = (dir) => {
-      const entities = fs.readdirSync(dir)
+    const list = async (dir) => {
+      const entities = await fs.promises.readdir(dir)
 
       // Browse core config entities
       for (let i = 0; i < entities.length; i += 1) {
         const file = `${entities[i].replace('.sample.json', '.json')}`
         // Recursive if the entity is a directory
         const way = path.join(dir, entities[i])
-        if (fs.statSync(way).isDirectory()) {
-          list(way)
+        if ((await fs.promises.stat(way)).isDirectory()) {
+          await list(way)
         } else if (
           entities[i].indexOf('.sample.json') !== -1 &&
           !fs.existsSync(`${dir}/${file}`)
@@ -40,6 +40,6 @@ export default () =>
       }
     }
 
-    list(dir)
+    await list(dir)
     resolve()
   })

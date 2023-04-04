@@ -18,80 +18,77 @@ const skillDataTypes = [
   Type.Literal('global_resolver'),
   Type.Literal('entity')
 ]
-const skillCustomEntityTypes = [
-  Type.Array(
-    Type.Object(
-      {
-        type: Type.Literal('trim'),
-        name: Type.String({ minLength: 1 }),
-        conditions: Type.Array(
-          Type.Object(
-            {
-              type: Type.Union([
-                Type.Literal('between'),
-                Type.Literal('after'),
-                Type.Literal('after_first'),
-                Type.Literal('after_last'),
-                Type.Literal('before'),
-                Type.Literal('before_first'),
-                Type.Literal('before_last')
-              ]),
-              from: Type.Optional(
-                Type.Union([
-                  Type.Array(Type.String({ minLength: 1 })),
-                  Type.String({ minLength: 1 })
-                ])
-              ),
-              to: Type.Optional(
-                Type.Union([
-                  Type.Array(Type.String({ minLength: 1 })),
-                  Type.String({ minLength: 1 })
-                ])
-              )
-            },
-            { additionalProperties: false }
+const skillCustomEnumEntityType = Type.Object(
+  {
+    type: Type.Literal('enum'),
+    name: Type.String(),
+    options: Type.Record(
+      Type.String({ minLength: 1 }),
+      Type.Object({
+        synonyms: Type.Array(Type.String({ minLength: 1 }))
+      })
+    )
+  },
+  {
+    additionalProperties: false,
+    description:
+      'Enum: define a bag of words and synonyms that should match your new entity.'
+  }
+)
+const skillCustomRegexEntityType = Type.Object(
+  {
+    type: Type.Literal('regex'),
+    name: Type.String({ minLength: 1 }),
+    regex: Type.String({ minLength: 1 })
+  },
+  {
+    additionalProperties: false,
+    description: 'Regex: you can create an entity based on a regex.'
+  }
+)
+const skillCustomTrimEntityType = Type.Object(
+  {
+    type: Type.Literal('trim'),
+    name: Type.String({ minLength: 1 }),
+    conditions: Type.Array(
+      Type.Object(
+        {
+          type: Type.Union([
+            Type.Literal('between'),
+            Type.Literal('after'),
+            Type.Literal('after_first'),
+            Type.Literal('after_last'),
+            Type.Literal('before'),
+            Type.Literal('before_first'),
+            Type.Literal('before_last')
+          ]),
+          from: Type.Optional(
+            Type.Union([
+              Type.Array(Type.String({ minLength: 1 })),
+              Type.String({ minLength: 1 })
+            ])
+          ),
+          to: Type.Optional(
+            Type.Union([
+              Type.Array(Type.String({ minLength: 1 })),
+              Type.String({ minLength: 1 })
+            ])
           )
-        )
-      },
-      {
-        additionalProperties: false,
-        description:
-          'Trim: you can pick up a data from an utterance by clearly defining conditions (e.g: pick up what is after the last “with” word of the utterance).'
-      }
+        },
+        {
+          additionalProperties: false,
+          description:
+            'Trim: you can pick up a data from an utterance by clearly defining conditions (e.g: pick up what is after the last "with" word of the utterance).'
+        }
+      )
     )
-  ),
-  Type.Array(
-    Type.Object(
-      {
-        type: Type.Literal('regex'),
-        name: Type.String({ minLength: 1 }),
-        regex: Type.String({ minLength: 1 })
-      },
-      {
-        additionalProperties: false,
-        description: 'Regex: you can create an entity based on a regex.'
-      }
-    )
-  ),
-  Type.Array(
-    Type.Object(
-      {
-        type: Type.Literal('enum'),
-        name: Type.String(),
-        options: Type.Record(
-          Type.String({ minLength: 1 }),
-          Type.Object({
-            synonyms: Type.Array(Type.String({ minLength: 1 }))
-          })
-        )
-      },
-      {
-        additionalProperties: false,
-        description:
-          'Enum: define a bag of words and synonyms that should match your new entity.'
-      }
-    )
-  )
+  },
+  { additionalProperties: false }
+)
+const skillCustomEntityTypes = [
+  Type.Array(skillCustomTrimEntityType),
+  Type.Array(skillCustomRegexEntityType),
+  Type.Array(skillCustomEnumEntityType)
 ]
 
 export const domainSchemaObject = Type.Strict(
@@ -255,7 +252,16 @@ export const skillConfigSchemaObject = Type.Strict(
   })
 )
 
-export type Domain = Static<typeof domainSchemaObject>
-export type Skill = Static<typeof skillSchemaObject>
-export type SkillConfig = Static<typeof skillConfigSchemaObject>
-export type SkillBridge = Static<typeof skillSchemaObject.bridge>
+export type DomainSchema = Static<typeof domainSchemaObject>
+export type SkillSchema = Static<typeof skillSchemaObject>
+export type SkillConfigSchema = Static<typeof skillConfigSchemaObject>
+export type SkillBridgeSchema = Static<typeof skillSchemaObject.bridge>
+export type SkillCustomTrimEntityTypeSchema = Static<
+  typeof skillCustomTrimEntityType
+>
+export type SkillCustomRegexEntityTypeSchema = Static<
+  typeof skillCustomRegexEntityType
+>
+export type SkillCustomEnumEntityTypeSchema = Static<
+  typeof skillCustomEnumEntityType
+>

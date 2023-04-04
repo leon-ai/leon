@@ -13,10 +13,10 @@
       "synced_google_drive": "Le nouveau contenu est maintenant disponible sur Google Drive"
     },
     "random_errors": [
-      "Désolé, il y a un problème avec mon système",
-      "Désolé, je ne fonctionne pas correctement",
-      "Désolé, vous devez me réparer",
-      "Désolé, je ne peux aboutir à votre demande parce que je suis cassé"
+      "Désolé, il y a un problème avec mon système. Veuillez consulter mes logs pour plus de détails",
+      "Désolé, je ne fonctionne pas correctement. Merci de regarder mes logs pour plus d'information",
+      "Désolé, vous devez me réparer. Veuillez vérifier mes logs pour en savoir plus",
+      "Désolé, je ne peux aboutir à votre demande parce que je suis cassé. Regardez mes logs pour plus de détails"
     ],
     "random_skill_errors": [
       "Désolé, il semblerait y avoir un problème avec le skill \"%skill_name%\" du domaine \"%domain_name%\"",

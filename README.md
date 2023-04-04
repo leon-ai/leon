@@ -28,7 +28,39 @@ _<p align="center">Your open-source personal assistant.</p>_
   <a href="https://blog.getleon.ai/the-story-behind-leon/">Story</a>
 </p>
 
-<br>
+---
+
+## Current State
+
+### Why is there a small amount of contributors?
+
+I'm taking a lot of time to work on the new core of Leon due to personal reasons. I can only work on it after work and on weekends. Hence, **I'm blocking any potential contribution as the whole core of Leon is coming with many breaking changes**. Many of you are willing to contribute in Leon (create new skills, help to improve the core, translations and so on...), a big thanks to every one of you!
+
+I wish one day I could work on Leon full time, but it's not possible at the moment as I need to pay my bills. I have some ideas about how to monetize Leon in the future (Leon's core will always remain open source), but before to get there there is still a long way to go.
+
+Until then, any financial support by [sponsoring Leon](http://sponsor.getleon.ai) is much appreciated 🙂
+
+### How about large language models and Leon?
+
+Since AI gained in popularity and large language models are getting more and more traction, many of you joined our community. A huge welcome to all of you! 🤗
+
+At the moment, Leon's NLU will remain intents first with his own model without relying on an LLM. It is important that Leon can run 100% offline and I'm confident that with the downsizing techniques such as quantization Leon will sooner or later work with LLMs at his core and still be able to run on edge.
+
+Here is how LLMs may help Leon in the future:
+
+- Intent fallback: when an utterance cannot match an intent, then rely on an LLM to provide results.
+- New named entity recognition engine: provide a better solution to extract entities from utterances such as fruits, numbers, cities, durations, persons, etc.
+- Skill features: let skills leverage LLMs to provide out-of-the-box NLP features such as summarization, translation, sentiment analysis and so on...
+- Skill building: LLMs can help to develop skills such as paraphrasing utterance samples, translate answers, convert code from our Python bridge to the upcoming JavaScript bridge and vice versa, etc.
+- More...
+
+### What's Next?
+
+Once the new core released, we'll work on the community aspect of Leon. For example, better organize our [Discord](https://discord.gg/MNQqqKg), planify regular calls, work on skills together, etc. It is very important for Leon to have a real community. At that moment, the skills platform will already be online, so it'll be easier to sync our progress and publish new skills.
+
+- Feel free to check out the Git development branches and our [next major milestones](https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/#whats-next).
+- And the [detailed roadmap](http://roadmap.getleon.ai).
+
 <h2 align="center">📢 Notice 📢</h2>
 <p align="center">
   <a href="https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/"><img width="400" src="https://blog.getleon.ai/static/a62ac28a01cb6898e299dced40875a68/c1b63/beta-7.png" /></a>
@@ -68,8 +100,8 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > - Skills
 > - The web app
 > - The hotword node
-> - The TCP server (for inter-process communication between Leon and third-party processes such as spaCy)
-> - The Python bridge (the connector between Python core and skills)
+> - The TCP server (for inter-process communication between Leon and third-party nodes such as spaCy)
+> - The Python bridge (the connector between the core and skills made with Python)
 
 ### What is Leon able to do?
 
@@ -81,7 +113,7 @@ Sounds good to you? Then let's get started!
 
 ## ☁️ Try with a Single-Click
 
-Gitpod will automatically setup an environment and run an instance for you.
+Gitpod will automatically set up an environment and run an instance for you.
 
 [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
 
@@ -186,16 +218,9 @@ You'll find a write-up on this [blog post](https://blog.getleon.ai/the-story-beh
         <sub><sup>100 USD / month</sup></sub>
       </td>
       <td align="center" valign="middle" width="128">
-        <a href="https://github.com/KeithIMyers">
-          <img src="https://github.com/KeithIMyers.png?size=128" />
-          Keith Myers
-        </a><br>
-        <sub><sup>10 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
-        <a href="https://github.com/andrinmeier">
-          <img src="https://github.com/andrinmeier.png?size=128" />
-          Andrin Meier
+        <a href="https://github.com/herbundkraut">
+          <img src="https://github.com/herbundkraut.png?size=128" />
+          herbundkraut
         </a><br>
         <sub><sup>10 USD / month</sup></sub>
       </td>

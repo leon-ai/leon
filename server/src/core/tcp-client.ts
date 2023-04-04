@@ -2,13 +2,19 @@ import Net from 'node:net'
 import { EventEmitter } from 'node:events'
 
 import { IS_PRODUCTION_ENV } from '@/constants'
+import { OSTypes } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
-import { OSHelper, OSTypes } from '@/helpers/os-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 // Time interval between each try (in ms)
 const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
 // Number of retries to connect to the TCP server
 const RETRIES_NB = IS_PRODUCTION_ENV ? 8 : 30
+
+interface ChunkData {
+  topic: string
+  data: unknown
+}
 
 export default class TCPClient {
   private static instance: TCPClient
@@ -49,7 +55,7 @@ export default class TCPClient {
       this.ee.emit('connected', null)
     })
 
-    this.tcpSocket.on('data', (chunk: { topic: string; data: unknown }) => {
+    this.tcpSocket.on('data', (chunk: ChunkData) => {
       LogHelper.title('TCP Client')
       LogHelper.info(`Received data: ${String(chunk)}`)
 
@@ -63,7 +69,7 @@ export default class TCPClient {
       if (err.code === 'ECONNREFUSED') {
         this.reconnectCounter += 1
 
-        const { type: osType } = OSHelper.getInformation()
+        const { type: osType } = SystemHelper.getInformation()
 
         if (this.reconnectCounter >= RETRIES_NB) {
           LogHelper.error('Failed to connect to the TCP server')
@@ -76,7 +82,7 @@ export default class TCPClient {
           if (this.reconnectCounter >= 5) {
             if (osType === OSTypes.MacOS) {
               LogHelper.warning(
-                'The cold start of the TCP server can take a few more seconds on macOS. It should be a one time think, no worries'
+                'The cold start of the TCP server can take a few more seconds on macOS. It should be a one-time thing, no worries'
               )
             }
           }
