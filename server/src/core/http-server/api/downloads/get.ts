@@ -1,18 +1,40 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import type { FastifyPluginAsync, FastifySchema } from 'fastify'
 import archiver from 'archiver'
+import { Type } from '@sinclair/typebox'
+import type { Static } from '@sinclair/typebox'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
+import type { APIOptions } from '@/core/http-server/http-server'
 
-const getDownloads = async (fastify, options) => {
-  fastify.get(
-    `/api/${options.apiVersion}/downloads`,
-    async (request, reply) => {
+const getDownloadsSchema = {
+  querystring: Type.Object({
+    domain: Type.String(),
+    skill: Type.String()
+  })
+} satisfies FastifySchema
+
+interface GetDownloadsSchema {
+  querystring: Static<typeof getDownloadsSchema.querystring>
+}
+
+export const getDownloads: FastifyPluginAsync<APIOptions> = async (
+  fastify,
+  options
+) => {
+  fastify.route<{
+    Querystring: GetDownloadsSchema['querystring']
+  }>({
+    method: 'GET',
+    url: `/api/${options.apiVersion}/downloads`,
+    schema: getDownloadsSchema,
+    handler: async (request, reply) => {
       LogHelper.title('GET /downloads')
 
-      const clean = async (dir, files) => {
+      const clean = async (dir: string, files: string[]): Promise<void> => {
         LogHelper.info('Cleaning skill download directory...')
         for (let i = 0; i < files.length; i += 1) {
           await fs.promises.unlink(`${dir}/${files[i]}`)
@@ -57,8 +79,8 @@ const getDownloads = async (fastify, options) => {
 
               for (let i = 0; i < domainsFiles.length; i += 1) {
                 if (
-                  domainsFiles[i].indexOf('.zip') !== -1 &&
-                  domainsFiles[i].indexOf(zipSlug) !== -1
+                  domainsFiles[i]?.indexOf('.zip') !== -1 &&
+                  domainsFiles[i]?.indexOf(zipSlug) !== -1
                 ) {
                   await fs.promises.unlink(`${dlDomainDir}/${domainsFiles[i]}`)
                   LogHelper.success(`${domainsFiles[i]} archive deleted`)
@@ -72,18 +94,14 @@ const getDownloads = async (fastify, options) => {
               const archive = archiver('zip', { zlib: { level: 9 } })
 
               // When the archive is ready
-              output.on('close', () => {
+              output.on('close', async () => {
                 LogHelper.info(`${zipName} is downloading...`)
-                reply.download(zipFile, async (err) => {
-                  if (err) LogHelper.error(err)
-
-                  LogHelper.success(`${zipName} downloaded`)
-
-                  await clean(downloadsDir, files)
-                })
+                reply.download(zipFile)
+                LogHelper.success(`${zipName} downloaded`)
+                await clean(downloadsDir, files)
               })
               archive.on('error', (err) => {
-                LogHelper.error(err)
+                LogHelper.error(err.message)
               })
 
               // Add the content to the archive
@@ -98,16 +116,15 @@ const getDownloads = async (fastify, options) => {
               archive.finalize()
             }
           } catch (error) {
-            if (error.code === 'ENOENT') {
-              message = 'There is no content to download for this skill.'
-              LogHelper.error(message)
-              reply.code(404).send({
-                success: false,
-                status: 404,
-                code: 'skill_dir_not_found',
-                message
-              })
-            }
+            message = 'There is no content to download for this skill.'
+            LogHelper.error(message)
+            reply.code(404).send({
+              success: false,
+              status: 404,
+              code: 'skill_dir_not_found',
+              message
+            })
+
             LogHelper.error(message)
           }
         } else {
@@ -131,7 +148,5 @@ const getDownloads = async (fastify, options) => {
         })
       }
     }
-  )
+  })
 }
-
-export default getDownloads

@@ -1,19 +1,36 @@
 import { join } from 'node:path'
 
-import Fastify from 'fastify'
+import Fastify, { FastifySchema } from 'fastify'
 import fastifyStatic from '@fastify/static'
+import { Type } from '@sinclair/typebox'
+import type { Static } from '@sinclair/typebox'
 
 import { version } from '@@/package.json'
-import { LEON_NODE_ENV, HAS_LOGGER } from '@/constants'
+import { LEON_NODE_ENV, HAS_LOGGER, HAS_OVER_HTTP } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
-import corsMidd from '@/core/http-server/plugins/cors'
-import otherMidd from '@/core/http-server/plugins/other'
-import infoPlugin from '@/core/http-server/api/info'
-import downloadsPlugin from '@/core/http-server/api/downloads'
-// import keyMidd from '@/core/http-server/plugins/key'
+import { corsMidd } from '@/core/http-server/plugins/cors'
+import { otherMidd } from '@/core/http-server/plugins/other'
+import { infoPlugin } from '@/core/http-server/api/info'
+import { downloadsPlugin } from '@/core/http-server/api/downloads'
+import { keyMidd } from '@/core/http-server/plugins/key'
+import { NLU, BRAIN } from '@/core'
 
 const API_VERSION = 'v1'
+
+export interface APIOptions {
+  apiVersion: string
+}
+
+const postQuerySchema = {
+  body: Type.Object({
+    utterance: Type.String()
+  })
+} satisfies FastifySchema
+
+interface PostQuerySchema {
+  body: Static<typeof postQuerySchema.body>
+}
 
 export default class HTTPServer {
   private static instance: HTTPServer
@@ -50,9 +67,6 @@ export default class HTTPServer {
     const sLogger = !HAS_LOGGER ? 'disabled' : 'enabled'
     LogHelper.info(`Collaborative logger ${sLogger}`)
 
-    // TODO
-    // await addProvider('1')
-
     await this.bootstrap()
   }
 
@@ -72,37 +86,43 @@ export default class HTTPServer {
     this.fastify.register(infoPlugin, { apiVersion: API_VERSION })
     this.fastify.register(downloadsPlugin, { apiVersion: API_VERSION })
 
-    // TODO: HTTP API
-    /*if (HAS_OVER_HTTP) {
-      server.fastify.register((instance, opts, next) => {
+    if (HAS_OVER_HTTP) {
+      this.fastify.register((instance, _opts, next) => {
         instance.addHook('preHandler', keyMidd)
 
-        instance.post('/api/query', async (request, reply) => {
-          const { utterance } = request.body
+        instance.route<{
+          Body: PostQuerySchema['body']
+        }>({
+          method: 'POST',
+          url: '/api/query',
+          schema: postQuerySchema,
+          handler: async (request, reply) => {
+            const { utterance } = request.body
 
-          try {
-            // TODO
-            BRAIN.isMuted = true
-            const data = await mainProvider.nlu.process(utterance)
+            try {
+              BRAIN.isMuted = true
+              const data = await NLU.process(utterance)
 
-            reply.send({
-              ...data,
-              success: true
-            })
-          } catch (e) {
-            reply.statusCode = 500
-            reply.send({
-              message: e.message,
-              success: false
-            })
+              reply.send({
+                ...data,
+                success: true
+              })
+            } catch (error) {
+              const message = error instanceof Error ? error.message : error
+              reply.statusCode = 500
+              reply.send({
+                message,
+                success: false
+              })
+            }
           }
         })
 
-        server.generateSkillsRoutes(instance)
+        // server.generateSkillsRoutes(instance)
 
         next()
       })
-    }*/
+    }
 
     try {
       await this.listen()
