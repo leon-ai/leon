@@ -1,6 +1,13 @@
-import { io } from 'socket.io-client'
+// import { io } from 'socket.io-client'
 
 import Chatbot from './chatbot'
+
+const WS_READY_STATES = {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSING: 2,
+  CLOSED: 3
+}
 
 export default class Client {
   constructor(client, serverUrl, input, res) {
@@ -35,109 +42,107 @@ export default class Client {
     return this._recorder
   }
 
-  sendSocketMessage() {
-    // topic, message, id, sentAt, client
-    this.socket.emit('init', this.client)
+  sendSocketMessage(event, data) {
+    if (this.socket.readyState !== WS_READY_STATES.OPEN) {
+      console.error('Socket not ready')
+      return
+    }
+
+    this.socket.send(
+      JSON.stringify({
+        event,
+        data,
+        sentAt: Date.now(),
+        client: this.client
+      })
+    )
   }
 
   init(loader) {
     this.chatbot.init()
 
-    this.socket.onmessage = (event) => {
-      console.log('client connected', event)
-      // TODO
-      // this.sendSocketMessage('init')
-      // this.socket.emit('init', this.client)
-      // this.socket.send('init')
+    const eventHandlers = {
+      ready: () => {
+        loader.stop()
+      },
+      answer: (data) => {
+        this.chatbot.receivedFrom('leon', data)
+      },
+      suggest: (data) => {
+        data?.forEach((suggestionText) => {
+          this.addSuggestion(suggestionText)
+        })
+      },
+      'is-typing': (data) => {
+        this.chatbot.isTyping('leon', data)
+      },
+      recognized: (data, cb) => {
+        this._input.value = data
+        this.send('utterance')
+
+        cb('string-received')
+      },
+      'audio-forwarded': (data, cb) => {
+        const ctx = new AudioContext()
+        const source = ctx.createBufferSource()
+
+        ctx.decodeAudioData(data.buffer, (buffer) => {
+          source.buffer = buffer
+
+          source.connect(ctx.destination)
+          source.start(0)
+
+          /**
+           * When the after speech option is enabled and
+           * the answer is a final one
+           */
+          if (this.info.after_speech && data.is_final_answer) {
+            // Enable recording after the speech + 500ms
+            setTimeout(() => {
+              this._recorder.start()
+              this._recorder.enabled = true
+
+              // Check every second if the recorder is enabled to stop it
+              const id = setInterval(() => {
+                if (this._recorder.enabled) {
+                  if (this._recorder.countSilenceAfterTalk <= 8) {
+                    // Stop recording if there was no noise for 8 seconds
+                    if (this._recorder.countSilenceAfterTalk === 8) {
+                      this._recorder.stop()
+                      this._recorder.enabled = false
+                      this._recorder.countSilenceAfterTalk = 0
+                      clearInterval(id)
+                    } else if (!this._recorder.noiseDetected) {
+                      this._recorder.countSilenceAfterTalk += 1
+                    } else {
+                      clearInterval(id)
+                    }
+                  }
+                }
+              }, 1_000)
+            }, data.duration + 500)
+          }
+        })
+
+        cb('audio-received')
+      },
+      download: (data) => {
+        window.location = `${this.serverUrl}/api/v1/downloads?domain=${data.domain}&skill=${data.skill}`
+      }
     }
 
     this.socket.addEventListener('open', () => {
-      console.log('client connected')
-      // TODO
-      // this.sendSocketMessage('init')
-      // this.socket.emit('init', this.client)
-      this.socket.send('init')
-    })
+      this.sendSocketMessage('init', this.client)
 
-    this.socket.addEventListener('connect', () => {
-      console.log('client connected2')
-      // TODO
-      // this.sendSocketMessage('init')
-      this.socket.emit('init', this.client)
-    })
+      this.socket.addEventListener('message', (message) => {
+        const { event, data } = JSON.parse(message.data)
+        console.log('message', message)
 
-    this.socket.addEventListener('ready', () => {
-      loader.stop()
-    })
+        console.log('event', event)
+        console.log('data', data)
 
-    this.socket.addEventListener('answer', (data) => {
-      this.chatbot.receivedFrom('leon', data)
-    })
-
-    this.socket.addEventListener('suggest', (data) => {
-      data?.forEach((suggestionText) => {
-        this.addSuggestion(suggestionText)
+        eventHandlers[event](data)
       })
-    })
-
-    this.socket.addEventListener('is-typing', (data) => {
-      this.chatbot.isTyping('leon', data)
-    })
-
-    this.socket.addEventListener('recognized', (data, cb) => {
-      this._input.value = data
-      this.send('utterance')
-
-      cb('string-received')
-    })
-
-    this.socket.addEventListener('audio-forwarded', (data, cb) => {
-      const ctx = new AudioContext()
-      const source = ctx.createBufferSource()
-
-      ctx.decodeAudioData(data.buffer, (buffer) => {
-        source.buffer = buffer
-
-        source.connect(ctx.destination)
-        source.start(0)
-
-        /**
-         * When the after speech option is enabled and
-         * the answer is a final one
-         */
-        if (this.info.after_speech && data.is_final_answer) {
-          // Enable recording after the speech + 500ms
-          setTimeout(() => {
-            this._recorder.start()
-            this._recorder.enabled = true
-
-            // Check every second if the recorder is enabled to stop it
-            const id = setInterval(() => {
-              if (this._recorder.enabled) {
-                if (this._recorder.countSilenceAfterTalk <= 8) {
-                  // Stop recording if there was no noise for 8 seconds
-                  if (this._recorder.countSilenceAfterTalk === 8) {
-                    this._recorder.stop()
-                    this._recorder.enabled = false
-                    this._recorder.countSilenceAfterTalk = 0
-                    clearInterval(id)
-                  } else if (!this._recorder.noiseDetected) {
-                    this._recorder.countSilenceAfterTalk += 1
-                  } else {
-                    clearInterval(id)
-                  }
-                }
-              }
-            }, 1_000)
-          }, data.duration + 500)
-        }
-      })
-
-      cb('audio-received')
-    })
-
-    this.socket.addEventListener('download', (data) => {
-      window.location = `${this.serverUrl}/api/v1/downloads?domain=${data.domain}&skill=${data.skill}`
     })
 
     if (this.history !== null) {

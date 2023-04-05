@@ -1,5 +1,5 @@
 import type { DefaultEventsMap } from 'socket.io/dist/typed-events'
-import { Server as SocketIOServer, Socket } from 'socket.io'
+// import { Server as SocketIOServer, Socket } from 'socket.io'
 import { WebSocketServer } from 'ws'
 
 import { LANG, HAS_STT, HAS_TTS, IS_DEVELOPMENT_ENV } from '@/constants'
@@ -50,23 +50,6 @@ export default class SocketServer {
       path: '/ws'
     })
 
-    wsServer.on('listening', () => {
-      console.log('listening...')
-    })
-
-    wsServer.on('connection', (socket) => {
-      /**
-       * @see https://github.com/websockets/ws/blob/HEAD/doc/ws.md#class-websocket
-       */
-      console.log('connected')
-
-      socket.send('connect')
-
-      socket.onmessage = (event): void => {
-        console.log('MESSAGE RECEIVED', event.data)
-      }
-    })
-
     /*const io = IS_DEVELOPMENT_ENV
       ? new SocketIOServer(HTTP_SERVER.httpServer, {
           cors: { origin: `${HTTP_SERVER.host}:3000` }
@@ -97,6 +80,22 @@ export default class SocketServer {
       LogHelper.error(`Failed to load NLP models: ${e}`)
     }
 
+    wsServer.on('connection', (socket) => {
+      LogHelper.title('Client')
+      LogHelper.success('Connected')
+
+      /**
+       * @see https://github.com/websockets/ws/blob/HEAD/doc/ws.md#class-websocket
+       */
+      this.socket = socket
+
+      this.socket.on('message', (message: Buffer) => {
+        console.log('message', message.toString())
+
+        this.socket.send('ready')
+      })
+    })
+
     // TODO
     /*io.on('connection', (socket) => {
       LogHelper.title('Client')
@@ -106,7 +105,7 @@ export default class SocketServer {
 
       // Init
       this.socket.on('init', (data: string) => {
-        LogHelper.info(`Type: ${data}`)
+        LogHelper.info(`Client type: ${data}`)
         LogHelper.info(`Socket ID: ${this.socket?.id}`)
 
         // TODO
