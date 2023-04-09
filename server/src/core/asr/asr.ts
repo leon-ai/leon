@@ -33,45 +33,35 @@ export default class ASR {
     return new Promise((resolve, reject) => {
       LogHelper.title('ASR')
 
-      fs.writeFile(
-        this.audioPaths.webm,
-        Buffer.from(blob),
-        'binary',
-        async (err) => {
-          if (err) {
-            reject(new Error(`${err}`))
-            return
+      fs.createWriteStream(this.audioPaths.webm).write(blob)
+
+      ffmpeg.setFfmpegPath(ffmpegPath)
+
+      /**
+       * Encode WebM file to WAVE file
+       * ffmpeg -i speech.webm -acodec pcm_s16le -ar 16000 -ac 1 speech.wav
+       */
+      ffmpeg()
+        .addInput(this.audioPaths.webm)
+        .on('start', () => {
+          LogHelper.info('Encoding WebM file to WAVE file...')
+        })
+        .on('end', () => {
+          LogHelper.success('Encoding done')
+
+          if (!STT.isParserReady) {
+            reject(new Error('The speech recognition is not ready yet'))
+          } else {
+            STT.transcribe(this.audioPaths.wav)
+            resolve()
           }
-
-          ffmpeg.setFfmpegPath(ffmpegPath)
-
-          /**
-           * Encode WebM file to WAVE file
-           * ffmpeg -i speech.webm -acodec pcm_s16le -ar 16000 -ac 1 speech.wav
-           */
-          ffmpeg()
-            .addInput(this.audioPaths.webm)
-            .on('start', () => {
-              LogHelper.info('Encoding WebM file to WAVE file...')
-            })
-            .on('end', () => {
-              LogHelper.success('Encoding done')
-
-              if (!STT.isParserReady) {
-                reject(new Error('The speech recognition is not ready yet'))
-              } else {
-                STT.transcribe(this.audioPaths.wav)
-                resolve()
-              }
-            })
-            .on('error', (err) => {
-              reject(new Error(`Encoding error ${err}`))
-            })
-            .outputOptions(['-acodec pcm_s16le', '-ar 16000', '-ac 1'])
-            .output(this.audioPaths.wav)
-            .run()
-        }
-      )
+        })
+        .on('error', (err) => {
+          reject(new Error(`Encoding error ${err}`))
+        })
+        .outputOptions(['-acodec pcm_s16le', '-ar 16000', '-ac 1'])
+        .output(this.audioPaths.wav)
+        .run()
     })
   }
 }

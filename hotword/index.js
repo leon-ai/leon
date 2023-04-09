@@ -6,17 +6,22 @@
 const axios = require('axios')
 const record = require('node-record-lpcm16')
 const { Detector, Models } = require('@bugsounet/snowboy')
-const { io } = require('socket.io-client')
+const WebSocket = require('ws')
 
 process.env.LEON_HOST = process.env.LEON_HOST || 'http://localhost'
 process.env.LEON_PORT = process.env.LEON_PORT || 1337
 const url = `${process.env.LEON_HOST}:${process.env.LEON_PORT}`
-const socket = io(url)
+const socket = url.startsWith('http://')
+  ? new WebSocket(`ws://${url.split('://')[1]}/ws`)
+  : new WebSocket(`wss://${url.split('://')[1]}/ws`)
 const { argv } = process
 const lang = argv[2] || 'en'
 
-socket.on('connect', () => {
-  socket.emit('init', 'hotword-node')
+socket.on('error', (error) => {
+  console.error('Socket error:', error)
+})
+
+socket.on('open', () => {
   console.log('Language:', lang)
   console.log('Connected to the server')
   console.log('Waiting for hotword...')
@@ -64,7 +69,15 @@ socket.on('connect', () => {
       const obj = { hotword, buffer }
 
       console.log('Hotword detected', obj)
-      socket.emit('hotword-detected', obj)
+
+      socket.send(
+        JSON.stringify({
+          event: 'hotword-detected',
+          data: obj,
+          sentAt: Date.now(),
+          client: 'hotword-node'
+        })
+      )
     })
 
     const mic = record.start({

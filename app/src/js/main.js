@@ -13,10 +13,8 @@ const config = {
   min_decibels: -40, // Noise detection sensitivity
   max_blank_time: 1_000 // Maximum time to consider a blank (ms)
 }
-const serverUrl =
-  import.meta.env.VITE_LEON_NODE_ENV === 'production'
-    ? ''
-    : `${config.server_host}:${config.server_port}`
+
+const serverUrl = `${config.server_host}:${config.server_port}`
 
 document.addEventListener('DOMContentLoaded', async () => {
   const loader = new Loader()
@@ -59,7 +57,15 @@ document.addEventListener('DOMContentLoaded', async () => {
 
               // Ensure there are some data
               if (blob.size >= 1_000) {
-                client.socket.emit('recognize', blob)
+                // convert blob to string
+                const reader = new FileReader()
+                reader.readAsDataURL(blob)
+                reader.onloadend = () => {
+                  const base64data = reader.result
+                  client.sendSocketMessage('recognize', base64data)
+                }
+
+                // client.sendSocketMessage('recognize', blob)
               }
             })
 

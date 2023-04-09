@@ -15,8 +15,8 @@
   "dependencies": {
     "@bugsounet/snowboy": "^2.2.5",
     "@mapbox/node-pre-gyp": "^1.0.10",
+    "axios": "^1.3.5",
     "node-record-lpcm16": "^0.3.1",
-    "socket.io-client": "^4.5.2",
-    "superagent": "^8.0.0"
+    "ws": "^8.13.0"
   }
 }

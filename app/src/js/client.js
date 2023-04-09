@@ -1,5 +1,3 @@
-// import { io } from 'socket.io-client'
-
 import Chatbot from './chatbot'
 
 const WS_READY_STATES = {
@@ -9,17 +7,19 @@ const WS_READY_STATES = {
   CLOSED: 3
 }
 
+function createNewWebSocket(serverUrl) {
+  return window.location.protocol === 'http:'
+    ? new WebSocket(`ws://${serverUrl.split('://')[1]}/ws`)
+    : new WebSocket(`wss://${serverUrl.split('://')[1]}/ws`)
+}
+
 export default class Client {
   constructor(client, serverUrl, input, res) {
     this.client = client
     this._input = input
     this._suggestionContainer = document.querySelector('#suggestions-container')
     this.serverUrl = serverUrl
-    this.socket =
-      window.location.protocol === 'http:'
-        ? new WebSocket(`ws://${this.serverUrl.split('://')[1]}/ws`)
-        : new WebSocket(`wss://${this.serverUrl.split('://')[1]}/ws`)
-    // this.socket = io(this.serverUrl)
+    this.socket = createNewWebSocket(serverUrl)
     this.history = localStorage.getItem('history')
     this.parsedHistory = []
     this.info = res
@@ -45,6 +45,21 @@ export default class Client {
   sendSocketMessage(event, data) {
     if (this.socket.readyState !== WS_READY_STATES.OPEN) {
       console.error('Socket not ready')
+
+      /**
+       * Auto reconnect WebSocket and send the message again
+       */
+
+      setTimeout(() => {
+        this.socket = createNewWebSocket(this.serverUrl)
+
+        this.initSocket()
+      }, 250)
+
+      setTimeout(() => {
+        this.sendSocketMessage(event, data)
+      }, 500)
+
       return
     }
 
@@ -61,6 +76,14 @@ export default class Client {
   init(loader) {
     this.chatbot.init()
 
+    this.initSocket(loader)
+
+    if (this.history !== null) {
+      this.parsedHistory = JSON.parse(this.history)
+    }
+  }
+
+  initSocket(loader) {
     const eventHandlers = {
       ready: () => {
         loader.stop()
@@ -132,30 +155,17 @@ export default class Client {
     }
 
     this.socket.addEventListener('open', () => {
-      this.sendSocketMessage('init', this.client)
-
       this.socket.addEventListener('message', (message) => {
         const { event, data } = JSON.parse(message.data)
-        console.log('message', message)
-
-        console.log('event', event)
-        console.log('data', data)
 
         eventHandlers[event](data)
       })
     })
-
-    if (this.history !== null) {
-      this.parsedHistory = JSON.parse(this.history)
-    }
   }
 
   send(keyword) {
     if (this._input.value !== '') {
-      this.socket.emit(keyword, {
-        client: this.client,
-        value: this._input.value.trim()
-      })
+      this.sendSocketMessage(keyword, this._input.value.trim())
       this.chatbot.sendTo('leon', this._input.value)
 
       this._suggestions.forEach((suggestion) => {
