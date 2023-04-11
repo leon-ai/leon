@@ -4,7 +4,15 @@ import { Type } from '@sinclair/typebox'
 import { globalResolverSchemaObject } from '@/schemas/global-data-schemas'
 
 const skillBridges = [Type.Literal('python'), Type.Null()]
-const skillActionTypes = [Type.Literal('logic'), Type.Literal('dialog')]
+const skillActionTypes = [
+  Type.Literal('logic', {
+    description: 'It runs the business logic implemented in actions via code.'
+  }),
+  Type.Literal('dialog', {
+    description:
+      "Action that don't need code to run. Leon actually just answers without any business logic."
+  })
+]
 const skillDataTypes = [
   Type.Literal('skill_resolver'),
   Type.Literal('global_resolver'),
@@ -21,7 +29,11 @@ const skillCustomEnumEntityType = Type.Object(
       })
     )
   },
-  { additionalProperties: false }
+  {
+    additionalProperties: false,
+    description:
+      'Enum: define a bag of words and synonyms that should match your new entity.'
+  }
 )
 const skillCustomRegexEntityType = Type.Object(
   {
@@ -29,7 +41,10 @@ const skillCustomRegexEntityType = Type.Object(
     name: Type.String({ minLength: 1 }),
     regex: Type.String({ minLength: 1 })
   },
-  { additionalProperties: false }
+  {
+    additionalProperties: false,
+    description: 'Regex: you can create an entity based on a regex.'
+  }
 )
 const skillCustomTrimEntityType = Type.Object(
   {
@@ -60,7 +75,11 @@ const skillCustomTrimEntityType = Type.Object(
             ])
           )
         },
-        { additionalProperties: false }
+        {
+          additionalProperties: false,
+          description:
+            'Trim: you can pick up a data from an utterance by clearly defining conditions (e.g: pick up what is after the last "with" word of the utterance).'
+        }
       )
     )
   },
@@ -73,119 +92,164 @@ const skillCustomEntityTypes = [
 ]
 
 export const domainSchemaObject = Type.Strict(
-  Type.Object(
-    {
-      name: Type.String({ minLength: 1 })
-    },
-    { additionalProperties: false }
-  )
+  Type.Object({
+    name: Type.String({ minLength: 1, description: 'The name of the domain.' })
+  })
 )
 export const skillSchemaObject = Type.Strict(
-  Type.Object(
-    {
-      name: Type.String({ minLength: 1 }),
-      bridge: Type.Union(skillBridges),
-      version: Type.String({ minLength: 1 }),
-      description: Type.String({ minLength: 1 }),
-      author: Type.Object(
+  Type.Object({
+    name: Type.String({ minLength: 1, description: 'The name of the skill.' }),
+    bridge: Type.Union(skillBridges, { description: 'Bridge SDK.' }),
+    version: Type.String({
+      minLength: 1,
+      description: 'Version following semver.'
+    }),
+    description: Type.String({
+      minLength: 1,
+      description: 'This helps people understand what your skill does.'
+    }),
+    author: Type.Object(
+      {
+        name: Type.String({ minLength: 1, description: 'Name of the author.' }),
+        email: Type.Optional(
+          Type.String({
+            minLength: 1,
+            maxLength: 254,
+            format: 'email',
+            description: 'Email address of the author.'
+          })
+        ),
+        url: Type.Optional(
+          Type.String({
+            minLength: 1,
+            maxLength: 255,
+            format: 'uri',
+            description: 'Website of the author.'
+          })
+        )
+      },
+      {
+        additionalProperties: false,
+        description:
+          'A person who has been involved in creating or maintaining this skill.'
+      }
+    )
+  })
+)
+export const skillConfigSchemaObject = Type.Strict(
+  Type.Object({
+    variables: Type.Optional(Type.Record(Type.String(), Type.String())),
+    actions: Type.Record(
+      Type.String(),
+      Type.Object(
         {
-          name: Type.String({ minLength: 1 }),
-          email: Type.Optional(
-            Type.String({ minLength: 1, maxLength: 254, format: 'email' })
+          type: Type.Union(skillActionTypes),
+          loop: Type.Optional(
+            Type.Object(
+              {
+                expected_item: Type.Object(
+                  {
+                    type: Type.Union(skillDataTypes),
+                    name: Type.String()
+                  },
+                  { description: 'An item can be a entity or a resolver.' }
+                )
+              },
+              {
+                additionalProperties: false,
+                description:
+                  'The action loop is a concept to keep Leon triggering the same skill action until the logic of the skill breaks the loop according to new utterances content.'
+              }
+            )
           ),
-          url: Type.Optional(
-            Type.String({ minLength: 1, maxLength: 255, format: 'uri' })
+          http_api: Type.Optional(
+            Type.Object(
+              {
+                entities: Type.Array(
+                  Type.Object(
+                    {
+                      entity: Type.String(),
+                      resolution: Type.Array(Type.String())
+                    },
+                    { additionalProperties: false }
+                  )
+                )
+              },
+              { additionalProperties: false }
+            )
+          ),
+          utterance_samples: Type.Optional(Type.Array(Type.String())),
+          answers: Type.Optional(Type.Array(Type.String())),
+          unknown_answers: Type.Optional(Type.Array(Type.String())),
+          suggestions: Type.Optional(
+            Type.Array(Type.String(), {
+              description:
+                'Suggestions are a simple way to suggest Leon owners what can be answered next.'
+            })
+          ),
+          slots: Type.Optional(
+            Type.Array(
+              Type.Object(
+                {
+                  name: Type.String(),
+                  item: Type.Object(
+                    {
+                      type: Type.Union(skillDataTypes),
+                      name: Type.String()
+                    },
+                    { additionalProperties: false }
+                  ),
+                  questions: Type.Array(Type.String()),
+                  suggestions: Type.Optional(
+                    Type.Array(Type.String(), {
+                      description:
+                        'Suggestions are a simple way to suggest Leon owners what can be answered next.'
+                    })
+                  )
+                },
+                {
+                  additionalProperties: false,
+                  description:
+                    'A slot expects a type of data called "item", and makes use of questions to let Leon owners knows what data they need to provide.'
+                }
+              ),
+              {
+                description:
+                  'Depending on how skill developers wants to design their skill, they have the possibility to ask for more information before to get to the meat of the skill. In this way, Leon can gather these information to operate the skill in a complete manner. These information are called "slots".'
+              }
+            )
+          ),
+          entities: Type.Optional(Type.Union(skillCustomEntityTypes)),
+          next_action: Type.Optional(
+            Type.String({
+              description:
+                'The next action property is useful when a skill needs to follow a specific order of actions, it helps to connect actions in a specific order to feed the context with data.'
+            })
           )
         },
         { additionalProperties: false }
       )
-    },
-    { additionalProperties: false }
-  )
-)
-export const skillConfigSchemaObject = Type.Strict(
-  Type.Object(
-    {
-      variables: Type.Optional(Type.Record(Type.String(), Type.String())),
-      actions: Type.Record(
+    ),
+    answers: Type.Optional(
+      Type.Record(Type.String(), Type.Array(Type.String()))
+    ),
+    entities: Type.Optional(Type.Record(Type.String(), Type.String())),
+    resolvers: Type.Optional(
+      Type.Record(
         Type.String(),
         Type.Object(
           {
-            type: Type.Union(skillActionTypes),
-            loop: Type.Optional(
-              Type.Object(
-                {
-                  expected_item: Type.Object({
-                    type: Type.Union(skillDataTypes),
-                    name: Type.String()
-                  })
-                },
-                { additionalProperties: false }
-              )
-            ),
-            http_api: Type.Optional(
-              Type.Object(
-                {
-                  entities: Type.Array(
-                    Type.Object(
-                      {
-                        entity: Type.String(),
-                        resolution: Type.Array(Type.String())
-                      },
-                      { additionalProperties: false }
-                    )
-                  )
-                },
-                { additionalProperties: false }
-              )
-            ),
-            utterance_samples: Type.Optional(Type.Array(Type.String())),
-            answers: Type.Optional(Type.Array(Type.String())),
-            unknown_answers: Type.Optional(Type.Array(Type.String())),
-            suggestions: Type.Optional(Type.Array(Type.String())),
-            slots: Type.Optional(
-              Type.Array(
-                Type.Object(
-                  {
-                    name: Type.String(),
-                    item: Type.Object(
-                      {
-                        type: Type.Union(skillDataTypes),
-                        name: Type.String()
-                      },
-                      { additionalProperties: false }
-                    ),
-                    questions: Type.Array(Type.String()),
-                    suggestions: Type.Optional(Type.Array(Type.String()))
-                  },
-                  { additionalProperties: false }
-                )
-              )
-            ),
-            entities: Type.Optional(Type.Union(skillCustomEntityTypes)),
-            next_action: Type.Optional(Type.String())
+            intents: globalResolverSchemaObject.properties.intents
           },
           { additionalProperties: false }
-        )
-      ),
-      answers: Type.Optional(
-        Type.Record(Type.String(), Type.Array(Type.String()))
-      ),
-      entities: Type.Optional(Type.Record(Type.String(), Type.String())),
-      resolvers: Type.Optional(
-        Type.Record(
-          Type.String(),
-          Type.Object(
-            {
-              intents: globalResolverSchemaObject.properties.intents
-            },
-            { additionalProperties: false }
-          )
-        )
+        ),
+        {
+          description:
+            'You can see resolvers as utterance samples that are converted (resolved) to a value of your choice. They are very handy when skills expect specific utterances and then according to these utterances attribute a value that can be handled by the skill. If a skill action expects to receive a resolver, then Leon will convert the value for you and this value will be usable from the skill action code. Any value can be passed to resolvers which allow a large possibilities of usages.'
+        }
       )
-    },
-    { additionalProperties: false }
-  )
+    )
+  })
 )
 
 export type DomainSchema = Static<typeof domainSchemaObject>

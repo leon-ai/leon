@@ -17,40 +17,37 @@ export const globalEntitySchemaObject = Type.Strict(
         )
       )
     },
-    { additionalProperties: false }
+    {
+      description:
+        'Global entities can hold data that can directly be reused in skills.'
+    }
   )
 )
 export const globalResolverSchemaObject = Type.Strict(
-  Type.Object(
-    {
-      name: Type.String(),
-      intents: Type.Record(
-        Type.String(),
-        Type.Object(
-          {
-            utterance_samples: Type.Array(Type.String()),
-            value: Type.Unknown()
-          },
-          { additionalProperties: false }
-        )
+  Type.Object({
+    name: Type.String(),
+    intents: Type.Record(
+      Type.String(),
+      Type.Object(
+        {
+          utterance_samples: Type.Array(Type.String()),
+          value: Type.Unknown()
+        },
+        { additionalProperties: false }
       )
-    },
-    { additionalProperties: false }
-  )
+    )
+  })
 )
 export const globalAnswersSchemaObject = Type.Strict(
-  Type.Object(
-    {
-      answers: Type.Record(
-        Type.String(),
-        Type.Union([
-          Type.Record(Type.String(), Type.String()),
-          Type.Array(Type.String())
-        ])
-      )
-    },
-    { additionalProperties: false }
-  )
+  Type.Object({
+    answers: Type.Record(
+      Type.String(),
+      Type.Union([
+        Type.Record(Type.String(), Type.String()),
+        Type.Array(Type.String())
+      ])
+    )
+  })
 )
 
 export type GlobalEntitySchema = Static<typeof globalEntitySchemaObject>

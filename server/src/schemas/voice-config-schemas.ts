@@ -9,8 +9,7 @@ export const amazonVoiceConfiguration = Type.Strict(
         secretAccessKey: Type.String()
       }),
       region: Type.String()
-    },
-    { additionalProperties: false }
+    }
   )
 )
 export const googleCloudVoiceConfiguration = Type.Strict(
@@ -26,8 +25,7 @@ export const googleCloudVoiceConfiguration = Type.Strict(
       token_uri: Type.String({ format: 'uri' }),
       auth_provider_x509_cert_url: Type.String({ format: 'uri' }),
       client_x509_cert_url: Type.String({ format: 'uri' })
-    },
-    { additionalProperties: false }
+    }
   )
 )
 export const watsonVoiceConfiguration = Type.Strict(
@@ -35,8 +33,7 @@ export const watsonVoiceConfiguration = Type.Strict(
     {
       apikey: Type.String(),
       url: Type.String({ format: 'uri' })
-    },
-    { additionalProperties: false }
+    }
   )
 )
 

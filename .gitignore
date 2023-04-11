@@ -33,3 +33,4 @@ skills/**/memory/*.json
 core/data/models/*.nlp
 package.json.backup
 .python-version
+schemas/**/*.json
