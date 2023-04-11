@@ -21,6 +21,7 @@ package-lock.json
 npm-debug.log
 debug.log
 .env
+leon.json
 bridges/python/src/Pipfile.lock
 tcp_server/src/Pipfile.lock
 !tcp_server/**/.gitkeep
