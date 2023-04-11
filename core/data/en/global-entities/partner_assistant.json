@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/global-data/global-entity.json",
   "options": {
     "Alexa": {
       "synonyms": ["Alexa"],

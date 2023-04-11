@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
   "variables": {
     "blue_leon": "#1C75DB",
     "pink_leon": "#ED297A"

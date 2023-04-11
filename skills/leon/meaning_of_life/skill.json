@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/skill-schemas/skill.json",
   "name": "Meaning of Life",
   "bridge": null,
   "version": "1.0.0",

@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
   "variables": {
     "leon_introduction_1": "I'm your daily personal assistant. I have been created by Louis. I'm very happy to serve you everyday.",
     "leon_introduction_2": "The question is, who are you? I'm kidding! I'm your daily personal assistant. Louis created me to make your life easier.",

@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/global-data/global-answers.json",
   "answers": {
     "success": {},
     "errors": {

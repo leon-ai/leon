@@ -47,6 +47,7 @@
     "prepare": "husky install",
     "generate:skills-endpoints": "ts-node scripts/generate/run-generate-skills-endpoints.js",
     "generate:http-api-key": "ts-node scripts/generate/run-generate-http-api-key.js",
+    "generate:json-schemas": "ts-node scripts/generate/run-generate-json-schemas.js",
     "build": "npm run build:app && npm run build:server",
     "build:app": "cross-env LEON_NODE_ENV=production ts-node scripts/app/run-build-app.js",
     "build:server": "npm run delete-dist:server && npm run train && npm run generate:skills-endpoints && tsc && resolve-tspaths && shx rm -rf server/dist/core server/dist/package.json && shx mv -f server/dist/server/src/* server/dist && shx rm -rf server/dist/server && shx mkdir -p server/dist/tmp",

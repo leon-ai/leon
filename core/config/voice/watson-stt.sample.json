@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/voice-config-schemas/watson-stt.json",
   "apikey": "",
   "url": "https://stream.watsonplatform.net/speech-to-text/api"
 }
