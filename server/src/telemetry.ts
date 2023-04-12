@@ -16,6 +16,7 @@ import {
   IS_TELEMETRY_ENABLED,
   INSTANCE_ID,
   IS_DEVELOPMENT_ENV,
+  IS_PRODUCTION_ENV,
   LANG,
   LEON_VERSION,
   PYTHON_BRIDGE_VERSION,
@@ -83,6 +84,7 @@ export class Telemetry {
         await this.axios.post('/on-start', {
           instanceID: this.instanceID,
           data: {
+            isProduction: IS_PRODUCTION_ENV,
             isOnline: true,
             language: LANG,
             sttProvider: STT_PROVIDER,

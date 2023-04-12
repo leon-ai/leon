@@ -186,8 +186,6 @@ export default class NLU {
         return resolve(null)
       }
 
-      // this.sendLog()
-
       if (intent === 'None') {
         const fallback = this.fallback(
           langs[LangHelper.getLongCode(locale)].fallbacks
