@@ -20,8 +20,8 @@ import {
 
 /**
  * Generate JSON schemas
- * @param {string} categoryName 
- * @param {Map<string, Object>} schemas 
+ * @param {string} categoryName
+ * @param {Map<string, Object>} schemas
  */
 export const generateSchemas = async (categoryName, schemas) => {
   const categorySchemasPath = path.join(process.cwd(), 'schemas', categoryName)
@@ -65,10 +65,7 @@ export default async () => {
       'voice-config-schemas',
       new Map([
         ['amazon', amazonVoiceConfiguration],
-        [
-          'google-cloud',
-          googleCloudVoiceConfiguration
-        ],
+        ['google-cloud', googleCloudVoiceConfiguration],
         ['watson-stt', watsonVoiceConfiguration],
         ['watson-tts', watsonVoiceConfiguration]
       ])

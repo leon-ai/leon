@@ -21,6 +21,7 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { ActionLoop } from '@/core/nlp/nlu/action-loop'
 import { SlotFilling } from '@/core/nlp/nlu/slot-filling'
 import Conversation, { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
+import { Telemetry } from '@/telemetry'
 
 type NLUProcessResult = Promise<Partial<
   BrainProcessResult & {
@@ -294,6 +295,17 @@ export default class NLU {
 
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
+
+        Telemetry.utterance({
+          value: utterance,
+          entities: this.nluResult.entities,
+          triggeredDomain: this.nluResult.classification.domain,
+          triggeredSkill: this.nluResult.classification.skill,
+          triggeredAction: this.nluResult.classification.action,
+          probability: this.nluResult.classification.confidence,
+          language: BRAIN.lang,
+          executionTime: processedData?.executionTime || 0
+        })
 
         return resolve({
           processingTime, // In ms, total time

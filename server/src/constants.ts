@@ -53,6 +53,8 @@ export const PYTHON_BRIDGE_BIN_PATH = path.join(
   PYTHON_BRIDGE_BIN_NAME
 )
 
+export const LEON_VERSION = process.env['npm_package_version']
+
 /**
  * spaCy models
  * Find new spaCy models: https://github.com/explosion/spacy-models/releases
@@ -95,6 +97,8 @@ export const HAS_LOGGER = process.env['LEON_LOGGER'] === 'true'
 
 export const TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
 export const TCP_SERVER_PORT = Number(process.env['LEON_PY_TCP_SERVER_PORT'])
+
+export const IS_TELEMETRY_ENABLED = process.env['LEON_TELEMETRY'] === 'true'
 
 /**
  * Paths

@@ -2,11 +2,11 @@ import fs from 'node:fs'
 
 import { LEON_FILE_PATH } from '@/constants'
 import { Telemetry } from '@/telemetry'
+import { LogHelper } from '@/helpers/log-helper'
 
-// TODO: export default
-;(async () => {
+export default async () => {
   try {
-    const { instanceID, birthDate } = await Telemetry.postinstall()
+    const { instanceID, birthDate } = await Telemetry.postInstall()
 
     if (!fs.existsSync(LEON_FILE_PATH)) {
       await fs.promises.writeFile(
@@ -22,8 +22,8 @@ import { Telemetry } from '@/telemetry'
       )
     }
 
-    // resolve()
+    LogHelper.success(`Instance ID created: ${instanceID}`)
   } catch (e) {
-    // reject(new Error(`Failed to create instance ID: ${e}`))
+    LogHelper.warning(`Failed to create the instance ID: ${e}`)
   }
-})()
+}

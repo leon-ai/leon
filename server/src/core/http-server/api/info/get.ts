@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify'
 
-import { version } from '@@/package.json'
 import {
+  LEON_VERSION,
   HAS_AFTER_SPEECH,
   HAS_LOGGER,
   HAS_STT,
@@ -39,7 +39,7 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
           enabled: HAS_TTS,
           provider: TTS_PROVIDER
         },
-        version
+        version: LEON_VERSION
       })
     }
   })

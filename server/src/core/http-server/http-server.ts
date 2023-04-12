@@ -5,8 +5,12 @@ import fastifyStatic from '@fastify/static'
 import { Type } from '@sinclair/typebox'
 import type { Static } from '@sinclair/typebox'
 
-import { version } from '@@/package.json'
-import { LEON_NODE_ENV, HAS_LOGGER, HAS_OVER_HTTP } from '@/constants'
+import {
+  LEON_VERSION,
+  LEON_NODE_ENV,
+  HAS_LOGGER,
+  HAS_OVER_HTTP
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { corsMidd } from '@/core/http-server/plugins/cors'
@@ -60,7 +64,7 @@ export default class HTTPServer {
 
     LogHelper.title('Initialization')
     LogHelper.info(`The current env is ${LEON_NODE_ENV}`)
-    LogHelper.info(`The current version is ${version}`)
+    LogHelper.info(`The current version is ${LEON_VERSION}`)
 
     LogHelper.info(`The current time zone is ${DateHelper.getTimeZone()}`)
 

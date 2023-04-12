@@ -118,4 +118,23 @@ export class SystemHelper {
   public static getTotalRAM(): number {
     return Number((os.totalmem() / (1_024 * 1_024 * 1_024)).toFixed(2))
   }
+
+  /**
+   * Get the Node.js version of the current process
+   * @example getNodeJSVersion() // 'v18.15.0'
+   */
+  public static getNodeJSVersion(): string {
+    return process.version || '0.0.0'
+  }
+
+  /**
+   * Get the npm version used to run the current process
+   * @example getNPMVersion() // '9.5.0'
+   */
+  public static getNPMVersion(): string {
+    return (
+      process.env['npm_config_user_agent']?.split('/')[1]?.split(' ')[0] ||
+      '0.0.0'
+    )
+  }
 }
