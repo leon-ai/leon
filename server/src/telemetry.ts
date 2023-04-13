@@ -4,14 +4,7 @@ import axios from 'axios'
 import osName from 'os-name'
 import getos from 'getos'
 
-import type { ShortLanguageCode } from '@/types'
-import type {
-  NEREntity,
-  NLPAction,
-  NLPDomain,
-  NLPSkill,
-  NLPUtterance
-} from '@/core/nlp/types'
+import type { NLUResult } from '@/core/nlp/types'
 import {
   IS_TELEMETRY_ENABLED,
   INSTANCE_ID,
@@ -24,7 +17,7 @@ import {
   TCP_SERVER_VERSION,
   TTS_PROVIDER
 } from '@/constants'
-import { NER } from '@/core'
+import { BRAIN, NER } from '@/core'
 import { SystemHelper } from '@/helpers/system-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -32,16 +25,6 @@ import { LogHelper } from '@/helpers/log-helper'
 interface PostIntallResponse {
   instanceID: string
   birthDate: number
-}
-interface UtteranceData {
-  value: NLPUtterance
-  entities: NEREntity[]
-  triggeredDomain: NLPDomain
-  triggeredSkill: NLPSkill
-  triggeredAction: NLPAction
-  probability: number
-  language: ShortLanguageCode
-  executionTime: number
 }
 
 enum EventNames {
@@ -119,19 +102,22 @@ export class Telemetry {
     }
   }
 
-  public static async utterance(data: UtteranceData): Promise<void> {
+  public static async utterance(
+    nluResult: NLUResult,
+    executionTime: number
+  ): Promise<void> {
     if (IS_TELEMETRY_ENABLED) {
       try {
         const {
-          triggeredDomain,
-          triggeredSkill,
-          value,
-          entities,
-          triggeredAction,
-          probability,
-          language,
-          executionTime
-        } = data
+          classification: {
+            domain: triggeredDomain,
+            skill: triggeredSkill,
+            action: triggeredAction,
+            confidence: probability
+          },
+          utterance,
+          entities
+        } = nluResult
         const skill = await SkillDomainHelper.getSkillInfo(
           triggeredDomain,
           triggeredSkill
@@ -144,9 +130,10 @@ export class Telemetry {
             triggeredSkill,
             triggeredAction,
             probability,
-            language,
+            language: BRAIN.lang,
             executionTime,
-            value: NER.anonymizeEntities(value, entities),
+            // TODO: await because when github.com + hi fast = not anonymized
+            value: await NER.anonymizeEntities(utterance, entities),
             triggeredSkillVersion: skill.version,
             triggeredSkillBridge: skill.bridge
           }

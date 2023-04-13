@@ -294,16 +294,7 @@ export default class NLU {
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
 
-        Telemetry.utterance({
-          value: utterance,
-          entities: this.nluResult.entities,
-          triggeredDomain: this.nluResult.classification.domain,
-          triggeredSkill: this.nluResult.classification.skill,
-          triggeredAction: this.nluResult.classification.action,
-          probability: this.nluResult.classification.confidence,
-          language: BRAIN.lang,
-          executionTime: processedData?.executionTime || 0
-        })
+        Telemetry.utterance(this.nluResult, processedData?.executionTime || 0)
 
         return resolve({
           processingTime, // In ms, total time
