@@ -156,17 +156,6 @@ export default class NER {
     }
   }
 
-  public anonymizeEntities(
-    utterance: NLPUtterance,
-    entities: NEREntity[]
-  ): NLPUtterance {
-    entities.forEach((entity) => {
-      utterance = utterance.replace(entity.sourceText, `{${entity.entity}}`)
-    })
-
-    return utterance
-  }
-
   /**
    * Get spaCy entities from the TCP server
    */

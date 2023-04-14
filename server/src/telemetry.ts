@@ -4,7 +4,8 @@ import axios from 'axios'
 import osName from 'os-name'
 import getos from 'getos'
 
-import type { NLUResult } from '@/core/nlp/types'
+import type { ShortLanguageCode } from '@/types'
+import type { NLUResult, NEREntity, NLPUtterance } from '@/core/nlp/types'
 import {
   IS_TELEMETRY_ENABLED,
   INSTANCE_ID,
@@ -17,7 +18,6 @@ import {
   TCP_SERVER_VERSION,
   TTS_PROVIDER
 } from '@/constants'
-import { BRAIN, NER } from '@/core'
 import { SystemHelper } from '@/helpers/system-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -103,6 +103,7 @@ export class Telemetry {
   }
 
   public static async utterance(
+    lang: ShortLanguageCode,
     nluResult: NLUResult,
     executionTime: number
   ): Promise<void> {
@@ -130,10 +131,9 @@ export class Telemetry {
             triggeredSkill,
             triggeredAction,
             probability,
-            language: BRAIN.lang,
+            language: lang,
             executionTime,
-            // TODO: await because when github.com + hi fast = not anonymized
-            value: await NER.anonymizeEntities(utterance, entities),
+            value: this.anonymizeEntities(utterance, entities),
             triggeredSkillVersion: skill.version,
             triggeredSkillBridge: skill.bridge
           }
@@ -209,5 +209,16 @@ export class Telemetry {
         }
       }
     }
+  }
+
+  private static anonymizeEntities(
+    utterance: NLPUtterance,
+    entities: NEREntity[]
+  ): NLPUtterance {
+    entities.forEach((entity) => {
+      utterance = utterance.replace(entity.sourceText, `{${entity.entity}}`)
+    })
+
+    return utterance
   }
 }
