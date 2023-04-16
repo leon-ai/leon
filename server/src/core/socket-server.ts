@@ -14,6 +14,7 @@ import {
 } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
+import { Telemetry } from '@/telemetry'
 
 interface HotwordDataEvent {
   hotword: string
@@ -115,7 +116,11 @@ export default class SocketServer {
               LogHelper.time('Utterance processed in')
 
               BRAIN.isMuted = false
-              await NLU.process(utterance)
+              const processedData = await NLU.process(utterance)
+
+              if (processedData) {
+                Telemetry.utterance(processedData)
+              }
 
               LogHelper.title('Execution Time')
               LogHelper.timeEnd('Utterance processed in')

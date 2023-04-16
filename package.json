@@ -110,6 +110,7 @@
     "@types/archiver": "5.3.2",
     "@types/cli-spinner": "0.2.1",
     "@types/fluent-ffmpeg": "2.1.20",
+    "@types/getos": "3.0.1",
     "@types/node": "18.7.13",
     "@types/node-wav": "0.0.0",
     "@typescript-eslint/eslint-plugin": "5.55.0",

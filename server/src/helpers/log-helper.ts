@@ -4,7 +4,7 @@ import path from 'node:path'
 import { DateHelper } from '@/helpers/date-helper'
 
 export class LogHelper {
-  static readonly ERRORS_PATH = path.join(
+  static readonly ERRORS_FILE_PATH = path.join(
     __dirname,
     '..',
     '..',
@@ -47,10 +47,10 @@ export class LogHelper {
   public static error(value: string): void {
     const data = `${DateHelper.getDateTime()} - ${value}`
 
-    if (fs.existsSync(LogHelper.ERRORS_PATH)) {
-      fs.appendFileSync(LogHelper.ERRORS_PATH, `\n${data}`)
+    if (fs.existsSync(this.ERRORS_FILE_PATH)) {
+      fs.appendFileSync(this.ERRORS_FILE_PATH, `\n${data}`)
     } else {
-      fs.writeFileSync(LogHelper.ERRORS_PATH, data, { flag: 'wx' })
+      fs.writeFileSync(this.ERRORS_FILE_PATH, data, { flag: 'wx' })
     }
 
     console.error('\x1b[31m🚨 %s\x1b[0m', value)
@@ -82,5 +82,26 @@ export class LogHelper {
    */
   public static timeEnd(value: string): void {
     console.timeEnd(`🕑 \x1b[36m${value}\x1b[0m`)
+  }
+
+  /**
+   * Parse error logs and return an array of log errors
+   * @example parseErrorLogs() // 'Failed to connect to the TCP server: Error: read ECONNRESET'
+   */
+  public static async parseErrorLogs(): Promise<string[]> {
+    const errorFileContent = await fs.promises.readFile(
+      LogHelper.ERRORS_FILE_PATH,
+      'utf8'
+    )
+    const errorLogs = errorFileContent
+      .trim()
+      .split(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} - /)
+
+    // Remove the first empty string if there's one
+    if (errorLogs[0] === '') {
+      errorLogs.shift()
+    }
+
+    return errorLogs
   }
 }

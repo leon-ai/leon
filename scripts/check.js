@@ -11,10 +11,10 @@ import axios from 'axios'
 import osName from 'os-name'
 import getos from 'getos'
 
-import { version } from '@@/package.json'
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import {
+  LEON_VERSION,
   PYTHON_BRIDGE_BIN_PATH,
   TCP_SERVER_BIN_PATH,
   TCP_SERVER_VERSION,
@@ -124,8 +124,8 @@ dotenv.config()
      */
 
     LogHelper.info('Leon version')
-    LogHelper.success(`${version}\n`)
-    pastebinData.leonVersion = version
+    LogHelper.success(`${LEON_VERSION}\n`)
+    pastebinData.leonVersion = LEON_VERSION
 
     /**
      * Environment checking

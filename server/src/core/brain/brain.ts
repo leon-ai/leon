@@ -339,7 +339,11 @@ export default class Brain {
            * "Logic" action skill execution
            */
 
-          this.executeLogicActionSkill(nluResult, utteranceId, intentObjectPath)
+          await this.executeLogicActionSkill(
+            nluResult,
+            utteranceId,
+            intentObjectPath
+          )
 
           const domainName = nluResult.classification.domain
           const skillName = nluResult.classification.skill
