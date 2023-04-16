@@ -4,8 +4,12 @@ import axios from 'axios'
 import osName from 'os-name'
 import getos from 'getos'
 
-import type { ShortLanguageCode } from '@/types'
-import type { NLUResult, NEREntity, NLPUtterance } from '@/core/nlp/types'
+import type {
+  NEREntity,
+  NLPUtterance,
+  NLUProcessResult,
+  NLUResult
+} from '@/core/nlp/types'
 import {
   IS_TELEMETRY_ENABLED,
   INSTANCE_ID,
@@ -103,41 +107,52 @@ export class Telemetry {
   }
 
   public static async utterance(
-    lang: ShortLanguageCode,
-    nluResult: NLUResult,
-    executionTime: number
+    processedData: NLUProcessResult | null
   ): Promise<void> {
     if (IS_TELEMETRY_ENABLED) {
       try {
-        const {
-          classification: {
-            domain: triggeredDomain,
-            skill: triggeredSkill,
-            action: triggeredAction,
-            confidence: probability
-          },
-          utterance,
-          entities
-        } = nluResult
-        const skill = await SkillDomainHelper.getSkillInfo(
-          triggeredDomain,
-          triggeredSkill
-        )
-
-        await this.axios.post('/on-utterance', {
-          instanceID: this.instanceID,
-          data: {
+        if (processedData?.classification) {
+          const {
+            classification: {
+              domain: triggeredDomain,
+              skill: triggeredSkill,
+              action: triggeredAction,
+              confidence: probability
+            },
+            utterance,
+            entities
+          } = processedData as NLUResult
+          const skill = await SkillDomainHelper.getSkillInfo(
             triggeredDomain,
-            triggeredSkill,
-            triggeredAction,
-            probability,
-            language: lang,
-            executionTime,
-            value: this.anonymizeEntities(utterance, entities),
-            triggeredSkillVersion: skill.version,
-            triggeredSkillBridge: skill.bridge
-          }
-        })
+            triggeredSkill
+          )
+
+          await this.axios.post('/on-utterance', {
+            instanceID: this.instanceID,
+            data: {
+              triggeredDomain: triggeredDomain || null,
+              triggeredSkill: triggeredSkill || null,
+              triggeredAction: triggeredAction || null,
+              probability,
+              language: processedData?.lang || null,
+              processingTime: processedData?.processingTime || 0,
+              executionTime: processedData?.executionTime || 0,
+              nluProcessingTime: processedData?.nluProcessingTime || 0,
+              value: this.anonymizeEntities(utterance, entities) || utterance,
+              triggeredSkillVersion: skill.version || null,
+              triggeredSkillBridge: skill.bridge || null
+            }
+          })
+        } else if (JSON.stringify(processedData) !== JSON.stringify({})) {
+          // Not in a skill loop
+          await this.axios.post('/on-utterance', {
+            instanceID: this.instanceID,
+            data: {
+              language: processedData?.lang || null,
+              value: processedData?.utterance
+            }
+          })
+        }
       } catch (e) {
         if (IS_DEVELOPMENT_ENV) {
           LogHelper.title('Telemetry')

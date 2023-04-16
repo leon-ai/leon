@@ -1,4 +1,5 @@
 import type { ShortLanguageCode } from '@/types'
+import type { BrainProcessResult } from '@/core/brain/types'
 
 /**
  * NLP types
@@ -8,6 +9,13 @@ export type NLPDomain = string
 export type NLPSkill = string
 export type NLPAction = string
 export type NLPUtterance = string
+
+export type NLUProcessResult = Partial<
+  BrainProcessResult & {
+    processingTime: number
+    nluProcessingTime: number
+  }
+>
 
 export interface NLPJSProcessResult {
   locale: ShortLanguageCode

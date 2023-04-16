@@ -5,6 +5,7 @@ import kill from 'tree-kill'
 
 import type { Language, ShortLanguageCode } from '@/types'
 import type {
+  NLUProcessResult,
   NLPAction,
   NLPDomain,
   NLPJSProcessResult,
@@ -12,7 +13,6 @@ import type {
   NLPUtterance,
   NLUResult
 } from '@/core/nlp/types'
-import type { BrainProcessResult } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
 import { TCP_SERVER_BIN_PATH } from '@/constants'
 import { TCP_CLIENT, BRAIN, SOCKET_SERVER, MODEL_LOADER, NER } from '@/core'
@@ -22,13 +22,6 @@ import { ActionLoop } from '@/core/nlp/nlu/action-loop'
 import { SlotFilling } from '@/core/nlp/nlu/slot-filling'
 import Conversation, { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
 import { Telemetry } from '@/telemetry'
-
-type NLUProcessResult = Promise<Partial<
-  BrainProcessResult & {
-    processingTime: number
-    nluProcessingTime: number
-  }
-> | null>
 
 export const DEFAULT_NLU_RESULT = {
   utterance: '',
@@ -92,7 +85,7 @@ export default class NLU {
    * pick-up the right classification
    * and extract entities
    */
-  public process(utterance: NLPUtterance): NLUProcessResult {
+  public process(utterance: NLPUtterance): Promise<NLUProcessResult | null> {
     const processingTimeStart = Date.now()
 
     return new Promise(async (resolve, reject) => {
@@ -201,6 +194,8 @@ export default class NLU {
           const msg = 'Intent not found'
           LogHelper.warning(msg)
 
+          Telemetry.utterance({ utterance, lang: BRAIN.lang })
+
           return resolve(null)
         }
 
@@ -293,12 +288,6 @@ export default class NLU {
 
         const processingTimeEnd = Date.now()
         const processingTime = processingTimeEnd - processingTimeStart
-
-        Telemetry.utterance(
-          BRAIN.lang,
-          this.nluResult,
-          processedData?.executionTime || 0
-        )
 
         return resolve({
           processingTime, // In ms, total time
