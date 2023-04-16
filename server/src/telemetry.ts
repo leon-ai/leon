@@ -1,5 +1,6 @@
 import os from 'node:os'
 
+import type { Os } from 'getos'
 import axios from 'axios'
 import osName from 'os-name'
 import getos from 'getos'
@@ -37,8 +38,8 @@ enum EventNames {
 }
 
 export class Telemetry {
-  // private static readonly serviceURL = 'https://telemetry.getleon.ai'
-  private static readonly serviceURL = 'http://localhost:3000'
+  private static readonly serviceURL = 'https://telemetry.getleon.ai'
+  // private static readonly serviceURL = 'http://localhost:3000'
   private static readonly instanceID = INSTANCE_ID
   private static readonly axios = axios.create({
     baseURL: this.serviceURL,
@@ -57,44 +58,49 @@ export class Telemetry {
     if (IS_TELEMETRY_ENABLED) {
       try {
         const platform = os.platform()
-        let distro = null
+        const data = {
+          isProduction: IS_PRODUCTION_ENV,
+          isOnline: true,
+          language: LANG,
+          sttProvider: STT_PROVIDER,
+          ttsProvider: TTS_PROVIDER,
+          coreVersion: LEON_VERSION,
+          pythonBridgeVersion: PYTHON_BRIDGE_VERSION,
+          tcpServerVersion: TCP_SERVER_VERSION,
+          environment: {
+            osDetails: {
+              type: os.type(),
+              platform,
+              arch: os.arch(),
+              cpus: os.cpus().length,
+              release: os.release(),
+              osName: osName(),
+              distro: null as Os | null
+            },
+            totalRAMInGB: SystemHelper.getTotalRAM(),
+            nodeVersion: SystemHelper.getNodeJSVersion(),
+            npmVersion: SystemHelper.getNPMVersion()
+          }
+        }
 
         if (platform === 'linux') {
-          getos((e, os) => {
+          getos(async (e, os) => {
             if (e) {
               /* */
             }
-            distro = os
+            data.environment.osDetails.distro = os
+
+            await this.axios.post('/on-start', {
+              instanceID: this.instanceID,
+              data
+            })
+          })
+        } else {
+          await this.axios.post('/on-start', {
+            instanceID: this.instanceID,
+            data
           })
         }
-
-        await this.axios.post('/on-start', {
-          instanceID: this.instanceID,
-          data: {
-            isProduction: IS_PRODUCTION_ENV,
-            isOnline: true,
-            language: LANG,
-            sttProvider: STT_PROVIDER,
-            ttsProvider: TTS_PROVIDER,
-            coreVersion: LEON_VERSION,
-            pythonBridgeVersion: PYTHON_BRIDGE_VERSION,
-            tcpServerVersion: TCP_SERVER_VERSION,
-            environment: {
-              osDetails: {
-                type: os.type(),
-                platform,
-                arch: os.arch(),
-                cpus: os.cpus().length,
-                release: os.release(),
-                osName: osName(),
-                distro
-              },
-              totalRAMInGB: SystemHelper.getTotalRAM(),
-              nodeVersion: SystemHelper.getNodeJSVersion(),
-              npmVersion: SystemHelper.getNPMVersion()
-            }
-          }
-        })
       } catch (e) {
         if (IS_DEVELOPMENT_ENV) {
           LogHelper.title('Telemetry')
