@@ -3,11 +3,11 @@ import type { FastifyPluginAsync } from 'fastify'
 import {
   LEON_VERSION,
   HAS_AFTER_SPEECH,
-  HAS_LOGGER,
   HAS_STT,
   HAS_TTS,
   STT_PROVIDER,
-  TTS_PROVIDER
+  TTS_PROVIDER,
+  IS_TELEMETRY_ENABLED
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import type { APIOptions } from '@/core/http-server/http-server'
@@ -30,7 +30,7 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
         code: 'info_pulled',
         message,
         after_speech: HAS_AFTER_SPEECH,
-        logger: HAS_LOGGER,
+        telemetry: IS_TELEMETRY_ENABLED,
         stt: {
           enabled: HAS_STT,
           provider: STT_PROVIDER

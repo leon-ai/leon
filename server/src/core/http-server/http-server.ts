@@ -8,8 +8,8 @@ import type { Static } from '@sinclair/typebox'
 import {
   LEON_VERSION,
   LEON_NODE_ENV,
-  HAS_LOGGER,
-  HAS_OVER_HTTP
+  HAS_OVER_HTTP,
+  IS_TELEMETRY_ENABLED
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
@@ -68,8 +68,8 @@ export default class HTTPServer {
 
     LogHelper.info(`The current time zone is ${DateHelper.getTimeZone()}`)
 
-    const sLogger = !HAS_LOGGER ? 'disabled' : 'enabled'
-    LogHelper.info(`Collaborative logger ${sLogger}`)
+    const isTelemetryEnabled = IS_TELEMETRY_ENABLED ? 'enabled' : 'disabled'
+    LogHelper.info(`Telemetry ${isTelemetryEnabled}`)
 
     await this.bootstrap()
   }
