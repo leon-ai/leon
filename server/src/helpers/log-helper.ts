@@ -89,23 +89,23 @@ export class LogHelper {
    * @example parseErrorLogs() // 'Failed to connect to the TCP server: Error: read ECONNRESET'
    */
   public static async parseErrorLogs(): Promise<string[]> {
-    if (fs.existsSync(LogHelper.ERRORS_FILE_PATH)) {
-      const errorFileContent = await fs.promises.readFile(
-        LogHelper.ERRORS_FILE_PATH,
-        'utf8'
-      )
-      const errorLogs = errorFileContent
-        .trim()
-        .split(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} - /)
-
-      // Remove the first empty string if there's one
-      if (errorLogs[0] === '') {
-        errorLogs.shift()
-      }
-
-      return errorLogs
+    if (!fs.existsSync(LogHelper.ERRORS_FILE_PATH)) {
+      await fs.promises.open(LogHelper.ERRORS_FILE_PATH, 'w')
     }
 
-    return ['']
+    const errorFileContent = await fs.promises.readFile(
+      LogHelper.ERRORS_FILE_PATH,
+      'utf8'
+    )
+    const errorLogs = errorFileContent
+      .trim()
+      .split(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} - /)
+
+    // Remove the first empty string if there's one
+    if (errorLogs[0] === '') {
+      errorLogs.shift()
+    }
+
+    return errorLogs
   }
 }
