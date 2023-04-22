@@ -118,3 +118,4 @@ export const LEON_FILE_PATH = path.join('leon.json')
 export const INSTANCE_ID = fs.existsSync(LEON_FILE_PATH)
   ? JSON.parse(fs.readFileSync(LEON_FILE_PATH, 'utf8')).instanceID
   : null
+export const IS_GITPOD = process.env['GITPOD_WORKSPACE_URL'] !== undefined

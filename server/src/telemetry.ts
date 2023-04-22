@@ -14,6 +14,7 @@ import type {
 import {
   IS_TELEMETRY_ENABLED,
   INSTANCE_ID,
+  IS_GITPOD,
   IS_DEVELOPMENT_ENV,
   IS_PRODUCTION_ENV,
   LANG,
@@ -48,7 +49,8 @@ export class Telemetry {
 
   public static async postInstall(): Promise<PostIntallResponse> {
     const { data } = await this.axios.post('/on-post-install', {
-      instanceID: this.instanceID
+      instanceID: this.instanceID,
+      isGitpod: IS_GITPOD
     })
 
     return data
@@ -60,6 +62,7 @@ export class Telemetry {
         const platform = os.platform()
         const data = {
           isProduction: IS_PRODUCTION_ENV,
+          isGitpod: IS_GITPOD,
           isOnline: true,
           language: LANG,
           sttProvider: STT_PROVIDER,
