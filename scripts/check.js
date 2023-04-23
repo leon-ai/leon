@@ -43,34 +43,6 @@ dotenv.config()
     const skillsResolversNlpModelPath =
       'core/data/models/leon-skills-resolvers-model.nlp'
     const mainNlpModelPath = 'core/data/models/leon-main-model.nlp'
-    const pastebinData = {
-      leonVersion: null,
-      environment: {
-        osDetails: null,
-        nodeVersion: null,
-        npmVersion: null
-      },
-      nlpModels: {
-        globalResolversModelState: null,
-        skillsResolversModelState: null,
-        mainModelState: null
-      },
-      pythonBridge: {
-        version: null,
-        executionTime: null,
-        command: null,
-        output: null,
-        error: null
-      },
-      tcpServer: {
-        version: null,
-        startTime: null,
-        command: null,
-        output: null,
-        error: null
-      },
-      report: null
-    }
     const report = {
       can_run: { title: 'Run', type: 'error', v: true },
       can_run_skill: { title: 'Run skills', type: 'error', v: true },
@@ -115,6 +87,34 @@ dotenv.config()
         type: 'warning',
         v: true
       }
+    }
+    let pastebinData = {
+      leonVersion: null,
+      environment: {
+        osDetails: null,
+        nodeVersion: null,
+        npmVersion: null
+      },
+      nlpModels: {
+        globalResolversModelState: null,
+        skillsResolversModelState: null,
+        mainModelState: null
+      },
+      pythonBridge: {
+        version: null,
+        executionTime: null,
+        command: null,
+        output: null,
+        error: null
+      },
+      tcpServer: {
+        version: null,
+        startTime: null,
+        command: null,
+        output: null,
+        error: null
+      },
+      report: null
     }
 
     LogHelper.title('Checking')
@@ -526,6 +526,10 @@ dotenv.config()
       }
 
       pastebinData.report = report
+
+      pastebinData = JSON.parse(
+        SystemHelper.sanitizeUsername(JSON.stringify(pastebinData))
+      )
 
       LogHelper.title('REPORT URL')
 
