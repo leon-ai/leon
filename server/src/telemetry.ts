@@ -178,7 +178,7 @@ export class Telemetry {
       try {
         await this.axios.post('/on-error', {
           instanceID: this.instanceID,
-          error
+          error: SystemHelper.sanitizeUsername(error)
         })
       } catch (e) {
         if (IS_DEVELOPMENT_ENV) {
