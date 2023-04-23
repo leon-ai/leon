@@ -1,4 +1,5 @@
 from cx_Freeze import setup, Executable
+import requests.certs
 
 from version import __version__
 
@@ -8,7 +9,8 @@ options = {
         'includes': [
         	'bs4',
         	'pytube'
-        ]
+        ],
+        'include_files': [(requests.certs.where(), 'cacert.pem')]
 	}
 }
 
