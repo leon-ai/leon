@@ -90,7 +90,9 @@ export class LogHelper {
    */
   public static async parseErrorLogs(): Promise<string[]> {
     if (!fs.existsSync(LogHelper.ERRORS_FILE_PATH)) {
-      await fs.promises.open(LogHelper.ERRORS_FILE_PATH, 'w')
+      const fileHandle = await fs.promises.open(LogHelper.ERRORS_FILE_PATH, 'w')
+
+      await fileHandle.close()
     }
 
     const errorFileContent = await fs.promises.readFile(
