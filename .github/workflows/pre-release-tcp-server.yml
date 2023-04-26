@@ -33,7 +33,6 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: lts/*
-          cache: npm
 
       - name: Set TCP server version
         working-directory: tcp_server/src
