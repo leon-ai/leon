@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-20.04, macos-latest, windows-latest]
 
     runs-on: ${{ matrix.os }}
 
@@ -44,7 +44,7 @@ jobs:
           echo "TCP server version: ${{ env.TCP_SERVER_VERSION }}"
 
       - name: Install core
-        run: npm ci
+        run: npm install
 
       - name: Set up TCP server
         run: npm run setup:tcp-server
