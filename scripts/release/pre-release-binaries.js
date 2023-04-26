@@ -43,7 +43,7 @@ BUILD_TARGETS.set('tcp-server', {
 
   if (!answer.binary.bumped) {
     LogHelper.info(
-      'Please bump the version number of the binary from the setup file before continuing'
+      'Please bump the version number of the binary from the version file before continuing'
     )
     process.exit(0)
   }
