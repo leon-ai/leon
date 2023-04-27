@@ -19,9 +19,11 @@ export const GITHUB_URL = 'https://github.com/leon-ai/leon'
  */
 export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
 export const PYTHON_BRIDGE_DIST_PATH = path.join('bridges', 'python', 'dist')
+export const NODEJS_BRIDGE_DIST_PATH = path.join('bridges', 'nodejs', 'dist')
 export const TCP_SERVER_DIST_PATH = path.join('tcp_server', 'dist')
 
 export const PYTHON_BRIDGE_SRC_PATH = path.join('bridges', 'python', 'src')
+export const NODEJS_BRIDGE_SRC_PATH = path.join('bridges', 'nodejs', 'src')
 export const TCP_SERVER_SRC_PATH = path.join('tcp_server', 'src')
 
 const PYTHON_BRIDGE_VERSION_FILE_PATH = path.join(
@@ -40,6 +42,7 @@ export const [, TCP_SERVER_VERSION] = fs
   .split("'")
 
 export const PYTHON_BRIDGE_BIN_NAME = 'leon-python-bridge'
+export const NODEJS_BRIDGE_BIN_NAME = 'leon-nodejs-bridge.js'
 export const TCP_SERVER_BIN_NAME = 'leon-tcp-server'
 
 export const TCP_SERVER_BIN_PATH = path.join(
@@ -52,6 +55,10 @@ export const PYTHON_BRIDGE_BIN_PATH = path.join(
   BINARIES_FOLDER_NAME,
   PYTHON_BRIDGE_BIN_NAME
 )
+export const NODEJS_BRIDGE_BIN_PATH = `${process.execPath} ${path.join(
+  NODEJS_BRIDGE_DIST_PATH,
+  NODEJS_BRIDGE_BIN_NAME
+)}`
 
 export const LEON_VERSION = process.env['npm_package_version']
 

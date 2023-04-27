@@ -26,6 +26,7 @@ bridges/python/src/Pipfile.lock
 tcp_server/src/Pipfile.lock
 !tcp_server/**/.gitkeep
 !bridges/python/**/.gitkeep
+!bridges/nodejs/dist/*
 !**/*.sample*
 packages/**/config/config.json
 skills/**/src/config.json

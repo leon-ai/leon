@@ -2,8 +2,13 @@ import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
 
 import { globalResolverSchemaObject } from '@/schemas/global-data-schemas'
+import { SkillBridges } from '@/core/brain/types'
 
-const skillBridges = [Type.Literal('python'), Type.Null()]
+const skillBridges = [
+  Type.Literal(SkillBridges.Python),
+  Type.Literal(SkillBridges.NodeJS),
+  Type.Null()
+]
 const skillActionTypes = [
   Type.Literal('logic', {
     description: 'It runs the business logic implemented in actions via code.'

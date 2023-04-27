@@ -9,15 +9,24 @@ import type {
   NERCustomEntity,
   NLUResult
 } from '@/core/nlp/types'
-import type { SkillConfigSchema } from '@/schemas/skill-schemas'
+import type { SkillConfigSchema, SkillSchema } from '@/schemas/skill-schemas'
 import type {
   BrainProcessResult,
   IntentObject,
   SkillResult
 } from '@/core/brain/types'
-import { SkillActionType, SkillOutputType } from '@/core/brain/types'
+import {
+  SkillActionTypes,
+  SkillBridges,
+  SkillOutputTypes
+} from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
-import { HAS_TTS, PYTHON_BRIDGE_BIN_PATH, TMP_PATH } from '@/constants'
+import {
+  HAS_TTS,
+  PYTHON_BRIDGE_BIN_PATH,
+  NODEJS_BRIDGE_BIN_PATH,
+  TMP_PATH
+} from '@/constants'
 import { SOCKET_SERVER, TTS } from '@/core'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -190,7 +199,7 @@ export default class Brain {
       const obj = JSON.parse(data.toString())
 
       if (typeof obj === 'object') {
-        if (obj.output.type === SkillOutputType.Intermediate) {
+        if (obj.output.type === SkillOutputTypes.Intermediate) {
           LogHelper.title(`${this.skillFriendlyName} skill`)
           LogHelper.info(data.toString())
 
@@ -258,6 +267,7 @@ export default class Brain {
    */
   private async executeLogicActionSkill(
     nluResult: NLUResult,
+    skillBridge: SkillSchema['bridge'],
     utteranceId: string,
     intentObjectPath: string
   ): Promise<void> {
@@ -282,10 +292,20 @@ export default class Brain {
           intentObjectPath,
           JSON.stringify(intentObject)
         )
-        this.skillProcess = spawn(
-          `${PYTHON_BRIDGE_BIN_PATH} "${intentObjectPath}"`,
-          { shell: true }
-        )
+
+        if (skillBridge === SkillBridges.Python) {
+          this.skillProcess = spawn(
+            `${PYTHON_BRIDGE_BIN_PATH} "${intentObjectPath}"`,
+            { shell: true }
+          )
+        } else if (skillBridge === SkillBridges.NodeJS) {
+          this.skillProcess = spawn(
+            `${NODEJS_BRIDGE_BIN_PATH} "${intentObjectPath}"`,
+            { shell: true }
+          )
+        } else {
+          LogHelper.error(`The skill bridge is not supported: ${skillBridge}`)
+        }
       } catch (e) {
         LogHelper.error(`Failed to save intent object: ${e}`)
       }
@@ -334,23 +354,24 @@ export default class Brain {
           ? actions[action.next_action]
           : null
 
-        if (actionType === SkillActionType.Logic) {
+        if (actionType === SkillActionTypes.Logic) {
           /**
            * "Logic" action skill execution
            */
-
-          await this.executeLogicActionSkill(
-            nluResult,
-            utteranceId,
-            intentObjectPath
-          )
 
           const domainName = nluResult.classification.domain
           const skillName = nluResult.classification.skill
           const { name: domainFriendlyName } =
             await SkillDomainHelper.getSkillDomainInfo(domainName)
-          const { name: skillFriendlyName } =
+          const { name: skillFriendlyName, bridge: skillBridge } =
             await SkillDomainHelper.getSkillInfo(domainName, skillName)
+
+          await this.executeLogicActionSkill(
+            nluResult,
+            skillBridge,
+            utteranceId,
+            intentObjectPath
+          )
 
           this.domainFriendlyName = domainFriendlyName
           this.skillFriendlyName = skillFriendlyName
@@ -387,7 +408,7 @@ export default class Brain {
 
                   // Synchronize the downloaded content if enabled
                   if (
-                    skillResult.output.type === SkillOutputType.End &&
+                    skillResult.output.type === SkillOutputTypes.End &&
                     skillResult.output.options['synchronization'] &&
                     skillResult.output.options['synchronization'].enabled &&
                     skillResult.output.options['synchronization'].enabled ===
