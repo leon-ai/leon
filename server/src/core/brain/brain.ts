@@ -171,11 +171,11 @@ export default class Brain {
    */
   private createIntentObject(
     nluResult: NLUResult,
-    utteranceId: string,
+    utteranceID: string,
     slots: IntentObject['slots']
   ): IntentObject {
     return {
-      id: utteranceId,
+      id: utteranceID,
       lang: this._lang,
       domain: nluResult.classification.domain,
       skill: nluResult.classification.skill,
@@ -268,7 +268,7 @@ export default class Brain {
   private async executeLogicActionSkill(
     nluResult: NLUResult,
     skillBridge: SkillSchema['bridge'],
-    utteranceId: string,
+    utteranceID: string,
     intentObjectPath: string
   ): Promise<void> {
     // Ensure the process is empty (to be able to execute other processes outside of Brain)
@@ -283,7 +283,7 @@ export default class Brain {
 
       const intentObject = this.createIntentObject(
         nluResult,
-        utteranceId,
+        utteranceID,
         slots
       )
 
@@ -319,8 +319,8 @@ export default class Brain {
     const executionTimeStart = Date.now()
 
     return new Promise(async (resolve) => {
-      const utteranceId = `${Date.now()}-${StringHelper.random(4)}`
-      const intentObjectPath = path.join(TMP_PATH, `${utteranceId}.json`)
+      const utteranceID = `${Date.now()}-${StringHelper.random(4)}`
+      const intentObjectPath = path.join(TMP_PATH, `${utteranceID}.json`)
       const speeches: string[] = []
 
       // Reset skill output
@@ -369,7 +369,7 @@ export default class Brain {
           await this.executeLogicActionSkill(
             nluResult,
             skillBridge,
-            utteranceId,
+            utteranceID,
             intentObjectPath
           )
 
@@ -463,7 +463,7 @@ export default class Brain {
             }
 
             resolve({
-              utteranceId,
+              utteranceID,
               lang: this._lang,
               ...nluResult,
               speeches,
@@ -592,7 +592,7 @@ export default class Brain {
           }
 
           resolve({
-            utteranceId,
+            utteranceID,
             lang: this._lang,
             ...nluResult,
             speeches: [answer as string],

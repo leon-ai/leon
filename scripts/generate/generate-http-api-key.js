@@ -14,7 +14,7 @@ dotenv.config()
  * Generate HTTP API key script
  * save it in the .env file
  */
-const generateHttpApiKey = () =>
+const generateHTTPAPIKey = () =>
   new Promise(async (resolve, reject) => {
     LogHelper.info('Generating the HTTP API key...')
 
@@ -56,17 +56,17 @@ export default () =>
         !process.env.LEON_HTTP_API_KEY ||
         process.env.LEON_HTTP_API_KEY === ''
       ) {
-        await generateHttpApiKey()
+        await generateHTTPAPIKey()
       } else if (!process.env.IS_DOCKER) {
         const answer = await prompt({
           type: 'confirm',
-          name: 'generate.httpApiKey',
+          name: 'generate.httpAPIKey',
           message: 'Do you want to regenerate the HTTP API key?',
           default: false
         })
 
-        if (answer.generate.httpApiKey === true) {
-          await generateHttpApiKey()
+        if (answer.generate.httpAPIKey === true) {
+          await generateHTTPAPIKey()
         }
       }
 

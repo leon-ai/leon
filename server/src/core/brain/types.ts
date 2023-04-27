@@ -67,7 +67,7 @@ export interface IntentObject {
 export interface BrainProcessResult extends NLUResult {
   speeches: string[]
   executionTime: number
-  utteranceId?: string
+  utteranceID?: string
   lang?: ShortLanguageCode
   core?: SkillCoreData | undefined
   action?: SkillConfigSchema['actions'][string]

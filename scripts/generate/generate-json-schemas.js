@@ -25,9 +25,12 @@ import {
  */
 export const generateSchemas = async (categoryName, schemas) => {
   const categorySchemasPath = path.join(process.cwd(), 'schemas', categoryName)
+
   await fs.promises.mkdir(categorySchemasPath, { recursive: true })
+
   for (const [schemaName, schemaObject] of schemas.entries()) {
     const schemaPath = path.join(categorySchemasPath, `${schemaName}.json`)
+
     await fs.promises.writeFile(
       schemaPath,
       JSON.stringify(
@@ -44,6 +47,7 @@ export const generateSchemas = async (categoryName, schemas) => {
 
 export default async () => {
   LogHelper.info('Generating the JSON schemas...')
+
   await Promise.all([
     generateSchemas(
       'global-data',
@@ -71,5 +75,6 @@ export default async () => {
       ])
     )
   ])
+
   LogHelper.success('JSON schemas generated')
 }
