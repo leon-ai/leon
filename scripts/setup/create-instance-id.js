@@ -20,9 +20,11 @@ export default async () => {
           2
         )
       )
-    }
 
-    LogHelper.success(`Instance ID created: ${instanceID}`)
+      LogHelper.success(`Instance ID created: ${instanceID}`)
+    } else {
+      LogHelper.success(`Instance ID already exists: ${instanceID}`)
+    }
   } catch (e) {
     LogHelper.warning(`Failed to create the instance ID: ${e}`)
   }
