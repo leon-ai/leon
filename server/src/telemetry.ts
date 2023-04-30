@@ -48,13 +48,17 @@ export class Telemetry {
     timeout: 7_000
   })
 
-  public static async postInstall(): Promise<PostIntallResponse> {
-    const { data } = await this.axios.post('/on-post-install', {
-      instanceID: this.instanceID,
-      isGitpod: IS_GITPOD
-    })
+  public static async postInstall(): Promise<PostIntallResponse | unknown> {
+    try {
+      const { data } = await this.axios.post('/on-post-install', {
+        instanceID: this.instanceID,
+        isGitpod: IS_GITPOD
+      })
 
-    return data
+      return data
+    } catch (e) {
+      return {}
+    }
   }
 
   public static async start(): Promise<void> {
@@ -95,10 +99,19 @@ export class Telemetry {
             }
             data.environment.osDetails.distro = os
 
-            await this.axios.post('/on-start', {
-              instanceID: this.instanceID,
-              data
-            })
+            try {
+              await this.axios.post('/on-start', {
+                instanceID: this.instanceID,
+                data
+              })
+            } catch (e) {
+              if (IS_DEVELOPMENT_ENV) {
+                LogHelper.title('Telemetry')
+                LogHelper.warning(
+                  `Failed to send start data to telemetry service: ${e}`
+                )
+              }
+            }
           })
         } else {
           await this.axios.post('/on-start', {
