@@ -29,8 +29,13 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
-import { VOICE_CONFIG_PATH, GLOBAL_DATA_PATH } from '@/constants'
+import {
+  MINIMUM_REQUIRED_RAM,
+  VOICE_CONFIG_PATH,
+  GLOBAL_DATA_PATH
+} from '@/constants'
 import { getGlobalEntitiesPath, getGlobalResolversPath } from '@/utilities'
+import { SystemHelper } from '@/helpers/system-helper'
 
 interface ObjectUnknown {
   [key: string]: unknown
@@ -66,8 +71,11 @@ const validateSchema = (
 
 /**
  * Pre-checking
- * Ensure JSON files are correctly formatted
+ *
+ * - Ensure the system requirements are met
+ * - Ensure JSON files are correctly formatted
  */
+
 const VOICE_CONFIG_SCHEMAS = {
   amazon: amazonVoiceConfiguration,
   'google-cloud': googleCloudVoiceConfiguration,
@@ -82,6 +90,23 @@ const GLOBAL_DATA_SCHEMAS = {
 
 ;(async (): Promise<void> => {
   LogHelper.title('Pre-checking')
+
+  /**
+   * System requirements checking
+   */
+  LogHelper.info('Checking system requirements...')
+
+  const totalRAMInGB = Math.round(SystemHelper.getTotalRAM())
+
+  if (totalRAMInGB < MINIMUM_REQUIRED_RAM) {
+    LogHelper.warning(
+      `Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM. It may not work as expected.`
+    )
+  } else {
+    LogHelper.success(
+      `Minimum required RAM: ${MINIMUM_REQUIRED_RAM} GB | Total RAM: ${totalRAMInGB} GB`
+    )
+  }
 
   /**
    * Voice configuration checking

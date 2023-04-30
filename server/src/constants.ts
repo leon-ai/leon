@@ -122,6 +122,7 @@ export const LEON_FILE_PATH = path.join('leon.json')
 /**
  * Misc
  */
+export const MINIMUM_REQUIRED_RAM = 4
 export const INSTANCE_ID = fs.existsSync(LEON_FILE_PATH)
   ? JSON.parse(fs.readFileSync(LEON_FILE_PATH, 'utf8')).instanceID
   : null

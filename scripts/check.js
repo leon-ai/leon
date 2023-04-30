@@ -14,6 +14,7 @@ import getos from 'getos'
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import {
+  MINIMUM_REQUIRED_RAM,
   LEON_VERSION,
   PYTHON_BRIDGE_BIN_PATH,
   TCP_SERVER_BIN_PATH,
@@ -31,7 +32,6 @@ dotenv.config()
   try {
     const nodeMinRequiredVersion = '16'
     const npmMinRequiredVersion = '8'
-    const minimumRequiredRAM = 4
     const flitePath = 'bin/flite/flite'
     const coquiLanguageModelPath = 'bin/coqui/huge-vocabulary.scorer'
     const amazonPath = 'core/config/voice/amazon.json'
@@ -144,10 +144,10 @@ dotenv.config()
     }
     const totalRAMInGB = SystemHelper.getTotalRAM()
 
-    if (Math.round(totalRAMInGB) < minimumRequiredRAM) {
+    if (Math.round(totalRAMInGB) < MINIMUM_REQUIRED_RAM) {
       report.can_run.v = false
       LogHelper.error(
-        `Total RAM: ${totalRAMInGB} GB. Leon needs at least ${minimumRequiredRAM} GB of RAM`
+        `Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM`
       )
     } else {
       LogHelper.success(`Total RAM: ${totalRAMInGB} GB`)
