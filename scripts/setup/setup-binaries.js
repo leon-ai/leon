@@ -88,7 +88,7 @@ const setupBinaries = async (key) => {
   if (!manifest || manifest.version !== version) {
     const buildPath = isPlatformDependent
       ? path.join(distPath, BINARIES_FOLDER_NAME)
-      : distPath
+      : path.join(distPath, 'bin')
     const archivePath = path.join(distPath, archiveName)
 
     await Promise.all([
@@ -130,7 +130,9 @@ const setupBinaries = async (key) => {
       LogHelper.success(`${name} downloaded`)
       LogHelper.info(`Extracting ${name}...`)
 
-      const absoluteDistPath = path.resolve(distPath)
+      const absoluteDistPath = isPlatformDependent
+        ? path.resolve(distPath)
+        : path.resolve(distPath, 'bin')
       await extractZip(archivePath, { dir: absoluteDistPath })
 
       LogHelper.success(`${name} extracted`)
@@ -151,7 +153,7 @@ const setupBinaries = async (key) => {
 }
 
 export default async () => {
-  // await setupBinaries('nodejs-bridge')
+  await setupBinaries('nodejs-bridge')
   await setupBinaries('python-bridge')
   await setupBinaries('tcp-server')
 }

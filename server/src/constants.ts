@@ -74,6 +74,7 @@ export const PYTHON_BRIDGE_BIN_PATH = path.join(
 )
 export const NODEJS_BRIDGE_BIN_PATH = `${process.execPath} ${path.join(
   NODEJS_BRIDGE_DIST_PATH,
+  'bin',
   NODEJS_BRIDGE_BIN_NAME
 )}`
 
