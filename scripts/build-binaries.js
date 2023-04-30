@@ -188,7 +188,7 @@ BUILD_TARGETS.set('tcp-server', {
   if (needsPythonEnv) {
     archive.directory(buildPath, BINARIES_FOLDER_NAME)
   } else {
-    archive.glob('**/*', { cwd: distPath })
+    archive.glob(`**/!(${archiveName})`, { cwd: distPath })
   }
 
   await archive.finalize()
