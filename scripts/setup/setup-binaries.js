@@ -151,7 +151,7 @@ const setupBinaries = async (key) => {
 }
 
 export default async () => {
-  await setupBinaries('nodejs-bridge')
+  // await setupBinaries('nodejs-bridge')
   await setupBinaries('python-bridge')
   await setupBinaries('tcp-server')
 }
