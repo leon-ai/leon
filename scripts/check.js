@@ -144,7 +144,7 @@ dotenv.config()
     }
     const totalRAMInGB = SystemHelper.getTotalRAM()
 
-    if (totalRAMInGB < minimumRequiredRAM) {
+    if (Math.round(totalRAMInGB) < minimumRequiredRAM) {
       report.can_run.v = false
       LogHelper.error(
         `Total RAM: ${totalRAMInGB} GB. Leon needs at least ${minimumRequiredRAM} GB of RAM`
