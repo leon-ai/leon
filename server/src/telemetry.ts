@@ -19,6 +19,7 @@ import {
   IS_PRODUCTION_ENV,
   LANG,
   LEON_VERSION,
+  NODEJS_BRIDGE_VERSION,
   PYTHON_BRIDGE_VERSION,
   STT_PROVIDER,
   TCP_SERVER_VERSION,
@@ -68,6 +69,7 @@ export class Telemetry {
           sttProvider: STT_PROVIDER,
           ttsProvider: TTS_PROVIDER,
           coreVersion: LEON_VERSION,
+          nodeJSBridgeVersion: NODEJS_BRIDGE_VERSION,
           pythonBridgeVersion: PYTHON_BRIDGE_VERSION,
           tcpServerVersion: TCP_SERVER_VERSION,
           environment: {
