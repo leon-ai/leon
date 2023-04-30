@@ -3,7 +3,11 @@ import path from 'node:path'
 import { prompt } from 'inquirer'
 import { command } from 'execa'
 
-import { PYTHON_BRIDGE_SRC_PATH, TCP_SERVER_SRC_PATH } from '@/constants'
+import {
+  NODEJS_BRIDGE_SRC_PATH,
+  PYTHON_BRIDGE_SRC_PATH,
+  TCP_SERVER_SRC_PATH
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
 
@@ -15,6 +19,10 @@ import { LoaderHelper } from '@/helpers/loader-helper'
 
 const BUILD_TARGETS = new Map()
 
+BUILD_TARGETS.set('nodejs-bridge', {
+  workflowFileName: 'pre-release-nodejs-bridge.yml',
+  versionFilePath: path.join(NODEJS_BRIDGE_SRC_PATH, 'version.ts')
+})
 BUILD_TARGETS.set('python-bridge', {
   workflowFileName: 'pre-release-python-bridge.yml',
   versionFilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'version.py')

@@ -8,7 +8,7 @@ import generateJSONSchemas from '../generate/generate-json-schemas'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupSkillsConfig from './setup-skills-config'
-import setupPythonBinaries from './setup-python-binaries'
+import setupBinaries from './setup-binaries'
 import createInstanceID from './create-instance-id'
 
 // Do not load ".env" file because it is not created yet
@@ -22,7 +22,7 @@ import createInstanceID from './create-instance-id'
     LoaderHelper.start()
     await Promise.all([setupCore(), setupSkillsConfig()])
     LoaderHelper.stop()
-    await setupPythonBinaries()
+    await setupBinaries()
     await generateHTTPAPIKey()
     await generateJSONSchemas()
     LoaderHelper.start()

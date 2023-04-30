@@ -18,14 +18,18 @@ export const GITHUB_URL = 'https://github.com/leon-ai/leon'
  * Binaries / distribution
  */
 export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
-export const PYTHON_BRIDGE_DIST_PATH = path.join('bridges', 'python', 'dist')
 export const NODEJS_BRIDGE_DIST_PATH = path.join('bridges', 'nodejs', 'dist')
+export const PYTHON_BRIDGE_DIST_PATH = path.join('bridges', 'python', 'dist')
 export const TCP_SERVER_DIST_PATH = path.join('tcp_server', 'dist')
 
-export const PYTHON_BRIDGE_SRC_PATH = path.join('bridges', 'python', 'src')
 export const NODEJS_BRIDGE_SRC_PATH = path.join('bridges', 'nodejs', 'src')
+export const PYTHON_BRIDGE_SRC_PATH = path.join('bridges', 'python', 'src')
 export const TCP_SERVER_SRC_PATH = path.join('tcp_server', 'src')
 
+const NODEJS_BRIDGE_VERSION_FILE_PATH = path.join(
+  NODEJS_BRIDGE_SRC_PATH,
+  'version.ts'
+)
 const PYTHON_BRIDGE_VERSION_FILE_PATH = path.join(
   PYTHON_BRIDGE_SRC_PATH,
   'version.py'
@@ -34,6 +38,9 @@ const TCP_SERVER_VERSION_FILE_PATH = path.join(
   TCP_SERVER_SRC_PATH,
   'version.py'
 )
+export const [, NODEJS_BRIDGE_VERSION] = fs
+  .readFileSync(NODEJS_BRIDGE_VERSION_FILE_PATH, 'utf8')
+  .split("'")
 export const [, PYTHON_BRIDGE_VERSION] = fs
   .readFileSync(PYTHON_BRIDGE_VERSION_FILE_PATH, 'utf8')
   .split("'")

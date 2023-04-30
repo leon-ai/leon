@@ -11,52 +11,71 @@ import extractZip from 'extract-zip'
 import {
   BINARIES_FOLDER_NAME,
   GITHUB_URL,
+  NODEJS_BRIDGE_DIST_PATH,
   PYTHON_BRIDGE_DIST_PATH,
   TCP_SERVER_DIST_PATH,
+  NODEJS_BRIDGE_BIN_NAME,
   PYTHON_BRIDGE_BIN_NAME,
   TCP_SERVER_BIN_NAME,
+  NODEJS_BRIDGE_VERSION,
   PYTHON_BRIDGE_VERSION,
   TCP_SERVER_VERSION
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
 /**
- * Set up Python binaries according to the given setup target
+ * Set up binaries according to the given setup target
  * 1. Delete the existing dist binaries if already exist
- * 2. Download the latest Python binaries from GitHub releases
+ * 2. Download the latest binaries from GitHub releases
  * 3. Extract the downloaded ZIP file to the dist folder
  */
 
-const PYTHON_TARGETS = new Map()
+const TARGETS = new Map()
 
-PYTHON_TARGETS.set('python-bridge', {
+TARGETS.set('nodejs-bridge', {
+  name: 'Node.js bridge',
+  distPath: NODEJS_BRIDGE_DIST_PATH,
+  manifestPath: path.join(NODEJS_BRIDGE_DIST_PATH, 'manifest.json'),
+  archiveName: `${NODEJS_BRIDGE_BIN_NAME}.zip`,
+  version: NODEJS_BRIDGE_VERSION,
+  isPlatformDependent: false // Need to be built for the target platform or not
+})
+TARGETS.set('python-bridge', {
   name: 'Python bridge',
   distPath: PYTHON_BRIDGE_DIST_PATH,
   manifestPath: path.join(PYTHON_BRIDGE_DIST_PATH, 'manifest.json'),
   archiveName: `${PYTHON_BRIDGE_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
-  version: PYTHON_BRIDGE_VERSION
+  version: PYTHON_BRIDGE_VERSION,
+  isPlatformDependent: true
 })
-PYTHON_TARGETS.set('tcp-server', {
+TARGETS.set('tcp-server', {
   name: 'TCP server',
   distPath: TCP_SERVER_DIST_PATH,
   manifestPath: path.join(TCP_SERVER_DIST_PATH, 'manifest.json'),
   archiveName: `${TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
-  version: TCP_SERVER_VERSION
+  version: TCP_SERVER_VERSION,
+  isPlatformDependent: true
 })
 
 async function createManifestFile(manifestPath, name, version) {
   const manifest = {
     name,
     version,
-    buildDate: Date.now()
+    setupDate: Date.now()
   }
 
   await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2))
 }
 
-const setupPythonBinaries = async (key) => {
-  const { name, distPath, archiveName, version, manifestPath } =
-    PYTHON_TARGETS.get(key)
+const setupBinaries = async (key) => {
+  const {
+    name,
+    distPath,
+    archiveName,
+    version,
+    manifestPath,
+    isPlatformDependent
+  } = TARGETS.get(key)
   let manifest = null
 
   if (fs.existsSync(manifestPath)) {
@@ -67,7 +86,9 @@ const setupPythonBinaries = async (key) => {
   }
 
   if (!manifest || manifest.version !== version) {
-    const buildPath = path.join(distPath, BINARIES_FOLDER_NAME)
+    const buildPath = isPlatformDependent
+      ? path.join(distPath, BINARIES_FOLDER_NAME)
+      : distPath
     const archivePath = path.join(distPath, archiveName)
 
     await Promise.all([
@@ -114,7 +135,7 @@ const setupPythonBinaries = async (key) => {
 
       LogHelper.success(`${name} extracted`)
 
-      Promise.all([
+      await Promise.all([
         fs.promises.rm(archivePath, { recursive: true, force: true }),
         createManifestFile(manifestPath, name, version)
       ])
@@ -130,6 +151,7 @@ const setupPythonBinaries = async (key) => {
 }
 
 export default async () => {
-  await setupPythonBinaries('python-bridge')
-  await setupPythonBinaries('tcp-server')
+  await setupBinaries('nodejs-bridge')
+  await setupBinaries('python-bridge')
+  await setupBinaries('tcp-server')
 }
