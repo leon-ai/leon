@@ -121,10 +121,10 @@ export class SystemHelper {
 
   /**
    * Get the Node.js version of the current process
-   * @example getNodeJSVersion() // 'v18.15.0'
+   * @example getNodeJSVersion() // '18.15.0'
    */
   public static getNodeJSVersion(): string {
-    return process.version || '0.0.0'
+    return process.versions.node || '0.0.0'
   }
 
   /**
