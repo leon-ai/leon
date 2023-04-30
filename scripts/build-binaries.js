@@ -9,10 +9,13 @@ import {
   PYTHON_BRIDGE_SRC_PATH,
   TCP_SERVER_SRC_PATH,
   BINARIES_FOLDER_NAME,
+  NODEJS_BRIDGE_DIST_PATH,
   PYTHON_BRIDGE_DIST_PATH,
   TCP_SERVER_DIST_PATH,
+  NODEJS_BRIDGE_BIN_NAME,
   PYTHON_BRIDGE_BIN_NAME,
-  TCP_SERVER_BIN_NAME
+  TCP_SERVER_BIN_NAME,
+  NODEJS_BRIDGE_ROOT_PATH
 } from '@/constants'
 import { OSTypes } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
@@ -29,8 +32,15 @@ import { SystemHelper } from '@/helpers/system-helper'
 
 const BUILD_TARGETS = new Map()
 
+BUILD_TARGETS.set('nodejs-bridge', {
+  name: 'Node.js bridge',
+  needsPythonEnv: false,
+  distPath: NODEJS_BRIDGE_DIST_PATH,
+  archiveName: `${NODEJS_BRIDGE_BIN_NAME.split('.')[0]}.zip`
+})
 BUILD_TARGETS.set('python-bridge', {
   name: 'Python bridge',
+  needsPythonEnv: true,
   pipfilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'Pipfile'),
   setupFilePath: path.join(PYTHON_BRIDGE_SRC_PATH, 'setup.py'),
   distPath: PYTHON_BRIDGE_DIST_PATH,
@@ -39,6 +49,7 @@ BUILD_TARGETS.set('python-bridge', {
 })
 BUILD_TARGETS.set('tcp-server', {
   name: 'TCP server',
+  needsPythonEnv: true,
   pipfilePath: path.join(TCP_SERVER_SRC_PATH, 'Pipfile'),
   setupFilePath: path.join(TCP_SERVER_SRC_PATH, 'setup.py'),
   distPath: TCP_SERVER_DIST_PATH,
@@ -62,13 +73,16 @@ BUILD_TARGETS.set('tcp-server', {
 
   const {
     name: buildTarget,
+    needsPythonEnv,
     pipfilePath,
     setupFilePath,
     distPath,
     archiveName,
     dotVenvPath
   } = BUILD_TARGETS.get(givenBuildTarget)
-  const buildPath = path.join(distPath, BINARIES_FOLDER_NAME)
+  const buildPath = needsPythonEnv
+    ? path.join(distPath, BINARIES_FOLDER_NAME)
+    : distPath
 
   const { type: osType } = SystemHelper.getInformation()
 
@@ -76,7 +90,7 @@ BUILD_TARGETS.set('tcp-server', {
    * Install requirements
    */
   try {
-    if (osType === OSTypes.Linux) {
+    if (needsPythonEnv && osType === OSTypes.Linux) {
       LogHelper.info('Checking whether the "patchelf" utility can be found...')
 
       await command('patchelf --version', { shell: true })
@@ -92,30 +106,58 @@ BUILD_TARGETS.set('tcp-server', {
     process.exit(1)
   }
 
-  /**
-   * Build
-   */
-  try {
-    LogHelper.info(`Building the ${buildTarget}...`)
+  LogHelper.info(`Building the ${buildTarget}...`)
 
-    // Required environment variables to set up
-    process.env.PIPENV_PIPFILE = pipfilePath
-    process.env.PIPENV_VENV_IN_PROJECT = true
+  if (needsPythonEnv) {
+    /**
+     * Build for binaries requiring a Python environment
+     */
+    try {
+      // Required environment variables to set up
+      process.env.PIPENV_PIPFILE = pipfilePath
+      process.env.PIPENV_VENV_IN_PROJECT = true
 
-    await command(
-      `pipenv run python ${setupFilePath} build --build-exe ${buildPath}`,
-      {
+      await command(
+        `pipenv run python ${setupFilePath} build --build-exe ${buildPath}`,
+        {
+          shell: true,
+          stdio: 'inherit'
+        }
+      )
+
+      LogHelper.success(`The ${buildTarget} has been built`)
+    } catch (e) {
+      LogHelper.error(
+        `An error occurred while building the ${buildTarget}. Try to delete the ${dotVenvPath} folder, run the setup command then build again: ${e}`
+      )
+      process.exit(1)
+    }
+  } else {
+    /**
+     * Build for binaries not requiring a Python environment
+     */
+    try {
+      const tsconfigPath = path.join(NODEJS_BRIDGE_ROOT_PATH, 'tsconfig.json')
+      const distMainFilePath = path.join(NODEJS_BRIDGE_DIST_PATH, 'main.js')
+      const distRenamedMainFilePath = path.join(
+        NODEJS_BRIDGE_DIST_PATH,
+        NODEJS_BRIDGE_BIN_NAME
+      )
+
+      await command(`tsc --project ${tsconfigPath}`, {
         shell: true,
         stdio: 'inherit'
-      }
-    )
+      })
 
-    LogHelper.success(`The ${buildTarget} has been built`)
-  } catch (e) {
-    LogHelper.error(
-      `An error occurred while building the ${buildTarget}. Try to delete the ${dotVenvPath} folder, run the setup command then build again: ${e}`
-    )
-    process.exit(1)
+      await fs.promises.rename(distMainFilePath, distRenamedMainFilePath)
+
+      LogHelper.success(`The ${buildTarget} has been built`)
+    } catch (e) {
+      LogHelper.error(
+        `An error occurred while building the ${buildTarget}: ${e}`
+      )
+      process.exit(1)
+    }
   }
 
   /**
@@ -143,7 +185,11 @@ BUILD_TARGETS.set('tcp-server', {
 
   archive.pipe(output)
 
-  archive.directory(buildPath, BINARIES_FOLDER_NAME)
+  if (needsPythonEnv) {
+    archive.directory(buildPath, BINARIES_FOLDER_NAME)
+  } else {
+    archive.glob('**/*', { cwd: distPath })
+  }
 
   await archive.finalize()
 })()
