@@ -123,11 +123,14 @@ Types define which kind of changes you made to the project.
 
 Scopes define high-level nodes of Leon.
 
-- web app
+- bridge/python
+- bridge/nodejs
+- docker
+- hotword
+- scripts
 - server
 - tcp server
-- python bridge
-- hotword
+- web app
 - skill/skill_name
 
 ### Examples

@@ -18,7 +18,7 @@ import { LogHelper } from '@/helpers/log-helper'
         'utf8'
       )
       const regex =
-        '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|docker|server|hotword|tcp server|python bridge|skill\\/([\\w-]+)))?\\)?: .{1,50}'
+        '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|scripts|docker|server|hotword|tcp server|bridge\\/(python|nodejs)|skill\\/([\\w-]+)))?\\)?: .{1,50}'
 
       if (commitMessage.match(regex) !== null) {
         LogHelper.success('Commit message validated')
