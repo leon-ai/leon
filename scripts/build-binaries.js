@@ -82,7 +82,7 @@ BUILD_TARGETS.set('tcp-server', {
   } = BUILD_TARGETS.get(givenBuildTarget)
   const buildPath = needsPythonEnv
     ? path.join(distPath, BINARIES_FOLDER_NAME)
-    : distPath
+    : path.join(distPath, 'bin')
 
   const { type: osType } = SystemHelper.getInformation()
 
@@ -138,9 +138,14 @@ BUILD_TARGETS.set('tcp-server', {
      */
     try {
       const tsconfigPath = path.join(NODEJS_BRIDGE_ROOT_PATH, 'tsconfig.json')
-      const distMainFilePath = path.join(NODEJS_BRIDGE_DIST_PATH, 'main.js')
+      const distMainFilePath = path.join(
+        NODEJS_BRIDGE_DIST_PATH,
+        'bin',
+        'main.js'
+      )
       const distRenamedMainFilePath = path.join(
         NODEJS_BRIDGE_DIST_PATH,
+        'bin',
         NODEJS_BRIDGE_BIN_NAME
       )
 
@@ -188,7 +193,7 @@ BUILD_TARGETS.set('tcp-server', {
   if (needsPythonEnv) {
     archive.directory(buildPath, BINARIES_FOLDER_NAME)
   } else {
-    archive.glob(`**/!(${archiveName})`, { cwd: distPath })
+    archive.directory(buildPath, 'bin')
   }
 
   await archive.finalize()

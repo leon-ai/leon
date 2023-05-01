@@ -2,7 +2,7 @@
   "extends": "@tsconfig/node16-strictest/tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src",
-    "outDir": "./dist",
+    "outDir": "./dist/bin",
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]

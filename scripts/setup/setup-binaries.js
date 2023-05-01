@@ -130,9 +130,7 @@ const setupBinaries = async (key) => {
       LogHelper.success(`${name} downloaded`)
       LogHelper.info(`Extracting ${name}...`)
 
-      const absoluteDistPath = isPlatformDependent
-        ? path.resolve(distPath)
-        : path.resolve(distPath, 'bin')
+      const absoluteDistPath = path.resolve(distPath)
       await extractZip(archivePath, { dir: absoluteDistPath })
 
       LogHelper.success(`${name} extracted`)
