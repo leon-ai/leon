@@ -1,0 +1,24 @@
+{
+  "extends": "@tsconfig/node16-strictest/tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "./server/dist",
+    "baseUrl": ".",
+    "paths": {
+      "@@/*": ["./*"],
+      "@/*": ["./server/src/*"]
+    },
+    "ignoreDeprecations": "5.0",
+    "allowJs": true,
+    "checkJs": false,
+    "resolveJsonModule": true
+  },
+  "ts-node": {
+    "swc": true,
+    "require": ["tsconfig-paths/register"],
+    "files": true
+  },
+  "files": ["server/src/global.d.ts"],
+  "include": ["server/src/**/*"],
+  "exclude": ["node_modules", "server/dist", "bridges/python", "tcp_server"]
+}

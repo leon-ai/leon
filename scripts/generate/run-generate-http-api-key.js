@@ -1,14 +1,14 @@
-import log from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import generateHttpApiKey from './generate-http-api-key'
 
 /**
  * Execute the generating HTTP API key script
  */
-(async () => {
+;(async () => {
   try {
     await generateHttpApiKey()
   } catch (e) {
-    log.error(`Failed to generate the HTTP API key: ${e}`)
+    LogHelper.error(`Failed to generate the HTTP API key: ${e}`)
   }
 })()

@@ -1,32 +1,33 @@
 import dotenv from 'dotenv'
 
-import loader from '@/helpers/loader'
-import log from '@/helpers/log'
+import { LoaderHelper } from '@/helpers/loader-helper'
+import { LogHelper } from '@/helpers/log-helper'
 
 import checkOs from '../check-os'
+
 import setupHotword from './setup-hotword'
 import setupTts from './setup-tts'
 import setupStt from './setup-stt'
 
-dotenv.config();
+dotenv.config()
 
 /**
- * Main entry to setup offline components
+ * Main entry to set up offline components
  */
-(async () => {
+;(async () => {
   try {
-    loader.start()
+    LoaderHelper.start()
     await checkOs()
-    loader.stop()
+    LoaderHelper.stop()
     await setupHotword()
-    loader.start()
+    LoaderHelper.start()
     await setupTts()
     await setupStt()
 
-    loader.stop()
-    log.success('Hooray! Offline components are installed!')
+    LoaderHelper.stop()
+    LogHelper.success('Hooray! Offline components are installed!')
   } catch (e) {
-    log.error(e)
-    loader.stop()
+    LogHelper.error(e)
+    LoaderHelper.stop()
   }
 })()

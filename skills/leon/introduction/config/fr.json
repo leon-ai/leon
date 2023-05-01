@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
   "actions": {
     "run": {
       "type": "logic",
@@ -27,15 +28,9 @@
       "Bonjour, profitez bien de votre journée !",
       "Bonjour, j'espère que votre journée sera pleine de joie et de productivité !"
     ],
-    "morning": [
-      "Bonjour !"
-    ],
-    "afternoon": [
-      "Bonjour !"
-    ],
-    "evening": [
-      "Bonsoir !"
-    ],
+    "morning": ["Bonjour !"],
+    "afternoon": ["Bonjour !"],
+    "evening": ["Bonsoir !"],
     "night": [
       "Bonsoir ! Bonne nuit !",
       "Bonsoir ! Je vous souhaite une douce nuit.",

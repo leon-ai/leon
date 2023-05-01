@@ -1,9 +1,21 @@
 {
-  "extends": "airbnb-base",
+  "extends": [
+    "eslint:recommended",
+    "plugin:@typescript-eslint/recommended",
+    "plugin:import/recommended",
+    "plugin:import/typescript",
+    "prettier"
+  ],
+  "settings": {
+    "import/resolver": {
+      "typescript": true,
+      "node": true
+    }
+  },
+  "parser": "@typescript-eslint/parser",
   "env": {
     "node": true,
-    "browser": true,
-    "jest/globals": true
+    "browser": true
   },
   "parserOptions": {
     "ecmaVersion": 2021
@@ -11,37 +23,55 @@
   "globals": {
     "io": true
   },
-  "plugins": [
-    "import",
-    "jest"
-  ],
-  "settings": {
-    "import/resolver": {
-      "babel-module": {
-        "alias": {
-          "@@": ".",
-          "@": "./server/src"
-        }
-      }
-    }
-  },
+  "plugins": ["@typescript-eslint", "unicorn", "import"],
+  "ignorePatterns": "*.spec.js",
   "rules": {
-    "no-multi-assign": "off",
-    "no-trailing-spaces": "off",
-    "linebreak-style": "off",
-    "indent": "off",
-    "strict": "off",
-    "no-console": "off",
-    "no-param-reassign": "off",
-    "no-shadow": "off",
-    "import/no-extraneous-dependencies": "off",
-    "import/no-dynamic-require": "off",
-    "prefer-promise-reject-errors": ["off"],
+    "@typescript-eslint/no-non-null-assertion": ["off"],
     "no-async-promise-executor": ["off"],
     "no-underscore-dangle": ["error", { "allowAfterThis": true }],
-    "space-before-function-paren": ["error", "always"],
-    "prefer-destructuring": ["error", { "array": true, "object": true }],
+    "prefer-destructuring": ["error"],
     "comma-dangle": ["error", "never"],
-    "semi": ["error", "never"]
-  }
+    "semi": ["error", "never"],
+    "object-curly-spacing": ["error", "always"],
+    "unicorn/prefer-node-protocol": "error",
+    "@typescript-eslint/member-delimiter-style": [
+      "error",
+      {
+        "multiline": {
+          "delimiter": "none",
+          "requireLast": true
+        },
+        "singleline": {
+          "delimiter": "comma",
+          "requireLast": false
+        }
+      }
+    ],
+    "@typescript-eslint/explicit-function-return-type": "off",
+    "@typescript-eslint/consistent-type-definitions": "error",
+    "import/no-named-as-default": "off",
+    "import/no-named-as-default-member": "off",
+    "import/order": [
+      "error",
+      {
+        "groups": [
+          "builtin",
+          "external",
+          "internal",
+          "parent",
+          "sibling",
+          "index"
+        ],
+        "newlines-between": "always"
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": ["*.ts"],
+      "rules": {
+        "@typescript-eslint/explicit-function-return-type": "error"
+      }
+    }
+  ]
 }

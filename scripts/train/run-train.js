@@ -1,14 +1,14 @@
-import log from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import train from './train'
 
 /**
  * Execute the training scripts
  */
-(async () => {
+;(async () => {
   try {
     await train()
   } catch (e) {
-    log.error(`Failed to train: ${e}`)
+    LogHelper.error(`Failed to train: ${e}`)
   }
 })()

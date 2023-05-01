@@ -1,41 +1,39 @@
-import loader from '@/helpers/loader'
-import log from '@/helpers/log'
+import { LoaderHelper } from '@/helpers/loader-helper'
+import { LogHelper } from '@/helpers/log-helper'
 
 import train from '../train/train'
-import generateHttpApiKey from '../generate/generate-http-api-key'
+import generateHTTPAPIKey from '../generate/generate-http-api-key'
+import generateJSONSchemas from '../generate/generate-json-schemas'
+
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupSkillsConfig from './setup-skills-config'
-import setupPythonPackages from './setup-python-packages'
+import setupBinaries from './setup-binaries'
+import createInstanceID from './create-instance-id'
 
 // Do not load ".env" file because it is not created yet
 
 /**
- * Main entry to setup Leon
+ * Main entry to set up Leon
  */
-(async () => {
+;(async () => {
   try {
-    // Required env vars to setup
-    process.env.PIPENV_PIPFILE = 'bridges/python/Pipfile'
-    process.env.PIPENV_VENV_IN_PROJECT = 'true'
-
     await setupDotenv()
-    loader.start()
-    await Promise.all([
-      setupCore(),
-      setupSkillsConfig()
-    ])
-    await setupPythonPackages()
-    loader.stop()
-    await generateHttpApiKey()
-    loader.start()
+    LoaderHelper.start()
+    await Promise.all([setupCore(), setupSkillsConfig()])
+    LoaderHelper.stop()
+    await setupBinaries()
+    await generateHTTPAPIKey()
+    await generateJSONSchemas()
+    LoaderHelper.start()
     await train()
+    await createInstanceID()
 
-    log.default('')
-    log.success('Hooray! Leon is installed and ready to go!')
-    loader.stop()
+    LogHelper.default('')
+    LogHelper.success('Hooray! Leon is installed and ready to go!')
+    LoaderHelper.stop()
   } catch (e) {
-    log.error(e)
-    loader.stop()
+    LogHelper.error(e)
+    LoaderHelper.stop()
   }
 })()

@@ -1,5 +1,5 @@
-import log from '@/helpers/log'
-import loader from '@/helpers/loader'
+import { LogHelper } from '@/helpers/log-helper'
+import { LoaderHelper } from '@/helpers/loader-helper'
 
 import updateVersion from './update-version'
 import generateChangelog from './generate-changelog'
@@ -7,27 +7,30 @@ import generateChangelog from './generate-changelog'
 /**
  * Main entry of the release preparation
  */
-(async () => {
-  loader.start()
-  log.info('Preparing for release...')
+;(async () => {
+  LoaderHelper.start()
+  LogHelper.info('Preparing for release...')
 
   const { argv } = process
   const version = argv[2].toLowerCase()
-  const semverRegex = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$/
+  const semverRegex =
+    /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(\.(0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*)?(\+[0-9a-zA-Z-]+(\.[0-9a-zA-Z-]+)*)?$/
 
   if (version.match(semverRegex) !== null) {
     try {
       await updateVersion(version)
       await generateChangelog(version)
 
-      log.success('Hooray! Leon is ready to be released!')
-      loader.stop()
+      LogHelper.success('Hooray! Leon is ready to be released!')
+      LoaderHelper.stop()
     } catch (e) {
-      log.error(e)
-      loader.stop()
+      LogHelper.error(e)
+      LoaderHelper.stop()
     }
   } else {
-    log.error('The version number does match the Semantic Versioning rules (https://semver.org)')
-    loader.stop()
+    LogHelper.error(
+      'The version number does match the Semantic Versioning rules (https://semver.org)'
+    )
+    LoaderHelper.stop()
   }
 })()

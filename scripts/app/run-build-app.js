@@ -1,14 +1,14 @@
-import log from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import buildApp from './build-app'
 
 /**
  * Execute the building app script
  */
-(async () => {
+;(async () => {
   try {
     await buildApp()
   } catch (e) {
-    log.error(`Failed to build: ${e}`)
+    LogHelper.error(`Failed to build: ${e}`)
   }
 })()

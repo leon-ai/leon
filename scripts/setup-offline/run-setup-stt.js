@@ -1,14 +1,14 @@
-import log from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
-import setupStt from './setup-stt';
+import setupStt from './setup-stt'
 
 /**
  * Execute the setup offline STT script
  */
-(async () => {
+;(async () => {
   try {
     await setupStt()
   } catch (e) {
-    log.error(`Failed to setup offline STT: ${e}`)
+    LogHelper.error(`Failed to set up offline STT: ${e}`)
   }
 })()

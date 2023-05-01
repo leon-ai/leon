@@ -1,14 +1,14 @@
-import log from '@/helpers/log'
+import { LogHelper } from '@/helpers/log-helper'
 
 import cleanTestDbs from './clean-test-dbs'
 
 /**
  * Execute the cleaning test DBs script
  */
-(async () => {
+;(async () => {
   try {
     await cleanTestDbs()
   } catch (e) {
-    log.error(`Failed to clean test DBs: ${e}`)
+    LogHelper.error(`Failed to clean test DBs: ${e}`)
   }
 })()

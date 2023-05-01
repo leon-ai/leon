@@ -1,0 +1,76 @@
+name: Pre-release Node.js bridge
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    name: Build
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-20.04]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+
+      - name: Set Node.js bridge version
+        working-directory: bridges/nodejs/src
+        run: |
+          echo "NODEJS_BRIDGE_VERSION=$(node --require fs --eval "const fs = require('node:fs'); const [, VERSION] = fs.readFileSync('version.ts', 'utf8').split(\"'\"); console.log(VERSION)")" >> $GITHUB_ENV
+
+      - name: Display Node.js bridge version
+        run: |
+          echo "Node.js bridge version: ${{ env.NODEJS_BRIDGE_VERSION }}"
+
+      - name: Install core
+        run: npm install
+
+      - name: Build Node.js bridge
+        run: npm run build:nodejs-bridge
+
+      - name: Upload Node.js bridge
+        uses: actions/upload-artifact@v3
+        with:
+          path: bridges/nodejs/dist/*.zip
+
+  draft-release:
+    name: Draft-release
+    needs: [build]
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v3
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: lts/*
+
+      - name: Set Node.js bridge version
+        working-directory: bridges/nodejs/src
+        run: |
+          echo "NODEJS_BRIDGE_VERSION=$(node --require fs --eval "const fs = require('node:fs'); const [, VERSION] = fs.readFileSync('version.ts', 'utf8').split(\"'\"); console.log(VERSION)")" >> $GITHUB_ENV
+
+      - name: Download Node.js bridge
+        uses: actions/download-artifact@v3
+        with:
+          path: bridges/nodejs/dist
+
+      - uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          automatic_release_tag: nodejs-bridge_v${{ env.NODEJS_BRIDGE_VERSION }}
+          draft: true
+          prerelease: false
+          title: Node.js Bridge ${{ env.NODEJS_BRIDGE_VERSION }}
+          files: bridges/nodejs/dist/artifact/*.zip

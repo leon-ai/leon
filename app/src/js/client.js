@@ -1,8 +1,9 @@
 import { io } from 'socket.io-client'
+
 import Chatbot from './chatbot'
 
 export default class Client {
-  constructor (client, serverUrl, input, res) {
+  constructor(client, serverUrl, input, res) {
     this.client = client
     this._input = input
     this._suggestionContainer = document.querySelector('#suggestions-container')
@@ -12,25 +13,25 @@ export default class Client {
     this.parsedHistory = []
     this.info = res
     this.chatbot = new Chatbot()
-    this._recorder = { }
+    this._recorder = {}
     this._suggestions = []
   }
 
-  set input (newInput) {
+  set input(newInput) {
     if (typeof newInput !== 'undefined') {
       this._input.value = newInput
     }
   }
 
-  set recorder (recorder) {
+  set recorder(recorder) {
     this._recorder = recorder
   }
 
-  get recorder () {
+  get recorder() {
     return this._recorder
   }
 
-  init (loader) {
+  init(loader) {
     this.chatbot.init()
 
     this.socket.on('connect', () => {
@@ -46,7 +47,7 @@ export default class Client {
     })
 
     this.socket.on('suggest', (data) => {
-      data.forEach((suggestionText) => {
+      data?.forEach((suggestionText) => {
         this.addSuggestion(suggestionText)
       })
     })
@@ -99,7 +100,7 @@ export default class Client {
                   }
                 }
               }
-            }, 1000)
+            }, 1_000)
           }, data.duration + 500)
         }
       })
@@ -116,9 +117,12 @@ export default class Client {
     }
   }
 
-  send (keyword) {
+  send(keyword) {
     if (this._input.value !== '') {
-      this.socket.emit(keyword, { client: this.client, value: this._input.value.trim() })
+      this.socket.emit(keyword, {
+        client: this.client,
+        value: this._input.value.trim()
+      })
       this.chatbot.sendTo('leon', this._input.value)
 
       this._suggestions.forEach((suggestion) => {
@@ -135,7 +139,7 @@ export default class Client {
     return false
   }
 
-  save () {
+  save() {
     let val = this._input.value
 
     if (localStorage.getItem('history') === null) {
@@ -157,7 +161,7 @@ export default class Client {
     this._input.value = ''
   }
 
-  addSuggestion (text) {
+  addSuggestion(text) {
     const newSuggestion = document.createElement('button')
     newSuggestion.classList.add('suggestion')
     newSuggestion.textContent = text

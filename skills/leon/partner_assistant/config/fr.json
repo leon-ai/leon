@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
   "actions": {
     "run": {
       "type": "dialog",
@@ -9,9 +10,7 @@
         "Je veux en savoir plus au sujet de @partner_assistant",
         "Connais-tu @partner_assistant ?"
       ],
-      "answers": [
-        "{{ partner_assistant.thought }}"
-      ],
+      "answers": ["{{ partner_assistant.thought }}"],
       "unknown_answers": [
         "Je ne connais pas cet assistant personnel.",
         "Je n'ai pas encore rencontré cet assistant personnel."

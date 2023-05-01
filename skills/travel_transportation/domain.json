@@ -1,3 +1,4 @@
 {
+  "$schema": "../../schemas/skill-schemas/domain.json",
   "name": "Travel & Transportation"
 }

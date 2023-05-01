@@ -1,7 +1,12 @@
-const listener = { }
+const listener = {}
 
-listener.listening = (stream, minDecibels, maxBlankTime,
-                      cbOnStart, cbOnEnd) => {
+listener.listening = (
+  stream,
+  minDecibels,
+  maxBlankTime,
+  cbOnStart,
+  cbOnEnd
+) => {
   const ctx = new AudioContext()
   const analyser = ctx.createAnalyser()
   const streamNode = ctx.createMediaStreamSource(stream)
@@ -26,7 +31,7 @@ listener.listening = (stream, minDecibels, maxBlankTime,
       silenceStart = time
     }
 
-    if (!triggered && (time - silenceStart) > maxBlankTime) {
+    if (!triggered && time - silenceStart > maxBlankTime) {
       cbOnEnd()
 
       triggered = true

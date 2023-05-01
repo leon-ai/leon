@@ -1,5 +1,5 @@
 export default class Chatbot {
-  constructor () {
+  constructor() {
     this.et = new EventTarget()
     this.feed = document.querySelector('#feed')
     this.typing = document.querySelector('#is-typing')
@@ -8,7 +8,7 @@ export default class Chatbot {
     this.parsedBubbles = JSON.parse(this.bubbles)
   }
 
-  async init () {
+  async init() {
     await this.loadFeed()
     this.scrollDown()
 
@@ -21,19 +21,19 @@ export default class Chatbot {
     })
   }
 
-  sendTo (who, string) {
+  sendTo(who, string) {
     if (who === 'leon') {
       this.et.dispatchEvent(new CustomEvent('to-leon', { detail: string }))
     }
   }
 
-  receivedFrom (who, string) {
+  receivedFrom(who, string) {
     if (who === 'leon') {
       this.et.dispatchEvent(new CustomEvent('me-received', { detail: string }))
     }
   }
 
-  isTyping (who, value) {
+  isTyping(who, value) {
     if (who === 'leon') {
       if (value) {
         this.enableTyping()
@@ -43,23 +43,23 @@ export default class Chatbot {
     }
   }
 
-  enableTyping () {
+  enableTyping() {
     if (!this.typing.classList.contains('on')) {
       this.typing.classList.add('on')
     }
   }
 
-  disableTyping () {
+  disableTyping() {
     if (this.typing.classList.contains('on')) {
       this.typing.classList.remove('on')
     }
   }
 
-  scrollDown () {
+  scrollDown() {
     this.feed.scrollTo(0, this.feed.scrollHeight)
   }
 
-  loadFeed () {
+  loadFeed() {
     return new Promise((resolve) => {
       if (this.parsedBubbles === null || this.parsedBubbles.length === 0) {
         this.noBubbleMessage.classList.remove('hide')
@@ -72,7 +72,7 @@ export default class Chatbot {
 
           this.createBubble(bubble.who, bubble.string, false)
 
-          if ((i + 1) === this.parsedBubbles.length) {
+          if (i + 1 === this.parsedBubbles.length) {
             setTimeout(() => {
               resolve()
             }, 100)
@@ -82,7 +82,7 @@ export default class Chatbot {
     })
   }
 
-  createBubble (who, string, save = true) {
+  createBubble(who, string, save = true) {
     const container = document.createElement('div')
     const bubble = document.createElement('p')
 
@@ -97,7 +97,7 @@ export default class Chatbot {
     }
   }
 
-  saveBubble (who, string) {
+  saveBubble(who, string) {
     if (!this.noBubbleMessage.classList.contains('hide')) {
       this.noBubbleMessage.classList.add('hide')
     }

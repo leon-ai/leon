@@ -1,11 +1,12 @@
-import dotenv from 'dotenv'
-import crypto from 'crypto'
-import fs from 'fs'
-import { prompt } from 'inquirer'
-import path from 'path'
+import fs from 'node:fs'
+import path from 'node:path'
+import crypto from 'node:crypto'
 
-import log from '@/helpers/log'
-import string from '@/helpers/string'
+import dotenv from 'dotenv'
+import { prompt } from 'inquirer'
+
+import { LogHelper } from '@/helpers/log-helper'
+import { StringHelper } from '@/helpers/string-helper'
 
 dotenv.config()
 
@@ -13,59 +14,64 @@ dotenv.config()
  * Generate HTTP API key script
  * save it in the .env file
  */
-const generateHttpApiKey = () => new Promise(async (resolve, reject) => {
-  log.info('Generating the HTTP API key...')
+const generateHTTPAPIKey = () =>
+  new Promise(async (resolve, reject) => {
+    LogHelper.info('Generating the HTTP API key...')
 
-  try {
-    const shasum = crypto.createHash('sha1')
-    const str = string.random(11)
-    const dotEnvPath = path.join(process.cwd(), '.env')
-    const envVarKey = 'LEON_HTTP_API_KEY'
-    let content = fs.readFileSync(dotEnvPath, 'utf8')
+    try {
+      const shasum = crypto.createHash('sha1')
+      const str = StringHelper.random(11)
+      const dotEnvPath = path.join(process.cwd(), '.env')
+      const envVarKey = 'LEON_HTTP_API_KEY'
+      let content = await fs.promises.readFile(dotEnvPath, 'utf8')
 
-    shasum.update(str)
-    const sha1 = shasum.digest('hex')
+      shasum.update(str)
+      const sha1 = shasum.digest('hex')
 
-    let lines = content.split('\n')
-    lines = lines.map((line) => {
-      if (line.indexOf(`${envVarKey}=`) !== -1) {
-        line = `${envVarKey}=${sha1}`
-      }
+      let lines = content.split('\n')
+      lines = lines.map((line) => {
+        if (line.indexOf(`${envVarKey}=`) !== -1) {
+          line = `${envVarKey}=${sha1}`
+        }
 
-      return line
-    })
-
-    content = lines.join('\n')
-
-    fs.writeFileSync(dotEnvPath, content)
-    log.success('HTTP API key generated')
-
-    resolve()
-  } catch (e) {
-    log.error(e.message)
-    reject(e)
-  }
-})
-
-export default () => new Promise(async (resolve, reject) => {
-  try {
-    if (!process.env.LEON_HTTP_API_KEY || process.env.LEON_HTTP_API_KEY === '') {
-      await generateHttpApiKey()
-    } else if (!process.env.IS_DOCKER) {
-      const answer = await prompt({
-        type: 'confirm',
-        name: 'generate.httpApiKey',
-        message: 'Do you want to regenerate the HTTP API key?',
-        default: false
+        return line
       })
 
-      if (answer.generate.httpApiKey === true) {
-        await generateHttpApiKey()
-      }
-    }
+      content = lines.join('\n')
 
-    resolve()
-  } catch (e) {
-    reject(e)
-  }
-})
+      await fs.promises.writeFile(dotEnvPath, content)
+      LogHelper.success('HTTP API key generated')
+
+      resolve()
+    } catch (e) {
+      LogHelper.error(e.message)
+      reject(e)
+    }
+  })
+
+export default () =>
+  new Promise(async (resolve, reject) => {
+    try {
+      if (
+        !process.env.LEON_HTTP_API_KEY ||
+        process.env.LEON_HTTP_API_KEY === ''
+      ) {
+        await generateHTTPAPIKey()
+      } else if (!process.env.IS_DOCKER) {
+        const answer = await prompt({
+          type: 'confirm',
+          name: 'generate.httpAPIKey',
+          message: 'Do you want to regenerate the HTTP API key?',
+          default: false
+        })
+
+        if (answer.generate.httpAPIKey === true) {
+          await generateHTTPAPIKey()
+        }
+      }
+
+      resolve()
+    } catch (e) {
+      reject(e)
+    }
+  })

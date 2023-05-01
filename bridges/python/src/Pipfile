@@ -1,0 +1,16 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[requires]
+python_version = "3.9.10"
+
+[packages]
+setuptools = "*"
+wheel = "*"
+cx-freeze = "==6.11.1"
+requests = "==2.28.1"
+pytube = "==9.5.0"
+tinydb = "==4.7.0"
+beautifulsoup4 = "==4.7.1"

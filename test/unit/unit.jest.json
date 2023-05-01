@@ -5,13 +5,8 @@
   "collectCoverage": true,
   "resetMocks": true,
   "rootDir": "../..",
-  "testMatch": [
-    "<rootDir>/test/unit/**/*.spec.js"
-  ],
-  "setupFiles": [
-    "jest-canvas-mock",
-    "<rootDir>/test/paths.setup.js"
-  ],
+  "testMatch": ["<rootDir>/test/unit/**/*.spec.js"],
+  "setupFiles": ["jest-canvas-mock", "<rootDir>/test/paths.setup.js"],
   "setupFilesAfterEnv": [
     "jest-extended/all",
     "<rootDir>/test/unit/unit.setup.js"

@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
   "actions": {
     "run": {
       "type": "logic",
@@ -11,5 +12,5 @@
       ]
     }
   },
-  "answers": { }
+  "answers": {}
 }

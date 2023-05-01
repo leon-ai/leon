@@ -1,10 +1,9 @@
 {
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
   "actions": {
     "run": {
       "type": "logic",
-      "utterance_samples": [
-        "Télécharge les nouvelles vidéos depuis YouTube"
-      ]
+      "utterance_samples": ["Télécharge les nouvelles vidéos depuis YouTube"]
     }
   },
   "answers": {

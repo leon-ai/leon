@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
   "actions": {
     "run": {
       "type": "dialog",
@@ -6,10 +7,7 @@
         "Quel est le but de la vie ?",
         "Quel est l'objectif de la vie ?"
       ],
-      "answers": [
-        "42.",
-        "1 0 1 0 1 0."
-      ]
+      "answers": ["42.", "1 0 1 0 1 0."]
     }
   }
 }

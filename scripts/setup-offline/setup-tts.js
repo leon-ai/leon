@@ -1,52 +1,68 @@
-import { command } from 'execa'
-import fs from 'fs'
+import fs from 'node:fs'
 
-import log from '@/helpers/log'
-import os from '@/helpers/os'
+import { command } from 'execa'
+
+import { LogHelper } from '@/helpers/log-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 
 /**
- * Setup offline text-to-speech
+ * Set up offline text-to-speech
  */
-export default () => new Promise(async (resolve, reject) => {
-  log.info('Setting up offline text-to-speech...')
+export default () =>
+  new Promise(async (resolve, reject) => {
+    LogHelper.info('Setting up offline text-to-speech...')
 
-  const destFliteFolder = 'bin/flite'
-  const tmpDir = 'scripts/tmp'
-  let makeCores = ''
-  if (os.cpus().length > 2) {
-    makeCores = `-j ${os.cpus().length - 2}`
-  }
-  let downloader = 'wget'
-  if (os.get().type === 'macos') {
-    downloader = 'curl -L -O'
-  }
-
-  if (!fs.existsSync(`${destFliteFolder}/flite`)) {
-    try {
-      log.info('Downloading run-time synthesis engine...')
-      await command(`cd ${tmpDir} && ${downloader} http://ports.ubuntu.com/pool/universe/f/flite/flite_2.1-release.orig.tar.bz2`, { shell: true })
-      log.success('Run-time synthesis engine download done')
-      log.info('Unpacking...')
-      await command(`cd ${tmpDir} && tar xfvj flite_2.1-release.orig.tar.bz2 && cp ../assets/leon.lv flite-2.1-release/config`, { shell: true })
-      log.success('Unpack done')
-      log.info('Configuring...')
-      await command(`cd ${tmpDir}/flite-2.1-release && ./configure --with-langvox=leon`, { shell: true })
-      log.success('Configure done')
-      log.info('Building...')
-      await command(`cd ${tmpDir}/flite-2.1-release && make ${makeCores}`, { shell: true })
-      log.success('Build done')
-      log.info('Cleaning...')
-      await command(`cp -f ${tmpDir}/flite-2.1-release/bin/flite ${destFliteFolder} && rm -rf ${tmpDir}/flite-2.1-release*`, { shell: true })
-      log.success('Clean done')
-      log.success('Offline text-to-speech installed')
-
-      resolve()
-    } catch (e) {
-      log.error(`Failed to install offline text-to-speech: ${e}`)
-      reject(e)
+    const destFliteFolder = 'bin/flite'
+    const tmpDir = 'scripts/tmp'
+    let makeCores = ''
+    if (SystemHelper.getNumberOfCPUCores() > 2) {
+      makeCores = `-j ${SystemHelper.getNumberOfCPUCores() - 2}`
     }
-  } else {
-    log.success('Offline text-to-speech is already installed')
-    resolve()
-  }
-})
+    let downloader = 'wget'
+    if (SystemHelper.getInformation().type === 'macos') {
+      downloader = 'curl -L -O'
+    }
+
+    if (!fs.existsSync(`${destFliteFolder}/flite`)) {
+      try {
+        LogHelper.info('Downloading run-time synthesis engine...')
+        await command(
+          `cd ${tmpDir} && ${downloader} http://ports.ubuntu.com/pool/universe/f/flite/flite_2.1-release.orig.tar.bz2`,
+          { shell: true }
+        )
+        LogHelper.success('Run-time synthesis engine download done')
+        LogHelper.info('Unpacking...')
+        await command(
+          `cd ${tmpDir} && tar xfvj flite_2.1-release.orig.tar.bz2 && cp ../assets/leon.lv flite-2.1-release/config`,
+          { shell: true }
+        )
+        LogHelper.success('Unpack done')
+        LogHelper.info('Configuring...')
+        await command(
+          `cd ${tmpDir}/flite-2.1-release && ./configure --with-langvox=leon`,
+          { shell: true }
+        )
+        LogHelper.success('Configure done')
+        LogHelper.info('Building...')
+        await command(`cd ${tmpDir}/flite-2.1-release && make ${makeCores}`, {
+          shell: true
+        })
+        LogHelper.success('Build done')
+        LogHelper.info('Cleaning...')
+        await command(
+          `cp -f ${tmpDir}/flite-2.1-release/bin/flite ${destFliteFolder} && rm -rf ${tmpDir}/flite-2.1-release*`,
+          { shell: true }
+        )
+        LogHelper.success('Clean done')
+        LogHelper.success('Offline text-to-speech installed')
+
+        resolve()
+      } catch (e) {
+        LogHelper.error(`Failed to install offline text-to-speech: ${e}`)
+        reject(e)
+      }
+    } else {
+      LogHelper.success('Offline text-to-speech is already installed')
+      resolve()
+    }
+  })

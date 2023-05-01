@@ -1,4 +1,5 @@
 {
+  "$schema": "../../../schemas/skill-schemas/skill.json",
   "name": "Introduction",
   "bridge": "python",
   "version": "1.0.0",

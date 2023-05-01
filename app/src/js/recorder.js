@@ -2,7 +2,7 @@ import on from '../sounds/on.mp3'
 import off from '../sounds/off.mp3'
 
 export default class Recorder {
-  constructor (stream, el, info) {
+  constructor(stream, el, info) {
     this.recorder = new MediaRecorder(stream, { audioBitsPerSecond: 16000 })
     this.el = el
     this.audioOn = new Audio(on)
@@ -15,7 +15,7 @@ export default class Recorder {
     this.countSilenceAfterTalk = 0
   }
 
-  start (playSound = true) {
+  start(playSound = true) {
     if (this.info.stt.enabled === false) {
       console.warn('Speech-to-text disabled')
     } else {
@@ -24,7 +24,7 @@ export default class Recorder {
     }
   }
 
-  stop (playSound = true) {
+  stop(playSound = true) {
     if (this.info.stt.enabled === false) {
       console.warn('Speech-to-text disabled')
     } else {
@@ -33,7 +33,7 @@ export default class Recorder {
     }
   }
 
-  onstart (cb) {
+  onstart(cb) {
     this.recorder.onstart = (e) => {
       if (this.playSound) {
         this.audioOn.play()
@@ -44,7 +44,7 @@ export default class Recorder {
     }
   }
 
-  onstop (cb) {
+  onstop(cb) {
     this.recorder.onstop = (e) => {
       if (this.playSound) {
         this.audioOff.play()
@@ -55,7 +55,7 @@ export default class Recorder {
     }
   }
 
-  ondataavailable (cb) {
+  ondataavailable(cb) {
     this.recorder.ondataavailable = (e) => {
       cb(e)
     }
