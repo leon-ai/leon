@@ -10,7 +10,8 @@ export default (version) =>
     LogHelper.info('Updating version...')
 
     const promises = []
-    const files = ['package.json', 'package-lock.json']
+    // const files = ['package.json', 'package-lock.json']
+    const files = ['package.json']
 
     for (let i = 0; i < files.length; i += 1) {
       promises.push(

@@ -1,3 +1,7 @@
+# [1.0.0-beta.8](https://github.com/leon-ai/leon/compare/v1.0.0-beta.7...v1.0.0-beta.8) (2023-05-01) / Binaries and TypeScript Rewrite
+
+_Please refer to [our latest blog post](https://blog.getleon.ai/binaries-and-typescript-rewrite-1-0-0-beta-8/) for more information on the new release of our dear Leon._
+
 # [1.0.0-beta.7](https://github.com/leon-ai/leon/compare/v1.0.0-beta.6...v1.0.0-beta.7) (2022-08-24) / A Much Better NLP
 
 _Please [read this blog post](https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/) to know more about all the new features and the exciting future of Leon._

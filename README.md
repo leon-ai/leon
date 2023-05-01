@@ -56,18 +56,19 @@ Here is how LLMs may help Leon in the future:
 
 ### What's Next?
 
-Once the new core released, we'll work on the community aspect of Leon. For example, better organize our [Discord](https://discord.gg/MNQqqKg), planify regular calls, work on skills together, etc. It is very important for Leon to have a real community. At that moment, the skills platform will already be online, so it'll be easier to sync our progress and publish new skills.
+Once the new core released, we'll work on the community aspect of Leon. For example, better organize [our Discord](https://discord.gg/MNQqqKg), planify regular calls, work on skills together, etc. It is very important for Leon to have a real community. At that moment, the skills platform will already be online, so it'll be easier to sync our progress and publish new skills.
 
 - Feel free to check out the Git development branches and our [next major milestones](https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/#whats-next).
 - And the [detailed roadmap](http://roadmap.getleon.ai).
+- Many exciting things are coming up, hence no new documentation and test are going to be written until the official release of Leon.
 
-<h2 align="center">📢 Notice 📢</h2>
-<p align="center">
-  <a href="https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/"><img width="400" src="https://blog.getleon.ai/static/a62ac28a01cb6898e299dced40875a68/c1b63/beta-7.png" /></a>
-  <br>
-  Many exciting things are coming up, hence no new documentation and test are going to be written until the official release of Leon. Feel free to <a href="https://discord.gg/MNQqqKg"><b>join us on Discord</b></a> to know more and to read the <a href="https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/"><b>"A Much Better NLP and Future" blog post</b></a>.
-</p>
-<br><br>
+---
+
+## Latest Release
+
+Check out the [latest release blog post](https://blog.getleon.ai/binaries-and-typescript-rewrite-1-0-0-beta-8/).
+
+<a href="https://blog.getleon.ai/binaries-and-typescript-rewrite-1-0-0-beta-8/"><img width="400" src="https://blog.getleon.ai/static/a0d1cbafd1968e7531dc17e229f8cc61/aa440/beta-8.png" /></a>
 
 ---
 
