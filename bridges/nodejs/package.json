@@ -1,7 +1,7 @@
 {
   "name": "leon-nodejs-bridge",
   "description": "Leon's Node.js bridge to communicate between the core and skills made with JavaScript",
-  "main": "dist/leon-nodejs-bridge.js",
+  "main": "dist/bin/leon-nodejs-bridge.js",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
