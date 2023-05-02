@@ -50,7 +50,7 @@ import { LogHelper } from '@/helpers/log-helper'
 
     setInterval(() => {
       Telemetry.heartbeat()
-    }, 1_000 * 3_600)
+    }, 1_000 * 3_600 * 6)
     ;[
       'exit',
       'SIGINT',
