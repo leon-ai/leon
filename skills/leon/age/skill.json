@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Age",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Leon tells his age.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  }
+}

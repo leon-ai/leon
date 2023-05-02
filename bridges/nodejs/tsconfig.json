@@ -1,23 +1,10 @@
 {
-  "extends": "@tsconfig/node16-strictest/tsconfig.json",
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist/bin",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./src/*"]
-    },
-    "ignoreDeprecations": "5.0",
-    "allowJs": true,
-    "checkJs": false,
-    "resolveJsonModule": true
+    "baseUrl": "."
   },
-  "ts-node": {
-    "swc": true,
-    "require": ["tsconfig-paths/register"],
-    "files": true
-  },
-  "files": [],
   "include": ["src/**/*"],
-  "exclude": ["dist"]
+  "exclude": ["node_modules", "dist"]
 }
