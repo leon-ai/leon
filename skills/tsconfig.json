@@ -2,6 +2,7 @@
   "extends": "@tsconfig/node16-strictest/tsconfig.json",
   "compilerOptions": {
     "paths": {
+      "@bridge/*": ["../bridges/nodejs/src/*"],
       "@sdk/*": ["../bridges/nodejs/src/sdk/*"]
     }
   }

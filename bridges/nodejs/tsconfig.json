@@ -3,7 +3,10 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist/bin",
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@bridge/*": ["./src/*"]
+    }
   },
   "ts-node": {
     "swc": true,
