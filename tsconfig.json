@@ -6,7 +6,8 @@
     "baseUrl": ".",
     "paths": {
       "@@/*": ["./*"],
-      "@/*": ["./server/src/*"]
+      "@/*": ["./server/src/*"],
+      "@sdk/*": ["./bridges/nodejs/src/sdk/*"]
     },
     "ignoreDeprecations": "5.0",
     "allowJs": true,
@@ -20,5 +21,5 @@
   },
   "files": ["server/src/global.d.ts"],
   "include": ["server/src/**/*"],
-  "exclude": ["node_modules", "server/dist", "bridges/python", "tcp_server"]
+  "exclude": ["node_modules", "server/dist", "bridges", "tcp_server"]
 }
