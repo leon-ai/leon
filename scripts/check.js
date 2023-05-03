@@ -145,14 +145,17 @@ dotenv.config()
       distro: null
     }
     const totalRAMInGB = SystemHelper.getTotalRAM()
+    const freeRAMInGB = SystemHelper.getFreeRAM()
 
-    if (Math.round(totalRAMInGB) < MINIMUM_REQUIRED_RAM) {
+    if (Math.round(freeRAMInGB) < MINIMUM_REQUIRED_RAM) {
       report.can_run.v = false
       LogHelper.error(
-        `Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM`
+        `Free RAM: ${freeRAMInGB} | Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM`
       )
     } else {
-      LogHelper.success(`Total RAM: ${totalRAMInGB} GB`)
+      LogHelper.success(
+        `Free RAM: ${freeRAMInGB} | Total RAM: ${totalRAMInGB} GB`
+      )
     }
 
     if (osInfo.platform === 'linux') {
@@ -166,6 +169,7 @@ dotenv.config()
 
     reportDataInput.environment.osDetails = osInfo
     reportDataInput.environment.totalRAMInGB = totalRAMInGB
+    reportDataInput.environment.freeRAMInGB = freeRAMInGB
     ;(
       await Promise.all([
         command('node --version', { shell: true }),

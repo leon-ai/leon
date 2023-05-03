@@ -120,6 +120,14 @@ export class SystemHelper {
   }
 
   /**
+   * Get the amount of free memory (in GB) on your machine
+   * @example getFreeRAM() // 6
+   */
+  public static getFreeRAM(): number {
+    return Number((os.freemem() / (1_024 * 1_024 * 1_024)).toFixed(2))
+  }
+
+  /**
    * Get the Node.js version of the current process
    * @example getNodeJSVersion() // '18.15.0'
    */

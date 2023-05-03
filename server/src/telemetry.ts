@@ -68,7 +68,6 @@ export class Telemetry {
         const data = {
           isProduction: IS_PRODUCTION_ENV,
           isGitpod: IS_GITPOD,
-          isOnline: true,
           language: LANG,
           sttProvider: STT_PROVIDER,
           ttsProvider: TTS_PROVIDER,
@@ -87,6 +86,7 @@ export class Telemetry {
               distro: null as Os | null
             },
             totalRAMInGB: SystemHelper.getTotalRAM(),
+            freeRAMInGB: SystemHelper.getFreeRAM(),
             nodeVersion: SystemHelper.getNodeJSVersion(),
             npmVersion: SystemHelper.getNPMVersion()
           }
