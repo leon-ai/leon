@@ -149,6 +149,8 @@ BUILD_TARGETS.set('tcp-server', {
         NODEJS_BRIDGE_BIN_NAME
       )
 
+      await fs.promises.rm(buildPath, { recursive: true, force: true })
+
       await command(`tsc --project ${tsconfigPath}`, {
         shell: true,
         stdio: 'inherit'

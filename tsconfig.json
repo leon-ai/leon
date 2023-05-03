@@ -6,8 +6,7 @@
     "baseUrl": ".",
     "paths": {
       "@@/*": ["./*"],
-      "@/*": ["./server/src/*"],
-      "@sdk/*": ["./bridges/nodejs/src/sdk/*"]
+      "@/*": ["./server/src/*"]
     },
     "ignoreDeprecations": "5.0",
     "allowJs": true,
