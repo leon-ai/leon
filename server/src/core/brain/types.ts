@@ -28,7 +28,6 @@ export interface SkillResult {
   entities: NEREntity[]
   slots: NLUSlots
   output: {
-    type: SkillOutputTypes
     codes: string[]
     speech: string
     core: SkillCoreData | undefined
@@ -40,10 +39,6 @@ export interface SkillResult {
 export enum SkillBridges {
   Python = 'python',
   NodeJS = 'nodejs'
-}
-export enum SkillOutputTypes {
-  Intermediate = 'inter',
-  End = 'end'
 }
 export enum SkillActionTypes {
   Logic = 'logic',

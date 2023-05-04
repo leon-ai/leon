@@ -15,11 +15,7 @@ import type {
   IntentObject,
   SkillResult
 } from '@/core/brain/types'
-import {
-  SkillActionTypes,
-  SkillBridges,
-  SkillOutputTypes
-} from '@/core/brain/types'
+import { SkillActionTypes, SkillBridges } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
 import {
   HAS_TTS,
@@ -199,18 +195,15 @@ export default class Brain {
       const obj = JSON.parse(data.toString())
 
       if (typeof obj === 'object') {
-        if (obj.output.type === SkillOutputTypes.Intermediate) {
-          LogHelper.title(`${this.skillFriendlyName} skill`)
-          LogHelper.info(data.toString())
+        LogHelper.title(`${this.skillFriendlyName} skill (on data)`)
+        LogHelper.info(data.toString())
 
-          const speech = obj.output.speech.toString()
-          if (!this.isMuted) {
-            this.talk(speech)
-          }
-          this.speeches.push(speech)
-        } else {
-          this.skillOutput = data.toString()
+        const speech = obj.output.speech.toString()
+        if (!this.isMuted) {
+          this.talk(speech)
         }
+        this.speeches.push(speech)
+        this.skillOutput = data.toString()
 
         return Promise.resolve(null)
       } else {
@@ -388,7 +381,7 @@ export default class Brain {
 
           // Catch the end of the skill execution
           this.skillProcess?.stdout.on('end', () => {
-            LogHelper.title(`${this.skillFriendlyName} skill`)
+            LogHelper.title(`${this.skillFriendlyName} skill (on end)`)
             LogHelper.info(this.skillOutput)
 
             let skillResult: SkillResult | undefined = undefined
@@ -398,36 +391,26 @@ export default class Brain {
               try {
                 skillResult = JSON.parse(this.skillOutput)
 
-                if (skillResult?.output.speech) {
-                  skillResult.output.speech =
-                    skillResult.output.speech.toString()
-                  if (!this.isMuted) {
-                    this.talk(skillResult.output.speech, true)
-                  }
-                  speeches.push(skillResult.output.speech)
+                // Synchronize the downloaded content if enabled
+                if (
+                  skillResult &&
+                  skillResult.output.options['synchronization'] &&
+                  skillResult.output.options['synchronization'].enabled &&
+                  skillResult.output.options['synchronization'].enabled === true
+                ) {
+                  const sync = new Synchronizer(
+                    this,
+                    nluResult.classification,
+                    skillResult.output.options['synchronization']
+                  )
 
-                  // Synchronize the downloaded content if enabled
-                  if (
-                    skillResult.output.type === SkillOutputTypes.End &&
-                    skillResult.output.options['synchronization'] &&
-                    skillResult.output.options['synchronization'].enabled &&
-                    skillResult.output.options['synchronization'].enabled ===
-                      true
-                  ) {
-                    const sync = new Synchronizer(
-                      this,
-                      nluResult.classification,
-                      skillResult.output.options['synchronization']
-                    )
-
-                    // When the synchronization is finished
-                    sync.synchronize((speech: string) => {
-                      if (!this.isMuted) {
-                        this.talk(speech)
-                      }
-                      speeches.push(speech)
-                    })
-                  }
+                  // When the synchronization is finished
+                  sync.synchronize((speech: string) => {
+                    if (!this.isMuted) {
+                      this.talk(speech)
+                    }
+                    speeches.push(speech)
+                  })
                 }
               } catch (e) {
                 LogHelper.title(`${this.skillFriendlyName} skill`)
