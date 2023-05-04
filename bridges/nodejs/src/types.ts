@@ -1,8 +1,3 @@
-export enum AnswerTypes {
-  Intermediate = 'inter',
-  Final = 'end'
-}
-
 export interface IntentObject {
   id: string
   domain: string
@@ -19,7 +14,6 @@ export interface IntentObject {
 
 export interface AnswerObject extends IntentObject {
   output: {
-    type: AnswerTypes
     codes: string
     speech: string
     core: unknown // TODO

@@ -1,8 +1,11 @@
-import type { ActionResponse } from '@sdk/types'
-import { IntermediateAnswer, FinalAnswer } from '@sdk/answer'
+import { leon } from '@sdk/leon'
+import { TextAnswer } from '@sdk/answer'
+import { Button } from '@sdk/aurora/button'
 
-export async function run(): Promise<ActionResponse> {
-  await new IntermediateAnswer().text('intermediate answer')
+export async function run(): Promise<void> {
+  await leon.answer(new TextAnswer('intermediate answer'))
 
-  return await new FinalAnswer().text('final answer')
+  console.log('button', Button)
+
+  await leon.answer(new TextAnswer('final answer'))
 }
