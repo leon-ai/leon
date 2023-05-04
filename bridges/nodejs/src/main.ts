@@ -38,7 +38,7 @@ import { getIntentObject } from '@bridge/utils'
       )
     )
 
-    actionFunction(params)
+    await actionFunction(params)
   } catch (e) {
     console.error('Error while running action:', e)
   }

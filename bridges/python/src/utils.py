@@ -90,8 +90,7 @@ def output(type, content = '', core = { }):
 		}
 	}))
 
-	if (type == 'inter'):
-		sys.stdout.flush()
+	sys.stdout.flush()
 
 def http(method, url, headers = None):
 	"""Send HTTP request with the Leon user agent"""
