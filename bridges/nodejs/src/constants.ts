@@ -25,7 +25,7 @@ export const SKILL_CONFIG: SkillConfigSchema = JSON.parse(
     'utf8'
   )
 )
-export const SKILL_SRC_CONFIG = JSON.parse(
+export const SKILL_SRC_CONFIG: Record<string, unknown> = JSON.parse(
   fs.readFileSync(
     path.join(
       process.cwd(),

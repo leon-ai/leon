@@ -67,13 +67,17 @@ class Leon {
    * Get source configuration
    * @example getSRCConfig() // { credentials: { apiKey: 'abc' } }
    */
-  public getSRCConfig<T extends Record<string, string>>(key?: string): T {
+  public getSRCConfig<T>(key: string): T
+  public getSRCConfig<T extends Record<string, unknown>>(key?: undefined): T
+  public getSRCConfig<T extends Record<string, unknown> | unknown>(
+    key?: string
+  ): T {
     try {
       if (key) {
-        return SKILL_SRC_CONFIG[key]
+        return SKILL_SRC_CONFIG[key] as T
       }
 
-      return SKILL_SRC_CONFIG
+      return SKILL_SRC_CONFIG as T
     } catch (e) {
       console.error('Error while getting source configuration:', e)
 

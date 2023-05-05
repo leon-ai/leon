@@ -13,4 +13,16 @@ export const run: ActionFunction = async () => {
   })
 
   console.log('button', Button)
+
+  const { someSampleConfig } = leon.getSRCConfig<{
+    options: { someSampleConfig: string }
+  }>()['options']
+
+  const options = leon.getSRCConfig<{ someSampleConfig: string }>('options')
+  await leon.answer({
+    key: 'config',
+    data: {
+      config: options.someSampleConfig + someSampleConfig
+    }
+  })
 }
