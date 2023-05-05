@@ -1,14 +1,18 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import type { SkillConfigSchema } from '@/schemas/skill-schemas'
+
+import type { IntentObject } from '@sdk/leon'
+
 const {
   argv: [, , INTENT_OBJ_FILE_PATH]
 } = process
 
-export const INTENT_OBJECT = JSON.parse(
+export const INTENT_OBJECT: IntentObject = JSON.parse(
   fs.readFileSync(INTENT_OBJ_FILE_PATH as string, 'utf8')
 )
-export const SKILL_CONFIG = JSON.parse(
+export const SKILL_CONFIG: SkillConfigSchema = JSON.parse(
   fs.readFileSync(
     path.join(
       process.cwd(),

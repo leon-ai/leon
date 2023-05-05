@@ -1,6 +1,7 @@
 import path from 'node:path'
 
 import { INTENT_OBJECT } from '@bridge/constants'
+import type { ActionFunction, ActionParams } from '@sdk/leon'
 ;(async (): Promise<void> => {
   const {
     domain,
@@ -8,25 +9,25 @@ import { INTENT_OBJECT } from '@bridge/constants'
     action,
     lang,
     utterance,
-    current_entities: currentEntities,
+    current_entities,
     entities,
-    current_resolvers: currentResolvers,
+    current_resolvers,
     resolvers,
     slots
   } = INTENT_OBJECT
 
-  const params = {
+  const params: ActionParams = {
     lang,
     utterance,
-    currentEntities,
+    current_entities,
     entities,
-    currentResolvers,
+    current_resolvers,
     resolvers,
     slots
   }
 
   try {
-    const { [action]: actionFunction } = await import(
+    const actionModule = await import(
       path.join(
         process.cwd(),
         'skills',
@@ -37,6 +38,7 @@ import { INTENT_OBJECT } from '@bridge/constants'
         `${action}.ts`
       )
     )
+    const actionFunction: ActionFunction = actionModule[action]
 
     await actionFunction(params)
   } catch (e) {

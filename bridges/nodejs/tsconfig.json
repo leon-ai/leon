@@ -1,18 +1,23 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src",
     "outDir": "./dist/bin",
     "baseUrl": ".",
     "paths": {
-      "@bridge/*": ["./src/*"]
-    }
+      "@@/*": ["../../*"],
+      "@/*": ["../../server/src/*"],
+      "@server/schemas/*": ["../../server/src/schemas/*"],
+      "@bridge/*": ["./src/*"],
+      "@sdk/*": ["./src/sdk/*"]
+    },
+    "exactOptionalPropertyTypes": false,
+    "declaration": true
   },
   "ts-node": {
     "swc": true,
     "require": ["tsconfig-paths/register"],
     "files": true
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "../../server/src/schemas/**/*"],
   "exclude": ["node_modules", "dist"]
 }

@@ -141,6 +141,9 @@ BUILD_TARGETS.set('tcp-server', {
       const distMainFilePath = path.join(
         NODEJS_BRIDGE_DIST_PATH,
         'bin',
+        'bridges',
+        'nodejs',
+        'src',
         'main.js'
       )
       const distRenamedMainFilePath = path.join(
