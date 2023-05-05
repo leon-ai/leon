@@ -7,6 +7,7 @@
     }
   },
   "answers": {
-    "default": ["I'm..."]
+    "default": ["I'm..."],
+    "greet": ["Hey, just a try %name% again %name%", "Another try, hi"]
   }
 }

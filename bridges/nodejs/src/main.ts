@@ -1,6 +1,6 @@
 import path from 'node:path'
 
-import { getIntentObject } from '@bridge/utils'
+import { INTENT_OBJECT } from '@bridge/constants'
 ;(async (): Promise<void> => {
   const {
     domain,
@@ -13,7 +13,7 @@ import { getIntentObject } from '@bridge/utils'
     current_resolvers: currentResolvers,
     resolvers,
     slots
-  } = await getIntentObject()
+  } = INTENT_OBJECT
 
   const params = {
     lang,
@@ -40,6 +40,6 @@ import { getIntentObject } from '@bridge/utils'
 
     await actionFunction(params)
   } catch (e) {
-    console.error('Error while running action:', e)
+    console.error(`Error while running "${skill}" skill "${action}" action:`, e)
   }
 })()

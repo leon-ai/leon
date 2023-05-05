@@ -1,7 +1,50 @@
-import fs from 'node:fs'
+import {
+  INTENT_OBJECT,
+  SKILL_CONFIG,
+  SKILL_SRC_CONFIG
+} from '@bridge/constants'
 
-import type { AnswerObject, IntentObject } from '@bridge/types'
-import type { Answer } from '@sdk/answer'
+interface IntentObject {
+  id: string
+  domain: string
+  skill: string
+  action: string
+  lang: string
+  utterance: string
+  current_entities: unknown[] // TODO
+  entities: unknown[] // TODO
+  current_resolvers: unknown[] // TODO
+  resolvers: unknown[] // TODO
+  slots: Record<string, unknown>[] // TODO
+}
+interface AnswerOutput extends IntentObject {
+  output: {
+    code: string
+    speech: string
+    core: AnswerCoreData
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    options: Record<string, any>
+  }
+}
+interface AnswerCoreData {
+  restart?: boolean
+  isInActionLoop?: boolean
+  showNextActionSuggestions?: boolean
+  showSuggestions?: boolean
+}
+interface TextAnswer {
+  key: string
+  data?: AnswerData
+  core?: AnswerCoreData
+}
+interface WidgetAnswer {
+  // TODO
+  key: 'widget'
+  data?: AnswerData
+  core?: AnswerCoreData
+}
+type AnswerData = Record<string, string | number> | null
+type AnswerInput = TextAnswer | WidgetAnswer
 
 class Leon {
   private static instance: Leon
@@ -13,34 +56,94 @@ class Leon {
   }
 
   /**
-   * Send an answer to the core
-   * @param answer
+   * Get source configuration
+   * @example getSRCConfig() // { credentials: { apiKey: 'abc' } }
    */
-  public async answer(answer: Answer): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  public getSRCConfig(key?: string): Record<string, any> {
     try {
-      const answerObject: AnswerObject = {
-        ...(await this.getIntentObject()),
-        output: await answer.createAnswerOutput()
+      if (key) {
+        return SKILL_SRC_CONFIG[key]
       }
 
-      process.stdout.write(JSON.stringify(answerObject))
-    } catch (error) {
-      console.error('Error while creating answer:', error)
+      return SKILL_SRC_CONFIG
+    } catch (e) {
+      console.error('Error while getting source configuration:', e)
+
+      return {}
     }
   }
 
   /**
-   * Get the intent object from the temporary intent file
-   * @example await getIntentObject() // { ... }
+   * Apply data to the answer
+   * @param answerKey The answer key
+   * @param data The data to apply
+   * @example setAnswerData('key', { name: 'Leon' })
    */
-  private async getIntentObject(): Promise<IntentObject> {
-    const {
-      argv: [, , INTENT_OBJ_FILE_PATH]
-    } = process
+  public setAnswerData(
+    answerKey: string,
+    data: AnswerData = null
+  ): string | null {
+    try {
+      // In case the answer key is a raw answer
+      if (!SKILL_CONFIG.answers[answerKey]) {
+        return answerKey
+      }
 
-    return JSON.parse(
-      await fs.promises.readFile(INTENT_OBJ_FILE_PATH as string, 'utf8')
-    )
+      const answers = SKILL_CONFIG.answers[answerKey]
+      let answer
+
+      if (Array.isArray(answers)) {
+        answer = answers[Math.floor(Math.random() * answers.length)]
+      } else {
+        answer = answers
+      }
+
+      if (data) {
+        for (const key in data) {
+          answer = answer.replaceAll(`%${key}%`, String(data[key]))
+        }
+      }
+
+      if (SKILL_CONFIG.variables) {
+        const { variables } = SKILL_CONFIG
+
+        for (const key in variables) {
+          answer = answer.replaceAll(`%${key}%`, String(variables[key]))
+        }
+      }
+
+      return answer
+    } catch (e) {
+      console.error('Error while setting answer data:', e)
+
+      return null
+    }
+  }
+
+  /**
+   * Send an answer to the core
+   * @param answerInput The answer input
+   * @example answer({ key: 'greet' }) // 'Hello world'
+   * @example answer({ key: 'welcome', data: { name: 'Louis' } }) // 'Welcome Louis'
+   * @example answer({ key: 'confirm', core: { restart: true } }) // 'Would you like to retry?'
+   */
+  public async answer(answerInput: AnswerInput): Promise<void> {
+    try {
+      const answerObject: AnswerOutput = {
+        ...INTENT_OBJECT,
+        output: {
+          codes: answerInput.key,
+          speech: this.setAnswerData(answerInput.key, answerInput.data),
+          core: answerInput.core,
+          options: this.getSRCConfig('options')
+        }
+      }
+
+      process.stdout.write(JSON.stringify(answerObject))
+    } catch (e) {
+      console.error('Error while creating answer:', e)
+    }
   }
 }
 
