@@ -6,7 +6,7 @@
     "paths": {
       "@@/*": ["../../*"],
       "@/*": ["../../server/src/*"],
-      "@server/schemas/*": ["../../server/src/schemas/*"],
+      "@server/*": ["../../server/src/*"],
       "@bridge/*": ["./src/*"],
       "@sdk/*": ["./src/sdk/*"]
     },
@@ -18,6 +18,6 @@
     "require": ["tsconfig-paths/register"],
     "files": true
   },
-  "include": ["src/**/*", "../../server/src/schemas/**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

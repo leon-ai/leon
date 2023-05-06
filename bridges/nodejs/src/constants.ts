@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { SkillConfigSchema } from '@/schemas/skill-schemas'
+import type { SkillConfigSchema } from '@server/schemas/skill-schemas'
 
 import type { IntentObject } from '@sdk/types'
 

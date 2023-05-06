@@ -8,7 +8,7 @@ enum OSNames {
   Linux = 'Linux',
   Unknown = 'Unknown'
 }
-enum BinaryFolderNames {
+export enum BinaryFolderNames {
   Linux64Bit = 'linux-x86_64', // Linux 64-bit (Intel)
   LinuxARM64 = 'linux-aarch64', // Linux 64-bit (ARM)
   MacOS64Bit = 'macosx-x86_64', // Apple 64-bit (Intel)

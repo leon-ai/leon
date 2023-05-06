@@ -13,7 +13,8 @@
     "ignoreDeprecations": "5.0",
     "allowJs": true,
     "checkJs": false,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "declaration": true
   },
   "ts-node": {
     "swc": true,
