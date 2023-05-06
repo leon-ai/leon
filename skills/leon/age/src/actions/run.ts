@@ -1,5 +1,6 @@
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
+import { Network } from '@sdk/network'
 import { Button } from '@sdk/aurora/button'
 
 export const run: ActionFunction = async function () {
@@ -20,9 +21,20 @@ export const run: ActionFunction = async function () {
 
   const options = leon.getSRCConfig<{ someSampleConfig: string }>('options')
   await leon.answer({
-    key: 'config',
+    key: 'answer',
     data: {
-      config: options.someSampleConfig + someSampleConfig
+      answer: options.someSampleConfig + someSampleConfig
+    }
+  })
+
+  const network = new Network({
+    baseURL: 'https://jsonplaceholder.typicode.com'
+  })
+  const data = await network.get<{ title: string }>('/todos/1')
+  await leon.answer({
+    key: 'answer',
+    data: {
+      answer: `Todo n°1: ${data.title}`
     }
   })
 }
