@@ -1,24 +1,11 @@
 /**
  * Action types
  */
+import type { ActionParams, IntentObject } from '@/core/brain/types'
 
-export interface ActionParams {
-  lang: string
-  utterance: string
-  current_entities: unknown[] // TODO
-  entities: unknown[] // TODO
-  current_resolvers: unknown[] // TODO
-  resolvers: unknown[] // TODO
-  slots: Record<string, unknown>[] // TODO
-}
+export type { ActionParams, IntentObject }
+
 export type ActionFunction = (params: ActionParams) => Promise<void>
-
-export interface IntentObject extends ActionParams {
-  id: string
-  domain: string
-  skill: string
-  action: string
-}
 
 /**
  * Answer types
