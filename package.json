@@ -117,6 +117,7 @@
     "@types/node-wav": "0.0.0",
     "@typescript-eslint/eslint-plugin": "5.55.0",
     "@typescript-eslint/parser": "5.55.0",
+    "@vercel/ncc": "0.36.1",
     "cli-spinner": "0.2.10",
     "eslint": "8.22.0",
     "eslint-config-prettier": "8.5.0",
