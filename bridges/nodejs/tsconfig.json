@@ -1,12 +1,17 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src",
     "outDir": "./dist/bin",
     "baseUrl": ".",
     "paths": {
-      "@bridge/*": ["./src/*"]
-    }
+      "@@/*": ["../../*"],
+      "@/*": ["../../server/src/*"],
+      "@server/*": ["../../server/src/*"],
+      "@bridge/*": ["./src/*"],
+      "@sdk/*": ["./src/sdk/*"]
+    },
+    "exactOptionalPropertyTypes": false,
+    "declaration": true
   },
   "ts-node": {
     "swc": true,
