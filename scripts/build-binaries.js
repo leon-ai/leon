@@ -137,14 +137,6 @@ BUILD_TARGETS.set('tcp-server', {
      * Build for binaries not requiring a Python environment
      */
     try {
-      const currentWorkingDirectory = process.cwd()
-      process.chdir(NODEJS_BRIDGE_ROOT_PATH)
-      await command('npm install', {
-        shell: true,
-        stdio: 'inherit'
-      })
-
-      process.chdir(currentWorkingDirectory)
       const distBinPath = path.join(NODEJS_BRIDGE_DIST_PATH, 'bin')
       const distMainFilePath = path.join(
         distBinPath,
