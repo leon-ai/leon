@@ -1,8 +1,8 @@
+import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
-import type { ActionFunction } from '@sdk/leon'
 import { Button } from '@sdk/aurora/button'
 
-export const run: ActionFunction = async () => {
+export const run: ActionFunction = async function () {
   await leon.answer({ key: 'default' })
 
   await leon.answer({

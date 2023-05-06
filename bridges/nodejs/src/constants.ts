@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import type { SkillConfigSchema } from '@/schemas/skill-schemas'
 
-import type { IntentObject } from '@sdk/leon'
+import type { IntentObject } from '@sdk/types'
 
 const {
   argv: [, , INTENT_OBJ_FILE_PATH]

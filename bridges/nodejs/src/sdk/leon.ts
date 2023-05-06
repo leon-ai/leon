@@ -1,58 +1,9 @@
+import type { AnswerData, AnswerInput, AnswerOutput } from '@sdk/types'
 import {
   INTENT_OBJECT,
   SKILL_CONFIG,
   SKILL_SRC_CONFIG
 } from '@bridge/constants'
-
-export interface ActionParams {
-  lang: string
-  utterance: string
-  current_entities: unknown[] // TODO
-  entities: unknown[] // TODO
-  current_resolvers: unknown[] // TODO
-  resolvers: unknown[] // TODO
-  slots: Record<string, unknown>[] // TODO
-}
-export type ActionFunction = (params: ActionParams) => Promise<void>
-
-export interface IntentObject extends ActionParams {
-  id: string
-  domain: string
-  skill: string
-  action: string
-}
-
-interface AnswerOutput extends IntentObject {
-  output: {
-    codes: string
-    speech: string
-    core?: AnswerCoreData
-    options: Record<string, string>
-  }
-}
-
-interface AnswerCoreData {
-  restart?: boolean
-  isInActionLoop?: boolean
-  showNextActionSuggestions?: boolean
-  showSuggestions?: boolean
-}
-
-interface TextAnswer {
-  key: string
-  data?: AnswerData
-  core?: AnswerCoreData
-}
-
-interface WidgetAnswer {
-  // TODO
-  key: 'widget'
-  data?: AnswerData
-  core?: AnswerCoreData
-}
-
-type AnswerData = Record<string, string | number> | null
-type AnswerInput = TextAnswer | WidgetAnswer
 
 class Leon {
   private static instance: Leon

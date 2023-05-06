@@ -1,7 +1,7 @@
 import path from 'node:path'
 
+import type { ActionFunction, ActionParams } from '@sdk/types'
 import { INTENT_OBJECT } from '@bridge/constants'
-import type { ActionFunction, ActionParams } from '@sdk/leon'
 ;(async (): Promise<void> => {
   const {
     domain,
