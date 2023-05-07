@@ -72,11 +72,13 @@ export const PYTHON_BRIDGE_BIN_PATH = path.join(
   BINARIES_FOLDER_NAME,
   PYTHON_BRIDGE_BIN_NAME
 )
-export const NODEJS_BRIDGE_BIN_PATH = `${process.execPath} ${path.join(
-  NODEJS_BRIDGE_DIST_PATH,
-  'bin',
-  NODEJS_BRIDGE_BIN_NAME
-)}`
+export const NODEJS_BRIDGE_BIN_PATH = `${path.join(
+  process.cwd(),
+  'node_modules',
+  'ts-node',
+  'dist',
+  'bin.js'
+)} --swc ${path.join(NODEJS_BRIDGE_DIST_PATH, 'bin', NODEJS_BRIDGE_BIN_NAME)}`
 
 export const LEON_VERSION = process.env['npm_package_version']
 

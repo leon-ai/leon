@@ -28,7 +28,6 @@ export interface SkillResult {
   entities: NEREntity[]
   slots: NLUSlots
   output: {
-    type: SkillOutputTypes
     codes: string[]
     speech: string
     core: SkillCoreData | undefined
@@ -41,27 +40,26 @@ export enum SkillBridges {
   Python = 'python',
   NodeJS = 'nodejs'
 }
-export enum SkillOutputTypes {
-  Intermediate = 'inter',
-  End = 'end'
-}
 export enum SkillActionTypes {
   Logic = 'logic',
   Dialog = 'dialog'
 }
 
-export interface IntentObject {
-  id: string
+export interface ActionParams {
   lang: ShortLanguageCode
-  domain: NLPDomain
-  skill: NLPSkill
-  action: NLPAction
   utterance: NLPUtterance
   current_entities: NEREntity[]
   entities: NEREntity[]
   current_resolvers: NLUResolver[]
   resolvers: NLUResolver[]
   slots: { [key: string]: NLUSlot['value'] | undefined }
+}
+
+export interface IntentObject extends ActionParams {
+  id: string
+  domain: NLPDomain
+  skill: NLPSkill
+  action: NLPAction
 }
 
 export interface BrainProcessResult extends NLUResult {

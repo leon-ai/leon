@@ -137,19 +137,25 @@ BUILD_TARGETS.set('tcp-server', {
      * Build for binaries not requiring a Python environment
      */
     try {
-      const tsconfigPath = path.join(NODEJS_BRIDGE_ROOT_PATH, 'tsconfig.json')
+      const distBinPath = path.join(NODEJS_BRIDGE_DIST_PATH, 'bin')
       const distMainFilePath = path.join(
-        NODEJS_BRIDGE_DIST_PATH,
-        'bin',
-        'main.js'
+        distBinPath,
+        'index.js'
       )
       const distRenamedMainFilePath = path.join(
-        NODEJS_BRIDGE_DIST_PATH,
-        'bin',
+        distBinPath,
         NODEJS_BRIDGE_BIN_NAME
       )
 
-      await command(`tsc --project ${tsconfigPath}`, {
+      await fs.promises.rm(buildPath, { recursive: true, force: true })
+
+      const inputMainFilePath = path.join(
+        NODEJS_BRIDGE_ROOT_PATH,
+        'src',
+        'main.ts'
+      )
+
+      await command(`ncc build ${inputMainFilePath} --out ${distBinPath}`, {
         shell: true,
         stdio: 'inherit'
       })

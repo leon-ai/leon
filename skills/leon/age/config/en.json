@@ -1,0 +1,14 @@
+{
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": ["How old are you?"]
+    }
+  },
+  "answers": {
+    "default": ["I'm..."],
+    "greet": ["Hey, just a try %name% again %name%", "Another try, hi"],
+    "answer": ["%answer%"]
+  }
+}

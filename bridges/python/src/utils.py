@@ -30,7 +30,7 @@ def translate(key, dict = { }):
 	"""Pickup the language file according to the cmd arg
 	and return the value according to the params"""
 
-	# "Temporize" for the data buffer ouput on the core
+	# "Temporize" for the data buffer output on the core
 	sleep(0.1)
 
 	output = ''
@@ -82,6 +82,7 @@ def output(type, content = '', core = { }):
 		'entities': intent_obj['entities'],
 		'slots': intent_obj['slots'],
 		'output': {
+			# TODO: remove type as it is not needed anymore
 			'type': type,
 			'codes': codes,
 			'speech': speech,
@@ -90,8 +91,7 @@ def output(type, content = '', core = { }):
 		}
 	}))
 
-	if (type == 'inter'):
-		sys.stdout.flush()
+	sys.stdout.flush()
 
 def http(method, url, headers = None):
 	"""Send HTTP request with the Leon user agent"""
