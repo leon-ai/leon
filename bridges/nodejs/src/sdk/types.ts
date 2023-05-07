@@ -7,6 +7,11 @@ export type { ActionParams, IntentObject }
 
 export type ActionFunction = (params: ActionParams) => Promise<void>
 
+export interface Versions {
+  core: string
+  'nodejs-bridge': string
+}
+
 /**
  * Answer types
  */

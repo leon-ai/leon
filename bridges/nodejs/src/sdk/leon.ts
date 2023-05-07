@@ -1,9 +1,15 @@
-import type { AnswerData, AnswerInput, AnswerOutput } from '@sdk/types'
+import type {
+  AnswerData,
+  AnswerInput,
+  AnswerOutput,
+  Versions
+} from '@sdk/types'
 import {
   INTENT_OBJECT,
   SKILL_CONFIG,
   SKILL_SRC_CONFIG
 } from '@bridge/constants'
+import { VERSION } from '@bridge/version'
 
 class Leon {
   private static instance: Leon
@@ -105,6 +111,16 @@ class Leon {
       process.stdout.write(JSON.stringify(answerObject))
     } catch (e) {
       console.error('Error while creating answer:', e)
+    }
+  }
+
+  /**
+   * Get the versions of the core and the bridge.
+   */
+  public async getVersions(): Promise<Versions> {
+    return {
+      core: process.env['npm_package_version'] ?? 'unknown',
+      'nodejs-bridge': VERSION
     }
   }
 }
