@@ -79,7 +79,7 @@
     "@nlpjs/core-loader": "4.22.7",
     "@nlpjs/lang-all": "4.22.12",
     "@nlpjs/nlp": "4.22.17",
-    "@segment/ajv-human-errors": "2.1.2",
+    "@segment/ajv-human-errors": "2.7.0",
     "@sinclair/typebox": "0.25.8",
     "ajv": "8.11.0",
     "ajv-formats": "2.1.1",
