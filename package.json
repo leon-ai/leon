@@ -99,7 +99,7 @@
     "node-wav": "0.0.2",
     "os-name": "4.0.1",
     "pretty-bytes": "5.6.0",
-    "pretty-ms": "7.0.1",
+    "pretty-ms": "8.0.0",
     "socket.io": "4.5.2",
     "socket.io-client": "4.5.2",
     "stt": "1.4.0",
