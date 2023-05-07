@@ -69,6 +69,7 @@
     "docker:check": "docker run --rm --interactive leon-ai/leon npm run check"
   },
   "dependencies": {
+    "leon-nodejs-bridge": "file:./bridges/nodejs",
     "@aws-sdk/client-polly": "3.18.0",
     "@fastify/static": "6.9.0",
     "@ffmpeg-installer/ffmpeg": "1.1.0",
