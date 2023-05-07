@@ -1,0 +1,12 @@
+{
+  "lang": "en",
+  "domain": "leon",
+  "skill": "age",
+  "action": "run",
+  "utterance": "How old are you?",
+  "slots": {},
+  "entities": [],
+  "current_entities": [],
+  "resolvers": [],
+  "current_resolvers": []
+}
