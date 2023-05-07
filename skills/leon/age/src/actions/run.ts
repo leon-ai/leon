@@ -30,11 +30,33 @@ export const run: ActionFunction = async function () {
   const network = new Network({
     baseURL: 'https://jsonplaceholder.typicode.com'
   })
-  const data = await network.get<{ title: string }>('/todos/1')
-  await leon.answer({
-    key: 'answer',
-    data: {
-      answer: `Todo n°1: ${data.title}`
+
+  try {
+    const response = await network.request<{ title: string }>({
+      url: '/todos/1',
+      method: 'GET'
+    })
+    await leon.answer({
+      key: 'answer',
+      data: {
+        answer: `Todo: ${response.data.title}`
+      }
+    })
+  } catch (error) {
+    await leon.answer({
+      key: 'answer',
+      data: {
+        answer: 'Something went wrong...'
+      }
+    })
+    if (network.isNetworkError(error)) {
+      const errorData = JSON.stringify(error.response.data, null, 2)
+      await leon.answer({
+        key: 'answer',
+        data: {
+          answer: `${error.message}: ${errorData}`
+        }
+      })
     }
-  })
+  }
 }
