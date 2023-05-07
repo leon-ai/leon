@@ -9,6 +9,6 @@
   "answers": {
     "default": ["I'm..."],
     "greet": ["Hey, just a try %name% again %name%", "Another try, hi"],
-    "config": ["%config%"]
+    "answer": ["%answer%"]
   }
 }
