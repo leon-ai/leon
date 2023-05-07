@@ -1,8 +1,44 @@
 import axios from 'axios'
 import type { AxiosInstance } from 'axios'
 
-export interface NetworkOptions {
+interface NetworkOptions {
+  /** `baseURL` will be prepended to `url`. It can be convenient to set `baseURL` for an instance of `Network` to pass relative URLs. */
   baseURL?: string
+}
+
+interface NetworkRequestOptions {
+  /** Server URL that will be used for the request. */
+  url: string
+
+  /** Request method to be used when making the request. */
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+
+  /** Data to be sent as the request body. */
+  data?: Record<string, unknown>
+
+  /** Custom headers to be sent. */
+  headers?: Record<string, string>
+}
+
+interface NetworkResponse<ResponseData> {
+  /** Data provided by the server. */
+  data: ResponseData
+
+  /** HTTP status code from the server response. */
+  statusCode: number
+
+  /** Options that was provided for the request. */
+  options: NetworkRequestOptions & NetworkOptions
+}
+
+export class NetworkError<ResponseErrorData = unknown> extends Error {
+  public readonly response: NetworkResponse<ResponseErrorData>
+
+  public constructor(response: NetworkResponse<ResponseErrorData>) {
+    super(`[NetworkError]: ${response.statusCode}`)
+    this.response = response
+    Object.setPrototypeOf(this, NetworkError.prototype)
+  }
 }
 
 export class Network {
@@ -16,7 +52,45 @@ export class Network {
     })
   }
 
-  public async get<T>(url: string): Promise<T> {
-    return (await this.axios.get<T>(url)).data as T
+  public async request<ResponseData = unknown, ResponseErrorData = unknown>(
+    options: NetworkRequestOptions
+  ): Promise<NetworkResponse<ResponseData>> {
+    try {
+      const response = await this.axios.request<ResponseData>({
+        url: options.url,
+        method: options.method.toLowerCase(),
+        data: options.data,
+        headers: options.headers
+      })
+      return {
+        data: response.data,
+        statusCode: response.status,
+        options: {
+          ...this.options,
+          ...options
+        }
+      }
+    } catch (error) {
+      let statusCode = 500
+      let data = {} as ResponseErrorData
+      if (axios.isAxiosError(error)) {
+        data = error?.response?.data
+        statusCode = error?.response?.status ?? 500
+      }
+      throw new NetworkError<ResponseErrorData>({
+        data,
+        statusCode,
+        options: {
+          ...this.options,
+          ...options
+        }
+      })
+    }
+  }
+
+  public isNetworkError<ResponseErrorData = unknown>(
+    error: unknown
+  ): error is NetworkError<ResponseErrorData> {
+    return error instanceof NetworkError
   }
 }
