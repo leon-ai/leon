@@ -19,8 +19,8 @@ export default () =>
       const skillKeys = Object.keys(currentDomain.skills)
 
       // Browse skills
-      for (let j = 0; j < skillKeys.length; j += 1) {
-        const skillFriendlyName = skillKeys[j]
+      for (let i = 0; i < skillKeys.length; i += 1) {
+        const skillFriendlyName = skillKeys[i]
         const currentSkill = currentDomain.skills[skillFriendlyName]
         const configDir = path.join(currentSkill.path, 'src')
         const configFile = path.join(configDir, 'config.json')
