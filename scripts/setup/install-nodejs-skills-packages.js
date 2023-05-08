@@ -45,35 +45,40 @@ export default async function () {
 
               if (fs.existsSync(lastSkillNPMInstallFilePath)) {
                 const lastSkillNPMInstallTime = new Date(
-                  await fs.promises.readFile(
-                    lastSkillNPMInstallFilePath,
-                    'utf8'
+                  Number(
+                    await fs.promises.readFile(
+                      lastSkillNPMInstallFilePath,
+                      'utf8'
+                    )
                   )
                 )
 
                 if (packageJSONMtime <= lastSkillNPMInstallTime) {
                   LogHelper.success(
-                    `${skillFriendlyName} skill npm packages are up-to-date`
+                    `"${skillFriendlyName}" skill npm packages are up-to-date`
                   )
                   continue
                 }
               }
 
               LogHelper.info(
-                `Installing npm packages for the ${skillFriendlyName} skill...`
+                `Installing npm packages for the "${skillFriendlyName}" skill...`
               )
 
-              await command(`npm install --prefix ${skillSRCPath}`, {
-                shell: true,
-                stdio: 'inherit'
-              })
+              await command(
+                `npm install --package-lock=false --prefix ${skillSRCPath}`,
+                {
+                  shell: true,
+                  stdio: 'inherit'
+                }
+              )
               await fs.promises.writeFile(
                 lastSkillNPMInstallFilePath,
                 `${Date.now()}`
               )
 
               LogHelper.success(
-                `${skillFriendlyName} skill npm packages installed`
+                `"${skillFriendlyName}" skill npm packages installed`
               )
             }
           }
