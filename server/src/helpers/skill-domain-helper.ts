@@ -9,6 +9,7 @@ import type {
   SkillConfigSchema,
   SkillBridgeSchema
 } from '@/schemas/skill-schemas'
+import { SKILLS_PATH } from '@/constants'
 
 interface SkillDomain {
   name: string
@@ -27,8 +28,6 @@ interface SkillConfigWithGlobalEntities
   entities: Record<string, GlobalEntitySchema>
 }
 
-const DOMAINS_DIR = path.join(process.cwd(), 'skills')
-
 export class SkillDomainHelper {
   /**
    * List all skills domains with skills data inside
@@ -38,9 +37,9 @@ export class SkillDomainHelper {
 
     await Promise.all(
       (
-        await fs.promises.readdir(DOMAINS_DIR)
+        await fs.promises.readdir(SKILLS_PATH)
       ).map(async (entity) => {
-        const domainPath = path.join(DOMAINS_DIR, entity)
+        const domainPath = path.join(SKILLS_PATH, entity)
 
         if ((await fs.promises.stat(domainPath)).isDirectory()) {
           const skills: SkillDomain['skills'] = {}
@@ -93,7 +92,7 @@ export class SkillDomainHelper {
   ): Promise<DomainSchema> {
     return JSON.parse(
       await fs.promises.readFile(
-        path.join(DOMAINS_DIR, domain, 'domain.json'),
+        path.join(SKILLS_PATH, domain, 'domain.json'),
         'utf8'
       )
     )
@@ -110,10 +109,22 @@ export class SkillDomainHelper {
   ): Promise<SkillSchema> {
     return JSON.parse(
       await fs.promises.readFile(
-        path.join(DOMAINS_DIR, domain, skill, 'skill.json'),
+        path.join(SKILLS_PATH, domain, skill, 'skill.json'),
         'utf8'
       )
     )
+  }
+
+  /**
+   * Get skill path
+   * @param domain Domain where the skill belongs
+   * @param skill Skill to get path from
+   */
+  public static getSkillPath(
+    domain: SkillDomain['name'],
+    skill: SkillSchema['name']
+  ): string {
+    return path.join(SKILLS_PATH, domain, skill)
   }
 
   /**

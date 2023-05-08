@@ -7,6 +7,12 @@ import { isFileEmpty } from '@/utilities'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
+/**
+ * Install Node.js skills packages on setup
+ * 1. Browse skills
+ * 2. If skill is Node.js, then verify if an installation is needed
+ * 3. If install is needed, then install npm packages
+ */
 export default async function () {
   try {
     LogHelper.info('Installing Node.js skills npm packages...')

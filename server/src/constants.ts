@@ -129,6 +129,7 @@ export const IS_TELEMETRY_ENABLED = process.env['LEON_TELEMETRY'] === 'true'
  * Paths
  */
 export const BIN_PATH = path.join('bin')
+export const SKILLS_PATH = path.join('skills')
 export const GLOBAL_DATA_PATH = path.join('core', 'data')
 export const MODELS_PATH = path.join(GLOBAL_DATA_PATH, 'models')
 export const VOICE_CONFIG_PATH = path.join('core', 'config', 'voice')

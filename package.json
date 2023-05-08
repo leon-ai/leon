@@ -59,6 +59,7 @@
     "python-bridge": "cross-env PIPENV_PIPFILE=bridges/python/src/Pipfile pipenv run python bridges/python/src/main.py server/src/intent-object.sample.json",
     "train": "ts-node scripts/train/run-train.js",
     "prepare-release": "ts-node scripts/release/prepare-release.js",
+    "skill-package": "ts-node scripts/skill-package.js",
     "pre-release:nodejs-bridge": "ts-node scripts/release/pre-release-binaries.js nodejs-bridge",
     "pre-release:python-bridge": "ts-node scripts/release/pre-release-binaries.js python-bridge",
     "pre-release:tcp-server": "ts-node scripts/release/pre-release-binaries.js tcp-server",
