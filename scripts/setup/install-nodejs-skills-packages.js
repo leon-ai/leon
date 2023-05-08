@@ -68,8 +68,7 @@ export default async function () {
               await command(
                 `npm install --package-lock=false --prefix ${skillSRCPath}`,
                 {
-                  shell: true,
-                  stdio: 'inherit'
+                  shell: true
                 }
               )
               await fs.promises.writeFile(
