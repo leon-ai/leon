@@ -102,6 +102,9 @@ class Leon {
         }
       }
 
+      // "Temporize" for the data buffer output on the core
+      await new Promise((r) => setTimeout(r, 100))
+
       process.stdout.write(JSON.stringify(answerObject))
     } catch (e) {
       console.error('Error while creating answer:', e)

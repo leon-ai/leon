@@ -1,3 +1,5 @@
+import * as utility from 'utility'
+
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { Network } from '@sdk/network'
@@ -5,6 +7,8 @@ import { Button } from '@sdk/aurora/button'
 
 export const run: ActionFunction = async function () {
   await leon.answer({ key: 'default' })
+
+  await leon.answer({ key: utility.md5('test') })
 
   await leon.answer({
     key: 'greet',
