@@ -1,5 +1,7 @@
-import axios from 'axios'
+import dns from 'node:dns'
+
 import type { AxiosInstance } from 'axios'
+import axios from 'axios'
 
 interface NetworkOptions {
   /** `baseURL` will be prepended to `url`. It can be convenient to set `baseURL` for an instance of `Network` to pass relative URLs. */
@@ -42,7 +44,7 @@ export class NetworkError<ResponseErrorData = unknown> extends Error {
 }
 
 export class Network {
-  private options: NetworkOptions
+  private readonly options: NetworkOptions
   private axios: AxiosInstance
 
   public constructor(options: NetworkOptions = {}) {
@@ -52,6 +54,11 @@ export class Network {
     })
   }
 
+  /**
+   * Send HTTP request
+   * @param options Request options
+   * @example request({ url: '/send', method: 'POST', data: { message: 'Hi' } })
+   */
   public async request<ResponseData = unknown, ResponseErrorData = unknown>(
     options: NetworkRequestOptions
   ): Promise<NetworkResponse<ResponseData>> {
@@ -88,9 +95,28 @@ export class Network {
     }
   }
 
+  /**
+   * Check if error is a network error
+   * @param error Error to check
+   * @example isNetworkError(error) // false
+   */
   public isNetworkError<ResponseErrorData = unknown>(
     error: unknown
   ): error is NetworkError<ResponseErrorData> {
     return error instanceof NetworkError
+  }
+
+  /**
+   * Verify whether there is an Internet connectivity
+   * @example isNetworkAvailable() // true
+   */
+  public async isNetworkAvailable(): Promise<boolean> {
+    try {
+      await dns.promises.resolve('apple.com')
+
+      return true
+    } catch (e) {
+      return false
+    }
   }
 }
