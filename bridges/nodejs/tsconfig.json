@@ -12,9 +12,7 @@
       "@sdk/*": ["./src/sdk/*"]
     },
     "exactOptionalPropertyTypes": false,
-    "declaration": true,
-    "target": "es2015",
-    "moduleResolution": "node"
+    "declaration": true
   },
   "ts-node": {
     "swc": true,
