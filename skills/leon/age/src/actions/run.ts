@@ -3,9 +3,14 @@ import * as utility from 'utility'
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { Network } from '@sdk/network'
+import { Memory } from '@sdk/memory'
 import { Button } from '@sdk/aurora/button'
 
 export const run: ActionFunction = async function () {
+  const db = new Memory()
+
+  await db.test()
+
   await leon.answer({ key: 'default' })
 
   await leon.answer({ key: utility.md5('test') })

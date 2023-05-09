@@ -7,12 +7,14 @@
     "email": "louis@getleon.ai",
     "url": "https://twitter.com/grenlouis"
   },
+  "type": "module",
   "license": "MIT",
   "homepage": "https://getleon.ai",
   "bugs": {
     "url": "https://github.com/leon-ai/leon/issues"
   },
   "dependencies": {
-    "axios": "1.4.0"
+    "axios": "1.4.0",
+    "lowdb": "6.0.1"
   }
 }
