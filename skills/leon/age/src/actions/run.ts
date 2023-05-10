@@ -1,14 +1,56 @@
 import utility from 'utility'
+
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { Network } from '@sdk/network'
-import { Memory } from '@sdk/memory'
+import { Database } from '@sdk/memory'
 import { Button } from '@sdk/aurora/button'
 
 export const run: ActionFunction = async function () {
-  const db = new Memory()
+  const blog = new Database('blog')
+  // const testo = new Database('leon.greets.testo') // From other skill
 
-  await db.test()
+  const posts = await blog.get('posts')
+  const sections = await blog.get('sections')
+
+  posts.push(
+    {
+      id: 0,
+      title: 'hello world',
+      content: 'hello world',
+      author: {
+        name: 'Louis'
+      },
+      createdAt: Date.now()
+    },
+    {
+      id: 1,
+      title: 'hello world 2',
+      content: 'hello world 2',
+      author: {
+        name: 'Louis'
+      },
+      createdAt: Date.now()
+    },
+    {
+      id: 2,
+      title: 'hello world 3',
+      content: 'hello world 3',
+      author: {
+        name: 'Line'
+      },
+      createdAt: Date.now()
+    }
+  )
+
+  sections.push({
+    type: 'header',
+    width: '100%',
+    height: '100px'
+  })
+
+  // await blog.posts.getAll()
+  // await posts.find()
 
   await leon.answer({ key: 'default' })
 

@@ -1,7 +1,7 @@
 import path from 'node:path'
 
 import type { ActionFunction, ActionParams } from '@sdk/types'
-import { INTENT_OBJECT } from '@bridge/constants'
+import { INTENT_OBJECT, MEMORY } from '@bridge/constants'
 ;(async (): Promise<void> => {
   const {
     domain,
@@ -27,6 +27,8 @@ import { INTENT_OBJECT } from '@bridge/constants'
   }
 
   try {
+    await MEMORY.init()
+
     const actionModule = await import(
       path.join(
         process.cwd(),
