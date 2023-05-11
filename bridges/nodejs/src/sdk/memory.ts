@@ -77,4 +77,26 @@ export class Memory {
       })
     })
   }
+
+  /**
+   * Update a record
+   * @param filter The filter to apply
+   * @param update The update to apply
+   */
+  public async updateOne<T, U>(
+    filter: Partial<T>,
+    update: Partial<U>
+  ): Promise<T | undefined> {
+    const record = await this.findOne(filter)
+
+    if (!record) {
+      return
+    }
+
+    Object.assign(record, update)
+
+    await this.low.write()
+
+    return record
+  }
 }
