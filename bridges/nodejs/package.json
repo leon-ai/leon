@@ -13,7 +13,11 @@
     "url": "https://github.com/leon-ai/leon/issues"
   },
   "dependencies": {
+    "@prisma/client": "4.14.0",
     "axios": "1.4.0",
     "lowdb": "6.0.1"
+  },
+  "devDependencies": {
+    "prisma": "4.14.0"
   }
 }
