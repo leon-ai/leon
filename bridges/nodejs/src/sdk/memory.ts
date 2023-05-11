@@ -27,11 +27,11 @@ export class Memory {
   }
 
   /**
-   * Insert record to memory
+   * Create record
    * @param record
-   * @example insertOne({ id: 0, title: 'hello world' })
+   * @example create({ id: 0, title: 'hello world' })
    */
-  public async insertOne<T>(record: T): Promise<T> {
+  public async create<T>(record: T): Promise<T> {
     this.memory.data[this.name].push(record)
 
     await this.memory.write()
@@ -40,11 +40,11 @@ export class Memory {
   }
 
   /**
-   * Insert records to memory
+   * Create records
    * @param records
-   * @example insertMany([{ id: 0, title: 'hello world' }, { id: 1, title: 'hello world' }])
+   * @example createMany([{ id: 0, title: 'hello world' }, { id: 1, title: 'hello world' }])
    */
-  public async insertMany<T>(records: T[]): Promise<T[]> {
+  public async createMany<T>(records: T[]): Promise<T[]> {
     this.memory.data[this.name].push(...records)
 
     await this.memory.write()

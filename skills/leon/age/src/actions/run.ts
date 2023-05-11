@@ -10,7 +10,7 @@ export const run: ActionFunction = async function () {
   const posts = await new Memory('posts').load()
   // const sections = await new Memory('sections').load()
 
-  await posts.insertOne({
+  await posts.create({
     id: 0,
     title: 'hello world',
     content: 'hello world',
@@ -20,7 +20,7 @@ export const run: ActionFunction = async function () {
     createdAt: Date.now()
   })
 
-  await posts.insertMany([
+  await posts.createMany([
     {
       id: 1,
       title: 'hello world',
