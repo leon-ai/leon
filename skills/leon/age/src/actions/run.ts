@@ -10,12 +10,18 @@ export const run: ActionFunction = async function () {
   const posts = await new Memory('posts').load()
   // const sections = await new Memory('sections').load()
 
-  const specificPosts = await posts.updateOne(
+  const specificPosts = await posts.updateMany(
     {
-      id: 0
+      id: 2,
+      author: {
+        name: 'Toto',
+        comments: {
+          id: 0
+        }
+      }
     },
     {
-      title: 'hello world UPDATED'
+      title: 'CHANGED!!!'
     }
   )
 

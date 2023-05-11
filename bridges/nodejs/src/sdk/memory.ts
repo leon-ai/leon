@@ -71,11 +71,35 @@ export class Memory {
    * @example findMany({ id: 0 })
    */
   public async findMany<T>(filter: Partial<T>): Promise<T[]> {
-    return this.low.data[this.name].filter((record: any) => {
-      return Object.entries(filter).every(([key, value]) => {
-        return record[key] === value
-      })
+    return this.low.data[this.name].filter((record: T) => {
+      return this.isMatch(record, filter)
     })
+  }
+
+  /**
+   * Check if a record match a filter
+   * @param record The record to check
+   * @param filter The filter to apply
+   * @example isMatch({ id: 0, title: 'hello world' }, { id: 0 })
+   */
+  private isMatch<T>(record: any, filter: Partial<T>): boolean {
+    if (Array.isArray(record) && Array.isArray(filter)) {
+      return record.some((item) => {
+        return filter.some((filterItem) => {
+          return this.isMatch(item, filterItem)
+        })
+      })
+    } else if (typeof record === 'object' && typeof filter === 'object') {
+      return Object.entries(filter).every(([key, value]) => {
+        if (typeof value === 'object') {
+          return this.isMatch(record[key], value as Partial<T>)
+        } else {
+          return record[key] === value
+        }
+      })
+    } else {
+      return record === filter
+    }
   }
 
   /**
@@ -98,5 +122,24 @@ export class Memory {
     await this.low.write()
 
     return record
+  }
+
+  public async updateMany<T, U>(
+    filter: Partial<T>,
+    update: Partial<U>
+  ): Promise<T[] | undefined> {
+    const records = await this.findMany(filter)
+
+    if (!records) {
+      return
+    }
+
+    records.forEach((record: any) => {
+      Object.assign(record, update)
+    })
+
+    await this.low.write()
+
+    return records
   }
 }
