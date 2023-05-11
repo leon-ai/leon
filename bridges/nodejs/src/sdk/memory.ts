@@ -38,4 +38,17 @@ export class Memory {
 
     return record
   }
+
+  /**
+   * Insert records to memory
+   * @param records
+   * @example insertMany([{ id: 0, title: 'hello world' }, { id: 1, title: 'hello world' }])
+   */
+  public async insertMany<T>(records: T[]): Promise<T[]> {
+    this.memory.data[this.name].push(...records)
+
+    await this.memory.write()
+
+    return records
+  }
 }
