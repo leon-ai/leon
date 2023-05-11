@@ -10,7 +10,7 @@ export const run: ActionFunction = async function () {
   const posts = await new Memory('posts').load()
   // const sections = await new Memory('sections').load()
 
-  const specificPosts = await posts.findOne({ id: 2 })
+  const specificPosts = await posts.findMany({ id: 2 })
 
   console.log('specificPosts', specificPosts)
 

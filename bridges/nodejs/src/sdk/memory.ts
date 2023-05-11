@@ -64,4 +64,17 @@ export class Memory {
       })
     })
   }
+
+  /**
+   * Find records
+   * @param filter The filter to apply
+   * @example findMany({ id: 0 })
+   */
+  public async findMany<T>(filter: Partial<T>): Promise<T[]> {
+    return this.low.data[this.name].filter((record: any) => {
+      return Object.entries(filter).every(([key, value]) => {
+        return record[key] === value
+      })
+    })
+  }
 }
