@@ -29,9 +29,9 @@ export class Memory {
   /**
    * Create record
    * @param record
-   * @example create({ id: 0, title: 'hello world' })
+   * @example createOne({ id: 0, title: 'hello world' })
    */
-  public async create<T>(record: T): Promise<T> {
+  public async createOne<T>(record: T): Promise<T> {
     this.memory.data[this.name].push(record)
 
     await this.memory.write()

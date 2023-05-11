@@ -10,7 +10,7 @@ export const run: ActionFunction = async function () {
   const posts = await new Memory('posts').load()
   // const sections = await new Memory('sections').load()
 
-  await posts.create({
+  await posts.createOne({
     id: 0,
     title: 'hello world',
     content: 'hello world',
