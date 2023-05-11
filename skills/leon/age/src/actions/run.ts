@@ -2,11 +2,18 @@ import utility from 'utility'
 
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
+import { PrismaClient } from '@sdk/prisma'
 import { Network } from '@sdk/network'
 import { Memory } from '@sdk/memory'
 import { Button } from '@sdk/aurora/button'
 
 export const run: ActionFunction = async function () {
+  const prisma = new PrismaClient()
+
+  const users = await prisma.user.findMany()
+
+  console.log('users', users)
+
   const posts = await new Memory('posts').load()
   // const sections = await new Memory('sections').load()
 
