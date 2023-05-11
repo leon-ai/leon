@@ -28,7 +28,7 @@ export class Memory {
 
   /**
    * Create record
-   * @param record
+   * @param record The record to create
    * @example createOne({ id: 0, title: 'hello world' })
    */
   public async createOne<T>(record: T): Promise<T> {
@@ -41,7 +41,7 @@ export class Memory {
 
   /**
    * Create records
-   * @param records
+   * @param records The records to create
    * @example createMany([{ id: 0, title: 'hello world' }, { id: 1, title: 'hello world' }])
    */
   public async createMany<T>(records: T[]): Promise<T[]> {
@@ -50,5 +50,18 @@ export class Memory {
     await this.low.write()
 
     return records
+  }
+
+  /**
+   * Find a record
+   * @param filter The filter to apply
+   * @example findOne({ id: 0 })
+   */
+  public async findOne<T>(filter: Partial<T>): Promise<T | undefined> {
+    return this.low.data[this.name].find((record: any) => {
+      return Object.entries(filter).every(([key, value]) => {
+        return record[key] === value
+      })
+    })
   }
 }

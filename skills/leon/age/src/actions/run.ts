@@ -10,7 +10,11 @@ export const run: ActionFunction = async function () {
   const posts = await new Memory('posts').load()
   // const sections = await new Memory('sections').load()
 
-  await posts.createOne({
+  const specificPosts = await posts.findOne({ id: 2 })
+
+  console.log('specificPosts', specificPosts)
+
+  /*await posts.createOne({
     id: 0,
     title: 'hello world',
     content: 'hello world',
@@ -39,7 +43,7 @@ export const run: ActionFunction = async function () {
       },
       createdAt: Date.now()
     }
-  ])
+  ])*/
 
   /*await sections.push({
     type: 'header',
