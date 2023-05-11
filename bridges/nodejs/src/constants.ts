@@ -4,7 +4,6 @@ import path from 'node:path'
 import type { SkillConfigSchema } from '@server/schemas/skill-schemas'
 
 import type { IntentObject } from '@sdk/types'
-import { Memory } from '@sdk/memory'
 
 const {
   argv: [, , INTENT_OBJ_FILE_PATH]
@@ -28,4 +27,3 @@ export const SKILL_CONFIG: SkillConfigSchema = JSON.parse(
 export const SKILL_SRC_CONFIG: Record<string, unknown> = JSON.parse(
   fs.readFileSync(path.join(SKILL_PATH, 'src', 'config.json'), 'utf8')
 ).configurations
-export const MEMORY = new Memory()

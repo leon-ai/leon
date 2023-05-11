@@ -7,7 +7,7 @@ const dynamicImport = new Function('specifier', 'return import(specifier)')
 export class Memory {
   private readonly memoryPath: string
   private readonly name: string
-  private memory: any
+  public low: any
 
   constructor(name: string) {
     this.name = name
@@ -19,9 +19,9 @@ export class Memory {
     const { JSONFile } = await dynamicImport('lowdb/node')
     const adapter = new JSONFile(this.memoryPath)
 
-    this.memory = new Low(adapter, { [this.name]: [] })
+    this.low = new Low(adapter, { [this.name]: [] })
 
-    await this.memory.read()
+    await this.low.read()
 
     return this
   }
@@ -32,9 +32,9 @@ export class Memory {
    * @example createOne({ id: 0, title: 'hello world' })
    */
   public async createOne<T>(record: T): Promise<T> {
-    this.memory.data[this.name].push(record)
+    this.low.data[this.name].push(record)
 
-    await this.memory.write()
+    await this.low.write()
 
     return record
   }
@@ -45,9 +45,9 @@ export class Memory {
    * @example createMany([{ id: 0, title: 'hello world' }, { id: 1, title: 'hello world' }])
    */
   public async createMany<T>(records: T[]): Promise<T[]> {
-    this.memory.data[this.name].push(...records)
+    this.low.data[this.name].push(...records)
 
-    await this.memory.write()
+    await this.low.write()
 
     return records
   }
