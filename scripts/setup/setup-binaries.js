@@ -4,7 +4,6 @@ import stream from 'node:stream'
 import readline from 'node:readline'
 
 import axios from 'axios'
-import { command } from 'execa'
 import prettyBytes from 'pretty-bytes'
 import prettyMilliseconds from 'pretty-ms'
 import extractZip from 'extract-zip'
@@ -12,7 +11,6 @@ import extractZip from 'extract-zip'
 import {
   BINARIES_FOLDER_NAME,
   GITHUB_URL,
-  NODEJS_BRIDGE_ROOT_PATH,
   NODEJS_BRIDGE_DIST_PATH,
   PYTHON_BRIDGE_DIST_PATH,
   TCP_SERVER_DIST_PATH,
@@ -97,23 +95,6 @@ const setupBinaries = async (key) => {
       fs.promises.rm(buildPath, { recursive: true, force: true }),
       fs.promises.rm(archivePath, { recursive: true, force: true })
     ])
-
-    if (key === 'nodejs-bridge') {
-      try {
-        LogHelper.info('Installing Node.js bridge npm packages...')
-
-        await command(
-          `npm install --package-lock=false --prefix ${NODEJS_BRIDGE_ROOT_PATH}`,
-          {
-            shell: true
-          }
-        )
-
-        LogHelper.success('Node.js bridge npm packages installed')
-      } catch (e) {
-        throw new Error(`Failed to download Node.js bridge npm packages: ${e}`)
-      }
-    }
 
     try {
       LogHelper.info(`Downloading ${name}...`)

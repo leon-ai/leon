@@ -4,7 +4,6 @@ import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { PrismaClient } from '@sdk/prisma'
 import { Network } from '@sdk/network'
-import { Memory } from '@sdk/memory'
 import { Button } from '@sdk/aurora/button'
 
 export const run: ActionFunction = async function () {
@@ -13,66 +12,6 @@ export const run: ActionFunction = async function () {
   const users = await prisma.user.findMany()
 
   console.log('users', users)
-
-  const posts = await new Memory('posts').load()
-  // const sections = await new Memory('sections').load()
-
-  const specificPosts = await posts.updateMany(
-    {
-      id: 2,
-      author: {
-        name: 'Toto',
-        comments: {
-          id: 0
-        }
-      }
-    },
-    {
-      title: 'CHANGED!!!'
-    }
-  )
-
-  console.log('specificPosts', specificPosts)
-
-  /*await posts.createOne({
-    id: 0,
-    title: 'hello world',
-    content: 'hello world',
-    author: {
-      name: 'Louis'
-    },
-    createdAt: Date.now()
-  })
-
-  await posts.createMany([
-    {
-      id: 1,
-      title: 'hello world',
-      content: 'hello world',
-      author: {
-        name: 'Louis'
-      },
-      createdAt: Date.now()
-    },
-    {
-      id: 2,
-      title: 'hello world',
-      content: 'hello world',
-      author: {
-        name: 'Louis'
-      },
-      createdAt: Date.now()
-    }
-  ])*/
-
-  /*await sections.push({
-    type: 'header',
-    width: '100%',
-    height: '100px'
-  })*/
-
-  // await blog.posts.getAll()
-  // await posts.find()
 
   await leon.answer({ key: 'default' })
 
