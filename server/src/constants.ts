@@ -18,9 +18,10 @@ export const GITHUB_URL = 'https://github.com/leon-ai/leon'
  * Binaries / distribution
  */
 export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
-export const NODEJS_BRIDGE_ROOT_PATH = path.join('bridges', 'nodejs')
-export const PYTHON_BRIDGE_ROOT_PATH = path.join('bridges', 'python')
-export const TCP_SERVER_ROOT_PATH = path.join('tcp_server')
+export const BRIDGES_PATH = path.join(process.cwd(), 'bridges')
+export const NODEJS_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'nodejs')
+export const PYTHON_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'python')
+export const TCP_SERVER_ROOT_PATH = path.join(process.cwd(), 'tcp_server')
 
 export const NODEJS_BRIDGE_DIST_PATH = path.join(
   NODEJS_BRIDGE_ROOT_PATH,
@@ -128,17 +129,23 @@ export const IS_TELEMETRY_ENABLED = process.env['LEON_TELEMETRY'] === 'true'
 /**
  * Paths
  */
-export const BIN_PATH = path.join('bin')
-export const SKILLS_PATH = path.join('skills')
-export const GLOBAL_DATA_PATH = path.join('core', 'data')
+export const BIN_PATH = path.join(process.cwd(), 'bin')
+export const SKILLS_PATH = path.join(process.cwd(), 'skills')
+export const GLOBAL_DATA_PATH = path.join(process.cwd(), 'core', 'data')
 export const MODELS_PATH = path.join(GLOBAL_DATA_PATH, 'models')
-export const VOICE_CONFIG_PATH = path.join('core', 'config', 'voice')
+export const VOICE_CONFIG_PATH = path.join(
+  process.cwd(),
+  'core',
+  'config',
+  'voice'
+)
 export const SERVER_PATH = path.join(
+  process.cwd(),
   'server',
   IS_PRODUCTION_ENV ? 'dist' : 'src'
 )
 export const TMP_PATH = path.join(SERVER_PATH, 'tmp')
-export const LEON_FILE_PATH = path.join('leon.json')
+export const LEON_FILE_PATH = path.join(process.cwd(), 'leon.json')
 
 /**
  * Misc
