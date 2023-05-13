@@ -3,56 +3,21 @@ import fs from 'node:fs'
 
 import { SKILL_PATH } from '@bridge/constants'
 
-export class Memory {
+interface MemoryOptions<T> {
+  name: string
+  defaultMemory: T
+}
+
+export class Memory<T> {
   private readonly memoryPath: string
   private readonly name: string
+  private readonly defaultMemory: T
 
-  constructor(name: string) {
-    this.memoryPath = path.join(SKILL_PATH, 'memory', `${name}.json`)
+  constructor(options: MemoryOptions<T>) {
+    const { name, defaultMemory } = options
     this.name = name
-  }
-
-  /**
-   * Get the memory
-   */
-  public async getMemory(): Promise<Record<string, unknown>> {
-    return this.read()
-  }
-
-  /**
-   * Get a value from the memory
-   * @param key The key to get
-   * @example get('key') // { name: 'Leon' }
-   */
-  public async get<T>(key: string): Promise<T> {
-    const memory = await this.read()
-
-    return memory[key] as T
-  }
-
-  /**
-   * Set a value in the memory
-   * @param key The key to set
-   * @param value The value to set
-   * @example set('key', { name: 'Leon' })
-   */
-  public async set<T>(key: string, value: T): Promise<void> {
-    const memory = await this.read()
-    memory[key] = value
-
-    await this.write(memory)
-  }
-
-  /**
-   * Delete a value from the memory
-   * @param key The key to delete
-   * @example delete('key')
-   */
-  public async delete(key: string): Promise<void> {
-    const memory = await this.read()
-    delete memory[key]
-
-    await this.write(memory)
+    this.defaultMemory = defaultMemory
+    this.memoryPath = path.join(SKILL_PATH, 'memory', `${options.name}.json`)
   }
 
   /**
@@ -60,22 +25,21 @@ export class Memory {
    * @example clear()
    */
   public async clear(): Promise<void> {
-    await this.write({})
+    await this.write(this.defaultMemory)
   }
 
   /**
    * Read the memory
    */
-  private async read(): Promise<Record<string, unknown>> {
+  public async read(): Promise<T> {
     try {
       if (!fs.existsSync(this.memoryPath)) {
         await this.clear()
       }
-
       return JSON.parse(await fs.promises.readFile(this.memoryPath, 'utf-8'))
-    } catch (e) {
-      console.error(`Error while reading memory for ${this.name}:`, e)
-      return {}
+    } catch (error) {
+      console.error(`Error while reading memory for ${this.name}:`, error)
+      throw error
     }
   }
 
@@ -83,14 +47,15 @@ export class Memory {
    * Write the memory
    * @param memory The memory to write
    */
-  private async write(memory: Record<string, unknown>): Promise<void> {
+  public async write(memory: T): Promise<void> {
     try {
       await fs.promises.writeFile(
         this.memoryPath,
         JSON.stringify(memory, null, 2)
       )
-    } catch (e) {
-      console.error(`Error while writing memory for ${this.name}:`, e)
+    } catch (error) {
+      console.error(`Error while writing memory for ${this.name}:`, error)
+      throw error
     }
   }
 }

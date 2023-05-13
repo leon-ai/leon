@@ -17,23 +17,8 @@ interface Post {
 }
 
 export const run: ActionFunction = async function () {
-  const postsMemory = new Memory('posts')
-  const websiteLayoutMemory = new Memory('websiteLayout')
-
-  await postsMemory.delete('1')
-
-  await websiteLayoutMemory.set('webSiteLayout', [
-    {
-      name: 'header',
-      component: '<Header>'
-    },
-    {
-      name: 'footer',
-      component: '<Footer>'
-    }
-  ])
-
-  await postsMemory.set('posts', [
+  const postsMemory = new Memory<Post[]>({ name: 'posts', defaultMemory: [] })
+  await postsMemory.write([
     {
       id: 0,
       title: 'Hello world',
@@ -51,34 +36,22 @@ export const run: ActionFunction = async function () {
       }
     }
   ])
-
-  await postsMemory.set('metaData', {
-    size: 50484,
-    type: 'image/png'
-  })
-
-  const metaData = await postsMemory.get<{ size: number; type: string }>(
-    'metaData'
-  )
-  const posts = await postsMemory.get<Post[]>('posts')
-  const websiteLayout = await websiteLayoutMemory.get<{
-    webSiteLayout: { name: string; component: string }[]
-  }>('webSiteLayout')
-
+  const posts = await postsMemory.read()
   console.log('posts', posts)
-  console.log('metaData', metaData)
-  console.log('websiteLayout', websiteLayout)
 
-  await postsMemory.set('posts', [
+  await postsMemory.write([
     ...posts,
     {
       id: 2,
       title: 'Hello world 3',
-      content: 'This is a test post 3'
+      content: 'This is a test post 3',
+      author: {
+        name: 'Louis'
+      }
     }
   ])
 
-  const posts2 = await postsMemory.get<Post[]>('posts')
+  const posts2 = await postsMemory.read()
 
   const foundPost = posts2.find((post) => post.id === 2)
 
