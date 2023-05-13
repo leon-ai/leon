@@ -13,6 +13,10 @@
     "url": "https://github.com/leon-ai/leon/issues"
   },
   "dependencies": {
-    "axios": "1.4.0"
+    "axios": "1.4.0",
+    "lodash": "4.17.21"
+  },
+  "devDependencies": {
+    "@types/lodash": "4.14.194"
   }
 }
