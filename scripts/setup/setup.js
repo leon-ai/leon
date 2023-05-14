@@ -7,8 +7,7 @@ import generateJSONSchemas from '../generate/generate-json-schemas'
 
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
-import setupSkillsConfig from './setup-skills-config'
-import installNodeJSSkillsPackages from './install-nodejs-skills-packages'
+import setupSkills from './setup-skills/setup-skills'
 import setupBinaries from './setup-binaries'
 import createInstanceID from './create-instance-id'
 
@@ -21,8 +20,8 @@ import createInstanceID from './create-instance-id'
   try {
     await setupDotenv()
     LoaderHelper.start()
-    await Promise.all([setupCore(), setupSkillsConfig()])
-    await installNodeJSSkillsPackages()
+    await setupCore()
+    await setupSkills()
     LoaderHelper.stop()
     await setupBinaries()
     await generateHTTPAPIKey()
