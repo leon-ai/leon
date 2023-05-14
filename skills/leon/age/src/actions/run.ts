@@ -17,7 +17,14 @@ interface Post {
 }
 
 export const run: ActionFunction = async function () {
+  const otherSkillMemory = new Memory<unknown>({
+    name: 'productivity:todo_list:db'
+  })
   const postsMemory = new Memory<Post[]>({ name: 'posts', defaultMemory: [] })
+  const todoLists = await otherSkillMemory.read()
+
+  console.log('todoLists', todoLists)
+
   await postsMemory.write([
     {
       id: 0,
