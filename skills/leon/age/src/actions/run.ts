@@ -36,10 +36,10 @@ export const run: ActionFunction = async function () {
       }
     }
   ])
-  const posts = await postsMemory.read()
+  let posts = await postsMemory.read()
   console.log('posts', posts)
 
-  await postsMemory.write([
+  posts = await postsMemory.write([
     ...posts,
     {
       id: 2,
@@ -51,13 +51,11 @@ export const run: ActionFunction = async function () {
     }
   ])
 
-  const posts2 = await postsMemory.read()
-
-  const foundPost = posts2.find((post) => post.id === 2)
+  const foundPost = posts.find((post) => post.id === 2)
 
   console.log('foundPost', foundPost)
 
-  console.log('keyBy', _.keyBy(posts2, 'id'))
+  console.log('keyBy', _.keyBy(posts, 'id'))
 
   ///
 

@@ -22,7 +22,7 @@ export class Memory<T> {
   }
 
   /**
-   * Clear the memory
+   * Clear the memory and set it to the default memory value
    * @example clear()
    */
   public async clear(): Promise<void> {
@@ -31,6 +31,7 @@ export class Memory<T> {
 
   /**
    * Read the memory
+   * @example read()
    */
   public async read(): Promise<T> {
     try {
@@ -48,13 +49,16 @@ export class Memory<T> {
   /**
    * Write the memory
    * @param memory The memory to write
+   * @example write({ foo: 'bar' }) // { foo: 'bar' }
    */
-  public async write(memory: T): Promise<void> {
+  public async write(memory: T): Promise<T> {
     try {
       await fs.promises.writeFile(
         this.memoryPath,
         JSON.stringify(memory, null, 2)
       )
+
+      return memory
     } catch (e) {
       console.error(`Error while writing memory for ${this.name}:`, e)
       throw e
