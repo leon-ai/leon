@@ -38,7 +38,7 @@ import { INTENT_OBJECT } from '@bridge/constants'
         `${action}.ts`
       )
     )
-    const actionFunction: ActionFunction = actionModule[action]
+    const actionFunction: ActionFunction = actionModule.run
 
     await actionFunction(params)
   } catch (e) {
