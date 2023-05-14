@@ -63,6 +63,11 @@ export default class Client {
       cb('string-received')
     })
 
+    this.socket.on('widget', (data) => {
+      console.log('data', data)
+      // TODO: render widget via React
+    })
+
     this.socket.on('audio-forwarded', (data, cb) => {
       const ctx = new AudioContext()
       const source = ctx.createBufferSource()

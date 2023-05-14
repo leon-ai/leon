@@ -1,6 +1,14 @@
 // TODO: contains the button API. rendering engine <-> SDK
+interface Options {
+  text: string
+}
+
 export class Button {
-  constructor() {
-    console.log('Button constructor')
+  private readonly text: string
+
+  constructor(options: Options) {
+    this.text = options.text
+
+    console.log('Button constructor', this.text)
   }
 }

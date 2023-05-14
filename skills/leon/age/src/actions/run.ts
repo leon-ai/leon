@@ -1,7 +1,8 @@
-import utility from 'utility'
+import utility from 'utility' // TODO
 
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
+import { Widget } from '@sdk/widget'
 import { Network } from '@sdk/network'
 import { Button } from '@sdk/aurora/button'
 import { Memory } from '@sdk/memory'
@@ -17,6 +18,15 @@ interface Post {
 }
 
 export const run: ActionFunction = async function () {
+  const button = new Button({
+    text: 'Hello world from action skill'
+  })
+  const widget = new Widget([button])
+
+  await leon.answer({ widget })
+
+  ///
+
   const otherSkillMemory = new Memory<unknown>({
     name: 'productivity:todo_list:db'
   })
