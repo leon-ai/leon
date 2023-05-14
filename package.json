@@ -142,6 +142,6 @@
     "tsc-watch": "6.0.0",
     "tsconfig-paths": "4.1.2",
     "typescript": "5.0.2",
-    "vite": "3.0.9"
+    "vite": "4.3.5"
   }
 }
