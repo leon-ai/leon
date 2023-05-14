@@ -15,6 +15,7 @@ export class Memory<T> {
 
   constructor(options: MemoryOptions<T>) {
     const { name, defaultMemory } = options
+
     this.name = name
     this.defaultMemory = defaultMemory
     this.memoryPath = path.join(SKILL_PATH, 'memory', `${options.name}.json`)
@@ -36,10 +37,11 @@ export class Memory<T> {
       if (!fs.existsSync(this.memoryPath)) {
         await this.clear()
       }
+
       return JSON.parse(await fs.promises.readFile(this.memoryPath, 'utf-8'))
-    } catch (error) {
-      console.error(`Error while reading memory for ${this.name}:`, error)
-      throw error
+    } catch (e) {
+      console.error(`Error while reading memory for ${this.name}:`, e)
+      throw e
     }
   }
 
@@ -53,9 +55,9 @@ export class Memory<T> {
         this.memoryPath,
         JSON.stringify(memory, null, 2)
       )
-    } catch (error) {
-      console.error(`Error while writing memory for ${this.name}:`, error)
-      throw error
+    } catch (e) {
+      console.error(`Error while writing memory for ${this.name}:`, e)
+      throw e
     }
   }
 }
