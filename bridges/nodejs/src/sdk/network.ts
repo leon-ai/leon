@@ -112,10 +112,10 @@ export class Network {
    */
   public async isNetworkAvailable(): Promise<boolean> {
     try {
-      await dns.promises.resolve('apple.com')
+      await dns.promises.resolve('getleon.ai')
 
       return true
-    } catch (e) {
+    } catch {
       return false
     }
   }
