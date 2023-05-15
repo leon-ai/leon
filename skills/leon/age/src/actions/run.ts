@@ -24,14 +24,17 @@ export const run: ActionFunction = async function () {
 
   ///
 
-  const otherSkillMemory = new Memory<unknown>({
+  const otherSkillMemory = new Memory({
     name: 'productivity:todo_list:db'
   })
+  try {
+    const todoLists = await otherSkillMemory.read()
+    console.log('todoLists', todoLists)
+  } catch {
+    console.log('todoLists', [])
+  }
+
   const postsMemory = new Memory<Post[]>({ name: 'posts', defaultMemory: [] })
-  const todoLists = await otherSkillMemory.read()
-
-  console.log('todoLists', todoLists)
-
   await postsMemory.write([
     {
       id: 0,

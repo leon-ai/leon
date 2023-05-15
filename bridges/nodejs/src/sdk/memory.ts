@@ -8,7 +8,7 @@ interface MemoryOptions<T> {
   defaultMemory?: T
 }
 
-export class Memory<T> {
+export class Memory<T = unknown> {
   private readonly memoryPath: string | undefined
   private readonly name: string
   private readonly defaultMemory: T | undefined
@@ -55,12 +55,13 @@ export class Memory<T> {
    * Read the memory
    * @example read()
    */
-  public async read(): Promise<T | undefined> {
+  public async read(): Promise<T> {
+    if (!this.memoryPath) {
+      throw new Error(
+        `You cannot read the memory "${this.name}" as it belongs to another skill which haven't written to this memory yet`
+      )
+    }
     try {
-      if (!this.memoryPath) {
-        return
-      }
-
       if (!fs.existsSync(this.memoryPath)) {
         await this.clear()
       }
