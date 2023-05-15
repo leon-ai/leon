@@ -159,11 +159,11 @@ dotenv.config()
     if (Math.round(freeRAMInGB) < MINIMUM_REQUIRED_RAM) {
       report.can_run.v = false
       LogHelper.error(
-        `Free RAM: ${freeRAMInGB} | Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM`
+        `Free RAM: ${freeRAMInGB} GB | Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM`
       )
     } else {
       LogHelper.success(
-        `Free RAM: ${freeRAMInGB} | Total RAM: ${totalRAMInGB} GB`
+        `Free RAM: ${freeRAMInGB} GB | Total RAM: ${totalRAMInGB} GB`
       )
     }
 
