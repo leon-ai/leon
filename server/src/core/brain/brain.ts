@@ -198,6 +198,10 @@ export default class Brain {
         LogHelper.title(`${this.skillFriendlyName} skill (on data)`)
         LogHelper.info(data.toString())
 
+        if (obj.output.widget) {
+          SOCKET_SERVER.socket?.emit('widget', obj.output.widget)
+        }
+
         const speech = obj.output.speech.toString()
         if (!this.isMuted) {
           this.talk(speech)

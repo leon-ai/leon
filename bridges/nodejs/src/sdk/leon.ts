@@ -43,44 +43,48 @@ class Leon {
    * @example setAnswerData('key', { name: 'Leon' })
    */
   public setAnswerData(
-    answerKey: string,
+    answerKey: string | undefined,
     data: AnswerData = null
-  ): string | null {
-    try {
-      // In case the answer key is a raw answer
-      if (SKILL_CONFIG.answers == null || !SKILL_CONFIG.answers[answerKey]) {
-        return answerKey
-      }
-
-      const answers = SKILL_CONFIG.answers[answerKey] ?? ''
-      let answer: string
-
-      if (Array.isArray(answers)) {
-        answer = answers[Math.floor(Math.random() * answers.length)] ?? ''
-      } else {
-        answer = answers
-      }
-
-      if (data) {
-        for (const key in data) {
-          answer = answer.replaceAll(`%${key}%`, String(data[key]))
+  ): string | null | undefined {
+    if (answerKey) {
+      try {
+        // In case the answer key is a raw answer
+        if (SKILL_CONFIG.answers == null || !SKILL_CONFIG.answers[answerKey]) {
+          return answerKey
         }
-      }
 
-      if (SKILL_CONFIG.variables) {
-        const { variables } = SKILL_CONFIG
+        const answers = SKILL_CONFIG.answers[answerKey] ?? ''
+        let answer: string
 
-        for (const key in variables) {
-          answer = answer.replaceAll(`%${key}%`, String(variables[key]))
+        if (Array.isArray(answers)) {
+          answer = answers[Math.floor(Math.random() * answers.length)] ?? ''
+        } else {
+          answer = answers
         }
+
+        if (data) {
+          for (const key in data) {
+            answer = answer.replaceAll(`%${key}%`, String(data[key]))
+          }
+        }
+
+        if (SKILL_CONFIG.variables) {
+          const { variables } = SKILL_CONFIG
+
+          for (const key in variables) {
+            answer = answer.replaceAll(`%${key}%`, String(variables[key]))
+          }
+        }
+
+        return answer
+      } catch (e) {
+        console.error('Error while setting answer data:', e)
+
+        return null
       }
-
-      return answer
-    } catch (e) {
-      console.error('Error while setting answer data:', e)
-
-      return null
     }
+
+    return undefined
   }
 
   /**
@@ -95,11 +99,18 @@ class Leon {
       const answerObject: AnswerOutput = {
         ...INTENT_OBJECT,
         output: {
-          codes: answerInput.key,
+          codes:
+            answerInput.widget && !answerInput.key
+              ? 'widget'
+              : (answerInput.key as string),
           speech: this.setAnswerData(answerInput.key, answerInput.data) ?? '',
           core: answerInput.core,
           options: this.getSRCConfig('options')
         }
+      }
+
+      if (answerInput.widget) {
+        answerObject.output.widget = answerInput.widget
       }
 
       // "Temporize" for the data buffer output on the core

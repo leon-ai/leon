@@ -1,5 +1,8 @@
 import { io } from 'socket.io-client'
+import React from 'react'
+import { createRoot } from 'react-dom/client'
 
+import { Button } from './aurora/button'
 import Chatbot from './chatbot'
 
 export default class Client {
@@ -61,6 +64,22 @@ export default class Client {
       this.send('utterance')
 
       cb('string-received')
+    })
+
+    this.socket.on('widget', (data) => {
+      /**
+       * TODO: widget: widget handler to core/skill; dynamic component rendering
+       */
+      console.log('data', data)
+
+      const container = document.createElement('div')
+      container.className = 'widget'
+      this.chatbot.feed.appendChild(container)
+
+      const root = createRoot(container)
+
+      // TODO: widget: pass props and dynamic component loading according to type
+      root.render(Button({ children: 'OK' }))
     })
 
     this.socket.on('audio-forwarded', (data, cb) => {

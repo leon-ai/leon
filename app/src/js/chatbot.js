@@ -60,6 +60,9 @@ export default class Chatbot {
   }
 
   loadFeed() {
+    /**
+     * TODO: widget: load widget from local storage
+     */
     return new Promise((resolve) => {
       if (this.parsedBubbles === null || this.parsedBubbles.length === 0) {
         this.noBubbleMessage.classList.remove('hide')
