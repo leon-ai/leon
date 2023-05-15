@@ -198,7 +198,6 @@ export default class Brain {
         LogHelper.title(`${this.skillFriendlyName} skill (on data)`)
         LogHelper.info(data.toString())
 
-        // TODO: widget
         if (obj.output.widget) {
           SOCKET_SERVER.socket?.emit('widget', obj.output.widget)
         }
