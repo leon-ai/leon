@@ -61,6 +61,7 @@ export class Memory<T = unknown> {
         `You cannot read the memory "${this.name}" as it belongs to another skill which haven't written to this memory yet`
       )
     }
+
     try {
       if (!fs.existsSync(this.memoryPath)) {
         await this.clear()
