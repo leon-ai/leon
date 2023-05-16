@@ -36,7 +36,7 @@ _<p align="center">Your open-source personal assistant.</p>_
 
 I'm taking a lot of time to work on the new core of Leon due to personal reasons. I can only work on it after work and on weekends. Hence, **I'm blocking any potential contribution as the whole core of Leon is coming with many breaking changes**. Many of you are willing to contribute in Leon (create new skills, help to improve the core, translations and so on...), a big thanks to every one of you!
 
-I wish one day I could work on Leon full time, but it's not possible at the moment as I need to pay my bills. I have some ideas about how to monetize Leon in the future (Leon's core will always remain open source), but before to get there there is still a long way to go.
+While I would love to devote more time to Leon, I'm currently unable to do so because I have bills to pay. I have some ideas about how to monetize Leon in the future (Leon's core will always remain open source), but before to get there there is still a long way to go.
 
 Until then, any financial support by [sponsoring Leon](http://sponsor.getleon.ai) is much appreciated 🙂
 
