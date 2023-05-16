@@ -101,11 +101,11 @@ const GLOBAL_DATA_SCHEMAS = {
 
   if (freeRAMInGB < MINIMUM_REQUIRED_RAM) {
     LogHelper.warning(
-      `Free RAM: ${freeRAMInGB} | Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM. It may not work as expected.`
+      `Free RAM: ${freeRAMInGB} GB | Total RAM: ${totalRAMInGB} GB. Leon needs at least ${MINIMUM_REQUIRED_RAM} GB of RAM. It may not work as expected.`
     )
   } else {
     LogHelper.success(
-      `Minimum required RAM: ${MINIMUM_REQUIRED_RAM} GB | Free RAM: ${freeRAMInGB} | Total RAM: ${totalRAMInGB} GB`
+      `Minimum required RAM: ${MINIMUM_REQUIRED_RAM} GB | Free RAM: ${freeRAMInGB} GB | Total RAM: ${totalRAMInGB} GB`
     )
   }
 

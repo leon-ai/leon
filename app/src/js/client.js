@@ -79,7 +79,15 @@ export default class Client {
       const root = createRoot(container)
 
       // TODO: widget: pass props and dynamic component loading according to type
-      root.render(Button({ children: 'OK' }))
+      const widgets = {
+        Button: (options) => {
+          return Button({
+            children: options.text
+          })
+        }
+      }
+
+      root.render(widgets[data.type](data.options))
     })
 
     this.socket.on('audio-forwarded', (data, cb) => {

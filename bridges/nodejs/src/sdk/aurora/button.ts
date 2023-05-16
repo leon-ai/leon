@@ -1,14 +1,12 @@
+import { Widget } from '../widget'
+
 // TODO: contains the button API. rendering engine <-> SDK
-interface Options {
+interface ButtonOptions {
   text: string
 }
 
-export class Button {
-  private readonly text: string
-
-  constructor(options: Options) {
-    this.text = options.text
-
-    console.log('Button constructor', this.text)
+export class Button extends Widget<ButtonOptions> {
+  public constructor(options: ButtonOptions) {
+    super(options)
   }
 }

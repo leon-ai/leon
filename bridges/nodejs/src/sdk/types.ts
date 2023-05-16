@@ -3,16 +3,9 @@
  */
 import type { ActionParams, IntentObject } from '@/core/brain/types'
 
-import type { Button } from '@sdk/aurora/button'
-
 export type { ActionParams, IntentObject }
 
 export type ActionFunction = (params: ActionParams) => Promise<void>
-
-/**
- * Aurora
- */
-export type AuroraComponent = Button // TODO
 
 /**
  * Answer types
