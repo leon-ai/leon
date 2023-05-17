@@ -17,6 +17,10 @@ interface Post {
 }
 
 export const run: ActionFunction = async function () {
+  await leon.answer({ key: 'test' })
+
+  ///
+
   const button = new Button({
     text: 'Hello world from action skill'
   })

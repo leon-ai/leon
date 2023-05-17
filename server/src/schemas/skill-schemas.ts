@@ -23,15 +23,13 @@ const skillDataTypes = [
   Type.Literal('global_resolver'),
   Type.Literal('entity')
 ]
-const answerTypes = [
-  Type.Array(Type.String()),
-  Type.Array(
-    Type.Object({
-      speech: Type.String(),
-      text: Type.String()
-    })
-  )
-]
+const answerTypes = Type.Union([
+  Type.String(),
+  Type.Object({
+    speech: Type.String(),
+    text: Type.String()
+  })
+])
 const skillCustomEnumEntityType = Type.Object(
   {
     type: Type.Literal('enum'),
@@ -193,8 +191,8 @@ export const skillConfigSchemaObject = Type.Strict(
             )
           ),
           utterance_samples: Type.Optional(Type.Array(Type.String())),
-          answers: Type.Optional(Type.Union(answerTypes)),
-          unknown_answers: Type.Optional(Type.Union(answerTypes)),
+          answers: Type.Optional(Type.Array(answerTypes)),
+          unknown_answers: Type.Optional(Type.Array(answerTypes)),
           suggestions: Type.Optional(
             Type.Array(Type.String(), {
               description:
@@ -244,7 +242,7 @@ export const skillConfigSchemaObject = Type.Strict(
         { additionalProperties: false }
       )
     ),
-    answers: Type.Optional(Type.Record(Type.String(), Type.Union(answerTypes))),
+    answers: Type.Optional(Type.Record(Type.String(), Type.Array(answerTypes))),
     entities: Type.Optional(Type.Record(Type.String(), Type.String())),
     resolvers: Type.Optional(
       Type.Record(
@@ -277,3 +275,4 @@ export type SkillCustomRegexEntityTypeSchema = Static<
 export type SkillCustomEnumEntityTypeSchema = Static<
   typeof skillCustomEnumEntityType
 >
+export type AnswerConfigSchema = Static<typeof answerTypes>

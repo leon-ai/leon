@@ -1,4 +1,9 @@
-import type { AnswerData, AnswerInput, AnswerOutput } from '@sdk/types'
+import type {
+  AnswerData,
+  AnswerInput,
+  AnswerOutput,
+  AnswerConfig
+} from '@sdk/types'
 import {
   INTENT_OBJECT,
   SKILL_CONFIG,
@@ -45,7 +50,7 @@ class Leon {
   public setAnswerData(
     answerKey: string | undefined,
     data: AnswerData = null
-  ): string | null | undefined {
+  ): AnswerConfig | null | undefined {
     if (answerKey) {
       try {
         // In case the answer key is a raw answer

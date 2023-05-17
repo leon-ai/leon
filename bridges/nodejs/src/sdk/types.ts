@@ -2,6 +2,7 @@
  * Action types
  */
 import type { ActionParams, IntentObject } from '@/core/brain/types'
+import type { AnswerConfigSchema } from '@/schemas/skill-schemas'
 
 export type { ActionParams, IntentObject }
 
@@ -40,3 +41,4 @@ export interface WidgetAnswer extends Answer {
 }
 export type AnswerData = Record<string, string | number> | null
 export type AnswerInput = TextAnswer | WidgetAnswer
+export type AnswerConfig = AnswerConfigSchema
