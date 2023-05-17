@@ -1,6 +1,76 @@
 {
   "endpoints": [
     {
+      "method": "GET",
+      "route": "/api/action/leon/age/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/color/favorite_color",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/color/why",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/color/color_hexadecimal",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/good_bye/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/greeting/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/introduction/introduce_leon",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/introduction/gather_basic_info",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/introduction/remember",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/joke/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/meaning_of_life/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/partner_assistant/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/random_number/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/welcome/run",
+      "params": []
+    },
+    {
       "method": "POST",
       "route": "/api/action/news/github_trends/run",
       "params": ["number", "daterange"],
@@ -139,76 +209,6 @@
     {
       "method": "GET",
       "route": "/api/action/games/rochambeau/rematch",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/age/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/color/favorite_color",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/color/why",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/color/color_hexadecimal",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/good_bye/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/greeting/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/introduction/introduce_leon",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/introduction/gather_basic_info",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/introduction/remember",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/joke/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/meaning_of_life/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/partner_assistant/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/random_number/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/leon/welcome/run",
       "params": []
     }
   ]

@@ -275,4 +275,4 @@ export type SkillCustomRegexEntityTypeSchema = Static<
 export type SkillCustomEnumEntityTypeSchema = Static<
   typeof skillCustomEnumEntityType
 >
-export type AnswerConfigSchema = Static<typeof answerTypes>
+export type SkillAnswerConfigSchema = Static<typeof answerTypes>

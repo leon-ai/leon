@@ -59,7 +59,7 @@ class Leon {
         }
 
         const answers = SKILL_CONFIG.answers[answerKey] ?? ''
-        let answer: string
+        let answer: AnswerConfig
 
         if (Array.isArray(answers)) {
           answer = answers[Math.floor(Math.random() * answers.length)] ?? ''
@@ -69,7 +69,22 @@ class Leon {
 
         if (data) {
           for (const key in data) {
-            answer = answer.replaceAll(`%${key}%`, String(data[key]))
+            // In case the answer needs speech and text differentiation
+            if (typeof answer !== 'string' && answer.text) {
+              answer.text = answer.text.replaceAll(
+                `%${key}%`,
+                String(data[key])
+              )
+              answer.speech = answer.speech.replaceAll(
+                `%${key}%`,
+                String(data[key])
+              )
+            } else {
+              answer = (answer as string).replaceAll(
+                `%${key}%`,
+                String(data[key])
+              )
+            }
           }
         }
 
@@ -77,7 +92,22 @@ class Leon {
           const { variables } = SKILL_CONFIG
 
           for (const key in variables) {
-            answer = answer.replaceAll(`%${key}%`, String(variables[key]))
+            // In case the answer needs speech and text differentiation
+            if (typeof answer !== 'string' && answer.text) {
+              answer.text = answer.text.replaceAll(
+                `%${key}%`,
+                String(variables[key])
+              )
+              answer.speech = answer.speech.replaceAll(
+                `%${key}%`,
+                String(variables[key])
+              )
+            } else {
+              answer = (answer as string).replaceAll(
+                `%${key}%`,
+                String(variables[key])
+              )
+            }
           }
         }
 
@@ -108,7 +138,7 @@ class Leon {
             answerInput.widget && !answerInput.key
               ? 'widget'
               : (answerInput.key as string),
-          speech: this.setAnswerData(answerInput.key, answerInput.data) ?? '',
+          answer: this.setAnswerData(answerInput.key, answerInput.data) ?? '',
           core: answerInput.core,
           options: this.getSRCConfig('options')
         }
