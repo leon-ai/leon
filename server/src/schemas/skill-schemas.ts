@@ -23,6 +23,15 @@ const skillDataTypes = [
   Type.Literal('global_resolver'),
   Type.Literal('entity')
 ]
+const answerTypes = [
+  Type.Array(Type.String()),
+  Type.Array(
+    Type.Object({
+      speech: Type.String(),
+      text: Type.String()
+    })
+  )
+]
 const skillCustomEnumEntityType = Type.Object(
   {
     type: Type.Literal('enum'),
@@ -184,8 +193,8 @@ export const skillConfigSchemaObject = Type.Strict(
             )
           ),
           utterance_samples: Type.Optional(Type.Array(Type.String())),
-          answers: Type.Optional(Type.Array(Type.String())),
-          unknown_answers: Type.Optional(Type.Array(Type.String())),
+          answers: Type.Optional(Type.Union(answerTypes)),
+          unknown_answers: Type.Optional(Type.Union(answerTypes)),
           suggestions: Type.Optional(
             Type.Array(Type.String(), {
               description:
@@ -235,9 +244,7 @@ export const skillConfigSchemaObject = Type.Strict(
         { additionalProperties: false }
       )
     ),
-    answers: Type.Optional(
-      Type.Record(Type.String(), Type.Array(Type.String()))
-    ),
+    answers: Type.Optional(Type.Record(Type.String(), Type.Union(answerTypes))),
     entities: Type.Optional(Type.Record(Type.String(), Type.String())),
     resolvers: Type.Optional(
       Type.Record(
