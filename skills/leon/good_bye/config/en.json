@@ -12,11 +12,14 @@
         "I have to go"
       ],
       "answers": [
-        {
-          "text": "text test",
-          "speech": "speech test"
-        },
-        "Bye!"
+        "Bye!",
+        "Bye bye!",
+        "Good bye.",
+        "Bye! Take care.",
+        "Good bye, please, take care of yourself.",
+        "Bye! Enjoy your time!",
+        "See you!",
+        "See ya!"
       ]
     }
   }
