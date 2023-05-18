@@ -68,6 +68,12 @@
   },
   "overrides": [
     {
+      "files": ["skills/**/*.ts"],
+      "rules": {
+        "import/order": "off"
+      }
+    },
+    {
       "files": ["*.ts"],
       "rules": {
         "@typescript-eslint/explicit-function-return-type": "error"

@@ -9,7 +9,10 @@ import type {
   NLUSlot,
   NLUSlots
 } from '@/core/nlp/types'
-import type { SkillConfigSchema } from '@/schemas/skill-schemas'
+import type {
+  SkillConfigSchema,
+  SkillAnswerConfigSchema
+} from '@/schemas/skill-schemas'
 import type { ShortLanguageCode } from '@/types'
 
 interface SkillCoreData {
@@ -29,7 +32,7 @@ export interface SkillResult {
   slots: NLUSlots
   output: {
     codes: string[]
-    speech: string
+    answer: string
     core: SkillCoreData | undefined
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     options: Record<string, any>
@@ -60,6 +63,22 @@ export interface IntentObject extends ActionParams {
   domain: NLPDomain
   skill: NLPSkill
   action: NLPAction
+}
+
+export interface SkillAnswerCoreData {
+  restart?: boolean
+  isInActionLoop?: boolean
+  showNextActionSuggestions?: boolean
+  showSuggestions?: boolean
+}
+export interface SkillAnswerOutput extends IntentObject {
+  output: {
+    codes: string
+    answer: SkillAnswerConfigSchema
+    core?: SkillAnswerCoreData
+    widget?: unknown // TODO
+    options: Record<string, string>
+  }
 }
 
 export interface BrainProcessResult extends NLUResult {

@@ -1,7 +1,13 @@
 /**
  * Action types
  */
-import type { ActionParams, IntentObject } from '@/core/brain/types'
+import type {
+  ActionParams,
+  IntentObject,
+  SkillAnswerCoreData,
+  SkillAnswerOutput
+} from '@/core/brain/types'
+import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
 
 export type { ActionParams, IntentObject }
 
@@ -10,26 +16,11 @@ export type ActionFunction = (params: ActionParams) => Promise<void>
 /**
  * Answer types
  */
-export interface AnswerOutput extends IntentObject {
-  output: {
-    codes: string
-    speech: string
-    core?: AnswerCoreData
-    widget?: unknown // TODO
-    options: Record<string, string>
-  }
-}
-export interface AnswerCoreData {
-  restart?: boolean
-  isInActionLoop?: boolean
-  showNextActionSuggestions?: boolean
-  showSuggestions?: boolean
-}
 export interface Answer {
   key?: string
   widget?: unknown // TODO
   data?: AnswerData
-  core?: AnswerCoreData
+  core?: SkillAnswerCoreData
 }
 export interface TextAnswer extends Answer {
   key: string
@@ -40,3 +31,5 @@ export interface WidgetAnswer extends Answer {
 }
 export type AnswerData = Record<string, string | number> | null
 export type AnswerInput = TextAnswer | WidgetAnswer
+export type AnswerOutput = SkillAnswerOutput
+export type AnswerConfig = SkillAnswerConfigSchema

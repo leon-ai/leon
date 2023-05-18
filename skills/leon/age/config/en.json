@@ -9,6 +9,12 @@
   "answers": {
     "default": ["I'm..."],
     "greet": ["Hey, just a try %name% again %name%", "Another try, hi"],
-    "answer": ["%answer%"]
+    "answer": ["%answer%"],
+    "test": [
+      {
+        "speech": "This will be said out loud",
+        "text": "This will be shown in the chat"
+      }
+    ]
   }
 }
