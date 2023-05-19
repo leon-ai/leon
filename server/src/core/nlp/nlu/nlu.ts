@@ -32,6 +32,7 @@ export const DEFAULT_NLU_RESULT = {
   slots: {},
   skillConfigPath: '',
   answers: [], // For dialog action type
+  sentiment: {},
   classification: {
     domain: '',
     skill: '',
@@ -127,6 +128,10 @@ export default class NLU {
       const result: NLPJSProcessResult =
         await MODEL_LOADER.mainNLPContainer.process(utterance)
       const { locale, answers, classifications } = result
+      const sentiment = {
+        vote: result.sentiment.vote,
+        score: result.sentiment.score
+      }
       let { score, intent, domain } = result
 
       /**
@@ -158,6 +163,7 @@ export default class NLU {
         ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
         utterance,
         answers, // For dialog action type
+        sentiment,
         classification: {
           domain,
           skill: skillName || '',

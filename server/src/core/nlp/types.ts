@@ -40,13 +40,14 @@ export interface NLPJSProcessResult {
   answer: string | undefined
   actions: NLPAction[]
   sentiment: {
+    // Rule of thumb: > 0 = negative; = 0 = neutral; < 0 = positive
     score: number
     numWords: number
     numHits: number
     average: number
     type: string
     locale: ShortLanguageCode
-    vote: string
+    vote: 'positive' | 'neutral' | 'negative'
   }
 }
 
@@ -85,6 +86,10 @@ export interface NLUResult {
   utterance: NLPUtterance
   skillConfigPath: string
   answers: { answer: string }[]
+  sentiment: {
+    vote?: NLPJSProcessResult['sentiment']['vote']
+    score?: NLPJSProcessResult['sentiment']['score']
+  }
   classification: NLUClassification
 }
 
