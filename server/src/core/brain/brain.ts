@@ -34,6 +34,7 @@ import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import Synchronizer from '@/core/synchronizer'
 import type { AnswerOutput } from '@sdk/types'
+import { DateHelper } from '@/helpers/date-helper'
 
 export default class Brain {
   private static instance: Brain
@@ -178,9 +179,11 @@ export default class Brain {
     utteranceID: string,
     slots: IntentObject['slots']
   ): IntentObject {
+    const date = DateHelper.getDateTime()
+    const dateObject = new Date(date)
+
     return {
       id: utteranceID,
-      lang: this._lang,
       domain: nluResult.classification.domain,
       skill: nluResult.classification.skill,
       action: nluResult.classification.action,
@@ -189,7 +192,16 @@ export default class Brain {
       entities: nluResult.entities,
       current_resolvers: nluResult.currentResolvers,
       resolvers: nluResult.resolvers,
-      slots
+      slots,
+      extra_context_data: {
+        lang: this._lang,
+        sentiment: nluResult.sentiment,
+        date: date.slice(0, 10),
+        time: date.slice(11, 19),
+        timestamp: dateObject.getTime(),
+        date_time: date,
+        week_day: dateObject.toLocaleString('default', { weekday: 'long' })
+      }
     }
   }
 

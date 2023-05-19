@@ -7,23 +7,23 @@ import { INTENT_OBJECT } from '@bridge/constants'
     domain,
     skill,
     action,
-    lang,
     utterance,
     current_entities,
     entities,
     current_resolvers,
     resolvers,
-    slots
+    slots,
+    extra_context_data
   } = INTENT_OBJECT
 
   const params: ActionParams = {
-    lang,
     utterance,
     current_entities,
     entities,
     current_resolvers,
     resolvers,
-    slots
+    slots,
+    extra_context_data
   }
 
   try {

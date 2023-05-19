@@ -21,7 +21,11 @@ export const SKILL_PATH = path.join(
 export const SKILLS_PATH = SKILLS_ROOT_PATH
 export const SKILL_CONFIG: SkillConfigSchema = JSON.parse(
   fs.readFileSync(
-    path.join(SKILL_PATH, 'config', INTENT_OBJECT.lang + '.json'),
+    path.join(
+      SKILL_PATH,
+      'config',
+      INTENT_OBJECT.extra_context_data.lang + '.json'
+    ),
     'utf8'
   )
 )

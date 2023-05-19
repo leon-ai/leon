@@ -49,13 +49,21 @@ export enum SkillActionTypes {
 }
 
 export interface ActionParams {
-  lang: ShortLanguageCode
   utterance: NLPUtterance
   current_entities: NEREntity[]
   entities: NEREntity[]
   current_resolvers: NLUResolver[]
   resolvers: NLUResolver[]
   slots: { [key: string]: NLUSlot['value'] | undefined }
+  extra_context_data: {
+    lang: ShortLanguageCode
+    sentiment: NLUResult['sentiment']
+    date: string
+    time: string
+    timestamp: number
+    date_time: string
+    week_day: string
+  }
 }
 
 export interface IntentObject extends ActionParams {
