@@ -49,6 +49,7 @@ export enum SkillActionTypes {
 }
 
 export interface ActionParams {
+  lang: ShortLanguageCode
   utterance: NLPUtterance
   current_entities: NEREntity[]
   entities: NEREntity[]

@@ -184,6 +184,7 @@ export default class Brain {
 
     return {
       id: utteranceID,
+      lang: this._lang, // TODO: remove once the Python bridge will be updated to use extra_context_data.lang instead
       domain: nluResult.classification.domain,
       skill: nluResult.classification.skill,
       action: nluResult.classification.action,
