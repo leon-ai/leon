@@ -1,4 +1,6 @@
 import random
+import sys
+from time import sleep
 
 from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG
 
@@ -63,5 +65,35 @@ class Leon:
                return None
 
         return None
+
+    def answer(answer_input):
+    	"""
+    	Send an answer to the core
+    	"""
+        try:
+            output = {
+                'output': {
+                    'codes': 'widget' if answer_input.get('widget') and not answer_input.get('key') else answer_input.get('key'),
+                    'answer': self.set_answer_data(answer_input.get('key'), answer_input.get('data')) or '',
+                    'core': answer_input.get('core'),
+                    'options': self.get_src_config('options')
+                }
+            }
+
+            if answer_input.get('widget'):
+                output['output']['widget'] = answer_input['widget']
+
+            answer_object = {
+                 **INTENT_OBJECT,
+                 **output
+            }
+
+            # Temporize for the data buffer output on the core
+            sleep(0.1)
+
+            sys.stdout.write(json.dumps(answer_object))
+
+        except Exception as e:
+            print('Error while creating answer:', e)
 
 leon = Leon()
