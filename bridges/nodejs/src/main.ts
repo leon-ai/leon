@@ -7,6 +7,7 @@ import { INTENT_OBJECT } from '@bridge/constants'
     domain,
     skill,
     action,
+    lang,
     utterance,
     current_entities,
     entities,
@@ -17,6 +18,7 @@ import { INTENT_OBJECT } from '@bridge/constants'
   } = INTENT_OBJECT
 
   const params: ActionParams = {
+    lang,
     utterance,
     current_entities,
     entities,
