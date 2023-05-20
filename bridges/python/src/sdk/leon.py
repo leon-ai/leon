@@ -2,7 +2,7 @@ import random
 import sys
 from time import sleep
 
-from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG
+from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG, INTENT_OBJECT
 
 class Leon:
 	instance: 'Leon' = None
