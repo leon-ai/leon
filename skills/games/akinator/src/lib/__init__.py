@@ -25,9 +25,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 """
 
+
 from .akinator import Akinator
 from .exceptions import *
 import os
-
 with open(os.path.join(os.path.dirname(__file__), "VERSION.txt")) as f:
     __version__ = f.read()

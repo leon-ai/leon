@@ -6,45 +6,47 @@ from time import time
 import utils
 from ..lib import db
 
+
 def add_todos(params):
-	"""Add todos to a to-do list"""
+    """Add todos to a to-do list"""
 
-	# List name
-	list_name = ''
+    # List name
+    list_name = ''
 
-	# Todos
-	todos = []
+    # Todos
+    todos = []
 
-	# Find entities
-	for item in params['entities']:
-		if item['entity'] == 'list':
-			list_name = item['sourceText'].lower()
-		elif item['entity'] == 'todos':
-			# Split todos into array and trim start/end-whitespaces
-			todos = [chunk.strip() for chunk in item['sourceText'].lower().split(',')]
+    # Find entities
+    for item in params['entities']:
+        if item['entity'] == 'list':
+            list_name = item['sourceText'].lower()
+        elif item['entity'] == 'todos':
+            # Split todos into array and trim start/end-whitespaces
+            todos = [chunk.strip() for chunk in item['sourceText'].lower().split(',')]
 
-	# Verify if a list name has been provided
-	if not list_name:
-		return utils.output('end', 'list_not_provided')
+    # Verify if a list name has been provided
+    if not list_name:
+        return utils.output('end', 'list_not_provided')
 
-	# Verify todos have been provided
-	if len(todos) == 0:
-		return utils.output('end', 'todos_not_provided')
+    # Verify todos have been provided
+    if len(todos) == 0:
+        return utils.output('end', 'todos_not_provided')
 
-	# Verify the list exists
-	if db.has_list(list_name) == False:
-		# Create the new to-do list
-		db.create_list(list_name)
+    # Verify the list exists
+    if db.has_list(list_name) == False:
+        # Create the new to-do list
+        db.create_list(list_name)
 
-	result = ''
-	for todo in todos:
-		# Add to-do to DB
-		db.create_todo(list_name, todo)
-		result += utils.translate('list_todo_element', { 'todo': todo })
+    result = ''
+    for todo in todos:
+        # Add to-do to DB
+        db.create_todo(list_name, todo)
+        result += utils.translate('list_todo_element', {'todo': todo})
 
-	return utils.output('end', { 'key': 'todos_added',
-		'data': {
-			'list': list_name,
-		  	'result': result
-		}
-	})
+    return utils.output('end', {
+        'key': 'todos_added',
+        'data': {
+            'list': list_name,
+            'result': result
+        }
+    })

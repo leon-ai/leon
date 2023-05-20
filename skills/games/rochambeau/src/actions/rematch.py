@@ -3,20 +3,21 @@
 
 import utils
 
+
 def rematch(params):
-	"""Take decision whether to do a rematch"""
+    """Take decision whether to do a rematch"""
 
-	resolvers = params['resolvers']
-	decision = False
+    resolvers = params['resolvers']
+    decision = False
 
-	for resolver in resolvers:
-		if resolver['name'] == 'affirmation_denial':
-			decision = resolver['value']
+    for resolver in resolvers:
+        if resolver['name'] == 'affirmation_denial':
+            decision = resolver['value']
 
-	if decision == True:
-		return utils.output('end', 'confirm_rematch', {
-			'isInActionLoop': False,
-			'restart': True
-		})
+    if decision:
+        return utils.output('end', 'confirm_rematch', {
+            'isInActionLoop': False,
+            'restart': True
+        })
 
-	return utils.output('end', 'deny_rematch', { 'isInActionLoop': False })
+    return utils.output('end', 'deny_rematch', {'isInActionLoop': False})
