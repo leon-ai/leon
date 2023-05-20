@@ -2,6 +2,7 @@ import random
 import sys
 from time import sleep
 
+from types import
 from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG, INTENT_OBJECT
 
 class Leon:
@@ -11,7 +12,7 @@ class Leon:
 		if not Leon.instance:
 			Leon.instance = self
 
-	def get_src_config(key: str = None):
+	def get_src_config(self, key: str = None):
 		"""
 		Get source configuration
 		"""
@@ -24,7 +25,7 @@ class Leon:
             print('Error while getting source configuration:', e)
             return {}
 
-	def set_answer_data(answer_key: str, data = None):
+	def set_answer_data(self, answer_key: str, data = None):
 		"""
 		Apply data to the answer
 		"""
@@ -66,7 +67,7 @@ class Leon:
 
         return None
 
-    def answer(answer_input):
+    def answer(self, answer_input: AnswerInput) -> None:
     	"""
     	Send an answer to the core
     	"""
