@@ -1,22 +1,26 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, TypedDict
 
 # TODO
 
-class Answer:
-	key: Optional[str]
+
+class AnswerData(TypedDict):
+    pass
+
+
+class Answer(TypedDict):
+    key: Optional[str]
     widget: Optional[Any]
     data: Optional[AnswerData]
     core: Optional[Dict[str, Any]]
 
-class AnswerInput:
-  key: Optional[str]
-  widget: Any
-  data: Optional[AnswerData]
-  core: Dict[str, Any]
 
-class AnswerData:
-  pass
+class AnswerInput(TypedDict):
+    key: Optional[str]
+    widget: Any
+    data: Optional[AnswerData]
+    core: Dict[str, Any]
 
-class AnswerConfig:
-  text: str
-  speech: str
+
+class AnswerConfig(TypedDict):
+    text: str
+    speech: str

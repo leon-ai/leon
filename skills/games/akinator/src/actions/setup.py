@@ -4,35 +4,36 @@
 import utils
 from ..lib import akinator, db
 
+
 def setup(params):
-	"""Initialize new session"""
+    """Initialize new session"""
 
-	utils.output('inter', 'calling_akinator')
+    utils.output('inter', 'calling_akinator')
 
-	slots, lang = params['slots'], params['lang']
-	thematic = slots['thematic']['resolution']['value']
-	theme_lang = lang
-	if thematic != 'characters':
-		theme_lang = lang + '_' + thematic
+    slots, lang = params['slots'], params['lang']
+    thematic = slots['thematic']['resolution']['value']
+    theme_lang = lang
+    if thematic != 'characters':
+        theme_lang = lang + '_' + thematic
 
-	try:
-		aki = akinator.Akinator()
+    try:
+        aki = akinator.Akinator()
 
-		q = aki.start_game(theme_lang)
+        q = aki.start_game(theme_lang)
 
-		db.upsert_session({
-			'response': aki.response,
-			'session': aki.session,
-			'progression': aki.progression,
-			'signature': aki.signature,
-			'uri': aki.uri,
-			'timestamp': aki.timestamp,
-			'server': aki.server,
-			'child_mode': aki.child_mode,
-			'frontaddr': aki.frontaddr,
-			'question_filter': aki.question_filter
-		})
+        db.upsert_session({
+            'response': aki.response,
+            'session': aki.session,
+            'progression': aki.progression,
+            'signature': aki.signature,
+            'uri': aki.uri,
+            'timestamp': aki.timestamp,
+            'server': aki.server,
+            'child_mode': aki.child_mode,
+            'frontaddr': aki.frontaddr,
+            'question_filter': aki.question_filter
+        })
 
-		return utils.output('end', q, { 'showNextActionSuggestions': True })
-	except:
-		return utils.output('end', 'network_error')
+        return utils.output('end', q, {'showNextActionSuggestions': True})
+    except BaseException:
+        return utils.output('end', 'network_error')

@@ -17,131 +17,139 @@ dirname = os.path.dirname(os.path.realpath(__file__))
 intent_object_path = sys.argv[1]
 codes = []
 
-intent_obj_file = open(intent_object_path, 'r', encoding = 'utf8')
+intent_obj_file = open(intent_object_path, 'r', encoding='utf8')
 intent_obj = loads(intent_obj_file.read())
 intent_obj_file.close()
 
+
 def get_intent_obj():
-	"""Return intent object"""
+    """Return intent object"""
 
-	return intent_obj
+    return intent_obj
 
-def translate(key, dict = { }):
-	"""Pickup the language file according to the cmd arg
-	and return the value according to the params"""
 
-	# "Temporize" for the data buffer output on the core
-	sleep(0.1)
+def translate(key, dict={}):
+    """Pickup the language file according to the cmd arg
+    and return the value according to the params"""
 
-	output = ''
-	variables = { }
+    # "Temporize" for the data buffer output on the core
+    sleep(0.1)
 
-	file = open(os.path.join(os.getcwd(), 'skills', intent_obj['domain'], intent_obj['skill'], 'config', intent_obj['lang'] + '.json'), 'r', encoding = 'utf8')
-	obj = loads(file.read())
-	file.close()
+    output = ''
+    variables = {}
 
-	# In case the key is a raw answer
-	if key not in obj['answers']:
-		return key
+    file = open(os.path.join(os.getcwd(), 'skills', intent_obj['domain'], intent_obj['skill'], 'config', intent_obj['lang'] + '.json'), 'r', encoding='utf8')
+    obj = loads(file.read())
+    file.close()
 
-	prop = obj['answers'][key]
-	if 'variables' in obj:
-		variables = obj['variables']
-	if isinstance(prop, list):
-		output = choice(prop)
-	else:
-		output = prop
+    # In case the key is a raw answer
+    if key not in obj['answers']:
+        return key
 
-	if dict:
-		for key in dict:
-			output = output.replace('%' + key + '%', str(dict[key]))
+    prop = obj['answers'][key]
+    if 'variables' in obj:
+        variables = obj['variables']
+    if isinstance(prop, list):
+        output = choice(prop)
+    else:
+        output = prop
 
-	if variables:
-		for key in variables:
-			output = output.replace('%' + key + '%', str(variables[key]))
+    if dict:
+        for key in dict:
+            output = output.replace('%' + key + '%', str(dict[key]))
 
-	return output
+    if variables:
+        for key in variables:
+            output = output.replace('%' + key + '%', str(variables[key]))
 
-def output(type, content = '', core = { }):
-	"""Communicate with the core"""
+    return output
 
-	if isinstance(content, dict):
-		speech = translate(content['key'], content['data'])
-		codes.append(content['key'])
-	else:
-		content = str(content)
-		speech = translate(content)
-		codes.append(content)
 
-	print(dumps({
-		'domain': intent_obj['domain'],
-		'skill': intent_obj['skill'],
-		'action': intent_obj['action'],
-		'lang': intent_obj['lang'],
-		'utterance': intent_obj['utterance'],
-		'entities': intent_obj['entities'],
-		'slots': intent_obj['slots'],
-		'output': {
-			# TODO: remove type as it is not needed anymore
-			'type': type,
-			'codes': codes,
-			'speech': speech,
-			'core': core,
-			'options': config('options')
-		}
-	}))
+def output(type, content='', core={}):
+    """Communicate with the core"""
 
-	sys.stdout.flush()
+    if isinstance(content, dict):
+        speech = translate(content['key'], content['data'])
+        codes.append(content['key'])
+    else:
+        content = str(content)
+        speech = translate(content)
+        codes.append(content)
 
-def http(method, url, headers = None):
-	"""Send HTTP request with the Leon user agent"""
+    print(dumps({
+        'domain': intent_obj['domain'],
+        'skill': intent_obj['skill'],
+        'action': intent_obj['action'],
+        'lang': intent_obj['lang'],
+        'utterance': intent_obj['utterance'],
+        'entities': intent_obj['entities'],
+        'slots': intent_obj['slots'],
+        'output': {
+                # TODO: remove type as it is not needed anymore
+                'type': type,
+                'codes': codes,
+                'speech': speech,
+                'core': core,
+                'options': config('options')
+                }
+    }))
 
-	session = requests.Session()
-	session.headers.update({ 'User-Agent': useragent, 'Cache-Control': 'no-cache' })
+    sys.stdout.flush()
 
-	if headers != None:
-	  session.headers.update(headers)
 
-	return session.request(method, url)
+def http(method, url, headers=None):
+    """Send HTTP request with the Leon user agent"""
+
+    session = requests.Session()
+    session.headers.update({'User-Agent': useragent, 'Cache-Control': 'no-cache'})
+
+    if headers is not None:
+        session.headers.update(headers)
+
+    return session.request(method, url)
+
 
 def config(key):
-	"""Get a skill configuration value"""
+    """Get a skill configuration value"""
 
-	file = open(os.path.join(os.getcwd(), 'skills', intent_obj['domain'], intent_obj['skill'], 'src/config.json'), 'r', encoding = 'utf8')
-	obj = loads(file.read())
-	file.close()
+    file = open(os.path.join(os.getcwd(), 'skills', intent_obj['domain'], intent_obj['skill'], 'src/config.json'), 'r', encoding='utf8')
+    obj = loads(file.read())
+    file.close()
 
-	return obj['configurations'][key]
+    return obj['configurations'][key]
+
 
 def create_dl_dir():
-	"""Create the downloads folder of a current skill"""
+    """Create the downloads folder of a current skill"""
 
-	dl_dir = os.path.join(os.getcwd(), 'downloads')
-	# dl_dir = os.path.dirname(os.path.realpath(__file__)) + '/../../../../downloads/'
-	skill_dl_dir = os.path.join(dl_dir, intent_obj['domain'], intent_obj['skill'])
+    dl_dir = os.path.join(os.getcwd(), 'downloads')
+    # dl_dir = os.path.dirname(os.path.realpath(__file__)) + '/../../../../downloads/'
+    skill_dl_dir = os.path.join(dl_dir, intent_obj['domain'], intent_obj['skill'])
 
-	Path(skill_dl_dir).mkdir(parents = True, exist_ok = True)
+    Path(skill_dl_dir).mkdir(parents=True, exist_ok=True)
 
-	return skill_dl_dir
+    return skill_dl_dir
 
-def db(db_type = 'tinydb'):
-	"""Create a new dedicated database
-	for a specific skill"""
 
-	if db_type == 'tinydb':
-		ext = '.json' if os.environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
-		db = TinyDB(os.path.join(os.getcwd(), 'skills', intent_obj['domain'], intent_obj['skill'], 'memory/db' + ext))
-		return {
-			'db': db,
-			'query': Query,
-			'table': table,
-			'operations': operations
-		}
+def db(db_type='tinydb'):
+    """Create a new dedicated database
+    for a specific skill"""
+
+    if db_type == 'tinydb':
+        ext = '.json' if os.environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
+        db = TinyDB(os.path.join(os.getcwd(), 'skills', intent_obj['domain'], intent_obj['skill'], 'memory/db' + ext))
+        return {
+            'db': db,
+            'query': Query,
+            'table': table,
+            'operations': operations
+        }
+
 
 def get_table(slug):
-	"""Get a table from a specific skill"""
+    """Get a table from a specific skill"""
 
-	domain, skill, table = slug.split('.')
-	ext = '.json' if os.environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
-	db = TinyDB(os.path.join(os.getcwd(), 'skills', domain, skill, 'memory/db' + ext))
-	return db.table(table)
+    domain, skill, table = slug.split('.')
+    ext = '.json' if os.environ.get('LEON_NODE_ENV') != 'testing' else '.spec.json'
+    db = TinyDB(os.path.join(os.getcwd(), 'skills', domain, skill, 'memory/db' + ext))
+    return db.table(table)

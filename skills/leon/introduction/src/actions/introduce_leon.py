@@ -6,13 +6,14 @@ from ..lib import db
 
 owner = db.get_owner()
 
+
 def introduce_leon(params):
-	"""Leon introduces himself and
-	ask about you if he does not know you yet"""
+    """Leon introduces himself and
+    ask about you if he does not know you yet"""
 
-	is_owner_saved = owner != None
+    is_owner_saved = owner is not None
 
-	if is_owner_saved == False:
-		return utils.output('end', 'leon_introduction_with_question')
+    if not is_owner_saved:
+        return utils.output('end', 'leon_introduction_with_question')
 
-	return utils.output('end', 'leon_introduction')
+    return utils.output('end', 'leon_introduction')

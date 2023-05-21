@@ -6,11 +6,12 @@ from random import randint
 import utils
 from ..lib import db
 
+
 def setup(params):
-	"""Init the the number to guess"""
+    """Init the the number to guess"""
 
-	nb = randint(1, 100)
+    nb = randint(1, 100)
 
-	db.create_new_game(nb)
+    db.create_new_game(nb)
 
-	return utils.output('end', 'ready')
+    return utils.output('end', 'ready')
