@@ -8,6 +8,13 @@
   },
   "answers": {
     "default": ["Timekeeper skill test answer..."],
-    "data_test": ["Data test here %name%..."]
+    "data_test": ["Data test here %name%..."],
+    "answer": ["%answer%"],
+    "test": [
+      {
+        "speech": "This will be said out loud",
+        "text": "This will be shown in the chat"
+      }
+    ]
   }
 }

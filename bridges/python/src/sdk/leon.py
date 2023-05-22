@@ -3,6 +3,7 @@ import sys
 from typing import Union
 from time import sleep
 import json
+from traceback import print_exc
 
 from .types import AnswerInput, AnswerData, AnswerConfig
 from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG, INTENT_OBJECT
@@ -85,7 +86,7 @@ class Leon:
             }
 
             if answer_input.get('widget'):
-                output['output']['widget'] = answer_input['widget']
+                output['output']['widget'] = answer_input['widget'].__dict__
 
             answer_object = {
                 **INTENT_OBJECT,
