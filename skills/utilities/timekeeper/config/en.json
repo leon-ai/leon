@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
+  "actions": {
+    "run": {
+      "type": "logic",
+      "utterance_samples": ["What time is it?"]
+    }
+  },
+  "answers": {
+    "default": ["Timekeeper skill test answer..."]
+  }
+}
