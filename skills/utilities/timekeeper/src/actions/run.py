@@ -1,7 +1,9 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+# TODO: find better way to import SDK modules
+from bridges.python.src.sdk.leon import leon
+
 
 def run(params):
     """TODO"""
 
-    print('hello from timekeeper skill', params)
+    leon.answer({'key': 'default'})
+    leon.answer({'key': 'data_test', 'data': {'name': 'Louis'}})

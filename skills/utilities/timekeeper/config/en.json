@@ -7,6 +7,7 @@
     }
   },
   "answers": {
-    "default": ["Timekeeper skill test answer..."]
+    "default": ["Timekeeper skill test answer..."],
+    "data_test": ["Data test here %name%..."]
   }
 }

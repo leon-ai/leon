@@ -9,7 +9,7 @@ from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG, INTENT_OBJECT
 
 
 class Leon:
-    instance: 'Leon'
+    instance: 'Leon' = None
 
     def __init__(self) -> None:
         if not Leon.instance:
@@ -96,6 +96,7 @@ class Leon:
             sleep(0.1)
 
             sys.stdout.write(json.dumps(answer_object))
+            sys.stdout.flush()
 
         except Exception as e:
             print('Error while creating answer:', e)
