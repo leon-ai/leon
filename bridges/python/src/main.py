@@ -1,33 +1,37 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-
-import utils
+import sys
 from traceback import print_exc
-from sys import path
-from json import dumps, loads
 from importlib import import_module
+
+from constants import INTENT_OBJECT
 
 
 def main():
-    """Dynamically import skills related to the args and print the output"""
-
-    path.append('.')
-
-    intent_obj = utils.get_intent_obj()
-
-    skill = import_module('skills.' + intent_obj['domain'] + '.' + intent_obj['skill'] + '.src.actions.' + intent_obj['action'])
-
     params = {
-        'lang': intent_obj['lang'],
-        'utterance': intent_obj['utterance'],
-        'current_entities': intent_obj['current_entities'],
-        'entities': intent_obj['entities'],
-        'current_resolvers': intent_obj['current_resolvers'],
-        'resolvers': intent_obj['resolvers'],
-        'slots': intent_obj['slots']
+        'lang': INTENT_OBJECT['lang'],
+        'utterance': INTENT_OBJECT['utterance'],
+        'current_entities': INTENT_OBJECT['current_entities'],
+        'entities': INTENT_OBJECT['entities'],
+        'current_resolvers': INTENT_OBJECT['current_resolvers'],
+        'resolvers': INTENT_OBJECT['resolvers'],
+        'slots': INTENT_OBJECT['slots'],
+        'extra_context_data': INTENT_OBJECT['extra_context_data']
     }
 
-    return getattr(skill, intent_obj['action'])(params)
+    try:
+        sys.path.append('.')
+
+        skill_action_module = import_module(
+            'skills.'
+            + INTENT_OBJECT['domain']
+            + '.'
+            + INTENT_OBJECT['skill']
+            + '.src.actions.'
+            + INTENT_OBJECT['action']
+        )
+
+        getattr(skill_action_module, 'run')(params)
+    except Exception as e:
+        print(f"Error while running {INTENT_OBJECT['skill']} skill {INTENT_OBJECT['action']} action: {e}")
 
 
 if __name__ == '__main__':

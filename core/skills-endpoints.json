@@ -86,6 +86,11 @@
     },
     {
       "method": "GET",
+      "route": "/api/action/utilities/timekeeper/run",
+      "params": []
+    },
+    {
+      "method": "GET",
       "route": "/api/action/utilities/youtube_downloader/run",
       "params": []
     },
