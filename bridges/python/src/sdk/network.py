@@ -1,10 +1,10 @@
 import requests
 import socket
-from typing import Any, Dict, NotRequired, TypedDict, Union, Literal
+from typing import Any, Dict, TypedDict, Union, Literal
 
 
-class NetworkOptions(TypedDict):
-    base_url: NotRequired[str]
+class NetworkOptions(TypedDict, total=False):
+    base_url: str
 
 
 class NetworkResponse(TypedDict):
@@ -19,11 +19,11 @@ class NetworkError(Exception):
         super().__init__(f"[NetworkError]: {response['status_code']}")
 
 
-class NetworkRequestOptions(TypedDict):
+class NetworkRequestOptions(TypedDict, total=False):
     url: str
     method: Union[Literal['GET'], Literal['POST'], Literal['PUT'], Literal['PATCH'], Literal['DELETE']]
-    data: NotRequired[Dict[str, Any]]
-    headers: NotRequired[Dict[str, str]]
+    data: Dict[str, Any]
+    headers: Dict[str, str]
 
 
 class Network:
@@ -64,7 +64,7 @@ class Network:
                 'options': {**self.options, **options}
             }) from error
 
-    def is_network_error(self, error: Any) -> bool:
+    def is_network_error(self, error: Exception) -> bool:
         return isinstance(error, NetworkError)
 
     def is_network_available(self) -> bool:

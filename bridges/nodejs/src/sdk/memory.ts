@@ -19,8 +19,8 @@ export class Memory<T = unknown> {
     this.name = name
     this.defaultMemory = defaultMemory
 
-    if (name.includes(':') && name.split(':').length === 3) {
-      const [domainName, skillName, memoryName] = name.split(':')
+    if (this.name.includes(':') && this.name.split(':').length === 3) {
+      const [domainName, skillName, memoryName] = this.name.split(':')
       const memoryPath = path.join(
         SKILLS_PATH,
         domainName as string,
@@ -33,7 +33,7 @@ export class Memory<T = unknown> {
         this.memoryPath = memoryPath
       }
     } else {
-      this.memoryPath = path.join(SKILL_PATH, 'memory', `${options.name}.json`)
+      this.memoryPath = path.join(SKILL_PATH, 'memory', `${this.name}.json`)
     }
   }
 

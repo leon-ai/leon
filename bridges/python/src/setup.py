@@ -8,7 +8,8 @@ options = {
         # Add common dependencies for skills
         'includes': [
             'bs4',
-            'pytube'
+            'pytube',
+            'requests'
         ],
         'include_files': [(requests.certs.where(), 'cacert.pem')]
     }

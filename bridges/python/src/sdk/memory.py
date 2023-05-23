@@ -1,16 +1,23 @@
 import json
 import os
+from typing import TypedDict, Any
 
 from ..constants import SKILL_PATH, SKILLS_PATH
 
 
+class MemoryOptions(TypedDict, total=False):
+    name: str
+    default_memory: Any
+
+
 class Memory:
-    def __init__(self, options):
+    def __init__(self, options: MemoryOptions):
         self.name = options['name']
         self.default_memory = options['default_memory'] if 'default_memory' in options else None
+        self.memory_path = None
 
-        if ':' in options['name'] and options['name'].count(':') == 2:
-            domain_name, skill_name, memory_name = options['name'].split(':')
+        if ':' in self.name and self.name.count(':') == 2:
+            domain_name, skill_name, memory_name = self.name.split(':')
             memory_path = os.path.join(
                 SKILLS_PATH,
                 domain_name,
@@ -25,7 +32,7 @@ class Memory:
             self.memory_path = os.path.join(
                 SKILL_PATH,
                 'memory',
-                options['name'] + '.json'
+                self.name + '.json'
             )
 
     def clear(self) -> None:
