@@ -8,26 +8,26 @@ from ..constants import SKILL_PATH, SKILLS_PATH
 
 class Memory:
     def __init__(self, options):
-        self.name = options.name
-        self.default_memory = options.default_memory
+        self.name = options['name']
+        self.default_memory = options['default_memory'] if 'default_memory' in options else None
 
-        if ':' in options.name and options.name.count(':') == 3:
-            domain_name, skill_name, memory_name = options.name.split(':')
-            self.memory_path = os.path.join(
+        if ':' in options['name'] and options['name'].count(':') == 2:
+            domain_name, skill_name, memory_name = options['name'].split(':')
+            memory_path = os.path.join(
                 SKILLS_PATH,
                 domain_name,
                 skill_name,
                 'memory',
                 memory_name + '.json'
             )
-            if os.path.exists(self.memory_path):
-                # TODO
-                pass
+
+            if os.path.exists(memory_path):
+                self.memory_path = memory_path
         else:
             self.memory_path = os.path.join(
                 SKILL_PATH,
                 'memory',
-                options.name + '.json'
+                options['name'] + '.json'
             )
 
     def clear(self) -> None:
@@ -51,7 +51,7 @@ class Memory:
             raise e
 
     def write(self, memory):
-        if self.default_memory and self.memory_path:
+        if self.default_memory is not None and self.memory_path:
             try:
                 with open(self.memory_path, 'w') as f:
                     json.dump(memory, f, indent=2)

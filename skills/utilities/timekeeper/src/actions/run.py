@@ -17,10 +17,11 @@ def run(params):
     other_skill_memory = Memory({
         'name': 'productivity:todo_list:db'
     })
+
     todo_lists = other_skill_memory.read()
     print('todo_lists', todo_lists)
 
-    posts_memory = Memory({ 'name': 'posts', 'default_memory': [] })
+    posts_memory = Memory({'name': 'posts', 'default_memory': []})
     posts_memory.write([
         {
             'id': 0,
