@@ -1,6 +1,7 @@
 # TODO
 
-import os.path
+import json
+import os
 
 from ..constants import SKILL_PATH, SKILLS_PATH
 
@@ -34,3 +35,17 @@ class Memory:
             self.write(self.default_memory)
         else:
             raise ValueError(f'You cannot clear the memory "{self.name}" as it belongs to another skill')
+
+    def read(self):
+        if not self.memory_path:
+            raise ValueError(f'You cannot read the memory "{self.name}" as it belongs to another skill which hasn\'t written to this memory yet')
+
+        try:
+            if not os.path.exists(self.memory_path):
+                self.clear()
+
+            with open(self.memory_path, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f'Error while reading memory for "{self.name}": {e}')
+            raise e

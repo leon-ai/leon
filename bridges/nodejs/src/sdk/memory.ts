@@ -69,7 +69,7 @@ export class Memory<T = unknown> {
 
       return JSON.parse(await fs.promises.readFile(this.memoryPath, 'utf-8'))
     } catch (e) {
-      console.error(`Error while reading memory for ${this.name}:`, e)
+      console.error(`Error while reading memory for "${this.name}":`, e)
       throw e
     }
   }
@@ -89,7 +89,7 @@ export class Memory<T = unknown> {
 
         return memory
       } catch (e) {
-        console.error(`Error while writing memory for ${this.name}:`, e)
+        console.error(`Error while writing memory for "${this.name}":`, e)
         throw e
       }
     } else {
