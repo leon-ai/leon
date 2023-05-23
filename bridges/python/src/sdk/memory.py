@@ -49,3 +49,16 @@ class Memory:
         except Exception as e:
             print(f'Error while reading memory for "{self.name}": {e}')
             raise e
+
+    def write(self, memory):
+        if self.default_memory and self.memory_path:
+            try:
+                with open(self.memory_path, 'w') as f:
+                    json.dump(memory, f, indent=2)
+
+                return memory
+            except Exception as e:
+                print(f'Error while writing memory for "{self.name}": {e}')
+                raise e
+        else:
+            raise ValueError(f'You cannot write into the memory "{self.name}" as it belongs to another skill')
