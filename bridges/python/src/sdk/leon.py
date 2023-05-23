@@ -3,7 +3,6 @@ import sys
 from typing import Union
 from time import sleep
 import json
-from traceback import print_exc
 
 from .types import AnswerInput, AnswerData, AnswerConfig
 from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG, INTENT_OBJECT
@@ -16,7 +15,8 @@ class Leon:
         if not Leon.instance:
             Leon.instance = self
 
-    def get_src_config(self, key: Union[str, None] = None):
+    @staticmethod
+    def get_src_config(key: Union[str, None] = None):
         """
         Get source configuration
         """
@@ -29,9 +29,12 @@ class Leon:
             print('Error while getting source configuration:', e)
             return {}
 
-    def set_answer_data(self, answer_key: Union[str, None], data: Union[AnswerData, None] = None) -> Union[str, AnswerConfig, None]:
+    @staticmethod
+    def set_answer_data(answer_key: Union[str, None], data: Union[AnswerData, None] = None) -> Union[str, AnswerConfig, None]:
         """
         Apply data to the answer
+        :param answer_key: The answer key
+        :param data: The data to apply
         """
         if answer_key:
             try:
@@ -74,6 +77,7 @@ class Leon:
     def answer(self, answer_input: AnswerInput) -> None:
         """
         Send an answer to the core
+        :param answer_input: The answer input
         """
         try:
             output = {

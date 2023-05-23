@@ -9,7 +9,6 @@ def run(params):
 
     # TODO
     # network request
-    # memory
     # install bs4 and grab it from skill
 
     ###

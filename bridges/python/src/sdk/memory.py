@@ -1,5 +1,3 @@
-# TODO
-
 import json
 import os
 
@@ -31,14 +29,21 @@ class Memory:
             )
 
     def clear(self) -> None:
+        """
+        Clear the memory and set it to the default memory value
+        """
         if self.default_memory:
             self.write(self.default_memory)
         else:
             raise ValueError(f'You cannot clear the memory "{self.name}" as it belongs to another skill')
 
     def read(self):
+        """
+        Read the memory
+        """
         if not self.memory_path:
-            raise ValueError(f'You cannot read the memory "{self.name}" as it belongs to another skill which hasn\'t written to this memory yet')
+            raise ValueError(f'You cannot read the memory "{self.name}" as it belongs to another skill which hasn\'t '
+                             f'written to this memory yet')
 
         try:
             if not os.path.exists(self.memory_path):
@@ -51,6 +56,10 @@ class Memory:
             raise e
 
     def write(self, memory):
+        """
+        Write the memory
+        :param memory: The memory to write
+        """
         if self.default_memory is not None and self.memory_path:
             try:
                 with open(self.memory_path, 'w') as f:
