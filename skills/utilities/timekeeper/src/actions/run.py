@@ -1,5 +1,6 @@
 # TODO: find better way to import SDK modules
 from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.memory import Memory
 from bridges.python.src.sdk.aurora.button import Button
 
 
@@ -10,6 +11,52 @@ def run(params):
     # network request
     # memory
     # install bs4 and grab it from skill
+
+    ###
+
+    other_skill_memory = Memory({
+        'name': 'productivity:todo_list:db'
+    })
+    todo_lists = other_skill_memory.read()
+    print('todo_lists', todo_lists)
+
+    posts_memory = Memory({ 'name': 'posts', 'default_memory': [] })
+    posts_memory.write([
+        {
+            'id': 0,
+            'title': 'Hello world',
+            'content': 'This is a test post',
+            'author': {
+                'name': 'Louis'
+            }
+        },
+        {
+            'id': 1,
+            'title': 'Hello world 2',
+            'content': 'This is a test post 2',
+            'author': {
+                'name': 'Louis'
+            }
+        }
+    ])
+    posts = posts_memory.read()
+    print('posts', posts)
+
+    posts = posts_memory.write([
+        *posts,
+        {
+            'id': 2,
+            'title': 'Hello world 3',
+            'content': 'This is a test post 3',
+            'author': {
+                'name': 'Louis'
+            }
+        }
+    ])
+
+    found_post = next((post for post in posts if post['id'] == 2), None)
+
+    print('found_post', found_post)
 
     ###
 

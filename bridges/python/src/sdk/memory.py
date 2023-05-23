@@ -28,3 +28,9 @@ class Memory:
                 'memory',
                 options.name + '.json'
             )
+
+    def clear(self) -> None:
+        if self.default_memory:
+            self.write(self.default_memory)
+        else:
+            raise ValueError(f'You cannot clear the memory "{self.name}" as it belongs to another skill')
