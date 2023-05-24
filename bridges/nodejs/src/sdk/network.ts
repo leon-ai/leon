@@ -3,6 +3,8 @@ import dns from 'node:dns'
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
 
+import { LEON_VERSION, NODEJS_BRIDGE_VERSION } from '@bridge/constants'
+
 interface NetworkOptions {
   /** `baseURL` will be prepended to `url`. It can be convenient to set `baseURL` for an instance of `Network` to pass relative URLs. */
   baseURL?: string
@@ -67,8 +69,12 @@ export class Network {
         url: options.url,
         method: options.method.toLowerCase(),
         data: options.data,
-        headers: options.headers
+        headers: {
+          'User-Agent': `Leon Personal Assistant ${LEON_VERSION} - Node.js Bridge ${NODEJS_BRIDGE_VERSION}`,
+          ...options.headers
+        }
       })
+
       return {
         data: response.data,
         statusCode: response.status,
@@ -80,10 +86,12 @@ export class Network {
     } catch (error) {
       let statusCode = 500
       let data = {} as ResponseErrorData
+
       if (axios.isAxiosError(error)) {
         data = error?.response?.data
         statusCode = error?.response?.status ?? 500
       }
+
       throw new NetworkError<ResponseErrorData>({
         data,
         statusCode,

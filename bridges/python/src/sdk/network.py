@@ -2,6 +2,8 @@ import requests
 import socket
 from typing import Any, Dict, TypedDict, Union, Literal
 
+from ..constants import LEON_VERSION, PYTHON_BRIDGE_VERSION
+
 
 class NetworkOptions(TypedDict, total=False):
     base_url: str
@@ -33,13 +35,21 @@ class Network:
     def request(self, options: NetworkRequestOptions) -> NetworkResponse:
         try:
             url = options['url']
+
             if self.options['base_url']:
                 url = self.options['base_url'] + url
             method = options['method']
             data = options.get('data', {})
             headers = options.get('headers', {})
-
-            response = requests.request(method, url, json=data, headers=headers)
+            response = requests.request(
+                method,
+                url,
+                json=data,
+                headers={
+                    'User-Agent': f"Leon Personal Assistant {LEON_VERSION} - Python Bridge {PYTHON_BRIDGE_VERSION}",
+                    **headers
+                }
+            )
 
             network_response: NetworkResponse = {
                 'data': response.json(),
@@ -70,6 +80,7 @@ class Network:
     def is_network_available(self) -> bool:
         try:
             socket.gethostbyname('getleon.ai')
+
             return True
         except socket.error:
             return False

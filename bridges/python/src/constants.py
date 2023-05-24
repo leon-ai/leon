@@ -2,6 +2,8 @@ import sys
 import json
 import os
 
+import version
+
 INTENT_OBJ_FILE_PATH = sys.argv[1]
 
 with open(INTENT_OBJ_FILE_PATH, 'r') as f:
@@ -25,3 +27,7 @@ with open(os.path.join(SKILL_PATH, 'config', INTENT_OBJECT['extra_context_data']
 
 with open(os.path.join(SKILL_PATH, 'src', 'config.json'), 'r') as f:
     SKILL_SRC_CONFIG = json.load(f)['configurations']
+
+LEON_VERSION = os.getenv('npm_package_version')
+
+PYTHON_BRIDGE_VERSION = version.__version__

@@ -12,9 +12,11 @@ def run(params: ActionParams) -> None:
     # TODO
     # network request
     # install bs4 and grab it from skill
+
     network = Network({
         'base_url': 'https://jsonplaceholder.typicode.com'
     })
+
     try:
         response = network.request({
             'url': '/todos/1',
