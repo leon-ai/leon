@@ -15,8 +15,10 @@ class Memory:
         self.name = options['name']
         self.default_memory = options['default_memory'] if 'default_memory' in options else None
         self.memory_path = None
+        self.__is_from_another_skill = False
 
         if ':' in self.name and self.name.count(':') == 2:
+            self.__is_from_another_skill = True
             domain_name, skill_name, memory_name = self.name.split(':')
             memory_path = os.path.join(
                 SKILLS_PATH,
@@ -39,7 +41,7 @@ class Memory:
         """
         Clear the memory and set it to the default memory value
         """
-        if self.default_memory is not None:
+        if not self.__is_from_another_skill:
             self.write(self.default_memory)
         else:
             raise ValueError(f'You cannot clear the memory "{self.name}" as it belongs to another skill')
@@ -48,9 +50,8 @@ class Memory:
         """
         Read the memory
         """
-        if not self.memory_path:
-            raise ValueError(f'You cannot read the memory "{self.name}" as it belongs to another skill which hasn\'t '
-                             f'written to this memory yet')
+        if not self.memory_path and self.__is_from_another_skill:
+            raise ValueError(f'You cannot read the memory "{self.name}" as it belongs to another skill which hasn\'t written to this memory yet')
 
         try:
             if not os.path.exists(self.memory_path):
@@ -67,7 +68,7 @@ class Memory:
         Write the memory
         :param memory: The memory to write
         """
-        if self.default_memory is not None and self.memory_path:
+        if self.memory_path is not None and not self.__is_from_another_skill:
             try:
                 with open(self.memory_path, 'w') as f:
                     json.dump(memory, f, indent=2)
