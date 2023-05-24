@@ -1,8 +1,14 @@
-import utils
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+
 from random import randint
 
 
-def run(params):
+def run(params: ActionParams) -> None:
     """Leon gives a random number"""
-
-    return utils.output('end', randint(0, 100))
+    leon.answer({
+        'key': 'answer',
+        'data': {
+            'answer': randint(0, 100)
+        }
+    })

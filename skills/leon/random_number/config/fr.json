@@ -12,5 +12,7 @@
       ]
     }
   },
-  "answers": {}
+  "answers": {
+    "answer": ["%answer%"]
+  }
 }
