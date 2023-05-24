@@ -1,16 +1,23 @@
-import utils
-from ..lib import db
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
 
-def remember(params):
+def run(params: ActionParams) -> None:
     """Save name and birth date into Leon's memory"""
-
     slots = params['slots']
     owner_name = slots['owner_name']['resolution']['value']
     owner_birth_date = slots['owner_birth_date']['resolution']['timex']
 
-    db.upsert_owner(owner_name, owner_birth_date)
+    owner: memory.Owner = {
+        'name': owner_name,
+        'birth_date': owner_birth_date
+    }
+    memory.upsert_owner(owner)
 
-    return utils.output('end', {'key': 'remembered',
-                                'data': {'owner_name': owner_name}
-                                })
+    leon.answer({
+        'key': 'remembered',
+        'data': {
+            'owner_name': owner_name
+        }
+    })
