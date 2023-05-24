@@ -1,13 +1,18 @@
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from bridges.python.src.sdk.memory import Memory
+
 from datetime import datetime
 from random import randint
-
-import utils
-
-owner_table = utils.get_table('leon.introduction.owner')
-owner = owner_table.get(doc_id=0)
+from typing import TypedDict
 
 
-def run(params):
+class Owner(TypedDict):
+    name: str
+    birth_date: str
+
+
+def run(params: ActionParams) -> None:
     """Leon greets you"""
 
     time = datetime.time(datetime.now())
@@ -15,21 +20,26 @@ def run(params):
     # 1/2 chance to get deeper greetings
     if randint(0, 1) != 0:
         if time.hour >= 5 and time.hour <= 10:
-            return utils.output('end', 'morning_good_day')
+            return leon.answer({'key': 'morning_good_day'})
         if time.hour == 11:
-            return utils.output('end', 'morning')
+            return leon.answer({'key': 'morning'})
         if time.hour >= 12 and time.hour <= 17:
-            return utils.output('end', 'afternoon')
+            return leon.answer({'key': 'afternoon'})
         if time.hour >= 18 and time.hour <= 21:
-            return utils.output('end', 'evening')
+            return leon.answer({'key': 'evening'})
         if time.hour >= 22 and time.hour <= 23:
-            return utils.output('end', 'night')
+            return leon.answer({'key': 'night'})
 
-        return utils.output('end', 'too_late')
+        return leon.answer({'key': 'too_late'})
 
-    if owner is not None:
-        return utils.output('end', {'key': 'default_w_name',
-                                    'data': {'owner_name': owner['name']}
-                                    })
-
-    return utils.output('end', 'default')
+    try:
+        owner_memory = Memory({'name': 'leon:introduction:owner'})
+        owner: Owner = owner_memory.read()
+        leon.answer({
+            'key': 'default_with_name',
+            'data': {
+                'owner_name': owner['name'],
+            }
+        })
+    except BaseException:
+        return leon.answer({'key': 'default'})
