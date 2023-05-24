@@ -12,14 +12,17 @@ export class Memory<T = unknown> {
   private readonly memoryPath: string | undefined
   private readonly name: string
   private readonly defaultMemory: T | undefined
+  private isFromAnotherSkill: boolean
 
   constructor(options: MemoryOptions<T>) {
     const { name, defaultMemory } = options
 
     this.name = name
     this.defaultMemory = defaultMemory
+    this.isFromAnotherSkill = false
 
     if (this.name.includes(':') && this.name.split(':').length === 3) {
+      this.isFromAnotherSkill = true
       const [domainName, skillName, memoryName] = this.name.split(':')
       const memoryPath = path.join(
         SKILLS_PATH,
@@ -42,8 +45,8 @@ export class Memory<T = unknown> {
    * @example clear()
    */
   public async clear(): Promise<void> {
-    if (this.defaultMemory) {
-      await this.write(this.defaultMemory)
+    if (!this.isFromAnotherSkill) {
+      await this.write(this.defaultMemory as T)
     } else {
       throw new Error(
         `You cannot clear the memory "${this.name}" as it belongs to another skill`
@@ -56,7 +59,7 @@ export class Memory<T = unknown> {
    * @example read()
    */
   public async read(): Promise<T> {
-    if (!this.memoryPath) {
+    if (!this.memoryPath || this.isFromAnotherSkill) {
       throw new Error(
         `You cannot read the memory "${this.name}" as it belongs to another skill which haven't written to this memory yet`
       )
@@ -80,7 +83,7 @@ export class Memory<T = unknown> {
    * @example write({ foo: 'bar' }) // { foo: 'bar' }
    */
   public async write(memory: T): Promise<T> {
-    if (this.defaultMemory && this.memoryPath) {
+    if (this.memoryPath != null && !this.isFromAnotherSkill) {
       try {
         await fs.promises.writeFile(
           this.memoryPath,

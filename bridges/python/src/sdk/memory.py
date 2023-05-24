@@ -50,7 +50,7 @@ class Memory:
         """
         Read the memory
         """
-        if not self.memory_path and self.__is_from_another_skill:
+        if not self.memory_path or self.__is_from_another_skill:
             raise ValueError(f'You cannot read the memory "{self.name}" as it belongs to another skill which hasn\'t written to this memory yet')
 
         try:
