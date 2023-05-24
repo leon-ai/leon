@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-
 # Give you information about your network speed
 # Author: Florian Bouché
 # Date: 2019-03-09

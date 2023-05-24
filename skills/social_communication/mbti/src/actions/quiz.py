@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-
 # Questions are taken from: http://www.lrjj.cn/encrm1.0/public/upload/MBTI-personality-test.pdf
 
 import utils

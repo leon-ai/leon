@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-
 from json import loads, dumps
 from pathlib import Path
 from random import choice

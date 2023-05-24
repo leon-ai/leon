@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-
 import utils
 from traceback import print_exc
 from sys import path
