@@ -14,27 +14,22 @@ class Memory:
     def __init__(self, options: MemoryOptions):
         self.name = options['name']
         self.default_memory = options['default_memory'] if 'default_memory' in options else None
-        self.memory_path = None
+        self.memory_path = self.memory_path = os.path.join(
+            SKILL_PATH,
+            'memory',
+            f'{self.name}.json'
+        )
         self.__is_from_another_skill = False
 
         if ':' in self.name and self.name.count(':') == 2:
             self.__is_from_another_skill = True
             domain_name, skill_name, memory_name = self.name.split(':')
-            memory_path = os.path.join(
+            self.memory_path = os.path.join(
                 SKILLS_PATH,
                 domain_name,
                 skill_name,
                 'memory',
                 memory_name + '.json'
-            )
-
-            if os.path.exists(memory_path):
-                self.memory_path = memory_path
-        else:
-            self.memory_path = os.path.join(
-                SKILL_PATH,
-                'memory',
-                self.name + '.json'
             )
 
     def clear(self) -> None:
@@ -50,7 +45,7 @@ class Memory:
         """
         Read the memory
         """
-        if not self.memory_path or self.__is_from_another_skill:
+        if self.__is_from_another_skill and not os.path.exists(self.memory_path):
             raise ValueError(f'You cannot read the memory "{self.name}" as it belongs to another skill which hasn\'t written to this memory yet')
 
         try:
@@ -68,7 +63,7 @@ class Memory:
         Write the memory
         :param memory: The memory to write
         """
-        if self.memory_path is not None and not self.__is_from_another_skill:
+        if not self.__is_from_another_skill:
             try:
                 with open(self.memory_path, 'w') as f:
                     json.dump(memory, f, indent=2)

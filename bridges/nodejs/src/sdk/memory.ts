@@ -9,7 +9,7 @@ interface MemoryOptions<T> {
 }
 
 export class Memory<T = unknown> {
-  private readonly memoryPath: string | undefined
+  private readonly memoryPath: string
   private readonly name: string
   private readonly defaultMemory: T | undefined
   private isFromAnotherSkill: boolean
@@ -19,24 +19,19 @@ export class Memory<T = unknown> {
 
     this.name = name
     this.defaultMemory = defaultMemory
+    this.memoryPath = path.join(SKILL_PATH, 'memory', `${this.name}.json`)
     this.isFromAnotherSkill = false
 
     if (this.name.includes(':') && this.name.split(':').length === 3) {
       this.isFromAnotherSkill = true
       const [domainName, skillName, memoryName] = this.name.split(':')
-      const memoryPath = path.join(
+      this.memoryPath = path.join(
         SKILLS_PATH,
         domainName as string,
         skillName as string,
         'memory',
         `${memoryName}.json`
       )
-
-      if (fs.existsSync(memoryPath)) {
-        this.memoryPath = memoryPath
-      }
-    } else {
-      this.memoryPath = path.join(SKILL_PATH, 'memory', `${this.name}.json`)
     }
   }
 
@@ -59,7 +54,7 @@ export class Memory<T = unknown> {
    * @example read()
    */
   public async read(): Promise<T> {
-    if (!this.memoryPath || this.isFromAnotherSkill) {
+    if (this.isFromAnotherSkill && !fs.existsSync(this.memoryPath)) {
       throw new Error(
         `You cannot read the memory "${this.name}" as it belongs to another skill which haven't written to this memory yet`
       )
@@ -83,7 +78,7 @@ export class Memory<T = unknown> {
    * @example write({ foo: 'bar' }) // { foo: 'bar' }
    */
   public async write(memory: T): Promise<T> {
-    if (this.memoryPath != null && !this.isFromAnotherSkill) {
+    if (!this.isFromAnotherSkill) {
       try {
         await fs.promises.writeFile(
           this.memoryPath,
