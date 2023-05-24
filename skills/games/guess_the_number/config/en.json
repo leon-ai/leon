@@ -39,7 +39,7 @@
     "bigger": ["The number is bigger.", "Try with a bigger number."],
     "smaller": ["It is smaller.", "Try a smaller number."],
     "guessed": [
-      "Congrats! The number was %nb% and you guessed in %attempts_nb% attempts. Ready for another round?"
+      "Congrats! The number was %number% and you guessed in %counter% attempts. Ready for another round?"
     ],
     "replay": [
       "Let's gooo!",

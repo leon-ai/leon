@@ -1,7 +1,8 @@
-import utils
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
 
 
-def replay(params):
+def run(params: ActionParams) -> None:
     """Take decision about whether to replay"""
 
     resolvers = params['resolvers']
@@ -12,9 +13,18 @@ def replay(params):
             decision = resolver['value']
 
     if decision:
-        return utils.output('end', 'replay', {
-            'isInActionLoop': False,
-            'restart': True
+        leon.answer({
+            'key': 'replay',
+            'core': {
+                'isInActionLoop': False,
+                'restart': True
+            }
         })
+        return
 
-    return utils.output('end', 'stop', {'isInActionLoop': False})
+    leon.answer({
+        'key': 'stop',
+        'core': {
+            'isInActionLoop': False
+        }
+    })

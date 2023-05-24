@@ -39,7 +39,7 @@ class Memory:
         """
         Clear the memory and set it to the default memory value
         """
-        if self.default_memory:
+        if self.default_memory is not None:
             self.write(self.default_memory)
         else:
             raise ValueError(f'You cannot clear the memory "{self.name}" as it belongs to another skill')
