@@ -1,7 +1,8 @@
-import utils
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
 
 
-def rematch(params):
+def run(params: ActionParams) -> None:
     """Take decision whether to do a rematch"""
 
     resolvers = params['resolvers']
@@ -12,9 +13,18 @@ def rematch(params):
             decision = resolver['value']
 
     if decision:
-        return utils.output('end', 'confirm_rematch', {
-            'isInActionLoop': False,
-            'restart': True
+        leon.answer({
+            'key': 'confirm_rematch',
+            'core': {
+                'isInActionLoop': False,
+                'restart': True
+            }
         })
+        return
 
-    return utils.output('end', 'deny_rematch', {'isInActionLoop': False})
+    leon.answer({
+        'key': 'deny_rematch',
+        'core': {
+            'isInActionLoop': False
+        }
+    })

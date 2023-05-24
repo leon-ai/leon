@@ -1,8 +1,10 @@
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+
 import random
-import utils
 
 
-def play(params):
+def run(params: ActionParams) -> None:
     """Define the winner"""
 
     handsigns = {
@@ -27,7 +29,7 @@ def play(params):
         'handsign': None,
         'points': 0
     }
-    leon = {
+    leon_player = {
         'handsign': random.choice(list(handsigns)),
         'points': 0
     }
@@ -39,35 +41,39 @@ def play(params):
 
     # Exit the loop if no handsign has been found
     if player['handsign'] is None:
-        utils.output('inter', None, None, {'isInActionLoop': False})
+        leon.answer({'core': {'isInActionLoop': False}})
 
-    leon_emoji = handsigns[leon['handsign']]['emoji']
+    leon_emoji = handsigns[leon_player['handsign']]['emoji']
     player_emoji = handsigns[player['handsign']]['emoji']
 
-    utils.output('inter', {'key': 'leon_emoji', 'data': {'leon_emoji': leon_emoji}})
+    leon.answer({'key': 'leon_emoji', 'data': {'leon_emoji': leon_emoji}})
 
-    if leon['handsign'] == player['handsign']:
-        utils.output('inter', 'equal')
+    if leon_player['handsign'] == player['handsign']:
+        leon.answer({'key': 'equal'})
 
     # Point for Leon
-    elif handsigns[leon['handsign']]['superior_to'] == player['handsign']:
-        utils.output('inter', {
+    elif handsigns[leon_player['handsign']]['superior_to'] == player['handsign']:
+        leon.answer({
             'key': 'point_for_leon',
             'data': {
-                'handsign_1': leon['handsign'].lower(),
+                'handsign_1': leon_player['handsign'].lower(),
                 'handsign_2': player['handsign'].lower()
             }
         })
 
     else:
-        utils.output('inter', {
+        leon.answer({
             'key': 'point_for_player',
             'data': {
                 'handsign_1': player['handsign'].lower(),
-                'handsign_2': leon['handsign'].lower()
+                'handsign_2': leon_player['handsign'].lower()
             }
         })
 
-    return utils.output('end', 'ask_for_rematch', {
-        'isInActionLoop': False, 'showNextActionSuggestions': True
+    leon.answer({
+        'key': 'ask_for_rematch',
+        'core': {
+            'isInActionLoop': False,
+            'showNextActionSuggestions': True
+        }
     })
