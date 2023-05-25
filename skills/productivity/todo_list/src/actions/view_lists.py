@@ -1,31 +1,29 @@
-from time import time
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-import utils
-from ..lib import db
+from typing import Union
 
 
-def view_lists(params):
+def run(params: ActionParams) -> None:
     """View to-do lists"""
 
-    # Lists number
-    lists_nb = db.count_lists()
+    todo_lists_count = memory.count_todo_lists()
 
-    # Verify if a list exists
-    if lists_nb == 0:
-        return utils.output('end', 'no_list')
+    if todo_lists_count == 0:
+        return leon.answer({'key': 'no_list'})
 
-    result = ''
-    # Fill end-result
-    for list_element in db.get_lists():
-        result += utils.translate('list_list_element', {
+    result: str = ''
+    for list_element in memory.get_todo_lists():
+        result += str(leon.set_answer_data('list_list_element', {
             'list': list_element['name'],
-            'todos_nb': db.count_todos(list_element['name'])
-        })
+            'todos_nb': memory.count_todo_items(list_element['name'])
+        }))
 
-    return utils.output('end', {
+    leon.answer({
         'key': 'lists_listed',
         'data': {
-            'lists_nb': lists_nb,
+            'lists_nb': todo_lists_count,
             'result': result
         }
     })

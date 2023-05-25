@@ -1,69 +1,67 @@
-from time import time
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-import utils
-from ..lib import db
+from typing import Union
 
 
-def view_list(params):
+def run(params: ActionParams) -> None:
     """View a to-do list"""
 
-    # List name
-    list_name = ''
+    list_name: Union[str, None] = None
 
-    # Find entities
     for item in params['entities']:
         if item['entity'] == 'list':
             list_name = item['sourceText'].lower()
 
-    # Verify if the list exists
-    if db.has_list(list_name) == False:
-        return utils.output('end', {
+    if list_name is None:
+        return leon.answer({'key': 'list_not_provided'})
+
+    if not memory.has_todo_list(list_name):
+        return leon.answer({
             'key': 'list_does_not_exist',
             'data': {
                 'list': list_name
             }
         })
 
-    # Grab todos of the list
-    todos = db.get_todos(list_name)
+    todos = memory.get_todo_items(list_name)
 
     if len(todos) == 0:
-        return utils.output('end', {
+        return leon.answer({
             'key': 'empty_list',
             'data': {
                 'list': list_name
             }
         })
 
-    unchecked_todos = db.get_uncomplete_todos(list_name)
-    completed_todos = db.get_done_todos(list_name)
+    uncompleted_todos = memory.get_uncompleted_todo_items(list_name)
+    completed_todos = memory.get_completed_todo_items(list_name)
 
-    result_unchecked_todos = ''
-    result_completed_todos = ''
+    result_uncompleted_todos: str = ''
+    result_completed_todos: str = ''
 
-    if len(unchecked_todos) == 0:
-        utils.output('inter', {
+    if len(uncompleted_todos) == 0:
+        leon.answer({
             'key': 'no_unchecked_todo',
             'data': {
                 'list': list_name
             }
         })
     else:
-        for todo in unchecked_todos:
-            result_unchecked_todos += utils.translate('list_todo_element', {
-                'todo': todo['name']
-            })
+        for todo in uncompleted_todos:
+            result_uncompleted_todos += str(leon.set_answer_data('list_todo_element', {'todo': todo['name']}))
 
-        utils.output('inter', {
+        leon.answer({
             'key': 'unchecked_todos_listed',
             'data': {
                 'list': list_name,
-                'result': result_unchecked_todos
+                'result': result_uncompleted_todos
             }
         })
 
     if len(completed_todos) == 0:
-        return utils.output('end', {
+        return leon.answer({
             'key': 'no_completed_todo',
             'data': {
                 'list': list_name
@@ -71,11 +69,9 @@ def view_list(params):
         })
 
     for todo in completed_todos:
-        result_completed_todos += utils.translate('list_completed_todo_element', {
-            'todo': todo['name']
-        })
+        result_completed_todos += str(leon.set_answer_data('list_completed_todo_element', {'todo': todo['name']}))
 
-    return utils.output('end', {
+    leon.answer({
         'key': 'completed_todos_listed',
         'data': {
             'list': list_name,

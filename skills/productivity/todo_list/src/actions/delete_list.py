@@ -1,37 +1,33 @@
-from time import time
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-import utils
-from ..lib import db
+from typing import Union
 
 
-def delete_list(params):
+def run(params: ActionParams) -> None:
     """Delete a to-do list"""
 
-    # List name
-    list_name = ''
+    list_name: Union[str, None] = None
 
-    # Find entities
     for item in params['entities']:
         if item['entity'] == 'list':
             list_name = item['sourceText'].lower()
 
-    # Verify if a list name has been provided
-    if not list_name:
-        return utils.output('end', 'list_not_provided')
+    if list_name is None:
+        return leon.answer({'key': 'list_not_provided'})
 
-    # Verify if the list exists
-    if db.has_list(list_name) == False:
-        return utils.output('end', {
+    if not memory.has_todo_list(list_name):
+        return leon.answer({
             'key': 'list_does_not_exist',
             'data': {
                 'list': list_name
             }
         })
 
-    # Delete the to-do list
-    db.delete_list(list_name)
+    memory.delete_todo_list(list_name)
 
-    return utils.output('end', {
+    leon.answer({
         'key': 'list_deleted',
         'data': {
             'list': list_name

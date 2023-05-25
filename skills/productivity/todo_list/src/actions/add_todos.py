@@ -1,46 +1,37 @@
-from time import time
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-import utils
-from ..lib import db
+from typing import Union
 
 
-def add_todos(params):
+def run(params: ActionParams) -> None:
     """Add todos to a to-do list"""
 
-    # List name
-    list_name = ''
+    list_name: Union[str, None] = None
+    todos: list[str] = []
 
-    # Todos
-    todos = []
-
-    # Find entities
     for item in params['entities']:
         if item['entity'] == 'list':
             list_name = item['sourceText'].lower()
         elif item['entity'] == 'todos':
-            # Split todos into array and trim start/end-whitespaces
             todos = [chunk.strip() for chunk in item['sourceText'].lower().split(',')]
 
-    # Verify if a list name has been provided
-    if not list_name:
-        return utils.output('end', 'list_not_provided')
+    if list_name is None:
+        return leon.answer({'key': 'list_not_provided'})
 
-    # Verify todos have been provided
     if len(todos) == 0:
-        return utils.output('end', 'todos_not_provided')
+        return leon.answer({'key': 'todos_not_provided'})
 
-    # Verify the list exists
-    if db.has_list(list_name) == False:
-        # Create the new to-do list
-        db.create_list(list_name)
+    if not memory.has_todo_list(list_name):
+        memory.create_todo_list(list_name)
 
-    result = ''
+    result: str = ''
     for todo in todos:
-        # Add to-do to DB
-        db.create_todo(list_name, todo)
-        result += utils.translate('list_todo_element', {'todo': todo})
+        memory.create_todo_item(list_name, todo)
+        result += str(leon.set_answer_data('list_todo_element', {'todo': todo}))
 
-    return utils.output('end', {
+    leon.answer({
         'key': 'todos_added',
         'data': {
             'list': list_name,

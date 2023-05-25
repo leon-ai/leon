@@ -1,54 +1,45 @@
-from time import time
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-import utils
-from ..lib import db
+from typing import Union
 
 
-def uncheck_todos(params):
+def run(params: ActionParams) -> None:
     """Uncheck todos"""
 
-    # List name
-    list_name = ''
+    list_name: Union[str, None] = None
+    todos: list[str] = []
 
-    # Todos
-    todos = []
-
-    # Find entities
     for item in params['entities']:
         if item['entity'] == 'list':
             list_name = item['sourceText'].lower()
         elif item['entity'] == 'todos':
-            # Split todos into array and trim start/end-whitespaces
             todos = [chunk.strip() for chunk in item['sourceText'].lower().split(',')]
 
-    # Verify if a list name has been provided
-    if not list_name:
-        return utils.output('end', 'list_not_provided')
+    if list_name is None:
+        return leon.answer({'key': 'list_not_provided'})
 
-    # Verify todos have been provided
     if len(todos) == 0:
-        return utils.output('end', 'todos_not_provided')
+        return leon.answer({'key': 'todos_not_provided'})
 
-    # Verify if the list exists
-    if db.has_list(list_name) == False:
-        return utils.output('end', {
+    if not memory.has_todo_list(list_name):
+        return leon.answer({
             'key': 'list_does_not_exist',
             'data': {
                 'list': list_name
             }
         })
 
-    result = ''
+    result: str = ''
     for todo in todos:
-        for db_todo in db.get_todos(list_name):
-            # Rough matching (e.g. 1kg of rice = rice)
-            if db_todo['name'].find(todo) != -1:
-                db.uncomplete_todo(list_name, db_todo['name'])
+        for todo_item in memory.get_todo_items(list_name):
+            if todo_item['name'].find(todo) != -1:
+                memory.uncomplete_todo_item(list_name, todo_item['name'])
+                result += str(leon.set_answer_data('list_todo_element', {'todo': todo_item['name']}))
 
-                result += utils.translate('list_todo_element', {'todo': db_todo['name']})
-
-    return utils.output('end', {
-        'key': 'todo_unchecked',
+    leon.answer({
+        'key': 'todos_unchecked',
         'data': {
             'list': list_name,
             'result': result
