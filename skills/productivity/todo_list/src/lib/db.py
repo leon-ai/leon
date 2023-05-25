@@ -1,4 +1,4 @@
-from time import time
+from datetime import datetime
 
 import utils
 
@@ -13,17 +13,15 @@ db_todos = db.table('todo_todos')
 # Query
 Query = utils.db()['query']()
 
-# Time stamp
-timestamp = int(time())
-
 
 def create_list(list_name):
     """Create list in DB"""
 
+    datetime_now = datetime.now().isoformat()
     db_lists.insert({
         'name': list_name,
-        'created_at': timestamp,
-        'updated_at': timestamp
+        'created_at': datetime_now,
+        'updated_at': datetime_now
     })
 
 
@@ -36,9 +34,10 @@ def get_lists():
 def update_list_name(old_list_name, new_list_name):
     """Update list name in DB"""
 
+    datetime_now = datetime.now().isoformat()
     db_lists.update({
         'name': new_list_name,
-        'updated_at': timestamp
+        'updated_at': datetime_now
     }, Query.name == old_list_name)
 
 
@@ -64,21 +63,23 @@ def has_list(list_name):
 def create_todo(list_name, todo_name):
     """Create to-todo in list DB table"""
 
+    datetime_now = datetime.now().isoformat()
     db_todos.insert({
         'list': list_name,
         'name': todo_name,
         'is_completed': False,
-        'created_at': timestamp,
-        'updated_at': timestamp
+        'created_at': datetime_now,
+        'updated_at': datetime_now
     })
 
 
 def update_todo_list_name(old_list_name, new_list_name):
     """Update todo list name in DB"""
 
+    datetime_now = datetime.now().isoformat()
     db_todos.update({
         'list': new_list_name,
-        'updated_at': timestamp
+        'updated_at': datetime_now
     }, Query.list == old_list_name)
 
 

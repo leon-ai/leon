@@ -1,7 +1,7 @@
 import requests
+from datetime import datetime
 import os
 import utils
-from time import time
 from pytube import YouTube
 
 
@@ -54,11 +54,11 @@ def run(params):
     if db.count(Entry.platform == 'youtube') == 0:
         db.insert({
             'platform': 'youtube',
-            'checked_at': int(time()),
+            'checked_at': datetime.now().isoformat(),
             'downloaded_videos': []
         })
     else:
-        db.update({'checked_at': int(time())}, Entry.platform == 'youtube')
+        db.update({'checked_at': datetime.now().isoformat()}, Entry.platform == 'youtube')
 
     # Get videos already downloaded
     downloaded_videos = db.get(Entry.platform == 'youtube')['downloaded_videos']

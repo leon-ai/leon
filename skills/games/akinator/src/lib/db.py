@@ -1,5 +1,3 @@
-from time import time
-
 import utils
 
 # Skill database
@@ -9,9 +7,6 @@ table = utils.db()['table']
 
 # Session table
 session_table = db.table('session')
-
-# Time stamp
-timestamp = int(time())
 
 
 def upsert_session(session):
