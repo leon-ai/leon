@@ -4,7 +4,7 @@ from ..lib import memory
 
 
 def run(params: ActionParams) -> None:
-    """Save name and birth date into Leon's memory"""
+    """Save name and birthdate into Leon's memory"""
     slots = params['slots']
     owner_name = slots['owner_name']['resolution']['value']
     owner_birth_date = slots['owner_birth_date']['resolution']['timex']
