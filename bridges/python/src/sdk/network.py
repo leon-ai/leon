@@ -1,12 +1,12 @@
 import requests
 import socket
-from typing import Any, Dict, TypedDict, Union, Literal
+from typing import Any, Dict, TypedDict, Union, Literal, Optional
 
 from ..constants import LEON_VERSION, PYTHON_BRIDGE_VERSION
 
 
 class NetworkOptions(TypedDict, total=False):
-    base_url: str
+    base_url: Optional[str]
 
 
 class NetworkResponse(TypedDict):
@@ -29,14 +29,14 @@ class NetworkRequestOptions(TypedDict, total=False):
 
 
 class Network:
-    def __init__(self, options: NetworkOptions = {}) -> None:
+    def __init__(self, options: NetworkOptions = {'base_url': None}) -> None:
         self.options = options
 
     def request(self, options: NetworkRequestOptions) -> NetworkResponse:
         try:
             url = options['url']
 
-            if self.options['base_url']:
+            if self.options['base_url'] is not None:
                 url = self.options['base_url'] + url
             method = options['method']
             data = options.get('data', {})
@@ -51,8 +51,14 @@ class Network:
                 }
             )
 
+            data = {}
+            try:
+                data = response.json()
+            except Exception:
+                pass
+
             network_response: NetworkResponse = {
-                'data': response.json(),
+                'data': data,
                 'status_code': response.status_code,
                 'options': {**self.options, **options}
             }
