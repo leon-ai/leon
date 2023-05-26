@@ -5,6 +5,7 @@ import { leon } from '@sdk/leon'
 import { Network } from '@sdk/network'
 import { Button } from '@sdk/aurora/button'
 import { Memory } from '@sdk/memory'
+import { Settings } from '@sdk/settings'
 import _ from '@sdk/packages/lodash'
 
 interface Post {
@@ -91,13 +92,21 @@ export const run: ActionFunction = async function () {
     }
   })
 
-  console.log('button', Button)
-
-  const { someSampleConfig } = leon.getSRCConfig<{
-    options: { someSampleConfig: string }
-  }>()['options']
-
-  const options = leon.getSRCConfig<{ someSampleConfig: string }>('options')
+  const settings = new Settings<{
+    someSampleConfig: string
+  }>()
+  await leon.answer({
+    key: 'answer',
+    data: {
+      answer: `Skill settings already set: ${await settings.isAlreadySet()}`
+    }
+  })
+  await settings.set({
+    someSampleConfig: 'Hello world'
+  })
+  await settings.set('someSampleConfig', 'Hello world 2')
+  const options = await settings.get()
+  const someSampleConfig = await settings.get('someSampleConfig')
   await leon.answer({
     key: 'answer',
     data: {
