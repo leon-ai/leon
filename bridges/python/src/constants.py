@@ -25,9 +25,6 @@ SKILLS_PATH = SKILLS_ROOT_PATH
 with open(os.path.join(SKILL_PATH, 'config', INTENT_OBJECT['extra_context_data']['lang'] + '.json'), 'r') as f:
     SKILL_CONFIG = json.load(f)
 
-with open(os.path.join(SKILL_PATH, 'src', 'config.json'), 'r') as f:
-    SKILL_SRC_CONFIG = json.load(f)['configurations']
-
 LEON_VERSION = os.getenv('npm_package_version')
 
 PYTHON_BRIDGE_VERSION = version.__version__

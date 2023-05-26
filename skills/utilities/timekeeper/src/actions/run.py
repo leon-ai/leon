@@ -2,6 +2,7 @@
 from bridges.python.src.sdk.leon import leon
 from bridges.python.src.sdk.types import ActionParams
 from bridges.python.src.sdk.memory import Memory
+from bridges.python.src.sdk.settings import Settings
 from bridges.python.src.sdk.network import Network
 from bridges.python.src.sdk.aurora.button import Button
 
@@ -103,12 +104,23 @@ def run(params: ActionParams) -> None:
     leon.answer({'key': 'test'})
 
     ###
-
-    options = leon.get_src_config('options')
+    settings = Settings()
     leon.answer({
         'key': 'answer',
         'data': {
-            'answer': options['test_config']
+            'answer': f"Skill settings already set: {settings.is_already_set()}"
+        }
+    })
+    settings.set({
+        'some_sample_config': 'Hello world'
+    })
+    settings.set('some_sample_config', 'Hello world 2')
+    options = settings.get()
+    some_sample_config = settings.get('some_sample_config')
+    leon.answer({
+        'key': 'answer',
+        'data': {
+            'answer': f"{options['some_sample_config']} {some_sample_config}"
         }
     })
 

@@ -5,7 +5,7 @@ from time import sleep
 import json
 
 from .types import AnswerInput, AnswerData, AnswerConfig
-from ..constants import SKILL_SRC_CONFIG, SKILL_CONFIG, INTENT_OBJECT
+from ..constants import SKILL_CONFIG, INTENT_OBJECT
 
 
 class Leon:
@@ -14,20 +14,6 @@ class Leon:
     def __init__(self) -> None:
         if not Leon.instance:
             Leon.instance = self
-
-    @staticmethod
-    def get_src_config(key: Union[str, None] = None):
-        """
-        Get source configuration
-        """
-        try:
-            if key:
-                return SKILL_SRC_CONFIG[key]
-
-            return SKILL_SRC_CONFIG
-        except Exception as e:
-            print('Error while getting source configuration:', e)
-            return {}
 
     @staticmethod
     def set_answer_data(answer_key: Union[str, None], data: Union[AnswerData, None] = None) -> Union[str, AnswerConfig, None]:
@@ -84,8 +70,7 @@ class Leon:
                 'output': {
                     'codes': 'widget' if answer_input.get('widget') and not answer_input.get('key') else answer_input.get('key'),
                     'answer': self.set_answer_data(answer_input.get('key'), answer_input.get('data')) or '',
-                    'core': answer_input.get('core'),
-                    'options': self.get_src_config('options')
+                    'core': answer_input.get('core')
                 }
             }
 
