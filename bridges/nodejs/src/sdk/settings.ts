@@ -16,12 +16,20 @@ export class Settings<T extends Record<string, unknown>> {
     )
   }
 
+  /**
+   * Check if the settings are already set
+   * @returns isAlreadySet() // true
+   */
   public async isAlreadySet(): Promise<boolean> {
     const settingsSample = await this.getSettingsSample()
     const settings = await this.get()
     return JSON.stringify(settings) !== JSON.stringify(settingsSample)
   }
 
+  /**
+   * Clear the settings and set it to the default settings.sample.json file
+   * @example clear()
+   */
   public async clear(): Promise<void> {
     const settingsSample = await this.getSettingsSample()
     await this.set(settingsSample)
@@ -41,6 +49,12 @@ export class Settings<T extends Record<string, unknown>> {
     }
   }
 
+  /**
+   * Get the settings
+   * @param key The key of the setting to get
+   * @example get('API_KEY') // 'value'
+   * @example get() // { API_KEY: 'value' }
+   */
   public async get<Key extends keyof T>(key: Key): Promise<T[Key]>
   public async get(): Promise<T>
   public async get<Key extends keyof T>(key?: Key): Promise<T | T[Key]> {
@@ -65,6 +79,12 @@ export class Settings<T extends Record<string, unknown>> {
     }
   }
 
+  /**
+   * Set the settings
+   * @param key The key of the setting to set
+   * @param value The value of the setting to set
+   * @example set({ API_KEY: 'value' }) // { API_KEY: 'value' }
+   */
   public async set<Key extends keyof T>(key: Key, value: T[Key]): Promise<T>
   public async set(settings: T): Promise<T>
   public async set<Key extends keyof T>(

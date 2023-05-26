@@ -12,11 +12,17 @@ class Settings:
         self.settings_sample_path = path.join(SKILL_PATH, 'src', 'settings.sample.json')
 
     def is_already_set(self) -> bool:
+        """
+        Check if the settings are already set
+        """
         settings_sample = self.get_settings_sample()
         settings = self.get()
         return json.dumps(settings) != json.dumps(settings_sample)
 
     def clear(self) -> None:
+        """
+        Clear the settings and set it to the default settings.sample.json file
+        """
         settings_sample = self.get_settings_sample()
         self.set(settings_sample)
 
@@ -29,6 +35,10 @@ class Settings:
             raise e
 
     def get(self, key: Union[str, None] = None) -> dict[str, Any]:
+        """
+        Get the settings
+        :param key: The key to get from the settings
+        """
         try:
             if not os.path.exists(self.settings_path):
                 self.clear()
@@ -44,6 +54,11 @@ class Settings:
             raise e
 
     def set(self, key_or_settings: Union[str, dict[str, Any]], value=None) -> dict[str, Any]:
+        """
+        Set the settings
+        :param key_or_settings: The key to set or the settings to set
+        :param value: The value to set
+        """
         try:
             settings = self.get()
 
