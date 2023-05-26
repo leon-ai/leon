@@ -6,12 +6,6 @@
       "not_found": "Désolé, il semblerait que je n'arrive pas à trouver ça",
       "nlu": "L'erreur semble provenir de ma compréhension de langage naturel. Voici plus de détails au sujet de cette dernière : \"%error%\""
     },
-    "synchronizer": {
-      "syncing_direct": "Je vais maintenant synchroniser le contenu téléchargé sur votre appareil actuel. Ne vous inquiétez pas, je vous préviendrai lorsque j'aurai terminé",
-      "synced_direct": "Le nouveau contenu a été synchronisé sur votre appareil",
-      "syncing_google_drive": "Je vais maintenant synchroniser le contenu téléchargé sur Google Drive. Ne vous inquiétez pas, je vous préviendrai lorsque j'aurai terminé",
-      "synced_google_drive": "Le nouveau contenu est maintenant disponible sur Google Drive"
-    },
     "random_errors": [
       "Désolé, il y a un problème avec mon système. Veuillez consulter mes logs pour plus de détails",
       "Désolé, je ne fonctionne pas correctement. Merci de regarder mes logs pour plus d'information",

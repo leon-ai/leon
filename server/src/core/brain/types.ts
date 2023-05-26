@@ -86,7 +86,6 @@ export interface SkillAnswerOutput extends IntentObject {
     answer: SkillAnswerConfigSchema
     core?: SkillAnswerCoreData
     widget?: unknown // TODO
-    options: Record<string, string>
   }
 }
 
