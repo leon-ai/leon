@@ -32,7 +32,6 @@ import corsMidd from '@/core/http-server/plugins/cors'
 import otherMidd from '@/core/http-server/plugins/other'
 import keyMidd from '@/core/http-server/plugins/key'
 import infoPlugin from '@/core/http-server/api/info'
-import downloadsPlugin from '@/core/http-server/api/downloads'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 
@@ -337,7 +336,6 @@ server.bootstrap = async () => {
   })
 
   server.fastify.register(infoPlugin, { apiVersion })
-  server.fastify.register(downloadsPlugin, { apiVersion })
 
   if (HAS_OVER_HTTP) {
     server.fastify.register((instance, opts, next) => {
