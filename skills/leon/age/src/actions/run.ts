@@ -94,7 +94,7 @@ export const run: ActionFunction = async function () {
 
   const settings = new Settings()
 
-  if (!(await settings.isAlreadySet('apiKey'))) {
+  if (!(await settings.isSettingSet('apiKey'))) {
     await leon.answer({
       key: 'answer',
       data: {
@@ -111,7 +111,7 @@ export const run: ActionFunction = async function () {
   })
 
   await leon.answer({
-    key: `Is API set now? ${await settings.isAlreadySet('apiKey')}`
+    key: `Is API set now? ${await settings.isSettingSet('apiKey')}`
   })
 
   const network = new Network({

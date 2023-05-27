@@ -106,7 +106,7 @@ def run(params: ActionParams) -> None:
     ###
     settings = Settings()
 
-    if not settings.is_already_set('apiKey'):
+    if not settings.is_setting_set('apiKey'):
         leon.answer({
             'key': "The API key isn't set..."
         })
@@ -119,7 +119,7 @@ def run(params: ActionParams) -> None:
     })
 
     leon.answer({
-        'key': f"Is API set now? {settings.is_already_set('apiKey')}"
+        'key': f"Is API set now? {settings.is_setting_set('apiKey')}"
     })
 
     ###

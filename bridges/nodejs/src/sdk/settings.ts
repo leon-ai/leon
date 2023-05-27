@@ -17,11 +17,11 @@ export class Settings<T extends Record<string, unknown>> {
   }
 
   /**
-   * Check if the settings are already set
+   * Check if a setting is already set
    * @param key The key to verify whether its value is set
-   * @returns isAlreadySet('apiKey') // true
+   * @returns isSettingSet('apiKey') // true
    */
-  public async isAlreadySet(key: string): Promise<boolean> {
+  public async isSettingSet(key: string): Promise<boolean> {
     const settingsSample = await this.getSettingsSample()
     const settings = await this.get()
 

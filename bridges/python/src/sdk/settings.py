@@ -11,9 +11,9 @@ class Settings:
         self.settings_path = path.join(SKILL_PATH, 'src', 'settings.json')
         self.settings_sample_path = path.join(SKILL_PATH, 'src', 'settings.sample.json')
 
-    def is_already_set(self, key: str) -> bool:
+    def is_setting_set(self, key: str) -> bool:
         """
-        Check if the settings are already set
+        Check if a setting is already set
         :param key: The key to verify whether its value is set
         """
         settings_sample = self.get_settings_sample()
