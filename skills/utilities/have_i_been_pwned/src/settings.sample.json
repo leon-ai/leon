@@ -1,10 +1,4 @@
 {
-  "configurations": {
-    "options": {
-      "emails": []
-    },
-    "credentials": {
-      "api_key": "YOUR_API_KEY"
-    }
-  }
+  "emails": [],
+  "api_key": "YOUR_API_KEY"
 }

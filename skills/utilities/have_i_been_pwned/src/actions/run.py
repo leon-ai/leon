@@ -1,90 +1,89 @@
-import utils
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from bridges.python.src.sdk.network import Network, NetworkError
+from bridges.python.src.sdk.settings import Settings
+
 from time import sleep
-from urllib import parse
-from requests import codes, exceptions
 
 # Developer token
-api_key = utils.config('credentials')['api_key']
+settings = Settings()
+api_key: str = settings.get('api_key')
 
 
-def run(params):
+def run(params: ActionParams) -> None:
     """Verify if one or several email addresses have been pwned"""
 
-    emails = []
+    emails: list[str] = []
 
     for item in params['entities']:
         if item['entity'] == 'email':
             emails.append(item['resolution']['value'])
 
-    if not emails:
-        emails = utils.config('options')['emails']
+    if len(emails) == 0:
+        emails = settings.get('emails')
 
-        if not emails:
-            return utils.output('end', 'no_email')
+        if len(emails) == 0:
+            return leon.answer({'key': 'no_email'})
 
-    utils.output('inter', 'checking')
-
-    for index, email in enumerate(emails):
-        is_last_email = index == len(emails) - 1
-        breached = check_for_breach(email)
-        data = {'email': email}
-
-        # Have I Been Pwned API returns a 403 when accessed by unauthorized/banned clients
-        if breached == 403:
-            return utils.output('end', {
-                'key': 'blocked',
-                'data': {
-                    'website_name': 'Have I Been Pwned'
+    for email in emails:
+        leon.answer({'key': 'checking'})
+        # Delay for 5 seconds before making request to accomodate API usage policy
+        sleep(5)
+        try:
+            network = Network({
+                'base_url': 'https://haveibeenpwned.com/api/v3'
+            })
+            response = network.request({
+                'url': f'/breachedaccount/{email}?truncateResponse=false',
+                'method': 'GET',
+                'headers': {
+                    'hibp-api-key': api_key
                 }
             })
-        elif breached == 503:
-            return utils.output('end', {
-                'key': 'unavailable',
-                'data': {
-                    'website_name': 'Have I Been Pwned'
-                }
-            })
-        elif not breached:
-            if is_last_email:
-                return utils.output('end', {'key': 'no_pwnage', 'data': data})
+            breaches = response['data']
+            breached = len(breaches) > 0
+            if breached:
+                result: str = ''
+                for breach in breaches:
+                    result += str(leon.set_answer_data('list_element', {
+                        'url': f'https://{breach["Domain"]}',
+                        'name': breach['Name'],
+                        'total': breach['PwnCount']
+                    }))
+                leon.answer({
+                    'key': 'pwned',
+                    'data': {
+                        'email': email,
+                        'result': result
+                    }
+                })
+        except NetworkError as e:
+            # Have I Been Pwned API returns a 403 when accessed by unauthorized/banned clients
+            if e.response['status_code'] == 403:
+                leon.answer({
+                    'key': 'blocked',
+                    'data': {
+                        'website_name': 'Have I Been Pwned'
+                    }
+                })
+            elif e.response['status_code'] == 404:
+                leon.answer({
+                    'key': 'no_pwnage',
+                    'data': {
+                        'email': email
+                    }
+                })
+            elif e.response['status_code'] == 503:
+                leon.answer({
+                    'key': 'unavailable',
+                    'data': {
+                        'website_name': 'Have I Been Pwned'
+                    }
+                })
             else:
-                utils.output('inter', {'key': 'no_pwnage', 'data': data})
-        else:
-            data['result'] = ''
-
-            for index, b in enumerate(breached):
-                data['result'] += utils.translate('list_element', {
-                    'url': 'http://' + b['Domain'],
-                    'name': b['Name'],
-                    'total': b['PwnCount']
-                }
-                )
-
-            if is_last_email:
-                return utils.output('end', {'key': 'pwned', 'data': data})
-            else:
-                utils.output('inter', {'key': 'pwned', 'data': data})
-
-
-def check_for_breach(email):
-    # Delay for 2 seconds before making request to accomodate API usage policy
-    sleep(2)
-    truncate = '?truncateResponse=true'
-    url = 'https://haveibeenpwned.com/api/v3/breachedaccount/' + parse.quote_plus(email)
-
-    try:
-        response = utils.http('GET', url, {'hibp-api-key': api_key})
-
-        if response.status_code == 404:
-            return None
-        elif response.status_code == 200:
-            return response.json()
-
-        return response.status_code
-    except exceptions.RequestException as e:
-        return utils.output('end', {
-            'key': 'errors',
-            'data': {
-                'website_name': 'Have I Been Pwned'
-            }
-        })
+                leon.answer({
+                    'key': 'errors',
+                    'data': {
+                        'website_name': 'Have I Been Pwned'
+                    }
+                })

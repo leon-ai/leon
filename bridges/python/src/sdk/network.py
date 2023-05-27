@@ -79,12 +79,6 @@ class Network:
                 'status_code': error.response.status_code,
                 'options': {**self.options, **options}
             }) from error
-        except Exception as error:
-            raise NetworkError({
-                'data': error,
-                'status_code': 500,
-                'options': {**self.options, **options}
-            }) from error
 
     def is_network_error(self, error: Exception) -> bool:
         return isinstance(error, NetworkError)
