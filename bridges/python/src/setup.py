@@ -8,7 +8,6 @@ options = {
         # Add common dependencies for skills
         'includes': [
             'bs4',
-            'pytube',
             'requests',
             'timeit'
         ],
