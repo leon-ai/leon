@@ -1,9 +1,7 @@
 import { join } from 'node:path'
 
-import Fastify, { FastifySchema } from 'fastify'
+import Fastify from 'fastify'
 import fastifyStatic from '@fastify/static'
-import { Type } from '@sinclair/typebox'
-import type { Static } from '@sinclair/typebox'
 
 import {
   LEON_VERSION,
@@ -17,22 +15,12 @@ import { corsMidd } from '@/core/http-server/plugins/cors'
 import { otherMidd } from '@/core/http-server/plugins/other'
 import { infoPlugin } from '@/core/http-server/api/info'
 import { keyMidd } from '@/core/http-server/plugins/key'
-import { NLU, BRAIN } from '@/core'
+import { utterancePlugin } from '@/core/http-server/api/utterance'
 
 const API_VERSION = 'v1'
 
 export interface APIOptions {
   apiVersion: string
-}
-
-const postQuerySchema = {
-  body: Type.Object({
-    utterance: Type.String()
-  })
-} satisfies FastifySchema
-
-interface PostQuerySchema {
-  body: Static<typeof postQuerySchema.body>
 }
 
 export default class HTTPServer {
@@ -92,33 +80,7 @@ export default class HTTPServer {
       this.fastify.register((instance, _opts, next) => {
         instance.addHook('preHandler', keyMidd)
 
-        instance.route<{
-          Body: PostQuerySchema['body']
-        }>({
-          method: 'POST',
-          url: '/api/query',
-          schema: postQuerySchema,
-          handler: async (request, reply) => {
-            const { utterance } = request.body
-
-            try {
-              BRAIN.isMuted = true
-              const data = await NLU.process(utterance)
-
-              reply.send({
-                ...data,
-                success: true
-              })
-            } catch (error) {
-              const message = error instanceof Error ? error.message : error
-              reply.statusCode = 500
-              reply.send({
-                message,
-                success: false
-              })
-            }
-          }
-        })
+        instance.register(utterancePlugin, { apiVersion: API_VERSION })
 
         // TODO: reimplement skills routes once the new core is ready
         // server.generateSkillsRoutes(instance)
