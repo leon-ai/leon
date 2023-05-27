@@ -1,7 +1,10 @@
 # Questions are taken from: http://www.lrjj.cn/encrm1.0/public/upload/MBTI-personality-test.pdf
 
-import utils
-from ..lib import db
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
+
+from typing import Union
 
 groups = [
     {
@@ -31,12 +34,12 @@ groups = [
 ]
 
 
-def quiz(params):
+def run(params: ActionParams) -> None:
     """Loop over the questions and track choices"""
 
     resolvers = params['resolvers']
     choice = None
-    letter = None  # E I S N T F
+    letter: Union[memory.Letter, None] = None  # E I S N T F
 
     for resolver in resolvers:
         if resolver['name'] == 'form':
@@ -44,11 +47,11 @@ def quiz(params):
 
     # Return no speech if no value has been found
     if choice is None:
-        return utils.output('end', None, {'isInActionLoop': False})
+        return leon.answer({'core': {'isInActionLoop': False}})
 
     question, choice = choice.split('_')
 
-    session = db.get_session()
+    session = memory.get_session()
     current_question = session['current_question']
     next_question = current_question + 1
 
@@ -57,12 +60,13 @@ def quiz(params):
         if current_question in group['questions']:
             letter = group[choice]
 
-    db.increment_letter(letter)
-    db.upsert_session(next_question)
+    if letter is not None:
+        memory.increment_letter_score(letter)
+    memory.upsert_session(next_question)
 
     # Release final result
     if current_question == 20:
-        session_result = db.get_session()
+        session_result = memory.get_session()
         type_arr = []
 
         for group in groups:
@@ -71,15 +75,18 @@ def quiz(params):
 
         final_type = ''.join(type_arr)
 
-        return utils.output('end', {
+        return leon.answer({
             'key': 'result',
             'data': {
                 'type': final_type,
                 'type_url': final_type.lower()
+            },
+            'core': {
+                'isInActionLoop': False
             }
-        }, {'isInActionLoop': False})
+        })
 
-    return utils.output('end', {
+    return leon.answer({
         'key': str(next_question),
         'data': {
             'question': str(next_question)
