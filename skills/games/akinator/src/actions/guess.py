@@ -1,8 +1,9 @@
-import utils
-from ..lib import akinator, db
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import akinator, memory
 
 
-def guess(params):
+def run(params: ActionParams) -> None:
     """Guess according to the given thematic"""
 
     resolvers = params['resolvers']
@@ -14,13 +15,12 @@ def guess(params):
 
     # Return no speech if no value has been found
     if answer is None:
-        return utils.output('end', None, {'isInActionLoop': False})
+        return leon.answer({'core': {'isInActionLoop': False}})
 
     aki = akinator.Akinator()
 
-    session = db.get_session()
+    session = memory.get_session()
     response = session['response']
-    formatted_response = aki._parse_response(response)
     aki.session = session['session']
     aki.signature = session['signature']
     aki.progression = session['progression']
@@ -37,23 +37,33 @@ def guess(params):
     if session['progression'] > 80:
         aki.win()
 
-        utils.output('inter', {'key': 'guessed', 'data': {
-            'name': aki.first_guess['name'],
-            'description': aki.first_guess['description']
-        }})
+        leon.answer({
+            'key': 'guessed',
+            'data': {
+                'name': aki.first_guess['name'],
+                'description': aki.first_guess['description']
+            }
+        })
 
-        utils.output('inter', {'key': 'guessed_img', 'data': {
-            'name': aki.first_guess['name'],
-            'url': aki.first_guess['absolute_picture_path']
-        }})
+        leon.answer({
+            'key': 'guessed_img',
+            'data': {
+                'name': aki.first_guess['name'],
+                'url': aki.first_guess['absolute_picture_path']
+            }
+        })
 
-        return utils.output('end', 'ask_for_retry', {
-            'isInActionLoop': False, 'showNextActionSuggestions': True
+        return leon.answer({
+            'key': 'ask_for_retry',
+            'core': {
+                'isInActionLoop': False,
+                'showNextActionSuggestions': True
+            }
         })
 
     aki.answer(answer)
 
-    db.upsert_session({
+    memory.upsert_session({
         'response': aki.response,
         'session': aki.session,
         'signature': aki.signature,
@@ -66,4 +76,9 @@ def guess(params):
         'question_filter': aki.question_filter
     })
 
-    return utils.output('end', aki.question, {'showSuggestions': True})
+    leon.answer({
+        'key': aki.question,
+        'core': {
+            'showSuggestions': True
+        }
+    })

@@ -1,11 +1,12 @@
-import utils
-from ..lib import akinator, db
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import akinator, memory
 
 
-def setup(params):
+def run(params: ActionParams) -> None:
     """Initialize new session"""
 
-    utils.output('inter', 'calling_akinator')
+    leon.answer({'key': 'calling_akinator'})
 
     slots, lang = params['slots'], params['lang']
     thematic = slots['thematic']['resolution']['value']
@@ -18,7 +19,7 @@ def setup(params):
 
         q = aki.start_game(theme_lang)
 
-        db.upsert_session({
+        memory.upsert_session({
             'response': aki.response,
             'session': aki.session,
             'progression': aki.progression,
@@ -31,6 +32,11 @@ def setup(params):
             'question_filter': aki.question_filter
         })
 
-        return utils.output('end', q, {'showNextActionSuggestions': True})
+        leon.answer({
+            'key': q,
+            'core': {
+                'ShowNextActionSuggestions': True
+            }
+        })
     except BaseException:
-        return utils.output('end', 'network_error')
+        leon.answer({'key': 'network_error'})
