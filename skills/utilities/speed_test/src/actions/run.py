@@ -3,37 +3,37 @@
 # Date: 2019-03-09
 # Based on the package https://github.com/sivel/speedtest-cli
 
-import utils
-import os
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import speedtest
+
 import sys
-import subprocess
-import re
 
 
-def run(params):
+def run(params: ActionParams) -> None:
     """Give you information about your network speed"""
 
-    utils.output('inter', 'testing')
+    leon.answer({'key': 'testing'})
 
-    realpath = os.path.dirname(os.path.realpath(__file__))
-    process = subprocess.Popen(
-        [sys.executable, realpath + '/../lib/speed_test.lib.py', '--simple'],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT
-    )
+    try:
+        speedtest_instance = speedtest.Speedtest()
+        speedtest_instance.download()
+        speedtest_instance.upload()
+        speedtest_instance.results.share()
 
-    (output, err) = process.communicate()
-    p_status = process.wait()
+        results = speedtest_instance.results.dict()
+        download = round(results['download'] / 1_000_000, 2)
+        upload = round(results['upload'] / 1_000_000, 2)
+        ping = round(results['ping'], 3)
 
-    if err:
-        return utils.output('end', 'error')
-
-    rawoutput = output.decode('utf-8')
-
-    data = {
-        'ping': re.search('Ping:(.+?)\n', rawoutput).group(1).strip(),
-        'download': re.search('Download:(.+?)\n', rawoutput).group(1).strip(),
-        'upload': re.search('Upload:(.+?)\n', rawoutput).group(1).strip()
-    }
-
-    return utils.output('end', {'key': 'done', 'data': data})
+        return leon.answer({
+            'key': 'done',
+            'data': {
+                'ping': f'{ping} ms',
+                'download': f'{download} Mbit/s',
+                'upload': f'{upload} Mbit/s'
+            }
+        })
+    except Exception as e:
+        print(e, flush=True, file=sys.stderr)
+        return leon.answer({'key': 'error'})

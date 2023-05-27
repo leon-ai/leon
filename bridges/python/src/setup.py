@@ -9,7 +9,8 @@ options = {
         'includes': [
             'bs4',
             'pytube',
-            'requests'
+            'requests',
+            'timeit'
         ],
         'include_files': [(requests.certs.where(), 'cacert.pem')]
     }
