@@ -1,4 +1,4 @@
-def get_all():
+def get_all() -> list[str]:
     return [
         '1C Enterprise',
         'ABAP',

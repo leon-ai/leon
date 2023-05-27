@@ -1,27 +1,29 @@
-import requests
-import utils
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from bridges.python.src.sdk.network import Network
+
 from ..lib import github_lang
 from re import search, escape
 from bs4 import BeautifulSoup
 
 
-def run(params):
+def run(params: ActionParams) -> None:
     """Get the GitHub trends"""
 
     # Number of repositories
-    limit = 5
+    limit: int = 5
 
     # Range string
-    since = 'daily'
+    since: str = 'daily'
 
     # Technology slug
-    tech_slug = ''
+    tech_slug: str = ''
 
     # Technology name
-    tech = ''
+    tech: str = ''
 
     # Answer key
-    answer_key = 'today'
+    answer_key: str = 'today'
 
     for item in params['entities']:
         if item['entity'] == 'number':
@@ -43,25 +45,39 @@ def run(params):
             tech_slug = language.lower()
 
     if limit > 25:
-        utils.output('inter', {'key': 'limit_max', 'data': {'limit': limit}})
+        leon.answer({
+            'key': 'limit_max',
+            'data': {
+                'limit': limit
+            }
+        })
         limit = 25
     elif limit == 0:
         limit = 5
 
-    utils.output('inter', 'reaching')
+    leon.answer({'key': 'reaching'})
 
+    network = Network({'base_url': 'https://github.com'})
     try:
-        r = utils.http('GET', 'https://github.com/trending/' + tech_slug + '?since=' + since)
-        soup = BeautifulSoup(r.text, features='html.parser')
+        response = network.request({
+            'url': f'/trending/{tech_slug}?since={since}',
+            'method': 'GET'
+        })
+        soup = BeautifulSoup(response['data'], features='html.parser')
         elements = soup.select('article.Box-row', limit=limit)
-        result = ''
+        result: str = ''
 
         for i, element in enumerate(elements):
-            repository = element.h1.get_text(strip=True).replace(' ', '')
-            if (element.img is not None):
-                author = element.img.get('alt')[1:]
-            else:
-                author = '?'
+
+            repository: str = '?'
+            if element.h2 is not None:
+                repository = element.h2.get_text(strip=True).replace(' ', '')
+
+            author: str = '?'
+            if element.img is not None:
+                image_alt = element.img.get('alt')
+                if isinstance(image_alt, str):
+                    author = image_alt[1:]
 
             has_stars = element.select('span.d-inline-block.float-sm-right')
             stars = 0
@@ -74,22 +90,22 @@ def run(params):
                 for j, separator in enumerate(separators):
                     stars = stars.replace(separator, '')
 
-            result += utils.translate('list_element', {
+            result += str(leon.set_answer_data('list_element', {
                 'rank': i + 1,
-                'repository_url': 'https://github.com/' + repository,
+                'repository_url': f'https://github.com/{repository}',
                 'repository_name': repository,
-                'author_url': 'https://github.com/' + author,
+                'author_url': f'https://github.com/{author}',
                 'author_username': author,
                 'stars_nb': stars
-            }
-            )
+            }))
 
-        return utils.output('end', {'key': answer_key,
-                                    'data': {
-                                        'limit': limit,
-                                        'tech': tech,
-                                        'result': result
-                                    }
-                                    })
-    except requests.exceptions.RequestException as e:
-        return utils.output('end', 'unreachable')
+        return leon.answer({
+            'key': answer_key,
+            'data': {
+                'limit': limit,
+                'tech': tech,
+                'result': result
+            }
+        })
+    except Exception as e:
+        return leon.answer({'key': 'unreachable'})

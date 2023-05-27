@@ -10,7 +10,7 @@ class NetworkOptions(TypedDict, total=False):
 
 
 class NetworkResponse(TypedDict):
-    data: Dict[str, Any]
+    data: Any
     status_code: int
     options: Dict[str, Any]
 
@@ -55,7 +55,7 @@ class Network:
             try:
                 data = response.json()
             except Exception:
-                pass
+                data = response.text
 
             network_response: NetworkResponse = {
                 'data': data,
@@ -68,14 +68,20 @@ class Network:
             else:
                 raise NetworkError(network_response)
         except requests.exceptions.RequestException as error:
+            data = {}
+            try:
+                data = error.response.json()
+            except Exception:
+                data = error.response.text
+
             raise NetworkError({
-                'data': error.response.json(),
+                'data': data,
                 'status_code': error.response.status_code,
                 'options': {**self.options, **options}
             }) from error
         except Exception as error:
             raise NetworkError({
-                'data': {},
+                'data': error,
                 'status_code': 500,
                 'options': {**self.options, **options}
             }) from error
