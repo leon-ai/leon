@@ -44,7 +44,9 @@ export default async function (skillFriendlyName, currentSkill) {
             try {
               // Add new skill settings in the settings.json file
               commandSync(
-                `json -I -f ${settingsPath} -e 'this.${settingsSampleKeys[j]}=${JSON.stringify(configKey[settingsSampleKeys[j]])}'`,
+                `json -I -f ${settingsPath} -e 'this.${
+                  settingsSampleKeys[j]
+                }=${JSON.stringify(configKey[settingsSampleKeys[j]])}'`,
                 { shell: true }
               )
               LogHelper.success(
@@ -69,9 +71,7 @@ export default async function (skillFriendlyName, currentSkill) {
         fs.createWriteStream(`${skillSrcPath}/settings.json`)
       )
 
-      LogHelper.success(
-        `"${skillFriendlyName}" skill settings file created`
-      )
+      LogHelper.success(`"${skillFriendlyName}" skill settings file created`)
     }
   }
 }
