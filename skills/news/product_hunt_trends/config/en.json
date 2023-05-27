@@ -26,28 +26,20 @@
     "today": [
       "Here are the %limit% Product Hunt trends of the day:<br><br><ul>%result%</ul>"
     ],
-    "specific_day": [
-      "Here are the %limit% Product Hunt trends for the %date%:<br><br><ul>%result%</ul>"
-    ],
     "unreachable": [
       "Product Hunt is unreachable for the moment, please retry later.",
       "I'm having difficulties to reach Product Hunt, please retry later.",
       "Product Hunt seems to be down, please try again later."
     ],
     "list_element": [
-      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> created by <a href=\"%author_url%\" target=\"_blank\">%author_name%</a> with %votes_nb% votes.</li>"
-    ],
-    "list_element_with_unknown_maker": [
-      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> with %votes_nb% votes. There is no information about the maker.</li>",
-      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> with %votes_nb% votes. I did not find any information about the maker.</li>"
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> with %votes_nb% votes.</li>"
     ],
     "not_found": [
       "There is no product on that date.",
       "I did not find any product on that date."
     ],
     "invalid_developer_token": [
-      "Your Product Hunt developer token is invalid. Please provide a valid one by <a href=\"https://github.com/leon-ai/leon/blob/develop/packages/trend/README.md#product-hunt\" target=\"_blank\">reading this</a>.",
-      "You did not set a valid Product Hunt developer token. Please set a valid one by <a href=\"https://github.com/leon-ai/leon/blob/develop/packages/trend/README.md#product-hunt\" target=\"_blank\">reading this</a>."
+      "Your Product Hunt developer token is invalid. Please provide a valid one by <a href=\"https://github.com/leon-ai/leon/tree/develop/skills/news/product_hunt_trends\" target=\"_blank\">reading this</a>."
     ]
   }
 }
