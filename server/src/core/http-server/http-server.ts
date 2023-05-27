@@ -16,7 +16,6 @@ import { DateHelper } from '@/helpers/date-helper'
 import { corsMidd } from '@/core/http-server/plugins/cors'
 import { otherMidd } from '@/core/http-server/plugins/other'
 import { infoPlugin } from '@/core/http-server/api/info'
-import { downloadsPlugin } from '@/core/http-server/api/downloads'
 import { keyMidd } from '@/core/http-server/plugins/key'
 import { NLU, BRAIN } from '@/core'
 
@@ -88,7 +87,6 @@ export default class HTTPServer {
     })
 
     this.fastify.register(infoPlugin, { apiVersion: API_VERSION })
-    this.fastify.register(downloadsPlugin, { apiVersion: API_VERSION })
 
     if (HAS_OVER_HTTP) {
       this.fastify.register((instance, _opts, next) => {
