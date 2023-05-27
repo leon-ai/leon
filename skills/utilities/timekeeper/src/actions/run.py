@@ -105,23 +105,21 @@ def run(params: ActionParams) -> None:
 
     ###
     settings = Settings()
-    leon.answer({
-        'key': 'answer',
-        'data': {
-            'answer': f"Skill settings already set: {settings.is_already_set()}"
-        }
-    })
+
+    if not settings.is_already_set('apiKey'):
+        leon.answer({
+            'key': "The API key isn't set..."
+        })
+
+    current_settings = settings.get()
+
     settings.set({
-        'some_sample_config': 'Hello world'
+        **current_settings,
+        'apiKey': 'newAPIKey'
     })
-    settings.set('some_sample_config', 'Hello world 2')
-    options = settings.get()
-    some_sample_config = settings.get('some_sample_config')
+
     leon.answer({
-        'key': 'answer',
-        'data': {
-            'answer': f"{options['some_sample_config']} {some_sample_config}"
-        }
+        'key': f"Is API set now? {settings.is_already_set('apiKey')}"
     })
 
     ###

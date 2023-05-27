@@ -11,13 +11,15 @@ class Settings:
         self.settings_path = path.join(SKILL_PATH, 'src', 'settings.json')
         self.settings_sample_path = path.join(SKILL_PATH, 'src', 'settings.sample.json')
 
-    def is_already_set(self) -> bool:
+    def is_already_set(self, key: str) -> bool:
         """
         Check if the settings are already set
+        :param key: The key to verify whether its value is set
         """
         settings_sample = self.get_settings_sample()
         settings = self.get()
-        return json.dumps(settings) != json.dumps(settings_sample)
+
+        return key in settings and json.dumps(settings[key]) != json.dumps(settings_sample[key])
 
     def clear(self) -> None:
         """
@@ -48,6 +50,7 @@ class Settings:
 
                 if key is not None:
                     return settings[key]
+
                 return settings
         except Exception as e:
             print(f"Error while reading settings at '{self.settings_path}': {e}")
