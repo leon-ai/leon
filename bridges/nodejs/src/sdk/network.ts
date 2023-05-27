@@ -39,7 +39,7 @@ export class NetworkError<ResponseErrorData = unknown> extends Error {
   public readonly response: NetworkResponse<ResponseErrorData>
 
   public constructor(response: NetworkResponse<ResponseErrorData>) {
-    super(`[NetworkError]: ${response.statusCode}`)
+    super(`[NetworkError]: ${response.statusCode} ${response.data}`)
     this.response = response
     Object.setPrototypeOf(this, NetworkError.prototype)
   }

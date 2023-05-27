@@ -18,7 +18,7 @@ class NetworkResponse(TypedDict):
 class NetworkError(Exception):
     def __init__(self, response: NetworkResponse) -> None:
         self.response = response
-        super().__init__(f"[NetworkError]: {response['status_code']}")
+        super().__init__(f"[NetworkError]: {response['status_code']} {response['data']}")
 
 
 class NetworkRequestOptions(TypedDict, total=False):

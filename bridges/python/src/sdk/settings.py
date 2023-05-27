@@ -1,7 +1,7 @@
 import json
 import os
 from os import path
-from typing import Union, Any
+from typing import Union, Any, overload
 
 from ..constants import SKILL_PATH
 
@@ -36,7 +36,13 @@ class Settings:
             print(f"Error while reading settings sample at '{self.settings_sample_path}': {e}")
             raise e
 
-    def get(self, key: Union[str, None] = None) -> dict[str, Any]:
+    @overload
+    def get(self, key: str) -> Any: ...
+
+    @overload
+    def get(self, key: None = None) -> dict[str, Any]: ...
+
+    def get(self, key: Union[str, None] = None) -> Union[dict[str, Any], Any]:
         """
         Get the settings
         :param key: The key to get from the settings
@@ -56,7 +62,13 @@ class Settings:
             print(f"Error while reading settings at '{self.settings_path}': {e}")
             raise e
 
-    def set(self, key_or_settings: Union[str, dict[str, Any]], value=None) -> dict[str, Any]:
+    @overload
+    def set(self, key_or_settings: dict[str, Any]) -> dict[str, Any]: ...
+
+    @overload
+    def set(self, key_or_settings: str, value: Any) -> dict[str, Any]: ...
+
+    def set(self, key_or_settings: Union[str, dict[str, Any]], value: Any = None) -> dict[str, Any]:
         """
         Set the settings
         :param key_or_settings: The key to set or the settings to set
