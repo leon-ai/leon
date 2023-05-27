@@ -46,6 +46,7 @@ def upsert_session(current_question: int) -> None:
 
 def increment_letter_score(letter: Letter) -> None:
     """Add one point to a letter"""
+
     session = session_memory.read()
     session[letter] += 1
     session_memory.write(session)
