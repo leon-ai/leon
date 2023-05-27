@@ -1,3 +1,4 @@
 {
-  "someSampleConfig": "someSampleValue"
+  "someSampleConfig": "someSampleValue",
+  "apiKey": "YOUR_API_KEY"
 }

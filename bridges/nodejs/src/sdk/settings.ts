@@ -18,12 +18,17 @@ export class Settings<T extends Record<string, unknown>> {
 
   /**
    * Check if the settings are already set
-   * @returns isAlreadySet() // true
+   * @param key The key to verify whether its value is set
+   * @returns isAlreadySet('apiKey') // true
    */
-  public async isAlreadySet(): Promise<boolean> {
+  public async isAlreadySet(key: string): Promise<boolean> {
     const settingsSample = await this.getSettingsSample()
     const settings = await this.get()
-    return JSON.stringify(settings) !== JSON.stringify(settingsSample)
+
+    return (
+      !!settings[key] &&
+      JSON.stringify(settings[key]) !== JSON.stringify(settingsSample[key])
+    )
   }
 
   /**
@@ -32,6 +37,7 @@ export class Settings<T extends Record<string, unknown>> {
    */
   public async clear(): Promise<void> {
     const settingsSample = await this.getSettingsSample()
+
     await this.set(settingsSample)
   }
 
@@ -45,6 +51,7 @@ export class Settings<T extends Record<string, unknown>> {
         `Error while reading settings sample at "${this.settingsSamplePath}":`,
         e
       )
+
       throw e
     }
   }
@@ -66,9 +73,11 @@ export class Settings<T extends Record<string, unknown>> {
       const settings = JSON.parse(
         await fs.promises.readFile(this.settingsPath, 'utf8')
       )
+
       if (key != null) {
         return settings[key]
       }
+
       return settings
     } catch (e) {
       console.error(
@@ -109,6 +118,7 @@ export class Settings<T extends Record<string, unknown>> {
         `Error while writing settings at "${this.settingsPath}":`,
         e
       )
+
       throw e
     }
   }

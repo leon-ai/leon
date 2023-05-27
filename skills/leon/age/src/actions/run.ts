@@ -92,26 +92,26 @@ export const run: ActionFunction = async function () {
     }
   })
 
-  const settings = new Settings<{
-    someSampleConfig: string
-  }>()
-  await leon.answer({
-    key: 'answer',
-    data: {
-      answer: `Skill settings already set: ${await settings.isAlreadySet()}`
-    }
-  })
+  const settings = new Settings()
+
+  if (!(await settings.isAlreadySet('apiKey'))) {
+    await leon.answer({
+      key: 'answer',
+      data: {
+        answer: "The API key isn't set..."
+      }
+    })
+  }
+
+  const currentSettings = await settings.get()
+
   await settings.set({
-    someSampleConfig: 'Hello world'
+    ...currentSettings,
+    apiKey: 'newAPIKey'
   })
-  await settings.set('someSampleConfig', 'Hello world 2')
-  const options = await settings.get()
-  const someSampleConfig = await settings.get('someSampleConfig')
+
   await leon.answer({
-    key: 'answer',
-    data: {
-      answer: options.someSampleConfig + someSampleConfig
-    }
+    key: `Is API set now? ${await settings.isAlreadySet('apiKey')}`
   })
 
   const network = new Network({
