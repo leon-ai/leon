@@ -35,7 +35,7 @@ def run(params: ActionParams) -> None:
         leon.answer({
             'key': q,
             'core': {
-                'ShowNextActionSuggestions': True
+                'showNextActionSuggestions': True
             }
         })
     except BaseException:
