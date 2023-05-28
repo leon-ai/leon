@@ -222,12 +222,9 @@ export default class Brain {
           SOCKET_SERVER.socket?.emit('widget', obj.output.widget)
         }
 
-        // TODO: remove this condition when Python skills outputs are updated (replace "speech" with "answer")
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        const { answer, speech } = obj.output
+        const { answer } = obj.output
         if (!this.isMuted) {
-          this.talk(answer || speech)
+          this.talk(answer)
         }
         this.answers.push(answer)
         this.skillOutput = data.toString()
