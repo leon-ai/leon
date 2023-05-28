@@ -212,17 +212,17 @@ export default class Brain {
     data: Buffer
   ): Promise<Error | null> | void {
     try {
-      const obj = JSON.parse(data.toString()) as AnswerOutput
+      const skillAnswer = JSON.parse(data.toString()) as AnswerOutput
 
-      if (typeof obj === 'object') {
+      if (typeof skillAnswer === 'object') {
         LogHelper.title(`${this.skillFriendlyName} skill (on data)`)
         LogHelper.info(data.toString())
 
-        if (obj.output.widget) {
-          SOCKET_SERVER.socket?.emit('widget', obj.output.widget)
+        if (skillAnswer.output.widget) {
+          SOCKET_SERVER.socket?.emit('widget', skillAnswer.output.widget)
         }
 
-        const { answer } = obj.output
+        const { answer } = skillAnswer.output
         if (!this.isMuted) {
           this.talk(answer)
         }
