@@ -90,11 +90,6 @@
       "params": []
     },
     {
-      "method": "GET",
-      "route": "/api/action/utilities/youtube_downloader/run",
-      "params": []
-    },
-    {
       "method": "POST",
       "route": "/api/action/games/akinator/choose_thematic",
       "params": ["thematic"],

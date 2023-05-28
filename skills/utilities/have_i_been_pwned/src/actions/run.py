@@ -15,7 +15,7 @@ def run(params: ActionParams) -> None:
 
     emails: list[str] = []
 
-    for item in params['entities']:
+    for item in params['current_entities']:
         if item['entity'] == 'email':
             emails.append(item['resolution']['value'])
 
