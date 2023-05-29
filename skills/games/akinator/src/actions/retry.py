@@ -1,22 +1,29 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
 
-import utils
 
-def retry(params):
-	"""Ask for a retry"""
+def run(params: ActionParams) -> None:
+    """Ask for a retry"""
 
-	resolvers = params['resolvers']
-	decision = False
+    resolvers = params['resolvers']
+    decision = False
 
-	for resolver in resolvers:
-		if resolver['name'] == 'affirmation_denial':
-			decision = resolver['value']
+    for resolver in resolvers:
+        if resolver['name'] == 'affirmation_denial':
+            decision = resolver['value']
 
-	if decision == True:
-		return utils.output('end', 'confirm_retry', {
-			'isInActionLoop': False,
-			'restart': True
-		})
+    if decision:
+        return leon.answer({
+            'key': 'confirm_retry',
+            'core': {
+                'isInActionLoop': False,
+                'restart': True
+            }
+        })
 
-	return utils.output('end', 'deny_retry', { 'isInActionLoop': False })
+    leon.answer({
+        'key': 'deny_retry',
+        'core': {
+            'isInActionLoop': False
+        }
+    })

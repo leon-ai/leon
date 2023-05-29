@@ -53,11 +53,14 @@ export class SkillDomainHelper {
             const skillPath = path.join(domainPath, skillAliasName)
 
             if ((await fs.promises.stat(skillPath)).isDirectory()) {
+              const skillJSONPath = path.join(skillPath, 'skill.json')
+
+              if (!fs.existsSync(skillJSONPath)) {
+                continue
+              }
+
               const { name: skillName, bridge: skillBridge } = JSON.parse(
-                await fs.promises.readFile(
-                  path.join(skillPath, 'skill.json'),
-                  'utf8'
-                )
+                await fs.promises.readFile(skillJSONPath, 'utf8')
               ) as SkillSchema
 
               skills[skillName] = {

@@ -135,10 +135,6 @@ export default class Client {
       cb('audio-received')
     })
 
-    this.socket.on('download', (data) => {
-      window.location = `${this.serverUrl}/api/v1/downloads?domain=${data.domain}&skill=${data.skill}`
-    })
-
     if (this.history !== null) {
       this.parsedHistory = JSON.parse(this.history)
     }

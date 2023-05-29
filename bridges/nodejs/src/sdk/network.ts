@@ -3,6 +3,8 @@ import dns from 'node:dns'
 import type { AxiosInstance } from 'axios'
 import axios from 'axios'
 
+import { LEON_VERSION, NODEJS_BRIDGE_VERSION } from '@bridge/constants'
+
 interface NetworkOptions {
   /** `baseURL` will be prepended to `url`. It can be convenient to set `baseURL` for an instance of `Network` to pass relative URLs. */
   baseURL?: string
@@ -37,7 +39,7 @@ export class NetworkError<ResponseErrorData = unknown> extends Error {
   public readonly response: NetworkResponse<ResponseErrorData>
 
   public constructor(response: NetworkResponse<ResponseErrorData>) {
-    super(`[NetworkError]: ${response.statusCode}`)
+    super(`[NetworkError]: ${response.statusCode} ${response.data}`)
     this.response = response
     Object.setPrototypeOf(this, NetworkError.prototype)
   }
@@ -63,14 +65,28 @@ export class Network {
     options: NetworkRequestOptions
   ): Promise<NetworkResponse<ResponseData>> {
     try {
-      const response = await this.axios.request<ResponseData>({
+      const response = await this.axios.request<string>({
         url: options.url,
         method: options.method.toLowerCase(),
         data: options.data,
-        headers: options.headers
+        transformResponse: (data) => {
+          return data
+        },
+        headers: {
+          'User-Agent': `Leon Personal Assistant ${LEON_VERSION} - Node.js Bridge ${NODEJS_BRIDGE_VERSION}`,
+          ...options.headers
+        }
       })
+
+      let data = {} as ResponseData
+      try {
+        data = JSON.parse(response.data)
+      } catch {
+        data = response.data as ResponseData
+      }
+
       return {
-        data: response.data,
+        data,
         statusCode: response.status,
         options: {
           ...this.options,
@@ -79,11 +95,20 @@ export class Network {
       }
     } catch (error) {
       let statusCode = 500
-      let data = {} as ResponseErrorData
+      let dataRawText = ''
+
       if (axios.isAxiosError(error)) {
-        data = error?.response?.data
+        dataRawText = error?.response?.data ?? ''
         statusCode = error?.response?.status ?? 500
       }
+
+      let data: ResponseErrorData
+      try {
+        data = JSON.parse(dataRawText)
+      } catch {
+        data = dataRawText as ResponseErrorData
+      }
+
       throw new NetworkError<ResponseErrorData>({
         data,
         statusCode,

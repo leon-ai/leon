@@ -1,62 +1,68 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from bridges.python.src.sdk.network import Network
 
-import requests
-import utils
+from typing import Union, Literal
 
-def run(params):
-	"""Check if a website is down or not"""
 
-	domains = []
-	output = ''
+def run(params: ActionParams) -> None:
+    """Check if a website is down or not"""
 
-	# Find entities from the current utterance
-	for item in params['current_entities']:
-		if item['entity'] == 'url':
-			domains.append(item['resolution']['value'].lower())
+    domains: list[str] = []
 
-	if len(domains) == 0:
-		# Find entities from the context
-		for item in params['entities']:
-			if item['entity'] == 'url':
-				domains.append(item['resolution']['value'].lower())
+    # Find entities from the current utterance
+    for item in params['current_entities']:
+        if item['entity'] == 'url':
+            domains.append(item['resolution']['value'].lower())
 
-	for i, domain in enumerate(domains):
-		state = 'up'
-		website_name = domain[:domain.find('.')].title()
+    if len(domains) == 0:
+        # Find entities from the context
+        for item in params['entities']:
+            if item['entity'] == 'url':
+                domains.append(item['resolution']['value'].lower())
 
-		utils.output('inter', { 'key': 'checking',
-			'data': {
-				'website_name': website_name
-			}
-		})
+    network = Network()
 
-		try:
-			r = utils.http('GET', 'http://' + domain)
+    for domain in domains:
+        state: Union[Literal['up'], Literal['down']] = 'up'
+        website_name = domain[:domain.find('.')].title()
 
-			if (r.status_code != requests.codes.ok):
-				state = 'down'
+        leon.answer({
+            'key': 'checking',
+            'data': {
+                'website_name': website_name
+            }
+        })
 
-			utils.output('inter', { 'key': state,
-				'data': {
-					'website_name': website_name
-				}
-			})
-		except requests.exceptions.RequestException as e:
-			utils.output('inter', { 'key': 'errors',
-				'data': {
-					'website_name': website_name
-				}
-			})
+        try:
+            network.request({
+                'url': 'https://' + domain,
+                'method': 'GET'
+            })
+            state = 'up'
+        except Exception as e:
+            if network.is_network_error(e):
+                state = 'down'
+            else:
+                leon.answer({
+                    'key': 'errors',
+                    'data': {
+                        'website_name': website_name
+                    }
+                })
+                continue
 
-		if len(domains) > 1 and i >= 0 and i + 1 < len(domains):
-			output += ' '
+        leon.answer({
+            'key': state,
+            'data': {
+                'website_name': website_name
+            }
+        })
 
-	if len(domains) == 0:
-		return utils.output('end', { 'key': 'invalid_domain_name',
-			'data': {
-				'website_name': website_name
-			}
-		})
-
-	return utils.output('end')
+        if len(domains) == 0:
+            leon.answer({
+                'key': 'invalid_domain_name',
+                'data': {
+                    'website_name': website_name
+                }
+            })

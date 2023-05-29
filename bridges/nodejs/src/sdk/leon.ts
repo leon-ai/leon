@@ -4,11 +4,7 @@ import type {
   AnswerOutput,
   AnswerConfig
 } from '@sdk/types'
-import {
-  INTENT_OBJECT,
-  SKILL_CONFIG,
-  SKILL_SRC_CONFIG
-} from '@bridge/constants'
+import { INTENT_OBJECT, SKILL_CONFIG } from '@bridge/constants'
 
 class Leon {
   private static instance: Leon
@@ -16,28 +12,6 @@ class Leon {
   constructor() {
     if (!Leon.instance) {
       Leon.instance = this
-    }
-  }
-
-  /**
-   * Get source configuration
-   * @example getSRCConfig() // { credentials: { apiKey: 'abc' } }
-   */
-  public getSRCConfig<T>(key: string): T
-  public getSRCConfig<T extends Record<string, unknown>>(key?: undefined): T
-  public getSRCConfig<T extends Record<string, unknown> | unknown>(
-    key?: string
-  ): T {
-    try {
-      if (key) {
-        return SKILL_SRC_CONFIG[key] as T
-      }
-
-      return SKILL_SRC_CONFIG as T
-    } catch (e) {
-      console.error('Error while getting source configuration:', e)
-
-      return {} as T
     }
   }
 
@@ -139,8 +113,7 @@ class Leon {
               ? 'widget'
               : (answerInput.key as string),
           answer: this.setAnswerData(answerInput.key, answerInput.data) ?? '',
-          core: answerInput.core,
-          options: this.getSRCConfig('options')
+          core: answerInput.core
         }
       }
 

@@ -1,73 +1,79 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
 
 import random
-import utils
 
-def play(params):
-	"""Define the winner"""
 
-	handsigns = {
-		'ROCK': {
-			'superior_to': 'SCISSORS',
-			'inferior_to': 'PAPER',
-			'emoji': '✊'
-		},
-		'PAPER': {
-			'superior_to': 'ROCK',
-			'inferior_to': 'SCISSORS',
-			'emoji': '✋'
-		},
-		'SCISSORS': {
-			'superior_to': 'PAPER',
-			'inferior_to': 'ROCK',
-			'emoji': '✌'
-		}
-	}
-	entities = params['entities']
-	player = {
-		'handsign': None,
-		'points': 0
-	}
-	leon = {
-		'handsign': random.choice(list(handsigns)),
-		'points': 0
-	}
+def run(params: ActionParams) -> None:
+    """Define the winner"""
 
-	# Find entities
-	for entity in entities:
-		if entity['entity'] == 'handsign':
-			player['handsign'] = entity['option']
+    handsigns = {
+        'ROCK': {
+            'superior_to': 'SCISSORS',
+            'inferior_to': 'PAPER',
+            'emoji': '✊'
+        },
+        'PAPER': {
+            'superior_to': 'ROCK',
+            'inferior_to': 'SCISSORS',
+            'emoji': '✋'
+        },
+        'SCISSORS': {
+            'superior_to': 'PAPER',
+            'inferior_to': 'ROCK',
+            'emoji': '✌'
+        }
+    }
+    entities = params['entities']
+    player = {
+        'handsign': None,
+        'points': 0
+    }
+    leon_player = {
+        'handsign': random.choice(list(handsigns)),
+        'points': 0
+    }
 
-	# Exit the loop if no handsign has been found
-	if player['handsign'] == None:
-		utils.output('inter', None, None, { 'isInActionLoop': False })
+    # Find entities
+    for entity in entities:
+        if entity['entity'] == 'handsign':
+            player['handsign'] = entity['option']
 
-	leon_emoji = handsigns[leon['handsign']]['emoji']
-	player_emoji = handsigns[player['handsign']]['emoji']
+    # Exit the loop if no handsign has been found
+    if player['handsign'] is None:
+        leon.answer({'core': {'isInActionLoop': False}})
 
-	utils.output('inter', { 'key': 'leon_emoji', 'data': { 'leon_emoji': leon_emoji } })
+    leon_emoji = handsigns[leon_player['handsign']]['emoji']
+    player_emoji = handsigns[player['handsign']]['emoji']
 
-	if leon['handsign'] == player['handsign']:
-		utils.output('inter', 'equal')
+    leon.answer({'key': 'leon_emoji', 'data': {'leon_emoji': leon_emoji}})
 
-	# Point for Leon
-	elif handsigns[leon['handsign']]['superior_to'] == player['handsign']:
-		utils.output('inter', { 'key': 'point_for_leon',
-			'data': {
-				'handsign_1': leon['handsign'].lower(),
-				'handsign_2': player['handsign'].lower()
-			}
-		})
+    if leon_player['handsign'] == player['handsign']:
+        leon.answer({'key': 'equal'})
 
-	else:
-		utils.output('inter', { 'key': 'point_for_player',
-			'data': {
-				'handsign_1': player['handsign'].lower(),
-				'handsign_2': leon['handsign'].lower()
-			}
-		})
+    # Point for Leon
+    elif handsigns[leon_player['handsign']]['superior_to'] == player['handsign']:
+        leon.answer({
+            'key': 'point_for_leon',
+            'data': {
+                'handsign_1': leon_player['handsign'].lower(),
+                'handsign_2': player['handsign'].lower()
+            }
+        })
 
-	return utils.output('end', 'ask_for_rematch', {
-		'isInActionLoop': False, 'showNextActionSuggestions': True
-	})
+    else:
+        leon.answer({
+            'key': 'point_for_player',
+            'data': {
+                'handsign_1': player['handsign'].lower(),
+                'handsign_2': leon_player['handsign'].lower()
+            }
+        })
+
+    leon.answer({
+        'key': 'ask_for_rematch',
+        'core': {
+            'isInActionLoop': False,
+            'showNextActionSuggestions': True
+        }
+    })

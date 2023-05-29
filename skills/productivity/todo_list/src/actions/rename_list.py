@@ -1,55 +1,47 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-from time import time
+from typing import Union
 
-import utils
-from ..lib import db
 
-def rename_list(params):
-	"""Rename a to-do list"""
+def run(params: ActionParams) -> None:
+    """Rename a to-do list"""
 
-	# Old list name
-	old_list_name = ''
+    old_list_name: Union[str, None] = None
+    new_list_name: Union[str, None] = None
 
-	# New list name
-	new_list_name = ''
+    for item in params['entities']:
+        if item['entity'] == 'old_list':
+            old_list_name = item['sourceText'].lower()
+        elif item['entity'] == 'new_list':
+            new_list_name = item['sourceText'].lower()
 
-	# Find entities
-	for item in params['entities']:
-		if item['entity'] == 'old_list':
-			old_list_name = item['sourceText'].lower()
-		elif item['entity'] == 'new_list':
-			new_list_name = item['sourceText'].lower()
+    if old_list_name is None or new_list_name is None:
+        return leon.answer({'key': 'new_or_old_list_not_provided'})
 
-	# Verify if an old and new list name have been provided
-	if not old_list_name or not new_list_name:
-		return utils.output('end', 'new_or_old_list_not_provided')
+    if not memory.has_todo_list(old_list_name):
+        return leon.answer({
+            'key': 'list_does_not_exist',
+            'data': {
+                'list': old_list_name
+            }
+        })
 
-	# Verify if the old list exists
-	if db.has_list(old_list_name) == False:
-		return utils.output('end', { 'key': 'list_does_not_exist',
-			'data': {
-				'list': old_list_name
-			}
-		})
+    if memory.has_todo_list(new_list_name):
+        return leon.answer({
+            'key': 'list_already_exists',
+            'data': {
+                'list': new_list_name
+            }
+        })
 
-	# Verify if the new list name already exists
-	if db.has_list(new_list_name):
-		return utils.output('end', { 'key': 'list_already_exists',
-			'data': {
-				'list': new_list_name
-			}
-		})
+    memory.update_todo_list(old_list_name, new_list_name)
 
-	# Rename the to-do list
-	db.update_list_name(old_list_name, new_list_name)
-	# Rename the list name of the todos
-	db.update_todo_list_name(old_list_name, new_list_name)
-
-	return utils.output('end', { 'key': 'list_renamed',
-		'data': {
-			'old_list': old_list_name,
-			'new_list': new_list_name
-		}
-	})
+    leon.answer({
+        'key': 'list_renamed',
+        'data': {
+            'old_list': old_list_name,
+            'new_list': new_list_name
+        }
+    })

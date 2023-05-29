@@ -1,7 +1,7 @@
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
-import setupSkillsConfig from './setup-skills-config'
+import setupSkillsSettings from './setup-skills-settings'
 import installNodejsSkillsPackages from './install-nodejs-skills-packages'
 
 /**
@@ -23,7 +23,7 @@ export default async function () {
 
         LogHelper.info(`Setting up "${skillFriendlyName}" skill...`)
 
-        await setupSkillsConfig(skillFriendlyName, currentSkill)
+        await setupSkillsSettings(skillFriendlyName, currentSkill)
         await installNodejsSkillsPackages(skillFriendlyName, currentSkill)
 
         LogHelper.success(`"${skillFriendlyName}" skill set up`)

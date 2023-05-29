@@ -9,31 +9,29 @@ interface MemoryOptions<T> {
 }
 
 export class Memory<T = unknown> {
-  private readonly memoryPath: string | undefined
+  private readonly memoryPath: string
   private readonly name: string
   private readonly defaultMemory: T | undefined
+  private isFromAnotherSkill: boolean
 
   constructor(options: MemoryOptions<T>) {
     const { name, defaultMemory } = options
 
     this.name = name
     this.defaultMemory = defaultMemory
+    this.memoryPath = path.join(SKILL_PATH, 'memory', `${this.name}.json`)
+    this.isFromAnotherSkill = false
 
-    if (name.includes(':') && name.split(':').length === 3) {
-      const [domainName, skillName, memoryName] = name.split(':')
-      const memoryPath = path.join(
+    if (this.name.includes(':') && this.name.split(':').length === 3) {
+      this.isFromAnotherSkill = true
+      const [domainName, skillName, memoryName] = this.name.split(':')
+      this.memoryPath = path.join(
         SKILLS_PATH,
         domainName as string,
         skillName as string,
         'memory',
         `${memoryName}.json`
       )
-
-      if (fs.existsSync(memoryPath)) {
-        this.memoryPath = memoryPath
-      }
-    } else {
-      this.memoryPath = path.join(SKILL_PATH, 'memory', `${options.name}.json`)
     }
   }
 
@@ -42,8 +40,8 @@ export class Memory<T = unknown> {
    * @example clear()
    */
   public async clear(): Promise<void> {
-    if (this.defaultMemory) {
-      await this.write(this.defaultMemory)
+    if (!this.isFromAnotherSkill) {
+      await this.write(this.defaultMemory as T)
     } else {
       throw new Error(
         `You cannot clear the memory "${this.name}" as it belongs to another skill`
@@ -56,7 +54,7 @@ export class Memory<T = unknown> {
    * @example read()
    */
   public async read(): Promise<T> {
-    if (!this.memoryPath) {
+    if (this.isFromAnotherSkill && !fs.existsSync(this.memoryPath)) {
       throw new Error(
         `You cannot read the memory "${this.name}" as it belongs to another skill which haven't written to this memory yet`
       )
@@ -69,7 +67,7 @@ export class Memory<T = unknown> {
 
       return JSON.parse(await fs.promises.readFile(this.memoryPath, 'utf-8'))
     } catch (e) {
-      console.error(`Error while reading memory for ${this.name}:`, e)
+      console.error(`Error while reading memory for "${this.name}":`, e)
       throw e
     }
   }
@@ -80,7 +78,7 @@ export class Memory<T = unknown> {
    * @example write({ foo: 'bar' }) // { foo: 'bar' }
    */
   public async write(memory: T): Promise<T> {
-    if (this.defaultMemory && this.memoryPath) {
+    if (!this.isFromAnotherSkill) {
       try {
         await fs.promises.writeFile(
           this.memoryPath,
@@ -89,7 +87,7 @@ export class Memory<T = unknown> {
 
         return memory
       } catch (e) {
-        console.error(`Error while writing memory for ${this.name}:`, e)
+        console.error(`Error while writing memory for "${this.name}":`, e)
         throw e
       }
     } else {

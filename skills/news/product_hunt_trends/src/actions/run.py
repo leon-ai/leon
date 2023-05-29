@@ -1,96 +1,84 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from bridges.python.src.sdk.network import Network
+from bridges.python.src.sdk.settings import Settings
 
-import requests
-import utils
+import sys
 
-def run(params):
-	"""Get the Product Hunt trends"""
 
-	# Developer token
-	developer_token = utils.config('credentials')['developer_token']
+def run(params: ActionParams) -> None:
+    """Get the Product Hunt trends"""
 
-	# Number of products
-	limit = 5
+    # Developer token
+    settings = Settings()
+    if not settings.is_setting_set('developer_token'):
+        return leon.answer({'key': 'invalid_developer_token'})
+    developer_token: str = settings.get('developer_token')
 
-	# Answer key
-	answer_key = 'today'
+    # Number of products
+    limit: int = 5
 
-	# Day date
-	day_date = ''
+    for item in params['entities']:
+        if item['entity'] == 'number':
+            limit = item['resolution']['value']
 
-	for item in params['entities']:
-		if item['entity'] == 'number':
-			limit = item['resolution']['value']
-		if item['entity'] == 'date':
-			answer_key = 'specific_day'
+    leon.answer({'key': 'reaching'})
 
-			if 'strPastValue' in item['resolution']:
-				day_date = item['resolution']['strPastValue']
-			else:
-				day_date = item['resolution']['strValue']
+    network = Network({'base_url': 'https://api.producthunt.com/v2/api/graphql'})
+    try:
+        query = """
+        query getPosts($first: Int!) {
+            posts(first: $first) {
+                edges {
+                    node {
+                        url
+                        name
+                        votesCount
+                    }
+                }
+            }
+        }
+        """
+        response = network.request({
+            'url': '/',
+            'method': 'POST',
+            'headers': {
+                'Authorization': f'Bearer {developer_token}'
+            },
+            'data': {
+                'query': query,
+                'variables': {
+                    'first': limit
+                }
+            }
+        })
 
-	utils.output('inter', 'reaching')
+        posts = response['data']['data']['posts']['edges']
+        result = ''
 
-	try:
-		url = 'https://api.producthunt.com/v1/posts'
-		if (day_date != ''):
-			url = url + '?day=' + day_date
+        if len(posts) == 0:
+            return leon.answer({'key': 'not_found'})
 
-		r = utils.http('GET', url, { 'Authorization': 'Bearer ' + developer_token })
-		response = r.json()
+        for index, post in enumerate(posts):
+            node = post['node']
+            rank = index + 1
+            result += str(leon.set_answer_data('list_element', {
+                'rank': rank,
+                'post_url': node['url'],
+                'product_name': node['name'],
+                'votes_nb': node['votesCount']
+            }))
 
-		if 'error' in response and response['error'] == 'unauthorized_oauth':
-			return utils.output('end', 'invalid_developer_token')
+            if rank == limit:
+                break
 
-		posts = list(enumerate(response['posts']))
-		result = ''
-
-		if len(posts) == 0:
-			return utils.output('end', 'not_found')
-
-		if limit > len(posts):
-			utils.output('inter', { 'key': 'limit_max',
-				'data': {
-					'limit': limit,
-					'new_limit': len(posts)
-				}
-			})
-			limit = len(posts)
-		elif limit == 0:
-			limit = 5
-
-		for i, post in posts:
-			# If the product maker is known
-			if post['maker_inside']:
-				author = list(reversed(post['makers']))[0]
-				result += utils.translate('list_element', {
-						'rank': i + 1,
-						'post_url': post['discussion_url'],
-						'product_name': post['name'],
-						'author_url': author['profile_url'],
-						'author_name': author['name'],
-						'votes_nb': post['votes_count']
-					}
-				)
-			else:
-				result += utils.translate('list_element_with_unknown_maker', {
-						'rank': i + 1,
-						'post_url': post['discussion_url'],
-						'product_name': post['name'],
-						'votes_nb': post['votes_count']
-					}
-				)
-
-			if (i + 1) == limit:
-				break
-
-		return utils.output('end', { 'key': answer_key,
-			'data': {
-				'limit': limit,
-				'result': result,
-				'date': day_date
-			}
-		})
-	except requests.exceptions.RequestException as e:
-		return utils.output('end', 'unreachable')
+        return leon.answer({
+            'key': 'today',
+            'data': {
+                'limit': limit,
+                'result': result
+            }
+        })
+    except Exception as e:
+        print(e, flush=True, file=sys.stderr)
+        return leon.answer({'key': 'unreachable'})

@@ -5,6 +5,7 @@ import { leon } from '@sdk/leon'
 import { Network } from '@sdk/network'
 import { Button } from '@sdk/aurora/button'
 import { Memory } from '@sdk/memory'
+import { Settings } from '@sdk/settings'
 import _ from '@sdk/packages/lodash'
 
 interface Post {
@@ -91,18 +92,26 @@ export const run: ActionFunction = async function () {
     }
   })
 
-  console.log('button', Button)
+  const settings = new Settings()
 
-  const { someSampleConfig } = leon.getSRCConfig<{
-    options: { someSampleConfig: string }
-  }>()['options']
+  if (!(await settings.isSettingSet('apiKey'))) {
+    await leon.answer({
+      key: 'answer',
+      data: {
+        answer: "The API key isn't set..."
+      }
+    })
+  }
 
-  const options = leon.getSRCConfig<{ someSampleConfig: string }>('options')
+  const currentSettings = await settings.get()
+
+  await settings.set({
+    ...currentSettings,
+    apiKey: 'newAPIKey'
+  })
+
   await leon.answer({
-    key: 'answer',
-    data: {
-      answer: options.someSampleConfig + someSampleConfig
-    }
+    key: `Is API set now? ${await settings.isSettingSet('apiKey')}`
   })
 
   const network = new Network({

@@ -22,6 +22,10 @@
       "Hello ! J'espère que vous allez bien !",
       "Hey ! Quoi de neuf ?!"
     ],
+    "default_with_name": [
+      "Salut %owner_name% !",
+      "Salut %owner_name%, Quoi de neuf ?!"
+    ],
     "morning_good_day": [
       "Bonjour, passez une agréable journée !",
       "Bonjour, je vous souhaite une très belle journée !",

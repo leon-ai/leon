@@ -1,19 +1,17 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-import utils
-from ..lib import db
 
-def setup(params):
-	"""Initialize session"""
+def run(params: ActionParams) -> None:
+    """Initialize session"""
 
-	session = db.get_session()
+    current_question = 1
+    memory.upsert_session(current_question)
 
-	current_question = 1
-	db.upsert_session(current_question)
-
-	return utils.output('end', { 'key': str(current_question),
-		'data': {
-			'question': str(current_question)
-		}
-	})
+    return leon.answer({
+        'key': str(current_question),
+        'data': {
+            'question': str(current_question)
+        }
+    })

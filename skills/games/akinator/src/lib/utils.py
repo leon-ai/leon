@@ -24,6 +24,7 @@ SOFTWARE.
 
 from .exceptions import InvalidAnswerError, InvalidLanguageError, AkiServerDown, AkiTechnicalError, AkiTimedOut, AkiNoQuestions, AkiConnectionFailure
 
+
 def ans_to_id(ans):
     """Convert an input answer string into an Answer ID for Akinator"""
 

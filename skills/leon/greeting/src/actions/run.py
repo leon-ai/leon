@@ -1,37 +1,45 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from bridges.python.src.sdk.memory import Memory
 
 from datetime import datetime
 from random import randint
+from typing import TypedDict
 
-import utils
 
-owner_table = utils.get_table('leon.introduction.owner')
-owner = owner_table.get(doc_id=0)
+class Owner(TypedDict):
+    name: str
+    birth_date: str
 
-def run(params):
-	"""Leon greets you"""
 
-	time = datetime.time(datetime.now())
+def run(params: ActionParams) -> None:
+    """Leon greets you"""
 
-	# 1/2 chance to get deeper greetings
-	if randint(0, 1) != 0:
-		if time.hour >= 5 and time.hour <= 10:
-			return utils.output('end', 'morning_good_day')
-		if time.hour == 11:
-			return utils.output('end', 'morning')
-		if time.hour >= 12 and time.hour <= 17:
-			return utils.output('end', 'afternoon')
-		if time.hour >= 18 and time.hour <= 21:
-			return utils.output('end', 'evening')
-		if time.hour >= 22 and time.hour <= 23:
-			return utils.output('end', 'night')
+    time = datetime.time(datetime.now())
 
-		return utils.output('end', 'too_late')
+    # 1/2 chance to get deeper greetings
+    if randint(0, 1) != 0:
+        if time.hour >= 5 and time.hour <= 10:
+            return leon.answer({'key': 'morning_good_day'})
+        if time.hour == 11:
+            return leon.answer({'key': 'morning'})
+        if time.hour >= 12 and time.hour <= 17:
+            return leon.answer({'key': 'afternoon'})
+        if time.hour >= 18 and time.hour <= 21:
+            return leon.answer({'key': 'evening'})
+        if time.hour >= 22 and time.hour <= 23:
+            return leon.answer({'key': 'night'})
 
-	if owner != None:
-		return utils.output('end', { 'key': 'default_w_name',
-			'data': { 'owner_name': owner['name'] }
-		})
+        return leon.answer({'key': 'too_late'})
 
-	return utils.output('end', 'default')
+    try:
+        owner_memory = Memory({'name': 'leon:introduction:owner'})
+        owner: Owner = owner_memory.read()
+        leon.answer({
+            'key': 'default_with_name',
+            'data': {
+                'owner_name': owner['name'],
+            }
+        })
+    except BaseException:
+        return leon.answer({'key': 'default'})

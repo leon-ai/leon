@@ -32,7 +32,6 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
-import Synchronizer from '@/core/synchronizer'
 import type { AnswerOutput } from '@sdk/types'
 import { DateHelper } from '@/helpers/date-helper'
 
@@ -213,22 +212,19 @@ export default class Brain {
     data: Buffer
   ): Promise<Error | null> | void {
     try {
-      const obj = JSON.parse(data.toString()) as AnswerOutput
+      const skillAnswer = JSON.parse(data.toString()) as AnswerOutput
 
-      if (typeof obj === 'object') {
+      if (typeof skillAnswer === 'object') {
         LogHelper.title(`${this.skillFriendlyName} skill (on data)`)
         LogHelper.info(data.toString())
 
-        if (obj.output.widget) {
-          SOCKET_SERVER.socket?.emit('widget', obj.output.widget)
+        if (skillAnswer.output.widget) {
+          SOCKET_SERVER.socket?.emit('widget', skillAnswer.output.widget)
         }
 
-        // TODO: remove this condition when Python skills outputs are updated (replace "speech" with "answer")
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
-        const { answer, speech } = obj.output
+        const { answer } = skillAnswer.output
         if (!this.isMuted) {
-          this.talk(answer || speech)
+          this.talk(answer)
         }
         this.answers.push(answer)
         this.skillOutput = data.toString()
@@ -420,28 +416,6 @@ export default class Brain {
             if (this.skillOutput !== '') {
               try {
                 skillResult = JSON.parse(this.skillOutput)
-
-                // Synchronize the downloaded content if enabled
-                if (
-                  skillResult &&
-                  skillResult.output.options['synchronization'] &&
-                  skillResult.output.options['synchronization'].enabled &&
-                  skillResult.output.options['synchronization'].enabled === true
-                ) {
-                  const sync = new Synchronizer(
-                    this,
-                    nluResult.classification,
-                    skillResult.output.options['synchronization']
-                  )
-
-                  // When the synchronization is finished
-                  sync.synchronize((speech: string) => {
-                    if (!this.isMuted) {
-                      this.talk(speech)
-                    }
-                    speeches.push(speech)
-                  })
-                }
               } catch (e) {
                 LogHelper.title(`${this.skillFriendlyName} skill`)
                 LogHelper.error(

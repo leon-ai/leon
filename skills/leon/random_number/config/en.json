@@ -15,5 +15,7 @@
       ]
     }
   },
-  "answers": {}
+  "answers": {
+    "answer": ["%answer%"]
+  }
 }

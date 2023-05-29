@@ -1,18 +1,14 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
+from ..lib import memory
 
-import utils
-from ..lib import db
 
-owner = db.get_owner()
+def run(params: ActionParams) -> None:
+    """Leon introduces himself and ask about you if he does not know you yet"""
+    owner = memory.get_owner()
+    is_owner_saved = owner is not None
 
-def introduce_leon(params):
-	"""Leon introduces himself and
-	ask about you if he does not know you yet"""
+    if not is_owner_saved:
+        return leon.answer({'key': 'leon_introduction_with_question'})
 
-	is_owner_saved = owner != None
-
-	if is_owner_saved == False:
-		return utils.output('end', 'leon_introduction_with_question')
-
-	return utils.output('end', 'leon_introduction')
+    return leon.answer({'key': 'leon_introduction'})

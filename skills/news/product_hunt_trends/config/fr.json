@@ -25,28 +25,20 @@
     "today": [
       "Voici les %limit% dernières tendances Product Hunt du jour :<br><br><ul>%result%</ul>"
     ],
-    "specific_day": [
-      "Voici les %limit% dernières tendances Product Hunt du %date% :<br><br><ul>%result%</ul>"
-    ],
     "unreachable": [
       "Product Hunt est inaccessible pour le moment, merci de réessayer plus tard.",
       "Je rencontre des difficultés pour atteindre Product Hunt, merci de réessayer plus tard.",
       "Product Hunt semble ne pas fonctionner correctement, veuillez retenter plus tard."
     ],
     "list_element": [
-      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> créé par <a href=\"%author_url%\" target=\"_blank\">%author_name%</a> avec %votes_nb% votes.</li>"
-    ],
-    "list_element_with_unknown_maker": [
-      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> avec %votes_nb% votes. Il n'y a pas d'information à propos du créateur.</li>",
-      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> avec %votes_nb% votes. Je n'ai trouvé aucune information à propos du créateur.</li>"
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> avec %votes_nb% votes.</li>"
     ],
     "not_found": [
       "Il n'y a pas de produit à cette date.",
       "Je n'ai trouvé aucun produit à cette date."
     ],
     "invalid_developer_token": [
-      "Votre jeton de développeur Product Hunt est invalide. Merci d'en fournir un valide en <a href=\"https://github.com/leon-ai/leon/blob/develop/packages/trend/README.md#product-hunt\" target=\"_blank\">lisant ceci</a>.",
-      "Vous n'avez pas bien configuré votre jeton de développeur Product Hunt. Veuillez en installer un valide en <a href=\"https://github.com/leon-ai/leon/blob/develop/packages/trend/README.md#product-hunt\" target=\"_blank\">lisant ceci</a>."
+      "Votre jeton de développeur Product Hunt est invalide. Merci d'en fournir un valide en <a href=\"https://github.com/leon-ai/leon/tree/develop/skills/news/product_hunt_trends\" target=\"_blank\">lisant ceci</a>."
     ]
   }
 }

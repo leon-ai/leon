@@ -29,6 +29,4 @@ export const SKILL_CONFIG: SkillConfigSchema = JSON.parse(
     'utf8'
   )
 )
-export const SKILL_SRC_CONFIG: Record<string, unknown> = JSON.parse(
-  fs.readFileSync(path.join(SKILL_PATH, 'src', 'config.json'), 'utf8')
-).configurations
+export { LEON_VERSION, NODEJS_BRIDGE_VERSION } from '@/constants'

@@ -8,7 +8,6 @@ __pycache__/
 test/coverage/
 **/tmp/*
 **/src/.venv/*
-downloads/*
 logs/*
 core/config/**/*.json
 bin/coqui/*
@@ -29,11 +28,8 @@ tcp_server/src/Pipfile.lock
 !bridges/python/**/.gitkeep
 !bridges/nodejs/**/.gitkeep
 !**/*.sample*
-packages/**/config/config.json
-skills/**/src/config.json
-packages/**/data/db/*.json
+skills/**/src/settings.json
 skills/**/memory/*.json
-skills/**/memory/*.db*
 core/data/models/*.nlp
 package.json.backup
 .python-version

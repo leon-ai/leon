@@ -5,12 +5,6 @@
     "errors": {
       "not_found": "Sorry, it seems I cannot find that"
     },
-    "synchronizer": {
-      "syncing_direct": "I will now synchronize the downloaded content on your current device. Don't worry, I will let you know once I'm done",
-      "synced_direct": "The new content has been synchronized on your device",
-      "syncing_google_drive": "I will now synchronize the downloaded content on Google Drive. Don't worry, I will let you know once I'm done",
-      "synced_google_drive": "The new content is now available on Google Drive"
-    },
     "random_errors": [
       "Sorry, there is a problem with my system. Please check my logs for further details",
       "Sorry, I don't work correctly. Please look at my logs for more information",

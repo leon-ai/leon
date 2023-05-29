@@ -1,22 +1,33 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
+from bridges.python.src.sdk.leon import leon
+from bridges.python.src.sdk.types import ActionParams
 
-import utils
+from ..lib import memory
 
-def replay(params):
-	"""Take decision about whether to replay"""
 
-	resolvers = params['resolvers']
-	decision = False
+def run(params: ActionParams) -> None:
+    """Take decision about whether to replay"""
 
-	for resolver in resolvers:
-		if resolver['name'] == 'affirmation_denial':
-			decision = resolver['value']
+    memory.game_memory.clear()
+    resolvers = params['resolvers']
+    decision = False
 
-	if decision == True:
-		return utils.output('end', 'replay', {
-			'isInActionLoop': False,
-			'restart': True
-		})
+    for resolver in resolvers:
+        if resolver['name'] == 'affirmation_denial':
+            decision = resolver['value']
 
-	return utils.output('end', 'stop', { 'isInActionLoop': False })
+    if decision:
+        leon.answer({
+            'key': 'replay',
+            'core': {
+                'isInActionLoop': False,
+                'restart': True
+            }
+        })
+        return
+
+    leon.answer({
+        'key': 'stop',
+        'core': {
+            'isInActionLoop': False
+        }
+    })
