@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 
 import { Button } from './aurora/button'
 import Chatbot from './chatbot'
+import { INIT_MESSAGES } from './constants'
 
 export default class Client {
   constructor(client, serverUrl, input, res) {
@@ -34,6 +35,24 @@ export default class Client {
     return this._recorder
   }
 
+  async sendInitMessages() {
+    for (let i = 0; i < INIT_MESSAGES.length; i++) {
+      const messages = INIT_MESSAGES[i]
+      const message = messages[Math.floor(Math.random() * messages.length)]
+      const sendingDelay = Math.floor(Math.random() * 2000) + 1000
+      const typingFactorDelay = Math.floor(Math.random() * 4) + 2
+
+      setTimeout(() => {
+        this.chatbot.isTyping('leon', true)
+      }, sendingDelay / typingFactorDelay)
+
+      await new Promise((resolve) => setTimeout(resolve, sendingDelay))
+
+      this.chatbot.receivedFrom('leon', message)
+      this.chatbot.isTyping('leon', false)
+    }
+  }
+
   init(loader) {
     this.chatbot.init()
 
@@ -43,6 +62,10 @@ export default class Client {
 
     this.socket.on('ready', () => {
       loader.stop()
+
+      if (this.chatbot.parsedBubbles?.length === 0) {
+        this.sendInitMessages()
+      }
     })
 
     this.socket.on('answer', (data) => {
