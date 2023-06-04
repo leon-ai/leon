@@ -7,6 +7,7 @@ import { leon } from '@sdk/leon'
 
 interface Text {
   text: string
+  weight?: 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 // TODO: design tokens ("400" default)
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl' // TODO: design tokens ("md" default)
   type?: 'primary' | 'secondary' // TODO: design tokens ("primary" default)
 }
@@ -22,8 +23,8 @@ interface Container {
 }
 interface Image {
   path: string
-  width?: string
-  height?: string
+  width?: number
+  height?: number
 }
 interface Checkbox {
   checked: boolean
@@ -38,8 +39,155 @@ interface Input {
   disabled?: boolean
   onChange?: () => void
 }
+interface Card {}
+interface TabGroup {
+  tabs: Tab[]
+}
+interface Tab {
+  title: string
+  selected?: boolean
+  content?: any // TODO
+  disabled?: boolean
+}
 
 export const run: ActionFunction = async function () {
+  /**
+   * Forecast
+   */
+
+  const forecast = new Container(
+    [
+      new Text({
+        text: 'Paris',
+        size: 'xl'
+      }),
+      new Text({
+        text: 'Thursday, 1 June',
+        type: 'secondary'
+      }),
+      new Image({
+        path: 'thumderstorms.svg'
+      }),
+      new Text({
+        text: '18°',
+        size: 'xxl'
+      }),
+      new Text({
+        text: 'Thumderstorms',
+        weight: 600 // TODO: not sure
+      }),
+      new Card({
+        width: '100%',
+        content: new Container([
+          new Container(
+            [
+              new Image({
+                path: 'sun.svg',
+                width: 28,
+                height: 28
+              }),
+              new Text({
+                text: '1',
+                size: 'sm'
+              }),
+              new Text({
+                text: 'UV Index',
+                size: 'sm',
+                type: 'secondary'
+              })
+            ],
+            {
+              direction: 'column'
+            }
+          ),
+          new Container(
+            [
+              new Image({
+                path: 'wind.svg',
+                width: 28,
+                height: 28
+              }),
+              new Text({
+                text: '10 m/s',
+                size: 'sm'
+              }),
+              new Text({
+                text: 'Wind',
+                size: 'sm',
+                type: 'secondary'
+              })
+            ],
+            {
+              direction: 'column'
+            }
+          ),
+          new Container(
+            [
+              new Image({
+                path: 'humidity.svg',
+                width: 28,
+                height: 28
+              }),
+              new Text({
+                text: '98%',
+                size: 'sm'
+              }),
+              new Text({
+                text: 'Humidity',
+                size: 'sm',
+                type: 'secondary'
+              })
+            ],
+            {
+              direction: 'column'
+            }
+          )
+        ])
+      }),
+      new TabGroup({
+        // TabGroup will automatically manage the tab selection state
+        tabs: [
+          new Tab({
+            title: 'Today',
+            selected: true,
+            content: new ScrollContainer([
+              new Card({
+                width: 60,
+                content: new Container([
+                  new Text({
+                    text: '10:00',
+                    size: 'sm',
+                    type: 'secondary'
+                  }),
+                  new Image({
+                    path: 'thumderstorms.svg',
+                    width: 28,
+                    height: 28
+                  }),
+                  new Text({
+                    text: '15°',
+                    size: 'lg',
+                    weight: 600
+                  })
+                ])
+              }) // TODO: continue ...
+            ])
+          }),
+          new Tab({
+            title: 'Tomorrow'
+          }),
+          new Tab({
+            title: 'Next 7 days'
+          })
+        ]
+      })
+    ],
+    {
+      direction: 'column',
+      align: 'center'
+    }
+  )
+
   /**
    * Select music provider
    */
@@ -66,10 +214,12 @@ export const run: ActionFunction = async function () {
     ]
   })
 
+  await leon.answer({ widget: musicProviderList })
+
   /**
    * Todo list
    */
-  const list = new List({
+  const todoList = new List({
     title: {
       text: 'Shopping List',
       align: 'left'
@@ -93,6 +243,8 @@ export const run: ActionFunction = async function () {
       }
     ]
   })
+
+  await leon.answer({ widget: todoList })
 
   /**
    * Random number
