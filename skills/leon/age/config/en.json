@@ -3,18 +3,25 @@
   "actions": {
     "run": {
       "type": "logic",
-      "utterance_samples": ["How old are you?"]
+      "utterance_samples": [
+        "How old are you?",
+        "Are you old?",
+        "Are you young?",
+        "When were you born?",
+        "When have you been created?",
+        "When is your birthday?"
+      ]
     }
   },
   "answers": {
-    "default": ["I'm..."],
-    "greet": ["Hey, just a try %name% again %name%", "Another try, hi"],
-    "answer": ["%answer%"],
-    "test": [
-      {
-        "speech": "This will be said out loud",
-        "text": "This will be shown in the chat"
-      }
+    "alive_for": [
+      "I've been alive for %years% years, %months% months, %days% days, %hours% hours, %minutes% minutes and %seconds% seconds."
+    ],
+    "magical_day": [
+      "Ah, this %weekday%, %month% %day%, %year%, was the magical day when I first came alive and began my journey as a personal assistant."
+    ],
+    "commemorate": [
+      "Since %year%, every %month% %day%, I commemorate the day when I embarked on this extraordinary adventure to be your personal assistant."
     ]
   }
 }
