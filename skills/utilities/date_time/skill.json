@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Date/Time",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Provide date and time related information.",
+  "author": {
+    "name": "Théo LUDWIG",
+    "email": "contact@theoludwig.fr",
+    "url": "https://theoludwig.fr"
+  }
+}

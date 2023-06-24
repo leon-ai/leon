@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
+  "actions": {
+    "current_date_time": {
+      "type": "logic",
+      "utterance_samples": [
+        "What time is it?",
+        "What's today date?",
+        "Do you have the time?",
+        "Can you tell me the current time?",
+        "What is the date today?",
+        "What day is it?",
+        "What day of the week are we?",
+        "What day of the week is it?"
+      ]
+    }
+  },
+  "answers": {
+    "current_date_time": [
+      "It's %weekday%, %month% %day%, %year%, and it's %hours%:%minutes%:%seconds%."
+    ]
+  }
+}
