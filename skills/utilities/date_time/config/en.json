@@ -13,11 +13,22 @@
         "What day of the week are we?",
         "What day of the week is it?"
       ]
+    },
+    "current_week_number": {
+      "type": "logic",
+      "utterance_samples": [
+        "What week is it?",
+        "Which week of the year is it?",
+        "What week are we in right now?",
+        "What is this week's number?",
+        "What week of the year are we?"
+      ]
     }
   },
   "answers": {
     "current_date_time": [
-      "It's %weekday%, %month% %day%, %year%, and it's %hours%:%minutes%:%seconds%."
-    ]
+      "It is %weekday%, %month% %day%, %year%, and it is %hours%:%minutes%:%seconds%."
+    ],
+    "current_week_number": ["It is the %week_number% week of the year."]
   }
 }
