@@ -3,7 +3,7 @@ import { leon } from '@sdk/leon'
 
 import { format } from 'numerable'
 
-const ONE_DAY_MILLISECONDS = 1_000 * 60 * 60 * 24
+import { ONE_DAY_MILLISECONDS } from '../lib/constants'
 
 /**
  * Get the week number (1-52) for a given date.

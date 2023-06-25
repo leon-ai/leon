@@ -23,12 +23,26 @@
         "What is this week's number?",
         "What week of the year are we?"
       ]
+    },
+    "days_countdown": {
+      "type": "logic",
+      "utterance_samples": [
+        "How many days left until 1st July?",
+        "What is the number of days remaining until December 25th?",
+        "In how many days will it be February 10th?"
+      ]
     }
   },
   "answers": {
     "current_date_time": [
       "It is %weekday%, %month% %day%, %year%, and it is %hours%:%minutes%:%seconds%."
     ],
-    "current_week_number": ["It is the %week_number% week of the year."]
+    "current_week_number": ["It is the %week_number% week of the year."],
+    "days_countdown": [
+      "There are %days% days between %month1% %day1%, %year1% and %month2% %day2%, %year2%."
+    ],
+    "days_countdown_error": [
+      "I'm sorry, I didn't understand the date you said."
+    ]
   }
 }
