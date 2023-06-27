@@ -24,26 +24,22 @@ const daysBetween = (date1: Date, date2: Date): number => {
 }
 
 export const run: ActionFunction = async function (params) {
-  const { current_entities } = params
-
-  let futureDateString: string | null = null
-
-  for (const entity of current_entities) {
+  let dateRangeEntity: BuiltInDateRangeEntity | null = null
+  for (const entity of params.current_entities) {
     if (isBuiltInDateRangeEntity(entity)) {
-      const { futureEndDate } = entity.resolution
-      futureDateString = futureEndDate
+      dateRangeEntity = entity
       break
     }
   }
 
-  if (futureDateString == null) {
+  if (dateRangeEntity == null) {
     return await leon.answer({
       key: 'days_countdown_error'
     })
   }
 
   const currentDate = new Date()
-  const futureDate = new Date(futureDateString)
+  const futureDate = new Date(dateRangeEntity.resolution.futureEndDate)
   const daysCountdown = daysBetween(currentDate, futureDate)
   await leon.answer({
     key: 'days_countdown',
