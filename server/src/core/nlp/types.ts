@@ -29,7 +29,8 @@ export interface NLPJSProcessResult {
     intent: string
     score: number
   }[]
-  intent: string // E.g. "greeting.run"
+  /** E.g. "greeting.run" */
+  intent: string
   score: number
   domain: NLPDomain
   sourceEntities: unknown[]
@@ -40,7 +41,7 @@ export interface NLPJSProcessResult {
   answer: string | undefined
   actions: NLPAction[]
   sentiment: {
-    // Rule of thumb: > 0 = negative; = 0 = neutral; < 0 = positive
+    /** Rule of thumb: > 0 = negative; = 0 = neutral; < 0 = positive */
     score: number
     numWords: number
     numHits: number
@@ -101,83 +102,139 @@ export type NLUSlots = Record<string, NLUSlot>
 
 /* eslint-disable @typescript-eslint/no-empty-interface */
 
-interface Entity {
+export const BUILT_IN_ENTITY_TYPES = [
+  'number',
+  'ip',
+  'hashtag',
+  'phonenumber',
+  'currency',
+  'percentage',
+  'date',
+  'time',
+  'timerange',
+  'daterange',
+  'datetimerange',
+  'duration',
+  'dimension',
+  'email',
+  'ordinal',
+  'age',
+  'url',
+  'temperature'
+] as const
+
+export type BuiltInEntityType = (typeof BUILT_IN_ENTITY_TYPES)[number]
+
+export const ENTITY_TYPES = [
+  ...BUILT_IN_ENTITY_TYPES,
+  'regex',
+  'trim',
+  'enum'
+] as const
+
+export type EntityType = (typeof ENTITY_TYPES)[number]
+
+interface Entity<
+  Type extends EntityType,
+  Resolution extends Record<string, unknown>,
+  EntityName extends string = Type
+> {
   start: number
   end: number
   len: number
   accuracy: number
   sourceText: string
   utteranceText: string
-  entity: unknown
-  resolution: unknown
+  entity: EntityName
+  type: Type
+  resolution: Resolution
 }
 
 /**
  * Built-in entity types
  */
 
-export interface BuiltInEntity extends Entity {}
+export interface BuiltInEntity<
+  Type extends BuiltInEntityType,
+  Resolution extends Record<string, unknown>
+> extends Entity<Type, Resolution> {}
 
-export interface BuiltInNumberEntity extends BuiltInEntity {
-  resolution: {
+export type BuiltInNumberEntity = BuiltInEntity<
+  'number',
+  {
     strValue: string
     value: number
     subtype: string
   }
-}
-export interface BuiltInIPEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInIPEntity = BuiltInEntity<
+  'ip',
+  {
     value: string
-    type: string
+    type: 'ipv4' | 'ipv6'
   }
-}
-export interface BuiltInHashtagEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInHashtagEntity = BuiltInEntity<
+  'hashtag',
+  {
     value: string
   }
-}
-export interface BuiltInPhoneNumberEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInPhoneNumberEntity = BuiltInEntity<
+  'phonenumber',
+  {
     value: string
     score: string
   }
-}
-export interface BuiltInCurrencyEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInCurrencyEntity = BuiltInEntity<
+  'currency',
+  {
     strValue: string
     value: number
     unit: string
     localeUnit: string
   }
-}
-export interface BuiltInPercentageEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInPercentageEntity = BuiltInEntity<
+  'percentage',
+  {
     strValue: string
     value: number
     subtype: string
   }
-}
-export interface BuiltInDateEntity extends BuiltInEntity {
-  resolution: {
-    type: string
-    timex: string
-    strPastValue: string
-    pastDate: string
-    strFutureValue: string
-    futureDate: string
-  }
-}
-export interface BuiltInTimeEntity extends BuiltInEntity {
-  resolution: {
+>
+
+export type BuiltInDateEntity = BuiltInEntity<
+  'date',
+  | {
+      type: 'date'
+      timex: string
+      strValue: string
+      date: string
+    }
+  | {
+      type: 'interval'
+      timex: string
+      strPastValue: string
+      pastDate: string
+      strFutureValue: string
+      futureDate: string
+    }
+>
+export type BuiltInTimeEntity = BuiltInEntity<
+  'time',
+  {
     values: {
       timex: string
       type: string
       value: string
     }[]
   }
-}
-export interface BuiltInTimeRangeEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInTimeRangeEntity = BuiltInEntity<
+  'timerange',
+  {
     values: {
       timex: string
       type: string
@@ -185,9 +242,25 @@ export interface BuiltInTimeRangeEntity extends BuiltInEntity {
       end: string
     }[]
   }
-}
-export interface BuiltInDateRangeEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInDateRangeEntity = BuiltInEntity<
+  'daterange',
+  {
+    type: 'interval'
+    timex: string
+    strPastStartValue: string
+    pastStartDate: string
+    strPastEndValue: string
+    pastEndDate: string
+    strFutureStartValue: string
+    futureStartDate: string
+    strFutureEndValue: string
+    futureEndDate: string
+  }
+>
+export type BuiltInDateTimeRangeEntity = BuiltInEntity<
+  'datetimerange',
+  {
     type: string
     timex: string
     strPastStartValue: string
@@ -199,94 +272,81 @@ export interface BuiltInDateRangeEntity extends BuiltInEntity {
     strFutureEndValue: string
     futureEndDate: string
   }
-}
-export interface BuiltInDateTimeRangeEntity extends BuiltInEntity {
-  resolution: {
-    type: string
-    timex: string
-    strPastStartValue: string
-    pastStartDate: string
-    strPastEndValue: string
-    pastEndDate: string
-    strFutureStartValue: string
-    futureStartDate: string
-    strFutureEndValue: string
-    futureEndDate: string
-  }
-}
-export interface BuiltInDurationEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInDurationEntity = BuiltInEntity<
+  'duration',
+  {
     values: {
       timex: string
       type: string
+      Mod?: 'before' | 'after'
       value: string
     }[]
   }
-}
-export interface BuiltInDimensionEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInDimensionEntity = BuiltInEntity<
+  'dimension',
+  {
     strValue: string
     value: number
     unit: string
     localeUnit: string
   }
-}
-export interface BuiltInEmailEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInEmailEntity = BuiltInEntity<
+  'email',
+  {
     value: string
   }
-}
-export interface BuiltInOrdinalEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInOrdinalEntity = BuiltInEntity<
+  'ordinal',
+  {
     strValue: string
     value: number
     subtype: string
   }
-}
-export interface BuiltInAgeEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInAgeEntity = BuiltInEntity<
+  'age',
+  {
     strValue: string
     value: number
     unit: string
     localeUnit: string
   }
-}
-export interface BuiltInURLEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInURLEntity = BuiltInEntity<
+  'url',
+  {
     value: string
   }
-}
-export interface BuiltInTemperatureEntity extends BuiltInEntity {
-  resolution: {
+>
+export type BuiltInTemperatureEntity = BuiltInEntity<
+  'temperature',
+  {
     strValue: string
     value: number
     unit: string
     localeUnit: string
   }
-}
+>
 
 /**
  * Custom entity types
  */
 
-interface CustomEntity<T> extends Entity {
-  type: T
-}
+interface CustomEntity<Type extends 'enum' | 'regex' | 'trim'>
+  extends Entity<Type, { value: string }, string> {}
 
 export interface CustomEnumEntity extends CustomEntity<'enum'> {
   levenshtein: number
   option: string
-  resolution: {
-    value: string
-  }
-  alias?: string // E.g. "location:country_0"; "location:country_1"
+  /** E.g. "location:country_0"; "location:country_1" */
+  alias?: string
 }
 type GlobalEntity = CustomEnumEntity
-export interface CustomRegexEntity extends CustomEntity<'regex'> {
-  resolution: {
-    value: string
-  }
-}
+export interface CustomRegexEntity extends CustomEntity<'regex'> {}
 interface CustomTrimEntity extends CustomEntity<'trim'> {
   subtype:
     | 'between'
@@ -296,16 +356,13 @@ interface CustomTrimEntity extends CustomEntity<'trim'> {
     | 'before'
     | 'beforeFirst'
     | 'beforeLast'
-  resolution: {
-    value: string
-  }
 }
 
 /**
  * spaCy's entity types
  */
 
-interface SpacyEntity<T> extends CustomEnumEntity {
+interface SpacyEntity<T extends string> extends CustomEnumEntity {
   entity: T
 }
 

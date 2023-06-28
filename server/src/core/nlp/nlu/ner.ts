@@ -1,10 +1,12 @@
 import type { ShortLanguageCode } from '@/types'
 import type {
+  BuiltInEntityType,
   NEREntity,
   NERSpacyEntity,
   NLPUtterance,
   NLUResult
 } from '@/core/nlp/types'
+import { BUILT_IN_ENTITY_TYPES } from '@/core/nlp/types'
 import type {
   SkillCustomEnumEntityTypeSchema,
   SkillCustomRegexEntityTypeSchema,
@@ -83,7 +85,7 @@ export default class NER {
         lang
       )
       const { action } = classification
-      const promises = []
+      const promises: Array<Promise<void>> = []
       const actionEntities = actions[action]?.entities || []
 
       /**
@@ -119,6 +121,12 @@ export default class NER {
         // Add resolution property to stay consistent with all entities
         if (!entity.resolution) {
           entity.resolution = { value: entity.sourceText }
+        }
+
+        if (
+          BUILT_IN_ENTITY_TYPES.includes(entity.entity as BuiltInEntityType)
+        ) {
+          entity.type = entity.entity as BuiltInEntityType
         }
 
         return entity

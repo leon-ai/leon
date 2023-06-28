@@ -1,17 +1,7 @@
-import type {
-  ActionFunction,
-  ActionParams,
-  BuiltInDateRangeEntity
-} from '@sdk/types'
+import type { ActionFunction, BuiltInDateRangeEntity } from '@sdk/types'
 import { leon } from '@sdk/leon'
 
 import { ONE_DAY_MILLISECONDS } from '../lib/constants'
-
-const isBuiltInDateRangeEntity = (
-  entity: ActionParams['current_entities'][number]
-): entity is BuiltInDateRangeEntity => {
-  return entity.entity === 'daterange'
-}
 
 /**
  * Calculate the number of days between two dates.
@@ -26,7 +16,7 @@ const daysBetween = (date1: Date, date2: Date): number => {
 export const run: ActionFunction = async function (params) {
   let dateRangeEntity: BuiltInDateRangeEntity | null = null
   for (const entity of params.current_entities) {
-    if (isBuiltInDateRangeEntity(entity)) {
+    if (entity.type === 'daterange') {
       dateRangeEntity = entity
       break
     }
