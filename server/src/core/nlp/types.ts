@@ -116,33 +116,33 @@ interface Entity {
  * Built-in entity types
  */
 
-interface BuiltInEntity extends Entity {}
+export interface BuiltInEntity extends Entity {}
 
-interface BuiltInNumberEntity extends BuiltInEntity {
+export interface BuiltInNumberEntity extends BuiltInEntity {
   resolution: {
     strValue: string
     value: number
     subtype: string
   }
 }
-interface BuiltInIPEntity extends BuiltInEntity {
+export interface BuiltInIPEntity extends BuiltInEntity {
   resolution: {
     value: string
     type: string
   }
 }
-interface BuiltInHashtagEntity extends BuiltInEntity {
+export interface BuiltInHashtagEntity extends BuiltInEntity {
   resolution: {
     value: string
   }
 }
-interface BuiltInPhoneNumberEntity extends BuiltInEntity {
+export interface BuiltInPhoneNumberEntity extends BuiltInEntity {
   resolution: {
     value: string
     score: string
   }
 }
-interface BuiltInCurrencyEntity extends BuiltInEntity {
+export interface BuiltInCurrencyEntity extends BuiltInEntity {
   resolution: {
     strValue: string
     value: number
@@ -150,24 +150,24 @@ interface BuiltInCurrencyEntity extends BuiltInEntity {
     localeUnit: string
   }
 }
-interface BuiltInPercentageEntity extends BuiltInEntity {
+export interface BuiltInPercentageEntity extends BuiltInEntity {
   resolution: {
     strValue: string
     value: number
     subtype: string
   }
 }
-interface BuiltInDateEntity extends BuiltInEntity {
+export interface BuiltInDateEntity extends BuiltInEntity {
   resolution: {
     type: string
     timex: string
     strPastValue: string
-    pastDate: Date
+    pastDate: string
     strFutureValue: string
-    futureDate: Date
+    futureDate: string
   }
 }
-interface BuiltInTimeEntity extends BuiltInEntity {
+export interface BuiltInTimeEntity extends BuiltInEntity {
   resolution: {
     values: {
       timex: string
@@ -176,7 +176,7 @@ interface BuiltInTimeEntity extends BuiltInEntity {
     }[]
   }
 }
-interface BuiltInTimeRangeEntity extends BuiltInEntity {
+export interface BuiltInTimeRangeEntity extends BuiltInEntity {
   resolution: {
     values: {
       timex: string
@@ -186,35 +186,35 @@ interface BuiltInTimeRangeEntity extends BuiltInEntity {
     }[]
   }
 }
-interface BuiltInDateRangeEntity extends BuiltInEntity {
+export interface BuiltInDateRangeEntity extends BuiltInEntity {
   resolution: {
     type: string
     timex: string
     strPastStartValue: string
-    pastStartDate: Date
+    pastStartDate: string
     strPastEndValue: string
-    pastEndDate: Date
+    pastEndDate: string
     strFutureStartValue: string
-    futureStartDate: Date
+    futureStartDate: string
     strFutureEndValue: string
-    futureEndDate: Date
+    futureEndDate: string
   }
 }
-interface BuiltInDateTimeRangeEntity extends BuiltInEntity {
+export interface BuiltInDateTimeRangeEntity extends BuiltInEntity {
   resolution: {
     type: string
     timex: string
     strPastStartValue: string
-    pastStartDate: Date
+    pastStartDate: string
     strPastEndValue: string
-    pastEndDate: Date
+    pastEndDate: string
     strFutureStartValue: string
-    futureStartDate: Date
+    futureStartDate: string
     strFutureEndValue: string
-    futureEndDate: Date
+    futureEndDate: string
   }
 }
-interface BuiltInDurationEntity extends BuiltInEntity {
+export interface BuiltInDurationEntity extends BuiltInEntity {
   resolution: {
     values: {
       timex: string
@@ -223,7 +223,7 @@ interface BuiltInDurationEntity extends BuiltInEntity {
     }[]
   }
 }
-interface BuiltInDimensionEntity extends BuiltInEntity {
+export interface BuiltInDimensionEntity extends BuiltInEntity {
   resolution: {
     strValue: string
     value: number
@@ -231,19 +231,19 @@ interface BuiltInDimensionEntity extends BuiltInEntity {
     localeUnit: string
   }
 }
-interface BuiltInEmailEntity extends BuiltInEntity {
+export interface BuiltInEmailEntity extends BuiltInEntity {
   resolution: {
     value: string
   }
 }
-interface BuiltInOrdinalEntity extends BuiltInEntity {
+export interface BuiltInOrdinalEntity extends BuiltInEntity {
   resolution: {
     strValue: string
     value: number
     subtype: string
   }
 }
-interface BuiltInAgeEntity extends BuiltInEntity {
+export interface BuiltInAgeEntity extends BuiltInEntity {
   resolution: {
     strValue: string
     value: number
@@ -251,12 +251,12 @@ interface BuiltInAgeEntity extends BuiltInEntity {
     localeUnit: string
   }
 }
-interface BuiltInURLEntity extends BuiltInEntity {
+export interface BuiltInURLEntity extends BuiltInEntity {
   resolution: {
     value: string
   }
 }
-interface BuiltInTemperatureEntity extends BuiltInEntity {
+export interface BuiltInTemperatureEntity extends BuiltInEntity {
   resolution: {
     strValue: string
     value: number

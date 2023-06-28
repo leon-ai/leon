@@ -11,6 +11,8 @@ import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
 
 export type { ActionParams, IntentObject }
 
+export * from '@/core/nlp/types'
+
 export type ActionFunction = (params: ActionParams) => Promise<void>
 
 /**

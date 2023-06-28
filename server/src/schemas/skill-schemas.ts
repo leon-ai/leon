@@ -32,7 +32,10 @@ const answerTypes = Type.Union([
 ])
 const skillCustomEnumEntityType = Type.Object(
   {
-    type: Type.Literal('enum'),
+    type: Type.Literal('enum', {
+      description:
+        'Enum: define a bag of words and synonyms that should match your new entity.'
+    }),
     name: Type.String(),
     options: Type.Record(
       Type.String({ minLength: 1 }),
@@ -42,25 +45,27 @@ const skillCustomEnumEntityType = Type.Object(
     )
   },
   {
-    additionalProperties: false,
-    description:
-      'Enum: define a bag of words and synonyms that should match your new entity.'
+    additionalProperties: false
   }
 )
 const skillCustomRegexEntityType = Type.Object(
   {
-    type: Type.Literal('regex'),
+    type: Type.Literal('regex', {
+      description: 'Regex: you can create an entity based on a regex.'
+    }),
     name: Type.String({ minLength: 1 }),
     regex: Type.String({ minLength: 1 })
   },
   {
-    additionalProperties: false,
-    description: 'Regex: you can create an entity based on a regex.'
+    additionalProperties: false
   }
 )
 const skillCustomTrimEntityType = Type.Object(
   {
-    type: Type.Literal('trim'),
+    type: Type.Literal('trim', {
+      description:
+        'Trim: you can pick up a data from an utterance by clearly defining conditions (e.g: pick up what is after the last "with" word of the utterance).'
+    }),
     name: Type.String({ minLength: 1 }),
     conditions: Type.Array(
       Type.Object(
@@ -88,9 +93,7 @@ const skillCustomTrimEntityType = Type.Object(
           )
         },
         {
-          additionalProperties: false,
-          description:
-            'Trim: you can pick up a data from an utterance by clearly defining conditions (e.g: pick up what is after the last "with" word of the utterance).'
+          additionalProperties: false
         }
       )
     )
@@ -190,7 +193,12 @@ export const skillConfigSchemaObject = Type.Strict(
               { additionalProperties: false }
             )
           ),
-          utterance_samples: Type.Optional(Type.Array(Type.String())),
+          utterance_samples: Type.Optional(
+            Type.Array(Type.String(), {
+              description:
+                'Utterance samples are used by the NLU (Natural Language Understanding) to train the skill. They are examples of what Leon owners can say to trigger the skill action.'
+            })
+          ),
           answers: Type.Optional(Type.Array(answerTypes)),
           unknown_answers: Type.Optional(Type.Array(answerTypes)),
           suggestions: Type.Optional(
