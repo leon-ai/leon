@@ -5,7 +5,9 @@
       "type": "logic",
       "utterance_samples": [
         "What is the current date and time?",
-        "What is the date and time?"
+        "What is the date and time?",
+        "Tell me the time and date",
+        "What's the present date and time?"
       ]
     },
     "current_date": {
@@ -23,7 +25,8 @@
       "utterance_samples": [
         "What time is it?",
         "Do you have the time?",
-        "Can you tell me the current time?"
+        "Can you tell me the current time?",
+        "What's the time right now?"
       ]
     },
     "current_week_number": {
@@ -33,7 +36,8 @@
         "Which week of the year is it?",
         "What week are we in right now?",
         "What is this week's number?",
-        "What week of the year are we?"
+        "What week of the year are we?",
+        "What's the current week number"
       ]
     },
     "days_countdown": {
@@ -41,7 +45,8 @@
       "utterance_samples": [
         "How many days left until 1st July?",
         "What is the number of days remaining until December 25th?",
-        "In how many days will it be February 10th?"
+        "In how many days will it be February 10th?",
+        "Calculate the number until March 1st"
       ]
     }
   },

@@ -69,27 +69,6 @@
       "params": []
     },
     {
-      "method": "GET",
-      "route": "/api/action/utilities/have_i_been_pwned/run",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/utilities/is_it_down/run",
-      "params": ["url"],
-      "entitiesType": "builtIn"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/utilities/speed_test/run",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/utilities/timekeeper/run",
-      "params": []
-    },
-    {
       "method": "POST",
       "route": "/api/action/games/akinator/choose_thematic",
       "params": ["thematic"],
@@ -209,6 +188,47 @@
     {
       "method": "GET",
       "route": "/api/action/leon/welcome/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/date_time/current_date_time",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/date_time/current_date",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/date_time/current_time",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/date_time/current_week_number",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/date_time/days_countdown",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/have_i_been_pwned/run",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/utilities/is_it_down/run",
+      "params": ["url"],
+      "entitiesType": "builtIn"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/speed_test/run",
       "params": []
     }
   ]
