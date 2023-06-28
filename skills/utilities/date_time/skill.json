@@ -1,9 +1,9 @@
 {
   "$schema": "../../../schemas/skill-schemas/skill.json",
-  "name": "Age",
+  "name": "Date/Time",
   "bridge": "nodejs",
   "version": "1.0.0",
-  "description": "Leon tells his age.",
+  "description": "Provide date and time related information.",
   "author": {
     "name": "Théo LUDWIG",
     "email": "contact@theoludwig.fr",
