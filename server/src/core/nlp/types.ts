@@ -125,11 +125,23 @@ export const BUILT_IN_ENTITY_TYPES = [
 
 export type BuiltInEntityType = (typeof BUILT_IN_ENTITY_TYPES)[number]
 
+export const CUSTOM_ENTITY_TYPES = ['regex', 'trim', 'enum'] as const
+
+export type CustomEntityType = (typeof CUSTOM_ENTITY_TYPES)[number]
+
+export const SPACY_ENTITY_TYPES = [
+  'location:country',
+  'location:city',
+  'person',
+  'organization'
+] as const
+
+export type SpacyEntityType = (typeof SPACY_ENTITY_TYPES)[number]
+
 export const ENTITY_TYPES = [
   ...BUILT_IN_ENTITY_TYPES,
-  'regex',
-  'trim',
-  'enum'
+  ...CUSTOM_ENTITY_TYPES,
+  ...SPACY_ENTITY_TYPES
 ] as const
 
 export type EntityType = (typeof ENTITY_TYPES)[number]
@@ -336,10 +348,15 @@ export type BuiltInTemperatureEntity = BuiltInEntity<
  * Custom entity types
  */
 
-interface CustomEntity<Type extends 'enum' | 'regex' | 'trim'>
-  extends Entity<Type, { value: string }, string> {}
+interface CustomEntity<
+  Type extends CustomEntityType | SpacyEntityType,
+  Resolution extends Record<string, unknown> = { value: string }
+> extends Entity<Type, Resolution, string> {}
 
-export interface CustomEnumEntity extends CustomEntity<'enum'> {
+export interface CustomEnumEntity<
+  Type extends CustomEntityType | SpacyEntityType = 'enum',
+  Resolution extends Record<string, unknown> = { value: string }
+> extends CustomEntity<Type, Resolution> {
   levenshtein: number
   option: string
   /** E.g. "location:country_0"; "location:country_1" */
@@ -362,14 +379,59 @@ interface CustomTrimEntity extends CustomEntity<'trim'> {
  * spaCy's entity types
  */
 
-interface SpacyEntity<T extends string> extends CustomEnumEntity {
+interface SpacyEntity<
+  T extends SpacyEntityType,
+  Resolution extends Record<string, unknown> = { value: string }
+> extends CustomEnumEntity<T, Resolution> {
   entity: T
 }
 
-interface SpacyLocationCountryEntity extends SpacyEntity<'location:country'> {}
-interface SpacyLocationCityEntity extends SpacyEntity<'location:city'> {}
-interface SpacyPersonEntity extends SpacyEntity<'person'> {}
-interface SpacyOrganizationEntity extends SpacyEntity<'organization'> {}
+export interface SpacyLocationCountryEntity
+  extends SpacyEntity<
+    'location:country',
+    {
+      value: string
+      data: {
+        name: string
+        iso: string
+        iso3: string
+        isonumeric: number
+        continentcode: string
+        capital: string
+        population: number
+        tld: string
+        currencycode: string
+        currencyname: string
+        phone: string
+        languages: string
+        neighbours: string
+      }
+    }
+  > {}
+export interface SpacyLocationCityEntity
+  extends SpacyEntity<
+    'location:city',
+    {
+      value: string
+      data: {
+        geonameid: number
+        name: string
+        latitude: number
+        longitude: number
+        countrycode: string
+        population: number
+        alternatenames: string[]
+        time_zone: {
+          country_code: string
+          id: string
+          coordinated_universal_time_offset: number
+          daylight_saving_time_offset: number
+        }
+      }
+    }
+  > {}
+export interface SpacyPersonEntity extends SpacyEntity<'person'> {}
+export interface SpacyOrganizationEntity extends SpacyEntity<'organization'> {}
 
 /**
  * Exported entity types

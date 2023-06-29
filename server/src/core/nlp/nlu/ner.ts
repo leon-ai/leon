@@ -4,9 +4,10 @@ import type {
   NEREntity,
   NERSpacyEntity,
   NLPUtterance,
-  NLUResult
+  NLUResult,
+  SpacyEntityType
 } from '@/core/nlp/types'
-import { BUILT_IN_ENTITY_TYPES } from '@/core/nlp/types'
+import { BUILT_IN_ENTITY_TYPES, SPACY_ENTITY_TYPES } from '@/core/nlp/types'
 import type {
   SkillCustomEnumEntityTypeSchema,
   SkillCustomRegexEntityTypeSchema,
@@ -42,6 +43,10 @@ export const MICROSOFT_BUILT_IN_ENTITIES = [
 export default class NER {
   private static instance: NER
   public manager: NERManager
+  public spacyData: Map<
+    `${SpacyEntityType}-${string}`,
+    Record<string, unknown>
+  > = new Map()
 
   constructor() {
     if (!NER.instance) {
@@ -129,6 +134,18 @@ export default class NER {
           entity.type = entity.entity as BuiltInEntityType
         }
 
+        if (SPACY_ENTITY_TYPES.includes(entity.entity as SpacyEntityType)) {
+          entity.type = entity.entity as SpacyEntityType
+          if (
+            'value' in entity.resolution &&
+            this.spacyData.has(`${entity.type}-${entity.resolution.value}`)
+          ) {
+            entity.resolution = this.spacyData.get(
+              `${entity.type}-${entity.resolution.value}`
+            ) as NERSpacyEntity['resolution']
+          }
+        }
+
         return entity
       })
 
@@ -147,6 +164,7 @@ export default class NER {
    * Merge spaCy entities with the NER instance
    */
   public async mergeSpacyEntities(utterance: NLPUtterance): Promise<void> {
+    this.spacyData = new Map()
     const spacyEntities = await this.getSpacyEntities(utterance)
 
     if (spacyEntities.length > 0) {
@@ -158,6 +176,7 @@ export default class NER {
             }
           }
         }
+        this.spacyData.set(`${entity}-${resolution.value}`, resolution)
 
         MODEL_LOADER.mainNLPContainer.addEntities(spacyEntity, BRAIN.lang)
       })
