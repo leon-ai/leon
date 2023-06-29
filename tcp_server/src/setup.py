@@ -15,6 +15,9 @@ options = {
             'srsly.msgpack.util',
             'blis',
             'cymem'
+        ],
+        'include_files': [
+            'lib/time_zones.txt'
         ]
     }
 }
