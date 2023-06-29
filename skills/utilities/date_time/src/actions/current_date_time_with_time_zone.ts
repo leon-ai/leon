@@ -44,11 +44,11 @@ export const run: ActionFunction = async function (params) {
   const currentDate = getCurrentCoordinatedUniversalTime()
   if (isDaylightSavingTime(currentDate)) {
     currentDate.setHours(
-      currentDate.getHours() + time_zone.daylight_saving_time_offset
+      currentDate.getHours() + time_zone.daylight_saving_time_offset_hours
     )
   } else {
     currentDate.setHours(
-      currentDate.getHours() + time_zone.coordinated_universal_time_offset
+      currentDate.getHours() + time_zone.coordinated_universal_time_offset_hours
     )
   }
 

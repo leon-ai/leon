@@ -424,8 +424,8 @@ export interface SpacyLocationCityEntity
         time_zone: {
           country_code: string
           id: string
-          coordinated_universal_time_offset: number
-          daylight_saving_time_offset: number
+          coordinated_universal_time_offset_hours: number
+          daylight_saving_time_offset_hours: number
         }
       }
     }

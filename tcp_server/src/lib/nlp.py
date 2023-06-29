@@ -36,8 +36,8 @@ cities = gc.get_cities()
 class TimeZone(TypedDict):
     country_code: str
     id: str
-    coordinated_universal_time_offset: float
-    daylight_saving_time_offset: float
+    coordinated_universal_time_offset_hours: float
+    daylight_saving_time_offset_hours: float
 
 
 # Extracted from: <https://download.geonames.org/export/dump/timeZones.txt>
@@ -57,8 +57,8 @@ def get_time_zone_data(time_zone_id: str) -> Union[TimeZone, None]:
             time_zone_data = {
                 'country_code': time_zone[0],
                 'id': time_zone[1],
-                'coordinated_universal_time_offset': float(time_zone[2]),
-                'daylight_saving_time_offset': float(time_zone[3])
+                'coordinated_universal_time_offset_hours': float(time_zone[2]),
+                'daylight_saving_time_offset_hours': float(time_zone[3])
             }
             break
     return time_zone_data
