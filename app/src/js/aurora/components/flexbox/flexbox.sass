@@ -1,0 +1,92 @@
+@import '../../styles/main.sass'
+
+.aurora-flexbox
+  position: relative
+  display: flex
+  flex-direction: column
+  height: 100%
+
+  &--padding
+    padding: var(--a-space-xl) var(--a-space-md)
+  &--padding-x
+    padding-left: var(--a-space-md)
+    padding-right: var(--a-space-md)
+  &--padding-y
+    padding-top: var(--a-space-xl)
+    padding-bottom: var(--a-space-xl)
+
+  &--full-width
+    width: 100%
+
+  &--flex
+    display: flex
+  &--inline-flex
+    display: inline-flex
+
+  &--row
+    flex-direction: row
+  &--row-reverse
+    flex-direction: row-reverse
+  &--column
+    flex-direction: column
+  &--column-reverse
+    flex-direction: column-reverse
+
+  &--align-flex-start
+    align-items: flex-start
+  &--align-center
+    align-items: center
+  &--align-flex-end
+    align-items: flex-end
+  &--align-stretch
+    align-items: stretch
+  &--align-baseline
+    align-items: baseline
+
+  &--justify-flex-start
+    justify-content: flex-start
+  &--justify-center
+    justify-content: center
+  &--justify-flex-end
+    justify-content: flex-end
+  &--justify-space-between
+    justify-content: space-between
+  &--justify-space-around
+    justify-content: space-around
+  &--justify-space-evenly
+    justify-content: space-evenly
+  &--justify-stretch
+    justify-content: stretch
+
+  &--gap-xs
+    gap: var(--a-space-xs)
+  &--gap-sm
+    gap: var(--a-space-sm)
+  &--gap-md
+    gap: var(--a-space-md)
+  &--gap-lg
+    gap: var(--a-space-lg)
+  &--gap-xl
+    gap: var(--a-space-xl)
+
+  &--row-gap-xs
+    row-gap: var(--a-space-xs)
+  &--row-gap-sm
+    row-gap: var(--a-space-sm)
+  &--row-gap-md
+    row-gap: var(--a-space-md)
+  &--row-gap-lg
+    row-gap: var(--a-space-lg)
+  &--row-gap-xl
+    row-gap: var(--a-space-xl)
+
+  &--column-gap-xs
+    column-gap: var(--a-space-xs)
+  &--column-gap-sm
+    column-gap: var(--a-space-sm)
+  &--column-gap-md
+    column-gap: var(--a-space-md)
+  &--column-gap-lg
+    column-gap: var(--a-space-lg)
+  &--column-gap-xl
+    column-gap: var(--a-space-xl)

@@ -1,0 +1,34 @@
+@import '../../styles/main.sass'
+
+.aurora-progress
+  position: relative
+  display: flex
+  align-items: flex-end
+  border-radius: var(--a-border-radius-pill)
+  background-color: var(--a-color-background-surface-secondary)
+
+  &--horizontal
+    width: 100%
+    &.aurora-progress--sm
+      height: 9px
+    &.aurora-progress--md
+      height: 18px
+    &.aurora-progress--lg
+      height: 24px
+    .aurora-progress-value
+      height: 100%
+
+  &--vertical
+    height: 100%
+    &.aurora-progress--sm
+      width: 9px
+    &.aurora-progress--md
+      width: 18px
+    &.aurora-progress--lg
+      width: 24px
+    .aurora-progress-value
+      width: 100%
+
+  .aurora-progress-value
+    border-radius: var(--a-border-radius-pill)
+    background-color: var(--a-color-accent)

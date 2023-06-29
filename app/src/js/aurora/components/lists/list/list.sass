@@ -1,0 +1,54 @@
+@import '../../../styles/main.sass'
+
+.aurora-list
+  position: relative
+  display: flex
+  flex-direction: column
+  .aurora-list-item:last-child
+    border-bottom: none
+
+.aurora-list-header
+  position: relative
+  display: flex
+  align-items: center
+  justify-content: flex-start
+  width: 100%
+  text-align: left
+  padding: var(--a-space-lg) var(--a-space-md)
+  border-bottom: 1px solid var(--a-color-separator)
+
+  &--left
+    justify-content: flex-start
+  &--center
+    justify-content: center
+
+.aurora-list-item
+  position: relative
+  display: flex
+  justify-content: flex-start
+  padding: var(--a-space-md)
+  border-bottom: 1px solid var(--a-color-separator)
+  background-color: transparent
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &:hover
+    background-color: var(--a-color-black)
+
+  &--left
+    justify-content: flex-start
+  &--center
+    justify-content: center
+
+  &--clickable
+    cursor: pointer
+    &:hover .aurora-list-item-clickable-icon .aurora-icon
+      color: var(--a-color-accent)
+
+  .aurora-list-item-clickable-icon
+    align-self: center
+    position: absolute
+    right: var(--a-space-md)
+    cursor: pointer
+    z-index: 1
+    .aurora-icon
+      color: var(--a-color-grey-blue)
+

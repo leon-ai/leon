@@ -1,0 +1,38 @@
+@import '../../../styles/main.sass'
+
+.aurora-tab-group
+  .aurora-tab
+    color: var(--a-color-text)
+    font-size: var(--a-font-size-md)
+    cursor: pointer
+    background-color: transparent
+    border: none
+    margin-right: var(--a-space-md)
+    padding: 0
+    padding-bottom: var(--a-space-xs)
+    transition: color var(--a-transition-duration-main) var(--a-transition-timing-main)
+    &:hover, &[data-selected]
+      color: var(--a-color-accent)
+    &[disabled]
+      opacity: var(--a-opacity-disabled)
+      cursor: not-allowed
+      color: inherit
+  &--sm .aurora-tab
+    font-size: var(--a-font-size-sm)
+  &--md .aurora-tab
+    font-size: var(--a-font-size-md)
+  &--lg .aurora-tab
+    font-size: var(--a-font-size-lg)
+
+.aurora-tab-indicator-container
+  display: grid
+
+.aurora-tab-indicator
+  justify-self: center
+  width: 6px
+  height: 6px
+  border-radius: var(--a-border-radius-circle)
+  background-color: var(--a-color-accent)
+
+.aurora-tab-content
+  margin-top: var(--a-space-md)

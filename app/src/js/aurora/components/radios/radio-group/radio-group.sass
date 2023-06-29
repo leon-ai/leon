@@ -1,0 +1,50 @@
+@import '../../../styles/main.sass'
+
+.aurora-radio-group
+  &[data-disabled]
+    cursor: not-allowed
+
+.aurora-radio
+  display: flex
+  align-items: center
+  gap: var(--a-space-sm)
+  cursor: pointer
+  &[data-disabled]
+    cursor: not-allowed
+
+.aurora-radio-control
+  display: flex
+  justify-content: center
+  align-items: center
+  width: var(--a-checkbox-radio-size)
+  height: var(--a-checkbox-radio-size)
+  border-radius: var(--a-border-radius-circle)
+  border: 1px solid var(--a-color-input-border)
+  background-color: var(--a-color-input-background)
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main), border-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &[data-hover]:not([data-checked])
+    border-color: var(--a-color-input-border-hover)
+    background-color: var(--a-color-input-background-hover)
+  &[data-checked]
+    border-color: transparent
+    background-color: var(--a-color-input-border-focus)
+    &::after
+      opacity: 1
+      transform: scale3d(.5, .5, .5)
+  &::after
+    content: ''
+    width: 16px
+    height: 16px
+    border-radius: var(--a-border-radius-circle)
+    background-color: var(--a-color-white)
+    opacity: 0
+    transition: opacity .3s var(--a-transition-timing-main), transform .3s var(--a-transition-timing-main)
+  &[data-disabled]
+    opacity: var(--a-opacity-disabled)
+
+.aurora-radio-label
+  color: var(--a-color-text)
+  font-size: var(--a-font-size-md)
+  &[data-disabled]
+    opacity: var(--a-opacity-disabled)
+    color: inherit

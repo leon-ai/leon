@@ -70,6 +70,7 @@
     "docker:check": "docker run --rm --interactive leon-ai/leon npm run check"
   },
   "dependencies": {
+    "@ark-ui/react": "0.5.0",
     "@aws-sdk/client-polly": "3.18.0",
     "@fastify/static": "6.9.0",
     "@ffmpeg-installer/ffmpeg": "1.1.0",
@@ -87,6 +88,7 @@
     "archiver": "5.3.1",
     "async": "3.2.4",
     "axios": "1.1.2",
+    "classnames": "2.3.2",
     "cross-env": "7.0.3",
     "dayjs": "1.11.5",
     "dotenv": "10.0.0",
@@ -141,6 +143,7 @@
     "nodemon": "2.0.19",
     "prettier": "2.8.7",
     "resolve-tspaths": "0.8.8",
+    "sass": "1.63.6",
     "semver": "7.3.5",
     "shx": "0.3.3",
     "ts-node": "10.9.1",

@@ -1,0 +1,48 @@
+@import '../../styles/main.sass'
+
+.aurora-switch
+  --a-switch-width: 44px
+  --a-thumb-size: 20px
+
+  position: relative
+  display: flex
+  align-items: center
+  gap: var(--a-space-sm)
+  cursor: pointer
+  &[data-disabled]
+    cursor: not-allowed
+    opacity: var(--a-opacity-disabled)
+  &:hover:not([data-checked], [data-disabled]) .aurora-switch-control
+    background-color: var(--a-color-background-surface-secondary-hover)
+
+.aurora-switch-control
+  position: relative
+  display: flex
+  align-items: center
+  border-radius: var(--a-border-radius-pill)
+  background-color: var(--a-color-background-surface-secondary)
+  width: var(--a-switch-width)
+  height: 22px
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &[data-checked]
+    background-color: var(--a-color-accent)
+
+.aurora-switch-thumb
+  display: block
+  position: relative
+  left: 2px
+  width: var(--a-thumb-size)
+  height: var(--a-thumb-size)
+  border-radius: var(--a-border-radius-circle)
+  border: 1px solid var(--a-color-input-border)
+  background-color: var(--a-color-background-surface)
+  transition: transform var(--a-transition-duration-main) var(--a-transition-timing-main), border-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &[data-checked]
+    border-color: transparent
+    transform: translateX(calc(var(--a-switch-width) - var(--a-thumb-size) - 4px))
+
+.aurora-switch-label
+  color: var(--a-color-text)
+  font-size: var(--a-font-size-md)
+  &[data-disabled]
+    color: inherit

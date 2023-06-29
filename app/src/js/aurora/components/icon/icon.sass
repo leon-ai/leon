@@ -1,0 +1,115 @@
+@import '../../styles/main.sass'
+
+.aurora-icon
+  position: relative
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  border-radius: var(--a-border-radius-xs)
+  color: var(--a-color-white)
+  font-size: var(--a-font-size-md)
+  background-color: transparent
+  padding: var(--a-space-xs)
+  transition: opacity var(--a-transition-duration-main) var(--a-transition-timing-main), color var(--a-transition-duration-main) var(--a-transition-timing-main), background-color var(--a-transition-duration-main) var(--a-transition-timing-main), transform var(--a-transition-duration-main) var(--a-transition-timing-main)
+
+  &--animated
+    opacity: 0
+    animation: aurora-animation-fade-in var(--a-transition-duration-main) var(--a-transition-timing-main) var(--a-transition-duration-main) forwards
+
+  &--xs
+    width: 12px
+    height: 12px
+    font-size: var(--a-font-size-xs)
+    border-radius: var(--a-border-radius-xs)
+  &--sm
+    width: 20px
+    height: 20px
+    font-size: var(--a-font-size-sm)
+    border-radius: var(--a-border-radius-xs)
+  &--md
+    width: 28px
+    height: 28px
+    font-size: var(--a-font-size-md)
+    border-radius: var(--a-border-radius-xs)
+  &--lg
+    width: 56px
+    height: 56px
+    font-size: var(--a-font-size-lg)
+    border-radius: var(--a-border-radius-md)
+  &--xl
+    width: 96px
+    height: 96px
+    font-size: var(--a-font-size-xl)
+    border-radius: var(--a-border-radius-md)
+  &--xxl
+    width: 128px
+    height: 128px
+    font-size: var(--a-font-size-xxl)
+    border-radius: var(--a-border-radius-md)
+
+  &--square
+    border-radius: var(--a-border-radius-xs)
+  &--circle
+    border-radius: var(--a-border-radius-circle)
+
+  &--white
+    color: var(--a-color-white)
+  &--transparent-white
+    color: var(--a-color-transparent-white)
+  &--black
+    color: var(--a-color-black)
+  &--blue
+    color: var(--a-color-blue)
+  &--secondary-blue
+    color: var(--a-color-secondary-blue)
+  &--transparent-blue
+    color: var(--a-color-transparent-blue)
+  &--red
+    color: var(--a-color-red)
+  &--secondary-red
+    color: var(--a-color-secondary-red)
+  &--transparent-red
+    color: var(--a-color-transparent-red)
+  &--green
+    color: var(--a-color-green)
+  &--secondary-green
+    color: var(--a-color-secondary-green)
+  &--transparent-green
+    color: var(--a-color-transparent-green)
+  &--yellow
+    color: var(--a-color-yellow)
+  &--secondary-yellow
+    color: var(--a-color-secondary-yellow)
+  &--transparent-yellow
+    color: var(--a-color-transparent-yellow)
+
+  &--bg-white
+    background-color: var(--a-color-white)
+  &--bg-transparent-white
+    background-color: var(--a-color-transparent-white)
+  &--bg-black
+    background-color: var(--a-color-black)
+  &--bg-blue
+    background-color: var(--a-color-blue)
+  &--bg-secondary-blue
+    background-color: var(--a-color-secondary-blue)
+  &--bg-transparent-blue
+    background-color: var(--a-color-transparent-blue)
+  &--bg-red
+    background-color: var(--a-color-red)
+  &--bg-secondary-red
+    background-color: var(--a-color-secondary-red)
+  &--bg-transparent-red
+    background-color: var(--a-color-transparent-red)
+  &--bg-green
+    background-color: var(--a-color-green)
+  &--bg-secondary-green
+    background-color: var(--a-color-secondary-green)
+  &--bg-transparent-green
+    background-color: var(--a-color-transparent-green)
+  &--bg-yellow
+    background-color: var(--a-color-yellow)
+  &--bg-secondary-yellow
+    background-color: var(--a-color-secondary-yellow)
+  &--bg-transparent-yellow
+    background-color: var(--a-color-transparent-yellow)

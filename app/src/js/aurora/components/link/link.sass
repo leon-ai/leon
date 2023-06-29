@@ -1,0 +1,14 @@
+@import '../../styles/main.sass'
+
+.aurora-link
+  display: inline-block
+  position: relative
+  text-decoration: none
+  transition: color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &:hover
+    text-decoration: 1px underline var(--a-color-accent)
+    .aurora-text, .aurora-icon
+      color: var(--a-color-accent-hover)
+
+  .aurora-text, .aurora-icon
+    color: var(--a-color-accent)

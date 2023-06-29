@@ -1,0 +1,78 @@
+@import '../../../styles/main.sass'
+
+.aurora-select-trigger
+  position: relative
+  display: inline-block
+  cursor: pointer
+  color: var(--a-color-text-placeholder)
+  text-align: left
+  background-color: var(--a-color-input-background)
+  font-size: var(--a-font-size-md)
+  border: 1px solid var(--a-color-input-border)
+  border-radius: var(--a-border-radius-md)
+  height: var(--a-input-size-md)
+  padding: 0 var(--a-space-md)
+  padding-right: 0
+  width: 100%
+  outline: none
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main), border-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &:hover
+    border-color: var(--a-color-input-border-hover)
+    background-color: var(--a-color-input-background-hover)
+  &--selected
+    color: var(--a-color-text)
+  &[data-expanded]
+    border-color: var(--a-color-input-border-focus)
+    background-color: var(--a-color-input-background-hover)
+    &:not([disabled])
+      .aurora-icon
+        color: var(--a-color-accent)
+        transform: rotate(-180deg)
+  &[disabled], &[disabled]:hover
+    border-color: inherit
+    background-color: inherit
+    opacity: var(--a-opacity-disabled)
+    cursor: not-allowed
+  &-placeholder-container
+    position: relative
+    overflow: hidden
+    white-space: nowrap
+    text-overflow: ellipsis
+    width: 100%
+  &-icon-container
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 50px
+
+  .aurora-icon
+    color: var(--color-secondary-white)
+
+.aurora-select-content
+  position: relative
+  width: var(--reference-width)
+  background-color: var(--a-color-background-surface)
+  border: 1px solid var(--a-color-separator)
+  border-radius: var(--a-border-radius-md)
+  cursor: pointer
+
+.aurora-select-option
+  font-size: var(--a-font-size-md)
+  line-height: var(--a-line-height-md)
+  color: var(--a-color-text-secondary)
+  padding: var(--a-space-md)
+  border-bottom: 1px solid var(--a-color-separator)
+  background-color: transparent
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &:hover
+    background-color: var(--a-color-black)
+  &[data-disabled]
+    color: rgba(245, 245, 247, var(--a-opacity-disabled))
+    cursor: not-allowed
+    &:hover
+      background-color: inherit
+  &[data-selected]
+    color: var(--a-color-text)
+  &:last-child
+    border-bottom: none
+

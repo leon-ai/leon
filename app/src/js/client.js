@@ -2,7 +2,7 @@ import { io } from 'socket.io-client'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 
-import { Button } from './aurora/button'
+import { Button } from './aurora'
 import Chatbot from './chatbot'
 import { INIT_MESSAGES } from './constants'
 

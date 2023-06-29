@@ -1,0 +1,28 @@
+.aurora-circular-progress
+  position: relative
+
+  &--sm
+    width: 64px
+    height: 64px
+  &--md
+    width: 128px
+    height: 128px
+  &--lg
+    width: 256px
+    height: 256px
+
+  path
+    transition: stroke-dashoffset var(--a-transition-duration-main) var(--a-transition-timing-main)
+    &:nth-child(1)
+      stroke: var(--a-color-background-surface-secondary)
+      stroke-width: 32px
+    &:nth-child(2)
+      stroke: var(--a-color-accent)
+      stroke-width: 12px
+      stroke-linecap: round
+
+.aurora-circular-progress-content
+  position: absolute
+  top: 50%
+  left: 50%
+  transform: translate(-50%, -50%)

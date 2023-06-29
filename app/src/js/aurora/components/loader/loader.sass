@@ -1,0 +1,29 @@
+@import '../../styles/main.sass'
+
+.aurora-loader
+  width: var(--a-loader-size-md)
+  height: var(--a-loader-size-md)
+  display: inline-block
+  position: relative
+  &::before, &::after
+    content: ''
+    box-sizing: border-box
+    width: var(--a-loader-size-md)
+    height: var(--a-loader-size-md)
+    border-radius: 50%
+    background-color: var(--a-color-accent)
+    position: absolute
+    left: 0
+    top: 0
+    animation: aurora-animation-loader 1s linear infinite
+  &::after
+    opacity: 0
+    animation-delay: .4s
+
+@keyframes aurora-animation-loader
+  0%
+    transform: scale(0)
+    opacity: 1
+  100%
+    transform: scale(1)
+    opacity: 0

@@ -1,0 +1,23 @@
+@import '../../styles/main.sass'
+
+.aurora-widget-wrapper
+  position: relative
+  display: inline-block
+  height: auto
+  border-radius: var(--a-border-radius-md)
+  padding: var(--a-space-xl) var(--a-space-md)
+  width: var(--a-widget-width)
+  background: linear-gradient(var(--a-color-background-surface), var(--a-color-background-surface)) padding-box, linear-gradient(135deg, rgba(28, 117, 219, 0.4) 0%, rgba(237, 41, 122, 0.2) 100%) border-box
+  border: 1px solid transparent
+  overflow-x: auto
+
+  &--no-padding
+    padding: 0
+  &--padding-top
+    padding-top: var(--a-space-xl)
+  &--padding-bottom
+    padding-bottom: var(--a-space-xl)
+  &--padding-left
+    padding-left: var(--a-space-md)
+  &--padding-right
+    padding-right: var(--a-space-md)

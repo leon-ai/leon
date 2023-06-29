@@ -1,0 +1,70 @@
+@import '../../styles/main.sass'
+
+.aurora-icon-button
+  position: relative
+  width: var(--a-button-size-md)
+  height: var(--a-button-size-md)
+  display: flex
+  align-items: center
+  justify-content: center
+  padding: 0
+  text-align: center
+  &.aurora-button:hover:not(.aurora-button--disabled, .aurora-button--loading)
+    transform: scale3d(1.03, 1.03, 1.03)
+  &.aurora-button:active:not(.aurora-button--disabled, .aurora-button--loading)
+    transform: scale3d(.96, .96, .96)
+  &.aurora-button.aurora-button--light:hover:not(.aurora-button--disabled, .aurora-button--loading)
+    transform: scale3d(1.06, 1.06, 1.06)
+  &.aurora-button.aurora-button--light:active:not(.aurora-button--disabled, .aurora-button--loading)
+    transform: scale3d(.96, .96, .96)
+
+  &--square
+    width: var(--a-button-size-md)
+    height: var(--a-button-size-md)
+    border-radius: var(--a-border-radius-md)
+  &--circle
+    width: var(--a-button-size-md)
+    height: var(--a-button-size-md)
+    border-radius: 50%
+
+  &--xs
+    width: 22px
+    height: 22px
+  &--sm
+    width: 30px
+    height: 30px
+  &--md
+    width: var(--a-button-size-md)
+    height: var(--a-button-size-md)
+  &--lg
+    width: 56px
+    height: 56px
+  &--xl
+    width: 96px
+    height: 96px
+  &--xxl
+    width: 164px
+    height: 164px
+
+  &.aurora-button--light .aurora-icon
+    color: var(--a-color-text)
+
+  &.aurora-button--secondary:hover, &.aurora-button--light:hover
+    background-color: transparent
+
+
+  &.aurora-button--light:hover .aurora-icon
+    color: var(--a-color-text)
+
+  &.aurora-button--light.aurora-button--secondary
+    background-color: transparent
+    border: none
+    .aurora-icon
+      color: var(--a-color-white-secondary)
+    &:hover:not(.aurora-button--disabled, .aurora-button--loading) .aurora-icon
+      color: var(--a-color-text)
+    &:hover.aurora-icon-button--activated .aurora-icon
+      color: var(--a-color-accent)
+
+  &.aurora-button--light.aurora-icon-button--activated .aurora-icon
+    color: var(--a-color-accent)

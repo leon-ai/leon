@@ -1,0 +1,31 @@
+@import '../../styles/main.sass'
+
+.aurora-scroll-container
+  position: relative
+  width: 100%
+  padding: var(--a-space-sm) 0
+
+  .aurora-scroll-container-mask
+    position: absolute
+    pointer-events: none
+
+  &--horizontal .aurora-scroll-container-mask
+    top: 0
+    right: 0
+    width: 50px
+    height: 100%
+    background: linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .3), var(--a-color-background-surface))
+  &--vertical .aurora-scroll-container-mask
+    position: absolute
+    content: ''
+    bottom: 0
+    left: 0
+    right: 0
+    width: 100%
+    height: 50px
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, .3), var(--a-color-background-surface))
+
+.aurora-scroll-container-scrollview
+  height: 100%
+  overflow-y: auto
+  overflow-x: auto

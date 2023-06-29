@@ -1,0 +1,62 @@
+@import '../../styles/main.sass'
+
+.aurora-status
+  position: relative
+  display: inline-block
+  border-radius: var(--a-border-radius-pill)
+  font-size: var(--a-font-size-xs)
+  padding: var(--a-space-xs) var(--a-space-sm)
+  cursor: default
+  color: var(--a-color-text)
+  background-color: var(--a-color-transparent-white)
+  border: 1px solid var(--a-color-transparent-white)
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main), border-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &:hover
+    background-color: var(--a-color-transparent-white-hover)
+    border-color: var(--a-color-transparent-white-hover)
+
+  *
+    cursor: default
+
+  .aurora-icon
+    width: auto
+    height: auto
+    padding: 0
+
+  &--blue
+    color: var(--a-color-blue)
+    background-color: var(--a-color-transparent-blue)
+    border-color: var(--a-color-transparent-blue)
+    &:hover
+      background-color: var(--a-color-transparent-blue-hover)
+      border-color: var(--a-color-transparent-blue-hover)
+    .aurora-icon
+      color: var(--a-color-blue)
+  &--green
+    color: var(--a-color-green)
+    background-color: var(--a-color-transparent-green)
+    border-color: var(--a-color-transparent-green)
+    &:hover
+      background-color: var(--a-color-transparent-green-hover)
+      border-color: var(--a-color-transparent-green-hover)
+    .aurora-icon
+      color: var(--a-color-green)
+  &--yellow
+    color: var(--a-color-yellow)
+    background-color: var(--a-color-transparent-yellow)
+    border-color: var(--a-color-transparent-yellow)
+    &:hover
+      background-color: var(--a-color-transparent-yellow-hover)
+      border-color: var(--a-color-transparent-yellow-hover)
+    .aurora-icon
+      color: var(--a-color-yellow)
+  &--red
+    color: var(--a-color-red)
+    background-color: var(--a-color-transparent-red)
+    border-color: var(--a-color-transparent-red)
+    &:hover
+      background-color: var(--a-color-transparent-red-hover)
+      border-color: var(--a-color-transparent-red-hover)
+    .aurora-icon
+      color: var(--a-color-red)
+

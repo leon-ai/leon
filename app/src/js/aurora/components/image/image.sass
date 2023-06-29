@@ -1,0 +1,76 @@
+@import '../../styles/main.sass'
+
+.aurora-image
+  position: relative
+  border-radius: var(--a-border-radius-md)
+  background-repeat: no-repeat
+  background-size: cover
+  background-position: center center
+
+  &--overlay
+    &::before
+      content: ''
+      position: absolute
+      width: 100%
+      height: 100%
+      background-color: rgba(0, 0, 0, .2)
+      transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+    &:hover
+      &::before
+        background-color: rgba(0, 0, 0, 0)
+
+  &--gradient
+    &::after
+      content: ''
+      position: absolute
+      top: auto
+      bottom: 0
+      width: 100%
+      height: 64px
+      background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), var(--a-color-background-surface))
+  &--gradient-top
+    &::after
+      top: 0
+      bottom: auto
+      background-image: linear-gradient(to top, rgba(0, 0, 0, 0), var(--a-color-background-surface))
+  &--gradient-bottom
+    &::after
+      top: auto
+      bottom: 0
+      background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0), var(--a-color-background-surface))
+  &--gradient-left
+    &::after
+      left: 0
+      top: 0
+      bottom: 0
+      width: 64px
+      height: 100%
+      background-image: linear-gradient(to left, rgba(0, 0, 0, 0), var(--a-color-background-surface))
+  &--gradient-right
+    &::after
+      right: 0
+      top: 0
+      bottom: 0
+      width: 64px
+      height: 100%
+      background-image: linear-gradient(to right, rgba(0, 0, 0, 0), var(--a-color-background-surface))
+
+  &--cover
+    background-size: cover
+  &--contain
+    background-size: contain
+
+  &--square
+    border-radius: var(--a-border-radius-md)
+  &--circle
+    border-radius: var(--a-border-radius-circle)
+
+  &--blue-border
+    border: 1px solid var(--a-color-blue)
+  &--white-border
+    border: 1px solid var(--a-color-white)
+
+  &--radius-top
+    border-radius: var(--a-border-radius-md) var(--a-border-radius-md) 0 0
+  &--radius-bottom
+    border-radius: 0 0 var(--a-border-radius-md) var(--a-border-radius-md)

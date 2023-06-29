@@ -1,0 +1,61 @@
+@import '../../styles/main.sass'
+
+.aurora-button
+  position: relative
+  display: inline-block
+  font-size: var(--a-font-size-md)
+  line-height: var(--a-line-height-md)
+  font-weight: var(--a-font-weight-semi-bold)
+  border-radius: var(--a-border-radius-md)
+  height: var(--a-button-size-md)
+  border: none
+  cursor: pointer
+  padding: 0 var(--a-space-lg)
+  box-shadow: 0 0 10px 2px transparent
+  transition: opacity var(--a-transition-duration-main) var(--a-transition-timing-main), transform var(--a-transition-duration-main), background-color var(--a-transition-duration-main) var(--a-transition-timing-main), border-color var(--a-transition-duration-main) var(--a-transition-timing-main), color var(--a-transition-duration-main) var(--a-transition-timing-main), box-shadow var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &:hover:not(&--disabled, &--loading)
+    transform: scale3d(1.01, 1.01, 1.01)
+  &:active:not(&--disabled, &--loading)
+    transform: scale3d(.96, .96, .96)
+
+  &--primary
+    color: var(--a-color-text)
+    background-color: var(--a-color-accent)
+    &:hover:not(.aurora-button--disabled, .aurora-button--loading)
+      background-color: var(--a-color-accent-hover)
+
+  &--secondary
+    background-color: transparent
+    color: var(--a-color-accent)
+    border: 1px solid var(--a-color-accent)
+    &:hover:not(.aurora-button--disabled, .aurora-button--loading), &:hover:not(.aurora-button--disabled, .aurora-button--loading) .aurora-icon
+      border-color: var(--a-color-accent-hover)
+      color: var(--a-color-accent-hover)
+    .aurora-icon
+      color: var(--a-color-accent)
+
+  &--danger
+    background-color: var(--a-color-background-danger)
+    color: var(--a-color-text-danger)
+    &:hover:not(.aurora-button--disabled, .aurora-button--loading)
+      background-color: var(--a-color-danger-hover)
+
+  &--light
+    background-color: transparent
+    color: var(--a-color-accent)
+    &:hover:not(.aurora-button--disabled, .aurora-button--loading), &:hover:not(.aurora-button--disabled, .aurora-button--loading) .aurora-icon
+      color: var(--a-color-accent-hover)
+    .aurora-icon
+      color: var(--a-color-accent)
+
+  &--disabled
+    opacity: var(--a-opacity-disabled)
+    cursor: not-allowed
+
+  &--loading
+    opacity: var(--a-opacity-disabled)
+    cursor: wait
+
+  .aurora-loader
+    &::before, &::after
+      background-color: var(--a-color-white)

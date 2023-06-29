@@ -1,0 +1,83 @@
+@import '../../styles/main.sass'
+
+.aurora-text-input-container
+  --a-icon-container-width: calc(var(--a-input-size-md) + var(--a-space-sm))
+
+  position: relative
+  display: flex
+  flex-direction: column
+
+.aurora-text-input
+  position: relative
+  display: inline-block
+  color: var(--a-color-text)
+  background-color: var(--a-color-input-background)
+  font-size: var(--a-font-size-md)
+  border: 1px solid var(--a-color-input-border)
+  border-radius: var(--a-border-radius-md)
+  height: var(--a-input-size-md)
+  padding: 0 var(--a-space-md)
+  width: 100%
+  outline: none
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main), border-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  &:hover
+    border-color: var(--a-color-input-border-hover)
+    background-color: var(--a-color-input-background-hover)
+  &:hover:not([disabled]) ~ .aurora-text-input-icon-container
+    border-color: var(--a-color-input-border-hover)
+  &:focus
+    border-color: var(--a-color-input-border-focus)
+    background-color: var(--a-color-input-background-hover)
+    &:focus:not([disabled])
+      &~ .aurora-text-input-icon-container
+        border-color: var(--a-color-input-border-focus)
+        i
+          color: var(--a-color-accent)
+  &:placeholder-shown ~ .aurora-text-input-icon-container i
+    color: var(--color-secondary-white)
+
+  &--multiline
+    height: calc(var(--a-input-size-md) * 2)
+    padding: var(--a-space-sm) var(--a-space-md)
+    resize: vertical
+    min-height: calc(var(--a-input-size-md) * 2)
+    max-height: 512px
+    &~ .aurora-text-input-icon-container
+      height: 100%
+
+  &--disabled, &--disabled:hover
+    opacity: var(--a-opacity-disabled)
+    color: inherit
+    background-color: var(--a-color-input-background)
+    border-color: var(--a-color-input-border)
+    cursor: not-allowed
+  &--disabled ~ .aurora-text-input-icon-container
+    opacity: var(--a-opacity-disabled)
+    i
+      color: inherit
+      opacity: var(--a-opacity-disabled)
+
+  &--with-icon
+    padding-left: calc(var(--a-icon-container-width) + var(--a-space-md))
+
+.aurora-text-input-icon-container
+  position: absolute
+  left: 0
+  top: 0
+  bottom: 0
+  display: flex
+  align-items: center
+  justify-content: center
+  color: var(--a-color-text)
+  pointer-events: none
+  border-right: 1px solid var(--a-color-input-border)
+  width: var(--a-icon-container-width)
+  height: var(--a-input-size-md)
+  transition: background-color var(--a-transition-duration-main) var(--a-transition-timing-main), border-color var(--a-transition-duration-main) var(--a-transition-timing-main)
+  i
+    color: var(--a-color-text)
+    transition: color var(--a-transition-duration-main) var(--a-transition-timing-main)
+
+.aurora-text-input-hint-container
+  padding-left: var(--a-space-md)
+  margin-top: var(--a-space-xs)

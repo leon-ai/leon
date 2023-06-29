@@ -55,7 +55,7 @@ export const run: ActionFunction = async function () {
    * Forecast
    */
 
-  const forecast = new Container(
+  /*const forecast = new Container(
     [
       new Text({
         text: 'Paris',
@@ -188,9 +188,9 @@ export const run: ActionFunction = async function () {
     }
   )
 
-  /**
+  /!**
    * Select music provider
-   */
+   *!/
 
   const musicProviderList = new List({
     title: {
@@ -216,9 +216,9 @@ export const run: ActionFunction = async function () {
 
   await leon.answer({ widget: musicProviderList })
 
-  /**
+  /!**
    * Todo list
-   */
+   *!/
   const todoList = new List({
     title: {
       text: 'Shopping List',
@@ -245,7 +245,7 @@ export const run: ActionFunction = async function () {
   })
 
   await leon.answer({ widget: todoList })
-
+*/
   /**
    * Random number
    */
