@@ -74,7 +74,7 @@
     "@fastify/static": "6.9.0",
     "@ffmpeg-installer/ffmpeg": "1.1.0",
     "@ffprobe-installer/ffprobe": "1.4.1",
-    "@google-cloud/speech": "4.2.0",
+    "@google-cloud/speech": "5.5.1",
     "@google-cloud/text-to-speech": "3.2.1",
     "@nlpjs/builtin-microsoft": "4.22.7",
     "@nlpjs/core-loader": "4.22.7",
