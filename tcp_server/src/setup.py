@@ -17,7 +17,7 @@ options = {
             'cymem'
         ],
         'include_files': [
-            'lib/time_zones.txt'
+            'tcp_server/src/lib/time_zones.txt'
         ]
     }
 }
