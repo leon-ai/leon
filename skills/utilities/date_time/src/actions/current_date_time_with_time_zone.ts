@@ -4,11 +4,10 @@ import { leon } from '@sdk/leon'
 import { zeroPad } from '../lib/zeroPad'
 
 /**
- * Determine if the given date is in Daylight Saving Time (DST).
- * @example isDaylightSavingTime(new Date(2020, 0, 1)) // false
- * @example isDaylightSavingTime(new Date(2020, 7, 1)) // true
+ * Determine if the current local date is in Daylight Saving Time (DST).
  */
-function isDaylightSavingTime(date: Date): boolean {
+function isDaylightSavingTime(): boolean {
+  const date = new Date()
   const january = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
   const july = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
   return Math.max(january, july) !== date.getTimezoneOffset()
@@ -42,7 +41,7 @@ export const run: ActionFunction = async function (params) {
   const { time_zone } = cityEntity.resolution.data
 
   const currentDate = getCurrentCoordinatedUniversalTime()
-  if (isDaylightSavingTime(currentDate)) {
+  if (isDaylightSavingTime()) {
     currentDate.setHours(
       currentDate.getHours() + time_zone.daylight_saving_time_offset_hours
     )
