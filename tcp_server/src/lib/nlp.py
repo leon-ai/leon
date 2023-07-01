@@ -99,7 +99,8 @@ def extract_spacy_entities(utterance):
                         break
 
                 for city in cities:
-                    if cities[city]['name'].casefold() == ent.text.casefold():
+                    alternatenames = [name.casefold() for name in cities[city]['alternatenames']]
+                    if cities[city]['name'].casefold() == ent.text.casefold() or ent.text.casefold() in alternatenames:
                         entity += ':city'
                         resolution['data'] = cities[city]
                         resolution['data']['time_zone'] = get_time_zone_data(cities[city]['timezone'])
