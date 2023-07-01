@@ -12,7 +12,7 @@ export const run: ActionFunction = async function (params) {
     }
   }
 
-  if (cityEntity == null) {
+  if (cityEntity == null || cityEntity.resolution.data == null) {
     return await leon.answer({
       key: 'city_not_found'
     })
@@ -33,7 +33,7 @@ export const run: ActionFunction = async function (params) {
       minutes: zeroPad(currentDate.getMinutes()),
       seconds: zeroPad(currentDate.getSeconds()),
       city: cityEntity.resolution.data.name,
-      country: time_zone.country_code
+      country: cityEntity.resolution.data.country.name
     }
   })
 }

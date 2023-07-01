@@ -104,6 +104,12 @@ def extract_spacy_entities(utterance):
                         entity += ':city'
                         resolution['data'] = cities[city]
                         resolution['data']['time_zone'] = get_time_zone_data(cities[city]['timezone'])
+
+                        for country in countries:
+                            if countries[country]['iso'] == cities[city]['countrycode']:
+                                resolution['data']['country'] = countries[country]
+                                break
+
                         break
 
             entities.append({

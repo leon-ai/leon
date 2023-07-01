@@ -169,14 +169,15 @@ export default class NER {
 
     if (spacyEntities.length > 0) {
       spacyEntities.forEach(({ entity, resolution }) => {
+        const value = StringHelper.ucFirst(resolution.value)
         const spacyEntity = {
           [entity]: {
             options: {
-              [resolution.value]: [StringHelper.ucFirst(resolution.value)]
+              [resolution.value]: [value]
             }
           }
         }
-        this.spacyData.set(`${entity}-${resolution.value}`, resolution)
+        this.spacyData.set(`${entity}-${value}`, resolution)
 
         MODEL_LOADER.mainNLPContainer.addEntities(spacyEntity, BRAIN.lang)
       })

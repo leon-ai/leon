@@ -386,26 +386,27 @@ interface SpacyEntity<
   entity: T
 }
 
+interface SpacyLocationCountryData {
+  name: string
+  iso: string
+  iso3: string
+  isonumeric: number
+  continentcode: string
+  capital: string
+  population: number
+  tld: string
+  currencycode: string
+  currencyname: string
+  phone: string
+  languages: string
+  neighbours: string
+}
 export interface SpacyLocationCountryEntity
   extends SpacyEntity<
     'location:country',
     {
       value: string
-      data: {
-        name: string
-        iso: string
-        iso3: string
-        isonumeric: number
-        continentcode: string
-        capital: string
-        population: number
-        tld: string
-        currencycode: string
-        currencyname: string
-        phone: string
-        languages: string
-        neighbours: string
-      }
+      data: SpacyLocationCountryData
     }
   > {}
 export interface SpacyLocationCityEntity
@@ -419,6 +420,7 @@ export interface SpacyLocationCityEntity
         latitude: number
         longitude: number
         countrycode: string
+        country: SpacyLocationCountryData
         population: number
         alternatenames: string[]
         time_zone: {
