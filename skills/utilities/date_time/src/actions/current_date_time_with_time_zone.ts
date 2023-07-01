@@ -3,26 +3,6 @@ import { leon } from '@sdk/leon'
 
 import { zeroPad } from '../lib/zeroPad'
 
-/**
- * Determine if the current local date is in Daylight Saving Time (DST).
- */
-function isDaylightSavingTime(): boolean {
-  const date = new Date()
-  const january = new Date(date.getFullYear(), 0, 1).getTimezoneOffset()
-  const july = new Date(date.getFullYear(), 6, 1).getTimezoneOffset()
-  return Math.max(january, july) !== date.getTimezoneOffset()
-}
-
-/**
- * Get the current date in Coordinated Universal Time (UTC).
- */
-function getCurrentCoordinatedUniversalTime(): Date {
-  const currentDate = new Date()
-  const utcOffset = currentDate.getTimezoneOffset()
-  currentDate.setMinutes(currentDate.getMinutes() + utcOffset)
-  return currentDate
-}
-
 export const run: ActionFunction = async function (params) {
   let cityEntity: SpacyLocationCityEntity | null = null
   for (const entity of params.current_entities) {
@@ -39,18 +19,9 @@ export const run: ActionFunction = async function (params) {
   }
 
   const { time_zone } = cityEntity.resolution.data
-
-  const currentDate = getCurrentCoordinatedUniversalTime()
-  if (isDaylightSavingTime()) {
-    currentDate.setHours(
-      currentDate.getHours() + time_zone.daylight_saving_time_offset_hours
-    )
-  } else {
-    currentDate.setHours(
-      currentDate.getHours() + time_zone.coordinated_universal_time_offset_hours
-    )
-  }
-
+  const currentDate = new Date(
+    new Date().toLocaleString('en', { timeZone: time_zone.id })
+  )
   await leon.answer({
     key: 'current_date_time_with_time_zone',
     data: {
