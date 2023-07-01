@@ -2,6 +2,7 @@
   "compilerOptions": {
     "useDefineForClassFields": true,
     "skipLibCheck": true,
+    "module": "ESNext",
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
