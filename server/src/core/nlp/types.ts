@@ -389,17 +389,13 @@ interface SpacyEntity<
 interface SpacyLocationCountryData {
   name: string
   iso: string
-  iso3: string
   isonumeric: number
   continentcode: string
   capital: string
   population: number
   tld: string
   currencycode: string
-  currencyname: string
   phone: string
-  languages: string
-  neighbours: string
 }
 export interface SpacyLocationCountryEntity
   extends SpacyEntity<
@@ -415,20 +411,13 @@ export interface SpacyLocationCityEntity
     {
       value: string
       data: {
-        geonameid: number
         name: string
         latitude: number
         longitude: number
         countrycode: string
         country: SpacyLocationCountryData
         population: number
-        alternatenames: string[]
-        time_zone: {
-          country_code: string
-          id: string
-          coordinated_universal_time_offset_hours: number
-          daylight_saving_time_offset_hours: number
-        }
+        timezone: string
       }
     }
   > {}

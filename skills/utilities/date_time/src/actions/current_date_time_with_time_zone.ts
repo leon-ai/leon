@@ -18,9 +18,9 @@ export const run: ActionFunction = async function (params) {
     })
   }
 
-  const { time_zone } = cityEntity.resolution.data
+  const { timezone } = cityEntity.resolution.data
   const currentDate = new Date(
-    new Date().toLocaleString('en', { timeZone: time_zone.id })
+    new Date().toLocaleString('en', { timeZone: timezone })
   )
   await leon.answer({
     key: 'current_date_time_with_time_zone',
