@@ -103,7 +103,7 @@ const setupBinaries = async (key) => {
         LogHelper.info('Installing Node.js bridge npm packages...')
 
         await command(
-          `npm install --package-lock=false --prefix ${NODEJS_BRIDGE_ROOT_PATH}`,
+          `cd ${NODEJS_BRIDGE_ROOT_PATH} && npm install --package-lock=false`,
           {
             shell: true
           }
