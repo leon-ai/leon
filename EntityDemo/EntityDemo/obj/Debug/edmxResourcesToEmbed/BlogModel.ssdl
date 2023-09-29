@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Schema Namespace="CustomerModel.Store" Provider="System.Data.SqlClient" ProviderManifestToken="2012" Alias="Self" xmlns:customannotation="http://schemas.microsoft.com/ado/2013/11/edm/customannotation" xmlns="http://schemas.microsoft.com/ado/2009/11/edm/ssdl">
+  <!--Errors Found During Generation:
+warning 6013: The table/view 'Customer.dbo.Customer' does not have a primary key defined and no valid primary key could be inferred. This table/view has been excluded. To use the entity, you will need to review your schema, add the correct keys, and uncomment it.
+        <EntityType Name="Customer">
+          <Property Name="customer_Id" Type="int" />
+          <Property Name="FirstName" Type="varchar" MaxLength="50" />
+          <Property Name="LastName" Type="varchar" MaxLength="50" />
+          <Property Name="Street" Type="varchar" MaxLength="50" />
+          <Property Name="CustomerState" Type="varchar" MaxLength="20" />
+          <Property Name="PhoneNumber" Type="int" />
+          <Property Name="Age" Type="int" />
+          <Property Name="postcode" Type="varchar" MaxLength="10" />
+        </EntityType>-->
+  <EntityContainer Name="CustomerModelStoreContainer" />
+</Schema>

@@ -1,0 +1,3 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\..\build\netcoreapp3.0\EntityFramework.props" />
+</Project>

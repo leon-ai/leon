@@ -1,0 +1,12 @@
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\obj\Debug\EntityDemo.csproj.AssemblyReference.cache
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\obj\Debug\EntityDemo.csproj.CoreCompileInputs.cache
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\bin\Debug\EntityDemo.exe.config
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\bin\Debug\EntityDemo.exe
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\bin\Debug\EntityDemo.pdb
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\bin\Debug\EntityFramework.dll
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\bin\Debug\EntityFramework.SqlServer.dll
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\bin\Debug\EntityFramework.xml
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\bin\Debug\EntityFramework.SqlServer.xml
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\obj\Debug\EntityDemo.csproj.CopyComplete
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\obj\Debug\EntityDemo.exe
+C:\Users\xnanax\source\repos\EntityDemo\EntityDemo\obj\Debug\EntityDemo.pdb

@@ -1,0 +1,42 @@
+.container{
+  background-color: gray;
+
+  max-width: 100%;
+}
+.inner--container{
+  /* background-color: blue; */
+  margin-left: 15%;
+  margin-right: 15%; 
+}
+span{
+  color: red ;
+  display: inline-block;
+  /* margin-left: 5%; */
+}
+
+h1{
+  font-weight: bold ;
+  margin-left: 50%;
+  display: inline-block;
+  text-align: center ;
+}
+.main--ul ul li{
+  list-style-type: none;
+  font-size: 1rem;
+  padding-left: 0;
+  /* display: inline-block; */
+
+
+  }
+  .ulMenu{
+    margin: 0;
+  }
+
+.hide{
+  visibility: hidden;
+}
+.main--ul{
+  display: block;
+  padding: 0;
+  color: orange !important;
+}

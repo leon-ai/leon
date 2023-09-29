@@ -1,0 +1,11 @@
+﻿<configuration xmlns:xdt="http://schemas.microsoft.com/XML-Document-Transform">
+  <configSections>
+    <section name="entityFramework" xdt:Transform="Remove" xdt:Locator="Match(name)" />
+    <section name="entityFramework" type="System.Data.Entity.Internal.ConfigFile.EntityFrameworkSection, EntityFramework, Version=6.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089" requirePermission="false" xdt:Transform="Insert" xdt:Locator="Match(name)" />
+  </configSections>
+  <entityFramework xdt:Transform="InsertIfMissing">
+    <providers xdt:Transform="InsertIfMissing">
+      <provider invariantName="System.Data.SqlClient" type="System.Data.Entity.SqlServer.SqlProviderServices, EntityFramework.SqlServer" xdt:Transform="InsertIfMissing" xdt:Locator="Match(invariantName)" />
+    </providers>
+  </entityFramework>
+</configuration>
