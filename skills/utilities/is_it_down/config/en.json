@@ -4,16 +4,16 @@
     "run": {
       "type": "logic",
       "utterance_samples": [
-        "Is getleon.ai up?",
-        "Is mozilla.org online?",
-        "Is mozilla.org up or down?",
-        "Is github.com up?",
-        "Is github.com offline?",
-        "Can you tell me if getleon.ai is up?",
-        "Check if github.com is up or down",
-        "Check if github.com is down",
-        "Check if github.com is up",
-        "Check if nodejs.org is working"
+        "Is @url up?",
+        "Is @url online?",
+        "Is @url up or down?",
+        "Is @url up?",
+        "Is @url offline?",
+        "Can you tell me if @url is up?",
+        "Check if @url is up or down",
+        "Check if @url is down",
+        "Check if @url is up",
+        "Check if @url is working"
       ],
       "http_api": {
         "entities": [

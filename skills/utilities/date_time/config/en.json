@@ -43,29 +43,23 @@
     "days_countdown": {
       "type": "logic",
       "utterance_samples": [
-        "How many days left until 1st July?",
-        "What is the number of days remaining until December 25th?",
-        "In how many days will it be February 10th?",
-        "Calculate the number until March 1st"
+        "How many days left until @date?",
+        "What is the number of days remaining until @date?",
+        "In how many days will it be @date?",
+        "Calculate the number until @date"
       ]
     },
     "current_date_time_with_time_zone": {
       "type": "logic",
       "utterance_samples": [
-        "What is the time in San Francisco?",
-        "What time is it in Paris?",
-        "Can you tell me the current time in London?",
-        "What's the time right now in Tokyo?",
-        "What is the current date and time in New York City?",
-        "What about Moscow?",
-        "What about Sydney?",
-        "How about the time in Berlin?",
-        "How about Rome?",
-        "How about Miami?",
-        "How about Madrid?",
-        "How about Stockholm?",
-        "And in Los Angeles?",
-        "And in Chicago?"
+        "What is the time in @location:city?",
+        "What time is it in @location:city?",
+        "Can you tell me the current time in @location:city?",
+        "What's the time right now in @location:city?",
+        "What is the current date and time in @location:city?",
+        "What about @location:city?",
+        "How about @location:city?",
+        "And in @location:city?"
       ]
     }
   },
