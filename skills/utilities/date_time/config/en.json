@@ -43,16 +43,32 @@
     "days_countdown": {
       "type": "logic",
       "utterance_samples": [
-        "How many days left until 1st July?",
-        "What is the number of days remaining until December 25th?",
-        "In how many days will it be February 10th?",
-        "Calculate the number until March 1st"
+        "How many days left until @date?",
+        "What is the number of days remaining until @date?",
+        "In how many days will it be @date?",
+        "Calculate the number until @date"
+      ]
+    },
+    "current_date_time_with_time_zone": {
+      "type": "logic",
+      "utterance_samples": [
+        "What is the time in @location:city?",
+        "What time is it in @location:city?",
+        "Can you tell me the current time in @location:city?",
+        "What's the time right now in @location:city?",
+        "What is the current date and time in @location:city?",
+        "What about @location:city?",
+        "How about @location:city?",
+        "And in @location:city?"
       ]
     }
   },
   "answers": {
     "current_date_time": [
       "It is %weekday%, %month% %day%, %year%, and it is %hours%:%minutes%:%seconds%."
+    ],
+    "current_date_time_with_time_zone": [
+      "Greetings from %city%, %country%! The local date and time is %weekday%, %month% %day%, %year%, and it is %hours%:%minutes%:%seconds%."
     ],
     "current_date": ["It is %weekday%, %month% %day%, %year%."],
     "current_time": ["It is %hours%:%minutes%:%seconds%."],
@@ -62,6 +78,9 @@
     ],
     "days_countdown_error": [
       "I'm sorry, I didn't understand the date you said."
+    ],
+    "city_not_found": [
+      "I'm sorry, I couldn't find the city you said. Please try again."
     ]
   }
 }

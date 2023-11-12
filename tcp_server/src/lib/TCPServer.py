@@ -1,11 +1,12 @@
 import socket
 import json
+from typing import Union
 
 import lib.nlp as nlp
 
 
 class TCPServer:
-    def __init__(self, host, port):
+    def __init__(self, host: str, port: Union[str, int]):
         self.host = host
         self.port = port
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -48,7 +49,7 @@ class TCPServer:
                 print(f'Client disconnected: {self.addr}')
                 self.conn.close()
 
-    def get_spacy_entities(self, utterance):
+    def get_spacy_entities(self, utterance: str) -> dict:
         entities = nlp.extract_spacy_entities(utterance)
 
         return {

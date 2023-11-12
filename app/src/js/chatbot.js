@@ -1,3 +1,5 @@
+const MAXIMUM_HEIGHT_TO_SHOW_SEE_MORE = 340
+
 export default class Chatbot {
   constructor() {
     this.et = new EventTarget()
@@ -94,6 +96,23 @@ export default class Chatbot {
     bubble.innerHTML = string
 
     this.feed.appendChild(container).appendChild(bubble)
+
+    if (container.clientHeight > MAXIMUM_HEIGHT_TO_SHOW_SEE_MORE) {
+      bubble.style.maxHeight = `${MAXIMUM_HEIGHT_TO_SHOW_SEE_MORE}px`
+      const showMore = document.createElement('p')
+      const showMoreText = 'Show more'
+
+      showMore.className = 'show-more'
+      showMore.innerHTML = showMoreText
+
+      container.appendChild(showMore)
+
+      showMore.addEventListener('click', () => {
+        bubble.classList.toggle('show-all')
+        showMore.innerHTML =
+          showMore.innerHTML === showMoreText ? 'Show less' : showMoreText
+      })
+    }
 
     if (save) {
       this.saveBubble(who, string)
