@@ -1,54 +1,7 @@
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
-
-/**
- * Aurora component props
- */
-
-interface Text {
-  text: string
-  weight?: 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900 // TODO: design tokens ("400" default)
-  size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl' // TODO: design tokens ("md" default)
-  type?: 'primary' | 'secondary' // TODO: design tokens ("primary" default)
-}
-interface List {
-  title: {
-    text: string
-    align?: 'left' | 'center' | 'right' // TODO: design tokens ("left" default)
-  }
-}
-interface Container {
-  direction?: 'row' | 'column' // TODO: design tokens ("row" default)
-  align?: 'left' | 'center' | 'right' // TODO: design tokens
-}
-interface Image {
-  path: string
-  width?: number
-  height?: number
-}
-interface Checkbox {
-  checked: boolean
-  label?: string
-  disabled?: boolean
-  hint?: string
-  onChange?: () => void
-}
-interface Input {
-  value: string
-  placeholder?: string
-  disabled?: boolean
-  onChange?: () => void
-}
-interface Card {}
-interface TabGroup {
-  tabs: Tab[]
-}
-interface Tab {
-  title: string
-  selected?: boolean
-  content?: any // TODO
-  disabled?: boolean
-}
+// TODO: import widgets @sdk/aurora
+// import { Button, Card } from '@sdk/aurora'
 
 export const run: ActionFunction = async function () {
   /**
@@ -250,10 +203,15 @@ export const run: ActionFunction = async function () {
    * Random number
    */
 
-  const text = new Text({
+  /*const text = new Text({
     text: '42',
     size: 'xxl'
-  })
+  })*/
 
-  await leon.answer({ widget: text })
+  // const widget = createElement('Card', null, createElement('Button', null, 'Click me'))
+
+  const widget =
+    '<div class="aurora-card"><button type="button" class="aurora-button">Click me</button></div>'
+  // TODO: render JSX here?
+  await leon.answer({ widget: widget })
 }

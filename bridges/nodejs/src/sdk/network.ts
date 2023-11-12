@@ -38,7 +38,7 @@ interface NetworkResponse<ResponseData> {
 export class NetworkError<ResponseErrorData = unknown> extends Error {
   public readonly response: NetworkResponse<ResponseErrorData>
 
-  public constructor(response: NetworkResponse<ResponseErrorData>) {
+  constructor(response: NetworkResponse<ResponseErrorData>) {
     super(`[NetworkError]: ${response.statusCode} ${response.data}`)
     this.response = response
     Object.setPrototypeOf(this, NetworkError.prototype)
@@ -49,7 +49,7 @@ export class Network {
   private readonly options: NetworkOptions
   private axios: AxiosInstance
 
-  public constructor(options: NetworkOptions = {}) {
+  constructor(options: NetworkOptions = {}) {
     this.options = options
     this.axios = axios.create({
       baseURL: this.options.baseURL

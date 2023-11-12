@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client'
 import { createRoot } from 'react-dom/client'
 
-import { Button } from './aurora'
+import { Button, Card } from './aurora'
 import Chatbot from './chatbot'
 import { INIT_MESSAGES } from './constants'
 
@@ -89,27 +89,38 @@ export default class Client {
     })
 
     this.socket.on('widget', (data) => {
+      this.chatbot.createBubble('leon', data)
+
       /**
        * TODO: widget: widget handler to core/skill; dynamic component rendering
        */
       console.log('data', data)
 
-      const container = document.createElement('div')
-      container.className = 'widget'
-      this.chatbot.feed.appendChild(container)
+      // const container = document.createElement('div')
+      // container.className = 'widget'
+      // this.chatbot.feed.appendChild(container)
 
-      const root = createRoot(container)
+      // const root = createRoot(container)
+
+      // this._reactRoot.
+
+      // createPortal('Toto', container)
 
       // TODO: widget: pass props and dynamic component loading according to type
       const widgets = {
         Button: (options) => {
-          return Button({
-            children: options.text
+          return Button(options)
+        },
+        Card: (options) => {
+          return Card({
+            ...options,
+            children: widgets.Button(options.childrens.options)
           })
         }
       }
 
-      root.render(widgets[data.type](data.options))
+      // root.render('Toto')
+      // root.render(widgets[data.type](data.options))
     })
 
     this.socket.on('audio-forwarded', (data, cb) => {

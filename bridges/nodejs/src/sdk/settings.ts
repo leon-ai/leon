@@ -7,7 +7,7 @@ export class Settings<T extends Record<string, unknown>> {
   private readonly settingsPath: string
   private readonly settingsSamplePath: string
 
-  public constructor() {
+  constructor() {
     this.settingsPath = path.join(SKILL_PATH, 'src', 'settings.json')
     this.settingsSamplePath = path.join(
       SKILL_PATH,

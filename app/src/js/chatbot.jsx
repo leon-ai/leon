@@ -1,4 +1,7 @@
-const MAXIMUM_HEIGHT_TO_SHOW_SEE_MORE = 340
+import { createRoot } from 'react-dom/client'
+import { createElement } from 'react'
+
+import { Button, Card } from './aurora'
 
 export default class Chatbot {
   constructor() {
@@ -97,21 +100,24 @@ export default class Chatbot {
 
     this.feed.appendChild(container).appendChild(bubble)
 
-    if (container.clientHeight > MAXIMUM_HEIGHT_TO_SHOW_SEE_MORE) {
-      bubble.style.maxHeight = `${MAXIMUM_HEIGHT_TO_SHOW_SEE_MORE}px`
-      const showMore = document.createElement('p')
-      const showMoreText = 'Show more'
+    console.log('string', string)
 
-      showMore.className = 'show-more'
-      showMore.innerHTML = showMoreText
+    if (string.includes('<')) {
+      console.log('ooook')
+      const root = createRoot(container)
 
-      container.appendChild(showMore)
+      /*root.render(
+        createElement(
+          Card,
+          null,
+          createElement(Button, null, 'Click me')
+        )
+      )*/
 
-      showMore.addEventListener('click', () => {
-        bubble.classList.toggle('show-all')
-        showMore.innerHTML =
-          showMore.innerHTML === showMoreText ? 'Show less' : showMoreText
-      })
+      console.log('string', string)
+
+      root.render(string)
+      // root.render(string)
     }
 
     if (save) {

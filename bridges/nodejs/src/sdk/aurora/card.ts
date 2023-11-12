@@ -1,13 +1,13 @@
 import { Widget } from '../widget'
 
 // TODO: contains the button API. rendering engine <-> SDK
-interface ButtonOptions {
+interface CardOptions {
   children: any
-  danger?: boolean
+  fullWidth?: boolean
 }
 
-export class Button extends Widget<ButtonOptions> {
-  constructor(options: ButtonOptions) {
+export class Card extends Widget<CardOptions> {
+  constructor(options: CardOptions) {
     super(options)
   }
 }
