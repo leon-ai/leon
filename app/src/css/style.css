@@ -287,6 +287,17 @@ small {
 .bubble-container.leon {
   text-align: left;
 }
+.show-more {
+  margin: 3px;
+  text-decoration: underline;
+}
+.show-more:hover {
+  cursor: pointer;
+  text-decoration: none;
+}
+.show-all {
+  max-height: 100% !important;
+}
 
 .bubble {
   padding: 6px 12px;
@@ -297,6 +308,7 @@ small {
   text-align: left;
   opacity: 0;
   animation: fadeIn 0.2s ease-in forwards;
+  overflow: hidden;
 }
 #feed .me .bubble {
   background-color: #1c75db;

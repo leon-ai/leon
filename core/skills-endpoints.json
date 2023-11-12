@@ -152,6 +152,11 @@
     },
     {
       "method": "GET",
+      "route": "/api/action/leon/help/help",
+      "params": []
+    },
+    {
+      "method": "GET",
       "route": "/api/action/leon/introduction/introduce_leon",
       "params": []
     },
@@ -213,6 +218,11 @@
     {
       "method": "GET",
       "route": "/api/action/utilities/date_time/days_countdown",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/date_time/current_date_time_with_time_zone",
       "params": []
     },
     {

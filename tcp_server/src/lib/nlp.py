@@ -1,6 +1,7 @@
+import copy
 from sys import argv
 import spacy
-import geonamescache
+from geonamescache import GeonamesCache
 
 lang = argv[1] or 'en'
 spacy_nlp = None
@@ -25,32 +26,16 @@ spacy_model_mapping = {
     }
 }
 
-gc = geonamescache.GeonamesCache()
-countries = gc.get_countries()
-cities = gc.get_cities()
-
-
-def gen_dict_extract(var, key):
-    if isinstance(var, dict):
-        for k, v in var.items():
-            if k == key:
-                yield v
-            if isinstance(v, (dict, list)):
-                yield from gen_dict_extract(v, key)
-    elif isinstance(var, list):
-        for d in var:
-            yield from gen_dict_extract(d, key)
-
-
-countries = [*gen_dict_extract(countries, 'name')]
-cities = [*gen_dict_extract(cities, 'name')]
+geonamescache = GeonamesCache()
+countries = geonamescache.get_countries()
+cities = geonamescache.get_cities()
 
 """
 Functions called from TCPServer class
 """
 
 
-def load_spacy_model():
+def load_spacy_model() -> None:
     global spacy_nlp
 
     model = spacy_model_mapping[lang]['model']
@@ -61,18 +46,63 @@ def load_spacy_model():
     print('spaCy model loaded')
 
 
-def extract_spacy_entities(utterance):
+def delete_unneeded_country_data(data: dict) -> None:
+    try:
+        del data['geonameid']
+        del data['neighbours']
+        del data['languages']
+        del data['iso3']
+        del data['fips']
+        del data['currencyname']
+        del data['postalcoderegex']
+        del data['areakm2']
+    except BaseException:
+        pass
+
+
+def extract_spacy_entities(utterance: str) -> list[dict]:
     doc = spacy_nlp(utterance)
-    entities = []
+    entities: list[dict] = []
 
     for ent in doc.ents:
         if ent.label_ in spacy_model_mapping[lang]['entity_mapping']:
             entity = spacy_model_mapping[lang]['entity_mapping'][ent.label_]
+            resolution = {
+                'value': ent.text
+            }
+
             if entity == 'location':
-                if ent.text.casefold() in (country.casefold() for country in countries):
-                    entity += ':country'
-                elif ent.text.casefold() in (city.casefold() for city in cities):
-                    entity += ':city'
+                for country in countries:
+                    if countries[country]['name'].casefold() == ent.text.casefold():
+                        entity += ':country'
+                        resolution['data'] = copy.deepcopy(countries[country])
+                        delete_unneeded_country_data(resolution['data'])
+                        break
+
+                city_population = 0
+                for city in cities:
+                    alternatenames = [name.casefold() for name in cities[city]['alternatenames']]
+                    if cities[city]['name'].casefold() == ent.text.casefold() or ent.text.casefold() in alternatenames:
+                        if city_population == 0:
+                            entity += ':city'
+
+                        if cities[city]['population'] > city_population:
+                            resolution['data'] = copy.deepcopy(cities[city])
+                            city_population = cities[city]['population']
+
+                            for country in countries:
+                                if countries[country]['iso'] == cities[city]['countrycode']:
+                                    resolution['data']['country'] = copy.deepcopy(countries[country])
+                                    break
+                            try:
+                                del resolution['data']['geonameid']
+                                del resolution['data']['alternatenames']
+                                del resolution['data']['admin1code']
+                                delete_unneeded_country_data(resolution['data']['country'])
+                            except BaseException:
+                                pass
+                        else:
+                            continue
 
             entities.append({
                 'start': ent.start_char,
@@ -81,9 +111,7 @@ def extract_spacy_entities(utterance):
                 'sourceText': ent.text,
                 'utteranceText': ent.text,
                 'entity': entity,
-                'resolution': {
-                    'value': ent.text
-                }
+                'resolution': resolution
             })
 
     return entities

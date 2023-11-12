@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Help",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Helps you get started with Leon.",
+  "author": {
+    "name": "Théo LUDWIG",
+    "email": "contact@theoludwig.fr",
+    "url": "https://theoludwig.fr"
+  }
+}

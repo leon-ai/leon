@@ -4,12 +4,12 @@
     "create_list": {
       "type": "logic",
       "utterance_samples": [
-        "Create [the|a] [shopping|material] list",
-        "I [want|need] you to [create|make] a stuff list",
-        "Can you create a reminder list for me?",
-        "Make a food list",
-        "I want a shopping list",
-        "Help me to get material list"
+        "Create [the|a] @list list",
+        "I [want|need] you to [create|make] a @list list",
+        "Can you create a @list list for me?",
+        "Make a @list list",
+        "I want a @list list",
+        "Help me to get @list list"
       ],
       "entities": [
         {
@@ -40,15 +40,15 @@
     "view_list": {
       "type": "logic",
       "utterance_samples": [
-        "Show [my|the] shopping list",
-        "Tell me what is on my stuff list",
-        "What is on the reminder list?",
-        "Can you give me the content of my movies list?",
-        "I'd like to know what is on the food list",
-        "Give me the content of the shopping list",
-        "I need you tell me what's on the stuff list",
-        "What is in my reminder list?",
-        "Get me the food list"
+        "What do I have [in|on] [the|my] @list list?",
+        "Show [my|the] @list list",
+        "Tell me what is on my @list list",
+        "What is [in|on] [the|my] @list list?",
+        "Can you give me the content of my @list list?",
+        "I'd like to know what is on the @list list",
+        "Give me the content of the @list list",
+        "I need you tell me what's on the @list list",
+        "Get me the @list list"
       ],
       "entities": [
         {
@@ -67,9 +67,9 @@
     "rename_list": {
       "type": "logic",
       "utterance_samples": [
-        "Rename [the|my] shopping list to purchases",
-        "Can you rename the food list into groceries?",
-        "[Change|Modify|Replace] [the|my] stuff list [to|by] food"
+        "Rename [the|my] @old_list list to @new_list",
+        "Can you rename the @old_list list into @new_list?",
+        "[Change|Modify|Replace] [the|my] @old_list list [to|by] @new_list"
       ],
       "entities": [
         {
@@ -98,11 +98,11 @@
     "delete_list": {
       "type": "logic",
       "utterance_samples": [
-        "Delete [the|my] shopping list",
+        "Delete [the|my] @list list",
         "Delete it",
-        "Can you remove the food list?",
-        "[Remove|Cancel] [the|my] groceries list",
-        "I don't want the reminder list anymore"
+        "Can you remove the @list list?",
+        "[Remove|Cancel] [the|my] @list list",
+        "I don't want the @list list anymore"
       ],
       "entities": [
         {
@@ -121,8 +121,9 @@
     "add_todos": {
       "type": "logic",
       "utterance_samples": [
-        "[Add|Append] potatoes to [the|my] groceries list",
-        "Can you add meat to my food list?"
+        "[Add|Append] @todos to [the|my] @list list",
+        "Can you add @todos to my @list list?",
+        "[Add|Append] @todos"
       ],
       "entities": [
         {
@@ -133,6 +134,10 @@
               "type": "between",
               "from": ["add", "append"],
               "to": ["to"]
+            },
+            {
+              "type": "after_last",
+              "from": ["add", "append"]
             }
           ]
         },
@@ -152,7 +157,7 @@
     "complete_todos": {
       "type": "logic",
       "utterance_samples": [
-        "[Check|Complete|Tick] potatoes from [the|my] [shopping|fruits] list"
+        "[Check|Complete|Tick|Delete|Remove] @todos from [the|my] @list list"
       ],
       "entities": [
         {
@@ -182,8 +187,8 @@
     "uncheck_todos": {
       "type": "logic",
       "utterance_samples": [
-        "[Uncheck|Untick] potatoes from [the|my] [shopping|fruits] list",
-        "Can you uncomplete peach from my food list?"
+        "[Uncheck|Untick] @todos from [the|my] @list list",
+        "Can you uncomplete @todos from my @list list?"
       ],
       "entities": [
         {
