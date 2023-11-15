@@ -1,0 +1,63 @@
+{
+	"github": {
+    "limit_max": [
+      "Hai richiesto troppi trend, te ne restituisco 25..",
+    ],
+    "reaching": [
+      "Mi connetto a GitHub, arrivo..."
+    ],
+    "today": [
+      "Ecco i %limit% GitHub trend di oggi:<br><br><ul>%result%</ul>"
+    ],
+    "week": [
+      "Ecco i %limit% GitHub trend della settimana:<br><br><ul>%result%</ul>"
+    ],
+    "month": [
+      "Ecco i %limit% GitHub trend del mese:<br><br><ul>%result%</ul>"
+    ],
+    "today_with_tech": [
+      "Ecco i %limit% GitHub trend per oggi per %tech%:<br><br><ul>%result%</ul>"
+    ],
+    "week_with_tech": [
+      "Ecco i %limit% GitHub trend della settimana per %tech%:<br><br><ul>%result%</ul>"
+    ],
+    "month_with_tech": [
+      "Ecco i %limit% GitHub trens del mese per %tech%:<br><br><ul>%result%</ul>"
+    ],
+    "unreachable": [
+      "Non riesco a raggiungere GitHub al momento, riprova più tardi."
+    ],
+    "list_element": [
+      "<li>#%rank%. <a href=\"%repository_url%\" target=\"_blank\">%repository_name%</a> creato da <a href=\"%author_url%\" target=\"_blank\">%author_username%</a> con %stars_nb% nuove stelle.</li>"
+    ]
+	},
+  "producthunt": {
+    "limit_max": [
+      "Hai chiesto troppi trend, te ne restituisco %new_limit%."
+    ],
+    "reaching": [
+      "Mi connetto a Product Hunt, arrivo..."
+    ],
+    "today": [
+      "Ecco i %limit% Product Hunt trend di oggi:<br><br><ul>%result%</ul>"
+    ],
+    "specific_day": [
+      "Ecco i %limit% Product Hunt trend per la data %date%:<br><br><ul>%result%</ul>"
+    ],
+    "unreachable": [
+      "Product Hunt non sembra essere raggiungibile al momento, riprova più tardi"
+    ],
+    "list_element": [
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> creato da <a href=\"%author_url%\" target=\"_blank\">%author_name%</a> con %votes_nb% voti.</li>"
+    ],
+    "list_element_with_unknown_maker": [
+      "<li>#%rank%. <a href=\"%post_url%\" target=\"_blank\">%product_name%</a> con %votes_nb% voti. Non ci sono informazioni riguardanti il creatore.</li>"
+    ],
+    "not_found": [
+      "Non ho trovato nessun prodotto per quella data."
+    ],
+    "invalid_developer_token": [
+      "Il tuo token per Product Hunt non è valido. Inseriscine uno valido <a href=\"https://github.com/leon-ai/leon/blob/develop/packages/trend/README.md#product-hunt\" target=\"_blank\">reading this</a>."
+    ]
+  }
+}

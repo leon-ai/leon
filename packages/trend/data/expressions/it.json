@@ -1,0 +1,18 @@
+{
+	"github": {
+    "run": {
+      "expressions": [
+        "Che trend ci sono su GitHub?",
+        "Dimmi che trend ci sono su GitHub."
+      ]
+    }
+  },
+  "producthunt": {
+    "run": {
+      "expressions": [
+        "Che trend ci sono su Product Hunt?",
+        "Dimmi che trend ci sono su Product Hunt"
+      ]
+    }
+  }
+}
