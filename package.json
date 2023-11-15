@@ -63,11 +63,7 @@
     "pre-release:nodejs-bridge": "tsx scripts/release/pre-release-binaries.js nodejs-bridge",
     "pre-release:python-bridge": "tsx scripts/release/pre-release-binaries.js python-bridge",
     "pre-release:tcp-server": "tsx scripts/release/pre-release-binaries.js tcp-server",
-    "check": "tsx scripts/check.js",
-    "docker:build": "docker build -t leon-ai/leon .",
-    "docker:run": "docker compose up",
-    "docker:dev": "docker compose --file=docker-compose.dev.yml up",
-    "docker:check": "docker run --rm --interactive leon-ai/leon npm run check"
+    "check": "tsx scripts/check.js"
   },
   "dependencies": {
     "@aws-sdk/client-polly": "3.18.0",
