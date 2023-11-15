@@ -1,0 +1,24 @@
+{
+    "$schema": "../../../../schemas/skill-schemas/skill-config.json",
+    "actions": {
+      "image_recognition": {
+        "type": "logic",
+        "utterance_samples": [
+          "[Identify] [people] in image [url]",
+          "Find items in image"
+        ],
+        "entities": [
+          {
+            "name": "image",
+            "to": "url"
+          }
+        ]
+      }
+    },
+    "answers": {
+      "image_recognized": [
+        "Alright, here is the url of image with objects identified \"%url%\"."
+      ]
+    }
+  }
+  
