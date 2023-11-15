@@ -1,12 +1,13 @@
 {
-  "extends": "@tsconfig/node16-strictest/tsconfig.json",
+  "extends": ["@tsconfig/strictest/tsconfig", "@tsconfig/node16/tsconfig"],
   "compilerOptions": {
+    "moduleResolution": "Node",
+    "module": "CommonJS",
     "paths": {
       "@@/*": ["../*"],
       "@/*": ["../server/src/*"],
       "@bridge/*": ["../bridges/nodejs/src/*"],
       "@sdk/*": ["../bridges/nodejs/src/sdk/*"]
-    },
-    "ignoreDeprecations": "5.0"
+    }
   }
 }
