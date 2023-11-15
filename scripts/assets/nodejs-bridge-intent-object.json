@@ -1,12 +1,22 @@
 {
+  "id": "1700053802548-g66l",
   "lang": "en",
   "domain": "leon",
   "skill": "age",
   "action": "run",
-  "utterance": "How old are you?",
-  "slots": {},
-  "entities": [],
+  "utterance": "how old are you?",
   "current_entities": [],
+  "entities": [],
+  "current_resolvers": [],
   "resolvers": [],
-  "current_resolvers": []
+  "slots": {},
+  "extra_context_data": {
+    "lang": "en",
+    "sentiment": { "vote": "neutral", "score": 0 },
+    "date": "2023-11-15",
+    "time": "21:10:02",
+    "timestamp": 1700053802000,
+    "date_time": "2023-11-15T21:10:02+08:00",
+    "week_day": "Wednesday"
+  }
 }
