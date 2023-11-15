@@ -343,7 +343,9 @@ small {
   padding: 2px 8px;
   font-size: inherit;
   cursor: pointer;
-  transition: background-color 0.2s, color 0.2s;
+  transition:
+    background-color 0.2s,
+    color 0.2s;
 }
 .suggestion:hover {
   color: var(--black-color);

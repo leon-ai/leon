@@ -76,10 +76,10 @@ export const PYTHON_BRIDGE_BIN_PATH = path.join(
 export const NODEJS_BRIDGE_BIN_PATH = `${path.join(
   process.cwd(),
   'node_modules',
-  'ts-node',
+  'tsx',
   'dist',
-  'bin.js'
-)} --swc ${path.join(NODEJS_BRIDGE_DIST_PATH, 'bin', NODEJS_BRIDGE_BIN_NAME)}`
+  'cli.mjs'
+)} ${path.join(NODEJS_BRIDGE_DIST_PATH, 'bin', NODEJS_BRIDGE_BIN_NAME)}`
 
 export const LEON_VERSION = process.env['npm_package_version']
 

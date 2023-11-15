@@ -1,25 +1,21 @@
 {
-  "extends": "@tsconfig/node16-strictest/tsconfig.json",
+  "extends": ["@tsconfig/strictest/tsconfig", "@tsconfig/node16/tsconfig"],
   "compilerOptions": {
     "rootDir": ".",
     "outDir": "./server/dist",
     "baseUrl": ".",
+    "moduleResolution": "Node",
+    "module": "CommonJS",
     "paths": {
       "@@/*": ["./*"],
       "@/*": ["./server/src/*"],
       "@bridge/*": ["./bridges/nodejs/src/*"],
       "@sdk/*": ["./bridges/nodejs/src/sdk/*"]
     },
-    "ignoreDeprecations": "5.0",
     "allowJs": true,
     "checkJs": false,
     "resolveJsonModule": true,
     "declaration": true
-  },
-  "ts-node": {
-    "swc": true,
-    "require": ["tsconfig-paths/register"],
-    "files": true
   },
   "files": ["server/src/global.d.ts"],
   "include": ["server/src/**/*"],

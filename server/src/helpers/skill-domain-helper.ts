@@ -36,9 +36,7 @@ export class SkillDomainHelper {
     const skillDomains = new Map<string, SkillDomain>()
 
     await Promise.all(
-      (
-        await fs.promises.readdir(SKILLS_PATH)
-      ).map(async (entity) => {
+      (await fs.promises.readdir(SKILLS_PATH)).map(async (entity) => {
         const domainPath = path.join(SKILLS_PATH, entity)
 
         if ((await fs.promises.stat(domainPath)).isDirectory()) {

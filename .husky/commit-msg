@@ -6,6 +6,6 @@ if ! [ -x "$(command -v npm)" ]; then
   echo "If you use a version manager tool such as nvm and a git GUI such as GitKraken, please read: https://typicode.github.io/husky/#/?id=command-not-found" >&2
   exit 1
 else
-  npx ts-node scripts/commit-msg.js
+  npx tsx scripts/commit-msg.js
 fi
 
