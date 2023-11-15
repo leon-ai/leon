@@ -74,7 +74,7 @@
     "@google-cloud/text-to-speech": "3.2.1",
     "@nlpjs/builtin-microsoft": "4.22.7",
     "@nlpjs/core-loader": "4.22.7",
-    "@nlpjs/lang-all": "4.22.12",
+    "@nlpjs/lang-all": "4.26.1",
     "@nlpjs/nlp": "4.22.17",
     "@segment/ajv-human-errors": "2.11.3",
     "@sinclair/typebox": "0.31.23",
