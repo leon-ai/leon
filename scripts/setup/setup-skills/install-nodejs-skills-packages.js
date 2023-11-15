@@ -48,7 +48,7 @@ export default async function (skillFriendlyName, currentSkill) {
         )
 
         await command(
-          `npm install --package-lock=false --prefix ${skillSRCPath}`,
+          `cd ${skillSRCPath} && npm install --package-lock=false`,
           {
             shell: true
           }
