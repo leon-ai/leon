@@ -18,10 +18,7 @@
     "browser": true
   },
   "parserOptions": {
-    "ecmaVersion": 2021
-  },
-  "globals": {
-    "io": true
+    "ecmaVersion": "latest"
   },
   "plugins": ["@typescript-eslint", "unicorn", "import"],
   "ignorePatterns": "*.spec.js",

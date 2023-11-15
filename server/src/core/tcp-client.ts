@@ -33,7 +33,10 @@ export default class TCPClient {
     return this.tcpSocket.readyState
   }
 
-  constructor(private readonly host: string, private readonly port: number) {
+  constructor(
+    private readonly host: string,
+    private readonly port: number
+  ) {
     if (!TCPClient.instance) {
       LogHelper.title('TCP Client')
       LogHelper.success('New instance')

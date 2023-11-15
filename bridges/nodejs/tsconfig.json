@@ -14,11 +14,6 @@
     "exactOptionalPropertyTypes": false,
     "declaration": true
   },
-  "ts-node": {
-    "swc": true,
-    "require": ["tsconfig-paths/register"],
-    "files": true
-  },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }

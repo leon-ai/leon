@@ -16,7 +16,6 @@ If the bug is related to the setup, please submit the issue at: https://github.c
 - OS (or browser) version:
 - Node.js version:
 - Complete "leon check" (or "npm run check") output:
-- (if using Docker) Complete "npm run docker:check" output:
 - (optional) Leon skill version:
 
 ### Expected Behavior

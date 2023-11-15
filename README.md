@@ -152,19 +152,6 @@ leon start
 # Hooray! Leon is running
 ```
 
-### Docker Installation
-
-```sh
-# Install Leon
-leon create birth --docker
-
-# Run
-leon start
-
-# Go to http://localhost:1337
-# Hooray! Leon is running
-```
-
 ## 📚 Documentation
 
 For full documentation, visit [docs.getleon.ai](https://docs.getleon.ai).
