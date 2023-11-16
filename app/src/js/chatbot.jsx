@@ -104,10 +104,18 @@ export default class Chatbot {
     if (typeof string === 'string' && string.includes('<')) {
       const root = createRoot(container)
 
-      const parseProps = (props, keyID) => {
+      const parseProps = (props, keyID, componentParams) => {
         props.key = keyID
 
         Object.keys(props).forEach((key) => {
+          // TODO: dynamic props parsing (font-size -> fontSize)
+          if (key === 'fontsize') {
+            props.fontSize = props[key]
+          }
+          if (key === 'iconname') {
+            props.iconName = props[key]
+          }
+
           if (props[key] === '') {
             props[key] = true
           }
@@ -138,10 +146,18 @@ export default class Chatbot {
             const keyID = `${componentName}-${Math.random()
               .toString(36)
               .substring(7)}`
+            let componentParams = auroraComponents[componentName]
+              .toString()
+              .match(/\(([^)]+)\)/)[1]
+            componentParams = componentParams
+              .split(',')
+              .map((paramName) => paramName.trim())
+
+            // TODO: handle camelCase props
 
             return createElement(
               auroraComponents[componentName],
-              parseProps(domNode.attribs, keyID),
+              parseProps(domNode.attribs, keyID, componentParams),
               parseChildren(domNode.children)
             )
           }
