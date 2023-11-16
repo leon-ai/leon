@@ -75,9 +75,8 @@ export function Slider({
             <SliderRange
               className="aurora-slider-range"
               style={{
-                [orientation === 'horizontal'
-                  ? 'width'
-                  : 'height']: `${valueInPercent}%`
+                [orientation === 'horizontal' ? 'width' : 'height']:
+                  `${valueInPercent}%`
               }}
             />
           </SliderTrack>
