@@ -1,4 +1,3 @@
-import type { Stream } from 'node:stream'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -64,7 +63,7 @@ export default class WatsonTTSSynthesizer extends TTSSynthesizerBase {
           text: speech,
           accept: 'audio/wav'
         })
-        const result = response.result as Stream
+        const result = response.result as NodeJS.ReadableStream
 
         const wStream = fs.createWriteStream(audioFilePath)
         result.pipe(wStream)

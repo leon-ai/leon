@@ -30,7 +30,10 @@ export default class HTTPServer {
 
   public httpServer = this.fastify.server
 
-  constructor(public readonly host: string, public readonly port: number) {
+  constructor(
+    public readonly host: string,
+    public readonly port: number
+  ) {
     if (!HTTPServer.instance) {
       LogHelper.title('HTTP Server')
       LogHelper.success('New instance')

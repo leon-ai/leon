@@ -1,5 +1,4 @@
 import { io } from 'socket.io-client'
-import { createRoot } from 'react-dom/client'
 
 import { Button, Card } from './aurora'
 import Chatbot from './chatbot'

@@ -1,12 +1,22 @@
 {
+  "id": "1700053946667-srkw",
   "lang": "en",
   "domain": "leon",
   "skill": "random_number",
   "action": "run",
-  "utterance": "Give me a random number",
-  "slots": {},
-  "entities": [],
+  "utterance": "give a random number",
   "current_entities": [],
+  "entities": [],
+  "current_resolvers": [],
   "resolvers": [],
-  "current_resolvers": []
+  "slots": {},
+  "extra_context_data": {
+    "lang": "en",
+    "sentiment": { "vote": "negative", "score": -0.125 },
+    "date": "2023-11-15",
+    "time": "21:12:26",
+    "timestamp": 1700053946000,
+    "date_time": "2023-11-15T21:12:26+08:00",
+    "week_day": "Wednesday"
+  }
 }

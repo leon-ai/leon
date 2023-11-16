@@ -1,37 +1,53 @@
 {
+  "id": "1700053357086-724b",
   "lang": "en",
   "domain": "utilities",
   "skill": "is_it_down",
   "action": "run",
-  "utterance": "Check if github.com, mozilla.org and twitter.com are online",
-  "slots": {},
-  "entities": [],
+  "utterance": "Is github.com down?",
   "current_entities": [
     {
-      "sourceText": "github.com",
-      "utteranceText": "github.com",
+      "start": 3,
+      "end": 12,
+      "len": 10,
+      "accuracy": 0.95,
+      "sourceText": "google.com",
+      "utteranceText": "google.com",
       "entity": "url",
       "resolution": {
         "value": "github.com"
-      }
-    },
+      },
+      "type": "url"
+    }
+  ],
+  "entities": [
     {
-      "sourceText": "mozilla.org",
-      "utteranceText": "mozilla.org",
+      "start": 3,
+      "end": 12,
+      "len": 10,
+      "accuracy": 0.95,
+      "sourceText": "google.com",
+      "utteranceText": "google.com",
       "entity": "url",
       "resolution": {
-        "value": "mozilla.org"
-      }
-    },
-    {
-      "sourceText": "twitter.com",
-      "utteranceText": "twitter.com",
-      "entity": "url",
-      "resolution": {
-        "value": "twitter.com"
-      }
+        "value": "github.com"
+      },
+      "type": "url"
     }
   ],
   "current_resolvers": [],
-  "resolvers": []
+  "resolvers": [],
+  "slots": {},
+  "extra_content_data": {
+    "lang": "en",
+    "sentiment": {
+      "vote": "negative",
+      "score": -0.292
+    }
+  },
+  "date": "2023-11-15",
+  "time": "21:02:37",
+  "timestamp": 1700053357000,
+  "date_time": "2023-11-15T21:02:37+08:00",
+  "week_day": "Wednesday"
 }
