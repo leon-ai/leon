@@ -1,7 +1,8 @@
 import { createRoot } from 'react-dom/client'
 import { createElement } from 'react'
+import parse from 'html-react-parser'
 
-import { Button, Card } from './aurora'
+import * as auroraComponents from './aurora'
 
 export default class Chatbot {
   constructor() {
@@ -100,24 +101,61 @@ export default class Chatbot {
 
     this.feed.appendChild(container).appendChild(bubble)
 
-    console.log('string', string)
-
-    if (string.includes('<')) {
-      console.log('ooook')
+    if (typeof string === 'string' && string.includes('<')) {
       const root = createRoot(container)
 
-      /*root.render(
-        createElement(
-          Card,
-          null,
-          createElement(Button, null, 'Click me')
-        )
-      )*/
+      const parseProps = (props, keyID) => {
+        props.key = keyID
 
-      console.log('string', string)
+        Object.keys(props).forEach((key) => {
+          if (props[key] === '') {
+            props[key] = true
+          }
+        })
 
-      root.render(string)
-      // root.render(string)
+        return props
+      }
+      const parseChildren = (children) => {
+        return children.map((child) => {
+          if (child.data) {
+            return child.data
+          }
+
+          return parseReactNode(child)
+        })
+      }
+      const parseReactNode = (domNode) => {
+        if (!domNode.attribs) {
+          return null
+        }
+
+        for (let i = 0; i < Object.keys(auroraComponents).length; i += 1) {
+          // TODO: play widget animation on show
+
+          const componentName = Object.keys(auroraComponents)[i]
+
+          if (domNode.name === componentName.toLowerCase()) {
+            const keyID = `${componentName}-${Math.random()
+              .toString(36)
+              .substring(7)}`
+
+            return createElement(
+              auroraComponents[componentName],
+              parseProps(domNode.attribs, keyID),
+              parseChildren(domNode.children)
+            )
+          }
+        }
+
+        return null
+      }
+      const reactNode = parse(string, {
+        replace: (domNode) => {
+          return parseReactNode(domNode)
+        }
+      })
+
+      root.render(reactNode)
     }
 
     if (save) {

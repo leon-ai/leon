@@ -2,6 +2,58 @@
   "endpoints": [
     {
       "method": "POST",
+      "route": "/api/action/games/akinator/choose_thematic",
+      "params": ["thematic"],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/akinator/setup",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/akinator/guess",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/akinator/retry",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/guess_the_number/setup",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/guess_the_number/guess",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/guess_the_number/replay",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/rochambeau/start",
+      "params": []
+    },
+    {
+      "method": "POST",
+      "route": "/api/action/games/rochambeau/play",
+      "params": ["handsign"],
+      "entitiesType": "trim"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/games/rochambeau/rematch",
+      "params": []
+    },
+    {
+      "method": "POST",
       "route": "/api/action/news/github_trends/run",
       "params": ["number", "daterange"],
       "entitiesType": "builtIn"
@@ -60,21 +112,6 @@
     },
     {
       "method": "GET",
-      "route": "/api/action/social_communication/mbti/setup",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/social_communication/mbti/quiz",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/unknown/widget-playground/run",
-      "params": []
-    },
-    {
-      "method": "GET",
       "route": "/api/action/leon/age/run",
       "params": []
     },
@@ -101,6 +138,11 @@
     {
       "method": "GET",
       "route": "/api/action/leon/greeting/run",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/leon/help/help",
       "params": []
     },
     {
@@ -144,55 +186,18 @@
       "params": []
     },
     {
-      "method": "POST",
-      "route": "/api/action/games/akinator/choose_thematic",
-      "params": ["thematic"],
-      "entitiesType": "trim"
-    },
-    {
       "method": "GET",
-      "route": "/api/action/games/akinator/setup",
+      "route": "/api/action/social_communication/mbti/setup",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/api/action/games/akinator/guess",
+      "route": "/api/action/social_communication/mbti/quiz",
       "params": []
     },
     {
       "method": "GET",
-      "route": "/api/action/games/akinator/retry",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/games/guess_the_number/setup",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/games/guess_the_number/guess",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/games/guess_the_number/replay",
-      "params": []
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/games/rochambeau/start",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/games/rochambeau/play",
-      "params": ["handsign"],
-      "entitiesType": "trim"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/games/rochambeau/rematch",
+      "route": "/api/action/unknown/widget-playground/run",
       "params": []
     },
     {
@@ -218,6 +223,11 @@
     {
       "method": "GET",
       "route": "/api/action/utilities/date_time/days_countdown",
+      "params": []
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/utilities/date_time/current_date_time_with_time_zone",
       "params": []
     },
     {

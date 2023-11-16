@@ -210,8 +210,15 @@ export const run: ActionFunction = async function () {
 
   // const widget = createElement('Card', null, createElement('Button', null, 'Click me'))
 
-  const widget =
-    '<div class="aurora-card"><button type="button" class="aurora-button">Click me</button></div>'
-  // TODO: render JSX here?
-  await leon.answer({ widget: widget })
+  const template = `
+<WidgetWrapper>
+  <Card>
+    <Button>Click me primary</Button>
+    <Button secondary>Click me secondary</Button>
+    <Button danger iconName="delete-bin" disabled>Click me primary danger</Button>
+  </Card
+</WidgetWrapper>
+`
+
+  await leon.answer({ widget: template })
 }
