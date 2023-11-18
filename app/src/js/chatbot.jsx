@@ -104,24 +104,34 @@ export default class Chatbot {
     if (typeof string === 'string' && string.includes('<')) {
       const root = createRoot(container)
 
-      const parseProps = (props, keyID, componentParams) => {
-        props.key = keyID
+      const parseProps = (componentProps, keyID, componentParams) => {
+        componentProps.key = keyID
 
-        Object.keys(props).forEach((key) => {
+        console.log('componentProps', componentProps)
+
+        Object.keys(componentProps).forEach((key) => {
           // TODO: dynamic props parsing (font-size -> fontSize)
           if (key === 'fontsize') {
-            props.fontSize = props[key]
+            componentProps.fontSize = componentProps[key]
+            delete componentProps[key]
           }
           if (key === 'iconname') {
-            props.iconName = props[key]
+            componentProps.iconName = componentProps[key]
+            delete componentProps[key]
           }
 
-          if (props[key] === '') {
-            props[key] = true
+          if (componentProps[key] === 'true') {
+            componentProps[key] = true
+          } else if (componentProps[key] === 'false') {
+            componentProps[key] = false
+          }
+
+          if (componentProps[key] === '') {
+            componentProps[key] = true
           }
         })
 
-        return props
+        return componentProps
       }
       const parseChildren = (children) => {
         return children.map((child) => {
@@ -136,6 +146,8 @@ export default class Chatbot {
         if (!domNode.attribs) {
           return null
         }
+
+        console.log('domNode', domNode)
 
         for (let i = 0; i < Object.keys(auroraComponents).length; i += 1) {
           // TODO: play widget animation on show
