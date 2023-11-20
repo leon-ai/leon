@@ -1,7 +1,12 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 // TODO: import widgets @sdk/aurora
 // import { Button, Card } from '@sdk/aurora'
+
+import tsxTemplate from '../widgets/playground-test'
 
 export const run: ActionFunction = async function () {
   /**
@@ -210,19 +215,23 @@ export const run: ActionFunction = async function () {
 
   // const widget = createElement('Card', null, createElement('Button', null, 'Click me'))
 
-  const template = `
-<WidgetWrapper>
-  <Card>
-    <Button>Click me primary</Button>
-    <Button secondary>Click me secondary</Button>
-    <Button danger iconName="delete-bin" disabled>Click me primary danger</Button>
-  </Card>
-  <Card>
-    <Text fontSize="xl">XL</Text>
-    <Text fontSize="xs">Hello world</Text>
-  </Card>
-</WidgetWrapper>
-`
+  const widgetPath = path.resolve(__dirname, '../widgets/playground-test.tsx')
+  const fileContent = await fs.promises.readFile(widgetPath, 'utf-8')
 
-  await leon.answer({ widget: template })
+  const regex = /return\s*\(\s*([\s\S]*?)\s*\)/
+  const match = fileContent.match(regex)
+  let widgetContent = null
+  if (match) {
+    const [content] = match
+
+    widgetContent = content.slice(8, -1)
+  } else {
+    // TODO: error in skill not respecting guideline
+  }
+
+  /**
+   * TODO: think of parsing JSX at the server side instead
+   * No need to develop a parser for every future client
+   */
+  await leon.answer({ widget: widgetContent })
 }

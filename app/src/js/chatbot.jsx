@@ -111,6 +111,8 @@ export default class Chatbot {
 
         Object.keys(componentProps).forEach((key) => {
           // TODO: dynamic props parsing (font-size -> fontSize)
+          // TODO: alternative solution: hardcoded mapping. E.g. fontsize -> fontSize
+          // TODO: create client "parser + renderer" file structure
           if (key === 'fontsize') {
             componentProps.fontSize = componentProps[key]
             delete componentProps[key]
