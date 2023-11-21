@@ -2,7 +2,8 @@ import {
   WidgetWrapper,
   Card,
   Text,
-  Button
+  Button,
+  Checkbox
 } from '../../../../../../aurora/dist/aurora.js'
 
 export default function () {
@@ -18,6 +19,14 @@ export default function () {
       <Card>
         <Text fontSize="xl">XL</Text>
         <Text fontSize="xs">Hello world</Text>
+      </Card>
+      <Card>
+        <Checkbox
+          label="This is a checkbox"
+          checked={false}
+          value="test"
+          onChange={(e) => console.log('Checkbox state:', e)}
+        />
       </Card>
     </WidgetWrapper>
   )
