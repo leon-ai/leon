@@ -1,8 +1,9 @@
 import { createRoot } from 'react-dom/client'
 import { createElement } from 'react'
 import parse from 'html-react-parser'
-
-import * as auroraComponents from './aurora'
+import 'remixicon/fonts/remixicon.css'
+import '@leon-ai/aurora/style.css'
+import * as auroraComponents from '@leon-ai/aurora'
 
 export default class Chatbot {
   constructor() {
