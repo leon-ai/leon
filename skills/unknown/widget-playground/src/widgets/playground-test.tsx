@@ -3,8 +3,13 @@ import {
   Card,
   Text,
   Button,
-  Checkbox
+  Checkbox,
+  Loader,
+  Flexbox,
+  Status
 } from '../../../../../../aurora/dist/aurora.js'
+
+// TODO: be able to parse comments; props interpolation checked={false}; etc.
 
 export default function () {
   return (
@@ -21,13 +26,11 @@ export default function () {
         <Text fontSize="xs">Hello world</Text>
       </Card>
       <Card>
-        <Checkbox
-          label="This is a checkbox"
-          checked={false}
-          value="test"
-          onChange={(e) => console.log('Checkbox state:', e)}
-        />
+        <Status color="green">ok</Status>
+        <Status>ok</Status>
+        <Text fontSize="xl">XL</Text>
       </Card>
+      <Checkbox label="Checkbox" checked={false} value="test" />
     </WidgetWrapper>
   )
 }
