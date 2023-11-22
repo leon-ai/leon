@@ -7,7 +7,7 @@ import {
   Loader,
   Flexbox,
   Status
-} from '../../../../../../aurora/dist/aurora.js'
+} from '@leon-ai/aurora'
 
 // TODO: be able to parse comments; props interpolation checked={false}; etc.
 
