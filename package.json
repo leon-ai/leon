@@ -72,7 +72,7 @@
     "@ffprobe-installer/ffprobe": "1.4.1",
     "@google-cloud/speech": "4.2.0",
     "@google-cloud/text-to-speech": "3.2.1",
-    "@leon-ai/aurora": "1.0.0-beta.3",
+    "@leon-ai/aurora": "1.0.0-beta.4",
     "@nlpjs/builtin-microsoft": "4.22.7",
     "@nlpjs/core-loader": "4.22.7",
     "@nlpjs/lang-all": "4.22.12",
