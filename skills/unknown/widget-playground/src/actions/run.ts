@@ -6,7 +6,8 @@ import { leon } from '@sdk/leon'
 // TODO: import widgets @sdk/aurora
 // import { Button, Card } from '@sdk/aurora'
 
-import tsxTemplate from '../widgets/playground-test'
+import Widget from '../widgets/playground-test'
+// import tsxTemplate from '../widgets/playground-test'
 
 export const run: ActionFunction = async function () {
   /**
@@ -215,6 +216,7 @@ export const run: ActionFunction = async function () {
 
   // const widget = createElement('Card', null, createElement('Button', null, 'Click me'))
 
+  // Problem with this solution: can't pass dynamic value to the widget
   const widgetPath = path.resolve(__dirname, '../widgets/playground-test.tsx')
   const fileContent = await fs.promises.readFile(widgetPath, 'utf-8')
 
@@ -230,8 +232,23 @@ export const run: ActionFunction = async function () {
   }
 
   /**
+   * TODO: non-JSX trial
+   */
+
+  const widget = new Widget({
+    value1: 'Hello',
+    value2: 'World'
+  })
+
+  console.log('widget', widget.render())
+
+  // TODO: from SDK, auto call render()
+  // await leon.answer({ widget })
+  await leon.answer({ widget: widget.render() })
+
+  /**
    * TODO: think of parsing JSX at the server side instead
    * No need to develop a parser for every future client
    */
-  await leon.answer({ widget: widgetContent })
+  // await leon.answer({ widget: widgetContent })
 }

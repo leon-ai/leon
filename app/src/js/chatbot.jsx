@@ -11,6 +11,7 @@ import { createRoot } from 'react-dom/client'
 import { createElement } from 'react'
 import parse from 'html-react-parser'
 import * as auroraComponents from '@leon-ai/aurora'
+import { WidgetWrapper, Button } from '@leon-ai/aurora'
 
 export default class Chatbot {
   constructor() {
@@ -109,92 +110,55 @@ export default class Chatbot {
 
     this.feed.appendChild(container).appendChild(bubble)
 
-    if (typeof string === 'string' && string.includes('<')) {
-      const root = createRoot(container)
+    console.log('string', string)
 
-      const parseProps = (componentProps, keyID, componentParams) => {
-        componentProps.key = keyID
-
-        console.log('componentProps', componentProps)
-
-        Object.keys(componentProps).forEach((key) => {
-          // TODO: dynamic props parsing (font-size -> fontSize)
-          // TODO: alternative solution: hardcoded mapping. E.g. fontsize -> fontSize
-          // TODO: create client "parser + renderer" file structure
-          if (key === 'fontsize') {
-            componentProps.fontSize = componentProps[key]
-            delete componentProps[key]
-          }
-          if (key === 'iconname') {
-            componentProps.iconName = componentProps[key]
-            delete componentProps[key]
-          }
-
-          if (componentProps[key] === 'true') {
-            componentProps[key] = true
-          } else if (componentProps[key] === 'false') {
-            componentProps[key] = false
-          }
-
-          if (componentProps[key] === '') {
-            componentProps[key] = true
-          }
-        })
-
-        return componentProps
-      }
-      const parseChildren = (children) => {
-        return children.map((child) => {
-          if (child.data) {
-            return child.data
-          }
-
-          return parseReactNode(child)
-        })
-      }
-      const parseReactNode = (domNode) => {
-        if (!domNode.attribs) {
-          return null
-        }
-
-        console.log('domNode', domNode)
-
-        for (let i = 0; i < Object.keys(auroraComponents).length; i += 1) {
-          // TODO: play widget animation on show
-
-          const componentName = Object.keys(auroraComponents)[i]
-
-          if (domNode.name === componentName.toLowerCase()) {
-            const keyID = `${componentName}-${Math.random()
-              .toString(36)
-              .substring(7)}`
-            let componentParams = auroraComponents[componentName]
-              .toString()
-              .match(/\(([^)]+)\)/)[1]
-            componentParams = componentParams
-              .split(',')
-              .map((paramName) => paramName.trim())
-
-            // TODO: handle camelCase props
-
-            return createElement(
-              auroraComponents[componentName],
-              parseProps(domNode.attribs, keyID, componentParams),
-              parseChildren(domNode.children)
-            )
+    /* string = {
+      "component": "WidgetWrapper",
+      "props": {
+      "children": [
+        {
+          "component": "Button",
+          "props": {
+            "children": "Hello World"
           }
         }
-
-        return null
-      }
-      const reactNode = parse(string, {
-        replace: (domNode) => {
-          return parseReactNode(domNode)
-        }
-      })
-
-      root.render(reactNode)
+      ]
     }
+    }*/
+
+    // render WidgetWrapper component
+
+    const root = createRoot(container)
+
+    /*if (string.component === 'WidgetWrapper') {
+      const WidgetWrapperComponent = auroraComponents[string.component]
+
+      console.log('WidgetWrapperComponent', WidgetWrapperComponent)
+
+      console.log('string.props', string.props)
+
+      const widgetWrapper = createElement(WidgetWrapperComponent, string.props)
+
+      root.render(widgetWrapper)
+    }*/
+
+    // should be recursive for all children props need to load component
+
+    console.log('string', string)
+
+    const render = (component) => {
+      const reactComponent = auroraComponents[component.component]
+
+      if (component.props.children && Array.isArray(component.props.children)) {
+        component.props.children = component.props.children.map((child) => {
+          return render(child)
+        })
+      }
+
+      return createElement(reactComponent, component.props)
+    }
+
+    root.render(render(string))
 
     if (save) {
       this.saveBubble(who, string)

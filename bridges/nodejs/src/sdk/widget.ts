@@ -1,9 +1,9 @@
 export abstract class Widget<T> {
-  public readonly type: string
-  public readonly options: T
+  public readonly component: string
+  public readonly props: T
 
-  protected constructor(options: T) {
-    this.type = this.constructor.name
-    this.options = options
+  protected constructor(props: T) {
+    this.component = this.constructor.name
+    this.props = props
   }
 }
