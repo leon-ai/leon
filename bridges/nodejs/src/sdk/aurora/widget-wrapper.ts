@@ -1,9 +1,6 @@
-import { Widget } from '../widget'
+import { type WidgetWrapperProps } from '@leon-ai/aurora'
 
-// TODO: contains the button API. rendering engine <-> SDK
-interface WidgetWrapperProps {
-  children: any
-}
+import { Widget } from '../widget'
 
 export class WidgetWrapper extends Widget<WidgetWrapperProps> {
   constructor(props: WidgetWrapperProps) {

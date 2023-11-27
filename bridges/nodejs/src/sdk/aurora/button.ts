@@ -1,10 +1,6 @@
-import { Widget } from '../widget'
+import { type ButtonProps } from '@leon-ai/aurora'
 
-// TODO: contains the button API. rendering engine <-> SDK
-interface ButtonProps {
-  children: any
-  danger?: boolean
-}
+import { Widget } from '../widget'
 
 export class Button extends Widget<ButtonProps> {
   constructor(props: ButtonProps) {
