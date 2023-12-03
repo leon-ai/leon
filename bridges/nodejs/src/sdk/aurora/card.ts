@@ -1,10 +1,6 @@
-import { Widget } from '../widget'
+import { type CardProps } from '@leon-ai/aurora'
 
-// TODO: contains the button API. rendering engine <-> SDK
-interface CardProps {
-  children: any
-  fullWidth?: boolean
-}
+import { Widget } from '../widget'
 
 export class Card extends Widget<CardProps> {
   constructor(props: CardProps) {
