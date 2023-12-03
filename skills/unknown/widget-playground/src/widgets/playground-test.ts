@@ -1,7 +1,7 @@
 // TODO: "Widget" mother class from SDK
 // export default class WidgetPlayground extends Widget {
 
-import { WidgetWrapper, Button } from '@sdk/aurora'
+import { WidgetWrapper, Button, Text } from '@sdk/aurora'
 
 interface PlaygroundTestWidgetProps {
   value1: string
@@ -26,6 +26,9 @@ export default class PlaygroundTestWidget {
         new Button({
           danger: true,
           children: 'Danger button'
+        }),
+        new Text({
+          children: 'hello world'
         })
       ]
     })
