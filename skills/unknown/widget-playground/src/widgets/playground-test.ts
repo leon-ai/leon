@@ -1,7 +1,7 @@
 // TODO: "Widget" mother class from SDK
 // export default class WidgetPlayground extends Widget {
 
-import { WidgetWrapper, Button, Text } from '@sdk/aurora'
+import { WidgetWrapper, Button, Flexbox } from '@sdk/aurora'
 
 interface PlaygroundTestWidgetProps {
   value1: string
@@ -20,15 +20,17 @@ export default class PlaygroundTestWidget {
 
     return new WidgetWrapper({
       children: [
-        new Button({
-          children: this.props.value1 + ' ' + this.props.value2
-        }),
-        new Button({
-          danger: true,
-          children: 'Danger button'
-        }),
-        new Text({
-          children: 'hello world'
+        new Flexbox({
+          gap: 'md',
+          children: [
+            new Button({
+              children: this.props.value1 + ' ' + this.props.value2
+            }),
+            new Button({
+              danger: true,
+              children: 'Danger button'
+            })
+          ]
         })
       ]
     })
