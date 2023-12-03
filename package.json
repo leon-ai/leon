@@ -73,7 +73,7 @@
     "@fontsource/source-sans-pro": "5.0.8",
     "@google-cloud/speech": "4.2.0",
     "@google-cloud/text-to-speech": "3.2.1",
-    "@leon-ai/aurora": "1.0.0-beta.7",
+    "@leon-ai/aurora": "1.0.0-beta.8",
     "@nlpjs/builtin-microsoft": "4.22.7",
     "@nlpjs/core-loader": "4.22.7",
     "@nlpjs/lang-all": "4.22.12",
