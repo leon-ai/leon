@@ -1,4 +1,5 @@
 export * from './button'
 export * from './card'
 export * from './checkbox'
+export * from './circular-progress'
 export * from './widget-wrapper'
