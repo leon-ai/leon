@@ -1,8 +1,8 @@
 import { type LoaderProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class Loader extends Widget<LoaderProps> {
+export class Loader extends WidgetComponent<LoaderProps> {
   constructor(props: LoaderProps) {
     super(props)
   }

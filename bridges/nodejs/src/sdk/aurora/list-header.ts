@@ -1,8 +1,8 @@
 import { type ListHeaderProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class ListHeader extends Widget<ListHeaderProps> {
+export class ListHeader extends WidgetComponent<ListHeaderProps> {
   constructor(props: ListHeaderProps) {
     super(props)
   }

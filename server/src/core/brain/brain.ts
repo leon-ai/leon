@@ -19,6 +19,7 @@ import type {
   IntentObject,
   SkillResult
 } from '@/core/brain/types'
+import type { AnswerOutput } from '@sdk/types'
 import { SkillActionTypes, SkillBridges } from '@/core/brain/types'
 import { langs } from '@@/core/langs.json'
 import {
@@ -32,7 +33,6 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
-import type { AnswerOutput } from '@sdk/types'
 import { DateHelper } from '@/helpers/date-helper'
 
 export default class Brain {

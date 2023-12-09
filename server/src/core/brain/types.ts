@@ -14,6 +14,7 @@ import type {
   SkillAnswerConfigSchema
 } from '@/schemas/skill-schemas'
 import type { ShortLanguageCode } from '@/types'
+import type { WidgetWrapper } from '@sdk/aurora'
 
 interface SkillCoreData {
   restart?: boolean
@@ -85,7 +86,7 @@ export interface SkillAnswerOutput extends IntentObject {
     codes: string
     answer: SkillAnswerConfigSchema
     core?: SkillAnswerCoreData
-    widget?: unknown // TODO
+    widget?: WidgetWrapper
   }
 }
 

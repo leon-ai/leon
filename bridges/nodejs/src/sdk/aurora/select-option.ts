@@ -1,8 +1,8 @@
 import { type SelectOptionProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class SelectOption extends Widget<SelectOptionProps> {
+export class SelectOption extends WidgetComponent<SelectOptionProps> {
   constructor(props: SelectOptionProps) {
     super(props)
   }

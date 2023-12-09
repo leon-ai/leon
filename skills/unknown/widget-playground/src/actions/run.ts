@@ -6,7 +6,7 @@ import { leon } from '@sdk/leon'
 // TODO: import widgets @sdk/aurora
 // import { Button, Card } from '@sdk/aurora'
 
-import Widget from '../widgets/playground-test'
+import PlaygroundTestWidget from '../widgets/playground-test'
 // import tsxTemplate from '../widgets/playground-test'
 
 export const run: ActionFunction = async function () {
@@ -235,16 +235,19 @@ export const run: ActionFunction = async function () {
    * TODO: non-JSX trial
    */
 
-  const widget = new Widget({
-    value1: 'Hello',
-    value2: 'World'
+  const playgroundTestWidget = new PlaygroundTestWidget({
+    params: {
+      value1: 'Hello',
+      value2: 'World'
+    },
+    wrapperProps: {
+      noPadding: true
+    }
   })
-
-  console.log('widget', widget.render())
 
   // TODO: from SDK, auto call render()
   // await leon.answer({ widget })
-  await leon.answer({ widget: widget.render() })
+  await leon.answer({ widget: playgroundTestWidget })
 
   /**
    * TODO: think of parsing JSX at the server side instead

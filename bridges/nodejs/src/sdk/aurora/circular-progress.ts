@@ -1,8 +1,8 @@
 import { type CircularProgressProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class CircularProgress extends Widget<CircularProgressProps> {
+export class CircularProgress extends WidgetComponent<CircularProgressProps> {
   constructor(props: CircularProgressProps) {
     super(props)
   }

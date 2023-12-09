@@ -1,8 +1,8 @@
 import { type TextInputProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class TextInput extends Widget<TextInputProps> {
+export class TextInput extends WidgetComponent<TextInputProps> {
   constructor(props: TextInputProps) {
     super(props)
   }

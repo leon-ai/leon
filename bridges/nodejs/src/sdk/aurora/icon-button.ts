@@ -1,8 +1,8 @@
 import { type IconButtonProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class IconButton extends Widget<IconButtonProps> {
+export class IconButton extends WidgetComponent<IconButtonProps> {
   constructor(props: IconButtonProps) {
     super(props)
   }

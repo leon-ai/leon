@@ -5,6 +5,7 @@ import type {
   AnswerConfig
 } from '@sdk/types'
 import { INTENT_OBJECT, SKILL_CONFIG } from '@bridge/constants'
+import { WidgetWrapper } from '@sdk/aurora'
 
 class Leon {
   private static instance: Leon
@@ -114,7 +115,10 @@ class Leon {
       }
 
       if (answerInput.widget) {
-        answerObject.output.widget = answerInput.widget
+        answerObject.output.widget = new WidgetWrapper({
+          ...answerInput.widget.wrapperProps,
+          children: [answerInput.widget.render()]
+        })
       }
 
       // "Temporize" for the data buffer output on the core

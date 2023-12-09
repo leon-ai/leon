@@ -1,8 +1,8 @@
 import { type FlexboxProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class Flexbox extends Widget<FlexboxProps> {
+export class Flexbox extends WidgetComponent<FlexboxProps> {
   constructor(props: FlexboxProps) {
     super(props)
   }

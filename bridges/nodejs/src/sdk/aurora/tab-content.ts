@@ -1,8 +1,8 @@
 import { type TabContentProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class TabContent extends Widget<TabContentProps> {
+export class TabContent extends WidgetComponent<TabContentProps> {
   constructor(props: TabContentProps) {
     super(props)
   }

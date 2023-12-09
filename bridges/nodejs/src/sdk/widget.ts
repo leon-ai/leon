@@ -1,9 +1,13 @@
-export abstract class Widget<T> {
-  public readonly component: string
-  public readonly props: T
+import { type WidgetWrapperProps } from '@leon-ai/aurora'
 
-  protected constructor(props: T) {
-    this.component = this.constructor.name
-    this.props = props
-  }
+interface WidgetOptions {
+  wrapperProps: Omit<WidgetWrapperProps, 'children'>
+}
+
+export abstract class Widget {
+  public abstract wrapperProps: WidgetOptions['wrapperProps']
+
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  public abstract render()
 }

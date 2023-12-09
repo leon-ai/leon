@@ -1,8 +1,8 @@
 import { type ScrollContainerProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class ScrollContainer extends Widget<ScrollContainerProps> {
+export class ScrollContainer extends WidgetComponent<ScrollContainerProps> {
   constructor(props: ScrollContainerProps) {
     super(props)
   }

@@ -1,8 +1,8 @@
 import { type StatusProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class Status extends Widget<StatusProps> {
+export class Status extends WidgetComponent<StatusProps> {
   constructor(props: StatusProps) {
     super(props)
   }

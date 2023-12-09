@@ -1,8 +1,8 @@
 import { type RadioGroupProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class RadioGroup extends Widget<RadioGroupProps> {
+export class RadioGroup extends WidgetComponent<RadioGroupProps> {
   constructor(props: RadioGroupProps) {
     super(props)
   }

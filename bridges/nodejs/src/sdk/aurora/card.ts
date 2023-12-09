@@ -1,8 +1,8 @@
 import { type CardProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class Card extends Widget<CardProps> {
+export class Card extends WidgetComponent<CardProps> {
   constructor(props: CardProps) {
     super(props)
   }

@@ -1,8 +1,8 @@
 import { type CheckboxProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class Checkbox extends Widget<CheckboxProps> {
+export class Checkbox extends WidgetComponent<CheckboxProps> {
   constructor(props: CheckboxProps) {
     super(props)
   }

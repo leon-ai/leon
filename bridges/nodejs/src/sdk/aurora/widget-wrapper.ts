@@ -1,8 +1,8 @@
 import { type WidgetWrapperProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class WidgetWrapper extends Widget<WidgetWrapperProps> {
+export class WidgetWrapper extends WidgetComponent<WidgetWrapperProps> {
   constructor(props: WidgetWrapperProps) {
     super(props)
   }

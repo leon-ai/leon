@@ -24,6 +24,7 @@ export class Memory<T = unknown> {
 
     if (this.name.includes(':') && this.name.split(':').length === 3) {
       this.isFromAnotherSkill = true
+
       const [domainName, skillName, memoryName] = this.name.split(':')
       this.memoryPath = path.join(
         SKILLS_PATH,

@@ -110,7 +110,7 @@ export default class Chatbot {
 
     this.feed.appendChild(container).appendChild(bubble)
 
-    console.log('string', string)
+    const root = createRoot(container)
 
     /* string = {
       "component": "WidgetWrapper",
@@ -128,8 +128,6 @@ export default class Chatbot {
 
     // render WidgetWrapper component
 
-    const root = createRoot(container)
-
     /*if (string.component === 'WidgetWrapper') {
       const WidgetWrapperComponent = auroraComponents[string.component]
 
@@ -144,21 +142,26 @@ export default class Chatbot {
 
     // should be recursive for all children props need to load component
 
-    console.log('string', string)
-
     const render = (component) => {
-      const reactComponent = auroraComponents[component.component]
+      if (component) {
+        const reactComponent = auroraComponents[component.component]
 
-      if (component.props.children && Array.isArray(component.props.children)) {
-        component.props.children = component.props.children.map((child) => {
-          return render(child)
-        })
+        if (
+          component.props?.children &&
+          Array.isArray(component.props.children)
+        ) {
+          component.props.children = component.props.children.map((child) => {
+            return render(child)
+          })
+        }
+
+        return createElement(reactComponent, component.props)
       }
-
-      return createElement(reactComponent, component.props)
     }
 
-    root.render(render(string))
+    if (typeof string === 'object') {
+      root.render(render(string))
+    }
 
     if (save) {
       this.saveBubble(who, string)

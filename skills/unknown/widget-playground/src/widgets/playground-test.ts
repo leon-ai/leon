@@ -1,30 +1,44 @@
 // TODO: "Widget" mother class from SDK
 // export default class WidgetPlayground extends Widget {
 
-import { WidgetWrapper, Button, Flexbox } from '@sdk/aurora'
+import { Button, Flexbox } from '@sdk/aurora'
+import { Widget } from '@sdk/widget'
 
-interface PlaygroundTestWidgetProps {
+interface WidgetOptions {
+  wrapperProps: Widget['wrapperProps']
+  params: Params
+}
+
+interface Params {
   value1: string
   value2: string
 }
 
-export default class PlaygroundTestWidget {
-  props: PlaygroundTestWidgetProps
+export default class PlaygroundTestWidget extends Widget {
+  public readonly wrapperProps: Widget['wrapperProps']
+  private readonly params: Params
 
-  constructor(props: PlaygroundTestWidgetProps) {
-    this.props = props
+  constructor(options: WidgetOptions) {
+    super()
+
+    this.wrapperProps = options.wrapperProps
+    this.params = options.params
   }
 
-  render() {
+  public render() {
     // TODO: force WidgetWrapper to be the root element (from mother class render method)
 
-    return new WidgetWrapper({
+    return new Button({
+      children: this.params.value1 + ' ' + this.params.value2
+    })
+
+    /*return new WidgetWrapper({
       children: [
         new Flexbox({
           gap: 'md',
           children: [
             new Button({
-              children: this.props.value1 + ' ' + this.props.value2
+              children: this.params.value1 + ' ' + this.params.value2
             }),
             new Button({
               danger: true,
@@ -33,6 +47,6 @@ export default class PlaygroundTestWidget {
           ]
         })
       ]
-    })
+    })*/
   }
 }

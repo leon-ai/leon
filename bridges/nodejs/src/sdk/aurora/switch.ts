@@ -1,8 +1,8 @@
 import { type SwitchProps } from '@leon-ai/aurora'
 
-import { Widget } from '../widget'
+import { WidgetComponent } from '../widget-component'
 
-export class Switch extends Widget<SwitchProps> {
+export class Switch extends WidgetComponent<SwitchProps> {
   constructor(props: SwitchProps) {
     super(props)
   }
