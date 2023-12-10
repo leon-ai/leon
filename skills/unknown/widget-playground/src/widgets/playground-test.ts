@@ -1,4 +1,5 @@
 import { Widget, type WidgetOptions } from '@sdk/widget'
+import { type WidgetComponent } from '@sdk/widget-component'
 import { Button } from '@sdk/aurora'
 
 interface Params {
@@ -11,7 +12,7 @@ export default class PlaygroundTestWidget extends Widget<Params> {
     super(options)
   }
 
-  public render(): Button {
+  public render(): WidgetComponent<unknown> {
     let children = 'Click me'
 
     if (this.params) {
