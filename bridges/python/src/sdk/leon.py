@@ -72,6 +72,11 @@ class Leon:
             }
 
             if answer_input.get('widget'):
+                # TODO: execute widget render method
+                # answerObject.output.widget = new WidgetWrapper({
+                #     ...answerInput.widget.wrapperProps,
+                # children: [answerInput.widget.render()]
+                # })
                 output['output']['widget'] = answer_input['widget'].__dict__
 
             answer_object = {

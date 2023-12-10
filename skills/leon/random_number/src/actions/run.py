@@ -3,13 +3,28 @@ from bridges.python.src.sdk.types import ActionParams
 
 from random import randint
 
+from ..widgets.number_widget import NumberWidget
+
 
 def run(params: ActionParams) -> None:
     """Leon gives a random number"""
 
-    leon.answer({
-        'key': 'answer',
-        'data': {
-            'answer': randint(0, 100)
+    random_number = randint(0, 100)
+
+    # TODO: handle voice text when widget
+    number_widget = NumberWidget({
+        'params': {
+            'random_number': random_number
         }
     })
+
+    leon.answer({
+        'widget': number_widget
+    })
+
+    # leon.answer({
+    #     'key': 'answer',
+    #     'data': {
+    #         'answer': randint(0, 100)
+    #     }
+    # })
