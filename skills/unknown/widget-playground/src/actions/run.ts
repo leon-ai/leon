@@ -1,13 +1,7 @@
-import fs from 'node:fs'
-import path from 'node:path'
-
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
-// TODO: import widgets @sdk/aurora
-// import { Button, Card } from '@sdk/aurora'
 
 import PlaygroundTestWidget from '../widgets/playground-test'
-// import tsxTemplate from '../widgets/playground-test'
 
 export const run: ActionFunction = async function () {
   /**
@@ -216,25 +210,6 @@ export const run: ActionFunction = async function () {
 
   // const widget = createElement('Card', null, createElement('Button', null, 'Click me'))
 
-  // Problem with this solution: can't pass dynamic value to the widget
-  const widgetPath = path.resolve(__dirname, '../widgets/playground-test.tsx')
-  const fileContent = await fs.promises.readFile(widgetPath, 'utf-8')
-
-  const regex = /return\s*\(\s*([\s\S]*?)\s*\)/
-  const match = fileContent.match(regex)
-  let widgetContent = null
-  if (match) {
-    const [content] = match
-
-    widgetContent = content.slice(8, -1)
-  } else {
-    // TODO: error in skill not respecting guideline
-  }
-
-  /**
-   * TODO: non-JSX trial
-   */
-
   const playgroundTestWidget = new PlaygroundTestWidget({
     params: {
       value1: 'Hello',
@@ -245,13 +220,5 @@ export const run: ActionFunction = async function () {
     }
   })
 
-  // TODO: from SDK, auto call render()
-  // await leon.answer({ widget })
   await leon.answer({ widget: playgroundTestWidget })
-
-  /**
-   * TODO: think of parsing JSX at the server side instead
-   * No need to develop a parser for every future client
-   */
-  // await leon.answer({ widget: widgetContent })
 }

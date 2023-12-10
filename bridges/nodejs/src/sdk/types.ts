@@ -22,7 +22,7 @@ export type ActionFunction = (params: ActionParams) => Promise<void>
  */
 export interface Answer {
   key?: string
-  widget?: Widget
+  widget?: Widget<unknown>
   data?: AnswerData
   core?: SkillAnswerCoreData
 }
@@ -30,7 +30,7 @@ export interface TextAnswer extends Answer {
   key: string
 }
 export interface WidgetAnswer extends Answer {
-  widget: Widget
+  widget: Widget<unknown>
   key?: string
 }
 export type AnswerData = Record<string, string | number> | null

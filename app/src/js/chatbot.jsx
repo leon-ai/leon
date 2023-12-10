@@ -9,9 +9,7 @@ import '@leon-ai/aurora/style.css'
 
 import { createRoot } from 'react-dom/client'
 import { createElement } from 'react'
-import parse from 'html-react-parser'
 import * as auroraComponents from '@leon-ai/aurora'
-import { WidgetWrapper, Button } from '@leon-ai/aurora'
 
 export default class Chatbot {
   constructor() {
@@ -111,36 +109,6 @@ export default class Chatbot {
     this.feed.appendChild(container).appendChild(bubble)
 
     const root = createRoot(container)
-
-    /* string = {
-      "component": "WidgetWrapper",
-      "props": {
-      "children": [
-        {
-          "component": "Button",
-          "props": {
-            "children": "Hello World"
-          }
-        }
-      ]
-    }
-    }*/
-
-    // render WidgetWrapper component
-
-    /*if (string.component === 'WidgetWrapper') {
-      const WidgetWrapperComponent = auroraComponents[string.component]
-
-      console.log('WidgetWrapperComponent', WidgetWrapperComponent)
-
-      console.log('string.props', string.props)
-
-      const widgetWrapper = createElement(WidgetWrapperComponent, string.props)
-
-      root.render(widgetWrapper)
-    }*/
-
-    // should be recursive for all children props need to load component
 
     const render = (component) => {
       if (component) {

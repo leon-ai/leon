@@ -1,52 +1,25 @@
-// TODO: "Widget" mother class from SDK
-// export default class WidgetPlayground extends Widget {
-
-import { Button, Flexbox } from '@sdk/aurora'
-import { Widget } from '@sdk/widget'
-
-interface WidgetOptions {
-  wrapperProps: Widget['wrapperProps']
-  params: Params
-}
+import { Widget, type WidgetOptions } from '@sdk/widget'
+import { Button } from '@sdk/aurora'
 
 interface Params {
   value1: string
   value2: string
 }
 
-export default class PlaygroundTestWidget extends Widget {
-  public readonly wrapperProps: Widget['wrapperProps']
-  private readonly params: Params
-
-  constructor(options: WidgetOptions) {
-    super()
-
-    this.wrapperProps = options.wrapperProps
-    this.params = options.params
+export default class PlaygroundTestWidget extends Widget<Params> {
+  constructor(options?: WidgetOptions<Params>) {
+    super(options)
   }
 
-  public render() {
-    // TODO: force WidgetWrapper to be the root element (from mother class render method)
+  public render(): Button {
+    let children = 'Click me'
+
+    if (this.params) {
+      children = this.params.value1 + ' ' + this.params.value2
+    }
 
     return new Button({
-      children: this.params.value1 + ' ' + this.params.value2
+      children
     })
-
-    /*return new WidgetWrapper({
-      children: [
-        new Flexbox({
-          gap: 'md',
-          children: [
-            new Button({
-              children: this.params.value1 + ' ' + this.params.value2
-            }),
-            new Button({
-              danger: true,
-              children: 'Danger button'
-            })
-          ]
-        })
-      ]
-    })*/
   }
 }

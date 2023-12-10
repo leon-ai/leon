@@ -1,11 +1,25 @@
 import { type WidgetWrapperProps } from '@leon-ai/aurora'
 
-interface WidgetOptions {
-  wrapperProps: Omit<WidgetWrapperProps, 'children'>
+export interface WidgetOptions<T> {
+  wrapperProps?: Omit<WidgetWrapperProps, 'children'>
+  params?: T
 }
 
-export abstract class Widget {
-  public abstract wrapperProps: WidgetOptions['wrapperProps']
+export abstract class Widget<T> {
+  public wrapperProps: WidgetOptions<T>['wrapperProps']
+  public params: WidgetOptions<T>['params']
+
+  protected constructor(options?: WidgetOptions<T>) {
+    if (options?.wrapperProps) {
+      this.wrapperProps = options.wrapperProps
+    }
+
+    if (!options?.params) {
+      this.params = undefined
+    } else {
+      this.params = options.params
+    }
+  }
 
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
