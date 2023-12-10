@@ -1,29 +1,23 @@
-from typing import Any, Optional
+from typing import Any, Optional, Generic, TypeVar
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
 from .widget_component import WidgetComponent
-from aurora.widget_wrapper import WidgetWrapperProps
+from .aurora.widget_wrapper import WidgetWrapperProps
 
-class WidgetOptions:
-    def __init__(
-        self,
-        wrapperProps: Optional[WidgetWrapperProps] = None,
-        params: Optional[Any] = None
-    ):
-        self.wrapperProps = wrapperProps
-        self.params = params
+T = TypeVar('T')
 
-class Widget:
-    wrapperProps: Optional[WidgetOptions['wrapperProps']]
-    params: Optional[WidgetOptions['params']]
+@dataclass
+class WidgetOptions(Generic[T]):
+    wrapper_props: WidgetWrapperProps
+    params: T
 
-    def __init__(self, options: Optional[WidgetOptions] = None):
-        if options and options.wrapperProps:
-            self.wrapperProps = options.wrapperProps
 
-        if not options or not options.params:
-            self.params = None
-        else:
-            self.params = options.params
+class Widget(ABC, Generic[T]):
+    def __init__(self, options: WidgetOptions[T]):
+        self.wrapper_props = options.wrapper_props
+        self.params = options.params
 
+    @abstractmethod
     def render(self) -> WidgetComponent:
         pass

@@ -1,24 +1,14 @@
-# from leon_ai.aurora import WidgetWrapperProps
-from typing import Any, Optional
+from typing import Optional, TypedDict, List
 from ..widget_component import WidgetComponent
 
 
-class WidgetWrapperProps:
-    def __init__(
-        self,
-        children: Any,
-        noPadding: Optional[bool] = False,
-        paddingTop: Optional[bool] = False,
-        paddingBottom: Optional[bool] = False,
-        paddingLeft: Optional[bool] = False,
-        paddingRight: Optional[bool] = False,
-    ):
-        self.children = children
-        self.noPadding = noPadding
-        self.paddingTop = paddingTop
-        self.paddingBottom = paddingBottom
-        self.paddingLeft = paddingLeft
-        self.paddingRight = paddingRight
+class WidgetWrapperProps(TypedDict, total=False):
+    noPadding: Optional[bool]
+    paddingTop: Optional[bool]
+    paddingBottom: Optional[bool]
+    paddingLeft: Optional[bool]
+    paddingRight: Optional[bool]
+    children: List[WidgetComponent]
 
 
 class WidgetWrapper(WidgetComponent[WidgetWrapperProps]):

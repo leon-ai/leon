@@ -1,21 +1,18 @@
-from typing import Optional
+from typing import TypedDict
+from bridges.python.src.sdk.aurora.button import Button
 
 from bridges.python.src.sdk.widget import Widget, WidgetOptions
 from bridges.python.src.sdk.widget_component import WidgetComponent
-from bridges.python.src.sdk.aurora.button import Button
 
-class Params:
-    def __init__(self, randon_number: int):
-        self.randon_number = randon_number
+class NumberWidgetParams(TypedDict):
+    random_number: int
 
-class NumberWidget(Widget):
-    def __init__(self, options: Optional[WidgetOptions[Params]] = None):
+
+class NumberWidget(Widget[NumberWidgetParams]):
+    def __init__(self, options: WidgetOptions[NumberWidgetParams]):
         super().__init__(options)
 
     def render(self) -> WidgetComponent:
-        children = 'Click me'
-
-        if self.params:
-            children = f"{self.params['random_number']}"
-
-        return Button(children=children)
+        return Button({
+            'children': self.params.get('random_number')
+        })

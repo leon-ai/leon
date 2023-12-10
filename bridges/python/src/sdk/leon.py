@@ -4,6 +4,8 @@ from typing import Union
 from time import sleep
 import json
 
+from .aurora.widget_wrapper import WidgetWrapper
+
 from .types import AnswerInput, AnswerData, AnswerConfig
 from ..constants import SKILL_CONFIG, INTENT_OBJECT
 
@@ -71,13 +73,12 @@ class Leon:
                 }
             }
 
-            if answer_input.get('widget'):
-                # TODO: execute widget render method
-                # answerObject.output.widget = new WidgetWrapper({
-                #     ...answerInput.widget.wrapperProps,
-                # children: [answerInput.widget.render()]
-                # })
-                output['output']['widget'] = answer_input['widget'].__dict__
+            widget = answer_input.get('widget')
+            if widget is not None:
+                output['output']['widget'] = WidgetWrapper({
+                    **widget.wrapper_props,
+                    'children': [widget.render()]
+                }).__dict__()
 
             answer_object = {
                 **INTENT_OBJECT,

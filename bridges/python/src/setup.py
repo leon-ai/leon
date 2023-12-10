@@ -9,7 +9,9 @@ options = {
         'includes': [
             'bs4',
             'requests',
-            'timeit'
+            'timeit',
+            'dataclasses',
+            'abc'
         ],
         'include_files': [(requests.certs.where(), 'cacert.pem')]
     }

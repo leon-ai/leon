@@ -1,34 +1,19 @@
-from ..widget import Widget
+from typing import Optional, TypedDict, Union, Literal, Any
+from ..widget_component import WidgetComponent
 
 
-# TODO: contains the button API. rendering engine <-> SDK
-
-class ButtonProps:
-    def __init__(
-        self,
-        children=None,
-        type=None,
-        iconName=None,
-        iconPosition=None,
-        secondary=False,
-        danger=False,
-        light=False,
-        disabled=False,
-        loading=False,
-        onClick=None
-    ):
-        self.children = children
-        self.type = type
-        self.iconName = iconName
-        self.iconPosition = iconPosition
-        self.secondary = secondary
-        self.danger = danger
-        self.light = light
-        self.disabled = disabled
-        self.loading = loading
-        self.onClick = onClick
+class ButtonProps(TypedDict, total=False):
+    type: Optional[Union[Literal['button'], Literal['submit'], Literal['reset']]]
+    iconName: Optional[str]
+    iconPosition: Optional[Union[Literal['left'], Literal['right']]]
+    secondary: Optional[bool]
+    danger: Optional[bool]
+    light: Optional[bool]
+    disabled: Optional[bool]
+    loading: Optional[bool]
+    children: Any
 
 
-class Button(Widget):
+class Button(WidgetComponent[ButtonProps]):
     def __init__(self, props: ButtonProps):
         super().__init__(props)
