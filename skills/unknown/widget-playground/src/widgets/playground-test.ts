@@ -7,20 +7,13 @@ interface Params {
   value2: string
 }
 
-export default class PlaygroundTestWidget extends Widget<Params> {
-  constructor(options?: WidgetOptions<Params>) {
+export class PlaygroundTestWidget extends Widget<Params> {
+  constructor(options: WidgetOptions<Params>) {
     super(options)
   }
 
-  public render(): WidgetComponent<unknown> {
-    let children = 'Click me'
-
-    if (this.params) {
-      children = this.params.value1 + ' ' + this.params.value2
-    }
-
-    return new Button({
-      children
-    })
+  public render(): WidgetComponent {
+    const children = this.params.value1 + ' ' + this.params.value2
+    return new Button({ children })
   }
 }

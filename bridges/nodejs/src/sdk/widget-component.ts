@@ -1,4 +1,4 @@
-export abstract class WidgetComponent<T> {
+export abstract class WidgetComponent<T = unknown> {
   public readonly component: string
   public readonly props: T
 

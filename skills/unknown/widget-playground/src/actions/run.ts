@@ -1,7 +1,7 @@
 import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 
-import PlaygroundTestWidget from '../widgets/playground-test'
+import { PlaygroundTestWidget } from '../widgets/playground-test'
 
 export const run: ActionFunction = async function () {
   /**
