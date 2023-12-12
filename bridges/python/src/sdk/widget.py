@@ -7,6 +7,7 @@ from .aurora.widget_wrapper import WidgetWrapperProps
 
 T = TypeVar('T')
 
+
 @dataclass
 class WidgetOptions(Generic[T]):
     wrapper_props: WidgetWrapperProps

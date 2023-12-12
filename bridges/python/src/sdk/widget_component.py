@@ -2,6 +2,7 @@ from typing import TypeVar, Generic, TypedDict
 
 T = TypeVar('T', TypedDict, dict)
 
+
 class WidgetComponent(Generic[T]):
     def __init__(self, props: T):
         self.component = type(self).__name__
@@ -9,7 +10,7 @@ class WidgetComponent(Generic[T]):
 
     def __dict__(self):
         children_value = self.props.get('children')
-        rest_of_values = { key: value for key, value in self.props.items() if key != 'children' }
+        rest_of_values = {key: value for key, value in self.props.items() if key != 'children'}
         children = None
         if children_value is not None:
             if isinstance(children_value, list):

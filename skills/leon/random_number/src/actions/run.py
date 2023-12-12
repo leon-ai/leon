@@ -15,8 +15,8 @@ def run(params: ActionParams) -> None:
 
     # TODO: handle voice text when widget
     number_widget_options: WidgetOptions[NumberWidgetParams] = WidgetOptions(
-        wrapper_props={ 'noPadding': True },
-        params={ 'random_number': random_number }
+        wrapper_props={'noPadding': True},
+        params={'random_number': random_number}
     )
     number_widget = NumberWidget(number_widget_options)
 
