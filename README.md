@@ -34,7 +34,7 @@ _<p align="center">Your open-source personal assistant.</p>_
 
 ### Why is there a small amount of contributors?
 
-I'm taking a lot of time to work on the new core of Leon due to personal reasons. I can only work on it after work and on weekends. Hence, **I'm blocking any potential contribution as the whole core of Leon is coming with many breaking changes**. Many of you are willing to contribute in Leon (create new skills, help to improve the core, translations and so on...), a big thanks to every one of you!
+I'm taking a lot of time to work on the new core of Leon due to personal reasons. I can only work on it after work and on weekends. Hence, **I'm blocking any potential contribution as the whole core of Leon is coming with many breaking changes**. Many of you are willing to contribute to Leon (create new skills, help to improve the core, translations, and so on...), a big thanks to every one of you!
 
 While I would love to devote more time to Leon, I'm currently unable to do so because I have bills to pay. I have some ideas about how to monetize Leon in the future (Leon's core will always remain open source), but before to get there there is still a long way to go.
 
@@ -50,17 +50,17 @@ Here is how LLMs may help Leon in the future:
 
 - Intent fallback: when an utterance cannot match an intent, then rely on an LLM to provide results.
 - New named entity recognition engine: provide a better solution to extract entities from utterances such as fruits, numbers, cities, durations, persons, etc.
-- Skill features: let skills leverage LLMs to provide out-of-the-box NLP features such as summarization, knowledge base, translation, sentiment analysis and so on...
-- Skill building: LLMs can help to develop skills such as paraphrasing utterance samples, translate answers, convert code from our Python bridge to the upcoming JavaScript bridge and vice versa, etc.
+- Skill features: let skills leverage LLMs to provide out-of-the-box NLP features such as summarization, knowledge base, translation, sentiment analysis, and so on...
+- Skill building: LLMs can help to develop skills such as paraphrasing utterance samples, translating answers, converting code from our Python bridge to the upcoming JavaScript bridge and vice versa, etc.
 - More...
 
 ### What's Next?
 
-Once the new core released, we'll work on the community aspect of Leon. For example, better organize [our Discord](https://discord.gg/MNQqqKg), planify regular calls, work on skills together, etc. It is very important for Leon to have a real community. At that moment, the skills platform will already be online, so it'll be easier to sync our progress and publish new skills.
+Once the new core is released, we'll work on the community aspect of Leon. For example, better organize [our Discord](https://discord.gg/MNQqqKg), plan regular calls, work on skills together, etc. It is very important for Leon to have a real community. At that moment, the skills platform will already be online, so it'll be easier to sync our progress and publish new skills.
 
 - Feel free to check out the Git development branches and our [next major milestones](https://blog.getleon.ai/a-much-better-nlp-and-future-1-0-0-beta-7/#whats-next).
 - And the [detailed roadmap](http://roadmap.getleon.ai).
-- Many exciting things are coming up, hence no new documentation and test are going to be written until the official release of Leon.
+- Many exciting things are coming up, hence no new documentation and tests are going to be written until the official release of Leon.
 
 ---
 
@@ -90,7 +90,7 @@ If you want to, Leon can communicate with you by being **offline to protect your
 > 2. With this generic structure, everyone can create their own skills and share them with others.
 >    Therefore there is only one core (to rule them all).
 > 3. Leon uses AI concepts, which is cool.
-> 4. Privacy matters, you can configure Leon to talk with him offline. You can already text with him without any third party services.
+> 4. Privacy matters, you can configure Leon to talk with him offline. You can already text him without any third-party services.
 > 5. Open source is great.
 
 ### What is this repository for?
@@ -227,7 +227,7 @@ Please note that I dedicate most of my free time to Leon.
 
 By sponsoring the project you make the project sustainable and faster to develop features.
 
-The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process and so on...
+The focus is not only limited to the activity you see on GitHub but also a lot of thinking about the direction of the project. Which is naturally related to the overall design, architecture, vision, learning process, and so on...
 
 ### Special Thanks
 
