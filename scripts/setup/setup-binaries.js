@@ -1,12 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import stream from 'node:stream'
-import readline from 'node:readline'
 
-import axios from 'axios'
 import { command } from 'execa'
-import prettyBytes from 'pretty-bytes'
-import prettyMilliseconds from 'pretty-ms'
 import extractZip from 'extract-zip'
 
 import {
@@ -24,6 +20,7 @@ import {
   TCP_SERVER_VERSION
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { FileHelper } from '@/helpers/file-helper'
 
 /**
  * Set up binaries according to the given setup target
@@ -58,16 +55,6 @@ TARGETS.set('tcp-server', {
   version: TCP_SERVER_VERSION,
   isPlatformDependent: true
 })
-
-async function createManifestFile(manifestPath, name, version) {
-  const manifest = {
-    name,
-    version,
-    setupDate: Date.now()
-  }
-
-  await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2))
-}
 
 const setupBinaries = async (key) => {
   const {
@@ -120,28 +107,7 @@ const setupBinaries = async (key) => {
 
       const archiveWriter = fs.createWriteStream(archivePath)
       const latestReleaseAssetURL = `${GITHUB_URL}/releases/download/${key}_v${version}/${archiveName}`
-      const { data } = await axios.get(latestReleaseAssetURL, {
-        responseType: 'stream',
-        onDownloadProgress: ({ loaded, total, progress, estimated, rate }) => {
-          const percentage = Math.floor(progress * 100)
-          const downloadedSize = prettyBytes(loaded)
-          const totalSize = prettyBytes(total)
-          const estimatedTime = !estimated
-            ? 0
-            : prettyMilliseconds(estimated * 1_000, { secondsDecimalDigits: 0 })
-          const downloadRate = !rate ? 0 : prettyBytes(rate)
-
-          readline.clearLine(process.stdout, 0)
-          readline.cursorTo(process.stdout, 0, null)
-          process.stdout.write(
-            `Download progress: ${percentage}% (${downloadedSize}/${totalSize} | ${downloadRate}/s | ${estimatedTime} ETA)`
-          )
-
-          if (percentage === 100) {
-            process.stdout.write('\n')
-          }
-        }
-      })
+      const { data } = await FileHelper.downloadFile(latestReleaseAssetURL, 'stream')
 
       data.pipe(archiveWriter)
       await stream.promises.finished(archiveWriter)
@@ -156,7 +122,7 @@ const setupBinaries = async (key) => {
 
       await Promise.all([
         fs.promises.rm(archivePath, { recursive: true, force: true }),
-        createManifestFile(manifestPath, name, version)
+        FileHelper.createManifestFile(manifestPath, name, version)
       ])
 
       LogHelper.success(`${name} manifest file created`)

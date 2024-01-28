@@ -8,6 +8,7 @@ import generateJSONSchemas from '../generate/generate-json-schemas'
 import setupDotenv from './setup-dotenv'
 import setupCore from './setup-core'
 import setupSkills from './setup-skills/setup-skills'
+import setupLLM from './setup-llm'
 import setupBinaries from './setup-binaries'
 import createInstanceID from './create-instance-id'
 
@@ -23,6 +24,7 @@ import createInstanceID from './create-instance-id'
     await setupCore()
     await setupSkills()
     LoaderHelper.stop()
+    await setupLLM()
     await setupBinaries()
     await generateHTTPAPIKey()
     await generateJSONSchemas()

@@ -148,6 +148,18 @@ export const TMP_PATH = path.join(SERVER_PATH, 'tmp')
 export const LEON_FILE_PATH = path.join(process.cwd(), 'leon.json')
 
 /**
+ * LLMs
+ */
+export const LLM_VERSION = 'v0.2.Q4_K_S'
+export const LLM_NAME = `Mistral 7B Instruct ${LLM_VERSION}`
+export const LLM_FILE_NAME = `mistral-7b-instruct-${LLM_VERSION}.gguf`
+export const LLM_PATH = path.join(
+  MODELS_PATH,
+  'llm',
+  LLM_FILE_NAME
+)
+
+/**
  * Misc
  */
 export const MINIMUM_REQUIRED_RAM = 4

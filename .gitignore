@@ -27,10 +27,12 @@ tcp_server/src/Pipfile.lock
 !tcp_server/**/.gitkeep
 !bridges/python/**/.gitkeep
 !bridges/nodejs/**/.gitkeep
+!core/data/models/llm/.gitkeep
 !**/*.sample*
 skills/**/src/settings.json
 skills/**/memory/*.json
 core/data/models/*.nlp
+core/data/models/llm/*
 package.json.backup
 .python-version
 schemas/**/*.json
