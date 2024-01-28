@@ -1,5 +1,7 @@
 from typing import TypedDict
 from bridges.python.src.sdk.aurora.button import Button
+from bridges.python.src.sdk.aurora.text import Text
+from bridges.python.src.sdk.aurora.flexbox import Flexbox
 
 from bridges.python.src.sdk.widget import Widget, WidgetOptions
 from bridges.python.src.sdk.widget_component import WidgetComponent
@@ -13,6 +15,13 @@ class NumberWidget(Widget[NumberWidgetParams]):
         super().__init__(options)
 
     def render(self) -> WidgetComponent:
-        return Button({
-            'children': self.params.get('random_number')
+        return Flexbox({
+            'alignItems': 'center',
+            'justifyContent': 'center',
+            'children': [
+                Text({
+                    'children': self.params.get('random_number'),
+                    'fontSize': 'xl'
+                })
+            ]
         })
