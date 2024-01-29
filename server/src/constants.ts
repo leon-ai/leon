@@ -151,13 +151,15 @@ export const LEON_FILE_PATH = path.join(process.cwd(), 'leon.json')
  * LLMs
  */
 export const LLM_VERSION = 'v0.2.Q4_K_S'
-export const LLM_NAME = `Mistral 7B Instruct ${LLM_VERSION}`
+export const LLM_NAME = 'Mistral 7B Instruct'
+export const LLM_NAME_WITH_VERSION = `${LLM_NAME} ${LLM_VERSION}`
 export const LLM_FILE_NAME = `mistral-7b-instruct-${LLM_VERSION}.gguf`
-export const LLM_PATH = path.join(
-  MODELS_PATH,
-  'llm',
-  LLM_FILE_NAME
-)
+export const LLM_DIR_PATH = path.join(MODELS_PATH, 'llm')
+export const LLM_PATH = path.join(LLM_DIR_PATH, LLM_FILE_NAME)
+export const LLM_MINIMUM_TOTAL_RAM = 8
+export const LLM_MINIMUM_FREE_RAM = 8
+export const LLM_HF_DOWNLOAD_URL = 'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true'
+export const LLM_MIRROR_DOWNLOAD_URL = 'https://hf-mirror.com/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true'
 
 /**
  * Misc

@@ -19,25 +19,16 @@ export class FileHelper {
     return axios.get(fileURL, {
       responseType,
       onDownloadProgress: ({ loaded, total, progress, estimated, rate }) => {
-        // TODO: remove
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-expect-error
-        const percentage = Math.floor(progress * 100)
+        const percentage = Math.floor(Number(progress) * 100)
         const downloadedSize = prettyBytes(loaded)
-        // TODO: remove
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-expect-error
-        const totalSize = prettyBytes(total)
+        const totalSize = prettyBytes(Number(total))
         const estimatedTime = !estimated
           ? 0
           : prettyMilliseconds(estimated * 1_000, { secondsDecimalDigits: 0 })
         const downloadRate = !rate ? 0 : prettyBytes(rate)
 
         readline.clearLine(process.stdout, 0)
-        // TODO: remove
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-expect-error
-        readline.cursorTo(process.stdout, 0, null)
+        readline.cursorTo(process.stdout, 0)
         process.stdout.write(
           `Download progress: ${percentage}% (${downloadedSize}/${totalSize} | ${downloadRate}/s | ${estimatedTime} ETA)`
         )
