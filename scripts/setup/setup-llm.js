@@ -19,9 +19,10 @@ import { FileHelper } from '@/helpers/file-helper'
 
 /**
  * Download and set up LLM
- * TODO...
- * Download LLM via Helper method...
- * Create manifest via Helper method...
+ * 1. Check minimum hardware requirements
+ * 2. Check if Hugging Face is accessible
+ * 3. Download the latest LLM from Hugging Face or mirror
+ * 4. Create manifest file
  */
 
 function checkMinimumHardwareRequirements() {
@@ -74,6 +75,8 @@ async function setupLLM() {
 
       LogHelper.success('Manifest file created')
       LogHelper.success(`${LLM_NAME_WITH_VERSION} ready`)
+    } else {
+      LogHelper.info(`${LLM_NAME_WITH_VERSION} is already set up and use the latest version`)
     }
 
     LogHelper.success('LLM is set up')
