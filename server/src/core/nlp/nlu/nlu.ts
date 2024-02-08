@@ -15,7 +15,8 @@ import type {
 } from '@/core/nlp/types'
 import { langs } from '@@/core/langs.json'
 import { TCP_SERVER_BIN_PATH } from '@/constants'
-import { TCP_CLIENT, BRAIN, SOCKET_SERVER, MODEL_LOADER, NER } from '@/core'
+import { TCP_CLIENT, MODEL_LOADER, NER } from '@/core'
+import Brain from '@/core/brain/brain'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { ActionLoop } from '@/core/nlp/nlu/action-loop'
@@ -45,14 +46,22 @@ export default class NLU {
   private static instance: NLU
   public nluResult: NLUResult = DEFAULT_NLU_RESULT
   public conversation = new Conversation('conv0')
+  private slotFilling!: SlotFilling
 
-  constructor() {
+  private _brain: Brain
+  public get brain(): Brain {
+    return this._brain
+  }
+
+  constructor(brain: Brain) {
     if (!NLU.instance) {
       LogHelper.title('NLU')
       LogHelper.success('New instance')
 
       NLU.instance = this
     }
+    this._brain = brain
+    this.slotFilling = new SlotFilling(this)
   }
 
   /**
@@ -66,8 +75,8 @@ export default class NLU {
       await this.process(utterance)
     }
 
-    BRAIN.lang = locale
-    BRAIN.talk(`${BRAIN.wernicke('random_language_switch')}.`, true)
+    this.brain.lang = locale
+    this.brain.talk(`${this.brain.wernicke('random_language_switch')}.`, true)
 
     // Recreate a new TCP server process and reconnect the TCP client
     kill(global.tcpServerProcess.pid as number, () => {
@@ -94,9 +103,9 @@ export default class NLU {
       LogHelper.info('Processing...')
 
       if (!MODEL_LOADER.hasNlpModels()) {
-        if (!BRAIN.isMuted) {
-          BRAIN.talk(`${BRAIN.wernicke('random_errors')}!`)
-          SOCKET_SERVER.socket?.emit('is-typing', false)
+        if (this.brain.socket !== undefined) {
+          this.brain.talk(`${this.brain.wernicke('random_errors')}!`)
+          this.brain.socket?.emit('is-typing', false)
         }
 
         const msg =
@@ -118,7 +127,7 @@ export default class NLU {
         // When the active context has slots filled
         if (Object.keys(this.conversation.activeContext.slots).length > 0) {
           try {
-            return resolve(await SlotFilling.handle(utterance))
+            return resolve(await this.slotFilling.handle(utterance))
           } catch (e) {
             return reject({})
           }
@@ -174,13 +183,16 @@ export default class NLU {
 
       const isSupportedLanguage = LangHelper.getShortCodes().includes(locale)
       if (!isSupportedLanguage) {
-        BRAIN.talk(`${BRAIN.wernicke('random_language_not_supported')}.`, true)
-        SOCKET_SERVER.socket?.emit('is-typing', false)
+        this.brain.talk(
+          `${this.brain.wernicke('random_language_not_supported')}.`,
+          true
+        )
+        this.brain.socket?.emit('is-typing', false)
         return resolve({})
       }
 
       // Trigger language switching
-      if (BRAIN.lang !== locale) {
+      if (this.brain.lang !== locale) {
         this.switchLanguage(utterance, locale)
         return resolve(null)
       }
@@ -191,16 +203,19 @@ export default class NLU {
         )
 
         if (!fallback) {
-          if (!BRAIN.isMuted) {
-            BRAIN.talk(`${BRAIN.wernicke('random_unknown_intents')}.`, true)
-            SOCKET_SERVER.socket?.emit('is-typing', false)
+          if (this.brain.socket !== undefined) {
+            this.brain.talk(
+              `${this.brain.wernicke('random_unknown_intents')}.`,
+              true
+            )
+            this.brain.socket?.emit('is-typing', false)
           }
 
           LogHelper.title('NLU')
           const msg = 'Intent not found'
           LogHelper.warning(msg)
 
-          Telemetry.utterance({ utterance, lang: BRAIN.lang })
+          Telemetry.utterance({ utterance, lang: this.brain.lang })
 
           return resolve(null)
         }
@@ -219,13 +234,13 @@ export default class NLU {
         this.nluResult.classification.domain,
         this.nluResult.classification.skill,
         'config',
-        BRAIN.lang + '.json'
+        this.brain.lang + '.json'
       )
       this.nluResult.skillConfigPath = skillConfigPath
 
       try {
         this.nluResult.entities = await NER.extractEntities(
-          BRAIN.lang,
+          this.brain.lang,
           skillConfigPath,
           this.nluResult
         )
@@ -233,7 +248,7 @@ export default class NLU {
         LogHelper.error(`Failed to extract entities: ${e}`)
       }
 
-      const shouldSlotLoop = await SlotFilling.route(intent)
+      const shouldSlotLoop = await this.slotFilling.route(intent)
       if (shouldSlotLoop) {
         return resolve({})
       }
@@ -244,7 +259,7 @@ export default class NLU {
         Object.keys(this.conversation.activeContext.slots).length > 0
       ) {
         try {
-          return resolve(await SlotFilling.handle(utterance))
+          return resolve(await this.slotFilling.handle(utterance))
         } catch (e) {
           return reject({})
         }
@@ -256,7 +271,7 @@ export default class NLU {
       }
       await this.conversation.setActiveContext({
         ...DEFAULT_ACTIVE_CONTEXT,
-        lang: BRAIN.lang,
+        lang: this.brain.lang,
         slots: {},
         isInActionLoop: false,
         originalUtterance: this.nluResult.utterance,
@@ -273,14 +288,14 @@ export default class NLU {
       this.nluResult.entities = this.conversation.activeContext.entities
 
       try {
-        const processedData = await BRAIN.execute(this.nluResult)
+        const processedData = await this.brain.execute(this.nluResult)
 
         // Prepare next action if there is one queuing
         if (processedData.nextAction) {
           this.conversation.cleanActiveContext()
           await this.conversation.setActiveContext({
             ...DEFAULT_ACTIVE_CONTEXT,
-            lang: BRAIN.lang,
+            lang: this.brain.lang,
             slots: {},
             isInActionLoop: !!processedData.nextAction.loop,
             originalUtterance: processedData.utterance ?? '',
@@ -306,9 +321,7 @@ export default class NLU {
 
         LogHelper.error(errorMessage)
 
-        if (!BRAIN.isMuted) {
-          SOCKET_SERVER.socket?.emit('is-typing', false)
-        }
+        this.brain.socket?.emit('is-typing', false)
 
         return reject(new Error(errorMessage))
       }

@@ -8,6 +8,8 @@ import { TMP_PATH } from '@/constants'
 import { STT } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 
+import { ClientSocket } from '../socket-server'
+
 export default class ASR {
   private static instance: ASR
 
@@ -29,7 +31,7 @@ export default class ASR {
    * Encode audio blob to WAVE file
    * and forward the WAVE file to the STT parser
    */
-  public encode(blob: Buffer): Promise<void> {
+  public encode(blob: Buffer, socket: ClientSocket): Promise<void> {
     return new Promise((resolve, reject) => {
       LogHelper.title('ASR')
 
@@ -60,7 +62,7 @@ export default class ASR {
               if (!STT.isParserReady) {
                 reject(new Error('The speech recognition is not ready yet'))
               } else {
-                STT.transcribe(this.audioPaths.wav)
+                STT.transcribe(this.audioPaths.wav, socket)
                 resolve()
               }
             })

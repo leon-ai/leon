@@ -2,7 +2,7 @@ import type { FastifyPluginAsync, FastifySchema } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import type { Static } from '@sinclair/typebox'
 
-import { NLU, BRAIN } from '@/core'
+import { NLU } from '@/core'
 import type { APIOptions } from '@/core/http-server/http-server'
 
 const postUtteranceSchema = {
@@ -29,7 +29,6 @@ export const postUtterance: FastifyPluginAsync<APIOptions> = async (
       const { utterance } = request.body
 
       try {
-        BRAIN.isMuted = true
         const data = await NLU.process(utterance)
 
         reply.send({

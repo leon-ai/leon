@@ -4,7 +4,7 @@ import fs from 'node:fs'
 
 import type { ShortLanguageCode } from '@/types'
 import type { TTSSynthesizer } from '@/core/tts/types'
-import { SOCKET_SERVER } from '@/core'
+import Brain from '@/core/brain/brain'
 import { TTS_PROVIDER, VOICE_CONFIG_PATH } from '@/constants'
 import { TTSSynthesizers, TTSProviders } from '@/core/tts/types'
 import { LogHelper } from '@/helpers/log-helper'
@@ -31,13 +31,18 @@ export default class TTS {
   public lang: ShortLanguageCode = 'en'
   public em = new events.EventEmitter()
 
-  constructor() {
+  private _brain: Brain
+  public get brain(): Brain {
+    return this._brain
+  }
+  constructor(brain: Brain) {
     if (!TTS.instance) {
       LogHelper.title('TTS')
       LogHelper.success('New instance')
 
       TTS.instance = this
     }
+    this._brain = brain
   }
 
   /**
@@ -112,7 +117,7 @@ export default class TTS {
         const { audioFilePath, duration } = result
         const bitmap = await fs.promises.readFile(audioFilePath)
 
-        SOCKET_SERVER.socket?.emit(
+        this.brain.socket?.emit(
           'audio-forwarded',
           {
             buffer: Buffer.from(bitmap),

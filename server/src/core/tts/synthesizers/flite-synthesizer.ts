@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process'
 import type { LongLanguageCode } from '@/types'
 import type { SynthesizeResult } from '@/core/tts/types'
 import { LANG, TMP_PATH, BIN_PATH } from '@/constants'
-import { TTS } from '@/core'
+import TextToSpeech from '@/core/tts/tts'
 import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -22,7 +22,11 @@ export default class FliteSynthesizer extends TTSSynthesizerBase {
   protected readonly lang = LANG as LongLanguageCode
   private readonly binPath = path.join(BIN_PATH, 'flite', 'flite')
 
-  constructor(lang: LongLanguageCode) {
+  private _tts: TextToSpeech
+  public get tts(): TextToSpeech {
+    return this._tts
+  }
+  constructor(tts: TextToSpeech, lang: LongLanguageCode) {
     super()
 
     LogHelper.title(this.name)
@@ -35,6 +39,8 @@ export default class FliteSynthesizer extends TTSSynthesizerBase {
         'The Flite synthesizer only accepts the "en-US" language at the moment'
       )
     }
+
+    this._tts = tts
 
     if (!fs.existsSync(this.binPath)) {
       LogHelper.error(
@@ -71,7 +77,7 @@ export default class FliteSynthesizer extends TTSSynthesizerBase {
 
     const duration = await this.getAudioDuration(audioFilePath)
 
-    TTS.em.emit('saved', duration)
+    this.tts.em.emit('saved', duration)
 
     return {
       audioFilePath,

@@ -4,9 +4,11 @@ import path from 'node:path'
 import type { ASRAudioFormat } from '@/core/asr/types'
 import type { STTParser } from '@/core/stt/types'
 import { STT_PROVIDER, VOICE_CONFIG_PATH } from '@/constants'
-import { SOCKET_SERVER, ASR } from '@/core'
+import { ASR } from '@/core'
 import { STTParserNames, STTProviders } from '@/core/stt/types'
 import { LogHelper } from '@/helpers/log-helper'
+
+import { ClientSocket } from '../socket-server'
 
 const PROVIDERS_MAP = {
   [STTProviders.GoogleCloudSTT]: STTParserNames.GoogleCloudSTT,
@@ -85,7 +87,10 @@ export default class STT {
   /**
    * Read the speech file and transcribe
    */
-  public async transcribe(audioFilePath: string): Promise<boolean> {
+  public async transcribe(
+    audioFilePath: string,
+    socket: ClientSocket
+  ): Promise<boolean> {
     LogHelper.info('Parsing WAVE file...')
 
     if (!fs.existsSync(audioFilePath)) {
@@ -99,7 +104,7 @@ export default class STT {
 
     if (transcript && transcript !== '') {
       // Forward the string to the client
-      this.forward(transcript)
+      this.forward(transcript, socket)
     } else {
       this.deleteAudios()
     }
@@ -111,8 +116,8 @@ export default class STT {
    * Forward string output to the client
    * and delete audio files once it has been forwarded
    */
-  private forward(str: string): void {
-    SOCKET_SERVER.socket?.emit('recognized', str, (confirmation: string) => {
+  private forward(str: string, socket: ClientSocket): void {
+    socket.emit('recognized', str, (confirmation: string) => {
       if (confirmation === 'string-received') {
         this.deleteAudios()
       }

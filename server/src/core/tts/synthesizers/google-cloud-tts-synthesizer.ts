@@ -2,13 +2,13 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 import type { TextToSpeechClient } from '@google-cloud/text-to-speech'
-import tts from '@google-cloud/text-to-speech'
+import gTTS from '@google-cloud/text-to-speech'
 import { google } from '@google-cloud/text-to-speech/build/protos/protos'
 
 import type { LongLanguageCode } from '@/types'
+import TextToSpeech from '@/core/tts/tts'
 import type { SynthesizeResult } from '@/core/tts/types'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
-import { TTS } from '@/core'
 import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -34,7 +34,11 @@ export default class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
   protected readonly lang = LANG as LongLanguageCode
   private readonly client: TextToSpeechClient | undefined = undefined
 
-  constructor(lang: LongLanguageCode) {
+  private _tts: TextToSpeech
+  public get tts(): TextToSpeech {
+    return this._tts
+  }
+  constructor(tts: TextToSpeech, lang: LongLanguageCode) {
     super()
 
     LogHelper.title(this.name)
@@ -45,9 +49,11 @@ export default class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
       'google-cloud.json'
     )
 
+    this._tts = tts
+
     try {
       this.lang = lang
-      this.client = new tts.TextToSpeechClient()
+      this.client = new gTTS.TextToSpeechClient()
 
       LogHelper.success('Synthesizer initialized')
     } catch (e) {
@@ -81,7 +87,7 @@ export default class GoogleCloudTTSSynthesizer extends TTSSynthesizerBase {
 
         const duration = await this.getAudioDuration(audioFilePath)
 
-        TTS.em.emit('saved', duration)
+        this.tts.em.emit('saved', duration)
 
         return {
           audioFilePath,

@@ -8,7 +8,7 @@ import type { LongLanguageCode } from '@/types'
 import type { SynthesizeResult } from '@/core/tts/types'
 import type { AmazonVoiceConfigurationSchema } from '@/schemas/voice-config-schemas'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
-import { TTS } from '@/core'
+import TextToSpeech from '@/core/tts/tts'
 import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -27,7 +27,11 @@ export default class AmazonPollySynthesizer extends TTSSynthesizerBase {
   protected readonly lang = LANG as LongLanguageCode
   private readonly client: Polly | undefined = undefined
 
-  constructor(lang: LongLanguageCode) {
+  private _tts: TextToSpeech
+  public get tts(): TextToSpeech {
+    return this._tts
+  }
+  constructor(tts: TextToSpeech, lang: LongLanguageCode) {
     super()
 
     LogHelper.title(this.name)
@@ -36,6 +40,8 @@ export default class AmazonPollySynthesizer extends TTSSynthesizerBase {
     const config: AmazonVoiceConfigurationSchema = JSON.parse(
       fs.readFileSync(path.join(VOICE_CONFIG_PATH, 'amazon.json'), 'utf8')
     )
+
+    this._tts = tts
 
     try {
       this.lang = lang
@@ -81,7 +87,7 @@ export default class AmazonPollySynthesizer extends TTSSynthesizerBase {
 
         const duration = await this.getAudioDuration(audioFilePath)
 
-        TTS.em.emit('saved', duration)
+        this.tts.em.emit('saved', duration)
 
         return {
           audioFilePath,

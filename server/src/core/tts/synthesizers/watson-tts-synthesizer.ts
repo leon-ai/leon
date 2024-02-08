@@ -8,7 +8,7 @@ import type { WatsonVoiceConfigurationSchema } from '@/schemas/voice-config-sche
 import type { LongLanguageCode } from '@/types'
 import type { SynthesizeResult } from '@/core/tts/types'
 import { LANG, VOICE_CONFIG_PATH, TMP_PATH } from '@/constants'
-import { TTS } from '@/core'
+import TextToSpeech from '@/core/tts/tts'
 import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -27,7 +27,11 @@ export default class WatsonTTSSynthesizer extends TTSSynthesizerBase {
   protected readonly lang: LongLanguageCode = LANG as LongLanguageCode
   private readonly client: Tts | undefined = undefined
 
-  constructor(lang: LongLanguageCode) {
+  private _tts: TextToSpeech
+  public get tts(): TextToSpeech {
+    return this._tts
+  }
+  constructor(tts: TextToSpeech, lang: LongLanguageCode) {
     super()
 
     LogHelper.title(this.name)
@@ -37,6 +41,7 @@ export default class WatsonTTSSynthesizer extends TTSSynthesizerBase {
       fs.readFileSync(path.join(VOICE_CONFIG_PATH, 'watson-stt.json'), 'utf8')
     )
 
+    this._tts = tts
     try {
       this.lang = lang
       this.client = new Tts({
@@ -75,7 +80,7 @@ export default class WatsonTTSSynthesizer extends TTSSynthesizerBase {
 
         const duration = await this.getAudioDuration(audioFilePath)
 
-        TTS.em.emit('saved', duration)
+        this.tts.em.emit('saved', duration)
 
         return {
           audioFilePath,

@@ -4,6 +4,7 @@ import { ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 
 import type { ShortLanguageCode } from '@/types'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
+import TextToSpeech from '@/core/tts/tts'
 import type {
   CustomEnumEntity,
   NERCustomEntity,
@@ -27,13 +28,14 @@ import {
   NODEJS_BRIDGE_BIN_PATH,
   TMP_PATH
 } from '@/constants'
-import { SOCKET_SERVER, TTS } from '@/core'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import type { AnswerOutput } from '@sdk/types'
 import { DateHelper } from '@/helpers/date-helper'
+
+import { ClientSocket } from '../socket-server'
 
 export default class Brain {
   private static instance: Brain
@@ -49,15 +51,29 @@ export default class Brain {
   private skillFriendlyName = ''
   private skillOutput = ''
   private answers: SkillAnswerConfigSchema[] = []
-  public isMuted = false // Close Leon mouth if true; e.g. over HTTP
 
-  constructor() {
+  private _socket: ClientSocket | undefined
+  public get socket(): ClientSocket | undefined {
+    return this._socket
+  }
+  public get isMuted(): boolean {
+    return this._socket == undefined
+  }
+
+  private _tts: TextToSpeech
+  public get tts(): TextToSpeech {
+    return this._tts
+  }
+
+  constructor(socket?: ClientSocket) {
     if (!Brain.instance) {
       LogHelper.title('Brain')
       LogHelper.success('New instance')
 
       Brain.instance = this
     }
+    this._socket = socket
+    this._tts = new TextToSpeech(this)
   }
 
   public get lang(): ShortLanguageCode {
@@ -80,7 +96,7 @@ export default class Brain {
   }
 
   private async updateTTSLang(newLang: ShortLanguageCode): Promise<void> {
-    await TTS.init(newLang)
+    await this.tts.init(newLang)
 
     LogHelper.title('Brain')
     LogHelper.info('Language has changed')
@@ -100,6 +116,15 @@ export default class Brain {
   }
 
   /**
+   * Resources free-up.
+   */
+  public dispose(): void {
+    this._socket?.disconnect()
+    this._socket?.removeAllListeners()
+    this._socket = undefined
+  }
+
+  /**
    * Make Leon talk
    */
   public talk(answer: SkillAnswerConfigSchema, end = false): void {
@@ -114,10 +139,10 @@ export default class Brain {
         // Stripe HTML to a whitespace. Whitespace to let the TTS respects punctuation
         const speech = speechAnswer.replace(/<(?:.|\n)*?>/gm, ' ')
 
-        TTS.add(speech, end)
+        this.tts.add(speech, end)
       }
 
-      SOCKET_SERVER.socket?.emit('answer', textAnswer)
+      this.socket?.emit('answer', textAnswer)
     }
   }
 
@@ -166,7 +191,7 @@ export default class Brain {
       const speech = `${this.wernicke('random_not_sure')}.`
 
       this.talk(speech, true)
-      SOCKET_SERVER.socket?.emit('ask-to-repeat', nluResult)
+      this.socket?.emit('ask-to-repeat', nluResult)
     }
   }
 
@@ -219,7 +244,7 @@ export default class Brain {
         LogHelper.info(data.toString())
 
         if (skillAnswer.output.widget) {
-          SOCKET_SERVER.socket?.emit('widget', skillAnswer.output.widget)
+          this.socket?.emit('widget', skillAnswer.output.widget)
         }
 
         const { answer } = skillAnswer.output
@@ -254,7 +279,7 @@ export default class Brain {
 
     if (!this.isMuted) {
       this.talk(speech)
-      SOCKET_SERVER.socket?.emit('is-typing', false)
+      this.socket?.emit('is-typing', false)
     }
 
     this.answers.push(speech)
@@ -428,9 +453,7 @@ export default class Brain {
 
             Brain.deleteIntentObjFile(intentObjectPath)
 
-            if (!this.isMuted) {
-              SOCKET_SERVER.socket?.emit('is-typing', false)
-            }
+            this.socket?.emit('is-typing', false)
 
             const executionTimeEnd = Date.now()
             const executionTime = executionTimeEnd - executionTimeStart
@@ -440,13 +463,13 @@ export default class Brain {
               nextAction?.suggestions &&
               skillResult?.output.core?.showNextActionSuggestions
             ) {
-              SOCKET_SERVER.socket?.emit('suggest', nextAction.suggestions)
+              this.socket?.emit('suggest', nextAction.suggestions)
             }
             if (
               action?.suggestions &&
               skillResult?.output.core?.showSuggestions
             ) {
-              SOCKET_SERVER.socket?.emit('suggest', action.suggestions)
+              this.socket?.emit('suggest', action.suggestions)
             }
 
             resolve({
@@ -574,12 +597,12 @@ export default class Brain {
 
           if (!this.isMuted) {
             this.talk(answer as string, true)
-            SOCKET_SERVER.socket?.emit('is-typing', false)
+            this.socket?.emit('is-typing', false)
           }
 
           // Send suggestions to the client
           if (nextAction?.suggestions) {
-            SOCKET_SERVER.socket?.emit('suggest', nextAction.suggestions)
+            this.socket?.emit('suggest', nextAction.suggestions)
           }
 
           resolve({
