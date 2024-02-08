@@ -85,7 +85,7 @@ export const LEON_VERSION = process.env['npm_package_version']
 
 /**
  * spaCy models
- * Find new spaCy models: https://github.com/explosion/spacy-models/releases
+ * @see Find new spaCy models: https://github.com/explosion/spacy-models/releases
  */
 export const EN_SPACY_MODEL_NAME = 'en_core_web_trf'
 export const EN_SPACY_MODEL_VERSION = '3.4.0'
@@ -158,8 +158,14 @@ export const LLM_DIR_PATH = path.join(MODELS_PATH, 'llm')
 export const LLM_PATH = path.join(LLM_DIR_PATH, LLM_FILE_NAME)
 export const LLM_MINIMUM_TOTAL_RAM = 8
 export const LLM_MINIMUM_FREE_RAM = 8
-export const LLM_HF_DOWNLOAD_URL = 'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true'
-export const LLM_MIRROR_DOWNLOAD_URL = 'https://hf-mirror.com/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true'
+export const LLM_HF_DOWNLOAD_URL =
+  'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true'
+export const LLM_MIRROR_DOWNLOAD_URL =
+  'https://hf-mirror.com/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_S.gguf?download=true'
+/**
+ * @see llama.cpp releases: https://github.com/ggerganov/llama.cpp/releases
+ */
+export const LLM_LLAMA_CPP_RELEASE_TAG = 'b2096'
 
 /**
  * Misc

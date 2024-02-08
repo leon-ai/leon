@@ -15,7 +15,10 @@ export class FileHelper {
    * @param responseType The Axios request response type
    * @example downloadFile('https://example.com/file.zip', 'arraybuffer') // ArrayBuffer
    */
-  public static downloadFile(fileURL: string, responseType: AxiosResponseType): Promise<AxiosResponse> {
+  public static downloadFile(
+    fileURL: string,
+    responseType: AxiosResponseType
+  ): Promise<AxiosResponse> {
     return axios.get(fileURL, {
       responseType,
       onDownloadProgress: ({ loaded, total, progress, estimated, rate }) => {
@@ -45,12 +48,19 @@ export class FileHelper {
    * @param manifestPath The manifest file path
    * @param manifestName The manifest name
    * @param manifestVersion The manifest version
+   * @param extraData Extra data to add to the manifest
    */
-  public static async createManifestFile(manifestPath: string, manifestName: string, manifestVersion: string): Promise<void> {
+  public static async createManifestFile(
+    manifestPath: string,
+    manifestName: string,
+    manifestVersion: string,
+    extraData?: Record<string, unknown>
+  ): Promise<void> {
     const manifest = {
       name: manifestName,
       version: manifestVersion,
-      setupDate: Date.now()
+      setupDate: Date.now(),
+      ...extraData
     }
 
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2))

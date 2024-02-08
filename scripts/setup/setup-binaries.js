@@ -107,7 +107,10 @@ const setupBinaries = async (key) => {
 
       const archiveWriter = fs.createWriteStream(archivePath)
       const latestReleaseAssetURL = `${GITHUB_URL}/releases/download/${key}_v${version}/${archiveName}`
-      const { data } = await FileHelper.downloadFile(latestReleaseAssetURL, 'stream')
+      const { data } = await FileHelper.downloadFile(
+        latestReleaseAssetURL,
+        'stream'
+      )
 
       data.pipe(archiveWriter)
       await stream.promises.finished(archiveWriter)
