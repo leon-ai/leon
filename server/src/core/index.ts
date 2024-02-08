@@ -3,7 +3,6 @@ import TCPClient from '@/core/tcp-client'
 import HTTPServer from '@/core/http-server/http-server'
 import SocketServer from '@/core/socket-server'
 import SpeechToText from '@/core/stt/stt'
-import TextToSpeech from '@/core/tts/tts'
 import AutomaticSpeechRecognition from '@/core/asr/asr'
 import NamedEntityRecognition from '@/core/nlp/nlu/ner'
 import ModelLoader from '@/core/nlp/nlu/model-loader'
@@ -25,14 +24,12 @@ export const SOCKET_SERVER = new SocketServer()
 
 export const STT = new SpeechToText()
 
-export const TTS = new TextToSpeech()
-
 export const ASR = new AutomaticSpeechRecognition()
 
 export const NER = new NamedEntityRecognition()
 
 export const MODEL_LOADER = new ModelLoader()
 
-export const NLU = new NaturalLanguageUnderstanding()
-
+// TODO: THIS IS USED OVER HTTP (FOR HTTP REQUESTS)
 export const BRAIN = new Brain()
+export const NLU = new NaturalLanguageUnderstanding(BRAIN)

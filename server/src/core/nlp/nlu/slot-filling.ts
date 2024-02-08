@@ -2,16 +2,22 @@ import { join } from 'node:path'
 
 import type { NLPUtterance } from '@/core/nlp/types'
 import type { BrainProcessResult } from '@/core/brain/types'
-import { BRAIN, MODEL_LOADER, NER, NLU, SOCKET_SERVER } from '@/core'
-import { DEFAULT_NLU_RESULT } from '@/core/nlp/nlu/nlu'
+import { MODEL_LOADER, NER } from '@/core'
+import NaturalLanguageUnderstanding, {
+  DEFAULT_NLU_RESULT
+} from '@/core/nlp/nlu/nlu'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
 
 export class SlotFilling {
+  private nlu!: NaturalLanguageUnderstanding
+  constructor(nlu: NaturalLanguageUnderstanding) {
+    this.nlu = nlu
+  }
   /**
    * Handle slot filling
    */
-  public static async handle(
+  public async handle(
     utterance: NLPUtterance
   ): Promise<Partial<BrainProcessResult> | null> {
     const processedData = await this.fillSlot(utterance)
@@ -21,16 +27,16 @@ export class SlotFilling {
      * Then reprocess with the new utterance
      */
     if (!processedData) {
-      await NLU.process(utterance)
+      await this.nlu.process(utterance)
       return null
     }
 
     if (processedData && Object.keys(processedData).length > 0) {
       // Set new context with the next action if there is one
       if (processedData.action?.next_action) {
-        await NLU.conversation.setActiveContext({
+        await this.nlu.conversation.setActiveContext({
           ...DEFAULT_ACTIVE_CONTEXT,
-          lang: BRAIN.lang,
+          lang: this.nlu.brain.lang,
           slots: processedData.slots || {},
           isInActionLoop: !!processedData.nextAction?.loop,
           originalUtterance: processedData.utterance ?? null,
@@ -50,14 +56,14 @@ export class SlotFilling {
    * Build NLU data result object based on slots
    * and ask for more entities if necessary
    */
-  public static async fillSlot(
+  public async fillSlot(
     utterance: NLPUtterance
   ): Promise<Partial<BrainProcessResult> | null> {
-    if (!NLU.conversation.activeContext.nextAction) {
+    if (!this.nlu.conversation.activeContext.nextAction) {
       return null
     }
 
-    const { domain, intent } = NLU.conversation.activeContext
+    const { domain, intent } = this.nlu.conversation.activeContext
     const [skillName, actionName] = intent.split('.') as [string, string]
     const skillConfigPath = join(
       process.cwd(),
@@ -65,10 +71,10 @@ export class SlotFilling {
       domain,
       skillName,
       'config',
-      BRAIN.lang + '.json'
+      this.nlu.brain.lang + '.json'
     )
 
-    NLU.nluResult = {
+    this.nlu.nluResult = {
       ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
       utterance,
       classification: {
@@ -80,56 +86,58 @@ export class SlotFilling {
     }
 
     const entities = await NER.extractEntities(
-      BRAIN.lang,
+      this.nlu.brain.lang,
       skillConfigPath,
-      NLU.nluResult
+      this.nlu.nluResult
     )
 
     // Continue to loop for questions if a slot has been filled correctly
-    let notFilledSlot = NLU.conversation.getNotFilledSlot()
+    let notFilledSlot = this.nlu.conversation.getNotFilledSlot()
     if (notFilledSlot && entities.length > 0) {
       const hasMatch = entities.some(
         ({ entity }) => entity === notFilledSlot?.expectedEntity
       )
 
       if (hasMatch) {
-        NLU.conversation.setSlots(BRAIN.lang, entities)
+        this.nlu.conversation.setSlots(this.nlu.brain.lang, entities)
 
-        notFilledSlot = NLU.conversation.getNotFilledSlot()
+        notFilledSlot = this.nlu.conversation.getNotFilledSlot()
         if (notFilledSlot) {
-          BRAIN.talk(notFilledSlot.pickedQuestion)
-          SOCKET_SERVER.socket?.emit('is-typing', false)
+          this.nlu.brain.talk(notFilledSlot.pickedQuestion)
+          this.nlu.brain.socket?.emit('is-typing', false)
 
           return {}
         }
       }
     }
 
-    if (!NLU.conversation.areSlotsAllFilled()) {
-      BRAIN.talk(`${BRAIN.wernicke('random_context_out_of_topic')}.`)
+    if (!this.nlu.conversation.areSlotsAllFilled()) {
+      this.nlu.brain.talk(
+        `${this.nlu.brain.wernicke('random_context_out_of_topic')}.`
+      )
     } else {
-      NLU.nluResult = {
+      this.nlu.nluResult = {
         ...DEFAULT_NLU_RESULT, // Reset entities, slots, etc.
         // Assign slots only if there is a next action
-        slots: NLU.conversation.activeContext.nextAction
-          ? NLU.conversation.activeContext.slots
+        slots: this.nlu.conversation.activeContext.nextAction
+          ? this.nlu.conversation.activeContext.slots
           : {},
-        utterance: NLU.conversation.activeContext.originalUtterance ?? '',
+        utterance: this.nlu.conversation.activeContext.originalUtterance ?? '',
         skillConfigPath,
         classification: {
           domain,
           skill: skillName,
-          action: NLU.conversation.activeContext.nextAction,
+          action: this.nlu.conversation.activeContext.nextAction,
           confidence: 1
         }
       }
 
-      NLU.conversation.cleanActiveContext()
+      this.nlu.conversation.cleanActiveContext()
 
-      return BRAIN.execute(NLU.nluResult)
+      return this.nlu.brain.execute(this.nlu.nluResult)
     }
 
-    NLU.conversation.cleanActiveContext()
+    this.nlu.conversation.cleanActiveContext()
     return null
   }
 
@@ -139,40 +147,40 @@ export class SlotFilling {
    * 2. If the context is expecting slots, then loop over questions to slot fill
    * 3. Or go to the brain executor if all slots have been filled in one shot
    */
-  public static async route(intent: string): Promise<boolean> {
+  public async route(intent: string): Promise<boolean> {
     const slots =
       await MODEL_LOADER.mainNLPContainer.slotManager.getMandatorySlots(intent)
     const hasMandatorySlots = Object.keys(slots)?.length > 0
 
     if (hasMandatorySlots) {
-      await NLU.conversation.setActiveContext({
+      await this.nlu.conversation.setActiveContext({
         ...DEFAULT_ACTIVE_CONTEXT,
-        lang: BRAIN.lang,
+        lang: this.nlu.brain.lang,
         slots,
         isInActionLoop: false,
-        originalUtterance: NLU.nluResult.utterance,
-        skillConfigPath: NLU.nluResult.skillConfigPath,
-        actionName: NLU.nluResult.classification.action,
-        domain: NLU.nluResult.classification.domain,
+        originalUtterance: this.nlu.nluResult.utterance,
+        skillConfigPath: this.nlu.nluResult.skillConfigPath,
+        actionName: this.nlu.nluResult.classification.action,
+        domain: this.nlu.nluResult.classification.domain,
         intent,
-        entities: NLU.nluResult.entities
+        entities: this.nlu.nluResult.entities
       })
 
-      const notFilledSlot = NLU.conversation.getNotFilledSlot()
+      const notFilledSlot = this.nlu.conversation.getNotFilledSlot()
       // Loop for questions if a slot hasn't been filled
       if (notFilledSlot) {
         const { actions } = await SkillDomainHelper.getSkillConfig(
-          NLU.nluResult.skillConfigPath,
-          BRAIN.lang
+          this.nlu.nluResult.skillConfigPath,
+          this.nlu.brain.lang
         )
         const [currentSlot] =
-          actions[NLU.nluResult.classification.action]?.slots?.filter(
+          actions[this.nlu.nluResult.classification.action]?.slots?.filter(
             ({ name }) => name === notFilledSlot.name
           ) ?? []
 
-        SOCKET_SERVER.socket?.emit('suggest', currentSlot?.suggestions)
-        BRAIN.talk(notFilledSlot.pickedQuestion)
-        SOCKET_SERVER.socket?.emit('is-typing', false)
+        this.nlu.brain.socket?.emit('suggest', currentSlot?.suggestions)
+        this.nlu.brain.talk(notFilledSlot.pickedQuestion)
+        this.nlu.brain.socket?.emit('is-typing', false)
 
         return true
       }
