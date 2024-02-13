@@ -26,7 +26,7 @@ export const PYTHON_TCP_CLIENT = new TCPClient(
   String(PYTHON_TCP_SERVER_HOST),
   PYTHON_TCP_SERVER_PORT
 )
-export const LLM_TCP_CLIENT = new LLMTCPClient(
+export const LLM_TCP_CLIENT = new TCPClient(
   'LLM',
   LLM_TCP_SERVER_HOST,
   LLM_TCP_SERVER_PORT

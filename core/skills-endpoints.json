@@ -95,7 +95,7 @@
     {
       "method": "POST",
       "route": "/api/action/productivity/todo_list/add_todos",
-      "params": ["todos", "list"],
+      "params": [null, "todos", "list"],
       "entitiesType": "trim"
     },
     {
