@@ -81,7 +81,6 @@ async function downloadLLM() {
       await stream.promises.finished(llmWriter)
 
       LogHelper.success(`${LLM_NAME_WITH_VERSION} downloaded`)
-
       LogHelper.success(`${LLM_NAME_WITH_VERSION} ready`)
     } else {
       LogHelper.success(

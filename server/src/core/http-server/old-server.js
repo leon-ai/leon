@@ -22,7 +22,7 @@ import {
   STT_PROVIDER,
   TTS_PROVIDER
 } from '@/constants'
-import { TCP_CLIENT } from '@/core'
+import { PYTHON_TCP_CLIENT } from '@/core'
 import Nlu from '@/core/nlu'
 import Brain from '@/core/brain'
 import Asr from '@/core/asr/asr'
@@ -221,10 +221,10 @@ server.handleOnConnection = (socket) => {
     const provider = await addProvider(socket.id)
 
     // Check whether the TCP client is connected to the TCP server
-    if (TCP_CLIENT.isConnected) {
+    if (PYTHON_TCP_CLIENT.isConnected) {
       socket.emit('ready')
     } else {
-      TCP_CLIENT.ee.on('connected', () => {
+      PYTHON_TCP_CLIENT.ee.on('connected', () => {
         socket.emit('ready')
       })
     }

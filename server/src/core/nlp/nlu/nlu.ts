@@ -14,8 +14,14 @@ import type {
   NLUResult
 } from '@/core/nlp/types'
 import { langs } from '@@/core/langs.json'
-import { TCP_SERVER_BIN_PATH } from '@/constants'
-import { TCP_CLIENT, BRAIN, SOCKET_SERVER, MODEL_LOADER, NER } from '@/core'
+import { PYTHON_TCP_SERVER_BIN_PATH } from '@/constants'
+import {
+  PYTHON_TCP_CLIENT,
+  BRAIN,
+  SOCKET_SERVER,
+  MODEL_LOADER,
+  NER
+} from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { ActionLoop } from '@/core/nlp/nlu/action-loop'
@@ -70,14 +76,17 @@ export default class NLU {
     BRAIN.talk(`${BRAIN.wernicke('random_language_switch')}.`, true)
 
     // Recreate a new TCP server process and reconnect the TCP client
-    kill(global.tcpServerProcess.pid as number, () => {
-      global.tcpServerProcess = spawn(`${TCP_SERVER_BIN_PATH} ${locale}`, {
-        shell: true
-      })
+    kill(global.pythonTCPServerProcess.pid as number, () => {
+      global.pythonTCPServerProcess = spawn(
+        `${PYTHON_TCP_SERVER_BIN_PATH} ${locale}`,
+        {
+          shell: true
+        }
+      )
 
-      TCP_CLIENT.connect()
-      TCP_CLIENT.ee.removeListener('connected', connectedHandler)
-      TCP_CLIENT.ee.on('connected', connectedHandler)
+      PYTHON_TCP_CLIENT.connect()
+      PYTHON_TCP_CLIENT.ee.removeListener('connected', connectedHandler)
+      PYTHON_TCP_CLIENT.ee.on('connected', connectedHandler)
     })
   }
 

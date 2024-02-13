@@ -4,7 +4,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io'
 import { LANG, HAS_STT, HAS_TTS, IS_DEVELOPMENT_ENV } from '@/constants'
 import {
   HTTP_SERVER,
-  TCP_CLIENT,
+  PYTHON_TCP_CLIENT,
   ASR,
   STT,
   TTS,
@@ -86,11 +86,11 @@ export default class SocketServer {
         // TODO
         // const provider = await addProvider(socket.id)
 
-        // Check whether the TCP client is connected to the TCP server
-        if (TCP_CLIENT.isConnected) {
+        // Check whether the Python TCP client is connected to the Python TCP server
+        if (PYTHON_TCP_CLIENT.isConnected) {
           this.socket?.emit('ready')
         } else {
-          TCP_CLIENT.ee.on('connected', () => {
+          PYTHON_TCP_CLIENT.ee.on('connected', () => {
             this.socket?.emit('ready')
           })
         }

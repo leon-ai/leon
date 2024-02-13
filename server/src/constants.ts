@@ -21,7 +21,10 @@ export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
 export const BRIDGES_PATH = path.join(process.cwd(), 'bridges')
 export const NODEJS_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'nodejs')
 export const PYTHON_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'python')
-export const TCP_SERVER_ROOT_PATH = path.join(process.cwd(), 'tcp_server')
+export const PYTHON_TCP_SERVER_ROOT_PATH = path.join(
+  process.cwd(),
+  'tcp_server'
+)
 
 export const NODEJS_BRIDGE_DIST_PATH = path.join(
   NODEJS_BRIDGE_ROOT_PATH,
@@ -31,11 +34,17 @@ export const PYTHON_BRIDGE_DIST_PATH = path.join(
   PYTHON_BRIDGE_ROOT_PATH,
   'dist'
 )
-export const TCP_SERVER_DIST_PATH = path.join(TCP_SERVER_ROOT_PATH, 'dist')
+export const PYTHON_TCP_SERVER_DIST_PATH = path.join(
+  PYTHON_TCP_SERVER_ROOT_PATH,
+  'dist'
+)
 
 export const NODEJS_BRIDGE_SRC_PATH = path.join(NODEJS_BRIDGE_ROOT_PATH, 'src')
 export const PYTHON_BRIDGE_SRC_PATH = path.join(PYTHON_BRIDGE_ROOT_PATH, 'src')
-export const TCP_SERVER_SRC_PATH = path.join(TCP_SERVER_ROOT_PATH, 'src')
+export const PYTHON_TCP_SERVER_SRC_PATH = path.join(
+  PYTHON_TCP_SERVER_ROOT_PATH,
+  'src'
+)
 
 const NODEJS_BRIDGE_VERSION_FILE_PATH = path.join(
   NODEJS_BRIDGE_SRC_PATH,
@@ -45,8 +54,8 @@ const PYTHON_BRIDGE_VERSION_FILE_PATH = path.join(
   PYTHON_BRIDGE_SRC_PATH,
   'version.py'
 )
-const TCP_SERVER_VERSION_FILE_PATH = path.join(
-  TCP_SERVER_SRC_PATH,
+const PYTHON_TCP_SERVER_VERSION_FILE_PATH = path.join(
+  PYTHON_TCP_SERVER_SRC_PATH,
   'version.py'
 )
 export const [, NODEJS_BRIDGE_VERSION] = fs
@@ -55,18 +64,18 @@ export const [, NODEJS_BRIDGE_VERSION] = fs
 export const [, PYTHON_BRIDGE_VERSION] = fs
   .readFileSync(PYTHON_BRIDGE_VERSION_FILE_PATH, 'utf8')
   .split("'")
-export const [, TCP_SERVER_VERSION] = fs
-  .readFileSync(TCP_SERVER_VERSION_FILE_PATH, 'utf8')
+export const [, PYTHON_TCP_SERVER_VERSION] = fs
+  .readFileSync(PYTHON_TCP_SERVER_VERSION_FILE_PATH, 'utf8')
   .split("'")
 
 export const NODEJS_BRIDGE_BIN_NAME = 'leon-nodejs-bridge.js'
 export const PYTHON_BRIDGE_BIN_NAME = 'leon-python-bridge'
-export const TCP_SERVER_BIN_NAME = 'leon-tcp-server'
+export const PYTHON_TCP_SERVER_BIN_NAME = 'leon-tcp-server'
 
-export const TCP_SERVER_BIN_PATH = path.join(
-  TCP_SERVER_DIST_PATH,
+export const PYTHON_TCP_SERVER_BIN_PATH = path.join(
+  PYTHON_TCP_SERVER_DIST_PATH,
   BINARIES_FOLDER_NAME,
-  TCP_SERVER_BIN_NAME
+  PYTHON_TCP_SERVER_BIN_NAME
 )
 export const PYTHON_BRIDGE_BIN_PATH = path.join(
   PYTHON_BRIDGE_DIST_PATH,
@@ -121,8 +130,12 @@ export const HAS_OVER_HTTP = process.env['LEON_OVER_HTTP'] === 'true'
 export const HTTP_API_KEY = process.env['LEON_HTTP_API_KEY']
 export const HTTP_API_LANG = process.env['LEON_HTTP_API_LANG']
 
-export const TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
-export const TCP_SERVER_PORT = Number(process.env['LEON_PY_TCP_SERVER_PORT'])
+export const PYTHON_TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
+export const PYTHON_TCP_SERVER_PORT = Number(
+  process.env['LEON_PY_TCP_SERVER_PORT']
+)
+export const LLM_TCP_SERVER_HOST = '0.0.0.0'
+export const LLM_TCP_SERVER_PORT = 52420
 
 export const IS_TELEMETRY_ENABLED = process.env['LEON_TELEMETRY'] === 'true'
 

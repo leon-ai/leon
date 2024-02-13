@@ -6,7 +6,7 @@ import { command } from 'execa'
 import {
   NODEJS_BRIDGE_SRC_PATH,
   PYTHON_BRIDGE_SRC_PATH,
-  TCP_SERVER_SRC_PATH
+  PYTHON_TCP_SERVER_SRC_PATH
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { LoaderHelper } from '@/helpers/loader-helper'
@@ -29,7 +29,7 @@ BUILD_TARGETS.set('python-bridge', {
 })
 BUILD_TARGETS.set('tcp-server', {
   workflowFileName: 'pre-release-tcp-server.yml',
-  versionFilePath: path.join(TCP_SERVER_SRC_PATH, 'version.py')
+  versionFilePath: path.join(PYTHON_TCP_SERVER_SRC_PATH, 'version.py')
 })
 ;(async () => {
   LoaderHelper.start()

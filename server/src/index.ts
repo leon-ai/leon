@@ -5,26 +5,26 @@ import {
   IS_DEVELOPMENT_ENV,
   IS_TELEMETRY_ENABLED,
   LANG as LEON_LANG,
-  TCP_SERVER_BIN_PATH
+  PYTHON_TCP_SERVER_BIN_PATH
 } from '@/constants'
-import { TCP_CLIENT, HTTP_SERVER, SOCKET_SERVER } from '@/core'
+import { PYTHON_TCP_CLIENT, HTTP_SERVER, SOCKET_SERVER } from '@/core'
 import { Telemetry } from '@/telemetry'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 ;(async (): Promise<void> => {
   process.title = 'leon'
 
-  // Start the TCP server
-  global.tcpServerProcess = spawn(
-    `${TCP_SERVER_BIN_PATH} ${LangHelper.getShortCode(LEON_LANG)}`,
+  // Start the Python TCP server
+  global.pythonTCPServerProcess = spawn(
+    `${PYTHON_TCP_SERVER_BIN_PATH} ${LangHelper.getShortCode(LEON_LANG)}`,
     {
       shell: true,
       detached: IS_DEVELOPMENT_ENV
     }
   )
 
-  // Connect the TCP client to the TCP server
-  TCP_CLIENT.connect()
+  // Connect the Python TCP client to the Python TCP server
+  PYTHON_TCP_CLIENT.connect()
 
   // Start the HTTP server
   await HTTP_SERVER.init()
@@ -65,7 +65,7 @@ import { LogHelper } from '@/helpers/log-helper'
       process.on(eventType, () => {
         Telemetry.stop()
 
-        global.tcpServerProcess.kill()
+        global.pythonTCPServerProcess.kill()
 
         setTimeout(() => {
           process.exit(0)

@@ -127,6 +127,18 @@
       ],
       "entities": [
         {
+          "type": "llm",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "list_name": {
+            "type": "string"
+          }
+        },
+        {
           "type": "trim",
           "name": "todos",
           "conditions": [

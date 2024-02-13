@@ -1,4 +1,11 @@
-import { HOST, PORT, TCP_SERVER_HOST, TCP_SERVER_PORT } from '@/constants'
+import {
+  HOST,
+  PORT,
+  PYTHON_TCP_SERVER_HOST,
+  PYTHON_TCP_SERVER_PORT,
+  LLM_TCP_SERVER_HOST,
+  LLM_TCP_SERVER_PORT
+} from '@/constants'
 import TCPClient from '@/core/tcp-client'
 import HTTPServer from '@/core/http-server/http-server'
 import SocketServer from '@/core/socket-server'
@@ -11,13 +18,23 @@ import NaturalLanguageUnderstanding from '@/core/nlp/nlu/nlu'
 import Brain from '@/core/brain/brain'
 
 /**
- * Register core singletons
+ * Register core nodes
  */
 
-export const TCP_CLIENT = new TCPClient(
-  String(TCP_SERVER_HOST),
-  TCP_SERVER_PORT
+export const PYTHON_TCP_CLIENT = new TCPClient(
+  'Python',
+  String(PYTHON_TCP_SERVER_HOST),
+  PYTHON_TCP_SERVER_PORT
 )
+export const LLM_TCP_CLIENT = new LLMTCPClient(
+  'LLM',
+  LLM_TCP_SERVER_HOST,
+  LLM_TCP_SERVER_PORT
+)
+
+/**
+ * Register core singletons
+ */
 
 export const HTTP_SERVER = new HTTPServer(String(HOST), PORT)
 

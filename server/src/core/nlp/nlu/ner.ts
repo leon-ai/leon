@@ -13,7 +13,7 @@ import type {
   SkillCustomRegexEntityTypeSchema,
   SkillCustomTrimEntityTypeSchema
 } from '@/schemas/skill-schemas'
-import { BRAIN, MODEL_LOADER, TCP_CLIENT } from '@/core'
+import { BRAIN, MODEL_LOADER, PYTHON_TCP_CLIENT } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
@@ -197,10 +197,13 @@ export default class NER {
         resolve(spacyEntities)
       }
 
-      TCP_CLIENT.ee.removeAllListeners()
-      TCP_CLIENT.ee.on('spacy-entities-received', spacyEntitiesReceivedHandler)
+      PYTHON_TCP_CLIENT.ee.removeAllListeners()
+      PYTHON_TCP_CLIENT.ee.on(
+        'spacy-entities-received',
+        spacyEntitiesReceivedHandler
+      )
 
-      TCP_CLIENT.emit('get-spacy-entities', utterance)
+      PYTHON_TCP_CLIENT.emit('get-spacy-entities', utterance)
     })
   }
 

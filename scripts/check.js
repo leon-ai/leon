@@ -18,8 +18,8 @@ import {
   LEON_VERSION,
   NODEJS_BRIDGE_BIN_PATH,
   PYTHON_BRIDGE_BIN_PATH,
-  TCP_SERVER_BIN_PATH,
-  TCP_SERVER_VERSION,
+  PYTHON_TCP_SERVER_BIN_PATH,
+  PYTHON_TCP_SERVER_VERSION,
   NODEJS_BRIDGE_VERSION,
   PYTHON_BRIDGE_VERSION,
   INSTANCE_ID
@@ -50,8 +50,8 @@ dotenv.config()
       can_run: { title: 'Run', type: 'error', v: true },
       can_run_skill: { title: 'Run skills', type: 'error', v: true },
       can_text: { title: 'Reply you by texting', type: 'error', v: true },
-      can_start_tcp_server: {
-        title: 'Start the TCP server',
+      can_start_python_tcp_server: {
+        title: 'Start the Python TCP server',
         type: 'error',
         v: true
       },
@@ -118,7 +118,7 @@ dotenv.config()
         output: null,
         error: null
       },
-      tcpServer: {
+      pythonTCPServer: {
         version: null,
         startTime: null,
         command: null,
@@ -286,39 +286,39 @@ dotenv.config()
     }
 
     /**
-     * TCP server startup checking
+     * Python TCP server startup checking
      */
 
-    LogHelper.success(`TCP server version: ${TCP_SERVER_VERSION}`)
-    reportDataInput.tcpServer.version = TCP_SERVER_VERSION
+    LogHelper.success(`Python TCP server version: ${PYTHON_TCP_SERVER_VERSION}`)
+    reportDataInput.pythonTCPServer.version = PYTHON_TCP_SERVER_VERSION
 
-    LogHelper.info('Starting the TCP server...')
+    LogHelper.info('Starting the Python TCP server...')
 
-    const tcpServerCommand = `${TCP_SERVER_BIN_PATH} en`
-    const tcpServerStart = Date.now()
-    const p = spawn(tcpServerCommand, { shell: true })
+    const pythonTCPServerCommand = `${PYTHON_TCP_SERVER_BIN_PATH} en`
+    const pythonTCPServerStart = Date.now()
+    const p = spawn(pythonTCPServerCommand, { shell: true })
     const ignoredWarnings = [
       'UserWarning: Unable to retrieve source for @torch.jit._overload function'
     ]
 
-    LogHelper.info(tcpServerCommand)
-    reportDataInput.tcpServer.command = tcpServerCommand
+    LogHelper.info(pythonTCPServerCommand)
+    reportDataInput.pythonTCPServer.command = pythonTCPServerCommand
 
     if (osInfo.platform === 'darwin') {
       LogHelper.info(
-        'For the first start, it may take a few minutes to cold start the TCP server on macOS. No worries it is a one-time thing'
+        'For the first start, it may take a few minutes to cold start the Python TCP server on macOS. No worries it is a one-time thing'
       )
     }
 
-    let tcpServerOutput = ''
+    let pythonTCPServerOutput = ''
 
     p.stdout.on('data', (data) => {
       const newData = data.toString()
-      tcpServerOutput += newData
+      pythonTCPServerOutput += newData
 
       if (newData?.toLowerCase().includes('waiting for')) {
         kill(p.pid)
-        LogHelper.success('The TCP server can successfully start')
+        LogHelper.success('The Python TCP server can successfully start')
       }
     })
 
@@ -327,10 +327,10 @@ dotenv.config()
 
       // Ignore given warnings on stderr output
       if (!ignoredWarnings.some((w) => newData.includes(w))) {
-        tcpServerOutput += newData
-        report.can_start_tcp_server.v = false
-        reportDataInput.tcpServer.error = newData
-        LogHelper.error(`Cannot start the TCP server: ${newData}`)
+        pythonTCPServerOutput += newData
+        report.can_start_python_tcp_server.v = false
+        reportDataInput.pythonTCPServer.error = newData
+        LogHelper.error(`Cannot start the Python TCP server: ${newData}`)
       }
     })
 
@@ -339,18 +339,20 @@ dotenv.config()
     setTimeout(() => {
       kill(p.pid)
 
-      const error = `The TCP server timed out after ${timeout}ms`
+      const error = `The Python TCP server timed out after ${timeout}ms`
       LogHelper.error(error)
-      reportDataInput.tcpServer.error = error
-      report.can_start_tcp_server.v = false
+      reportDataInput.pythonTCPServer.error = error
+      report.can_start_python_tcp_server.v = false
     }, timeout)
 
     p.stdout.on('end', async () => {
-      const tcpServerEnd = Date.now()
-      reportDataInput.tcpServer.output = tcpServerOutput
-      reportDataInput.tcpServer.startTime = `${tcpServerEnd - tcpServerStart}ms`
+      const pythonTCPServerEnd = Date.now()
+      reportDataInput.pythonTCPServer.output = pythonTCPServerOutput
+      reportDataInput.pythonTCPServer.startTime = `${
+        pythonTCPServerEnd - pythonTCPServerStart
+      }ms`
       LogHelper.info(
-        `TCP server startup time: ${reportDataInput.tcpServer.startTime}\n`
+        `Python TCP server startup time: ${reportDataInput.pythonTCPServer.startTime}\n`
       )
 
       /**
@@ -564,7 +566,7 @@ dotenv.config()
         report.can_run.v &&
         report.can_run_skill.v &&
         report.can_text.v &&
-        report.can_start_tcp_server.v
+        report.can_start_python_tcp_server.v
       ) {
         LogHelper.success('Hooray! Leon can run correctly')
         LogHelper.info(

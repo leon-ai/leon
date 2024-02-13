@@ -7,14 +7,14 @@ import prettyBytes from 'pretty-bytes'
 
 import {
   PYTHON_BRIDGE_SRC_PATH,
-  TCP_SERVER_SRC_PATH,
+  PYTHON_TCP_SERVER_SRC_PATH,
   BINARIES_FOLDER_NAME,
   NODEJS_BRIDGE_DIST_PATH,
   PYTHON_BRIDGE_DIST_PATH,
-  TCP_SERVER_DIST_PATH,
+  PYTHON_TCP_SERVER_DIST_PATH,
   NODEJS_BRIDGE_BIN_NAME,
   PYTHON_BRIDGE_BIN_NAME,
-  TCP_SERVER_BIN_NAME,
+  PYTHON_TCP_SERVER_BIN_NAME,
   NODEJS_BRIDGE_ROOT_PATH
 } from '@/constants'
 import { OSTypes } from '@/types'
@@ -48,13 +48,13 @@ BUILD_TARGETS.set('python-bridge', {
   dotVenvPath: path.join(PYTHON_BRIDGE_SRC_PATH, '.venv')
 })
 BUILD_TARGETS.set('tcp-server', {
-  name: 'TCP server',
+  name: 'Python TCP server',
   needsPythonEnv: true,
-  pipfilePath: path.join(TCP_SERVER_SRC_PATH, 'Pipfile'),
-  setupFilePath: path.join(TCP_SERVER_SRC_PATH, 'setup.py'),
-  distPath: TCP_SERVER_DIST_PATH,
-  archiveName: `${TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
-  dotVenvPath: path.join(TCP_SERVER_SRC_PATH, '.venv')
+  pipfilePath: path.join(PYTHON_TCP_SERVER_SRC_PATH, 'Pipfile'),
+  setupFilePath: path.join(PYTHON_TCP_SERVER_SRC_PATH, 'setup.py'),
+  distPath: PYTHON_TCP_SERVER_DIST_PATH,
+  archiveName: `${PYTHON_TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
+  dotVenvPath: path.join(PYTHON_TCP_SERVER_SRC_PATH, '.venv')
 })
 ;(async () => {
   LoaderHelper.start()
