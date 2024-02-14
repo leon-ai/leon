@@ -47,7 +47,7 @@ export default class TCPClient {
     this.tcpSocket.on('connect', () => {
       LogHelper.title(`${this.name} TCP Client`)
       LogHelper.success(
-        `Connected to the ${this.name} TCP server tcp://${this.host}:${this.port}`
+        `Connected to the ${this.name} TCP server at tcp://${this.host}:${this.port}`
       )
 
       this.reconnectCounter = 0

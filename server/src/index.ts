@@ -3,6 +3,7 @@ import fs from 'node:fs'
 
 import {
   IS_DEVELOPMENT_ENV,
+  IS_PRODUCTION_ENV,
   IS_TELEMETRY_ENABLED,
   LANG as LEON_LANG,
   PYTHON_TCP_SERVER_BIN_PATH
@@ -14,6 +15,7 @@ import {
   LLM_TCP_CLIENT,
   LLM_TCP_SERVER
 } from '@/core'
+import { Updater } from '@/updater'
 import { Telemetry } from '@/telemetry'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -55,6 +57,17 @@ import { LogHelper } from '@/helpers/log-helper'
 
   // Start the socket server
   SOCKET_SERVER.init()
+
+  // Check for updates on startup and every 24 hours
+  if (IS_PRODUCTION_ENV) {
+    Updater.checkForUpdates()
+    setInterval(
+      () => {
+        Updater.checkForUpdates()
+      },
+      1_000 * 3_600 * 24
+    )
+  }
 
   // Telemetry events
   if (IS_TELEMETRY_ENABLED) {

@@ -69,8 +69,6 @@ export default class ModelLoader {
           )
         )
       } else {
-        LogHelper.title('Model Loader')
-
         try {
           const container = await containerBootstrap()
 
@@ -82,6 +80,7 @@ export default class ModelLoader {
           nluManager.settings.spellCheck = true
 
           await this.globalResolversNLPContainer.load(modelPath)
+          LogHelper.title('Model Loader')
           LogHelper.success('Global resolvers NLP model loaded')
 
           resolve()

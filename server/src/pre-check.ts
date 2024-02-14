@@ -110,6 +110,11 @@ const GLOBAL_DATA_SCHEMAS = {
   }
 
   /**
+   * New updates checking
+   */
+  LogHelper.info('Checking for new updates...')
+
+  /**
    * Voice configuration checking
    */
   LogHelper.info('Checking voice configuration schemas...')

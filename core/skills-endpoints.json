@@ -2,6 +2,17 @@
   "endpoints": [
     {
       "method": "POST",
+      "route": "/api/action/news/github_trends/run",
+      "params": ["number", "daterange"],
+      "entitiesType": "builtIn"
+    },
+    {
+      "method": "GET",
+      "route": "/api/action/news/product_hunt_trends/run",
+      "params": []
+    },
+    {
+      "method": "POST",
       "route": "/api/action/games/akinator/choose_thematic",
       "params": ["thematic"],
       "entitiesType": "trim"
@@ -50,17 +61,6 @@
     {
       "method": "GET",
       "route": "/api/action/games/rochambeau/rematch",
-      "params": []
-    },
-    {
-      "method": "POST",
-      "route": "/api/action/news/github_trends/run",
-      "params": ["number", "daterange"],
-      "entitiesType": "builtIn"
-    },
-    {
-      "method": "GET",
-      "route": "/api/action/news/product_hunt_trends/run",
       "params": []
     },
     {
