@@ -11,13 +11,13 @@ import {
   NODEJS_BRIDGE_ROOT_PATH,
   NODEJS_BRIDGE_DIST_PATH,
   PYTHON_BRIDGE_DIST_PATH,
-  TCP_SERVER_DIST_PATH,
+  PYTHON_TCP_SERVER_DIST_PATH,
   NODEJS_BRIDGE_BIN_NAME,
   PYTHON_BRIDGE_BIN_NAME,
-  TCP_SERVER_BIN_NAME,
+  PYTHON_TCP_SERVER_BIN_NAME,
   NODEJS_BRIDGE_VERSION,
   PYTHON_BRIDGE_VERSION,
-  TCP_SERVER_VERSION
+  PYTHON_TCP_SERVER_VERSION
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { FileHelper } from '@/helpers/file-helper'
@@ -48,11 +48,11 @@ TARGETS.set('python-bridge', {
   isPlatformDependent: true
 })
 TARGETS.set('tcp-server', {
-  name: 'TCP server',
-  distPath: TCP_SERVER_DIST_PATH,
-  manifestPath: path.join(TCP_SERVER_DIST_PATH, 'manifest.json'),
-  archiveName: `${TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
-  version: TCP_SERVER_VERSION,
+  name: 'Python TCP server',
+  distPath: PYTHON_TCP_SERVER_DIST_PATH,
+  manifestPath: path.join(PYTHON_TCP_SERVER_DIST_PATH, 'manifest.json'),
+  archiveName: `${PYTHON_TCP_SERVER_BIN_NAME}-${BINARIES_FOLDER_NAME}.zip`,
+  version: PYTHON_TCP_SERVER_VERSION,
   isPlatformDependent: true
 })
 
