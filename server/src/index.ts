@@ -11,7 +11,8 @@ import {
   PYTHON_TCP_CLIENT,
   HTTP_SERVER,
   SOCKET_SERVER,
-  LLM_TCP_CLIENT
+  LLM_TCP_CLIENT,
+  LLM_TCP_SERVER
 } from '@/core'
 import { Telemetry } from '@/telemetry'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -31,11 +32,22 @@ import { LogHelper } from '@/helpers/log-helper'
   // Connect the Python TCP client to the Python TCP server
   PYTHON_TCP_CLIENT.connect()
 
+  try {
+    // Start the LLM TCP server
+    await LLM_TCP_SERVER.init()
+  } catch (e) {
+    LogHelper.error(`LLM TCP server failed to init: ${e}`)
+  }
+
   // Connect the LLM TCP client to the LLM TCP server
   LLM_TCP_CLIENT.connect()
 
-  // Start the HTTP server
-  await HTTP_SERVER.init()
+  try {
+    // Start the HTTP server
+    await HTTP_SERVER.init()
+  } catch (e) {
+    LogHelper.error(`HTTP server failed to init: ${e}`)
+  }
 
   // TODO
   // Register HTTP API endpoints

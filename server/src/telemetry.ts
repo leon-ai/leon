@@ -74,7 +74,7 @@ export class Telemetry {
           coreVersion: LEON_VERSION,
           nodeJSBridgeVersion: NODEJS_BRIDGE_VERSION,
           pythonBridgeVersion: PYTHON_BRIDGE_VERSION,
-          pythonTCPServerVersion: PYTHON_TCP_SERVER_VERSION,
+          tcpServerVersion: PYTHON_TCP_SERVER_VERSION,
           environment: {
             osDetails: {
               type: os.type(),

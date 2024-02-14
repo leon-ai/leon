@@ -7,6 +7,7 @@ import {
   LLM_TCP_SERVER_PORT
 } from '@/constants'
 import TCPClient from '@/core/tcp-client'
+import LLMTCPServer from '@/core/llm-tcp-server/llm-tcp-server'
 import HTTPServer from '@/core/http-server/http-server'
 import SocketServer from '@/core/socket-server'
 import SpeechToText from '@/core/stt/stt'
@@ -35,6 +36,11 @@ export const LLM_TCP_CLIENT = new TCPClient(
 /**
  * Register core singletons
  */
+
+export const LLM_TCP_SERVER = new LLMTCPServer(
+  LLM_TCP_SERVER_HOST,
+  LLM_TCP_SERVER_PORT
+)
 
 export const HTTP_SERVER = new HTTPServer(String(HOST), PORT)
 
