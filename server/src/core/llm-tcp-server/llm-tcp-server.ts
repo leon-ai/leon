@@ -1,8 +1,10 @@
 import fs from 'node:fs'
+import Net from 'node:net'
 
 import { LLM_MINIMUM_FREE_RAM, LLM_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
+// import { LLMDuty } from '@/core/llm-tcp-server/llm-duty'
 
 /**
  * Duties:
@@ -67,6 +69,37 @@ export default class LLMTCPServer {
       return
     }
 
+    const server = new Net.Server()
+
+    server.listen(this.port, this.host, () => {
+      LogHelper.success(
+        `The LLM TCP server is listening on tcp://${this.host}:${this.port}`
+      )
+    })
+
+    server.on('connection', (socket) => {
+      LogHelper.title('Client')
+      LogHelper.success('Connected')
+
+      socket.on('data', (data) => {
+        LogHelper.title('Client')
+        LogHelper.info(`Received data: ${data}`)
+
+        const parsedData = JSON.parse(data.toString())
+
+        LogHelper.info(parsedData)
+      })
+
+      socket.on('error', (err) => {
+        LogHelper.error(`Error: ${err}`)
+      })
+
+      socket.on('end', () => {
+        LogHelper.title('Client')
+        LogHelper.error('Disconnected')
+      })
+    })
+
     /* try {
       await this.loadModel()
 
@@ -74,10 +107,40 @@ export default class LLMTCPServer {
     } catch (e) {
     } */
 
-    LogHelper.title('Initialization')
+    console.log('LOADING...')
+
+    const { LlamaModel, LlamaContext } = await import('node-llama-cpp')
+
+    /**
+     * @see https://withcatai.github.io/node-llama-cpp/api/type-aliases/LlamaModelOptions
+     */
+    const model = new LlamaModel({
+      modelPath: LLM_PATH
+    })
+
+    console.log('MODEL END LOADING', model)
+
+    /**
+     * @see https://withcatai.github.io/node-llama-cpp/api/type-aliases/LlamaContextOptions
+     */
+    const context = new LlamaContext({
+      model,
+      contextSize: 8_096,
+      threads: 4
+    })
+
+    console.log('CONTEXT END LOADING', context)
+
+    // const duty = new LLMDuty(LL)
+
     LogHelper.info(
       `Starting the LLM TCP server on tcp://${this.host}:${this.port}`
     )
+
+    /*ee.emit('infer', {
+      duty: '',
+      prompt: ''
+    })*/
 
     return
 

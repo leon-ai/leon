@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 
+import { LLMDuties } from '@/core/llm-tcp-server/types'
 import {
   IS_DEVELOPMENT_ENV,
   IS_PRODUCTION_ENV,
@@ -43,6 +44,34 @@ import { LogHelper } from '@/helpers/log-helper'
 
   // Connect the LLM TCP client to the LLM TCP server
   LLM_TCP_CLIENT.connect()
+
+  LLM_TCP_CLIENT.emit('infer', {
+    duty: LLMDuties.CustomNER,
+    prompt:
+      'Add apples, 1L of milk, orange juice and tissues to the shopping list',
+    data: {
+      schema: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'string'
+          }
+        },
+        list_name: {
+          type: 'string'
+        }
+      }
+    }
+  })
+
+  LLM_TCP_CLIENT.emit('infer', {
+    duty: LLMDuties.Translation,
+    prompt: 'Bonjour, la température est très agréable à Shenzhen',
+    data: {
+      source: 'fr',
+      target: 'en'
+    }
+  })
 
   try {
     // Start the HTTP server
