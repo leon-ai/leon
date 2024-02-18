@@ -15,7 +15,7 @@ interface ChunkData {
   topic: string
   data: unknown
 }
-type TCPClientName = 'Python' | 'LLM'
+type TCPClientName = 'Python'
 
 export default class TCPClient {
   private reconnectCounter = 0

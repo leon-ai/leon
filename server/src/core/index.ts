@@ -2,12 +2,9 @@ import {
   HOST,
   PORT,
   PYTHON_TCP_SERVER_HOST,
-  PYTHON_TCP_SERVER_PORT,
-  LLM_TCP_SERVER_HOST,
-  LLM_TCP_SERVER_PORT
+  PYTHON_TCP_SERVER_PORT
 } from '@/constants'
 import TCPClient from '@/core/tcp-client'
-import LLMTCPServer from '@/core/llm-tcp-server/llm-tcp-server'
 import HTTPServer from '@/core/http-server/http-server'
 import SocketServer from '@/core/socket-server'
 import SpeechToText from '@/core/stt/stt'
@@ -17,6 +14,7 @@ import NamedEntityRecognition from '@/core/nlp/nlu/ner'
 import ModelLoader from '@/core/nlp/nlu/model-loader'
 import NaturalLanguageUnderstanding from '@/core/nlp/nlu/nlu'
 import Brain from '@/core/brain/brain'
+import LLMManager from '@/core/llm-manager/llm-manager'
 
 /**
  * Register core nodes
@@ -27,20 +25,12 @@ export const PYTHON_TCP_CLIENT = new TCPClient(
   String(PYTHON_TCP_SERVER_HOST),
   PYTHON_TCP_SERVER_PORT
 )
-export const LLM_TCP_CLIENT = new TCPClient(
-  'LLM',
-  LLM_TCP_SERVER_HOST,
-  LLM_TCP_SERVER_PORT
-)
 
 /**
  * Register core singletons
  */
 
-export const LLM_TCP_SERVER = new LLMTCPServer(
-  LLM_TCP_SERVER_HOST,
-  LLM_TCP_SERVER_PORT
-)
+export const LLM_MANAGER = new LLMManager()
 
 export const HTTP_SERVER = new HTTPServer(String(HOST), PORT)
 

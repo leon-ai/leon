@@ -134,8 +134,6 @@ export const PYTHON_TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
 export const PYTHON_TCP_SERVER_PORT = Number(
   process.env['LEON_PY_TCP_SERVER_PORT']
 )
-export const LLM_TCP_SERVER_HOST = '0.0.0.0'
-export const LLM_TCP_SERVER_PORT = 52420
 
 export const IS_TELEMETRY_ENABLED = process.env['LEON_TELEMETRY'] === 'true'
 
