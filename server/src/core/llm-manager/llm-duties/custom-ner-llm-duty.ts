@@ -48,7 +48,7 @@ export class CustomNERLLMDuty<T> extends LLMDuty {
       const grammar = new LlamaJsonSchemaGrammar({
         type: 'object',
         // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-ignore
+        // @ts-expect-error
         properties: {
           ...this.data.schema
         }
@@ -60,7 +60,7 @@ export class CustomNERLLMDuty<T> extends LLMDuty {
         maxTokens: LLM_MANAGER.context.getContextSize()
       })
       // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-      // @ts-ignore
+      // @ts-expect-error
       const parsedResult = grammar.parse(rawResult)
       const result = {
         dutyType: LLMDuties.CustomNER,
