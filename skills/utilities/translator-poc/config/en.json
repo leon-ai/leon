@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
+  "actions": {
+    "translate": {
+      "type": "logic",
+      "utterance_samples": ["Can you translate to @language?"]
+    }
+  },
+  "answers": {
+    "translate": ["%output%"]
+  }
+}

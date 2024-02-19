@@ -1,0 +1,12 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Translator (PoC)",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Translate text from one language to another",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  }
+}

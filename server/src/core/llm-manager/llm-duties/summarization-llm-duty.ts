@@ -62,6 +62,8 @@ export class SummarizationLLMDuty extends LLMDuty {
 
       LogHelper.title(this.name)
       LogHelper.success(`Duty executed: ${JSON.stringify(result)}`)
+
+      return result as unknown as LLMDutyResult
     } catch (e) {
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${e}`)

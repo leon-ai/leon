@@ -79,6 +79,8 @@ export class TranslationLLMDuty extends LLMDuty {
 
       LogHelper.title(this.name)
       LogHelper.success(`Duty executed: ${JSON.stringify(result)}`)
+
+      return result
     } catch (e) {
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${e}`)
