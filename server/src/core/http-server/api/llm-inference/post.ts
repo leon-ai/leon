@@ -5,6 +5,7 @@ import { LLMDuties } from '@/core/llm-manager/types'
 import { CustomNERLLMDuty } from '@/core/llm-manager/llm-duties/custom-ner-llm-duty'
 import { SummarizationLLMDuty } from '@/core/llm-manager/llm-duties/summarization-llm-duty'
 import { TranslationLLMDuty } from '@/core/llm-manager/llm-duties/translation-llm-duty'
+import { LLM_MANAGER } from '@/core'
 
 interface PostLLMInferenceSchema {
   body: {
@@ -34,6 +35,16 @@ export const postLLMInference: FastifyPluginAsync<APIOptions> = async (
       const params = request.body
 
       try {
+        if (!LLM_MANAGER.isLLMEnabled) {
+          reply.statusCode = 400
+          reply.send({
+            message: 'LLM is not enabled.',
+            success: false
+          })
+
+          return
+        }
+
         if (!LLM_DUTIES_MAP[params.dutyType]) {
           reply.statusCode = 400
           reply.send({
