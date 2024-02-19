@@ -38,8 +38,10 @@ export const postLLMInference: FastifyPluginAsync<APIOptions> = async (
         if (!LLM_MANAGER.isLLMEnabled) {
           reply.statusCode = 400
           reply.send({
-            message: 'LLM is not enabled.',
-            success: false
+            success: false,
+            status: reply.statusCode,
+            code: 'llm_not_enabled',
+            message: 'LLM is not enabled.'
           })
 
           return
@@ -48,8 +50,10 @@ export const postLLMInference: FastifyPluginAsync<APIOptions> = async (
         if (!LLM_DUTIES_MAP[params.dutyType]) {
           reply.statusCode = 400
           reply.send({
-            message: `LLM duty type "${params.dutyType}" not supported.`,
-            success: false
+            success: false,
+            status: reply.statusCode,
+            code: 'llm_duty_not_supported',
+            message: `LLM duty type "${params.dutyType}" not supported.`
           })
 
           return
@@ -71,8 +75,10 @@ export const postLLMInference: FastifyPluginAsync<APIOptions> = async (
         const message = error instanceof Error ? error.message : error
         reply.statusCode = 500
         reply.send({
-          message,
-          success: false
+          success: false,
+          status: reply.statusCode,
+          code: 'llm_duty_execution_error',
+          message
         })
       }
     }
