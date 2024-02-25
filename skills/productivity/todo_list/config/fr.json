@@ -247,21 +247,6 @@
       "<li>\"%list%\", avec %todos_nb% éléments.</li>",
       "<li>\"%list%\", contenant %todos_nb% éléments.</li>"
     ],
-    "no_unchecked_todo": [
-      "Vous n'avez pas d'élément en attente dans votre liste \"%list%\".",
-      "Vous n'avez aucun élément en attente dans votre liste \"%list%\"."
-    ],
-    "no_completed_todo": [
-      "Et vous n'avez pas d'élément complété dans votre liste \"%list%\".",
-      "Et vous n'avez aucun élément complété dans votre liste \"%list%\"."
-    ],
-    "unchecked_todos_listed": [
-      "Voici les éléments en attente de votre liste \"%list%\" :<br><br><ul>%result%</ul><br>Restez motivé !",
-      "Voici les éléments en attente de votre liste \"%list%\" :<br><br><ul>%result%</ul><br>Continuez ainsi !"
-    ],
-    "completed_todos_listed": [
-      "Et voici les éléments complétés de votre liste \"%list%\" :<br><br><ul>%result%</ul>"
-    ],
     "list_todo_element": ["<li>%todo%.</li>"],
     "list_completed_todo_element": ["<li><s>%todo%</s>.</li>"],
     "todos_added": [

@@ -1,5 +1,7 @@
 from bridges.python.src.sdk.leon import leon
 from bridges.python.src.sdk.types import ActionParams
+from bridges.python.src.sdk.widget import WidgetOptions
+from ..widgets.todo_list_widget import TodoListWidget, TodoListWidgetParams
 from ..lib import memory
 
 from typing import Union
@@ -35,46 +37,16 @@ def run(params: ActionParams) -> None:
             }
         })
 
-    uncompleted_todos = memory.get_uncompleted_todo_items(list_name)
-    completed_todos = memory.get_completed_todo_items(list_name)
-
-    result_uncompleted_todos: str = ''
-    result_completed_todos: str = ''
-
-    if len(uncompleted_todos) == 0:
-        leon.answer({
-            'key': 'no_unchecked_todo',
-            'data': {
-                'list': list_name
-            }
-        })
-    else:
-        for todo in uncompleted_todos:
-            result_uncompleted_todos += str(leon.set_answer_data('list_todo_element', {'todo': todo['name']}))
-
-        leon.answer({
-            'key': 'unchecked_todos_listed',
-            'data': {
-                'list': list_name,
-                'result': result_uncompleted_todos
-            }
-        })
-
-    if len(completed_todos) == 0:
-        return leon.answer({
-            'key': 'no_completed_todo',
-            'data': {
-                'list': list_name
-            }
-        })
-
-    for todo in completed_todos:
-        result_completed_todos += str(leon.set_answer_data('list_completed_todo_element', {'todo': todo['name']}))
-
+    todo_list_widget_options: WidgetOptions[TodoListWidgetParams] = WidgetOptions(
+        wrapper_props={
+            'noPadding': True
+        },
+        params={
+            'list_name': list_name,
+            'todo_items': todos,
+        },
+    )
+    todo_list_widget = TodoListWidget(todo_list_widget_options)
     leon.answer({
-        'key': 'completed_todos_listed',
-        'data': {
-            'list': list_name,
-            'result': result_completed_todos
-        }
+        'widget': todo_list_widget
     })
