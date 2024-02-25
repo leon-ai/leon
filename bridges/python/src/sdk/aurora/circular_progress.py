@@ -1,11 +1,6 @@
-from typing import TypedDict
 from ..widget_component import WidgetComponent
 
 
-class CircularProgressProps(TypedDict, total=False):
-    pass
-
-
-class CircularProgress(WidgetComponent[CircularProgressProps]):
-    def __init__(self, props: CircularProgressProps):
+class CircularProgress(WidgetComponent[dict]):
+    def __init__(self, props: dict):
         super().__init__(props)

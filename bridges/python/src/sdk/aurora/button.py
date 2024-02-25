@@ -4,7 +4,7 @@ from ..widget_component import WidgetComponent
 
 class ButtonProps(TypedDict, total=False):
     type: Optional[Union[Literal['button'], Literal['submit'], Literal['reset']]]
-    iconaName: Optional[str]
+    iconName: Optional[str]
     iconPosition: Optional[Union[Literal['left'], Literal['right']]]
     secondary: Optional[bool]
     danger: Optional[bool]

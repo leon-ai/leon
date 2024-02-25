@@ -1,11 +1,6 @@
-from typing import TypedDict
 from ..widget_component import WidgetComponent
 
 
-class ListProps(TypedDict, total=False):
-    pass
-
-
-class List(WidgetComponent[ListProps]):
-    def __init__(self, props: ListProps):
+class List(WidgetComponent[dict]):
+    def __init__(self, props: dict):
         super().__init__(props)

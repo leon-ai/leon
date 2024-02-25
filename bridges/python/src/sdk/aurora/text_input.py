@@ -1,11 +1,6 @@
-from typing import TypedDict
 from ..widget_component import WidgetComponent
 
 
-class TextInputProps(TypedDict, total=False):
-    pass
-
-
-class TextInput(WidgetComponent[TextInputProps]):
-    def __init__(self, props: TextInputProps):
+class TextInput(WidgetComponent[dict]):
+    def __init__(self, props: dict):
         super().__init__(props)

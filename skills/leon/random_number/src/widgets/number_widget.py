@@ -6,6 +6,7 @@ from bridges.python.src.sdk.aurora.flexbox import Flexbox
 from bridges.python.src.sdk.widget import Widget, WidgetOptions
 from bridges.python.src.sdk.widget_component import WidgetComponent
 
+
 class NumberWidgetParams(TypedDict):
     random_number: int
 

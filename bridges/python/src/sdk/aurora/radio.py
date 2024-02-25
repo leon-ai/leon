@@ -1,11 +1,6 @@
-from typing import TypedDict
 from ..widget_component import WidgetComponent
 
 
-class RadioProps(TypedDict, total=False):
-    pass
-
-
-class Radio(WidgetComponent[RadioProps]):
-    def __init__(self, props: RadioProps):
+class Radio(WidgetComponent[dict]):
+    def __init__(self, props: dict):
         super().__init__(props)

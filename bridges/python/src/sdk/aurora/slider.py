@@ -1,11 +1,6 @@
-from typing import TypedDict
 from ..widget_component import WidgetComponent
 
 
-class SliderProps(TypedDict, total=False):
-    pass
-
-
-class Slider(WidgetComponent[SliderProps]):
-    def __init__(self, props: SliderProps):
+class Slider(WidgetComponent[dict]):
+    def __init__(self, props: dict):
         super().__init__(props)

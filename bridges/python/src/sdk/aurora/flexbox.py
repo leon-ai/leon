@@ -1,11 +1,6 @@
-from typing import TypedDict
 from ..widget_component import WidgetComponent
 
 
-class FlexboxProps(TypedDict, total=False):
-    pass
-
-
-class Flexbox(WidgetComponent[FlexboxProps]):
-    def __init__(self, props: FlexboxProps):
+class Flexbox(WidgetComponent[dict]):
+    def __init__(self, props: dict):
         super().__init__(props)
