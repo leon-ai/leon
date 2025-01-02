@@ -134,7 +134,7 @@ async function downloadAndCompileLlamaCPP() {
         LogHelper.info(`Updating llama.cpp to ${LLM_LLAMA_CPP_RELEASE_TAG}...`)
       }
 
-      let llamaCPPDownloadCommand = `npx --no node-llama-cpp download --release "${LLM_LLAMA_CPP_RELEASE_TAG}"`
+      let llamaCPPDownloadCommand = `npx --no node-llama-cpp source download --release "${LLM_LLAMA_CPP_RELEASE_TAG}"`
 
       if (
         osType === OSTypes.MacOS &&
