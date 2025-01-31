@@ -121,6 +121,8 @@ Gitpod will automatically set up an environment and run an instance for you.
 
 [![Open in Gitpod](https://gitpod.io/button/open-in-gitpod.svg)](https://gitpod.io/#https://github.com/leon-ai/leon)
 
+[![Open in Codeanywhere](https://codeanywhere.com/img/open-in-codeanywhere-btn.svg)](https://app.codeanywhere.com/#https://github.com/leon-ai/leon)
+
 ## 🚀 Getting Started
 
 ### Prerequisites
