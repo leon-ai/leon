@@ -3,11 +3,15 @@
     "rms_mic_threshold": 196,
     "device": "auto",
     "silence_duration": 1,
-    "active_listening_duration": 12
+    "active_listening_duration": 10
   },
   "tts": {
     "model_file_name": "EN-Leon-V1_1-G_600000.pth",
     "device": "auto"
   },
-  "wake_word": {}
+  "wake_word": {
+    "model_file_name": "Hey_Leon.onnx",
+    "device": "cpu",
+    "detection_threshold": 0.5
+  }
 }

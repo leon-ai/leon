@@ -21,6 +21,9 @@
     "node": ">=22.13.1",
     "npm": ">=10.9.2"
   },
+  "volta": {
+    "node": "22.13.1"
+  },
   "scripts": {
     "pre-commit": "lint-staged",
     "lint": "tsx scripts/lint.js",

@@ -30,4 +30,8 @@ soundfile = "==0.12.1"
 numba = "==0.59.1"
 # ASR
 faster-whisper = "==1.1.1"
+# Wake word
+numpy = "==1.26.4"
+openwakeword = "==0.6.0"
+# ASR + wake word
 pyaudio = "==0.2.14"

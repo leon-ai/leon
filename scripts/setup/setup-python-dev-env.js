@@ -244,28 +244,46 @@ SPACY_MODELS.set('fr', {
       ) {
         LogHelper.info('macOS ARM64 detected')
 
-        LogHelper.info(
-          'Installing Rust installer as it is needed for the "tokenizers" package for macOS ARM64 architecture...'
-        )
-        await command('curl https://sh.rustup.rs -sSf | sh -s -- -y', {
-          shell: true,
-          stdio: 'inherit'
-        })
-        LogHelper.success('Rust installer installed')
-
-        LogHelper.info('Reloading configuration from "$HOME/.cargo/env"...')
+        LogHelper.info('Loading Rust environment from "$HOME/.cargo/env"...')
         await command('source "$HOME/.cargo/env"', {
           shell: true,
           stdio: 'inherit'
         })
-        LogHelper.success('Configuration reloaded')
+        LogHelper.success('Rust environment loaded')
 
-        LogHelper.info('Checking Rust compiler version...')
-        await command('rustc --version', {
-          shell: true,
-          stdio: 'inherit'
-        })
-        LogHelper.success('Rust compiler OK')
+        try {
+          LogHelper.info('Checking if Rust is already installed...')
+
+          await command('rustc --version', {
+            shell: true,
+            stdio: 'inherit'
+          })
+          LogHelper.success('Rust is already installed')
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (e) {
+          LogHelper.info(
+            'Rust not found. Installing Rust installer as it is needed for the "tokenizers" package for macOS ARM64 architecture...'
+          )
+          await command('curl https://sh.rustup.rs -sSf | sh -s -- -y', {
+            shell: true,
+            stdio: 'inherit'
+          })
+          LogHelper.success('Rust installer installed')
+
+          LogHelper.info('Reloading configuration from "$HOME/.cargo/env"...')
+          await command('source "$HOME/.cargo/env"', {
+            shell: true,
+            stdio: 'inherit'
+          })
+          LogHelper.success('Configuration reloaded')
+
+          LogHelper.info('Checking Rust compiler version...')
+          await command('rustc --version', {
+            shell: true,
+            stdio: 'inherit'
+          })
+          LogHelper.success('Rust compiler OK')
+        }
       }
 
       LogHelper.success('Python packages installed')

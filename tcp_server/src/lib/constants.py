@@ -25,3 +25,7 @@ IS_TTS_ENABLED = os.environ.get('LEON_TTS', 'true') == 'true'
 # ASR
 ASR_MODEL_PATH = os.path.join(AUDIO_MODELS_PATH, 'asr')
 IS_ASR_ENABLED = os.environ.get('LEON_STT', 'true') == 'true'
+
+# Wake word
+WAKE_WORD_MODEL_FOLDER_PATH = os.path.join(AUDIO_MODELS_PATH, 'wake_word')
+IS_WAKE_WORD_ENABLED = os.environ.get('LEON_WAKE_WORD', 'true') == 'true'

@@ -4,16 +4,18 @@ import os
 from typing import Union
 import time
 import re
-import string
 import threading
 
 import lib.nlp as nlp
 from .utils import get_settings
+from .wake_word.api import WakeWord
 from .asr.api import ASR
 from .tts.api import TTS
 from .constants import (
     TTS_MODEL_CONFIG_PATH,
     TTS_MODEL_FOLDER_PATH,
+    WAKE_WORD_MODEL_FOLDER_PATH,
+    IS_WAKE_WORD_ENABLED,
     IS_TTS_ENABLED,
     TMP_PATH,
     IS_ASR_ENABLED
@@ -29,6 +31,7 @@ class TCPServer:
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.conn = None
         self.addr = None
+        self.wake_word = None
         self.tts = None
         self.asr = None
         self.asr_recording_thread = None
@@ -60,40 +63,20 @@ class TCPServer:
         self.tts = TTS(language='EN',
                        device=get_settings('tts')['device'],
                        config_path=TTS_MODEL_CONFIG_PATH,
-                       ckpt_path=TTS_MODEL_PATH
-                       )
+                       ckpt_path=TTS_MODEL_PATH)
 
     def init_asr(self):
         if not IS_ASR_ENABLED:
             self.log('ASR is disabled')
             return
 
-        def clean_up_speech(text: str) -> str:
-            """Remove everything before the wake word if there is (included), remove punctuation right after it, trim and
-            capitalize the first letter"""
-            lowercased_text = text.lower()
-            for wake_word in self.asr.wake_words:
-                if wake_word in lowercased_text:
-                    start_index = lowercased_text.index(wake_word)
-                    end_index = start_index + len(wake_word)
-                    end_whitespace_index = end_index
-                    while end_whitespace_index < len(text) and (
-                        text[end_whitespace_index] in string.whitespace + string.punctuation):
-                        end_whitespace_index += 1
-                    cleaned_text = text[end_whitespace_index:].strip()
-                    if cleaned_text:  # Check if cleaned_text is not empty
-                        return cleaned_text[0].upper() + cleaned_text[1:]
-                    else:
-                        return ""  # Return an empty string if cleaned_text is empty
-            return text
-
         def transcribed_callback(text):
-            cleaned_text = clean_up_speech(text)
-            self.log('Cleaned speech:', cleaned_text)
+            # cleaned_text = clean_up_speech(text)
+            self.log('Cleaned speech:', text)
             self.send_tcp_message({
                 'topic': 'asr-new-speech',
                 'data': {
-                    'text': cleaned_text
+                    'text': text
                 }
             })
 
@@ -115,19 +98,34 @@ class TCPServer:
 
         def active_listening_disabled_callback():
             self.log('Active listening disabled')
-
-            self.asr.stop_recording()
-
             self.send_tcp_message({
                 'topic': 'asr-active-listening-disabled',
                 'data': {}
             })
 
-        self.asr = ASR(device=get_settings('asr')['device'],
+        self.asr = ASR(tcp_server=self,
+                       device=get_settings('asr')['device'],
                        interrupt_leon_speech_callback=interrupt_leon_speech_callback,
                        transcribed_callback=transcribed_callback,
                        end_of_owner_speech_callback=end_of_owner_speech_callback,
                        active_listening_disabled_callback=active_listening_disabled_callback)
+
+        if not IS_WAKE_WORD_ENABLED:
+            self.log('Wake word is disabled')
+            return
+
+        wake_word_model_name = get_settings('wake_word')['model_file_name']
+        wake_word_model_path = os.path.join(WAKE_WORD_MODEL_FOLDER_PATH, wake_word_model_name)
+
+        self.asr.wake_word = WakeWord(
+            asr=self.asr,
+            model_path=wake_word_model_path,
+            device=get_settings('wake_word')['device'],
+            detection_threshold=get_settings('wake_word')['detection_threshold']
+        )
+        # Do not add anything after this line because it will be ignored
+        # as it loops for the wake word
+        self.asr.wake_word.start_listening()
 
     def init(self):
         try:
@@ -174,6 +172,8 @@ class TCPServer:
                         res = method(data)
 
                         self.send_tcp_message(res)
+                    else:
+                        self.log(f'Method "{method}" not found')
             finally:
                 self.log(f'Client disconnected: {self.addr}')
                 self.conn.close()
@@ -194,8 +194,9 @@ class TCPServer:
             self.log('ASR is not initialized yet. Waiting for 2 seconds before starting recording...')
             time.sleep(2)
 
-        self.asr_recording_thread = threading.Thread(target=self.asr.start_recording)
-        self.asr_recording_thread.start()
+        if self.asr.is_recording is False:
+            self.asr_recording_thread = threading.Thread(target=self.asr.start_recording)
+            self.asr_recording_thread.start()
 
         return {
             'topic': 'asr-started-recording',
@@ -247,6 +248,9 @@ class TCPServer:
         }
 
     def leon_speech_audio_ended(self, audio_duration: float) -> dict:
+        if not self.asr:
+            self.log('ASR is None, cannot update active listening duration')
+
         if self.asr:
             if not audio_duration:
                 audio_duration = 0

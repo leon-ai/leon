@@ -11,6 +11,7 @@ from ..utils import ThrottledCallback, is_macos, get_settings
 
 class ASR:
     def __init__(self,
+                 tcp_server=None,
                  # @see https://github.com/SYSTRAN/faster-whisper/blob/master/faster_whisper/transcribe.py
                  # auto, cpu, cuda
                  device='auto',
@@ -38,6 +39,8 @@ class ASR:
         if device == 'cpu':
             compute_type = 'int8_float32'
 
+        self.tcp_server = tcp_server
+        self.wake_word = None
         self.compute_type = compute_type
         self.is_recording = False
 
@@ -51,12 +54,9 @@ class ASR:
         self.end_of_owner_speech_callback = end_of_owner_speech_callback
         self.active_listening_disabled_callback = active_listening_disabled_callback
 
-        self.wake_words = ['ok leon', 'okay leon', 'hi leon', 'hey leon', 'hello leon', 'heilion', 'alion', 'hyleon']
-
         self.device = device
         self.is_voice_activity_detected = False
         self.silence_start_time = 0
-        self.is_wake_word_detected = False
         self.is_active_listening_enabled = False
         self.complete_text = ''
 
@@ -77,7 +77,7 @@ class ASR:
         self.active_listening_duration = self.base_active_listening_duration
 
         self.audio = pyaudio.PyAudio()
-        self.stream = None
+        self.mic_stream = None
         self.model = None
 
         model_params = {
@@ -89,29 +89,42 @@ class ASR:
         if self.device == 'cpu':
             model_params['cpu_threads'] = 4
 
+        self.open_mic_stream()
+
         self.model = WhisperModel(**model_params)
 
         self.log('Model loaded')
         toc = time.perf_counter()
 
-        self.log(f"Time taken to load model: {toc - tic:0.4f} seconds")
+        self.log(f'Time taken to load model: {toc - tic:0.4f} seconds')
+
+    def open_mic_stream(self):
+        try:
+            self.mic_stream = self.audio.open(format=self.audio_format,
+                                              channels=self.channels,
+                                              rate=self.rate,
+                                              frames_per_buffer=self.frames_per_buffer,
+                                              input=True,
+                                              input_device_index=self.audio.get_default_input_device_info()['index'])  # Use the default input device
+        except Exception as e:
+            self.log('Error to open mic stream:', e)
 
     def start_recording(self):
+        if self.wake_word:
+            # Make sure to stop the wake word detection before recording
+            # otherwise it will loop for the wake word and create conflict
+            # on the audio stream
+            self.wake_word.stop_listening()
+
         self.is_recording = True
         # Convert the silence duration to the number of audio frames required to detect the silence
         silence_threshold = int(self.silence_duration * self.rate / self.frames_per_buffer)
 
         try:
-            self.stream = self.audio.open(format=self.audio_format,
-                                          channels=self.channels,
-                                          rate=self.rate,
-                                          frames_per_buffer=self.frames_per_buffer,
-                                          input=True,
-                                          input_device_index=self.audio.get_default_input_device_info()["index"])  # Use the default input device
-            self.log("Recording...")
+            self.log('Recording...')
 
             while self.is_recording:
-                data = self.stream.read(self.frames_per_buffer, exception_on_overflow=False)
+                data = self.mic_stream.read(self.frames_per_buffer, exception_on_overflow=False)
                 rms = audioop.rms(data, 2)  # width=2 for format=paInt16
 
                 if rms >= self.rms_threshold:
@@ -149,7 +162,7 @@ class ASR:
                             segments, info = self.model.transcribe(audio_data, **transcribe_params)
 
                             for segment in segments:
-                                self.log("[%.2fs -> %.2fs] %s" % (segment.start, segment.end, segment.text))
+                                self.log('[%.2fs -> %.2fs] %s' % (segment.start, segment.end, segment.text))
                                 self.complete_text += segment.text
 
                             self.transcribed_callback(self.complete_text)
@@ -163,16 +176,41 @@ class ASR:
                         should_stop_active_listening = self.is_active_listening_enabled and time.time() - self.silence_start_time > self.active_listening_duration
                         if should_stop_active_listening:
                             self.is_active_listening_enabled = False
-                            self.log('Active listening disabled')
                             self.active_listening_disabled_callback()
+                            # Do not add anything after this line because it will be ignored
+                            # as it loops for the wake word
+                            self.stop_recording()
         except Exception as e:
             self.log('Error:', e)
 
     def stop_recording(self):
-        self.is_recording = False
-        self.stream.stop_stream()
-        self.stream.close()
-        self.log('Stream closed, recording stopped')
+        self.log('Recording stopped')
+
+        if self.wake_word:
+            self.wake_word.reset_model_state()
+            if self.wake_word.is_enabled:
+                # Do not add anything after this line because it will be ignored
+                # as it loops for the wake word
+                self.wake_word.start_listening()
+        else:
+            self.is_recording = False
+            # self.mic_stream.stop_stream()
+            # self.mic_stream.close()
+            # self.log('Stream closed, recording stopped')
+
+        # Make sure to wait for the recording thread to join before starting a new recording.
+        # Only needed when the wake word detection is enabled
+        if (
+            self.wake_word and
+            self.wake_word.is_enabled and
+            self.tcp_server.asr_recording_thread and
+            self.tcp_server.asr_recording_thread.is_alive()
+        ):
+            # The thread is only used when received TCP message from the core,
+            # hence it is not used when triggered by the wake word.
+            # If we do not "join" it, it'll duplicate the recording loop
+            self.log('Join recording thread')
+            self.tcp_server.asr_recording_thread.join()
 
     @staticmethod
     def log(*args, **kwargs):
