@@ -27,7 +27,7 @@ def run(params: ActionParams) -> None:
 
     for email in emails:
         leon.answer({'key': 'checking'})
-        # Delay for 5 seconds before making request to accomodate API usage policy
+        # Delay for 5 seconds before making request to accommodate API usage policy
         sleep(5)
         try:
             network = Network({
