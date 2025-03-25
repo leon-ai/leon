@@ -125,8 +125,8 @@ Gitpod will automatically set up an environment and run an instance for you.
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) >= 16
-- [npm](https://npmjs.com/) >= 8
+- [Node.js](https://nodejs.org/) >= 22.13.1
+- [npm](https://npmjs.com/) >= 10.9.2
 - Supported OSes: Linux, macOS and Windows
 
 To install these prerequisites, you can follow the [How To section](https://docs.getleon.ai/how-to/) of the documentation.

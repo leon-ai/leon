@@ -5,6 +5,8 @@ import { LogHelper } from '@/helpers/log-helper'
 /**
  * This script is executed after "git commit" or "git merge" (Git hook https://git-scm.com/docs/githooks#_commit_msg)
  * it ensures the authenticity of commit messages
+ *
+ * @see https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13
  */
 ;(async () => {
   LogHelper.info('Checking commit message...')

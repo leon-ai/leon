@@ -102,7 +102,7 @@
     "googleapis": "67.1.1",
     "ibm-watson": "6.1.1",
     "ipull": "3.9.2",
-    "node-llama-cpp": "3.5.0",
+    "node-llama-cpp": "3.6.0",
     "node-wav": "0.0.2",
     "os-name": "4.0.1",
     "pretty-bytes": "5.6.0",
