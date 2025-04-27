@@ -1,5 +1,6 @@
 from cx_Freeze import setup, Executable
 import requests.certs
+import os
 
 from version import __version__
 
@@ -19,7 +20,7 @@ options = {
 
 executables = [
     Executable(
-        script='bridges/python/src/main.py',
+        script=os.path.join('bridges', 'python', 'src', 'main.py'),
         target_name='leon-python-bridge'
     )
 ]

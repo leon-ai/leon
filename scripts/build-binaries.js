@@ -119,6 +119,8 @@ BUILD_TARGETS.set('tcp-server', {
 
       /**
        * cx_Freeze usage
+       * If running on Windows and the error about "no base named 'console'" pops up,
+       * manually uninstall cx_Freeze (e.g. pipenv uninstall cx-freeze) and reinstall it
        * @see https://cx-freeze.readthedocs.io/en/latest/setup_script.html#build-exe
        */
       await command(

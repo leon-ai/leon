@@ -24,6 +24,9 @@
   "volta": {
     "node": "22.13.1"
   },
+  "pnpm": {
+    "neverBuiltDependencies": []
+  },
   "scripts": {
     "pre-commit": "lint-staged",
     "lint": "tsx scripts/lint.js",
@@ -79,7 +82,7 @@
     "@fontsource/source-sans-pro": "5.0.8",
     "@google-cloud/speech": "4.2.0",
     "@google-cloud/text-to-speech": "3.2.1",
-    "@leon-ai/aurora": "1.0.0-beta.14",
+    "@leon-ai/aurora": "1.0.0-beta.15",
     "@nlpjs/builtin-microsoft": "4.22.7",
     "@nlpjs/core-loader": "4.22.7",
     "@nlpjs/lang-all": "4.22.12",
@@ -102,7 +105,7 @@
     "googleapis": "67.1.1",
     "ibm-watson": "6.1.1",
     "ipull": "3.9.2",
-    "node-llama-cpp": "3.6.0",
+    "node-llama-cpp": "3.7.0",
     "node-wav": "0.0.2",
     "os-name": "4.0.1",
     "pretty-bytes": "5.6.0",

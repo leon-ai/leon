@@ -10,6 +10,7 @@ import type {
   SkillBridgeSchema
 } from '@/schemas/skill-schemas'
 import { SKILLS_PATH } from '@/constants'
+import { FileHelper } from '@/helpers/file-helper'
 
 interface SkillDomain {
   domainId: string
@@ -49,7 +50,7 @@ export class SkillDomainHelper {
 
         if ((await fs.promises.stat(domainPath)).isDirectory()) {
           const skills: SkillDomain['skills'] = {}
-          const { name: domainName } = (await import(
+          const { name: domainName } = (await FileHelper.dynamicImportFromFile(
             path.join(domainPath, 'domain.json'),
             { with: { type: 'json' } }
           )) as DomainSchema

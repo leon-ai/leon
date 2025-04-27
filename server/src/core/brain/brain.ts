@@ -165,7 +165,10 @@ export default class Brain {
    * Process the answer queue in the right order (first in, first out)
    */
   private async processAnswerQueue(end = false): Promise<void> {
-    const naturalStartTypingDelay = 500
+    // Between 100 and 350ms
+    const naturalStartTypingDelay = Math.floor(
+      Math.random() * (350 - 100 + 1) + 100
+    )
     this.answerQueue.isProcessing = true
 
     // Clean up the timer as we are now already processing the queue for this timer tick
@@ -278,7 +281,7 @@ export default class Brain {
           })
         }
 
-        SOCKET_SERVER.socket?.emit('is-typing', false)
+        // SOCKET_SERVER.socket?.emit('is-typing', false)
       }
     }
 
@@ -442,6 +445,8 @@ export default class Brain {
   private handleLogicActionSkillProcessOutput(
     data: Buffer
   ): Promise<Error | null> | void {
+    SOCKET_SERVER.socket?.emit('is-typing', true)
+
     try {
       const skillAnswer = JSON.parse(data.toString()) as AnswerOutput
 
@@ -461,6 +466,7 @@ export default class Brain {
               `Failed to send widget. Widget output is not well formatted: ${e}`
             )
           } finally {
+            // Stop typing when the widget is sent
             SOCKET_SERVER.socket?.emit('is-typing', false)
           }
         }

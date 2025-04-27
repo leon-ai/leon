@@ -2,6 +2,8 @@ import path from 'node:path'
 
 import type { ActionFunction, ActionParams } from '@sdk/types'
 import { INTENT_OBJECT } from '@bridge/constants'
+
+import { FileHelper } from '@/helpers/file-helper'
 ;(async (): Promise<void> => {
   const {
     domain,
@@ -31,7 +33,7 @@ import { INTENT_OBJECT } from '@bridge/constants'
   }
 
   try {
-    const actionModule = await import(
+    const actionModule = await FileHelper.dynamicImportFromFile(
       path.join(
         process.cwd(),
         'skills',

@@ -3,6 +3,7 @@ import { io } from 'socket.io-client'
 import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { INIT_MESSAGES } from './constants'
+import handleSuggestions from './suggestion-handler.js'
 
 export default class Client {
   constructor(client, serverUrl, input) {
@@ -29,6 +30,10 @@ export default class Client {
     if (typeof newInput !== 'undefined') {
       this._input.value = newInput
     }
+  }
+
+  get input() {
+    return this._input
   }
 
   set recorder(recorder) {
@@ -161,9 +166,15 @@ export default class Client {
     })
 
     this.socket.on('suggest', (data) => {
-      data?.forEach((suggestionText) => {
+      setTimeout(() => {
+        handleSuggestions(data, this.chatbot, this)
+      }, 400)
+      setTimeout(() => {
+        this.chatbot.scrollDown()
+      }, 450)
+      /*data?.forEach((suggestionText) => {
         this.addSuggestion(suggestionText)
-      })
+      })*/
     })
 
     this.socket.on('is-typing', (data) => {
@@ -398,7 +409,7 @@ export default class Client {
     }, 0)
   }
 
-  addSuggestion(text) {
+  /*addSuggestion(text) {
     const newSuggestion = document.createElement('button')
     newSuggestion.classList.add('suggestion')
     newSuggestion.textContent = text
@@ -412,7 +423,7 @@ export default class Client {
     })
 
     this._suggestions.push(newSuggestion)
-  }
+  }*/
 
   enableVoiceMode() {
     if (!this._isVoiceModeEnabled) {

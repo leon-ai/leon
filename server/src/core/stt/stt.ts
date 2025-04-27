@@ -7,6 +7,7 @@ import { SERVER_CORE_PATH, STT_PROVIDER, VOICE_CONFIG_PATH } from '@/constants'
 import { SOCKET_SERVER, ASR } from '@/core'
 import { STTParserNames, STTProviders } from '@/core/stt/types'
 import { LogHelper } from '@/helpers/log-helper'
+import { FileHelper } from '@/helpers/file-helper'
 
 const PROVIDERS_MAP = {
   [STTProviders.Local]: STTParserNames.Local,
@@ -73,7 +74,7 @@ export default class STT {
 
     try {
       // Dynamically attribute the parser
-      const { default: parser } = await import(
+      const { default: parser } = await FileHelper.dynamicImportFromFile(
         path.join(
           SERVER_CORE_PATH,
           'stt',

@@ -9,6 +9,7 @@ import {
 } from '@/core/llm-manager/types'
 import { LLM_PROVIDER, SERVER_CORE_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { FileHelper } from '@/helpers/file-helper'
 import LocalLLMProvider from '@/core/llm-manager/llm-providers/local-llm-provider'
 import GroqLLMProvider from '@/core/llm-manager/llm-providers/groq-llm-provider'
 
@@ -73,7 +74,7 @@ export default class LLMProvider {
     }
 
     // Dynamically set the provider
-    const { default: provider } = await import(
+    const { default: provider } = await FileHelper.dynamicImportFromFile(
       path.join(
         SERVER_CORE_PATH,
         'llm-manager',
