@@ -3,6 +3,7 @@ import { io } from 'socket.io-client'
 import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { INIT_MESSAGES } from './constants'
+import handleSuggestions from './suggestion-handler.js'
 
 export default class Client {
   constructor(client, serverUrl, input) {
@@ -29,6 +30,10 @@ export default class Client {
     if (typeof newInput !== 'undefined') {
       this._input.value = newInput
     }
+  }
+
+  get input() {
+    return this._input
   }
 
   set recorder(recorder) {
@@ -136,6 +141,39 @@ export default class Client {
       this._isLeonGeneratingAnswer = false
 
       /**
+       * Handle message replacement if replaceMessageId is provided
+       */
+      if (data.replaceMessageId) {
+        this.chatbot.replaceMessage(data.replaceMessageId, data)
+        return
+      }
+
+      /**
+       * Handle tool output messages
+       */
+      if (data.isToolOutput) {
+        this.chatbot.handleToolOutput(data)
+        return
+      }
+
+      /**
+       * Handle widget data directly
+       */
+      if (data.widget || data.componentTree) {
+        // Pass the entire widget data as JSON string for chatbot.js to handle
+        const widgetString =
+          typeof data === 'string' ? data : JSON.stringify(data)
+
+        this.chatbot.createBubble({
+          who: 'leon',
+          string: widgetString,
+          messageId: data.widget?.id || data.id || `msg-${Date.now()}`
+        })
+
+        return
+      }
+
+      /**
        * Just save the bubble if the newest bubble is from the streaming.
        * Otherwise, create a new bubble
        */
@@ -161,9 +199,15 @@ export default class Client {
     })
 
     this.socket.on('suggest', (data) => {
-      data?.forEach((suggestionText) => {
+      setTimeout(() => {
+        handleSuggestions(data, this.chatbot, this)
+      }, 400)
+      setTimeout(() => {
+        this.chatbot.scrollDown()
+      }, 450)
+      /*data?.forEach((suggestionText) => {
         this.addSuggestion(suggestionText)
-      })
+      })*/
     })
 
     this.socket.on('is-typing', (data) => {
@@ -175,13 +219,6 @@ export default class Client {
       this.send('utterance')
 
       cb('string-received')
-    })
-
-    this.socket.on('widget', (data) => {
-      this.chatbot.createBubble({
-        who: 'leon',
-        string: data
-      })
     })
 
     this.socket.on('widget-send-utterance', (utterance) => {
@@ -398,7 +435,7 @@ export default class Client {
     }, 0)
   }
 
-  addSuggestion(text) {
+  /*addSuggestion(text) {
     const newSuggestion = document.createElement('button')
     newSuggestion.classList.add('suggestion')
     newSuggestion.textContent = text
@@ -412,7 +449,7 @@ export default class Client {
     })
 
     this._suggestions.push(newSuggestion)
-  }
+  }*/
 
   enableVoiceMode() {
     if (!this._isVoiceModeEnabled) {

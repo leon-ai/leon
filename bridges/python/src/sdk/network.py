@@ -26,7 +26,9 @@ class NetworkRequestOptions(TypedDict, total=False):
     method: Union[Literal['GET'], Literal['POST'], Literal['PUT'], Literal['PATCH'], Literal['DELETE']]
     data: Dict[str, Any]
     headers: Dict[str, str]
-
+    files: Dict[str, Any]
+    use_json: bool
+    response_type: Optional[Union[Literal['json'], Literal['text'], Literal['arraybuffer'], Literal['bytes']]]
 
 class Network:
     def __init__(self, options: NetworkOptions = {'base_url': None}) -> None:
@@ -37,28 +39,47 @@ class Network:
             url = options['url']
 
             if self.options['base_url'] is not None:
-                url = self.options['base_url'] + url
+                url = (self.options['base_url'] or '') + url
+
             method = options['method']
             data = options.get('data', {})
             headers = options.get('headers', {})
-            response = requests.request(
-                method,
-                url,
-                json=data,
-                headers={
+            files = options.get('files')
+            use_json = options.get('use_json', True)
+            response_type = options.get('response_type', 'json')
+
+            request_kwargs: Dict[str, Any] = {
+                'headers': {
                     'User-Agent': f"Leon Personal Assistant {LEON_VERSION} - Python Bridge {PYTHON_BRIDGE_VERSION}",
                     **headers
                 }
+            }
+
+            # If files are provided or JSON is explicitly disabled, send form data
+            if files or not use_json:
+                request_kwargs['data'] = data
+                if files:
+                    request_kwargs['files'] = files
+            else:
+                request_kwargs['json'] = data
+
+            response = requests.request(
+                method,
+                url,
+                **request_kwargs
             )
 
-            data = {}
-            try:
-                data = response.json()
-            except Exception:
-                data = response.text
+            parsed_data: Any
+            if response_type in ['arraybuffer', 'bytes']:
+                parsed_data = response.content
+            else:
+                try:
+                    parsed_data = response.json()
+                except Exception:
+                    parsed_data = response.text
 
             network_response: NetworkResponse = {
-                'data': data,
+                'data': parsed_data,
                 'status_code': response.status_code,
                 'options': {**self.options, **options}
             }
@@ -68,15 +89,19 @@ class Network:
             else:
                 raise NetworkError(network_response)
         except requests.exceptions.RequestException as error:
-            data = {}
-            try:
-                data = error.response.json()
-            except Exception:
-                data = error.response.text
+            status_code = 500
+            raw_data: Any = ''
+
+            if error.response is not None:
+                status_code = error.response.status_code
+                try:
+                    raw_data = error.response.json()
+                except Exception:
+                    raw_data = error.response.text
 
             raise NetworkError({
-                'data': data,
-                'status_code': error.response.status_code,
+                'data': raw_data,
+                'status_code': status_code,
                 'options': {**self.options, **options}
             }) from error
 

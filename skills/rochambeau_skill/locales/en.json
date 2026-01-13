@@ -1,0 +1,43 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "actions": {
+    "set_up": {
+      "answers": [
+        "Alright, let's get started!",
+        "1, 2, 3, FIRE!",
+        "Rock, paper, scissors..."
+      ]
+    },
+    "play": {
+      "suggestions": ["Rock ✊", "Paper ✋", "Scissors ✌"],
+      "answers": {
+        "leon_emoji": ["{{ leon_emoji }}"],
+        "equal": ["No point.", "It's a tie."],
+        "point_for_leon": [
+          "I got you. The {{ handsign_1 }} beats the {{ handsign_2 }}.",
+          "Yeaaah, I won! The {{ handsign_1 }} beats the {{ handsign_2 }}.",
+          "Gotcha! I got the point because the {{ handsign_1 }} beats the {{ handsign_2 }}."
+        ],
+        "point_for_player": [
+          "You got me. The {{ handsign_1 }} beats the {{ handsign_2 }}.",
+          "Aargh no, you got the point. The {{ handsign_1 }} beats the {{ handsign_2 }}.",
+          "Well played! You got the point because the {{ handsign_1 }} beats the {{ handsign_2 }}."
+        ],
+        "ask_for_rematch": [
+          "Do you want a rematch?",
+          "Should we go for another round?"
+        ]
+      }
+    },
+    "rematch": {
+      "suggestions": ["Yes please", "No thanks"],
+      "answers": {
+        "confirm_rematch": ["Be ready!", "I'm not gonna let you win."],
+        "deny_rematch": [
+          "As you wish.",
+          "Let me know anytime you want to play."
+        ]
+      }
+    }
+  }
+}

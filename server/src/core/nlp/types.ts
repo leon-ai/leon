@@ -1,6 +1,12 @@
 import type { ShortLanguageCode } from '@/types'
 import type { BrainProcessResult } from '@/core/brain/types'
-import { SkillConfigSchema } from '@/schemas/skill-schemas'
+import type { ActionCallingSuccessOutput } from '@/core/llm-manager/types'
+import type {
+  SkillConfigSchema,
+  SkillSchema,
+  SkillActionConfig,
+  SkillLocaleConfigSchema
+} from '@/schemas/skill-schemas'
 
 /**
  * NLP types
@@ -11,13 +17,14 @@ export type NLPSkill = string
 export type NLPAction = string
 export type NLPUtterance = string
 
-export type NLUProcessResult = Partial<
+export type NLUPartialProcessResult = Partial<
   BrainProcessResult & {
     processingTime: number
     nluProcessingTime: number
   }
 >
 
+// TODO: core rewrite delete?
 export interface NLPJSProcessResult {
   locale: ShortLanguageCode
   utterance: NLPUtterance
@@ -57,6 +64,7 @@ export interface NLPJSProcessResult {
  * NLU types
  */
 
+// TODO: core rewrite delete?
 export interface NLUSlot {
   name: string
   expectedEntity: string
@@ -67,6 +75,7 @@ export interface NLUSlot {
   locales?: Record<string, string[]> // From NLP.js
 }
 
+// TODO: core rewrite delete?
 export interface NLUClassification {
   domain: NLPDomain
   skill: NLPSkill
@@ -74,11 +83,51 @@ export interface NLUClassification {
   confidence: number
 }
 
+// TODO: core rewrite delete?
 export interface NLUResolver {
   name: string
   value: string
 }
 
+interface NLUProcessSentiment {
+  vote?: NLPJSProcessResult['sentiment']['vote']
+  score?: NLPJSProcessResult['sentiment']['score']
+}
+export interface NLUProcessResult {
+  contextName: string
+  skillName: NLPSkill
+  actionName: NLPAction
+  skillConfig: {
+    name: SkillSchema['name']
+    bridge: SkillSchema['bridge']
+    version: SkillSchema['version']
+    flow: SkillSchema['flow']
+  }
+  localeSkillConfig: {
+    variables: SkillLocaleConfigSchema['variables']
+    widgetContents: SkillLocaleConfigSchema['widget_contents']
+  }
+  skillConfigPath: string
+  actionConfig: SkillActionConfig | null
+  new: {
+    utterance?: NLPUtterance
+    actionArguments?: ActionCallingSuccessOutput['arguments']
+    entities?: NEREntity[]
+    sentiment?: NLUProcessSentiment
+  }
+  context: {
+    utterances: NLPUtterance[]
+    actionArguments: ActionCallingSuccessOutput['arguments'][]
+    entities: NEREntity[]
+    sentiments: NLUProcessSentiment[]
+    /**
+     * Generic key/value store for simple memory pushed from skill actions (e.g. audio_path, last_download_path, etc.)
+     * Updated via leon.answer({ core: { context_data: { key: value } } })
+     */
+    data: Record<string, unknown>
+  }
+}
+// TODO: core rewrite delete?
 export interface NLUResult {
   currentEntities: NEREntity[]
   entities: NEREntity[]
@@ -97,6 +146,7 @@ export interface NLUResult {
   actionConfig: SkillConfigSchema['actions'][NLPAction] | null
 }
 
+// TODO: core rewrite delete?
 export type NLUSlots = Record<string, NLUSlot>
 
 /**

@@ -1,0 +1,9 @@
+{
+  "name": "Operating System Control",
+  "description": "Tools for interacting with and controlling the operating system.",
+  "tools": {
+    "bash": {
+      "description": "A tool for executing bash commands on the operating system."
+    }
+  }
+}

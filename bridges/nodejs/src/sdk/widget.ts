@@ -1,6 +1,6 @@
 import { type WidgetWrapperProps } from '@leon-ai/aurora'
 
-import { INTENT_OBJECT, SKILL_CONFIG } from '@bridge/constants'
+import { INTENT_OBJECT, SKILL_LOCALE_CONFIG } from '@bridge/constants'
 import { WidgetComponent } from '@sdk/widget-component'
 
 type UtteranceSender = 'leon' | 'owner'
@@ -45,13 +45,13 @@ export abstract class Widget<T = unknown> {
     if (options?.wrapperProps) {
       this.wrapperProps = options.wrapperProps
     }
-    this.actionName = `${INTENT_OBJECT.domain}:${INTENT_OBJECT.skill}:${INTENT_OBJECT.action}`
+    this.actionName = `${INTENT_OBJECT.skill_name}:${INTENT_OBJECT.action_name}`
     this.params = options.params
     this.widget = this.constructor.name
     if (options?.onFetch) {
       this.onFetch = {
         widgetId: options.onFetch.widgetId,
-        actionName: `${INTENT_OBJECT.domain}:${INTENT_OBJECT.skill}:${options.onFetch.actionName}`
+        actionName: `${INTENT_OBJECT.skill_name}:${options.onFetch.actionName}`
       }
     }
     this.id =
@@ -92,7 +92,7 @@ export abstract class Widget<T = unknown> {
    * Indicate the core to run a given skill action
    * @param actionName The name of the action
    * @param params The parameters of the action
-   * @example runSkillAction('music_audio:player:next', { provider: 'Spotify' })
+   * @example runSkillAction('music_player_skill:next', { provider: 'Spotify' })
    */
   protected runSkillAction(
     actionName: string,
@@ -115,7 +115,7 @@ export abstract class Widget<T = unknown> {
    * @example content('provider_selected', { provider: 'Spotify' }) // 'I chose the Spotify provider'
    */
   protected content(key: string, data?: Record<string, unknown>): string {
-    const { widget_contents: widgetContents } = SKILL_CONFIG
+    const { widget_contents: widgetContents } = SKILL_LOCALE_CONFIG
 
     if (!widgetContents || !widgetContents[key]) {
       return 'INVALID'
@@ -129,7 +129,7 @@ export abstract class Widget<T = unknown> {
 
     if (data) {
       for (const key in data) {
-        content = content.replaceAll(`%${key}%`, String(data[key]))
+        content = content.replaceAll(`{{ ${key} }}`, String(data[key]))
       }
     }
 

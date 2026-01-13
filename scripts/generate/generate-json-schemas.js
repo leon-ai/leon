@@ -5,7 +5,8 @@ import { LogHelper } from '@/helpers/log-helper'
 import {
   domainSchemaObject,
   skillSchemaObject,
-  skillConfigSchemaObject
+  skillConfigSchemaObject,
+  skillLocaleConfigObject
 } from '@/schemas/skill-schemas'
 import {
   globalEntitySchemaObject,
@@ -62,7 +63,8 @@ export default async () => {
       new Map([
         ['domain', domainSchemaObject],
         ['skill', skillSchemaObject],
-        ['skill-config', skillConfigSchemaObject]
+        ['skill-config', skillConfigSchemaObject],
+        ['skill-locale-config', skillLocaleConfigObject]
       ])
     ),
     generateSchemas(

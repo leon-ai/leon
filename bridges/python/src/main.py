@@ -1,21 +1,26 @@
 import sys
+import inspect
 from traceback import print_exc
 from importlib import import_module
 
 from constants import INTENT_OBJECT
+from sdk.params_helper import ParamsHelper
 
 
 def main():
     params = {
         'lang': INTENT_OBJECT['lang'],
         'utterance': INTENT_OBJECT['utterance'],
-        'new_utterance': INTENT_OBJECT['new_utterance'],
-        'current_entities': INTENT_OBJECT['current_entities'],
+        'action_arguments': INTENT_OBJECT['action_arguments'],
         'entities': INTENT_OBJECT['entities'],
-        'current_resolvers': INTENT_OBJECT['current_resolvers'],
-        'resolvers': INTENT_OBJECT['resolvers'],
-        'slots': INTENT_OBJECT['slots'],
-        'extra_context_data': INTENT_OBJECT['extra_context_data']
+        'sentiment': INTENT_OBJECT['sentiment'],
+        'context_name': INTENT_OBJECT['context_name'],
+        'skill_name': INTENT_OBJECT['skill_name'],
+        'action_name': INTENT_OBJECT['action_name'],
+        'context': INTENT_OBJECT['context'],
+        'skill_config': INTENT_OBJECT['skill_config'],
+        'skill_config_path': INTENT_OBJECT['skill_config_path'],
+        'extra_context': INTENT_OBJECT['extra_context']
     }
 
     try:
@@ -23,16 +28,26 @@ def main():
 
         skill_action_module = import_module(
             'skills.'
-            + INTENT_OBJECT['domain']
-            + '.'
-            + INTENT_OBJECT['skill']
+            + INTENT_OBJECT['skill_name']
             + '.src.actions.'
-            + INTENT_OBJECT['action']
+            + INTENT_OBJECT['action_name']
         )
 
-        getattr(skill_action_module, 'run')(params)
+        run_function = getattr(skill_action_module, 'run')
+        params_helper = ParamsHelper(params)
+
+        # Inspect to decide how many args to pass
+        signature = inspect.signature(run_function)
+        param_count = len(signature.parameters)
+
+        if param_count >= 2:
+            run_function(params, params_helper)
+        elif param_count == 1:
+            run_function(params)
+        else:
+            run_function()
     except Exception as e:
-        print(f"Error while running {INTENT_OBJECT['skill']} skill {INTENT_OBJECT['action']} action: {e}")
+        print(f"Error while running {INTENT_OBJECT['skill_name']} skill {INTENT_OBJECT['action_name']} action: {e}")
         print_exc()
 
 

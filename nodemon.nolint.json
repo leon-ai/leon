@@ -1,0 +1,13 @@
+{
+  "verbose": true,
+  "watch": ["server/src"],
+  "ext": "ts,js,json",
+  "ignore": [
+    ".git",
+    "node_modules",
+    "server/src/tmp",
+    "server/dist",
+    "bridges/toolkits"
+  ],
+  "exec": "tsx server/src/index.ts"
+}

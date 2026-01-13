@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "actions": {
+    "say_bye": {
+      "answers": [
+        "Good bye! I hope to see you again soon.",
+        "Bye!",
+        "Bye bye!",
+        "Bye!",
+        "Good bye.",
+        "Bye! Take care.",
+        "Good bye, please, take care of yourself.",
+        "Bye! Enjoy your time!",
+        "See you!",
+        "See ya!"
+      ]
+    }
+  }
+}

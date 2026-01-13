@@ -1,3 +1,6 @@
+// TODO: core rewrite delete?
+
+/*
 import type { NLPUtterance } from '@/core/nlp/types'
 import type { BrainProcessResult } from '@/core/brain/types'
 import { BRAIN, MODEL_LOADER, NER, NLU, SOCKET_SERVER } from '@/core'
@@ -7,18 +10,18 @@ import { LogHelper } from '@/helpers/log-helper'
 import { DEFAULT_ACTIVE_CONTEXT } from '@/core/nlp/conversation'
 
 export class SlotFilling {
-  /**
+  /!**
    * Handle slot filling
-   */
+   *!/
   public static async handle(
     utterance: NLPUtterance
   ): Promise<Partial<BrainProcessResult> | null> {
     const processedData = await this.fillSlot(utterance)
 
-    /**
+    /!**
      * In case the slot filling has been interrupted. e.g. context change, etc.
      * Then reprocess with the new utterance
-     */
+     *!/
     if (!processedData) {
       await NLU.process(utterance)
       return null
@@ -46,10 +49,10 @@ export class SlotFilling {
     return processedData
   }
 
-  /**
+  /!**
    * Build NLU data result object based on slots
    * and ask for more entities if necessary
-   */
+   *!/
   public static async fillSlot(
     utterance: NLPUtterance
   ): Promise<Partial<BrainProcessResult> | null> {
@@ -139,23 +142,26 @@ export class SlotFilling {
             : []
       })
 
-      const processedData = await BRAIN.execute(NLU.nluResult)
+      // TODO: core rewrite
+      return null
+
+      /!*const processedData = await BRAIN.execute(NLU.nluResult)
 
       NLU.conversation.cleanActiveContext()
 
-      return processedData
+      return processedData*!/
     }
 
     NLU.conversation.cleanActiveContext()
     return null
   }
 
-  /**
+  /!**
    * Decide what to do with slot filling.
    * 1. Activate context
    * 2. If the context is expecting slots, then loop over questions to slot fill
    * 3. Or go to the brain executor if all slots have been filled in one shot
-   */
+   *!/
   public static async route(
     intent: string,
     utterance: NLPUtterance
@@ -201,3 +207,4 @@ export class SlotFilling {
     return false
   }
 }
+*/

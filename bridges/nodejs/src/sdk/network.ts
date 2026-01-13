@@ -18,10 +18,25 @@ interface NetworkRequestOptions {
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
   /** Data to be sent as the request body. */
-  data?: Record<string, unknown>
+  data?: unknown
 
   /** Custom headers to be sent. */
   headers?: Record<string, string>
+
+  /** Optional files for multipart/form-data requests (parity with Python SDK). */
+  files?: Record<string, unknown>
+
+  /** Whether to send JSON body (true by default). If false, send form data. */
+  useJson?: boolean
+
+  /** Response type (defaults to 'json'). Use 'arraybuffer' for binary data like audio/video files. */
+  responseType?:
+    | 'json'
+    | 'text'
+    | 'arraybuffer'
+    | 'blob'
+    | 'document'
+    | 'stream'
 }
 
 interface NetworkResponse<ResponseData> {
@@ -65,13 +80,12 @@ export class Network {
     options: NetworkRequestOptions
   ): Promise<NetworkResponse<ResponseData>> {
     try {
-      const response = await this.axios.request<string>({
+      const response = await this.axios.request({
         url: options.url,
         method: options.method.toLowerCase(),
-        data: options.data,
-        transformResponse: (data) => {
-          return data
-        },
+        // For parity, we accept any data type here (including FormData)
+        data: options.data as never,
+        responseType: options.responseType,
         headers: {
           'User-Agent': `Leon Personal Assistant ${LEON_VERSION} - Node.js Bridge ${NODEJS_BRIDGE_VERSION}`,
           ...options.headers
@@ -79,10 +93,24 @@ export class Network {
       })
 
       let data = {} as ResponseData
-      try {
-        data = JSON.parse(response.data)
-      } catch {
+      // For binary response types, return data as-is
+      if (
+        options.responseType === 'arraybuffer' ||
+        options.responseType === 'blob' ||
+        options.responseType === 'stream'
+      ) {
         data = response.data as ResponseData
+      } else {
+        // For text/json responses, try to parse as JSON
+        try {
+          if (typeof response.data === 'string') {
+            data = JSON.parse(response.data)
+          } else {
+            data = response.data as ResponseData
+          }
+        } catch {
+          data = response.data as ResponseData
+        }
       }
 
       return {

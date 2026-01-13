@@ -24,6 +24,9 @@
   "volta": {
     "node": "22.13.1"
   },
+  "pnpm": {
+    "neverBuiltDependencies": []
+  },
   "scripts": {
     "pre-commit": "lint-staged",
     "lint": "tsx scripts/lint.js",
@@ -44,8 +47,8 @@
     "preinstall": "node scripts/setup/preinstall.js",
     "postinstall": "tsx scripts/setup/setup.js",
     "dev:app": "vite --config app/vite.config.js",
-    "dev:server": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development LEON_WARM_UP_LLM_DUTIES=true tsc-watch --noClear --onSuccess \"nodemon\"",
-    "dev:server:no-lint": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development LEON_WARM_UP_LLM_DUTIES=true \"nodemon\"",
+    "dev:server": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development LEON_WARM_UP_LLM_DUTIES=true nodemon",
+    "dev:server:no-lint": "npm run train && npm run generate:skills-endpoints && cross-env LEON_NODE_ENV=development LEON_WARM_UP_LLM_DUTIES=true nodemon --config nodemon.nolint.json",
     "inspect:gpu": "./node_modules/node-llama-cpp/dist/cli/cli.js inspect gpu",
     "wake": "cross-env LEON_HOST=http://localhost LEON_PORT=1337 node hotword/index.js",
     "delete-dist:server": "shx rm -rf ./server/dist",
@@ -79,7 +82,7 @@
     "@fontsource/source-sans-pro": "5.0.8",
     "@google-cloud/speech": "4.2.0",
     "@google-cloud/text-to-speech": "3.2.1",
-    "@leon-ai/aurora": "1.0.0-beta.14",
+    "@leon-ai/aurora": "1.0.0-beta.15",
     "@nlpjs/builtin-microsoft": "4.22.7",
     "@nlpjs/core-loader": "4.22.7",
     "@nlpjs/lang-all": "4.22.12",
@@ -102,7 +105,7 @@
     "googleapis": "67.1.1",
     "ibm-watson": "6.1.1",
     "ipull": "3.9.2",
-    "node-llama-cpp": "3.6.0",
+    "node-llama-cpp": "3.12.1",
     "node-wav": "0.0.2",
     "os-name": "4.0.1",
     "pretty-bytes": "5.6.0",
@@ -133,9 +136,9 @@
     "@types/react-dom": "18.3.0",
     "@typescript-eslint/eslint-plugin": "8.15.0",
     "@typescript-eslint/parser": "8.15.0",
-    "@vercel/ncc": "0.38.1",
     "@vitejs/plugin-react": "4.1.1",
     "cli-spinner": "0.2.10",
+    "esbuild": "0.25.8",
     "eslint": "9.15.0",
     "eslint-config-prettier": "9.0.0",
     "eslint-import-resolver-typescript": "3.6.1",
@@ -150,14 +153,13 @@
     "jest-extended": "2.0.0",
     "json": "11.0.0",
     "lint-staged": "15.1.0",
-    "nodemon": "3.1.9",
+    "nodemon": "3.1.10",
     "prettier": "3.1.0",
     "resolve-tspaths": "0.8.17",
     "sass": "1.77.2",
     "semver": "7.5.4",
     "shx": "0.3.4",
-    "tsc-watch": "6.2.0",
-    "tsx": "4.10.5",
+    "tsx": "4.20.5",
     "typescript": "5.5.4",
     "vite": "4.5.0"
   }

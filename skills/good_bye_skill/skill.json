@@ -1,0 +1,18 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Good Bye",
+  "bridge": null,
+  "version": "1.0.0",
+  "description": "Leon says good bye.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "say_bye": {
+      "type": "dialog",
+      "description": "Say good bye to the owner."
+    }
+  }
+}

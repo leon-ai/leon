@@ -9,6 +9,7 @@ import { SERVER_CORE_PATH, TTS_PROVIDER, VOICE_CONFIG_PATH } from '@/constants'
 import { TTSSynthesizers, TTSProviders } from '@/core/tts/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
+import { FileHelper } from '@/helpers/file-helper'
 
 interface Speech {
   text: string
@@ -79,7 +80,7 @@ export default class TTS {
 
     try {
       // Dynamically attribute the synthesizer
-      const { default: synthesizer } = await import(
+      const { default: synthesizer } = await FileHelper.dynamicImportFromFile(
         path.join(
           SERVER_CORE_PATH,
           'tts',

@@ -21,6 +21,7 @@ import { runActionPlugin } from '@/core/http-server/api/run-action'
 import { fetchWidgetPlugin } from '@/core/http-server/api/fetch-widget'
 import { keyMidd } from '@/core/http-server/plugins/key'
 import { utterancePlugin } from '@/core/http-server/api/utterance'
+import { openPathPlugin } from '@/core/http-server/api/open-path'
 import { LLM_MANAGER, PERSONA } from '@/core'
 import { SystemHelper } from '@/helpers/system-helper'
 
@@ -102,6 +103,7 @@ export default class HTTPServer {
     this.fastify.register(fetchWidgetPlugin, { apiVersion: API_VERSION })
     this.fastify.register(infoPlugin, { apiVersion: API_VERSION })
     this.fastify.register(llmInferencePlugin, { apiVersion: API_VERSION })
+    this.fastify.register(openPathPlugin, { apiVersion: API_VERSION })
 
     if (HAS_OVER_HTTP) {
       this.fastify.register((instance, _opts, next) => {

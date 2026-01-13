@@ -13,36 +13,36 @@ export class LogHelper {
   /**
    * This one looks obvious :)
    */
-  public static success(value: string): void {
-    console.log('\x1b[32m✅ %s\x1b[0m', value)
+  public static success(value: string, ...args: unknown[]): void {
+    console.log(`\x1b[32m✅ ${value}\x1b[0m`, ...args)
   }
 
   /**
    * This one looks obvious :)
    */
-  public static info(value: string): void {
-    console.info('\x1b[36mℹ️ %s\x1b[0m', value)
+  public static info(value: string, ...args: unknown[]): void {
+    console.info(`\x1b[36mℹ️ ${value}\x1b[0m`, ...args)
   }
 
   /**
    * This one looks obvious :)
    */
-  public static warning(value: string): void {
-    console.warn('\x1b[33m⚠️ %s\x1b[0m', value)
+  public static warning(value: string, ...args: unknown[]): void {
+    console.warn(`\x1b[33m⚠️ ${value}\x1b[0m`, ...args)
   }
 
   /**
    * This one looks obvious :)
    */
-  public static debug(value: string): void {
-    console.info('\u001b[35m🐞 [DEBUG] %s\x1b[0m', value)
+  public static debug(value: string, ...args: unknown[]): void {
+    console.info(`\u001b[35m🐞 [DEBUG] ${value}\x1b[0m`, ...args)
   }
 
   /**
    * Log message on stderr and write in error log file
    */
-  public static error(value: string): void {
-    const data = `${DateHelper.getDateTime()} - ${value}`
+  public static error(value: string, ...args: unknown[]): void {
+    const data = `${DateHelper.getDateTime()} - ${value} ${args.join(' ')}`
 
     if (fs.existsSync(this.ERRORS_FILE_PATH)) {
       fs.appendFileSync(this.ERRORS_FILE_PATH, `\n${data}`)
@@ -50,7 +50,7 @@ export class LogHelper {
       fs.writeFileSync(this.ERRORS_FILE_PATH, data, { flag: 'wx' })
     }
 
-    console.error('\x1b[31m🚨 %s\x1b[0m', value)
+    console.error(`\x1b[31m🚨 ${value}\x1b[0m`, ...args)
   }
 
   /**
@@ -63,8 +63,8 @@ export class LogHelper {
   /**
    * This one looks obvious :)
    */
-  public static default(value: string): void {
-    console.log(value)
+  public static default(value: string, ...args: unknown[]): void {
+    console.log(value, ...args)
   }
 
   /**

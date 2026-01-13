@@ -4,13 +4,16 @@ import type { AxiosResponse } from 'axios'
 
 import {
   type CompletionParams,
-  LLMDuties,
+  type LLMDuties,
+  type PromptOrChatHistory,
   LLMProviders
 } from '@/core/llm-manager/types'
 import { LLM_PROVIDER, SERVER_CORE_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { FileHelper } from '@/helpers/file-helper'
 import LocalLLMProvider from '@/core/llm-manager/llm-providers/local-llm-provider'
 import GroqLLMProvider from '@/core/llm-manager/llm-providers/groq-llm-provider'
+import { LLM_MANAGER } from '@/core'
 
 interface CompletionResult {
   dutyType: LLMDuties
@@ -18,7 +21,9 @@ interface CompletionResult {
   input: string
   output: string
   data: Record<string, unknown> | null
+  functions?: Record<string, unknown> | undefined
   maxTokens: number
+  thoughtTokensBudget: number
   usedInputTokens: number
   usedOutputTokens: number
   temperature: number
@@ -38,6 +43,7 @@ const DEFAULT_MAX_EXECUTION_TIMOUT = 32_000
 const DEFAULT_MAX_EXECUTION_RETRIES = 2
 const DEFAULT_TEMPERATURE = 0 // Disabled
 const DEFAULT_MAX_TOKENS = 8_192
+const DEFAULT_THOUGHT_TOKENS_BUDGET = Infinity
 
 export default class LLMProvider {
   private static instance: LLMProvider
@@ -73,7 +79,7 @@ export default class LLMProvider {
     }
 
     // Dynamically set the provider
-    const { default: provider } = await import(
+    const { default: provider } = await FileHelper.dynamicImportFromFile(
       path.join(
         SERVER_CORE_PATH,
         'llm-manager',
@@ -104,6 +110,13 @@ export default class LLMProvider {
     const { usedInputTokens, usedOutputTokens } =
       completionParams.session.sequence.tokenMeter.getState()
 
+    LogHelper.title('LLM Provider')
+    LogHelper.debug(
+      `Raw context tokens:\n${LLM_MANAGER.model.detokenize(
+        completionParams.session.sequence.contextTokens
+      )}`
+    )
+
     return {
       rawResult,
       usedInputTokens,
@@ -133,6 +146,9 @@ export default class LLMProvider {
     str = str.replace(/\*winks?\*/g, '😉')
     str = str.replace(/\*sigh\*/g, '😔')
 
+    // Remove all newlines at the beginning
+    str = str.replace(/^\n+/, '')
+
     return str
   }
 
@@ -140,27 +156,34 @@ export default class LLMProvider {
    * Run the completion inference
    */
   public async prompt(
-    prompt: string,
+    promptOrChatHistory: PromptOrChatHistory,
     completionParams: CompletionParams
   ): Promise<CompletionResult | null> {
+    const measureExecutionTimeLabel = `Inference time for "${completionParams.dutyType}" duty`
+
     LogHelper.title('LLM Provider')
     LogHelper.info(`Using "${LLM_PROVIDER}" provider for completion...`)
+    LogHelper.time(measureExecutionTimeLabel)
 
     if (!this.llmProvider) {
       LogHelper.error('LLM provider is not ready')
       return null
     }
 
-    completionParams.dutyType = completionParams.dutyType || null
+    completionParams.dutyType = completionParams.dutyType ?? null
     completionParams.timeout =
-      completionParams.timeout || DEFAULT_MAX_EXECUTION_TIMOUT
+      completionParams.timeout ?? DEFAULT_MAX_EXECUTION_TIMOUT
     completionParams.maxRetries =
-      completionParams.maxRetries || DEFAULT_MAX_EXECUTION_RETRIES
-    completionParams.data = completionParams.data || null
+      completionParams.maxRetries ?? DEFAULT_MAX_EXECUTION_RETRIES
+    completionParams.data = completionParams.data ?? null
+    completionParams.functions = completionParams.functions ?? undefined
     completionParams.temperature =
-      completionParams.temperature || DEFAULT_TEMPERATURE
+      completionParams.temperature ?? DEFAULT_TEMPERATURE
     completionParams.maxTokens =
-      completionParams.maxTokens || DEFAULT_MAX_TOKENS
+      completionParams.maxTokens ?? DEFAULT_MAX_TOKENS
+    completionParams.thoughtTokensBudget =
+      completionParams.thoughtTokensBudget ?? DEFAULT_THOUGHT_TOKENS_BUDGET
+
     /**
      * TODO: support onToken (stream) for Groq provider too
      */
@@ -169,7 +192,7 @@ export default class LLMProvider {
     const isJSONMode = completionParams.data !== null
 
     const rawResultPromise = this.llmProvider.runChatCompletion(
-      prompt,
+      promptOrChatHistory,
       completionParams
     )
 
@@ -250,7 +273,9 @@ export default class LLMProvider {
 
     rawResultString = rawResult as string
 
-    rawResultString = this.cleanUpResult(rawResultString)
+    if (typeof rawResult === 'string') {
+      rawResultString = this.cleanUpResult(rawResultString)
+    }
 
     if (isJSONMode) {
       // If a closing bracket is missing, add it
@@ -259,14 +284,22 @@ export default class LLMProvider {
       }
     }
 
+    LogHelper.title('LLM Provider')
+    LogHelper.timeEnd(measureExecutionTimeLabel)
+
     return {
       dutyType: completionParams.dutyType,
       systemPrompt: completionParams.systemPrompt,
       temperature: completionParams.temperature,
-      input: prompt,
+      input:
+        typeof promptOrChatHistory === 'string'
+          ? promptOrChatHistory
+          : JSON.stringify(promptOrChatHistory),
       output: isJSONMode ? JSON.parse(rawResultString) : rawResultString,
       data: completionParams.data,
+      functions: completionParams.functions,
       maxTokens: completionParams.maxTokens,
+      thoughtTokensBudget: completionParams.thoughtTokensBudget,
       // Current used context size
       usedInputTokens,
       usedOutputTokens

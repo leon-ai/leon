@@ -16,6 +16,7 @@ import trainSkillsResolvers from './train-resolvers-model/train-skills-resolvers
 import trainGlobalEntities from './train-main-model/train-global-entities'
 import trainSkillsActions from './train-main-model/train-skills-actions'
 import trainLLMActionsClassifier from './train-llm-actions-classifier'
+import trainSkillRouterDuty from './train-skill-router-duty.js'
 
 dotenv.config()
 
@@ -143,6 +144,16 @@ export default () =>
         resolve()
       } catch (e) {
         LogHelper.error(`Failed to train LLM actions classifier: ${e}`)
+        reject()
+      }
+
+      try {
+        await trainSkillRouterDuty()
+
+        LogHelper.success('Skill router duty trained')
+        resolve()
+      } catch (e) {
+        LogHelper.error(`Failed to train skill router duty: ${e}`)
         reject()
       }
     } catch (e) {

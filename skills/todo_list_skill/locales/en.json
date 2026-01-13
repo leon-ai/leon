@@ -1,0 +1,108 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "actions": {
+    "create_list": {
+      "missing_param_follow_ups": {
+        "list_name": [
+          "What is the name of the to-do list you want to create?",
+          "Please provide a name for the to-do list."
+        ]
+      },
+      "answers": {
+        "list_created": [
+          "Alright, I've created the \"{{ list }}\" list.",
+          "Done, I created your \"{{ list }}\" list."
+        ]
+      }
+    },
+    "get_all_lists": {
+      "answers": {
+        "no_list": ["You do not have any list.", "There is no list to show."]
+      }
+    },
+    "get_list_items": {
+      "answers": {
+        "empty_list": [
+          "Your \"{{ list }}\" list is empty.",
+          "There is nothing in your \"{{ list }}\" list."
+        ]
+      }
+    },
+    "rename_list": {
+      "missing_param_follow_ups": {
+        "old_list_name": [
+          "What is the name of the list you want to rename?",
+          "Please provide the current name of the to-do list."
+        ],
+        "new_list_name": [
+          "What is the new name for the to-do list?",
+          "Please provide the new name for the to-do list."
+        ]
+      },
+      "answers": {
+        "list_renamed": [
+          "I renamed the \"{{ old_list }}\" list to \"{{ new_list }}\"."
+        ]
+      }
+    },
+    "delete_list": {
+      "missing_param_follow_ups": {
+        "list_name": [
+          "What is the name of the to-do list you want to delete?",
+          "Please provide the name of the to-do list you want to delete."
+        ]
+      },
+      "answers": {
+        "list_deleted": [
+          "I deleted the \"{{ list }}\" list and all the todos it was containing."
+        ]
+      }
+    },
+    "add_todos": {
+      "missing_param_follow_ups": {
+        "list_name": [
+          "What is the name of the to-do list you want to add items to?",
+          "Please provide the name of the to-do list."
+        ],
+        "items": [
+          "What items would you like to add to the list?",
+          "Please provide the items you want to add."
+        ]
+      },
+      "answers": {
+        "list_todo_element": ["<li>{{ todo }}.</li>"]
+      }
+    },
+    "complete_items": {
+      "missing_param_follow_ups": {
+        "list_name": [
+          "What is the name of the to-do list containing the items to complete?",
+          "Please provide the name of the to-do list."
+        ],
+        "items": [
+          "What items would you like to mark as completed?",
+          "Please provide the items you want to complete."
+        ]
+      }
+    },
+    "uncomplete_items": {
+      "missing_param_follow_ups": {
+        "list_name": [
+          "What is the name of the to-do list containing the items to uncomplete?",
+          "Please provide the name of the to-do list."
+        ],
+        "items": [
+          "What items would you like to mark as incomplete?",
+          "Please provide the items you want to uncomplete."
+        ]
+      }
+    }
+  },
+  "common_answers": {
+    "list_already_exists": ["You already have a list named \"{{ list }}\"."],
+    "list_does_not_exist": [
+      "Sorry I can't because the \"{{ list }}\" list does not exist.",
+      "I cannot do that because the \"{{ list }}\" list does not exist."
+    ]
+  }
+}

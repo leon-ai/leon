@@ -1,0 +1,69 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Video Translator",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Download videos from any URL and extract audio for translation purposes.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "flow": [
+    "download_video",
+    "extract_audio",
+    "music_audio_toolkit_skill:split_instrumental_vocal",
+    "music_audio_toolkit_skill:transcribe_audio",
+    "translate_transcription",
+    "get_speakers_references",
+    "detect_genders",
+    "create_new_audio",
+    "merge_audio"
+  ],
+  "actions": {
+    "download_video": {
+      "type": "logic",
+      "description": "Download a video from a URL for translation processing.",
+      "parameters": {
+        "video_url": {
+          "type": "string",
+          "description": "The URL of the video to download (YouTube, Twitch, etc.)."
+        },
+        "target_language": {
+          "type": "string",
+          "description": "The target language for translation (e.g., 'Chinese', 'Spanish', 'French')."
+        },
+        "quality": {
+          "type": "string",
+          "enum": ["worst", "best", "720p", "1080p", "480p"],
+          "description": "The video quality to download (optional, defaults to 'best')."
+        }
+      },
+      "optional_parameters": ["quality"]
+    },
+    "extract_audio": {
+      "type": "logic",
+      "description": "Extract audio from a downloaded video file for translation processing."
+    },
+    "translate_transcription": {
+      "type": "logic",
+      "description": "Translate a transcription file from one language to another using OpenRouter and LLM."
+    },
+    "merge_audio": {
+      "type": "logic",
+      "description": "Replace the original video audio with the dubbed audio to create a translated video."
+    },
+    "get_speakers_references": {
+      "type": "logic",
+      "description": "Extract speaker reference audio clips from the transcribed audio for voice cloning purposes."
+    },
+    "detect_genders": {
+      "type": "logic",
+      "description": "Detect the gender of each speaker from the audio file for personalized translation."
+    },
+    "create_new_audio": {
+      "type": "logic",
+      "description": "Generate new dubbed audio segments using Chatterbox ONNX with speaker voice cloning and intelligent grouping."
+    }
+  }
+}

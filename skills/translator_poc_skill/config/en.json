@@ -1,0 +1,48 @@
+{
+  "$schema": "../../../../schemas/skill-schemas/skill-config.json",
+  "actions": {
+    "setup": {
+      "type": "dialog",
+      "utterance_samples": ["Start a [translation|translate] loop"],
+      "slots": [
+        {
+          "name": "target_language",
+          "item": {
+            "type": "entity",
+            "name": "language"
+          },
+          "questions": [
+            "What language would you like to translate to?",
+            "Sure, what language are you translating to?"
+          ]
+        }
+      ],
+      "next_action": "ready"
+    },
+    "ready": {
+      "disable_llm_nlg": true,
+      "type": "dialog",
+      "answers": [
+        "Let's start translating to {{ target_language }}.",
+        "Okay, you can input the text you want to translate to {{ target_language }}.",
+        "Alright, let's start translating to {{ target_language }}."
+      ],
+      "next_action": "translate"
+    },
+    "translate": {
+      "type": "logic",
+      "loop": {
+        "expected_item": {
+          "type": "utterance",
+          "name": "text_to_translate"
+        }
+      }
+    }
+  },
+  "entities": {
+    "language": "global-entities/language.json"
+  },
+  "answers": {
+    "translate": ["%output%"]
+  }
+}

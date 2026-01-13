@@ -21,7 +21,6 @@ import {
   SOCKET_SERVER,
   EVENT_EMITTER
 } from '@/core'
-import { LLM_THREADS } from '@/core/llm-manager/llm-manager'
 import { LLMProviders, LLMDuties } from '@/core/llm-manager/types'
 import { LLM_PROVIDER as LLM_PROVIDER_NAME } from '@/constants'
 import { StringHelper } from '@/helpers/string-helper'
@@ -84,9 +83,7 @@ export class ConversationLLMDuty extends LLMDuty {
             }
           }
 
-          ConversationLLMDuty.context = await LLM_MANAGER.model.createContext({
-            threads: LLM_THREADS
-          })
+          ConversationLLMDuty.context = await LLM_MANAGER.model.createContext()
 
           const { LlamaChatSession } = await Function(
             'return import("node-llama-cpp")'

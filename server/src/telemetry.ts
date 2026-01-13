@@ -5,10 +5,10 @@ import axios from 'axios'
 import osName from 'os-name'
 import getos from 'getos'
 
-import type {
+import {
   NEREntity,
   NLPUtterance,
-  NLUProcessResult,
+  NLUPartialProcessResult,
   NLUResult
 } from '@/core/nlp/types'
 import {
@@ -132,10 +132,13 @@ export class Telemetry {
   }
 
   public static async utterance(
-    processedData: NLUProcessResult | null
+    processedData: NLUPartialProcessResult | null
   ): Promise<void> {
     if (IS_TELEMETRY_ENABLED) {
       try {
+        // TODO: core rewrite, implement properly
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-expect-error
         if (processedData?.classification) {
           const {
             classification: {
@@ -174,6 +177,9 @@ export class Telemetry {
             instanceID: this.instanceID,
             data: {
               language: processedData?.lang || null,
+              // TODO: core rewrite, implement properly
+              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+              // @ts-expect-error
               value: processedData?.utterance
             }
           })

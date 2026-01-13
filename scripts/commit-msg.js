@@ -5,6 +5,8 @@ import { LogHelper } from '@/helpers/log-helper'
 /**
  * This script is executed after "git commit" or "git merge" (Git hook https://git-scm.com/docs/githooks#_commit_msg)
  * it ensures the authenticity of commit messages
+ *
+ * @see https://gist.github.com/qoomon/5dfcdf8eec66a051ecd85625518cfd13
  */
 ;(async () => {
   LogHelper.info('Checking commit message...')
@@ -18,7 +20,7 @@ import { LogHelper } from '@/helpers/log-helper'
         'utf8'
       )
       const regex =
-        '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|scripts|server|hotword|python tcp server|llm tcp server|bridge\\/(python|nodejs)|skill\\/([\\w-]+)))?\\)?: .{1,50}'
+        '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|scripts|server|hotword|python tcp server|llm tcp server|bridge\\/(python|nodejs)|tool\\/([\\w-]+)|skill\\/([\\w-]+)))?\\)?: .{1,50}'
 
       if (commitMessage.match(regex) !== null) {
         LogHelper.success('Commit message validated')

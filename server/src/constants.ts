@@ -52,6 +52,26 @@ export const SERVER_CORE_PATH = path.join(SERVER_PATH, 'core')
 export const LEON_FILE_PATH = path.join(process.cwd(), 'leon.json')
 
 /**
+ * CUDA Runtime paths and versions
+ */
+export const CUDA_RUNTIME_PATH = path.join(BIN_PATH, 'cuda')
+export const CUDA_CUBLAS_PATH = path.join(CUDA_RUNTIME_PATH, 'cublas')
+export const CUDA_CUDNN_PATH = path.join(CUDA_RUNTIME_PATH, 'cudnn')
+export const CUDA_VERSIONS_PATH = path.join(CUDA_RUNTIME_PATH, 'versions.json')
+export const CUDA_CUBLAS_MANIFEST_PATH = path.join(
+  CUDA_CUBLAS_PATH,
+  'manifest.json'
+)
+export const CUDA_CUDNN_MANIFEST_PATH = path.join(
+  CUDA_CUDNN_PATH,
+  'manifest.json'
+)
+const CUDA_VERSIONS = JSON.parse(fs.readFileSync(CUDA_VERSIONS_PATH, 'utf8'))
+export const CUDA_VERSION = CUDA_VERSIONS.cuda
+export const CUDA_CUDNN_VERSION = CUDA_VERSIONS.cudnn
+export const CUDA_CUBLAS_VERSION = CUDA_VERSIONS.cublas
+
+/**
  * Binaries / distribution
  */
 export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
@@ -141,7 +161,7 @@ export const [, PYTHON_TCP_SERVER_VERSION] = fs
   .readFileSync(PYTHON_TCP_SERVER_VERSION_FILE_PATH, 'utf8')
   .split("'")
 
-export const NODEJS_BRIDGE_BIN_NAME = 'leon-nodejs-bridge.js'
+export const NODEJS_BRIDGE_BIN_NAME = 'leon-nodejs-bridge.cjs'
 export const PYTHON_BRIDGE_BIN_NAME = 'leon-python-bridge'
 export const PYTHON_TCP_SERVER_BIN_NAME = 'leon-tcp-server'
 
@@ -243,6 +263,10 @@ export const LLM_ACTIONS_CLASSIFIER_PATH = path.join(
   MODELS_PATH,
   'leon-llm-actions-classifier.json'
 )
+export const LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH = path.join(
+  MODELS_PATH,
+  'leon-skill-list.nlp'
+)
 
 /**
  * LLMs
@@ -258,7 +282,11 @@ export const LLM_PROVIDER = process.env['LEON_LLM_PROVIDER']
 // export const LLM_VERSION = '2.9-llama3-8b.Q5_K_S'
 // export const LLM_VERSION = '3.1-8B-Lexi-Uncensored_V2_Q5'
 // export const LLM_VERSION = '3-8B-Uncensored-Q5_K_S'
-export const LLM_VERSION = '8B-Lexi-Uncensored.i1-Q5_K_S'
+// export const LLM_VERSION = 'Q4_K_M'
+// export const LLM_VERSION = '4b-it-Q5_K_M'
+// export const LLM_VERSION = '3b-instruct-q5_k_m'
+// export const LLM_VERSION = '8B-Lexi-Uncensored.i1-Q5_K_S'
+export const LLM_VERSION = '4B-Q4_K_M'
 // export const LLM_VERSION = '8B-Abliterated.i1-Q5_K_S'
 // export const LLM_VERSION = '3-mini-128k-instruct.Q5_K_S'
 // export const LLM_VERSION = '3-mini-4k-instruct-q4'
@@ -268,7 +296,12 @@ export const LLM_VERSION = '8B-Lexi-Uncensored.i1-Q5_K_S'
 // export const LLM_NAME = 'Meta-Llama-3-8B-Instruct'
 // export const LLM_NAME = 'Dolphin 2.9 Llama-3-8B'
 // export const LLM_NAME = 'Llama-3.1-8B-Lexi-Uncensored-V2'
-export const LLM_NAME = 'Lexi-Llama-3-8B-Uncensored'
+// export const LLM_NAME = 'Llama-3.1-SuperNova-Lite (8B)'
+// export const LLM_NAME = 'Gemma 3 12B IT Abliterated'
+// export const LLM_NAME = 'Gemma-3-4B-IT'
+// export const LLM_NAME = 'Qwen2.5-3B-Instruct'
+export const LLM_NAME = 'Qwen3-4B'
+// export const LLM_NAME = 'Lexi-Llama-3-8B-Uncensored'
 // export const LLM_NAME = 'Llama-3-8B-Lexi-Uncensored'
 // export const LLM_NAME = 'DeepSeek-R1-Distill-Llama'
 // export const LLM_NAME = 'Phi-3-Mini-128K-Instruct'
@@ -280,7 +313,11 @@ export const LLM_NAME = 'Lexi-Llama-3-8B-Uncensored'
 // export const LLM_FILE_NAME = `dolphin-${LLM_VERSION}.gguf`
 // export const LLM_FILE_NAME = `Llama-${LLM_VERSION}.gguf`
 // export const LLM_FILE_NAME = `Lexi-Llama-${LLM_VERSION}.gguf`
-export const LLM_FILE_NAME = `Llama-3-${LLM_VERSION}.gguf`
+// export const LLM_FILE_NAME = `supernova-lite-v1-${LLM_VERSION}.gguf`
+// export const LLM_FILE_NAME = `gemma-3-${LLM_VERSION}.gguf`
+// export const LLM_FILE_NAME = `qwen2.5-${LLM_VERSION}.gguf`
+export const LLM_FILE_NAME = `Qwen3-${LLM_VERSION}.gguf`
+// export const LLM_FILE_NAME = `Llama-3-${LLM_VERSION}.gguf`
 // export const LLM_FILE_NAME = `DeepSeek-R1-Distill-Llama-${LLM_VERSION}.gguf`
 // export const LLM_FILE_NAME = `Phi-${LLM_VERSION}.gguf`
 // export const LLM_FILE_NAME = `gemma-${LLM_VERSION}.gguf`
@@ -300,8 +337,18 @@ export const LLM_MINIMUM_FREE_VRAM = 8
   'https://huggingface.co/Orenguteng/Llama-3.1-8B-Lexi-Uncensored-V2-GGUF/resolve/main/Llama-3.1-8B-Lexi-Uncensored_V2_Q5.gguf?download=true'*/
 /*export const LLM_HF_DOWNLOAD_URL =
   'https://huggingface.co/bartowski/Lexi-Llama-3-8B-Uncensored-GGUF/resolve/main/Lexi-Llama-3-8B-Uncensored-Q5_K_S.gguf?download=true'*/
+/*export const LLM_HF_DOWNLOAD_URL =
+  'https://huggingface.co/arcee-ai/Llama-3.1-SuperNova-Lite-GGUF/resolve/main/supernova-lite-v1.Q4_K_M.gguf?download=true'*/
+/*export const LLM_HF_DOWNLOAD_URL =
+  'https://huggingface.co/mlabonne/gemma-3-12b-it-abliterated-GGUF/resolve/main/gemma-3-12b-it-abliterated.q4_k_m.gguf?download=true'*/
+/*export const LLM_HF_DOWNLOAD_URL =
+  'https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q5_K_M.gguf?download=true'*/
+/*export const LLM_HF_DOWNLOAD_URL =
+  'https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q5_k_m.gguf?download=true'*/
 export const LLM_HF_DOWNLOAD_URL =
-  'https://huggingface.co/mradermacher/Llama-3-8B-Lexi-Uncensored-i1-GGUF/resolve/main/Llama-3-8B-Lexi-Uncensored.i1-Q5_K_S.gguf?download=true'
+  'https://huggingface.co/unsloth/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true'
+/*export const LLM_HF_DOWNLOAD_URL =
+  'https://huggingface.co/mradermacher/Llama-3-8B-Lexi-Uncensored-i1-GGUF/resolve/main/Llama-3-8B-Lexi-Uncensored.i1-Q5_K_S.gguf?download=true'*/
 /*export const LLM_HF_DOWNLOAD_URL =
   'https://huggingface.co/mradermacher/DeepSeek-R1-Distill-Llama-8B-Abliterated-i1-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Abliterated.i1-Q5_K_S.gguf?download=true'*/
 /*export const LLM_HF_DOWNLOAD_URL =

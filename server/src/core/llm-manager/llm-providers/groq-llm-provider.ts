@@ -1,7 +1,10 @@
 import axios, { type AxiosError, type AxiosResponse } from 'axios'
 
+import type {
+  CompletionParams,
+  PromptOrChatHistory
+} from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
-import { CompletionParams } from '@/core/llm-manager/types'
 
 /**
  * @see https://console.groq.com/docs/text-chat
@@ -59,7 +62,7 @@ export default class GroqLLMProvider {
   }
 
   public runChatCompletion(
-    prompt: string,
+    prompt: PromptOrChatHistory,
     completionParams: GroqCompletionParams
   ): Promise<AxiosResponse> {
     return new Promise(async (resolve, reject) => {
@@ -107,7 +110,7 @@ export default class GroqLLMProvider {
         if (messagesHistory.length === 0 || lastMessage?.content !== prompt) {
           messagesHistory.push({
             role: 'user',
-            content: prompt
+            content: prompt as string
           })
         }
 

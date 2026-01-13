@@ -1,0 +1,42 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Rochambeau",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Rock paper scissors game.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "flow": ["set_up", "play", "rematch"],
+  "actions": {
+    "set_up": {
+      "type": "dialog",
+      "description": "Set up the game to start playing."
+    },
+    "play": {
+      "type": "logic",
+      "description": "Play the game by choosing rock, paper or scissors.",
+      "parameters": {
+        "handsign": {
+          "type": "string",
+          "enum": ["ROCK", "PAPER", "SCISSORS"],
+          "description": "The owner's chosen hand sign."
+        }
+      },
+      "is_loop": true
+    },
+    "rematch": {
+      "type": "logic",
+      "description": "Ask the owner if they want to play again.",
+      "parameters": {
+        "confirmation": {
+          "type": "boolean",
+          "description": "Whether the owner wants to play again or not."
+        }
+      },
+      "is_loop": true
+    }
+  }
+}

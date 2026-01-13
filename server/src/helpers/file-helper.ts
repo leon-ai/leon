@@ -1,4 +1,6 @@
 import fs from 'node:fs'
+import path from 'node:path'
+import url from 'node:url'
 
 import { downloadFile as ipullDownloadFile } from 'ipull'
 
@@ -28,17 +30,12 @@ export class FileHelper {
       ...options
     }
 
-    const directory = destinationPath.substring(
-      0,
-      destinationPath.lastIndexOf('/')
-    )
-    const fileName = destinationPath.substring(
-      destinationPath.lastIndexOf('/') + 1
-    )
+    const directory = path.dirname(destinationPath)
+    const fileName = path.basename(destinationPath)
     const downloader = await ipullDownloadFile({
       url: fileURL,
-      directory: directory,
-      fileName: fileName,
+      directory,
+      fileName,
       ...options
     })
 
@@ -66,5 +63,33 @@ export class FileHelper {
     }
 
     await fs.promises.writeFile(manifestPath, JSON.stringify(manifest, null, 2))
+  }
+
+  /**
+   * Dynamically imports a module or JSON file using a file path,
+   * ensuring cross-platform compatibility for native ESM imports
+   * @param filePath
+   * @param options
+   * @example dynamicImportFromFile('path/to/module.js')
+   */
+  public static async dynamicImportFromFile(
+    filePath: string,
+    options?: ImportCallOptions
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Promise<any> {
+    const absolutePath = path.resolve(filePath)
+    const fileURL = url.pathToFileURL(absolutePath).href
+
+    /**
+     * This creates a function at runtime that performs the import.
+     * Esbuild won't try to analyze it, resolving the warning when building the Node.js bridge
+     */
+    const importer = new Function(
+      'url',
+      'options',
+      'return import(url, options)'
+    )
+
+    return importer(fileURL, options)
   }
 }

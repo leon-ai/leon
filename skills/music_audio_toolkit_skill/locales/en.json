@@ -1,0 +1,37 @@
+{
+  "actions": {
+    "transcribe_audio": {
+      "answers": {
+        "transcription_started": "Transcription started for {{ audio_path }} using {{ provider }}.",
+        "transcription_completed": "Transcription completed. File saved at {{ transcription_path }}.",
+        "audio_not_found": "I couldn't find the given audio file to transcribe.",
+        "provider_not_supported": "The configured transcription provider is not supported.",
+        "missing_api_key": "Your OpenAI API key is not set. Please add it in this skill's settings.",
+        "transcription_error": "An error occurred while transcribing the audio: {{ error }}"
+      }
+    },
+    "dub_audio": {
+      "answers": {
+        "audio_not_found": "I couldn't find the given audio/video file to dub.",
+        "target_language_missing": "Target language is required for dubbing. Please specify which language to dub into.",
+        "missing_api_key": "Your ElevenLabs API key is not set. Please add it in this skill's settings.",
+        "dubbing_started": "🎬 Starting dubbing of {{ audio_path }} ({{ file_size }}) to {{ target_language }}... Source: {{ source_language }}, Speakers: {{ num_speakers }}",
+        "dubbing_created": "✨ Dubbing project created! ID: {{ dubbing_id }}, Expected duration: {{ expected_duration }}, Target: {{ target_language }}",
+        "dubbing_progress": "⏳ Dubbing in progress... Status: {{ status }}, Elapsed: {{ elapsed_time }}, ID: {{ dubbing_id }}",
+        "dubbing_failed": "❌ Dubbing failed for project {{ dubbing_id }}: {{ error }}",
+        "dubbing_timeout": "⏱️ Dubbing timed out after {{ elapsed_time }}. Project ID: {{ dubbing_id }}. Please check the status manually.",
+        "dubbing_download_failed": "❌ Failed to download dubbed file for project {{ dubbing_id }}: {{ error }}",
+        "dubbing_completed": "✅ Dubbing completed successfully! Dubbed file ({{ file_size }}) saved at {{ dubbed_path }} for language {{ target_language }}. Project ID: {{ dubbing_id }}",
+        "dubbing_error": "❌ An error occurred during dubbing: {{ error }}"
+      }
+    },
+    "split_instrumental_vocal": {
+      "answers": {
+        "vocal_separation_started": "Vocal separation started for {{ audio_path }} using Ultimate Vocal Remover ONNX.",
+        "vocal_separation_completed": "Vocal separation completed. Vocal path: {{ vocal_path }}. Instrumental path: {{ instrumental_path }}.",
+        "audio_not_found": "I couldn't find the given audio file to split.",
+        "vocal_separation_error": "An error occurred while splitting the audio: {{ error }}"
+      }
+    }
+  }
+}

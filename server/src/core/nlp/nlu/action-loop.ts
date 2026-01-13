@@ -143,7 +143,9 @@ export class ActionLoop {
         return null
       }
 
-      try {
+      // TODO: core rewrite
+      return null
+      /*try {
         const processedData = await BRAIN.execute(NLU.nluResult)
         // Reprocess with the original utterance that triggered the context at first
         if (processedData.core?.restart === true) {
@@ -158,10 +160,10 @@ export class ActionLoop {
           return null
         }
 
-        /**
+        /!**
          * In case there is no next action to prepare anymore
          * and there is an explicit stop of the loop from the skill
-         */
+         *!/
         if (
           !processedData.action?.next_action &&
           processedData.core?.isInActionLoop === false
@@ -185,7 +187,7 @@ export class ActionLoop {
         LogHelper.warning(`Failed to execute action loop: ${e}`)
 
         return null
-      }
+      }*/
     }
 
     return null

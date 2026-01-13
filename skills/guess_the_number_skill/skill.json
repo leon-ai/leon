@@ -1,0 +1,41 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Guess the Number",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Find the number between 0 and 100 that Leon has picked.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "flow": ["set_up", "guess", "replay"],
+  "actions": {
+    "set_up": {
+      "type": "logic",
+      "description": "Set up the game by asking the owner to guess a number between 0 and 100."
+    },
+    "guess": {
+      "type": "logic",
+      "description": "Guess the number between 0 and 100.",
+      "parameters": {
+        "number": {
+          "type": "number",
+          "description": "The number guessed by the owner."
+        }
+      },
+      "is_loop": true
+    },
+    "replay": {
+      "type": "logic",
+      "description": "Ask the owner if they want to play again.",
+      "parameters": {
+        "confirmation": {
+          "type": "boolean",
+          "description": "Whether the owner wants to play again or not."
+        }
+      },
+      "is_loop": true
+    }
+  }
+}

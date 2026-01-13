@@ -1,0 +1,18 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Greeting",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon greets the owner.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "greet": {
+      "type": "logic",
+      "description": "Greet the owner."
+    }
+  }
+}

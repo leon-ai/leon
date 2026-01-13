@@ -1,10 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 
 import type { APIOptions } from '@/core/http-server/http-server'
-import { BRAIN } from '@/core'
+import { BRAIN, NLU } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
-import { DEFAULT_NLU_RESULT } from '@/core/nlp/nlu/nlu'
-import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
+import { NLUProcessResultUpdater } from '@/core/nlp/nlu/nlu-process-result-updater'
 
 export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
   fastify,
@@ -34,9 +33,9 @@ export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
           })
         }
 
-        const [domain, skill, action] = skillAction.split(':')
+        const [skill, action] = skillAction.split(':')
 
-        if (!domain || !skill || !action) {
+        if (!skill || !action) {
           message = 'skill_action is not well formatted.'
           LogHelper.title('GET /fetch-widget')
           LogHelper.warning(message)
@@ -51,41 +50,45 @@ export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
 
         // Do not return any speech and new widget
         BRAIN.isMuted = true
-        await BRAIN.execute({
-          ...DEFAULT_NLU_RESULT,
-          currentEntities: [
-            {
-              start: 0,
-              end: widgetId.length - 1,
-              len: widgetId.length,
-              levenshtein: 0,
-              accuracy: 1,
-              entity: 'widgetid',
-              type: 'enum',
-              option: widgetId,
-              sourceText: widgetId,
-              utteranceText: widgetId,
-              resolution: {
-                value: widgetId
+
+        await NLUProcessResultUpdater.update({
+          skillName: skill
+        })
+        await NLUProcessResultUpdater.update({
+          actionName: action
+        })
+        await NLUProcessResultUpdater.update({
+          new: {
+            entities: [
+              {
+                start: 0,
+                end: widgetId.length - 1,
+                len: widgetId.length,
+                levenshtein: 0,
+                accuracy: 1,
+                entity: 'widgetid',
+                type: 'enum',
+                option: widgetId,
+                sourceText: widgetId,
+                utteranceText: widgetId,
+                resolution: {
+                  value: widgetId
+                }
               }
-            }
-          ],
-          skillConfigPath: SkillDomainHelper.getSkillConfigPath(
-            domain,
-            skill,
-            BRAIN.lang
-          ),
-          classification: {
-            domain,
-            skill,
-            action,
-            confidence: 1
+            ]
           }
         })
 
-        const parsedOutput = JSON.parse(BRAIN.skillOutput)
+        const processedData = await BRAIN.runSkillAction(NLU.nluProcessResult)
 
-        if (parsedOutput.output.widget) {
+        console.log('processedData', processedData)
+
+        if (processedData.lastOutputFromSkill?.widget) {
+          console.log(
+            'processedData.lastOutputFromSkill.widget',
+            processedData.lastOutputFromSkill.widget
+          )
+
           message = 'Widget fetched successfully.'
           LogHelper.title('GET /fetch-widget')
           LogHelper.success(message)
@@ -94,7 +97,7 @@ export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
             status: 200,
             code: 'widget_fetched',
             message,
-            widget: parsedOutput.output.widget
+            widget: processedData.lastOutputFromSkill.widget
           })
         }
 

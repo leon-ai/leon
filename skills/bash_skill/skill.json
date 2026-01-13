@@ -1,0 +1,18 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Bash",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon executes bash commands based on LLM reasoning.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "actions": {
+    "execute": {
+      "type": "logic",
+      "description": "Execute bash commands based on natural language instructions."
+    }
+  }
+}

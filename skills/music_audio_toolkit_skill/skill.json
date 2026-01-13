@@ -1,0 +1,51 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Music Audio Toolkit",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Toolkit skill providing common audio utilities such as audio transcription that can be reused by other skills.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "actions": {
+    "transcribe_audio": {
+      "type": "logic",
+      "description": "Transcribe audio to text using the configured provider (e.g., faster_whisper, openai_audio).",
+      "parameters": {
+        "audio_path": {
+          "type": "string",
+          "description": "Path to the audio file to transcribe (optional when called from other skills that manage audio context)."
+        }
+      },
+      "optional_parameters": ["audio_path"]
+    },
+    "dub_audio": {
+      "type": "logic",
+      "description": "Dub audio or video into a different language using ElevenLabs AI dubbing.",
+      "parameters": {
+        "audio_path": {
+          "type": "string",
+          "description": "Path to the audio or video file to dub (optional when called from other skills that manage audio context)."
+        },
+        "target_language": {
+          "type": "string",
+          "description": "Target language code for dubbing (e.g., 'es' for Spanish, 'fr' for French, 'zh' for Chinese)."
+        }
+      },
+      "optional_parameters": ["audio_path", "target_language"]
+    },
+    "split_instrumental_vocal": {
+      "type": "logic",
+      "description": "Split audio into instrumental and vocal tracks using Ultimate Vocal Remover ONNX.",
+      "parameters": {
+        "audio_path": {
+          "type": "string",
+          "description": "Path to the audio file to split."
+        }
+      },
+      "optional_parameters": ["audio_path"]
+    }
+  }
+}

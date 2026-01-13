@@ -30,7 +30,7 @@ export interface LLMDutyExecuteParams {
   shouldEmitOnToken?: boolean
 }
 export interface LLMDutyParams {
-  input: string | null
+  input: string | object | null
   data?: Record<string, unknown>
   systemPrompt?: string | null
 }
@@ -41,6 +41,10 @@ export interface LLMDutyResult {
   output: Record<string, unknown>
   data: Record<string, unknown>
 }
+interface LLMFunctionParameter {
+  type: string
+  description: string
+}
 
 export const DEFAULT_INIT_PARAMS: LLMDutyInitParams = {
   useLoopHistory: true,
@@ -49,6 +53,11 @@ export const DEFAULT_INIT_PARAMS: LLMDutyInitParams = {
 export const DEFAULT_EXECUTE_PARAMS: LLMDutyExecuteParams = {
   isWarmingUp: false,
   shouldEmitOnToken: true
+}
+const PARAMETER_TYPE_DESCRIPTIONS = {
+  boolean: {
+    suffix: 'The value must be either true or false.'
+  }
 }
 
 export abstract class LLMDuty {
@@ -60,4 +69,34 @@ export abstract class LLMDuty {
   protected abstract execute(
     params: LLMDutyExecuteParams
   ): Promise<LLMDutyResult | null>
+}
+
+/**
+ * Overriding the slot description to add more details
+ * according to the slot type
+ */
+export function formatParameterDescription(
+  parameter: LLMFunctionParameter
+): LLMFunctionParameter['description'] {
+  let description = parameter.description.trim()
+
+  // If there is no dot at the end of the description, add one
+  if (!description.endsWith('.')) {
+    description = `${description}.`
+  }
+
+  // Add more details according to the parameter type
+  if (
+    PARAMETER_TYPE_DESCRIPTIONS[
+      parameter.type as keyof typeof PARAMETER_TYPE_DESCRIPTIONS
+    ]
+  ) {
+    description = `${description} ${
+      PARAMETER_TYPE_DESCRIPTIONS[
+        parameter.type as keyof typeof PARAMETER_TYPE_DESCRIPTIONS
+      ].suffix
+    }`
+  }
+
+  return description
 }

@@ -1,0 +1,47 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "actions": {
+    "execute": {
+      "arguments": {
+        "query": [
+          "{{ query }}",
+          "execute {{ query }}",
+          "run {{ query }}",
+          "bash {{ query }}",
+          "command {{ query }}"
+        ]
+      },
+      "answers": {
+        "understanding_query": [
+          "Let me understand what you want to do...",
+          "I'm analyzing your request...",
+          "Processing your command...",
+          "Thinking about how to execute this..."
+        ],
+        "confirmation_needed": [
+          "I need confirmation before executing this command: `{{ command }}`\n\nThis command could {{ risk_description }}. Do you want to proceed? (yes/no)"
+        ],
+        "executing_command": [
+          "Executing: `{{ command }}`",
+          "Running: `{{ command }}`"
+        ],
+        "command_success": [
+          "Command executed successfully:\n```\n{{ output }}\n```"
+        ],
+        "command_failed": ["Command failed with error:\n```\n{{ error }}\n```"],
+        "cancelled": [
+          "Command execution cancelled.",
+          "Okay, I won't execute that command."
+        ],
+        "llm_error": [
+          "I had trouble understanding your request: {{ error }}",
+          "Sorry, I couldn't process your command: {{ error }}"
+        ],
+        "invalid_command": [
+          "I couldn't generate a safe command for your request: {{ query }}",
+          "Sorry, I can't execute that command as it might be unsafe."
+        ]
+      }
+    }
+  }
+}

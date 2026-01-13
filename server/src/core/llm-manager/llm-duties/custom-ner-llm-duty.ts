@@ -96,8 +96,7 @@ export class CustomNERLLMDuty<T> extends LLMDuty {
       if (LLM_PROVIDER_NAME === LLMProviders.Local) {
         completionResult = await LLM_PROVIDER.prompt(prompt, {
           ...completionParams,
-          session: CustomNERLLMDuty.session,
-          maxTokens: LLM_MANAGER.context.contextSize
+          session: CustomNERLLMDuty.session
         })
       } else {
         completionResult = await LLM_PROVIDER.prompt(prompt, completionParams)

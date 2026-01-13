@@ -6,19 +6,24 @@ import { CustomNERLLMDuty } from '@/core/llm-manager/llm-duties/custom-ner-llm-d
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
 import { ConversationLLMDuty } from '@/core/llm-manager/llm-duties/conversation-llm-duty'
 import { ActionRecognitionLLMDuty } from '@/core/llm-manager/llm-duties/action-recognition-llm-duty'
+import { SlotFillingLLMDuty } from '@/core/llm-manager/llm-duties/slot-filling-llm-duty'
+import { SkillRouterLLMDuty } from '@/core/llm-manager/llm-duties/skill-router-llm-duty'
+import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calling-llm-duty'
 import { CustomLLMDuty } from '@/core/llm-manager/llm-duties/custom-llm-duty'
 import { LLM_MANAGER } from '@/core'
 
 interface PostLLMInferenceSchema {
   body: {
     dutyType: LLMDuties
-    systemPrompt: string
     input: string
     data: Record<string, unknown>
   }
 }
 
 const LLM_DUTIES_MAP = {
+  [LLMDuties.SkillRouter]: SkillRouterLLMDuty,
+  [LLMDuties.ActionCalling]: ActionCallingLLMDuty,
+  [LLMDuties.SlotFilling]: SlotFillingLLMDuty,
   [LLMDuties.ActionRecognition]: ActionRecognitionLLMDuty,
   [LLMDuties.CustomNER]: CustomNERLLMDuty,
   [LLMDuties.Paraphrase]: ParaphraseLLMDuty,

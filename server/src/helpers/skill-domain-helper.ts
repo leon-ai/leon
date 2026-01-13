@@ -7,9 +7,11 @@ import type {
   DomainSchema,
   SkillSchema,
   SkillConfigSchema,
-  SkillBridgeSchema
+  SkillBridgeSchema,
+  SkillLocaleConfigSchema
 } from '@/schemas/skill-schemas'
 import { SKILLS_PATH } from '@/constants'
+import { FileHelper } from '@/helpers/file-helper'
 
 interface SkillDomain {
   domainId: string
@@ -21,6 +23,7 @@ interface SkillDomain {
       name: string
       path: string
       bridge: SkillBridgeSchema
+      friendlyPrompt: string
     }
   }
 }
@@ -38,7 +41,79 @@ interface SkillActionObject {
 
 export class SkillDomainHelper {
   /**
-   * List all skills domains with skills data inside
+   * List all skill folders
+   */
+  public static async listSkillFolders(): Promise<string[]> {
+    const skillNames = (await fs.promises.readdir(SKILLS_PATH))
+      .filter((folder) => folder.endsWith('_skill'))
+      .sort()
+
+    return skillNames
+  }
+
+  /**
+   * TODO: rename this function when legacy getSkillConfig is removed
+   *
+   * Get skill configuration (skill.json)
+   * @param skillName Skill name to get configuration for
+   */
+  public static async getNewSkillConfig(
+    skillName: SkillSchema['name']
+  ): Promise<SkillSchema | null> {
+    const skillConfigPath = SkillDomainHelper.getNewSkillConfigPath(skillName)
+
+    if (!skillConfigPath) {
+      return null
+    }
+
+    return JSON.parse(
+      await fs.promises.readFile(skillConfigPath, 'utf8')
+    ) as SkillSchema
+  }
+
+  /**
+   * TODO: rename this function when legacy helpers are removed
+   *
+   * Get new skill config path
+   * @param skillName Skill name to get configuration for
+   */
+  public static getNewSkillConfigPath(
+    skillName: SkillSchema['name']
+  ): string | null {
+    const skillPath = path.join(SKILLS_PATH, skillName)
+    const skillConfigPath = path.join(skillPath, 'skill.json')
+
+    if (!fs.existsSync(skillConfigPath)) {
+      return null
+    }
+
+    return skillConfigPath
+  }
+
+  /**
+   * List all skills friendly prompts
+   */
+  public static async listSkillFriendlyPrompts(): Promise<string[]> {
+    const skillNames = await SkillDomainHelper.listSkillFolders()
+    const skillFriendlyPrompts: string[] = []
+
+    await Promise.all(
+      skillNames.map(async (skillName) => {
+        const skillConfig = await SkillDomainHelper.getNewSkillConfig(skillName)
+
+        if (skillConfig && skillConfig.description) {
+          skillFriendlyPrompts.push(`${skillName}: ${skillConfig.description}`)
+        }
+      })
+    )
+
+    skillFriendlyPrompts.sort()
+
+    return skillFriendlyPrompts
+  }
+
+  /**
+   * List all skill domains with skill data inside
    */
   public static async getSkillDomains(): Promise<Map<string, SkillDomain>> {
     const skillDomains = new Map<string, SkillDomain>()
@@ -48,9 +123,14 @@ export class SkillDomainHelper {
         const domainPath = path.join(SKILLS_PATH, entity)
 
         if ((await fs.promises.stat(domainPath)).isDirectory()) {
+          const domainSchemaPath = path.join(domainPath, 'domain.json')
+          if (!fs.existsSync(domainSchemaPath)) {
+            return null
+          }
+
           const skills: SkillDomain['skills'] = {}
-          const { name: domainName } = (await import(
-            path.join(domainPath, 'domain.json'),
+          const { name: domainName } = (await FileHelper.dynamicImportFromFile(
+            domainSchemaPath,
             { with: { type: 'json' } }
           )) as DomainSchema
           const skillFolders = await fs.promises.readdir(domainPath)
@@ -68,7 +148,11 @@ export class SkillDomainHelper {
                 continue
               }
 
-              const { name: skillName, bridge: skillBridge } = JSON.parse(
+              const {
+                name: skillName,
+                bridge: skillBridge,
+                description: skillDescription
+              } = JSON.parse(
                 await fs.promises.readFile(skillJSONPath, 'utf8')
               ) as SkillSchema
 
@@ -76,7 +160,8 @@ export class SkillDomainHelper {
                 domainId,
                 name: skillAliasName,
                 path: skillPath,
-                bridge: skillBridge
+                bridge: skillBridge,
+                friendlyPrompt: `${skillAliasName}_skill: ${skillDescription}`
               }
             }
 
@@ -267,5 +352,38 @@ export class SkillDomainHelper {
     ) as SkillConfigSchema
 
     return !!actions[action]
+  }
+
+  /**
+   * Get localized configuration of a skill action
+   * @param lang Language short code
+   * @param skillName Skill name to get configuration for
+   * @example getSkillLocaleConfig('en', 'good_bye_skill')['actions'][actionName] // { "answers": ["Goodbye!", "See you later!"] }
+   */
+  public static async getSkillLocaleConfig(
+    lang: ShortLanguageCode,
+    skillName: SkillSchema['name']
+  ): Promise<SkillLocaleConfigSchema | object> {
+    const skillLocaleConfigPath = path.join(
+      SKILLS_PATH,
+      skillName,
+      'locales',
+      `${lang}.json`
+    )
+
+    if (!fs.existsSync(skillLocaleConfigPath)) {
+      return {}
+    }
+
+    try {
+      const skillLocaleConfig = JSON.parse(
+        await fs.promises.readFile(skillLocaleConfigPath, 'utf8')
+      )
+
+      return skillLocaleConfig
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (e) {
+      return {}
+    }
   }
 }

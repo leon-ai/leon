@@ -25,6 +25,10 @@ export class NetworkHelper {
    * @example setHuggingFaceURL('https://huggingface.co') // https://hf-mirror.com
    */
   public static async setHuggingFaceURL(url: string): Promise<string> {
+    if (!url.includes('huggingface.co')) {
+      return url
+    }
+
     const canAccess = await NetworkHelper.canAccessHuggingFace()
 
     if (!canAccess) {

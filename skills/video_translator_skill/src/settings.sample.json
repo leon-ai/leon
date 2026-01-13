@@ -1,0 +1,7 @@
+{
+  "translation_openrouter_api_key": "sk-or-v1-...",
+  "translation_openrouter_model": "gemini-2.5-flash",
+  "translation_max_tokens_per_request": 2000,
+  "translation_segments_per_batch": 10,
+  "speech_synthesis_provider": "chatterbox_onnx"
+}

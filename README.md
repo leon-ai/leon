@@ -30,30 +30,54 @@ _<p align="center">Your open-source personal assistant.</p>_
 
 ---
 
-## Important Notice (as of 2024-06-18)
+## Important Notice (as of 2026-01-11)
 
 > [!IMPORTANT]
-> Due to all the new major changes coming to Leon AI, the development branch might be unstable. It is recommended to use the older version under the master branch.
+> **Leon is currently undergoing a massive architectural rewrite.**
 >
-> Please note that older versions do not make use of any foundation model, which will be introduced in upcoming versions.
+> The `develop` branch is highly experimental and may be unstable as I implement the new agentic core.
+> 
+> - If you are looking for the legacy, stable version (pre-LLM), please use the `master` branch.
+> - If you want to contribute to the future of Leon (LLMs, Agents, Automation), you are in the right place.
 
-**Outdated Documentation**
+### Outdated Documentation
 
-Please note that the documentation and this README are not up to date. We've made significant changes to Leon over the past few months, including the introduction of new TTS and ASR engines, and a hybrid approach that balances LLM, simple classification, and multiple NLP techniques to achieve optimal speed, customization, and accuracy. We'll update the documentation for the official release.
+Please note that the current documentation and this README are outdated regarding the technical architecture. We are moving away from simple classification toward a hybrid approach involving Local LLMs, Transformers, and Atomic Tools. Updated documentation will be released alongside the new core stability.
 
-**Project History and Future Plans**
+### Project Evolution and Future Plans
 
-Since its inception in 2017, Leon has undergone significant transformations. Although we've been inconsistent in shipping updates over the years, we're now focused on maturing the project. With the recent integration of transformers-based models, we're prepared to unlock Leon's full potential.
+**I have been working on Leon since 2017**. While development has been inconsistent in the past, the current era of AI unlocks capabilities that were previously impossible. I'm now transitioning Leon from a standard assistant to a fully **autonomous personal AI assistant** designed to be used by technical hobbyists to non-tech users.
 
-Our next step is to finalize the latest features for the official release.
-Then we'll be establishing a group of active contributors to work together, develop new skills, and share them with the community. A skill registry platform will be built (see it as the npm or pip registry but for skills).
+I'm currently building the foundation for the next generation of Leon, focusing on 3 key milestones:
 
-- Check out [the roadmap](http://roadmap.getleon.ai/) for more information on our upcoming plans.
-- Watch a [preview of our last progress](https://www.youtube.com/watch?v=6CInSt6pTVA) to see what we've been working on.
+**1. Workflow Architecture and Atomic Tools**
+
+We are restructuring Leon around a robust flow: `Skills > Actions > Tools > Functions (> Binaries)`.
+Instead of monolithic scripts, Leon will use atomic components (e.g. compiled binaries using ONNX runtime) to execute complex workflows.
+
+- Example: a "Video Translator" skill won't just be a script; it will be a workflow where Leon orchestrates tools like vocal isolation, zero-shot voice cloning, ASR, audio gender recognition, etc. to achieve the result.
+
+**2. Autonomous Skill Generation (self-coding)**
+
+We are developing a meta-skill capable of writing code for new skills automatically.
+
+- Leon will analyze a request, check if a skill exists, and if not, write the code itself following our strict architectural standards.
+- It will leverage existing tools and inject the new skill directly into its memory for future reuse.
+
+**3. Agentic Behavior (ReAct) and Local LLM Optimization**
+
+The ultimate phase will be to adopt the ReAct (Reason + Act) approach.
+
+- Leon will be provided with low-level **tools** (organized in toolkits, e.g., `music_audio` containing FFmpeg).
+- Using Local LLMs, Leon will loop through thoughts and actions to solve problems dynamically.
+- Optimization: we are implementing strict context filtering to save tokens, reduce hallucinations, and ensure high performance on local hardware.
 
 **Get Involved**
 
 [Join us on Discord](https://discord.gg/MNQqqKg) to ask questions, or express interest in becoming an active contributor.
+
+- Check out [the roadmap](http://roadmap.getleon.ai/) for more information on our upcoming plans.
+- Watch a [preview of our last progress](https://www.youtube.com/watch?v=6CInSt6pTVA) to see what we've been working on.
 
 ---
 

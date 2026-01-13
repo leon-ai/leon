@@ -1,0 +1,36 @@
+{
+  "name": "Video Streaming",
+  "description": "Tools for video processing and streaming.",
+  "tools": {
+    "ffmpeg": {
+      "description": "A tool for video/audio processing and conversion using FFmpeg.",
+      "binaries": {
+        "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-linux-x86_64",
+        "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-linux-aarch64",
+        "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-macosx-x86_64",
+        "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-macosx-arm64",
+        "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-win-amd64.exe"
+      }
+    },
+    "ffprobe": {
+      "description": "A tool for analyzing and extracting metadata from video and audio files using FFprobe.",
+      "binaries": {
+        "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-linux-x86_64",
+        "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-linux-aarch64",
+        "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-macosx-x86_64",
+        "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-macosx-arm64",
+        "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-win-amd64.exe"
+      }
+    },
+    "ytdlp": {
+      "description": "A tool for downloading videos and audio from various streaming platforms using yt-dlp.",
+      "binaries": {
+        "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/yt-dlp_2025.12.08/yt-dlp_2025.12.08-linux-x86_64",
+        "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/yt-dlp_2025.12.08/yt-dlp_2025.12.08-linux-aarch64",
+        "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/yt-dlp_2025.12.08/yt-dlp_2025.12.08-macosx-x86_64",
+        "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/yt-dlp_2025.12.08/yt-dlp_2025.12.08-macosx-arm64",
+        "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/yt-dlp_2025.12.08/yt-dlp_2025.12.08-win-amd64.exe"
+      }
+    }
+  }
+}

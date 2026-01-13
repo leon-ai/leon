@@ -12,10 +12,10 @@
       "Sorry, I cannot do that because I'm broken. Please check my logs for further details"
     ],
     "random_skill_errors": [
-      "Sorry, it seems I have a problem with the \"%skill_name%\" skill from the \"%domain_name%\" domain",
-      "Sorry, I have an issue with the \"%skill_name%\" skill from the \"%domain_name%\" domain",
-      "Sorry, I've got an error with the \"%skill_name%\" skill from the \"%domain_name%\" domain",
-      "Sorry, the \"%skill_name%\" skill from the \"%domain_name%\" domain is broken"
+      "Sorry, it seems I have a problem with the \"{{ skill_name }}\" skill",
+      "Sorry, I have an issue with the \"{{ skill_name }}\" skill",
+      "Sorry, I've got an error with the \"{{ skill_name }}\" skill",
+      "Sorry, the \"{{ skill_name }}\" skill is broken"
     ],
     "random_unknown_intents_legacy": [
       "Sorry, I still don't know this, but you can help me to understand by <a href=\"https://github.com/leon-ai/leon/blob/develop/.github/CONTRIBUTING.md\" target=\"_blank\">creating a pull request</a>",
@@ -67,6 +67,228 @@
       "Alright, let me know what you need next",
       "Okay, let me know what I can do for you next",
       "Sure thing"
+    ],
+    "ask_for_action_missing_parameters": [
+      "Please provide me the {{ missing_param }}",
+      "Sure thing! For that, I'll just need the {{ missing_param }}",
+      "Absolutely. Please provide the {{ missing_param }}"
+    ],
+    "bridges.tools.checking_binary": [
+      "Checking for {{ binary_name }} binary...",
+      "Looking for {{ binary_name }} executable...",
+      "Verifying {{ binary_name }} binary exists...",
+      "Searching for {{ binary_name }} binary in toolkit...",
+      "Ensuring {{ binary_name }} binary is available...",
+      "Validating {{ binary_name }} binary presence..."
+    ],
+    "bridges.tools.no_binary_url": [
+      "No download URL found for {{ binary_name }} binary.",
+      "I couldn't find a download link for the {{ binary_name }} binary.",
+      "The download URL for {{ binary_name }} binary is missing.",
+      "I'm unable to locate the download URL for {{ binary_name }} binary.",
+      "Download URL not available for {{ binary_name }} binary.",
+      "Sorry, I don't have the download URL for the {{ binary_name }} binary."
+    ],
+    "bridges.tools.binary_not_found": [
+      "{{ binary_name }} binary not found. Downloading...",
+      "I'm downloading the {{ binary_name }} binary now.",
+      "Please wait while I fetch the {{ binary_name }} binary.",
+      "Retrieving {{ binary_name }} executable file.",
+      "{{ binary_name }} is being downloaded, this may take a moment.",
+      "Hang tight, I'm getting the {{ binary_name }} binary for you."
+    ],
+    "bridges.tools.binary_downloaded": [
+      "{{ binary_name }} binary downloaded successfully.",
+      "The {{ binary_name }} binary has been downloaded and is ready to use.",
+      "Successfully downloaded {{ binary_name }} binary.",
+      "{{ binary_name }} binary is now available for use.",
+      "Download complete for {{ binary_name }} binary.",
+      "The {{ binary_name }} executable file has been successfully downloaded."
+    ],
+    "bridges.tools.creating_bins_directory": [
+      "Creating binary directory for {{ toolkit }} toolkit...",
+      "Setting up binary storage for {{ toolkit }} toolkit.",
+      "Initializing {{ toolkit }} toolkit binary directory.",
+      "Creating toolkit directory structure for {{ toolkit }}.",
+      "Preparing binary storage location for {{ toolkit }} toolkit."
+    ],
+    "bridges.tools.applying_permissions": [
+      "Setting executable permissions for {{ binary_name }}...",
+      "Applying proper permissions to {{ binary_name }} binary...",
+      "Making {{ binary_name }} binary executable...",
+      "Configuring {{ binary_name }} binary permissions...",
+      "Setting up executable permissions for {{ binary_name }}..."
+    ],
+    "bridges.tools.binary_ready": [
+      "{{ binary_name }} binary is ready for use.",
+      "{{ binary_name }} binary setup complete.",
+      "The {{ binary_name }} binary is now configured and ready.",
+      "{{ binary_name }} binary is fully prepared.",
+      "Setup complete for {{ binary_name }} binary.",
+      "{{ binary_name }} binary is now available for operations."
+    ],
+    "bridges.tools.making_executable": [
+      "Making {{ binary_name }} binary executable...",
+      "Setting executable permissions for {{ binary_name }}.",
+      "Configuring {{ binary_name }} binary for execution.",
+      "Applying executable permissions to {{ binary_name }}.",
+      "Preparing {{ binary_name }} binary for use."
+    ],
+    "bridges.tools.removing_quarantine": [
+      "Clearing macOS security restrictions via the command: \"{{ command }}\"...",
+      "Removing quarantine from binary using command: \"{{ command }}\"...",
+      "Executing quarantine removal for binary with: \"{{ command }}\"...",
+      "Running security bypass command \"{{ command }}\"...",
+      "Applying command \"{{ command }}\" to remove binary quarantine.",
+      "Processing binary quarantine removal via: \"{{ command }}\".",
+      "Using \"{{ command }}\" to clear quarantine attributes from binary."
+    ],
+    "bridges.tools.download_failed": [
+      "Failed to download {{ binary_name }} binary: {{ error }}.",
+      "Download error for {{ binary_name }}: {{ error }}.",
+      "Could not download {{ binary_name }} binary: {{ error }}.",
+      "{{ binary_name }} binary download failed: {{ error }}.",
+      "Error downloading {{ binary_name }}: {{ error }}."
+    ],
+    "bridges.tools.downloading_from_url": [
+      "Downloading binary from remote server...",
+      "Fetching binary file from URL...",
+      "Retrieving binary from download source...",
+      "Downloading binary data...",
+      "Getting binary file from server..."
+    ],
+    "bridges.tools.download_url_failed": [
+      "Download failed with error: {{ error }}.",
+      "Could not download from URL: {{ error }}.",
+      "Binary download error: {{ error }}.",
+      "Failed to retrieve binary file: {{ error }}.",
+      "Download process failed: {{ error }}."
+    ],
+    "bridges.tools.quarantine_removed": [
+      "Removed quarantine attribute from {{ file_name }}.",
+      "Successfully cleared macOS quarantine for {{ file_name }}.",
+      "{{ file_name }} quarantine attribute removed.",
+      "macOS security restrictions cleared for {{ file_name }}.",
+      "Quarantine removal complete for {{ file_name }}."
+    ],
+    "bridges.tools.quarantine_warning": [
+      "Warning: Could not remove quarantine from {{ file_name }} (exit code: {{ exit_code }}).",
+      "Quarantine removal warning for {{ file_name }}: exit code {{ exit_code }}.",
+      "Unable to fully remove quarantine from {{ file_name }} (code {{ exit_code }}).",
+      "Partial quarantine removal for {{ file_name }} - exit code: {{ exit_code }}."
+    ],
+    "bridges.tools.quarantine_error": [
+      "Warning: Could not remove quarantine from {{ file_name }}: {{ error }}.",
+      "Quarantine removal failed for {{ file_name }}: {{ error }}.",
+      "Error removing quarantine attribute from {{ file_name }}: {{ error }}.",
+      "Failed to clear quarantine for {{ file_name }}: {{ error }}."
+    ],
+    "bridges.tools.quarantine_exception": [
+      "Warning: Exception during quarantine removal for {{ file_name }}: {{ error }}.",
+      "Quarantine process exception for {{ file_name }}: {{ error }}.",
+      "Unexpected error during quarantine removal of {{ file_name }}: {{ error }}.",
+      "Exception while processing {{ file_name }} quarantine: {{ error }}."
+    ],
+    "bridges.tools.executing_command": [
+      "Executing {{ binary_name }}: {{ command }}...",
+      "Running {{ binary_name }} command: {{ command }}...",
+      "Starting {{ binary_name }}: {{ command }}...",
+      "Launching {{ binary_name }} with: {{ command }}...",
+      "Executing command: {{ command }}..."
+    ],
+    "bridges.tools.command_completed": [
+      "Command completed successfully in {{ execution_time }}.",
+      "{{ command }} finished in {{ execution_time }}.",
+      "Command execution completed ({{ execution_time }}).",
+      "Successfully executed command in {{ execution_time }}.",
+      "Command finished successfully after {{ execution_time }}."
+    ],
+    "bridges.tools.command_failed": [
+      "Command failed: {{ command }} ({{ error }}).",
+      "Execution failed: {{ command }} - {{ error }}.",
+      "Command error: {{ command }} failed with: {{ error }}.",
+      "Failed to execute {{ command }}: {{ error }}.",
+      "Command execution failed: {{ error }}."
+    ],
+    "bridges.tools.command_error": [
+      "Process error executing {{ command }}: {{ error }}.",
+      "Failed to start command {{ command }}: {{ error }}.",
+      "Command process error: {{ error }}.",
+      "Unable to execute {{ command }}: {{ error }}.",
+      "Process failed for {{ command }}: {{ error }}."
+    ],
+    "bridges.tools.command_timeout": [
+      "Command timed out after {{ timeout }}: {{ command }}.",
+      "Execution timeout ({{ timeout }}): {{ command }}.",
+      "Command {{ command }} exceeded timeout of {{ timeout }}.",
+      "Process timed out after {{ timeout }}: {{ command }}.",
+      "Command execution timeout ({{ timeout }}): {{ command }}."
+    ],
+    "bridges.tools.checking_resource": [
+      "Checking for {{ resource_name }} resource...",
+      "Looking for {{ resource_name }} resource files...",
+      "Verifying {{ resource_name }} resource exists...",
+      "Searching for {{ resource_name }} resource in toolkit...",
+      "Ensuring {{ resource_name }} resource is available...",
+      "Validating {{ resource_name }} resource presence..."
+    ],
+    "bridges.tools.no_resource_urls": [
+      "No download URLs found for {{ resource_name }} resource.",
+      "I couldn't find download links for the {{ resource_name }} resource.",
+      "The download URLs for {{ resource_name }} resource are missing.",
+      "I'm unable to locate the download URLs for {{ resource_name }} resource.",
+      "Download URLs not available for {{ resource_name }} resource.",
+      "Sorry, I don't have the download URLs for the {{ resource_name }} resource."
+    ],
+    "bridges.tools.creating_resource_directory": [
+      "Creating resource directory for {{ resource_name }} at {{ resource_path }}...",
+      "Setting up resource storage for {{ resource_name }} at {{ resource_path }}...",
+      "Initializing {{ resource_name }} resource directory at {{ resource_path }}...",
+      "Creating resource directory structure for {{ resource_name }} at {{ resource_path }}...",
+      "Preparing resource storage location at {{ resource_path }}..."
+    ],
+    "bridges.tools.resource_already_exists": [
+      "{{ resource_name }} resource already exists at {{ resource_path }}.",
+      "The {{ resource_name }} resource is already available at {{ resource_path }}.",
+      "Resource {{ resource_name }} found at {{ resource_path }}.",
+      "{{ resource_name }} resource is already downloaded at {{ resource_path }}.",
+      "Using existing {{ resource_name }} resource from {{ resource_path }}."
+    ],
+    "bridges.tools.downloading_resource": [
+      "Downloading {{ resource_name }} resource...",
+      "Fetching {{ resource_name }} resource files...",
+      "Retrieving {{ resource_name }} resource data...",
+      "Getting {{ resource_name }} resource from server...",
+      "Downloading {{ resource_name }} resource, this may take a moment..."
+    ],
+    "bridges.tools.downloading_resource_file": [
+      "Downloading {{ file_name }} for {{ resource_name }} from {{ url }} ...",
+      "Fetching {{ file_name }} file for {{ resource_name }} ...",
+      "Getting {{ file_name }} from {{ url }} ...",
+      "Downloading resource file {{ file_name }} ...",
+      "Retrieving {{ file_name }} for {{ resource_name }} resource ..."
+    ],
+    "bridges.tools.resource_file_downloaded": [
+      "Downloaded {{ file_name }} for {{ resource_name }} to {{ file_path }}.",
+      "Successfully downloaded {{ file_name }} for {{ resource_name }}.",
+      "{{ file_name }} downloaded for {{ resource_name }} resource.",
+      "Resource file {{ file_name }} saved to {{ file_path }}.",
+      "Completed download of {{ file_name }} for {{ resource_name }}."
+    ],
+    "bridges.tools.resource_file_download_failed": [
+      "Failed to download {{ file_name }} for {{ resource_name }} from {{ url }} : {{ error }}.",
+      "Download error for {{ file_name }} ({{ resource_name }}): {{ error }}.",
+      "Could not download {{ file_name }} for {{ resource_name }}: {{ error }}.",
+      "{{ file_name }} download failed for {{ resource_name }}: {{ error }}.",
+      "Error downloading {{ file_name }} from {{ url }} : {{ error }}."
+    ],
+    "bridges.tools.resource_downloaded": [
+      "{{ resource_name }} resource downloaded successfully to {{ resource_path }}.",
+      "The {{ resource_name }} resource has been downloaded and is ready at {{ resource_path }}.",
+      "Successfully downloaded {{ resource_name }} resource.",
+      "{{ resource_name }} resource is now available at {{ resource_path }}.",
+      "Download complete for {{ resource_name }} resource.",
+      "The {{ resource_name }} resource files have been successfully downloaded."
     ]
   }
 }

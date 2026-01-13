@@ -1,0 +1,42 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Timer",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Set timers to remind you of things.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "set_timer": {
+      "type": "logic",
+      "description": "Set a timer for a specified duration.",
+      "parameters": {
+        "duration": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "number",
+              "description": "The numeric value of the duration."
+            },
+            "unit": {
+              "type": "string",
+              "enum": ["HOURS", "MINUTES", "SECONDS"],
+              "description": "The unit of time for the duration."
+            }
+          }
+        }
+      }
+    },
+    "cancel_timer": {
+      "type": "logic",
+      "description": "Cancel an active timer."
+    },
+    "check_timer": {
+      "type": "logic",
+      "description": "Check the remaining time on the active timer."
+    }
+  }
+}

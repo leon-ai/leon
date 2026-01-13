@@ -1,0 +1,116 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Todo List",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Manage your lists and items they contain.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "create_list": {
+      "type": "logic",
+      "description": "Create a new to-do list based on the given list name.",
+      "parameters": {
+        "list_name": {
+          "type": "string",
+          "description": "The name of the to-do list to create."
+        }
+      }
+    },
+    "get_all_lists": {
+      "type": "logic",
+      "description": "Retrieve all existing to-do lists."
+    },
+    "get_list_items": {
+      "type": "logic",
+      "description": "Retrieve all items from a specific to-do list.",
+      "parameters": {
+        "list_name": {
+          "type": "string",
+          "description": "The name of the to-do list to retrieve items from."
+        }
+      }
+    },
+    "rename_list": {
+      "type": "logic",
+      "description": "Rename an existing to-do list.",
+      "parameters": {
+        "old_list_name": {
+          "type": "string",
+          "description": "The current name of the to-do list."
+        },
+        "new_list_name": {
+          "type": "string",
+          "description": "The new name for the to-do list."
+        }
+      }
+    },
+    "delete_list": {
+      "type": "logic",
+      "description": "Delete a specific to-do list.",
+      "parameters": {
+        "list_name": {
+          "type": "string",
+          "description": "The name of the to-do list to delete."
+        }
+      }
+    },
+    "add_todos": {
+      "type": "logic",
+      "description": "Add items to a specific to-do list.",
+      "parameters": {
+        "list_name": {
+          "type": "string",
+          "description": "The name of the to-do list to add items to."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The items to add to the list."
+        }
+      }
+    },
+    "complete_items": {
+      "type": "logic",
+      "description": "Mark items as completed in a specific to-do list.",
+      "parameters": {
+        "list_name": {
+          "type": "string",
+          "description": "The name of the to-do list containing the items to complete."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The items to mark as completed."
+        }
+      }
+    },
+    "uncomplete_items": {
+      "type": "logic",
+      "description": "Mark items as incomplete in a specific to-do list.",
+      "parameters": {
+        "list_name": {
+          "type": "string",
+          "description": "The name of the to-do list containing the items to mark as incomplete."
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The items to mark as incomplete."
+        }
+      }
+    }
+  },
+  "action_notes": [
+    "Always consider to not use \"list\" as a suffix in a list_name. E.g. \"device list\" = \"device\", \"shopping list\" = \"shopping\"."
+  ]
+}

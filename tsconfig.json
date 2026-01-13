@@ -1,6 +1,7 @@
 {
   "extends": ["@tsconfig/strictest/tsconfig", "@tsconfig/node16/tsconfig"],
   "compilerOptions": {
+    "lib": ["ESNext"],
     "rootDir": ".",
     "outDir": "./server/dist",
     "baseUrl": ".",

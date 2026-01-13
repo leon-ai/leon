@@ -103,7 +103,87 @@ export default class NER {
     )
   }
 
+  public extractBuiltInEntities(
+    lang: ShortLanguageCode,
+    utterance: NLPUtterance
+  ): Promise<NEREntity[]> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        LogHelper.title('NER')
+        LogHelper.info('Looking for built-in entities...')
+
+        // Remove end-punctuation and add an end-whitespace
+        const formattedUtterance = `${StringHelper.removeEndPunctuation(
+          utterance
+        )} `
+
+        const { entities: extractedEntities }: { entities: NEREntity[] } =
+          await MODEL_LOADER.mainNLPContainer.ner.process({
+            locale: lang,
+            text: formattedUtterance
+          })
+
+        // Normalize entities
+        extractedEntities.forEach((entity) => {
+          // Trim whitespace at the beginning and the end of the entity value
+          entity.sourceText = entity.sourceText.trim()
+          entity.utteranceText = entity.utteranceText.trim()
+
+          // Add resolution property to stay consistent with all entities
+          if (!entity.resolution) {
+            entity.resolution = { value: entity.sourceText }
+          }
+
+          if (
+            BUILT_IN_ENTITY_TYPES.includes(entity.entity as BuiltInEntityType)
+          ) {
+            entity.type = entity.entity as BuiltInEntityType
+
+            if (entity.type === 'duration' && entity.resolution.values[0]) {
+              entity.resolution.values[0] = {
+                ...entity.resolution.values[0],
+                unit: getDurationUnit(
+                  entity.resolution.values[0].timex
+                ) as NERDurationUnit
+              }
+            }
+          }
+
+          /*if (SPACY_ENTITY_TYPES.includes(entity.entity as SpacyEntityType)) {
+            entity.type = entity.entity as SpacyEntityType
+            if (
+              'value' in entity.resolution &&
+              this.spacyData.has(`${entity.type}-${entity.resolution.value}`)
+            ) {
+              entity.resolution = this.spacyData.get(
+                `${entity.type}-${entity.resolution.value}`
+              ) as NERSpacyEntity['resolution']
+            }
+          }*/
+
+          return entity
+        })
+
+        if (extractedEntities.length > 0) {
+          NER.logExtraction(extractedEntities)
+          return resolve(extractedEntities)
+        }
+
+        LogHelper.title('NER')
+        LogHelper.info('No entity found')
+
+        return resolve([])
+      } catch (e) {
+        LogHelper.title('NER')
+        LogHelper.error(`Failed to extract entities: ${e}`)
+
+        return reject([])
+      }
+    })
+  }
+
   /**
+   * TODO: delete extract entities
    * Grab entities and match them with the utterance
    */
   public extractEntities(

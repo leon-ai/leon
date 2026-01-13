@@ -1,0 +1,26 @@
+{
+  "$schema": "../../schemas/skill-schemas/skill.json",
+  "name": "Partner Assistant",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Leon tells about other virtual assistants.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "tell_about_assistant": {
+      "type": "logic",
+      "description": "Tell about an AI virtual assistant.",
+      "parameters": {
+        "assistant_name": {
+          "type": "string",
+          "description": "The name of the virtual assistant to tell about.",
+          "enum": ["Siri", "Alexa", "Google Assistant", "Cortana"]
+        }
+      },
+      "optional_parameters": ["assistant_name"]
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "actions": {
+    "set_up": {
+      "answers": {
+        "ready": [
+          "Alright, I'm ready! Go ahead and guess the number between 0 and 100!"
+        ]
+      }
+    },
+    "guess": {
+      "answers": {
+        "bigger": ["The number is bigger.", "Try with a bigger number."],
+        "smaller": ["It is smaller.", "Try a smaller number."],
+        "guessed": [
+          "Congrats! The number was {{ number }} and you guessed in {{ counter }} attempts. Ready for another round?"
+        ]
+      }
+    },
+    "replay": {
+      "suggestions": ["Yes please", "No thanks"],
+      "answers": {
+        "replay": [
+          "Let's gooo!",
+          "You said it!",
+          "Let me pick up a number...",
+          "Gotcha, I'm picking up a number..."
+        ],
+        "stop": ["Sure, as you wish.", "You said it.", "Let's stop here then!"]
+      }
+    }
+  }
+}

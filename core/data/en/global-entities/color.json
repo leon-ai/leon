@@ -2,244 +2,124 @@
   "$schema": "../../../../schemas/global-data/global-entity.json",
   "options": {
     "red": {
-      "synonyms": ["red"],
-      "data": {
-        "hexa": ["#FF0000"]
-      }
+      "synonyms": ["red"]
     },
     "blue": {
-      "synonyms": ["blue"],
-      "data": {
-        "hexa": ["#0000FF"]
-      }
+      "synonyms": ["blue"]
     },
     "green": {
-      "synonyms": ["green"],
-      "data": {
-        "hexa": ["#006400"]
-      }
+      "synonyms": ["green"]
     },
     "orange": {
-      "synonyms": ["orange"],
-      "data": {
-        "hexa": ["#FF6600"]
-      }
+      "synonyms": ["orange"]
     },
     "white": {
-      "synonyms": ["white"],
-      "data": {
-        "hexa": ["#FFFFFF"]
-      }
+      "synonyms": ["white"]
     },
     "black": {
-      "synonyms": ["black"],
-      "data": {
-        "hexa": ["#000000"]
-      }
+      "synonyms": ["black"]
     },
     "yellow": {
-      "synonyms": ["yellow"],
-      "data": {
-        "hexa": ["#FFFF00"]
-      }
+      "synonyms": ["yellow"]
     },
     "purple": {
-      "synonyms": ["purple"],
-      "data": {
-        "hexa": ["#A020F0"]
-      }
+      "synonyms": ["purple"]
     },
     "silver": {
-      "synonyms": ["silver"],
-      "data": {
-        "hexa": ["#C0C0C0"]
-      }
+      "synonyms": ["silver"]
     },
     "brown": {
-      "synonyms": ["brown"],
-      "data": {
-        "hexa": ["#964B00"]
-      }
+      "synonyms": ["brown"]
     },
     "gray": {
-      "synonyms": ["gray", "grey"],
-      "data": {
-        "hexa": ["#808080"]
-      }
+      "synonyms": ["gray", "grey"]
     },
     "pink": {
-      "synonyms": ["pink"],
-      "data": {
-        "hexa": ["#FFC0CB"]
-      }
+      "synonyms": ["pink"]
     },
     "olive": {
-      "synonyms": ["olive"],
-      "data": {
-        "hexa": ["#808000"]
-      }
+      "synonyms": ["olive"]
     },
     "maroon": {
-      "synonyms": ["maroon"],
-      "data": {
-        "hexa": ["#800000"]
-      }
+      "synonyms": ["maroon"]
     },
     "violet": {
-      "synonyms": ["violet"],
-      "data": {
-        "hexa": ["#8F00FF"]
-      }
+      "synonyms": ["violet"]
     },
     "charcoal": {
-      "synonyms": ["charcoal"],
-      "data": {
-        "hexa": ["#36454F"]
-      }
+      "synonyms": ["charcoal"]
     },
     "magenta": {
-      "synonyms": ["magenta"],
-      "data": {
-        "hexa": ["#FF00FF"]
-      }
+      "synonyms": ["magenta"]
     },
     "bronze": {
-      "synonyms": ["bronze"],
-      "data": {
-        "hexa": ["#CD7F32"]
-      }
+      "synonyms": ["bronze"]
     },
     "cream": {
-      "synonyms": ["cream"],
-      "data": {
-        "hexa": ["#FFFDD0"]
-      }
+      "synonyms": ["cream"]
     },
     "gold": {
-      "synonyms": ["gold"],
-      "data": {
-        "hexa": ["#FFD700"]
-      }
+      "synonyms": ["gold"]
     },
     "tan": {
-      "synonyms": ["tan"],
-      "data": {
-        "hexa": ["#D2B48C"]
-      }
+      "synonyms": ["tan"]
     },
     "teal": {
-      "synonyms": ["teal"],
-      "data": {
-        "hexa": ["#008080"]
-      }
+      "synonyms": ["teal"]
     },
     "mustard": {
-      "synonyms": ["mustard"],
-      "data": {
-        "hexa": ["#FFDB58"]
-      }
+      "synonyms": ["mustard"]
     },
     "navy blue": {
-      "synonyms": ["navy blue"],
-      "data": {
-        "hexa": ["#000080"]
-      }
+      "synonyms": ["navy blue"]
     },
     "coral": {
-      "synonyms": ["coral"],
-      "data": {
-        "hexa": ["#FF7F50"]
-      }
+      "synonyms": ["coral"]
     },
     "burgundy": {
-      "synonyms": ["burgundy"],
-      "data": {
-        "hexa": ["#800020"]
-      }
+      "synonyms": ["burgundy"]
     },
     "lavender": {
-      "synonyms": ["lavender"],
-      "data": {
-        "hexa": ["#E6E6FA"]
-      }
+      "synonyms": ["lavender"]
     },
     "mauve": {
-      "synonyms": ["mauve"],
-      "data": {
-        "hexa": ["#E0b0FF"]
-      }
+      "synonyms": ["mauve"]
     },
     "peach": {
-      "synonyms": ["peach"],
-      "data": {
-        "hexa": ["#FFE5B4"]
-      }
+      "synonyms": ["peach"]
     },
     "rust": {
-      "synonyms": ["rust"],
-      "data": {
-        "hexa": ["#B7410E"]
-      }
+      "synonyms": ["rust"]
     },
     "indigo": {
-      "synonyms": ["indigo"],
-      "data": {
-        "hexa": ["#4B0082"]
-      }
+      "synonyms": ["indigo"]
     },
     "ruby": {
-      "synonyms": ["ruby"],
-      "data": {
-        "hexa": ["#E0115F"]
-      }
+      "synonyms": ["ruby"]
     },
     "clay": {
-      "synonyms": ["clay"],
-      "data": {
-        "hexa": ["#CC7357"]
-      }
+      "synonyms": ["clay"]
     },
     "cyan": {
-      "synonyms": ["cyan"],
-      "data": {
-        "hexa": ["#00FFFF"]
-      }
+      "synonyms": ["cyan"]
     },
     "azure": {
-      "synonyms": ["azure"],
-      "data": {
-        "hexa": ["#007FFF"]
-      }
+      "synonyms": ["azure"]
     },
     "beige": {
-      "synonyms": ["beige"],
-      "data": {
-        "hexa": ["#F5F5DC"]
-      }
+      "synonyms": ["beige"]
     },
     "off white": {
-      "synonyms": ["off white"],
-      "data": {
-        "hexa": ["#FAF9F6"]
-      }
+      "synonyms": ["off white"]
     },
     "turquoise": {
-      "synonyms": ["turquoise"],
-      "data": {
-        "hexa": ["#30D5C8"]
-      }
+      "synonyms": ["turquoise"]
     },
     "amber": {
-      "synonyms": ["amber"],
-      "data": {
-        "hexa": ["#FFBF00"]
-      }
+      "synonyms": ["amber"]
     },
     "mint": {
-      "synonyms": ["mint"],
-      "data": {
-        "hexa": ["#3EB489"]
-      }
+      "synonyms": ["mint"]
     }
   }
 }

@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "MBTI (Myers-Briggs Type Indicator)",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Questionnaire to define your MBTI personality type.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "flow": ["set_up", "quiz"],
+  "actions": {
+    "set_up": {
+      "type": "logic",
+      "description": "Set up the MBTI form."
+    },
+    "quiz": {
+      "type": "logic",
+      "description": "Ask the form question.",
+      "parameters": {
+        "form_answer": {
+          "type": "string",
+          "description": "Answer from the owner."
+        }
+      },
+      "is_loop": true
+    }
+  }
+}

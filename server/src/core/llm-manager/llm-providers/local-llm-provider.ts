@@ -1,5 +1,14 @@
+import {
+  LlamaChat,
+  LlamaChatSession,
+  type LlamaChatResponse
+} from 'node-llama-cpp'
+
+import type {
+  CompletionParams,
+  PromptOrChatHistory
+} from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
-import { CompletionParams } from '@/core/llm-manager/types'
 import { LLM_MANAGER } from '@/core'
 
 type LocalCompletionParams = Omit<CompletionParams, ''>
@@ -13,9 +22,9 @@ export default class LocalLLMProvider {
   }
 
   public runChatCompletion(
-    prompt: string,
+    promptOrChatHistory: PromptOrChatHistory,
     completionParams: LocalCompletionParams
-  ): Promise<string> {
+  ): Promise<string | LlamaChatResponse<never>> {
     return new Promise(async (resolve, reject) => {
       try {
         if (!completionParams.session) {
@@ -23,30 +32,58 @@ export default class LocalLLMProvider {
         }
 
         const isJSONMode = completionParams.data !== null
-        let promptParams = {
+        let promptParams: Record<string, unknown> = {
+          functions: completionParams.functions,
           maxTokens: completionParams.maxTokens as number,
           temperature: completionParams.temperature as number,
-          onToken: completionParams.onToken as (tokens: unknown) => void
+          onToken: completionParams.onToken as (tokens: unknown) => void,
+          budgets: {
+            thoughtTokens: completionParams.thoughtTokensBudget
+          }
         }
 
         if (isJSONMode) {
-          const { LlamaJsonSchemaGrammar } = await Function(
-            'return import("node-llama-cpp")'
-          )()
-          const grammar = new LlamaJsonSchemaGrammar(LLM_MANAGER.llama, {
+          const grammar = await LLM_MANAGER.llama.createGrammarForJsonSchema({
             type: 'object',
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-expect-error
             properties: completionParams.data
           })
 
           promptParams = {
             ...promptParams,
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-expect-error
             grammar
           }
         }
 
-        const promise = completionParams.session.prompt(prompt, promptParams)
+        let promise = null
+
+        /**
+         * LlamaChat and LlamaChatSession have different methods for generating responses.
+         * We use LlamaChat for function calling and LlamaChatSession for simple prompts
+         */
+        if (
+          completionParams.session instanceof LlamaChat &&
+          Array.isArray(promptOrChatHistory)
+        ) {
+          promise = completionParams.session.generateResponse(
+            promptOrChatHistory,
+            promptParams
+          )
+        } else if (
+          completionParams.session instanceof LlamaChatSession &&
+          typeof promptOrChatHistory === 'string'
+        ) {
+          promise = completionParams.session.prompt(
+            promptOrChatHistory,
+            promptParams
+          )
+        } else {
+          LogHelper.title(this.name)
+          const errorMessage = 'Invalid session or prompt type'
+          LogHelper.error(errorMessage)
+          return reject(new Error(errorMessage))
+        }
 
         return resolve(promise)
       } catch (e) {

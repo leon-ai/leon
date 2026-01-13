@@ -1,0 +1,90 @@
+{
+  "name": "Music & Audio",
+  "description": "Tools for music and audio processing.",
+  "tools": {
+    "faster_whisper": {
+      "description": "A tool for speech recognition and audio transcription using the Faster Whisper model.",
+      "binaries": {
+        "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-linux-x86_64",
+        "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-linux-aarch64",
+        "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-macosx-x86_64",
+        "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-macosx-arm64",
+        "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-win-amd64.exe"
+      },
+      "resources": {
+        "faster-whisper-large-v3": [
+          "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/config.json?download=true",
+          "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/model.bin?download=true",
+          "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/preprocessor_config.json?download=true",
+          "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/tokenizer.json?download=true",
+          "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/vocabulary.json?download=true"
+        ]
+      }
+    },
+    "openai_audio": {
+      "description": "A tool for audio processing using OpenAI's API."
+    },
+    "assemblyai_audio": {
+      "description": "A tool for audio processing using AssemblyAI's API."
+    },
+    "elevenlabs_audio": {
+      "description": "A tool for audio processing using ElevenLabs's API."
+    },
+    "ecapa": {
+      "description": "A tool for voice gender classification using ECAPA-TDNN model.",
+      "binaries": {
+        "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-linux-x86_64",
+        "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-linux-aarch64",
+        "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-macosx-x86_64",
+        "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-macosx-arm64",
+        "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-win-amd64.exe"
+      },
+      "resources": {
+        "ecapa-voice_gender_classifier": [
+          "https://huggingface.co/JaesungHuh/voice-gender-classifier/resolve/main/config.json?download=true",
+          "https://huggingface.co/JaesungHuh/voice-gender-classifier/resolve/main/model.safetensors?download=true"
+        ]
+      }
+    },
+    "chatterbox_onnx": {
+      "description": "A tool for text-to-speech synthesis and voice cloning using the Chatterbox ONNX model.",
+      "binaries": {
+        "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-linux-x86_64",
+        "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-linux-aarch64",
+        "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-macosx-x86_64",
+        "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-macosx-arm64",
+        "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-win-amd64.exe"
+      },
+      "resources": {
+        "chatterbox-multilingual-onnx": [
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/Cangjie5_TC.json?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/default_voice.wav?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/tokenizer.json?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/conditional_decoder.onnx?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/conditional_decoder.onnx_data?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/embed_tokens.onnx?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/embed_tokens.onnx_data?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/language_model_q4.onnx?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/language_model_q4.onnx_data?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/speech_encoder.onnx?download=true",
+          "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/speech_encoder.onnx_data?download=true"
+        ]
+      }
+    },
+    "ultimate_vocal_remover_onnx": {
+      "description": "A tool for vocal separation using the Ultimate Vocal Remover ONNX model.",
+      "binaries": {
+        "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-linux-x86_64",
+        "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-linux-aarch64",
+        "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-macosx-x86_64",
+        "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-macosx-arm64",
+        "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-win-amd64.exe"
+      },
+      "resources": {
+        "ultimate-vocal-remover-onnx": [
+          "https://huggingface.co/seanghay/uvr_models/resolve/main/UVR-MDX-NET-Inst_HQ_3.onnx?download=true"
+        ]
+      }
+    }
+  }
+}

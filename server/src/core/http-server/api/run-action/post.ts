@@ -1,10 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify'
 
 import type { APIOptions } from '@/core/http-server/http-server'
-import { BRAIN } from '@/core'
+import { BRAIN, NLU } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
-import { DEFAULT_NLU_RESULT } from '@/core/nlp/nlu/nlu'
-import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
+import { NLUProcessResultUpdater } from '@/core/nlp/nlu/nlu-process-result-updater'
 
 export const runAction: FastifyPluginAsync<APIOptions> = async (
   fastify,
@@ -35,9 +34,9 @@ export const runAction: FastifyPluginAsync<APIOptions> = async (
           })
         }
 
-        const [domain, skill, action] = (actionName as string).split(':')
+        const [skill, action] = (actionName as string).split(':')
 
-        if (!domain || !skill || !action) {
+        if (!skill || !action) {
           message = 'skill_action is not well formatted.'
           LogHelper.title('POST /run-action')
           LogHelper.warning(message)
@@ -50,25 +49,27 @@ export const runAction: FastifyPluginAsync<APIOptions> = async (
           })
         }
 
-        await BRAIN.execute({
-          ...DEFAULT_NLU_RESULT,
-          ...actionParams,
-          skillConfigPath: SkillDomainHelper.getSkillConfigPath(
-            domain,
-            skill,
-            BRAIN.lang
-          ),
-          classification: {
-            domain,
-            skill,
-            action,
-            confidence: 1
+        await NLUProcessResultUpdater.update({
+          skillName: skill
+        })
+        await NLUProcessResultUpdater.update({
+          actionName: action
+        })
+        await NLUProcessResultUpdater.update({
+          new: {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-expect-error
+            actionArguments: actionParams.action_arguments,
+            ...actionParams
           }
         })
 
-        const parsedOutput = JSON.parse(BRAIN.skillOutput)
+        // Ensure we can send response from the brain
+        BRAIN.isMuted = false
 
-        if (parsedOutput.output) {
+        const processedData = await BRAIN.runSkillAction(NLU.nluProcessResult)
+
+        if (processedData.lastOutputFromSkill) {
           message = 'Skill action executed successfully.'
           LogHelper.title('POST /run-action')
           LogHelper.success(message)
@@ -77,7 +78,7 @@ export const runAction: FastifyPluginAsync<APIOptions> = async (
             status: 200,
             code: 'action_executed',
             message,
-            result: parsedOutput.output
+            result: processedData
           })
         }
 

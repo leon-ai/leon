@@ -27,6 +27,17 @@ Instead of injecting everything from a package,
 it's recommended to only include the necessary files via the
 "include_files" property.
 """
+
+package_dir = os.path.join('tcp_server', 'src', '.venv', 'lib', f'python{PYTHON_VERSION}', 'site-packages')
+if 'win' in sysconfig.get_platform():
+    package_dir = os.path.join('tcp_server', 'src', '.venv', 'Lib', 'site-packages')
+
+av_src = os.path.join(package_dir, 'av')
+av_dist = os.path.join('lib', 'av')
+
+nvidia_cudnn_lib_src = os.path.join(package_dir, 'nvidia', 'cudnn', 'lib')
+nvidia_cudnn_lib_dist = os.path.join('lib', 'nvidia', 'cudnn', 'lib')
+
 options = {
     'build_exe': {
         'packages': [
@@ -43,17 +54,20 @@ options = {
         'include_files': [
             # Includes "av" module files manually to avoid ModuleNotFoundError
             # for "av.about" since cx_Freeze does not include about.py somehow
-            (f'tcp_server/src/.venv/lib/python{PYTHON_VERSION}/site-packages/av', 'lib/av')
+            (av_src, av_dist)
         ]
     }
 }
 
 # Include NVIDIA libraries for non-macOS platforms
 if 'macos' not in sysconfig.get_platform():
-    options['build_exe']['include_files'] = [
-        *options['build_exe']['include_files'],
-        (f'tcp_server/src/.venv/lib/python{PYTHON_VERSION}/site-packages/nvidia/cudnn/lib', 'lib/nvidia/cudnn/lib')
-    ]
+    if not os.path.exists(nvidia_cudnn_lib_src):
+        print(f'Skipping NVIDIA cuDNN inclusion. Directory does not exist: {nvidia_cudnn_lib_src}')
+    else:
+        options['build_exe']['include_files'] = [
+            *options['build_exe']['include_files'],
+            (nvidia_cudnn_lib_src, nvidia_cudnn_lib_dist)
+        ]
 
 # Include private libraries from the tokenizers package for Linux
 # if 'linux' in sysconfig.get_platform():
@@ -64,7 +78,7 @@ if 'macos' not in sysconfig.get_platform():
 
 executables = [
     Executable(
-        script='tcp_server/src/main.py',
+        script=os.path.join('tcp_server', 'src', 'main.py'),
         target_name='leon-tcp-server'
     )
 ]

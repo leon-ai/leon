@@ -2,6 +2,7 @@
   "name": "leon-nodejs-bridge",
   "description": "Leon's Node.js bridge to communicate between the core and skills made with JavaScript",
   "main": "dist/bin/leon-nodejs-bridge.js",
+  "type": "module",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
@@ -14,6 +15,7 @@
   },
   "dependencies": {
     "axios": "1.4.0",
+    "ipull": "3.9.2",
     "lodash": "4.17.21"
   },
   "devDependencies": {

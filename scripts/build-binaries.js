@@ -119,6 +119,8 @@ BUILD_TARGETS.set('tcp-server', {
 
       /**
        * cx_Freeze usage
+       * If running on Windows and the error about "no base named 'console'" pops up,
+       * manually uninstall cx_Freeze (e.g. pipenv uninstall cx-freeze) and reinstall it
        * @see https://cx-freeze.readthedocs.io/en/latest/setup_script.html#build-exe
        */
       await command(
@@ -142,7 +144,7 @@ BUILD_TARGETS.set('tcp-server', {
      */
     try {
       const distBinPath = path.join(NODEJS_BRIDGE_DIST_PATH, 'bin')
-      const distMainFilePath = path.join(distBinPath, 'index.js')
+      const distMainFilePath = path.join(distBinPath, 'main.js')
       const distRenamedMainFilePath = path.join(
         distBinPath,
         NODEJS_BRIDGE_BIN_NAME
@@ -156,10 +158,13 @@ BUILD_TARGETS.set('tcp-server', {
         'main.ts'
       )
 
-      await command(`ncc build ${inputMainFilePath} --out ${distBinPath}`, {
-        shell: true,
-        stdio: 'inherit'
-      })
+      await command(
+        `esbuild ${inputMainFilePath} --bundle --platform=node --loader:.node=file --outdir=${distBinPath}`,
+        {
+          shell: true,
+          stdio: 'inherit'
+        }
+      )
 
       await fs.promises.rename(distMainFilePath, distRenamedMainFilePath)
 

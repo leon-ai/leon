@@ -1,0 +1,16 @@
+{
+  "transcription_provider": "faster_whisper",
+  "faster_whisper_device": "auto",
+  "faster_whisper_cpu_threads": 4,
+  "openai_transcription_api_key": "sk-...",
+  "openai_transcription_model": "gpt-4o-transcribe-diarize",
+  "assemblyai_transcription_api_key": "",
+  "elevenlabs_transcription_api_key": "sk_...",
+  "elevenlabs_transcription_model": "scribe_v1",
+  "elevenlabs_transcription_diarize": true,
+  "elevenlabs_dubbing_api_key": "sk_...",
+  "elevenlabs_dubbing_source_lang": "auto",
+  "elevenlabs_dubbing_num_speakers": 0,
+  "elevenlabs_dubbing_watermark": false,
+  "elevenlabs_dubbing_poll_interval": 10000
+}

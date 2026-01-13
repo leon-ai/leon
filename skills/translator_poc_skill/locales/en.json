@@ -1,0 +1,20 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "actions": {
+    "translate": {
+      "missing_param_follow_ups": {
+        "target_language": [
+          "What language would you like to translate to?",
+          "Sure, what language are you translating to?"
+        ],
+        "text_to_translate": [
+          "What text would you like to translate?",
+          "Please provide the text you want to translate."
+        ]
+      },
+      "answers": {
+        "translation": ["{{ output }}"]
+      }
+    }
+  }
+}

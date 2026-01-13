@@ -1,0 +1,45 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "variables": {
+    "hours": "hours",
+    "minutes": "minutes",
+    "seconds": "seconds"
+  },
+  "actions": {
+    "set_timer": {
+      "answers": {
+        "timer_set": [
+          {
+            "speech": "Done. I will let you know when time is up."
+          }
+        ],
+        "cannot_get_duration": [
+          "You should provide a duration for the timer.",
+          "You didn't provide a duration for the timer."
+        ],
+        "unit_not_supported": [
+          "Sorry, I can't set a timer for this unit. Use {{ hours }}, {{ minutes }} or {{ seconds }} instead.",
+          "I can't set a timer for this duration. Use {{ hours }}, {{ minutes }} or {{ seconds }} instead."
+        ]
+      }
+    },
+    "check_timer": {
+      "answers": {
+        "no_timer_set": ["No timer is set.", "There is no timer set."]
+      }
+    },
+    "cancel_timer": {
+      "answers": {
+        "timer_canceled": ["The timer is canceled.", "Timer is stopped."]
+      }
+    }
+  },
+  "widget_contents": {
+    "second_unit": "second",
+    "seconds_unit": "seconds",
+    "minutes_unit": "minutes",
+    "minute_unit": "minute",
+    "total_time": "Total {{ value }} {{ unit }}",
+    "times_up": ["Time's up!", "The timer is up!", "The timer has ended!"]
+  }
+}

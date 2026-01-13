@@ -1,0 +1,354 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill-locale-config.json",
+  "actions": {
+    "download_video": {
+      "missing_param_follow_ups": {
+        "video_url": [
+          "Please provide the URL of the video you want to translate.",
+          "What video URL would you like me to download for translation?"
+        ],
+        "target_language": [
+          "What language would you like to translate the video into?",
+          "Please specify the target language for translation (e.g., Chinese, Spanish, French)."
+        ]
+      },
+      "answers": {
+        "download_started": [
+          "I'm downloading the video from {{ video_url }} in {{ quality }} quality for translation to {{ target_language }}. This may take a moment...",
+          "Starting video download for {{ target_language }} translation..."
+        ],
+        "download_progress": [
+          "📥 Downloading... {{ percentage }}% complete{{ speed ? ' (' + speed + ')' : '' }}{{ eta ? ' - ETA: ' + eta : '' }}",
+          "⬇️ Download progress: {{ percentage }}%{{ size ? ' of ' + size : '' }}{{ speed ? ' at ' + speed : '' }}"
+        ],
+        "download_completed": [
+          "✅ Video downloaded successfully! File size: {{ file_size }}. Ready to process for {{ target_language }} translation. Saved folder path: {{ file_path }}.",
+          "Download complete! The video ({{ file_size }}) is ready for {{ target_language }} translation processing. Saved folder path: {{ file_path }}."
+        ],
+        "download_failed": [
+          "❌ Failed to download the video from {{ video_url }}. Error: {{ error }}",
+          "Sorry, I couldn't download the video. Please check if the URL is valid and accessible."
+        ],
+        "download_error": [
+          "❌ An error occurred while downloading: {{ error }}",
+          "There was a problem downloading the video from {{ video_url }}: {{ error }}"
+        ]
+      }
+    },
+    "extract_audio": {
+      "missing_param_follow_ups": {
+        "video_path": [
+          "Please provide the path to the video file from which to extract audio.",
+          "What video file would you like me to extract audio from?"
+        ],
+        "target_language": [
+          "What language are you translating to?",
+          "Please specify the target language for translation (e.g., Chinese, Spanish, French)."
+        ]
+      },
+      "answers": {
+        "no_video_info": [
+          "❌ No video information found in memory. Please download a video first using the 'download_video' action.",
+          "I couldn't find any video to process. Please download a video first before extracting audio."
+        ],
+        "video_file_not_found": [
+          "❌ I couldn't find the video file at {{ video_path }}. Please check the file path.",
+          "The specified video file doesn't exist or is not accessible."
+        ],
+        "extraction_started": [
+          "🎵 Extracting audio from {{ video_path }} ({{ video_size }}) in {{ audio_format }} format for {{ target_language }} translation...",
+          "Starting audio extraction for {{ target_language }} translation processing..."
+        ],
+        "extraction_completed": [
+          "✅ Audio extracted successfully into: {{ folder_path }}! Output: {{ audio_size }} {{ audio_format }} file ready for {{ target_language }} translation.",
+          "Audio extraction complete and saved in {{ folder_path }}! The {{ audio_format }} file ({{ audio_size }}) is ready for {{ target_language }}."
+        ],
+        "extraction_failed": [
+          "❌ Failed to extract audio from {{ video_path }}. Error: {{ error }}",
+          "Sorry, I couldn't extract the audio. Please check if the video file is valid."
+        ],
+        "extraction_error": [
+          "❌ An error occurred during audio extraction: {{ error }}",
+          "There was a problem extracting audio from {{ video_path }}: {{ error }}"
+        ]
+      }
+    },
+    "translate_transcription": {
+      "missing_param_follow_ups": {
+        "transcription_path": [
+          "Please provide the path to the transcription file to translate.",
+          "What transcription file would you like me to translate?"
+        ],
+        "target_language": [
+          "What language would you like to translate into?",
+          "Please specify the target language for translation (e.g., Chinese, Spanish, French)."
+        ]
+      },
+      "answers": {
+        "transcription_not_found": [
+          "❌ I couldn't find the given transcription file to translate.",
+          "The specified transcription file doesn't exist or is not accessible."
+        ],
+        "target_language_missing": [
+          "❌ Target language is required for translation. Please specify which language to translate into.",
+          "I need to know which language to translate to. Please specify a target language."
+        ],
+        "missing_api_key": [
+          "❌ Your OpenRouter API key is not set. Please add it in this skill's settings.",
+          "I need an OpenRouter API key to translate. Please configure it in the skill settings."
+        ],
+        "no_segments_found": [
+          "❌ No segments found in the transcription file. The file may be empty or corrupted.",
+          "The transcription file appears to be empty or invalid."
+        ],
+        "translation_started": [
+          "🌐 Starting translation of {{ segment_count }} segments from {{ transcription_path }} to {{ target_language }} using {{ model }}...",
+          "Beginning translation to {{ target_language }} using {{ model }}. Processing {{ segment_count }} segments..."
+        ],
+        "translating_batch": [
+          "📝 Translating batch {{ batch_number }}/{{ total_batches }} ({{ segments_in_batch }} segments)...",
+          "⏳ Processing batch {{ batch_number }} of {{ total_batches }}..."
+        ],
+        "translation_api_error": [
+          "❌ Translation API error in batch {{ batch_number }}: {{ error }}",
+          "Failed to translate batch {{ batch_number }}. Error: {{ error }}"
+        ],
+        "translation_completed": [
+          "✅ Translation completed successfully! {{ segment_count }} segments translated to {{ target_language }}. File saved at {{ translated_path }}",
+          "Translation to {{ target_language }} complete! Translated {{ segment_count }} segments and saved to {{ translated_path }}"
+        ],
+        "translation_error": [
+          "❌ An error occurred during translation: {{ error }}",
+          "Translation failed with error: {{ error }}"
+        ]
+      }
+    },
+    "get_speakers_references": {
+      "missing_param_follow_ups": {
+        "transcription_path": [
+          "Please provide the path to the transcription file.",
+          "What transcription file contains the speaker information?"
+        ],
+        "audio_path": [
+          "Please provide the path to the audio file.",
+          "What audio file should I extract speaker references from?"
+        ]
+      },
+      "answers": {
+        "transcription_not_found": [
+          "❌ I couldn't find the transcription file. Please ensure the transcription has been completed first.",
+          "The transcription file doesn't exist or is not accessible."
+        ],
+        "audio_not_found": [
+          "❌ I couldn't find the audio file. Please ensure the audio has been extracted first.",
+          "The audio file doesn't exist or is not accessible."
+        ],
+        "no_speakers_found": [
+          "❌ No speakers found in the transcription. The transcription may be empty or invalid.",
+          "I couldn't find any speaker information in the transcription file."
+        ],
+        "extraction_started": [
+          "🎤 Starting speaker reference extraction for {{ speaker_count }} speakers from {{ audio_path }}...",
+          "Extracting voice references for {{ speaker_count }} speakers..."
+        ],
+        "no_valid_segments": [
+          "⚠️ No valid segments found for speaker {{ speaker }} after the first third of the audio.",
+          "Skipping speaker {{ speaker }} - insufficient audio segments."
+        ],
+        "insufficient_audio": [
+          "⚠️ Insufficient audio for speaker {{ speaker }} to create 10-second references.",
+          "Speaker {{ speaker }} doesn't have enough clear audio for reference extraction."
+        ],
+        "extracting_reference": [
+          "✂️ Extracting reference {{ reference_number }} for speaker {{ speaker }} starting at {{ start_time }} ({{ duration }} seconds)...",
+          "Creating reference audio {{ reference_number }} for speaker {{ speaker }}..."
+        ],
+        "speaker_references_created": [
+          "✅ Speaker {{ speaker }} references created: {{ reference1_path }} and {{ reference2_path }}",
+          "Voice references for speaker {{ speaker }} saved successfully."
+        ],
+        "extraction_completed": [
+          "✅ Speaker reference extraction completed! Created references for {{ speaker_count }} speakers in {{ folder_path }}",
+          "All speaker voice references have been extracted and saved to {{ folder_path }}"
+        ],
+        "extraction_error": [
+          "❌ An error occurred during speaker reference extraction: {{ error }}",
+          "Failed to extract speaker references: {{ error }}"
+        ]
+      }
+    },
+    "detect_genders": {
+      "answers": {
+        "no_speaker_references": [
+          "❌ No speaker references available to analyze gender.",
+          "I couldn't find any voice reference clips to determine gender for the speakers."
+        ],
+        "genders_detected": [
+          "✅ Gender detection complete! Here are the detected genders for each speaker: {{ genders }}.",
+          "Gender analysis finished: {{ count }} speakers processed. Results: {{ genders }}."
+        ]
+      }
+    },
+    "create_new_audio": {
+      "answers": {
+        "translated_transcription_not_found": [
+          "❌ I couldn't find the translated transcription file. Please run the translate_transcription action first.",
+          "The translated transcription file is missing. Please ensure the translation step completed successfully."
+        ],
+        "audio_not_found": [
+          "❌ I couldn't find the original audio file needed for reference.",
+          "The original audio file is missing. Please ensure the extract_audio step completed successfully."
+        ],
+        "speaker_references_missing": [
+          "❌ Speaker references are missing. Please run the get_speakers_references action first.",
+          "I need speaker voice references to generate the dubbed audio. Please complete the speaker reference extraction step."
+        ],
+        "target_language_missing": [
+          "❌ Target language is required for audio synthesis. {{ note ? note : 'Please specify the target language.' }}",
+          "I need to know the target language to generate the dubbed audio. {{ note ? note : 'Please specify which language to use.' }}"
+        ],
+        "no_segments_found": [
+          "❌ No segments found in the translated transcription.",
+          "The translated transcription appears to be empty or invalid."
+        ],
+        "synthesis_started": [
+          "🎙️ Starting audio synthesis for {{ segment_count }} segments with {{ speaker_count }} speakers in {{ target_language }} using {{ provider }}...",
+          "Beginning dubbed audio generation with {{ speaker_count }} voices for {{ target_language }} translation (Provider: {{ provider }})..."
+        ],
+        "grouping_segments": [
+          "📊 Analyzing and grouping segments for efficient processing...",
+          "Organizing transcript segments into natural speech groups..."
+        ],
+        "segments_grouped": [
+          "✅ Optimized from {{ original_count }} segments into {{ grouped_count }} efficient groups for better quality.",
+          "Grouped {{ original_count }} segments into {{ grouped_count }} natural speech units."
+        ],
+        "preparing_synthesis_tasks": [
+          "📋 Preparing {{ total_groups }} synthesis tasks for batch processing...",
+          "Setting up batch synthesis for {{ total_groups }} audio segments..."
+        ],
+        "batch_synthesis_started": [
+          "🎙️ Running batch synthesis for {{ task_count }} segments using {{ provider }}. This will be much faster!",
+          "Starting optimized batch synthesis of {{ task_count }} segments with {{ provider }}..."
+        ],
+        "batch_synthesis_completed": [
+          "✅ Batch synthesis completed! Generated {{ task_count }} audio segments.",
+          "Successfully synthesized {{ task_count }} audio segments in batch mode."
+        ],
+        "batch_synthesis_failed": [
+          "❌ Batch synthesis failed: {{ error }}",
+          "Failed to generate audio in batch mode: {{ error }}"
+        ],
+        "post_processing_started": [
+          "⚙️ Post-processing {{ segment_count }} synthesized segments (tempo adjustment, synchronization)...",
+          "Applying tempo adjustments and synchronization to {{ segment_count }} segments..."
+        ],
+        "segment_not_generated": [
+          "⚠️ Segment {{ segment_number }} was not generated. Skipping.",
+          "Audio file for segment {{ segment_number }} is missing. Skipping post-processing."
+        ],
+        "speaker_reference_not_found": [
+          "⚠️ No voice reference found for speaker {{ speaker }}. Skipping this segment.",
+          "Speaker {{ speaker }} doesn't have a voice reference. Cannot generate audio for this segment."
+        ],
+        "synthesis_failed": [
+          "❌ Failed to synthesize audio for group {{ group_number }}: {{ error }}",
+          "Audio generation failed for segment {{ group_number }}: {{ error }}"
+        ],
+        "capping_speed": [
+          "⚠️ Segment {{ segment_number }}: Capping speed adjustment from {{ requested_speed }}x to {{ capped_speed }}x to maintain audio quality.",
+          "Segment {{ segment_number }}: Speed limited to {{ capped_speed }}x (requested: {{ requested_speed }}x) for better quality."
+        ],
+        "tempo_adjustment_failed": [
+          "⚠️ Failed to adjust tempo for group {{ group_number }}: {{ error }}. Using original speed.",
+          "Tempo adjustment failed for segment {{ group_number }}. Keeping original timing."
+        ],
+        "assembling_audio": [
+          "🎼 Assembling final dubbed audio track with precise timing synchronization...",
+          "Creating final audio track from all processed segments..."
+        ],
+        "audio_assembly_completed": [
+          "✅ Audio assembly completed successfully! Final dubbed audio: {{ output_path }}",
+          "Final audio track assembled with precise timing at {{ output_path }}"
+        ],
+        "audio_assembly_failed": [
+          "❌ Failed to assemble audio segments: {{ error }}",
+          "Audio assembly failed with error: {{ error }}"
+        ],
+        "audio_assembly_note": ["ℹ️ Note: {{ note }}", "Info: {{ note }}"],
+        "synthesis_completed": [
+          "✅ Audio synthesis completed! Processed {{ processed_count }} segments. Final output: {{ output_path }}. Segments folder: {{ output_folder }}. Manifest: {{ manifest_path }}. Target language: {{ target_language }}.",
+          "Dubbed audio generation complete for {{ target_language }}! {{ processed_count }} segments processed. Final audio: {{ output_path }}."
+        ],
+        "synthesis_error": [
+          "❌ An error occurred during audio synthesis: {{ error }}",
+          "Failed to generate dubbed audio: {{ error }}"
+        ]
+      }
+    },
+    "merge_audio": {
+      "missing_param_follow_ups": {
+        "video_path": [
+          "Please provide the path to the original video file.",
+          "What video file would you like me to merge the dubbed audio with?"
+        ],
+        "dubbed_audio_path": [
+          "Please provide the path to the dubbed audio file.",
+          "Where is the dubbed audio file that should replace the original audio?"
+        ],
+        "target_language": [
+          "What language is the dubbed audio in?",
+          "Please specify the target language for the video."
+        ]
+      },
+      "answers": {
+        "no_video_path": [
+          "❌ No video path found. Please download a video first or provide a video_path parameter.",
+          "I couldn't find the video file. Please run the download_video action first or specify a video path."
+        ],
+        "no_dubbed_audio_path": [
+          "❌ No dubbed audio path found. Please run the create_new_audio action first or provide a dubbed_audio_path parameter.",
+          "I couldn't find the dubbed audio file. Please ensure the audio synthesis (create_new_audio) has completed successfully."
+        ],
+        "video_file_not_found": [
+          "❌ I couldn't find the video file at {{ video_path }}. Please check the file path.",
+          "The specified video file doesn't exist or is not accessible at {{ video_path }}."
+        ],
+        "dubbed_audio_file_not_found": [
+          "❌ I couldn't find the dubbed audio file at {{ dubbed_audio_path }}. Please check the file path.",
+          "The specified dubbed audio file doesn't exist or is not accessible at {{ dubbed_audio_path }}."
+        ],
+        "merge_started": [
+          "🎬 Merging {{ dubbed_audio_path }} ({{ audio_size }}) with {{ video_path }} ({{ video_size }}){{ target_language ? ' for ' + target_language + ' version' : '' }}...",
+          "Starting audio replacement process{{ target_language ? ' to create ' + target_language + ' version' : '' }}..."
+        ],
+        "merging_with_instrumental": [
+          "🎵 Merging dubbed audio with the original instrumental track for better quality...",
+          "Combining dubbed vocals with the instrumental background..."
+        ],
+        "merge_completed": [
+          "✅ Video with {{ target_language }} audio created successfully! Saved to: {{ folder_path }}. File: {{ merged_video_path }} ({{ merged_size }}). Original video: {{ original_video }}, Dubbed audio: {{ dubbed_audio }}.",
+          "Audio merge complete! Your {{ target_language }} video ({{ merged_size }}) is ready at {{ folder_path }}. File: {{ merged_video_path }}."
+        ],
+        "merge_failed": [
+          "❌ Failed to merge audio with video {{ video_path }}. Error: {{ error }}",
+          "Sorry, I couldn't merge the audio with the video. Please check if both files are valid."
+        ],
+        "merge_error": [
+          "❌ An error occurred during audio merging: {{ error }}",
+          "There was a problem merging the audio with the video: {{ error }}"
+        ]
+      }
+    }
+  },
+  "common_answers": {
+    "processing_started": [
+      "🚀 Starting video translation workflow for {{ target_language }}...",
+      "Beginning video translation process to {{ target_language }}."
+    ],
+    "workflow_info": [
+      "📋 Video Translation Workflow: 1) Download video → 2) Extract audio → 3) Transcribe → 4) Translate → 5) Merge",
+      "This skill translates videos using speech-to-text and AI translation."
+    ]
+  }
+}
