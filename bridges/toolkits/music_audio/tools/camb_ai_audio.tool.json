@@ -1,0 +1,248 @@
+{
+  "$schema": "../../../../schemas/tool-schemas/tool.json",
+  "tool_id": "camb_ai_audio",
+  "toolkit_id": "music_audio",
+  "name": "CAMB AI Audio",
+  "description": "A tool for audio processing using CAMB AI's API. Supports TTS, translation, transcription, translated TTS, voice cloning, voice listing, dubbing, text-to-sound, and audio separation.",
+  "icon_name": "sound-module",
+  "author": {
+    "name": "CAMB AI",
+    "email": "support@camb.ai",
+    "url": "https://camb.ai"
+  },
+  "functions": {
+    "textToSpeech": {
+      "description": "Convert text to speech using CAMB AI's streaming TTS API. Saves the generated audio to a file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to convert to speech"
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Path to save the generated audio file"
+          },
+          "language": {
+            "type": "integer",
+            "description": "CAMB AI language ID (e.g., 1 for English)"
+          },
+          "voiceId": {
+            "type": "integer",
+            "description": "Voice ID to use for synthesis"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "speechModel": {
+            "type": "string",
+            "description": "TTS model to use (e.g., 'mars-flash')"
+          }
+        },
+        "required": [
+          "text",
+          "outputPath",
+          "language"
+        ]
+      }
+    },
+    "translate": {
+      "description": "Translate text from one language to another using CAMB AI's translation stream API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to translate"
+          },
+          "sourceLanguage": {
+            "type": "integer",
+            "description": "CAMB AI source language ID"
+          },
+          "targetLanguage": {
+            "type": "integer",
+            "description": "CAMB AI target language ID"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "sourceLanguage",
+          "targetLanguage"
+        ]
+      }
+    },
+    "transcribeToFile": {
+      "description": "Transcribe audio to a file using CAMB AI's transcription API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Path to the audio file to transcribe"
+          },
+          "outputPath": {
+            "type": "string",
+            "description": "Path to save the JSON transcription"
+          },
+          "language": {
+            "type": "integer",
+            "description": "CAMB AI language ID for the audio"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath",
+          "language"
+        ]
+      }
+    },
+    "translatedTts": {
+      "description": "Translate text and generate speech in the target language using CAMB AI's translated TTS API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "The text to translate and speak"
+          },
+          "voiceId": {
+            "type": "integer",
+            "description": "Voice ID for the output speech"
+          },
+          "sourceLanguage": {
+            "type": "integer",
+            "description": "CAMB AI source language ID"
+          },
+          "targetLanguage": {
+            "type": "integer",
+            "description": "CAMB AI target language ID"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "voiceId",
+          "sourceLanguage",
+          "targetLanguage"
+        ]
+      }
+    },
+    "cloneVoice": {
+      "description": "Clone a voice from an audio sample using CAMB AI's voice cloning API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Path to the audio sample for voice cloning"
+          },
+          "voiceName": {
+            "type": "string",
+            "description": "Name for the cloned voice"
+          },
+          "gender": {
+            "type": "integer",
+            "description": "Gender of the voice (1=male, 2=female)"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath",
+          "voiceName",
+          "gender"
+        ]
+      }
+    },
+    "listVoices": {
+      "description": "List all available voices from CAMB AI.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": []
+      }
+    },
+    "dubMedia": {
+      "description": "Dub a video or audio file into a target language using CAMB AI's dubbing API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoUrl": {
+            "type": "string",
+            "description": "URL of the video/audio to dub"
+          },
+          "sourceLanguage": {
+            "type": "integer",
+            "description": "CAMB AI source language ID"
+          },
+          "targetLanguage": {
+            "type": "integer",
+            "description": "CAMB AI target language ID"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "videoUrl",
+          "sourceLanguage",
+          "targetLanguage"
+        ]
+      }
+    },
+    "textToSound": {
+      "description": "Generate music or sound effects from a text prompt using CAMB AI's text-to-sound API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Text description of the sound to generate"
+          },
+          "duration": {
+            "type": "number",
+            "description": "Desired duration of the audio in seconds"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    "separateAudio": {
+      "description": "Separate vocals from instrumental audio using CAMB AI's audio separation API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Path to the audio file to separate"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath"
+        ]
+      }
+    }
+  }
+}

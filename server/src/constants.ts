@@ -331,10 +331,12 @@ export const HAS_LLM_ACTION_RECOGNITION =
 export const LEON_ROUTING_MODE = process.env['LEON_ROUTING_MODE'] || 'smart'
 export const LEON_PULSE_ENABLED = true
 export const LEON_PULSE_INTERVAL_MS = 30 * 60 * 1_000
+const NEEDS_LOCAL_STT = HAS_STT && STT_PROVIDER === 'local'
+const NEEDS_LOCAL_TTS = HAS_TTS && TTS_PROVIDER === 'local'
 export const SHOULD_START_PYTHON_TCP_SERVER = !(
   LEON_ROUTING_MODE.toLowerCase() === 'agent' &&
-  !HAS_STT &&
-  !HAS_TTS
+  !NEEDS_LOCAL_STT &&
+  !NEEDS_LOCAL_TTS
 )
 export const LEON_DISABLED_CONTEXT_FILES =
   process.env['LEON_DISABLED_CONTEXT_FILES'] || ''
