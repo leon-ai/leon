@@ -11,6 +11,7 @@
     "qwen3_tts",
     "ecapa",
     "chatterbox_onnx",
-    "ultimate_vocal_remover_onnx"
+    "ultimate_vocal_remover_onnx",
+    "camb_ai_audio"
   ]
 }
