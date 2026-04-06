@@ -22,6 +22,7 @@ import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-
 import { AnswerQueue } from '@/core/brain/answer-queue'
 import { LogicActionSkillHandler } from '@/core/brain/logic-action-skill-handler'
 import { DialogActionSkillHandler } from '@/core/brain/dialog-action-skill-handler'
+import { MESSAGING_APP_MANAGER } from '@/messaging'
 
 type SkillProcess = ChildProcessWithoutNullStreams | undefined
 interface IsTalkingWithVoiceOptions {
@@ -345,6 +346,9 @@ export default class Brain {
                 }
               : textAnswer
           )
+          await MESSAGING_APP_MANAGER.broadcast({
+            message: textAnswer
+          })
 
           if (NLU.currentResponseRoute !== 'react') {
             void SELF_MODEL_MANAGER.observeTurn({
