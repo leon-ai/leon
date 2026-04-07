@@ -41,7 +41,7 @@ import { SkillRouterLLMDuty } from '@/core/llm-manager/llm-duties/skill-router-l
 import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calling-llm-duty'
 import { SlotFillingLLMDuty } from '@/core/llm-manager/llm-duties/slot-filling-llm-duty'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
-import { AGENT_LLM_TARGET, LEON_ROUTING_MODE, WORKFLOW_LLM_TARGET } from '@/constants'
+import { LEON_ROUTING_MODE } from '@/constants'
 import { RoutingMode } from '@/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { WorkflowProgressWidget } from '@/core/nlp/nlu/workflow-progress-widget'
@@ -1223,11 +1223,12 @@ export default class NLU {
             )
 
             this._currentResponseRoute = routingDecision.route
+            const modelState = CONFIG_STATE.getModelState()
             const isLLMDisabledForRoute =
               (routingDecision.route === this.routingRoutes.react &&
-                !AGENT_LLM_TARGET.isEnabled) ||
+                !modelState.getAgentTarget().isEnabled) ||
               (routingDecision.route === this.routingRoutes.workflow &&
-                !WORKFLOW_LLM_TARGET.isEnabled)
+                !modelState.getWorkflowTarget().isEnabled)
 
             if (isLLMDisabledForRoute) {
               await this.handleProviderFailure(NO_LLM_ENABLED_MESSAGE)

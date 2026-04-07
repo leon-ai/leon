@@ -134,6 +134,7 @@ export function BuiltInCommandsModal({
   recentSelectedSuggestionIndex,
   suggestionSelectedSuggestionIndex,
   result,
+  pendingInput,
   hasSubmitted,
   inputRef,
   onCommandChange,
@@ -142,6 +143,9 @@ export function BuiltInCommandsModal({
   onReturn
 }) {
   const isCommandInputEmpty = commandValue.trim() === ''
+  const pendingInputIcon = pendingInput?.icon_name
+    ? parseRemixIcon(pendingInput.icon_name)
+    : null
 
   return (
     <div
@@ -181,8 +185,14 @@ export function BuiltInCommandsModal({
             <div className="built-in-commands-modal__input-field">
               <Input
                 name="built-in-commands"
-                placeholder="Type a built-in command"
-                iconSVG={SLASH_COMMAND_ICON_SVG}
+                type={pendingInput?.type || 'text'}
+                placeholder={
+                  pendingInput?.placeholder || 'Type a built-in command'
+                }
+                maxLength={2_048}
+                iconName={pendingInputIcon?.iconName}
+                iconType={pendingInputIcon ? pendingInput.icon_type : undefined}
+                iconSVG={pendingInput ? undefined : SLASH_COMMAND_ICON_SVG}
                 iconSize="lg"
                 value={commandValue}
                 autofocus={isOpen}

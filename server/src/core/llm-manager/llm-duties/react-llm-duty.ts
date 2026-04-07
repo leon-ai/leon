@@ -32,9 +32,14 @@ import {
   type OpenAIToolChoice
 } from '@/core/llm-manager/types'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
-import { AGENT_LLM_PROVIDER as LLM_PROVIDER_NAME, LOGS_PATH } from '@/constants'
+import { LOGS_PATH } from '@/constants'
 import type { MessageLog } from '@/types'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
+
+function getLLMProviderName(): LLMProviders {
+  return CONFIG_STATE.getModelState().getAgentProvider()
+}
 
 import {
   PLAN_SYSTEM_PROMPT,
@@ -244,7 +249,7 @@ export class ReActLLMDuty extends LLMDuty {
       await CONTEXT_MANAGER.load()
     }
 
-    if (LLM_PROVIDER_NAME === LLMProviders.Local) {
+    if (getLLMProviderName() === LLMProviders.Local) {
       if (!ReActLLMDuty.session || params.force) {
         LogHelper.title(this.name)
         LogHelper.info('Initializing...')
@@ -309,7 +314,7 @@ export class ReActLLMDuty extends LLMDuty {
       const { messageLogs: history, localChatHistory } =
         await this.loadPreparedHistory()
 
-      if (LLM_PROVIDER_NAME === LLMProviders.Local && localChatHistory) {
+      if (getLLMProviderName() === LLMProviders.Local && localChatHistory) {
         ReActLLMDuty.session.setChatHistory(localChatHistory)
       }
 
@@ -324,7 +329,7 @@ export class ReActLLMDuty extends LLMDuty {
 
       LogHelper.title(this.name)
       LogHelper.debug(`Catalog mode: ${catalog.mode} | Catalog length: ${catalog.text.length} chars (~${Math.ceil(catalog.text.length / 4)} tokens) | Input: "${this.input}"`)
-      LogHelper.debug(`Native tools supported: ${this.supportsNativeTools} (provider: ${LLM_PROVIDER_NAME})`)
+      LogHelper.debug(`Native tools supported: ${this.supportsNativeTools} (provider: ${getLLMProviderName()})`)
       if (continuation) {
         LogHelper.debug(
           `Resuming paused execution from clarification: "${continuation.state.clarificationQuestion}"`
@@ -987,11 +992,11 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private getHistoryCompactionScope(): ReactHistoryCompactionScope {
-    return LLM_PROVIDER_NAME === LLMProviders.Local ? 'local' : 'remote'
+    return getLLMProviderName() === LLMProviders.Local ? 'local' : 'remote'
   }
 
   private getHistoryCompactionConfig(): ReactHistoryCompactionConfig {
-    if (LLM_PROVIDER_NAME === LLMProviders.Local) {
+    if (getLLMProviderName() === LLMProviders.Local) {
       return {
         historyLimit: REACT_LOCAL_PROVIDER_HISTORY_LOGS,
         compactionBatchSize: REACT_LOCAL_PROVIDER_HISTORY_COMPACTION_POINT
@@ -1328,7 +1333,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private buildPreparedHistory(history: MessageLog[]): PreparedReactHistory {
-    if (LLM_PROVIDER_NAME !== LLMProviders.Local) {
+    if (getLLMProviderName() !== LLMProviders.Local) {
       return {
         messageLogs: history
       }
@@ -1372,7 +1377,7 @@ export class ReActLLMDuty extends LLMDuty {
       try {
         let result = null
 
-        if (LLM_PROVIDER_NAME === LLMProviders.Local) {
+        if (getLLMProviderName() === LLMProviders.Local) {
           const tempContext = await LLM_MANAGER.model.createContext()
           const { LlamaChatSession } = await Function(
             'return import("node-llama-cpp")'
@@ -1560,7 +1565,7 @@ export class ReActLLMDuty extends LLMDuty {
    * mechanism and stays on grammar-based JSON mode.
    */
   private get supportsNativeTools(): boolean {
-    return LLM_PROVIDER_NAME !== LLMProviders.Local
+    return getLLMProviderName() !== LLMProviders.Local
   }
 
   /**
@@ -1643,7 +1648,7 @@ export class ReActLLMDuty extends LLMDuty {
       options?.emitReasoning ?? phasePolicy.emitReasoning
     const shouldStream =
       (options?.streamToProvider ?? phasePolicy.streamToProvider) &&
-      LLM_PROVIDER_NAME !== LLMProviders.Local
+      getLLMProviderName() !== LLMProviders.Local
     const reasoningGenerationId = shouldEmitReasoning
       ? this.getReasoningGenerationId(
           phase,
@@ -1688,7 +1693,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     let result
-    if (LLM_PROVIDER_NAME === LLMProviders.Local) {
+    if (getLLMProviderName() === LLMProviders.Local) {
       result = await this.withLocalPromptSession(history, (session) =>
         LLM_PROVIDER.prompt(prompt, {
           ...completionParams,
@@ -1750,7 +1755,7 @@ export class ReActLLMDuty extends LLMDuty {
       options?.streamToUser ?? shouldStream ?? phasePolicy.streamToUser
     const shouldStreamEffective =
       (options?.streamToProvider ?? phasePolicy.streamToProvider) &&
-      LLM_PROVIDER_NAME !== LLMProviders.Local
+      getLLMProviderName() !== LLMProviders.Local
     const reasoningGenerationId = shouldEmitReasoning
       ? this.getReasoningGenerationId(
           phase,
@@ -1830,7 +1835,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     let result
-    if (LLM_PROVIDER_NAME === LLMProviders.Local) {
+    if (getLLMProviderName() === LLMProviders.Local) {
       result = await this.withLocalPromptSession(history, (session) =>
         LLM_PROVIDER.prompt(prompt, {
           ...completionParams,
@@ -1920,7 +1925,7 @@ export class ReActLLMDuty extends LLMDuty {
       options?.streamToUser ?? shouldStreamToUser ?? phasePolicy.streamToUser
     const shouldStreamEffective =
       (options?.streamToProvider ?? phasePolicy.streamToProvider) &&
-      LLM_PROVIDER_NAME !== LLMProviders.Local
+      getLLMProviderName() !== LLMProviders.Local
 
     const toolNames = tools.map((t) => t.function.name).join(', ')
     const choiceLabel =
@@ -2552,7 +2557,7 @@ export class ReActLLMDuty extends LLMDuty {
     firstTokenAt?: number | null | undefined
   }): void {
     const observedMetrics = observeCompletionMetrics({
-      providerName: LLM_PROVIDER_NAME as LLMProviders,
+      providerName: getLLMProviderName(),
       accumulator: {
         totalInputTokens: this.totalInputTokens,
         totalOutputTokens: this.totalOutputTokens,
@@ -2574,7 +2579,7 @@ export class ReActLLMDuty extends LLMDuty {
       providerTokensPerSecond: params.providerTokensPerSecond,
       ...(params.firstTokenAt ? { firstTokenAt: params.firstTokenAt } : {}),
       estimateTokensFromText: this.estimateTokensFromText.bind(this),
-      ...(LLM_PROVIDER_NAME === LLMProviders.Local && LLM_MANAGER.model
+      ...(getLLMProviderName() === LLMProviders.Local && LLM_MANAGER.model
         ? {
             tokenizeLocally: (text: string): number =>
               LLM_MANAGER.model.tokenize(text).length
@@ -2663,7 +2668,7 @@ export class ReActLLMDuty extends LLMDuty {
           : `forced:${toolChoice.function.name}`
 
     const diagnosisMessage = BRAIN.wernicke('react.tool_call.diagnosis', '', {
-      '{{ provider }}': LLM_PROVIDER_NAME,
+      '{{ provider }}': getLLMProviderName(),
       '{{ tool_choice }}': forcedChoice,
       '{{ tool_count }}': String(tools.length),
       '{{ total_tokens }}': String(totalEstimatedTokens),
@@ -2731,7 +2736,7 @@ export class ReActLLMDuty extends LLMDuty {
     )
 
     const llmMetrics = deriveLLMMetrics({
-      providerName: LLM_PROVIDER_NAME as LLMProviders,
+      providerName: getLLMProviderName(),
       normalizedOutput,
       totalInputTokens: this.totalInputTokens,
       totalOutputTokens: this.totalOutputTokens,
@@ -2742,7 +2747,7 @@ export class ReActLLMDuty extends LLMDuty {
       phaseMetrics: this.phaseMetrics,
       finalAnswerMetrics: this.finalAnswerMetrics,
       estimateTokensFromText: this.estimateTokensFromText.bind(this),
-      ...(LLM_PROVIDER_NAME === LLMProviders.Local && LLM_MANAGER.model
+      ...(getLLMProviderName() === LLMProviders.Local && LLM_MANAGER.model
         ? {
             tokenizeLocally: (text: string): number =>
               LLM_MANAGER.model.tokenize(text).length

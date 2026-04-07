@@ -21,6 +21,15 @@ export interface BuiltInCommandAutocompleteItem {
   value: string
 }
 
+export interface BuiltInCommandPendingInput {
+  name: string
+  type: 'text' | 'password'
+  placeholder: string
+  prompt?: string
+  icon_name?: string
+  icon_type?: 'line' | 'fill' | 'notype'
+}
+
 export interface BuiltInCommandSession {
   id: string
   status: 'idle' | 'awaiting_required_parameters' | 'completed' | 'error'
@@ -28,11 +37,18 @@ export interface BuiltInCommandSession {
   raw_input: string
   required_parameters: string[]
   collected_parameters: Record<string, string>
+  pending_input: BuiltInCommandPendingInput | null
 }
 
 export interface BuiltInCommandExecutionContext {
   raw_input: string
   args: string[]
+  session: BuiltInCommandSession
+  resolveCommands: () => BuiltInCommand[]
+}
+
+export interface BuiltInCommandPendingInputExecutionContext {
+  input: string
   session: BuiltInCommandSession
   resolveCommands: () => BuiltInCommand[]
 }
@@ -130,6 +146,14 @@ export abstract class BuiltInCommand {
     void context
 
     return []
+  }
+
+  public async executePendingInput(
+    context: BuiltInCommandPendingInputExecutionContext
+  ): Promise<BuiltInCommandExecutionResult> {
+    void context
+
+    throw new Error(`The command "${this.name}" does not accept extra input.`)
   }
 
   public abstract execute(

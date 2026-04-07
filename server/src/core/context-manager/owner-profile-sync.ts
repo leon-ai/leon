@@ -13,8 +13,8 @@ import {
   type OwnerProfile,
   writeOwnerProfile
 } from '@/core/context-manager/owner-profile'
-import { WORKFLOW_LLM_PROVIDER } from '@/constants'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 const OWNER_DOCUMENT_TOKEN_BUDGET = 2_000
 const OWNER_DOCUMENT_UPDATE_TIMEOUT_MS = 30_000
@@ -328,13 +328,14 @@ async function promptForOwnerDocument(
     maxRetries: OWNER_DOCUMENT_MAX_RETRIES,
     maxTokens,
     trackProviderErrors: false,
-    /**
-     * Disable thinking when Llama.cpp since local models tend
-     * to loop overthink
-     */
-    ...(WORKFLOW_LLM_PROVIDER === LLMProviders.LlamaCPP
-      ? { disableThinking: true }
-      : {}),
+        /**
+         * Disable thinking when Llama.cpp since local models tend
+         * to loop overthink
+         */
+        ...(CONFIG_STATE.getModelState().getWorkflowProvider() ===
+        LLMProviders.LlamaCPP
+          ? { disableThinking: true }
+          : {}),
     ...(data ? { data } : {})
   })
 

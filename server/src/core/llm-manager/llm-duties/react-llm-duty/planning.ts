@@ -1,7 +1,7 @@
 import { LogHelper } from '@/helpers/log-helper'
 import { LLMProviders, type OpenAITool } from '@/core/llm-manager/types'
 import type { MessageLog } from '@/types'
-import { AGENT_LLM_PROVIDER as LLM_PROVIDER_NAME } from '@/constants'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 import {
   PLAN_SYSTEM_PROMPT,
@@ -33,6 +33,10 @@ import {
   PLAN_STEP_SCHEMA
 } from './plan-contract'
 import { buildPhaseSystemPrompt } from './phase-policy'
+
+function getLLMProviderName(): LLMProviders {
+  return CONFIG_STATE.getModelState().getAgentProvider()
+}
 
 function buildPlanningPromptSections(params: {
   prompt: string
@@ -198,7 +202,7 @@ export async function runPlanningPhase(
     ]
 
     const isForcedCreatePlanChoice =
-      LLM_PROVIDER_NAME === LLMProviders.LlamaCPP
+      getLLMProviderName() === LLMProviders.LlamaCPP
     const planningToolChoice = isForcedCreatePlanChoice
       ? ({ type: 'function', function: { name: 'create_plan' } } as const)
       : 'auto'

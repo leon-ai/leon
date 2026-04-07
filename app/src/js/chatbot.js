@@ -15,6 +15,15 @@ const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 24
 const MAXIMUM_BUBBLES_IN_MEMORY = 62
 const MAXIMUM_WIDGET_FETCH_CONCURRENCY = 4
 
+function escapeHTML(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export default class Chatbot {
   constructor(socket, serverURL) {
     this.socket = socket
@@ -599,6 +608,7 @@ export default class Chatbot {
       message.includes && message.includes('"component":"WidgetWrapper"')
 
     if (typeof message === 'string' && !isWidget) {
+      message = escapeHTML(message)
       message = message.replace(/\n/g, '<br />')
 
       // Handle HTTP/HTTPS URLs with simple regex

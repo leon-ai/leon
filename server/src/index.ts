@@ -5,7 +5,6 @@ import psList from 'ps-list'
 import kill from 'tree-kill'
 
 import {
-  AGENT_LLM_TARGET,
   IS_DEVELOPMENT_ENV,
   IS_PRODUCTION_ENV,
   IS_TELEMETRY_ENABLED,
@@ -21,8 +20,7 @@ import {
   PYTORCH_TORCH_PATH,
   PYTHON_TCP_SERVER_ENTRY_PATH,
   PYTHON_TCP_SERVER_RUNTIME_BIN_PATH,
-  SHOULD_START_PYTHON_TCP_SERVER,
-  WORKFLOW_LLM_TARGET
+  SHOULD_START_PYTHON_TCP_SERVER
 } from '@/constants'
 import {
   PYTHON_TCP_CLIENT,
@@ -46,6 +44,7 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 ;(async (): Promise<void> => {
   process.title = 'leon'
   const shouldStartPythonTCPServer = SHOULD_START_PYTHON_TCP_SERVER
@@ -175,8 +174,7 @@ import { SystemHelper } from '@/helpers/system-helper'
       LogHelper.error(`LLM Manager failed to init: ${e}`)
     }
   } else {
-    const hasEnabledLLMTarget =
-      WORKFLOW_LLM_TARGET.isEnabled || AGENT_LLM_TARGET.isEnabled
+    const hasEnabledLLMTarget = CONFIG_STATE.getModelState().hasEnabledTarget()
 
     if (hasEnabledLLMTarget) {
       LogHelper.warning(

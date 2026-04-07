@@ -1,15 +1,13 @@
 import fs from 'node:fs'
 
 import {
-  AGENT_LLM_TARGET,
-  LEON_ROUTING_MODE,
-  LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH,
-  WORKFLOW_LLM_TARGET
+  LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH
 } from '@/constants'
 import { ConversationLogger } from '@/conversation-logger'
 import { LLMDuties } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 interface CoreLLMDutyConfig {
   maxTokens?: number
@@ -154,10 +152,12 @@ export default class LLMManager {
     }
 
     LogHelper.title('LLM Manager')
+    const modelState = CONFIG_STATE.getModelState()
+    const routingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
     const llmDisplay = getRoutingModeLLMDisplay(
-      LEON_ROUTING_MODE,
-      WORKFLOW_LLM_TARGET,
-      AGENT_LLM_TARGET
+      routingMode,
+      modelState.getWorkflowTarget(),
+      modelState.getAgentTarget()
     )
     LogHelper.success(`LLM manager initialized with ${llmDisplay.value}`)
     LogHelper.timeEnd('LLM Manager init')

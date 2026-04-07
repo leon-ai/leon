@@ -1,7 +1,5 @@
 import {
-  AGENT_LLM_TARGET,
   LEON_VERSION,
-  WORKFLOW_LLM_TARGET,
   NODEJS_BRIDGE_VERSION,
   PYTHON_BRIDGE_VERSION,
   PYTHON_TCP_SERVER_VERSION
@@ -49,15 +47,16 @@ export class LeonRuntimeContextFile extends ContextFile {
     const agentLlmName = this.resolvers.getAgentLLMName()
     const localLlmName = this.resolvers.getLocalLLMName()
     const routingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
+    const modelState = CONFIG_STATE.getModelState()
     const llmDisplay = getRoutingModeLLMDisplay(
       routingMode,
-      WORKFLOW_LLM_TARGET,
-      AGENT_LLM_TARGET
+      modelState.getWorkflowTarget(),
+      modelState.getAgentTarget()
     )
     const activeLLMTarget = getActiveLLMTarget(
       routingMode,
-      WORKFLOW_LLM_TARGET,
-      AGENT_LLM_TARGET
+      modelState.getWorkflowTarget(),
+      modelState.getAgentTarget()
     )
 
     return [
@@ -71,8 +70,8 @@ export class LeonRuntimeContextFile extends ContextFile {
       `- Active LLM provider: ${activeLLMTarget.provider}`,
       ...(routingMode === 'smart'
         ? [
-            `- Workflow LLM provider: ${WORKFLOW_LLM_TARGET.provider}`,
-            `- Agent LLM provider: ${AGENT_LLM_TARGET.provider}`,
+            `- Workflow LLM provider: ${modelState.getWorkflowProvider()}`,
+            `- Agent LLM provider: ${modelState.getAgentProvider()}`,
             `- Workflow LLM: ${workflowLlmName}`,
             `- Agent LLM: ${agentLlmName}`
           ]

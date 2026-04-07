@@ -2,7 +2,6 @@ import type { FastifyPluginAsync } from 'fastify'
 
 import type { APIOptions } from '@/core/http-server/http-server'
 import {
-  AGENT_LLM_TARGET,
   LEON_VERSION,
   HAS_AFTER_SPEECH,
   HAS_STT,
@@ -10,10 +9,9 @@ import {
   STT_PROVIDER,
   TTS_PROVIDER,
   IS_TELEMETRY_ENABLED,
-  SHOULD_START_PYTHON_TCP_SERVER,
-  WORKFLOW_LLM_TARGET
+  SHOULD_START_PYTHON_TCP_SERVER
 } from '@/constants'
-import { LLM_PROVIDER, PERSONA } from '@/core'
+import { PERSONA } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { SystemHelper } from '@/helpers/system-helper'
@@ -49,16 +47,19 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
         SystemHelper.getUsedVRAM()
       ])
       const moodState = CONFIG_STATE.getMoodState()
+      const modelState = CONFIG_STATE.getModelState()
       const routingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
+      const workflowTarget = modelState.getWorkflowTarget()
+      const agentTarget = modelState.getAgentTarget()
       const activeLLMTarget = getActiveLLMTarget(
         routingMode,
-        WORKFLOW_LLM_TARGET,
-        AGENT_LLM_TARGET
+        workflowTarget,
+        agentTarget
       )
       const llmDisplay = getRoutingModeLLMDisplay(
         routingMode,
-        WORKFLOW_LLM_TARGET,
-        AGENT_LLM_TARGET
+        workflowTarget,
+        agentTarget
       )
 
       reply.send({
@@ -75,20 +76,20 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
         freeVRAM,
         usedVRAM,
         llm: {
-          enabled: WORKFLOW_LLM_TARGET.isEnabled || AGENT_LLM_TARGET.isEnabled,
+          enabled: workflowTarget.isEnabled || agentTarget.isEnabled,
           heading: llmDisplay.heading,
           display: llmDisplay.value,
           provider: activeLLMTarget.provider,
           model: activeLLMTarget.model,
-          workflow: WORKFLOW_LLM_TARGET.label,
-          agent: AGENT_LLM_TARGET.label,
-          workflowEnabled: WORKFLOW_LLM_TARGET.isEnabled,
-          agentEnabled: AGENT_LLM_TARGET.isEnabled,
-          workflowProvider: WORKFLOW_LLM_TARGET.provider,
-          agentProvider: AGENT_LLM_TARGET.provider,
-          workflowModel: LLM_PROVIDER.workflowLLMName,
-          agentModel: LLM_PROVIDER.agentLLMName,
-          localModel: LLM_PROVIDER.localLLMName
+          workflow: workflowTarget.label,
+          agent: agentTarget.label,
+          workflowEnabled: workflowTarget.isEnabled,
+          agentEnabled: agentTarget.isEnabled,
+          workflowProvider: workflowTarget.provider,
+          agentProvider: agentTarget.provider,
+          workflowModel: modelState.getWorkflowModelName(),
+          agentModel: modelState.getAgentModelName(),
+          localModel: modelState.getLocalModelName()
         },
         stt: {
           enabled: HAS_STT,

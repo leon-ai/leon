@@ -19,6 +19,27 @@ interface PostCommandSchema {
   body: Static<typeof postCommandSchema.body>
 }
 
+async function refreshLLMRuntimeIfModelCommand(input: {
+  mode: (typeof COMMAND_MODES)[number]
+  commandName: string | null
+  status: string | undefined
+}): Promise<void> {
+  if (
+    input.mode !== 'execute' ||
+    input.commandName !== 'model' ||
+    input.status !== 'completed'
+  ) {
+    return
+  }
+
+  const { LLM_PROVIDER, LLM_MANAGER } = await import('@/core')
+  const isProviderReady = await LLM_PROVIDER.init()
+
+  if (isProviderReady) {
+    await LLM_MANAGER.init()
+  }
+}
+
 export const postCommand: FastifyPluginAsync<APIOptions> = async (
   fastify,
   options
@@ -37,6 +58,12 @@ export const postCommand: FastifyPluginAsync<APIOptions> = async (
           mode === 'autocomplete'
             ? BUILT_IN_COMMAND_MANAGER.autocomplete(input, sessionId)
             : await BUILT_IN_COMMAND_MANAGER.execute(input, sessionId)
+
+        await refreshLLMRuntimeIfModelCommand({
+          mode,
+          commandName: data.session.command_name,
+          status: 'status' in data ? data.status : undefined
+        })
 
         reply.send({
           ...data,

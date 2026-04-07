@@ -7,14 +7,11 @@ import fastifyStatic from '@fastify/static'
 
 import {
   API_VERSION,
-  AGENT_LLM_TARGET,
   LEON_VERSION,
   LEON_NODE_ENV,
   HAS_OVER_HTTP,
   IS_TELEMETRY_ENABLED,
-  LEON_ROUTING_MODE,
-  TMP_PATH,
-  WORKFLOW_LLM_TARGET
+  TMP_PATH
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
@@ -33,6 +30,7 @@ import { openPathPlugin } from '@/core/http-server/api/open-path'
 import { PERSONA } from '@/core'
 import { SystemHelper } from '@/helpers/system-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 const LEON_OPEN_BROWSER_GUARD_PREFIX = 'open-browser'
 
@@ -135,12 +133,14 @@ export default class HTTPServer {
     LogHelper.info(`Environment: ${LEON_NODE_ENV}`)
     LogHelper.info(`Version: ${LEON_VERSION}`)
     LogHelper.info(`Time zone: ${DateHelper.getTimeZone()}`)
+    const routingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
+    const modelState = CONFIG_STATE.getModelState()
     const llmDisplay = getRoutingModeLLMDisplay(
-      LEON_ROUTING_MODE,
-      WORKFLOW_LLM_TARGET,
-      AGENT_LLM_TARGET
+      routingMode,
+      modelState.getWorkflowTarget(),
+      modelState.getAgentTarget()
     )
-    LogHelper.info(`Routing mode: ${LEON_ROUTING_MODE}`)
+    LogHelper.info(`Routing mode: ${routingMode}`)
     LogHelper.info(`${llmDisplay.heading}: ${llmDisplay.value}`)
     LogHelper.info(`Mood: ${PERSONA.mood.type}`)
     LogHelper.info(

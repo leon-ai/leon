@@ -3,8 +3,6 @@ import { Server as SocketIOServer, Socket } from 'socket.io'
 import axios from 'axios'
 
 import {
-  AGENT_LLM_TARGET,
-  WORKFLOW_LLM_TARGET,
   LANG,
   HAS_STT,
   HAS_TTS,
@@ -28,6 +26,7 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { Telemetry } from '@/telemetry'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { StringHelper } from '@/helpers/string-helper'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 const DEFAULT_CLIENT_CAPABILITIES = {
   supportsWidgets: true
@@ -359,7 +358,10 @@ export default class SocketServer {
           })
         }
 
-        const usesLlamaCPP = [WORKFLOW_LLM_TARGET, AGENT_LLM_TARGET].some(
+        const usesLlamaCPP = [
+          CONFIG_STATE.getModelState().getWorkflowTarget(),
+          CONFIG_STATE.getModelState().getAgentTarget()
+        ].some(
           (target) =>
             target.isEnabled &&
             target.isResolved &&

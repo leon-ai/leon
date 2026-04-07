@@ -7,11 +7,11 @@ import { gzipSync } from 'node:zlib'
 import {
   CONTEXT_PATH,
   MEMORY_DB_PATH,
-  MEMORY_PATH,
-  WORKFLOW_LLM_PROVIDER
+  MEMORY_PATH
 } from '@/constants'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 import MemoryRepository from './memory-repository'
 import QMDBackend from './qmd-backend'
@@ -1261,7 +1261,8 @@ No markdown. No explanation.`
          * Disable thinking when Llama.cpp since local models tend
          * to loop overthink
          */
-        ...(WORKFLOW_LLM_PROVIDER === LLMProviders.LlamaCPP
+        ...(CONFIG_STATE.getModelState().getWorkflowProvider() ===
+        LLMProviders.LlamaCPP
           ? { disableThinking: true }
           : {})
       })

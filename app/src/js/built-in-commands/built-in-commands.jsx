@@ -38,6 +38,7 @@ export default class BuiltInCommands {
     this.suggestions = []
     this.recentSuggestions = []
     this.result = null
+    this.pendingInput = null
     this.isOpen = false
     this.isClosing = false
     this.isLoading = false
@@ -89,6 +90,7 @@ export default class BuiltInCommands {
         recentSelectedSuggestionIndex={recentSelectedSuggestionIndex}
         suggestionSelectedSuggestionIndex={suggestionSelectedSuggestionIndex}
         result={this.result}
+        pendingInput={this.pendingInput}
         hasSubmitted={this.hasSubmitted}
         inputRef={this.modalInputRef}
         onCommandChange={(value) => {
@@ -225,8 +227,10 @@ export default class BuiltInCommands {
   handleCommandChange(value) {
     this.commandValue = value
     this.hasSubmitted = false
-    this.result = null
-    this.queueAutocomplete()
+    if (!this.pendingInput) {
+      this.result = null
+      this.queueAutocomplete()
+    }
     this.render()
   }
 
@@ -237,6 +241,7 @@ export default class BuiltInCommands {
       this.origin = origin
       this.commandValue = this.normalizeCommandValue(rawInput)
       this.result = null
+      this.pendingInput = null
       this.hasSubmitted = false
       this.shouldFocusInput = true
       this.input.value = ''
@@ -250,6 +255,7 @@ export default class BuiltInCommands {
     this.commandValue = this.normalizeCommandValue(rawInput)
     this.suggestions = []
     this.result = null
+    this.pendingInput = null
     this.selectedSuggestionIndex = -1
     this.hasSubmitted = false
     this.isOpen = true
@@ -304,6 +310,7 @@ export default class BuiltInCommands {
       this.sessionId = data.session.id
       this.suggestions = data.suggestions || []
       this.recentSuggestions = data.recent_suggestions || []
+      this.pendingInput = data.session.pending_input || null
       this.selectedSuggestionIndex =
         this.getVisibleSuggestions().length > 0 ? 0 : -1
       this.isLoading = false
@@ -361,6 +368,8 @@ export default class BuiltInCommands {
       this.isLoading = false
       this.result = data.result
       this.recentSuggestions = data.recent_suggestions || []
+      this.pendingInput = data.session.pending_input || null
+      this.commandValue = ''
       this.render()
     } catch (error) {
       this.isLoading = false
@@ -430,6 +439,7 @@ export default class BuiltInCommands {
     this.sessionId = null
     this.hasSubmitted = false
     this.result = null
+    this.pendingInput = null
     this.commandValue = ''
     this.suggestions = []
     this.selectedSuggestionIndex = -1
@@ -519,6 +529,10 @@ export default class BuiltInCommands {
   }
 
   buildCommandInput() {
+    if (this.pendingInput) {
+      return this.commandValue
+    }
+
     return `/${this.commandValue}`.trim()
   }
 
@@ -570,6 +584,7 @@ export default class BuiltInCommands {
     this.commandValue = ''
     this.suggestions = []
     this.result = null
+    this.pendingInput = null
     this.selectedSuggestionIndex = -1
     this.hasSubmitted = false
     this.shouldFocusInput = false

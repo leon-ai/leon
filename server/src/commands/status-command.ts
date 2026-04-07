@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import { execFileSync } from 'node:child_process'
 
 import {
-  AGENT_LLM_TARGET,
   API_VERSION,
   GITHUB_URL,
   HAS_STT,
@@ -12,8 +11,7 @@ import {
   LEON_FILE_PATH,
   LEON_VERSION,
   STT_PROVIDER,
-  TTS_PROVIDER,
-  WORKFLOW_LLM_TARGET
+  TTS_PROVIDER
 } from '@/constants'
 import {
   BuiltInCommand,
@@ -88,26 +86,28 @@ export class StatusCommand extends BuiltInCommand {
     void context
 
     const moodState = CONFIG_STATE.getMoodState()
-    const llmState = CONFIG_STATE.getLLMState()
+    const modelState = CONFIG_STATE.getModelState()
     const routingModeState = CONFIG_STATE.getRoutingModeState()
     const leonMetadata = getLeonMetadata()
     const routingMode = routingModeState.getRoutingMode()
+    const workflowTarget = modelState.getWorkflowTarget()
+    const agentTarget = modelState.getAgentTarget()
     const llmDisplay = getRoutingModeLLMDisplay(
       routingMode,
-      WORKFLOW_LLM_TARGET,
-      AGENT_LLM_TARGET
+      workflowTarget,
+      agentTarget
     )
     const activeLLMTarget = getActiveLLMTarget(
       routingMode,
-      WORKFLOW_LLM_TARGET,
-      AGENT_LLM_TARGET
+      workflowTarget,
+      agentTarget
     )
     const currentUsedModelName =
       routingMode === 'smart'
-        ? `workflow=${llmState.getWorkflowLLMName()}, agent=${llmState.getAgentLLMName()}`
+        ? `workflow=${modelState.getWorkflowModelName()}, agent=${modelState.getAgentModelName()}`
         : routingMode === 'agent'
-          ? llmState.getAgentLLMName()
-          : llmState.getWorkflowLLMName()
+          ? modelState.getAgentModelName()
+          : modelState.getWorkflowModelName()
     const items = [
       {
         label: 'Instance ID',
@@ -155,15 +155,15 @@ export class StatusCommand extends BuiltInCommand {
       },
       {
         label: 'Workflow model name',
-        value: llmState.getWorkflowLLMName()
+        value: modelState.getWorkflowModelName()
       },
       {
         label: 'Agent model name',
-        value: llmState.getAgentLLMName()
+        value: modelState.getAgentModelName()
       },
       {
         label: 'Local model name',
-        value: llmState.getLocalLLMName()
+        value: modelState.getLocalModelName()
       },
       {
         label: 'STT',

@@ -12,12 +12,7 @@ import {
   LLMDuties,
   LLMProviders
 } from '@/core/llm-manager/types'
-import {
-  AGENT_LLM_TARGET,
-  LEON_ROUTING_MODE,
-  SERVER_CORE_PATH,
-  WORKFLOW_LLM_TARGET
-} from '@/constants'
+import { SERVER_CORE_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { FileHelper } from '@/helpers/file-helper'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
@@ -101,6 +96,8 @@ const DEFAULT_TEMPERATURE = 0 // Disabled
 const DEFAULT_MAX_TOKENS = 8_192
 const NO_LLM_ENABLED_MESSAGE =
   'I need an AI engine before I can answer. Enable local AI or configure an online provider.'
+const LLM_PROVIDER_NOT_READY_MESSAGE =
+  'The LLM provider is not ready yet. Use the built-in command "/model <provider> <model name>" to configure a model. Just press "/" to open built-in commands.'
 export default class LLMProvider {
   private static instance: LLMProvider
 
@@ -205,8 +202,9 @@ export default class LLMProvider {
     LogHelper.info('Initializing LLM provider...')
     this.llamaCPPServerBootErrorMessage = null
 
-    const workflowTarget = WORKFLOW_LLM_TARGET
-    const agentTarget = AGENT_LLM_TARGET
+    const modelState = CONFIG_STATE.getModelState()
+    const workflowTarget = modelState.getWorkflowTarget()
+    const agentTarget = modelState.getAgentTarget()
 
     for (const target of [workflowTarget, agentTarget]) {
       if (target.isEnabled && !target.isResolved) {
@@ -223,7 +221,6 @@ export default class LLMProvider {
       this.disposeCurrentProviders()
       this.workflowLLMProvider = undefined
       this.agentLLMProvider = undefined
-      CONFIG_STATE.getLLMState().resetToConfiguredTargets()
 
       LogHelper.title('LLM Provider')
       LogHelper.warning(
@@ -277,17 +274,12 @@ export default class LLMProvider {
       throw error
     }
 
-    CONFIG_STATE.getLLMState().syncModelNames({
-      workflowLLMName: this.workflowLLMName,
-      agentLLMName: this.agentLLMName,
-      localLLMName: this.localLLMName
-    })
-
     LogHelper.title('LLM Provider')
+    const routingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
     const llmDisplay = getRoutingModeLLMDisplay(
-      LEON_ROUTING_MODE,
-      WORKFLOW_LLM_TARGET,
-      AGENT_LLM_TARGET
+      routingMode,
+      workflowTarget,
+      agentTarget
     )
     LogHelper.success(`Initialized ${llmDisplay.heading.toLowerCase()} ${llmDisplay.value}`)
 
@@ -298,7 +290,6 @@ export default class LLMProvider {
     this.disposeCurrentProviders()
     this.workflowLLMProvider = undefined
     this.agentLLMProvider = undefined
-    CONFIG_STATE.getLLMState().resetToConfiguredTargets()
   }
 
   private async createProvider(target: ResolvedLLMTarget): Promise<Provider> {
@@ -347,15 +338,19 @@ export default class LLMProvider {
   }
 
   private getProviderNameForDuty(dutyType: LLMDuties | null): LLMProviders {
+    const modelState = CONFIG_STATE.getModelState()
+
     return dutyType === LLMDuties.ReAct
-      ? AGENT_LLM_TARGET.provider
-      : WORKFLOW_LLM_TARGET.provider
+      ? modelState.getAgentProvider()
+      : modelState.getWorkflowProvider()
   }
 
   private getTargetForDuty(dutyType: LLMDuties | null): ResolvedLLMTarget {
+    const modelState = CONFIG_STATE.getModelState()
+
     return dutyType === LLMDuties.ReAct
-      ? AGENT_LLM_TARGET
-      : WORKFLOW_LLM_TARGET
+      ? modelState.getAgentTarget()
+      : modelState.getWorkflowTarget()
   }
 
   private getProviderForDuty(dutyType: LLMDuties | null): Provider | undefined {
@@ -376,7 +371,7 @@ export default class LLMProvider {
       )
     }
 
-    return 'The LLM provider is not ready yet.'
+    return LLM_PROVIDER_NOT_READY_MESSAGE
   }
 
   private getDefaultTimeoutForProvider(providerName: LLMProviders): number {

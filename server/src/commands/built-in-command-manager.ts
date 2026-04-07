@@ -55,8 +55,29 @@ export class BuiltInCommandManager {
     const session = this.getSession(sessionId)
     const parsedInput = this.parseInput(rawInput)
 
-    session.raw_input = parsedInput.normalized_input
-    session.command_name = parsedInput.command_name || null
+    if (
+      !(
+        session.status === 'awaiting_required_parameters' &&
+        session.pending_input &&
+        !parsedInput.has_command_prefix
+      )
+    ) {
+      session.raw_input = parsedInput.normalized_input
+      session.command_name = parsedInput.command_name || null
+    }
+
+    if (
+      session.status === 'awaiting_required_parameters' &&
+      session.pending_input &&
+      !parsedInput.has_command_prefix
+    ) {
+      return {
+        mode: 'autocomplete',
+        session,
+        suggestions: [],
+        recent_suggestions: this.getRecentSuggestions()
+      }
+    }
 
     if (!parsedInput.has_command_prefix) {
       return {
@@ -125,8 +146,19 @@ export class BuiltInCommandManager {
     const session = this.getSession(sessionId)
     const parsedInput = this.parseInput(rawInput)
 
+    if (
+      session.status === 'awaiting_required_parameters' &&
+      session.pending_input &&
+      !parsedInput.has_command_prefix
+    ) {
+      return this.executePendingInput(session, rawInput)
+    }
+
     session.raw_input = parsedInput.normalized_input
     session.command_name = parsedInput.command_name || null
+    session.required_parameters = []
+    session.collected_parameters = {}
+    session.pending_input = null
 
     if (!parsedInput.has_command_prefix || !parsedInput.command_name) {
       session.status = 'error'
@@ -227,6 +259,68 @@ export class BuiltInCommandManager {
     }
   }
 
+  private async executePendingInput(
+    session: BuiltInCommandSession,
+    rawInput: string
+  ): Promise<BuiltInCommandExecuteResponse> {
+    const command = session.command_name
+      ? this.getCommand(session.command_name)
+      : null
+
+    if (!command) {
+      session.status = 'error'
+      session.pending_input = null
+
+      return {
+        mode: 'execute',
+        session,
+        status: 'error',
+        result: createListResult({
+          title: 'Command Session Error',
+          tone: 'error',
+          items: [
+            {
+              label: 'The built-in command session is no longer available.',
+              tone: 'error'
+            }
+          ]
+        }),
+        suggestions: [],
+        recent_suggestions: this.getRecentSuggestions()
+      }
+    }
+
+    const executionResult = await command.executePendingInput({
+      input: rawInput,
+      session,
+      resolveCommands: () => this.listCommands()
+    })
+
+    if (executionResult.session) {
+      Object.assign(session, executionResult.session)
+    }
+
+    session.status =
+      executionResult.status === 'awaiting_required_parameters'
+        ? 'awaiting_required_parameters'
+        : executionResult.status === 'error'
+          ? 'error'
+          : 'completed'
+
+    if (executionResult.status === 'completed') {
+      this.persistRecentCommandValue(session.raw_input)
+    }
+
+    return {
+      mode: 'execute',
+      session,
+      status: executionResult.status,
+      result: executionResult.result,
+      suggestions: [],
+      recent_suggestions: this.getRecentSuggestions()
+    }
+  }
+
   private getSession(sessionId?: string): BuiltInCommandSession {
     const resolvedSessionId = sessionId || this.createSessionId()
     const existingSession = this.sessions.get(resolvedSessionId)
@@ -241,7 +335,8 @@ export class BuiltInCommandManager {
       command_name: null,
       raw_input: '',
       required_parameters: [],
-      collected_parameters: {}
+      collected_parameters: {},
+      pending_input: null
     }
 
     this.sessions.set(resolvedSessionId, session)
