@@ -53,7 +53,8 @@ export default class Chatbot {
     this.et.addEventListener('to-leon', (event) => {
       this.createBubble({
         who: 'me',
-        string: event.detail
+        string: event.detail.string,
+        sentAt: event.detail.sentAt
       })
     })
 
@@ -83,9 +84,16 @@ export default class Chatbot {
     )
   }
 
-  sendTo(who, string) {
+  sendTo(who, string, sentAt = Date.now()) {
     if (who === 'leon') {
-      this.et.dispatchEvent(new CustomEvent('to-leon', { detail: string }))
+      this.et.dispatchEvent(
+        new CustomEvent('to-leon', {
+          detail: {
+            string,
+            sentAt
+          }
+        })
+      )
     }
   }
 
@@ -369,6 +377,8 @@ export default class Chatbot {
       this.createBubble({
         who: bubble.who === 'owner' ? 'me' : bubble.who,
         string: bubble.originalString ? bubble.originalString : bubble.string,
+        metrics: bubble.llmMetrics || null,
+        sentAt: bubble.sentAt,
         save: false,
         isCreatingFromLoadingFeed: true,
         messageId: bubble.messageId
@@ -387,6 +397,7 @@ export default class Chatbot {
       bubbleId,
       isCreatingFromLoadingFeed = false,
       messageId,
+      sentAt = null,
       beforeElement = null
     } = params
     const container = document.createElement('div')
@@ -424,7 +435,13 @@ export default class Chatbot {
     container.appendChild(bubble)
 
     if (who === 'leon' && metrics) {
-      container.appendChild(this.createMetricsElement(metrics))
+      container.appendChild(this.createMetricsElement(metrics, sentAt))
+    } else if (who === 'me') {
+      const timestampElement = this.createTimestampElement(sentAt)
+
+      if (timestampElement) {
+        container.appendChild(timestampElement)
+      }
     }
 
     let widgetComponentTree = null
@@ -483,7 +500,7 @@ export default class Chatbot {
     }
 
     if (save) {
-      this.saveBubble(who, originalString, formattedString, messageId, metrics)
+      this.saveBubble(who, originalString, formattedString, messageId, metrics, sentAt)
     }
 
     return container
@@ -583,7 +600,14 @@ export default class Chatbot {
     }
   }
 
-  saveBubble(who, originalString, string, messageId, metrics = null) {
+  saveBubble(
+    who,
+    originalString,
+    string,
+    messageId,
+    metrics = null,
+    sentAt = null
+  ) {
     if (!this.noBubbleMessage.classList.contains('hide')) {
       this.noBubbleMessage.classList.add('hide')
     }
@@ -595,6 +619,7 @@ export default class Chatbot {
     // Store both original and formatted strings
     this.parsedBubbles.push({
       who,
+      sentAt,
       string,
       originalString,
       messageId,
@@ -628,7 +653,100 @@ export default class Chatbot {
     return message
   }
 
-  formatMetrics(metrics) {
+  formatMetricTimestamp(sentAt) {
+    if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
+      return ''
+    }
+
+    const date = new Date(sentAt)
+    const now = new Date()
+
+    if (Number.isNaN(date.getTime()) || Number.isNaN(now.getTime())) {
+      return ''
+    }
+
+    const timeFormatter = new Intl.DateTimeFormat(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+    const formattedTime = timeFormatter.format(date)
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    )
+    const startOfTargetDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    )
+    const dayDifference = Math.round(
+      (startOfToday.getTime() - startOfTargetDay.getTime()) / 86_400_000
+    )
+
+    if (dayDifference === 0) {
+      return `Today, ${formattedTime}`
+    }
+
+    if (dayDifference === 1) {
+      return `Yesterday, ${formattedTime}`
+    }
+
+    if (dayDifference > 1 && dayDifference < 7) {
+      const weekdayFormatter = new Intl.DateTimeFormat(undefined, {
+        weekday: 'long'
+      })
+
+      return `${weekdayFormatter.format(date)}, ${formattedTime}`
+    }
+
+    const monthDayFormatter = new Intl.DateTimeFormat(undefined, {
+      month: 'short',
+      day: 'numeric'
+    })
+
+    return `${monthDayFormatter.format(date)}, ${formattedTime}`
+  }
+
+  formatFullMetricTimestamp(sentAt) {
+    if (typeof sentAt !== 'number' || !Number.isFinite(sentAt)) {
+      return ''
+    }
+
+    const date = new Date(sentAt)
+
+    if (Number.isNaN(date.getTime())) {
+      return ''
+    }
+
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  }
+
+  formatTimestampMarkup(sentAt) {
+    const formattedTimestamp = this.formatMetricTimestamp(sentAt)
+    const fullFormattedTimestamp = this.formatFullMetricTimestamp(sentAt)
+
+    if (!formattedTimestamp) {
+      return ''
+    }
+
+    return `
+      <span class="bubble-metric-item">
+        <i class="ri-time-line" aria-hidden="true"></i>
+        <span title="${fullFormattedTimestamp || formattedTimestamp}">${formattedTimestamp}</span>
+      </span>
+    `.trim()
+  }
+
+  formatMetrics(metrics, sentAt = null) {
     if (!metrics) {
       return ''
     }
@@ -641,35 +759,50 @@ export default class Chatbot {
       metrics.tokensPerSecond || metrics.averagedPhaseTokensPerSecond || 0
     )
     const tokenFormatter = new Intl.NumberFormat()
+    const timestampMarkup = this.formatTimestampMarkup(sentAt)
 
     return `
       <span class="bubble-metric-item">
         <i class="ri-copper-coin-line" aria-hidden="true"></i>
         <span>${tokenFormatter.format(totalTokens)} (i:${tokenFormatter.format(inputTokens)}/o:${tokenFormatter.format(outputTokens)}) tok</span>
       </span>
-      <span class="bubble-metric-separator" aria-hidden="true">•</span>
       <span class="bubble-metric-item">
-        <i class="ri-time-line" aria-hidden="true"></i>
+        <i class="ri-timer-flash-line" aria-hidden="true"></i>
         <span>${durationSeconds.toFixed(1)}s</span>
       </span>
-      <span class="bubble-metric-separator" aria-hidden="true">•</span>
       <span class="bubble-metric-item">
         <i class="ri-flashlight-line" aria-hidden="true"></i>
         <span>${tokensPerSecond.toFixed(2)} t/s</span>
       </span>
+      ${timestampMarkup}
     `.trim()
   }
 
-  createMetricsElement(metrics) {
+  createMetricsElement(metrics, sentAt = null) {
     const metricsElement = document.createElement('div')
 
     metricsElement.className = 'bubble-metrics'
-    metricsElement.innerHTML = this.formatMetrics(metrics)
+    metricsElement.innerHTML = this.formatMetrics(metrics, sentAt)
 
     return metricsElement
   }
 
-  updateBubbleMetrics(container, metrics) {
+  createTimestampElement(sentAt) {
+    const timestampMarkup = this.formatTimestampMarkup(sentAt)
+
+    if (!timestampMarkup) {
+      return null
+    }
+
+    const timestampElement = document.createElement('div')
+
+    timestampElement.className = 'bubble-metrics'
+    timestampElement.innerHTML = timestampMarkup
+
+    return timestampElement
+  }
+
+  updateBubbleMetrics(container, metrics, sentAt = null) {
     if (!container) {
       return
     }
@@ -685,11 +818,11 @@ export default class Chatbot {
     }
 
     if (existingMetricsElement) {
-      existingMetricsElement.innerHTML = this.formatMetrics(metrics)
+      existingMetricsElement.innerHTML = this.formatMetrics(metrics, sentAt)
       return
     }
 
-    container.appendChild(this.createMetricsElement(metrics))
+    container.appendChild(this.createMetricsElement(metrics, sentAt))
   }
 
   getLatestReasoningContainer() {
@@ -746,7 +879,11 @@ export default class Chatbot {
       save: shouldSaveMessage,
       messageId: replaceMessageId,
       beforeElement,
-      metrics
+      metrics,
+      sentAt:
+        newData && typeof newData === 'object' && typeof newData.sentAt === 'number'
+          ? newData.sentAt
+          : Date.now()
     })
 
     /**

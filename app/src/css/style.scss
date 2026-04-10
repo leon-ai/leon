@@ -492,6 +492,10 @@ textarea::-webkit-scrollbar-thumb {
   cursor: default;
   margin-top: 2px;
   padding: 0 4px;
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
   font-size: 0.95rem;
   line-height: 1.2rem;
   color: var(--grey-color);
@@ -505,9 +509,6 @@ textarea::-webkit-scrollbar-thumb {
 }
 .bubble-metric-item i {
   font-size: 1rem;
-}
-.bubble-metric-separator {
-  margin: 0 6px;
 }
 #feed .me .bubble-metrics {
   text-align: right;

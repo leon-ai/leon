@@ -79,6 +79,30 @@ export interface ConversationWidgetData {
   historyMode: ConversationWidgetHistoryMode
 }
 
+export interface LLMAnswerMetrics {
+  inputTokens: number
+  outputTokens: number
+  totalTokens: number
+  finalAnswerOutputTokens?: number
+  durationMs: number
+  finalAnswerDurationMs?: number
+  finalAnswerTokensPerSecond?: number
+  finalAnswerCharsPerSecond?: number
+  outputCharsPerSecond?: number
+  averagedPhaseTokensPerSecond?: number
+  phaseMetrics?: {
+    planning: { outputTokens: number, durationMs: number, tokensPerSecond: number }
+    execution: { outputTokens: number, durationMs: number, tokensPerSecond: number }
+    recovery: { outputTokens: number, durationMs: number, tokensPerSecond: number }
+    final_answer: { outputTokens: number, durationMs: number, tokensPerSecond: number }
+  }
+  turnInputTokens?: number
+  turnOutputTokens?: number
+  turnTotalTokens?: number
+  ttftMs?: number
+  tokensPerSecond: number
+}
+
 export interface MessageLog {
   who: 'owner' | 'leon'
   sentAt: number
@@ -86,6 +110,7 @@ export interface MessageLog {
   isAddedToHistory: boolean
   messageId?: string
   widget?: ConversationWidgetData | null
+  llmMetrics?: LLMAnswerMetrics
 }
 
 export interface ConversationHistoryItem {
@@ -95,4 +120,5 @@ export interface ConversationHistoryItem {
   originalString: string
   source: ConversationItemSource
   messageId?: string
+  llmMetrics?: LLMAnswerMetrics
 }

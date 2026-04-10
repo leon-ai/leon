@@ -245,7 +245,10 @@ export default class Client {
           answerText,
           answerText,
           null,
-          llmMetrics
+          llmMetrics,
+          data && typeof data === 'object' && typeof data.sentAt === 'number'
+            ? data.sentAt
+            : Date.now()
         )
 
         // Slightly delay the update to avoid the stream animation to be interrupted
@@ -255,7 +258,10 @@ export default class Client {
             this.chatbot.formatMessage(answerText)
           this.chatbot.updateBubbleMetrics(
             streamedBubbleContainerElement,
-            llmMetrics
+            llmMetrics,
+            data && typeof data === 'object' && typeof data.sentAt === 'number'
+              ? data.sentAt
+              : Date.now()
           )
         }, 2_500)
       } else {
@@ -269,7 +275,11 @@ export default class Client {
               data.historyMode === 'system_widget'
             ),
           metrics: llmMetrics,
-          messageId: data && typeof data === 'object' ? data.messageId : null
+          messageId: data && typeof data === 'object' ? data.messageId : null,
+          sentAt:
+            data && typeof data === 'object' && typeof data.sentAt === 'number'
+              ? data.sentAt
+              : Date.now()
         })
       }
       this.chatbot.scrollDown({ force: true })
@@ -302,7 +312,8 @@ export default class Client {
       this.chatbot.createBubble({
         who: 'me',
         string: data.utterance,
-        messageId: data.messageId
+        messageId: data.messageId,
+        sentAt: typeof data.sentAt === 'number' ? data.sentAt : Date.now()
       })
     })
 
@@ -504,11 +515,14 @@ export default class Client {
     }
 
     if (this._input.value !== '') {
+      const sentAt = Date.now()
+
       this.socket.emit(keyword, {
         client: this.client,
-        value: this._input.value.trim()
+        value: this._input.value.trim(),
+        sentAt
       })
-      this.chatbot.sendTo('leon', this._input.value)
+      this.chatbot.sendTo('leon', this._input.value, sentAt)
       this.chatbot.scrollDown({ force: true })
 
       this.save()

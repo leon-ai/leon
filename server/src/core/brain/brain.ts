@@ -2,7 +2,7 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { ShortLanguageCode } from '@/types'
+import type { LLMAnswerMetrics, ShortLanguageCode } from '@/types'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import type { NLUProcessResult } from '@/core/nlp/types'
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
@@ -27,30 +27,6 @@ import { MESSAGING_APP_MANAGER } from '@/messaging'
 type SkillProcess = ChildProcessWithoutNullStreams | undefined
 interface IsTalkingWithVoiceOptions {
   shouldInterrupt?: boolean
-}
-
-interface LLMAnswerMetrics {
-  inputTokens: number
-  outputTokens: number
-  totalTokens: number
-  finalAnswerOutputTokens?: number
-  durationMs: number
-  finalAnswerDurationMs?: number
-  finalAnswerTokensPerSecond?: number
-  finalAnswerCharsPerSecond?: number
-  outputCharsPerSecond?: number
-  averagedPhaseTokensPerSecond?: number
-  phaseMetrics?: {
-    planning: { outputTokens: number, durationMs: number, tokensPerSecond: number }
-    execution: { outputTokens: number, durationMs: number, tokensPerSecond: number }
-    recovery: { outputTokens: number, durationMs: number, tokensPerSecond: number }
-    final_answer: { outputTokens: number, durationMs: number, tokensPerSecond: number }
-  }
-  turnInputTokens?: number
-  turnOutputTokens?: number
-  turnTotalTokens?: number
-  ttftMs?: number
-  tokensPerSecond: number
 }
 
 type QueuedAnswer =
@@ -366,7 +342,8 @@ export default class Brain {
           await CONVERSATION_LOGGER.push({
             who: 'leon',
             message: textAnswer,
-            isAddedToHistory: true
+            isAddedToHistory: true,
+            ...(llmMetrics ? { llmMetrics } : {})
           })
         }
 

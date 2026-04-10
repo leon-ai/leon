@@ -51,6 +51,7 @@ interface InitDataEvent {
 interface UtteranceDataEvent {
   client: string
   value: string
+  sentAt?: number
 }
 
 interface WidgetDataEvent {
@@ -400,10 +401,15 @@ export default class SocketServer {
 
             const { value: utterance } = utteranceData
             const ownerMessageId = `owner-${Date.now()}-${StringHelper.random(6)}`
+            const ownerMessageSentAt =
+              typeof utteranceData.sentAt === 'number'
+                ? utteranceData.sentAt
+                : Date.now()
 
             this.emitToOtherChatClients(socket.id, 'owner-utterance', {
               utterance,
-              messageId: ownerMessageId
+              messageId: ownerMessageId,
+              sentAt: ownerMessageSentAt
             })
 
             try {

@@ -1,7 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 
-import type { MessageLog } from '@/types'
+import type { ConversationWidgetData, LLMAnswerMetrics, MessageLog } from '@/types'
 import { LOGS_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -34,6 +34,8 @@ export class ConversationLogger {
   private operations = Promise.resolve()
   private static readonly WIDGET_PLACEHOLDER_PREFIX =
     '__LEON_INLINE_WIDGET__'
+  private static readonly LLM_METRICS_PLACEHOLDER_PREFIX =
+    '__LEON_INLINE_LLM_METRICS__'
 
   get loggerName(): string {
     return this.settings.loggerName
@@ -96,17 +98,50 @@ export class ConversationLogger {
    */
   private serializeLogs(conversationLogs: MessageLog[]): string {
     const serializedWidgets = new Map<string, string>()
+    const serializedLLMMetrics = new Map<string, string>()
     const preparedLogs = conversationLogs.map((conversationLog, index) => {
-      if (!conversationLog.widget) {
-        return conversationLog
+      let widgetPlaceholder: string | null = null
+      let llmMetricsPlaceholder: string | null = null
+      const preparedConversationLog: MessageLog = {
+        who: conversationLog.who,
+        sentAt: conversationLog.sentAt,
+        message: conversationLog.message,
+        isAddedToHistory: conversationLog.isAddedToHistory,
+        ...(conversationLog.messageId
+          ? { messageId: conversationLog.messageId }
+          : {})
       }
 
-      const placeholder = `${ConversationLogger.WIDGET_PLACEHOLDER_PREFIX}_${index}`
-      serializedWidgets.set(placeholder, JSON.stringify(conversationLog.widget))
+      if (conversationLog.widget) {
+        widgetPlaceholder = `${ConversationLogger.WIDGET_PLACEHOLDER_PREFIX}_${index}`
+        serializedWidgets.set(
+          widgetPlaceholder,
+          JSON.stringify(conversationLog.widget)
+        )
+      }
+
+      if (conversationLog.llmMetrics) {
+        llmMetricsPlaceholder = `${ConversationLogger.LLM_METRICS_PLACEHOLDER_PREFIX}_${index}`
+        serializedLLMMetrics.set(
+          llmMetricsPlaceholder,
+          JSON.stringify(conversationLog.llmMetrics)
+        )
+      }
 
       return {
-        ...conversationLog,
-        widget: placeholder as unknown as MessageLog['widget']
+        ...preparedConversationLog,
+        ...(widgetPlaceholder
+          ? {
+              widget:
+                widgetPlaceholder as unknown as ConversationWidgetData | null
+            }
+          : {}),
+        ...(llmMetricsPlaceholder
+          ? {
+              llmMetrics:
+                llmMetricsPlaceholder as unknown as LLMAnswerMetrics
+            }
+          : {})
       }
     })
 
@@ -116,6 +151,13 @@ export class ConversationLogger {
       serializedLogs = serializedLogs.replace(
         `"${placeholder}"`,
         serializedWidget
+      )
+    }
+
+    for (const [placeholder, serializedMetrics] of serializedLLMMetrics.entries()) {
+      serializedLogs = serializedLogs.replace(
+        `"${placeholder}"`,
+        serializedMetrics
       )
     }
 

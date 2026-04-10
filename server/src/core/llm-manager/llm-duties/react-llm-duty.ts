@@ -1144,6 +1144,29 @@ export class ReActLLMDuty extends LLMDuty {
     )
   }
 
+  private rebuildHistoryCompactionStateFromBoundary(
+    conversationLogs: MessageLog[],
+    currentState: ReactHistoryCompactionProviderState
+  ): ReactHistoryCompactionProviderState {
+    if (
+      !hasHistoryCompactionContent(currentState.summary) ||
+      currentState.summarySentAt === null
+    ) {
+      return createEmptyHistoryCompactionProviderState()
+    }
+
+    const rebuiltTail = conversationLogs.filter(
+      (conversationLog) => conversationLog.sentAt > currentState.summarySentAt!
+    )
+
+    return {
+      summary: currentState.summary,
+      summarySentAt: currentState.summarySentAt,
+      tail: rebuiltTail,
+      newMessagesSinceCompaction: rebuiltTail.length
+    }
+  }
+
   private synchronizeHistoryCompactionState(
     conversationLogs: MessageLog[],
     currentState: ReactHistoryCompactionProviderState
@@ -1163,20 +1186,38 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     if (currentState.tail.length === 0) {
+      const rebuiltState = this.rebuildHistoryCompactionStateFromBoundary(
+        conversationLogs,
+        currentState
+      )
+
       return {
-        state: emptyState,
-        shouldPersist: true
+        state: rebuiltState,
+        shouldPersist: !this.areHistoryCompactionStatesEqual(
+          currentState,
+          rebuiltState
+        )
       }
     }
 
     const tailStartIndex = findMessageSequenceStart(conversationLogs, currentState.tail)
     if (tailStartIndex === -1) {
+      const rebuiltState = this.rebuildHistoryCompactionStateFromBoundary(
+        conversationLogs,
+        currentState
+      )
+
       LogHelper.title(this.name)
-      LogHelper.debug('History compaction state reset; rebuilding from raw logs')
+      LogHelper.debug(
+        'History compaction tail mismatch; rebuilding from compaction boundary'
+      )
 
       return {
-        state: emptyState,
-        shouldPersist: true
+        state: rebuiltState,
+        shouldPersist: !this.areHistoryCompactionStatesEqual(
+          currentState,
+          rebuiltState
+        )
       }
     }
 
