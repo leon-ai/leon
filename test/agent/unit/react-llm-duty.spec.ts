@@ -119,6 +119,24 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty/plan-widget', () => ({
 
 let ReActLLMDuty: typeof import('@/core/llm-manager/llm-duties/react-llm-duty').ReActLLMDuty
 
+function createMessageLog(
+  who: 'owner' | 'leon',
+  message: string,
+  sentAt: number
+): {
+  who: 'owner' | 'leon'
+  message: string
+  sentAt: number
+  isAddedToHistory: true
+} {
+  return {
+    who,
+    message,
+    sentAt,
+    isAddedToHistory: true
+  }
+}
+
 function logUnitProgress(message: string, data?: Record<string, unknown>): void {
   const serializedData = data ? ` ${JSON.stringify(data)}` : ''
   console.info(`[agent:unit] ${message}${serializedData}`)
@@ -314,5 +332,94 @@ describe('ReActLLMDuty agent loop', () => {
         requestedToolInput: '{"command":"ls -1"}'
       }
     ])
+  })
+
+  it('tracks only appended history entries after compaction', () => {
+    const duty = new ReActLLMDuty({ input: 'Hi there' })
+    const currentState = {
+      summary: '- Previous topic',
+      summarySentAt: 1,
+      tail: [
+        createMessageLog('owner', 'Earlier owner turn', 10),
+        createMessageLog('leon', 'Earlier Leon turn', 11)
+      ],
+      newMessagesSinceCompaction: 0
+    }
+    const synchronized = (
+      duty as never
+    ).synchronizeHistoryCompactionState(
+      [
+        ...currentState.tail,
+        createMessageLog('owner', 'New owner turn', 12),
+        createMessageLog('leon', 'New Leon turn', 13)
+      ],
+      currentState
+    )
+
+    expect(synchronized.shouldPersist).toBe(true)
+    expect(synchronized.state.tail).toHaveLength(4)
+    expect(synchronized.state.newMessagesSinceCompaction).toBe(2)
+  })
+
+  it('keeps the compacted summary in prompt history while the raw tail grows', () => {
+    const duty = new ReActLLMDuty({ input: 'Hi there' })
+    const state = {
+      summary: '- Previous topic',
+      summarySentAt: 50,
+      tail: Array.from({ length: 60 }, (_, index) =>
+        createMessageLog(
+          index % 2 === 0 ? 'owner' : 'leon',
+          `Message ${index + 1}`,
+          100 + index
+        )
+      ),
+      newMessagesSinceCompaction: 24
+    }
+    const history = (duty as never).buildHistoryForCurrentTurn([], state, {
+      historyLimit: 48,
+      compactionBatchSize: 36
+    })
+
+    expect(history).toHaveLength(48)
+    expect(history[0]?.message).toBe('Earlier conversation summary:\n- Previous topic')
+    expect(history[1]?.message).toBe('Message 14')
+    expect(history[47]?.message).toBe('Message 60')
+  })
+
+  it('does not compact again when only a few new history entries were added', async () => {
+    const duty = new ReActLLMDuty({ input: 'Set a timer for 3 seconds' })
+    const state = {
+      summary: '- Timer discussion already compacted',
+      summarySentAt: 100,
+      tail: Array.from({ length: 38 }, (_, index) =>
+        createMessageLog(
+          index % 2 === 0 ? 'owner' : 'leon',
+          `Tail message ${index + 1}`,
+          200 + index
+        )
+      ),
+      newMessagesSinceCompaction: 2
+    }
+    const loadStateSpy = vi
+      .spyOn(duty as never, 'loadHistoryCompactionProviderState' as never)
+      .mockReturnValue(state)
+    const synchronizeSpy = vi
+      .spyOn(duty as never, 'synchronizeHistoryCompactionState' as never)
+      .mockReturnValue({
+        state,
+        shouldPersist: false
+      })
+    const rollSpy = vi
+      .spyOn(duty as never, 'rollHistoryCompactionState' as never)
+      .mockResolvedValue(state)
+
+    coreMocks.conversationLogger.loadAll.mockResolvedValue(state.tail)
+
+    await (duty as never).maybeCompactHistoryAfterAnswer('plan_test_widget', [])
+
+    expect(loadStateSpy).toHaveBeenCalledOnce()
+    expect(synchronizeSpy).toHaveBeenCalledOnce()
+    expect(rollSpy).not.toHaveBeenCalled()
+    expect(widgetMocks.emitPlanWidget).not.toHaveBeenCalled()
   })
 })

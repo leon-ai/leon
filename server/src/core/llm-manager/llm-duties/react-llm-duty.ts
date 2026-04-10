@@ -139,6 +139,7 @@ interface ReactHistoryCompactionProviderState {
   summary: string | null
   summarySentAt: number | null
   tail: MessageLog[]
+  newMessagesSinceCompaction: number
 }
 
 interface ReactHistoryCompactionState {
@@ -172,7 +173,8 @@ function createEmptyHistoryCompactionProviderState(): ReactHistoryCompactionProv
   return {
     summary: null,
     summarySentAt: null,
-    tail: []
+    tail: [],
+    newMessagesSinceCompaction: 0
   }
 }
 
@@ -1038,6 +1040,12 @@ export class ReActLLMDuty extends LLMDuty {
         typeof record?.['summarySentAt'] === 'number'
           ? record['summarySentAt']
           : null,
+      newMessagesSinceCompaction:
+        typeof record?.['newMessagesSinceCompaction'] === 'number' &&
+        Number.isFinite(record['newMessagesSinceCompaction']) &&
+        record['newMessagesSinceCompaction'] >= 0
+          ? Math.floor(record['newMessagesSinceCompaction'])
+          : 0,
       tail: this.normalizeMessageLogs(record?.['tail'])
     }
   }
@@ -1102,7 +1110,8 @@ export class ReActLLMDuty extends LLMDuty {
     return Boolean(
       hasHistoryCompactionContent(state.summary) ||
         state.summarySentAt !== null ||
-        state.tail.length > 0
+        state.tail.length > 0 ||
+        state.newMessagesSinceCompaction > 0
     )
   }
 
@@ -1130,6 +1139,7 @@ export class ReActLLMDuty extends LLMDuty {
     return (
       left.summary === right.summary &&
       left.summarySentAt === right.summarySentAt &&
+      left.newMessagesSinceCompaction === right.newMessagesSinceCompaction &&
       this.areMessageLogsEqual(left.tail, right.tail)
     )
   }
@@ -1173,7 +1183,10 @@ export class ReActLLMDuty extends LLMDuty {
     const synchronizedState: ReactHistoryCompactionProviderState = {
       summary: currentState.summary,
       summarySentAt: currentState.summarySentAt,
-      tail: conversationLogs.slice(tailStartIndex)
+      tail: conversationLogs.slice(tailStartIndex),
+      newMessagesSinceCompaction:
+        currentState.newMessagesSinceCompaction +
+        (conversationLogs.length - tailStartIndex - currentState.tail.length)
     }
 
     return {
@@ -1190,12 +1203,11 @@ export class ReActLLMDuty extends LLMDuty {
     state: ReactHistoryCompactionProviderState,
     config: ReactHistoryCompactionConfig
   ): MessageLog[] {
-    if (
-      hasHistoryCompactionContent(state.summary) &&
-      state.tail.length > 0 &&
-      state.tail.length < config.historyLimit
-    ) {
-      return this.buildHistoryFromCompactionState(state)
+    if (hasHistoryCompactionContent(state.summary)) {
+      return this.buildHistoryFromCompactionState({
+        ...state,
+        tail: state.tail.slice(-(config.historyLimit - 1))
+      })
     }
 
     return conversationLogs.slice(-config.historyLimit)
@@ -1212,7 +1224,8 @@ export class ReActLLMDuty extends LLMDuty {
     return {
       summary: null,
       summarySentAt: null,
-      tail: [...conversationLogs]
+      tail: [...conversationLogs],
+      newMessagesSinceCompaction: conversationLogs.length
     }
   }
 
@@ -1220,18 +1233,28 @@ export class ReActLLMDuty extends LLMDuty {
     state: ReactHistoryCompactionProviderState,
     config: ReactHistoryCompactionConfig
   ): Promise<ReactHistoryCompactionProviderState | null> {
+    const hadCompactedSummary = hasHistoryCompactionContent(state.summary)
     let nextSummary = state.summary
     let nextSummarySentAt = state.summarySentAt
     let nextTail = [...state.tail]
+    let nextNewMessagesSinceCompaction = state.newMessagesSinceCompaction
     let compactedBatches = 0
     let compactedMessages = 0
 
-    while (nextTail.length >= config.historyLimit) {
+    while (
+      hadCompactedSummary
+        ? nextNewMessagesSinceCompaction >= config.compactionBatchSize
+        : nextTail.length >= config.historyLimit
+    ) {
       const batch = nextTail.slice(0, config.compactionBatchSize)
 
       LogHelper.title(this.name)
       LogHelper.debug(
-        `History compaction triggering: batch=${batch.length} tail=${nextTail.length} threshold=${config.historyLimit}`
+        `History compaction triggering: batch=${batch.length} tail=${nextTail.length} threshold=${
+          hadCompactedSummary
+            ? config.compactionBatchSize
+            : config.historyLimit
+        } new_messages=${nextNewMessagesSinceCompaction}`
       )
 
       const compactedSummary = await this.compactHistoryLogs(batch, nextSummary)
@@ -1244,6 +1267,12 @@ export class ReActLLMDuty extends LLMDuty {
       nextSummarySentAt =
         batch[batch.length - 1]?.sentAt ?? nextSummarySentAt ?? Date.now()
       nextTail = nextTail.slice(config.compactionBatchSize)
+      if (hadCompactedSummary) {
+        nextNewMessagesSinceCompaction = Math.max(
+          0,
+          nextNewMessagesSinceCompaction - batch.length
+        )
+      }
       compactedBatches += 1
       compactedMessages += batch.length
     }
@@ -1258,7 +1287,10 @@ export class ReActLLMDuty extends LLMDuty {
     return {
       summary: nextSummary,
       summarySentAt: nextSummarySentAt,
-      tail: nextTail
+      tail: nextTail,
+      newMessagesSinceCompaction: hadCompactedSummary
+        ? nextNewMessagesSinceCompaction
+        : 0
     }
   }
 
@@ -1286,7 +1318,12 @@ export class ReActLLMDuty extends LLMDuty {
       synchronizedState.state
     )
 
-    if (stateToCompact.tail.length < historyConfig.historyLimit) {
+    const shouldCompact = hasHistoryCompactionContent(stateToCompact.summary)
+      ? stateToCompact.newMessagesSinceCompaction >=
+        historyConfig.compactionBatchSize
+      : stateToCompact.tail.length >= historyConfig.historyLimit
+
+    if (!shouldCompact) {
       return
     }
 
