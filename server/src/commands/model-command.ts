@@ -4,6 +4,7 @@ import {
   type BuiltInCommandAutocompleteItem,
   type BuiltInCommandExecutionContext,
   type BuiltInCommandExecutionResult,
+  type BuiltInCommandRenderListItem,
   type BuiltInCommandPendingInputExecutionContext
 } from '@/commands/built-in-command'
 import { createListResult } from '@/commands/built-in-command-renderer'
@@ -17,6 +18,7 @@ const API_KEY_INPUT_PROMPT_SUFFIX = 'API key:'
 const CONFIGURED_TARGET_PARAMETER_NAME = 'configured_target'
 const PROVIDER_PARAMETER_NAME = 'provider'
 const API_KEY_ENV_PARAMETER_NAME = 'api_key_env'
+const CREATE_API_KEY_LINK_LABEL = 'Create your API key here'
 
 export class ModelCommand extends BuiltInCommand {
   protected override description =
@@ -152,6 +154,7 @@ export class ModelCommand extends BuiltInCommand {
     }
 
     const provider = providerArgument as LLMProviders
+    const providerLabel = modelState.getProviderLabel(provider)
     let configuredTarget = ''
 
     try {
@@ -199,7 +202,7 @@ export class ModelCommand extends BuiltInCommand {
             name: API_KEY_PARAMETER_NAME,
             type: 'password',
             placeholder: API_KEY_INPUT_PLACEHOLDER,
-            prompt: `Paste your ${provider} ${API_KEY_INPUT_PROMPT_SUFFIX}`,
+            prompt: `Paste your ${providerLabel} ${API_KEY_INPUT_PROMPT_SUFFIX}`,
             icon_name: 'key-2',
             icon_type: 'fill'
           }
@@ -208,9 +211,7 @@ export class ModelCommand extends BuiltInCommand {
           title: 'API Key Required',
           tone: 'info',
           items: [
-            {
-              label: `Paste your ${provider} API key in the input to finish configuring the model.`
-            },
+            this.createAPIKeyInstructionItem(provider),
             {
               label: 'Target',
               value: configuredTarget
@@ -252,12 +253,7 @@ export class ModelCommand extends BuiltInCommand {
         result: createListResult({
           title: 'API Key Required',
           tone: 'error',
-          items: [
-            {
-              label: 'Please paste a valid API key.',
-              tone: 'error'
-            }
-          ]
+          items: [this.createInvalidAPIKeyItem(provider as LLMProviders)]
         })
       }
     }
@@ -317,6 +313,48 @@ export class ModelCommand extends BuiltInCommand {
           }
         ]
       })
+    }
+  }
+
+  private createAPIKeyInstructionItem(
+    provider: LLMProviders
+  ): BuiltInCommandRenderListItem {
+    const modelState = CONFIG_STATE.getModelState()
+    const apiKeyURL = CONFIG_STATE.getModelState().getProviderAPIKeyURL(provider)
+    const providerLabel = modelState.getProviderLabel(provider)
+
+    if (!apiKeyURL) {
+      return {
+        label: `Paste your ${providerLabel} API key in the input to finish configuring the model.`
+      }
+    }
+
+    return {
+      label: `Paste your ${providerLabel} API key in the input to finish configuring the model.`,
+      inline_link_label: CREATE_API_KEY_LINK_LABEL,
+      inline_link_href: apiKeyURL
+    }
+  }
+
+  private createInvalidAPIKeyItem(
+    provider: LLMProviders
+  ): BuiltInCommandRenderListItem {
+    const modelState = CONFIG_STATE.getModelState()
+    const providerLabel = modelState.getProviderLabel(provider)
+    const apiKeyURL = modelState.getProviderAPIKeyURL(provider)
+
+    if (!apiKeyURL) {
+      return {
+        label: `Please paste a valid ${providerLabel} API key.`,
+        tone: 'error'
+      }
+    }
+
+    return {
+      label: `Please paste a valid ${providerLabel} API key.`,
+      inline_link_label: CREATE_API_KEY_LINK_LABEL,
+      inline_link_href: apiKeyURL,
+      tone: 'error'
     }
   }
 }

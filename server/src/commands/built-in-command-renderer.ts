@@ -16,13 +16,19 @@ interface CreateListResultInput {
 
 function renderListItemForTerminal(item: BuiltInCommandRenderListItem): string {
   const textParts = [`- ${item.label}`]
+  const resolvedValue = item.value || item.href
+  const hasInlineLink = !!item.inline_link_label && !!item.inline_link_href
 
-  if (item.value) {
-    textParts.push(`: ${item.value}`)
+  if (resolvedValue) {
+    textParts.push(`: ${resolvedValue}`)
+  }
+
+  if (hasInlineLink) {
+    textParts.push(` ${item.inline_link_label}: ${item.inline_link_href}`)
   }
 
   if (item.description) {
-    textParts.push(item.value ? ` (${item.description})` : ` - ${item.description}`)
+    textParts.push(resolvedValue ? ` (${item.description})` : ` - ${item.description}`)
   }
 
   return textParts.join('')

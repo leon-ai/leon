@@ -63,6 +63,9 @@ export type BuiltInCommandRenderItemTone =
 export interface BuiltInCommandRenderListItem {
   label: string
   value?: string
+  href?: string
+  inline_link_label?: string
+  inline_link_href?: string
   description?: string
   tone?: BuiltInCommandRenderItemTone
 }

@@ -9,6 +9,7 @@ import {
   type ResolvedLLMTarget,
   resolveConfiguredLLMTarget
 } from '@/core/llm-manager/llm-routing'
+import { getLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import { LLMProviders } from '@/core/llm-manager/types'
 import {
   CONFIG_STATE_EVENT_EMITTER,
@@ -22,17 +23,6 @@ const LOCAL_MODEL_PROVIDERS = new Set<LLMProviders>([
   LLMProviders.LlamaCPP,
   LLMProviders.SGLang
 ])
-
-const PROVIDER_API_KEY_ENV_MAP: Partial<Record<LLMProviders, string>> = {
-  [LLMProviders.OpenAI]: 'LEON_OPENAI_API_KEY',
-  [LLMProviders.OpenRouter]: 'LEON_OPENROUTER_API_KEY',
-  [LLMProviders.Anthropic]: 'LEON_ANTHROPIC_API_KEY',
-  [LLMProviders.ZAI]: 'LEON_ZAI_API_KEY',
-  [LLMProviders.MoonshotAI]: 'LEON_MOONSHOTAI_API_KEY',
-  [LLMProviders.Groq]: 'LEON_GROQ_API_KEY',
-  [LLMProviders.Cerebras]: 'LEON_CEREBRAS_API_KEY',
-  [LLMProviders.HuggingFace]: 'LEON_HUGGINGFACE_API_KEY'
-}
 
 function getInitialWorkflowTargetValue(): string {
   return LEON_LLM.trim()
@@ -145,7 +135,15 @@ export class ModelState {
   }
 
   public getProviderAPIKeyEnv(provider: LLMProviders): string | null {
-    return PROVIDER_API_KEY_ENV_MAP[provider] || null
+    return getLLMProviderAccountConfig(provider)?.apiKeyEnv || null
+  }
+
+  public getProviderAPIKeyURL(provider: LLMProviders): string | null {
+    return getLLMProviderAccountConfig(provider)?.apiKeyURL || null
+  }
+
+  public getProviderLabel(provider: LLMProviders): string {
+    return getLLMProviderAccountConfig(provider)?.label || provider
   }
 
   public providerRequiresAPIKey(provider: LLMProviders): boolean {

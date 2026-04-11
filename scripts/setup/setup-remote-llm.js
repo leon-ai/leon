@@ -1,11 +1,12 @@
+import {
+  getLLMProviderAccountConfig
+} from '@/core/llm-manager/llm-provider-account-configs'
+
 import { SetupUI, setupConsola } from './setup-ui'
 
 const REMOTE_LLM_PROVIDERS = [
   {
-    label: 'OpenRouter',
-    value: 'openrouter',
-    apiKeyEnv: 'LEON_OPENROUTER_API_KEY',
-    apiKeyURL: 'https://openrouter.ai/settings/keys',
+    ...getRequiredProviderAccountConfig('openrouter'),
     models: [
       { label: 'openai/gpt-5.4 (Recommended)', value: 'openai/gpt-5.4' },
       { label: 'openai/gpt-5.4-mini', value: 'openai/gpt-5.4-mini' },
@@ -35,10 +36,7 @@ const REMOTE_LLM_PROVIDERS = [
     ]
   },
   {
-    label: 'OpenAI',
-    value: 'openai',
-    apiKeyEnv: 'LEON_OPENAI_API_KEY',
-    apiKeyURL: 'https://platform.openai.com/api-keys',
+    ...getRequiredProviderAccountConfig('openai'),
     models: [
       { label: 'GPT-5.4 (Recommended)', value: 'gpt-5.4' },
       { label: 'GPT-5.4 mini', value: 'gpt-5.4-mini' },
@@ -46,10 +44,7 @@ const REMOTE_LLM_PROVIDERS = [
     ]
   },
   {
-    label: 'Anthropic',
-    value: 'anthropic',
-    apiKeyEnv: 'LEON_ANTHROPIC_API_KEY',
-    apiKeyURL: 'https://console.anthropic.com/settings/keys',
+    ...getRequiredProviderAccountConfig('anthropic'),
     models: [
       { label: 'Claude Opus 4.6 (Recommended)', value: 'claude-opus-4-6' },
       { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
@@ -57,23 +52,29 @@ const REMOTE_LLM_PROVIDERS = [
     ]
   },
   {
-    label: 'Z.AI',
-    value: 'zai',
-    apiKeyEnv: 'LEON_ZAI_API_KEY',
-    apiKeyURL: 'https://z.ai/manage-apikey/apikey-list',
+    ...getRequiredProviderAccountConfig('zai'),
     models: [
       { label: 'GLM-5-Turbo (Recommended)', value: 'glm-5-turbo' },
       { label: 'GLM-5', value: 'glm-5' }
     ]
   },
   {
-    label: 'Moonshot AI',
-    value: 'moonshotai',
-    apiKeyEnv: 'LEON_MOONSHOTAI_API_KEY',
-    apiKeyURL: 'https://platform.moonshot.ai/console/api-keys',
+    ...getRequiredProviderAccountConfig('moonshotai'),
     models: [{ label: 'Kimi K2.5', value: 'kimi-k2.5' }]
   }
 ]
+
+function getRequiredProviderAccountConfig(providerValue) {
+  const providerAccountConfig = getLLMProviderAccountConfig(providerValue)
+
+  if (!providerAccountConfig || !providerAccountConfig.apiKeyURL) {
+    throw new Error(
+      `Missing provider account configuration for "${providerValue}".`
+    )
+  }
+
+  return providerAccountConfig
+}
 
 function getProviderOptions() {
   return REMOTE_LLM_PROVIDERS.map((provider) => ({

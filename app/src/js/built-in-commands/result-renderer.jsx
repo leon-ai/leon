@@ -1,11 +1,27 @@
 import {
   Flexbox,
   Icon,
+  Link,
   List,
   ListHeader,
   ListItem,
   Text
 } from '@aurora'
+
+function InlineLabel({ item }) {
+  if (item.inline_link_label && item.inline_link_href) {
+    return (
+      <Text>
+        {item.label}{' '}
+        <Link href={item.inline_link_href} fontSize="md">
+          {item.inline_link_label}
+        </Link>.
+      </Text>
+    )
+  }
+
+  return <Text>{item.label}</Text>
+}
 
 function ToneListItem({ item }) {
   if (item.tone === 'success') {
@@ -20,7 +36,7 @@ function ToneListItem({ item }) {
             color="green"
             bgColor="transparent-green"
           />
-          <Text>{item.label}</Text>
+          <InlineLabel item={item} />
         </Flexbox>
       </ListItem>
     )
@@ -38,7 +54,7 @@ function ToneListItem({ item }) {
             color="yellow"
             bgColor="transparent-yellow"
           />
-          <Text>{item.label}</Text>
+          <InlineLabel item={item} />
         </Flexbox>
       </ListItem>
     )
@@ -56,7 +72,7 @@ function ToneListItem({ item }) {
             color="red"
             bgColor="transparent-red"
           />
-          <Text>{item.label}</Text>
+          <InlineLabel item={item} />
         </Flexbox>
       </ListItem>
     )
@@ -72,9 +88,15 @@ function ToneListItem({ item }) {
           </div>
           {item.value ? (
             <div className="built-in-commands-modal__result-value">
-              <Text secondary textAlign="right">
-                {item.value}
-              </Text>
+              {item.href ? (
+                <Link href={item.href} fontSize="md">
+                  {item.value}
+                </Link>
+              ) : (
+                <Text secondary textAlign="right">
+                  {item.value}
+                </Text>
+              )}
             </div>
           ) : null}
         </div>
@@ -82,9 +104,17 @@ function ToneListItem({ item }) {
     )
   }
 
+  if (item.inline_link_label && item.inline_link_href) {
+    return (
+      <ListItem>
+        <InlineLabel item={item} />
+      </ListItem>
+    )
+  }
+
   return (
     <ListItem>
-      <Text>{item.label}</Text>
+      <InlineLabel item={item} />
     </ListItem>
   )
 }
