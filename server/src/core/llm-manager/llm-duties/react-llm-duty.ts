@@ -85,7 +85,6 @@ import {
   runExecutionStep,
   runFinalAnswerPhase
 } from './react-llm-duty/phases'
-import { buildStepLabelFromFunction } from './react-llm-duty/phase-helpers'
 import {
   buildCompactedHistoryMessage,
   findMessageSequenceStart,
@@ -596,7 +595,7 @@ export class ReActLLMDuty extends LLMDuty {
           replanCount += 1
           LogHelper.title(this.name)
           LogHelper.debug(
-            `Re-plan ${replanCount}/${MAX_REPLANS}: reason="${stepResult.reason}" | new steps: ${stepResult.functions.join(' -> ')}`
+            `Re-plan ${replanCount}/${MAX_REPLANS}: reason="${stepResult.reason}" | new steps: ${stepResult.steps.map((step) => step.function).join(' -> ')}`
           )
 
           if (replanCount > MAX_REPLANS) {
@@ -605,9 +604,9 @@ export class ReActLLMDuty extends LLMDuty {
             break
           }
 
-          pendingSteps = stepResult.functions.map((f) => ({
-            function: f,
-            label: buildStepLabelFromFunction(f)
+          pendingSteps = stepResult.steps.map((step) => ({
+            function: step.function,
+            label: step.label
           }))
 
           // Rebuild tracked steps: keep completed ones, replace remaining
@@ -876,12 +875,12 @@ export class ReActLLMDuty extends LLMDuty {
 
           if (
             selfObservationResult?.type === 'replan' &&
-            selfObservationResult.functions.length > 0
+            selfObservationResult.steps.length > 0
           ) {
             replanCount += 1
-            pendingSteps = selfObservationResult.functions.map((f) => ({
-              function: f,
-              label: buildStepLabelFromFunction(f)
+            pendingSteps = selfObservationResult.steps.map((step) => ({
+              function: step.function,
+              label: step.label
             }))
 
             LogHelper.title(this.name)

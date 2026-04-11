@@ -339,47 +339,8 @@ function normalizeStepLabelFromFunction(functionName: string): string {
 
   return readable.charAt(0).toUpperCase() + readable.slice(1)
 }
-
-function getFunctionDescription(functionName: string): string {
-  const parts = functionName.split('.')
-  if (parts.length !== 3) {
-    return ''
-  }
-
-  const [toolkitId, toolId, fnName] = parts
-  if (!toolkitId || !toolId || !fnName) {
-    return ''
-  }
-
-  const functions = TOOLKIT_REGISTRY.getToolFunctions(toolkitId, toolId)
-  const fnConfig = functions?.[fnName]
-  return typeof fnConfig?.description === 'string' ? fnConfig.description.trim() : ''
-}
-
-function descriptionToStepLabel(description: string): string {
-  const cleaned = description
-    .replace(/^[\s"'`]+|[\s"'`]+$/g, '')
-    .replace(/[.]+$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  if (!cleaned) {
-    return ''
-  }
-
-  const words = cleaned.split(' ')
-  const limited = words.slice(0, 8).join(' ')
-  return limited.charAt(0).toUpperCase() + limited.slice(1)
-}
-
+  
 export function buildStepLabelFromFunction(functionName: string): string {
-  const functionDescription = getFunctionDescription(functionName)
-  if (functionDescription) {
-    const descriptionLabel = descriptionToStepLabel(functionDescription)
-    if (descriptionLabel) {
-      return descriptionLabel
-    }
-  }
-
   return normalizeStepLabelFromFunction(functionName)
 }
 

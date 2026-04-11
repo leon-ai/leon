@@ -109,8 +109,9 @@ You are executing one specific step. You are given the current function signatur
 - tool_input must be a JSON string.
 - Return ONLY one of the following JSON shapes:
   - {"type":"execute","function_name":"...","tool_input":"{...}"}
-  - {"type":"replan","functions":["toolkit_id.tool_id.function_name",...],"reason":"..."}
+  - {"type":"replan","steps":[{"function":"toolkit_id.tool_id.function_name","label":"Short verb-first label"}],"reason":"..."}
   - {"type":"handoff","intent":"answer|clarification|cancelled|error","draft":"..."}
+- For "replan", every step label must be a short user-facing action, start with a verb, and stay under 8 words.
 - No other keys, no null values.
 </output_contract>`
 
@@ -138,8 +139,9 @@ You are given the available functions for one tool. Choose the single most appro
 - tool_input must be a JSON string.
 - Return ONLY one of the following JSON shapes:
   - {"type":"execute","function_name":"...","tool_input":"{...}"}
-  - {"type":"replan","functions":["toolkit_id.tool_id.function_name",...],"reason":"..."}
+  - {"type":"replan","steps":[{"function":"toolkit_id.tool_id.function_name","label":"Short verb-first label"}],"reason":"..."}
   - {"type":"handoff","intent":"answer|clarification|cancelled|error","draft":"..."}
+- For "replan", every step label must be a short user-facing action, start with a verb, and stay under 8 words.
 - No other keys, no null values.
 </output_contract>`
 

@@ -6,7 +6,7 @@ import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createHuggingFace } from '@ai-sdk/huggingface'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
-import { createWebSocketFetch } from 'ai-sdk-openai-websocket-fetch'
+import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import type {
