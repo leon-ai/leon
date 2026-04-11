@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import { LogHelper } from '@/helpers/log-helper'
 import {
   TOOLKIT_REGISTRY,
-  TOOL_EXECUTOR
+  TOOL_EXECUTOR,
+  SOCKET_SERVER
 } from '@/core'
 import type { OpenAITool } from '@/core/llm-manager/types'
 
@@ -166,6 +167,98 @@ function buildExecutionContextManifestSection(
 
 function buildExecutionReplanFallbackLabel(functionName: string): string {
   return buildStepLabelFromFunction(functionName)
+}
+
+function stringifyToolPanelValue(value: unknown): string {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) {
+      return '(empty)'
+    }
+
+    try {
+      return JSON.stringify(JSON.parse(trimmed), null, 2)
+    } catch {
+      return trimmed
+    }
+  }
+
+  if (typeof value === 'undefined') {
+    return '(empty)'
+  }
+
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
+function emitToolExecutionToWebApp(params: {
+  toolkitId: string
+  toolId: string
+  functionName: string
+  toolInput: string
+  output: Record<string, unknown>
+  status: string
+  message: string
+  stepLabel?: string
+}): void {
+  const resolvedTool = TOOLKIT_REGISTRY.resolveToolById(
+    params.toolId,
+    params.toolkitId
+  )
+  const toolkitName = resolvedTool?.toolkitName || params.toolkitId
+  const toolName = resolvedTool?.toolName || params.toolId
+  const toolGroupId =
+    `react_${params.toolkitId}_${params.toolId}_${params.functionName}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+  const prefixLines = params.stepLabel
+    ? [`Step: ${params.stepLabel}`, '']
+    : []
+  const inputMessage = [
+    ...prefixLines,
+    'Input:',
+    stringifyToolPanelValue(params.toolInput)
+  ].join('\n')
+  const outputPayload = {
+    status: params.status,
+    message: params.message,
+    output: params.output
+  }
+  const outputMessage = [
+    `Output (${params.status}):`,
+    stringifyToolPanelValue(outputPayload)
+  ].join('\n')
+
+  SOCKET_SERVER.emitAnswerToChatClients({
+    answer: inputMessage,
+    isToolOutput: true,
+    toolDisplayMode: 'activity_card',
+    toolPhase: 'input',
+    toolkitName,
+    toolName,
+    toolGroupId,
+    key: `${params.toolkitId}.${params.toolId}.${params.functionName}`,
+    functionName: params.functionName,
+    toolInput: params.toolInput,
+    ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
+  })
+  SOCKET_SERVER.emitAnswerToChatClients({
+    answer: outputMessage,
+    isToolOutput: true,
+    toolDisplayMode: 'activity_card',
+    toolPhase: 'output',
+    toolkitName,
+    toolName,
+    toolGroupId,
+    key: `${params.toolkitId}.${params.toolId}.${params.functionName}`,
+    functionName: params.functionName,
+    status: params.status,
+    message: params.message,
+    output: params.output,
+    ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
+  })
 }
 
 function extractExecutionReplanSteps(
@@ -1643,6 +1736,17 @@ export async function runToolExecution(
   LogHelper.debug(
     `Tool output: ${JSON.stringify(toolExecutionResult.data?.output)}`
   )
+
+  emitToolExecutionToWebApp({
+    toolkitId,
+    toolId,
+    functionName,
+    toolInput: requestedToolInput,
+    output: toolExecutionResult.data?.output || {},
+    status: effectiveStatus,
+    message: effectiveMessage,
+    ...(stepLabel ? { stepLabel } : {})
+  })
 
   // Check for final_answer in tool result
   const finalAnswer =
