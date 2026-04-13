@@ -9,7 +9,7 @@ import {
 } from '@/commands/built-in-command'
 import { createListResult } from '@/commands/built-in-command-renderer'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { type LLMProviders } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
 import { DotEnvHelper } from '@/helpers/dotenv-helper'
 
 const API_KEY_PARAMETER_NAME = 'api_key'
@@ -19,6 +19,9 @@ const CONFIGURED_TARGET_PARAMETER_NAME = 'configured_target'
 const PROVIDER_PARAMETER_NAME = 'provider'
 const API_KEY_ENV_PARAMETER_NAME = 'api_key_env'
 const CREATE_API_KEY_LINK_LABEL = 'Create your API key here'
+const HIDDEN_MODEL_COMMAND_PROVIDERS = new Set<LLMProviders>([
+  LLMProviders.SGLang
+])
 
 export class ModelCommand extends BuiltInCommand {
   protected override description =
@@ -48,8 +51,7 @@ export class ModelCommand extends BuiltInCommand {
       context.args.length === 0 ||
       (context.args.length === 1 && !context.ends_with_space)
     ) {
-      return modelState
-        .getSupportedProviders()
+      return this.getVisibleSupportedProviders()
         .filter((provider) => provider.startsWith(providerArgument))
         .map((provider) => ({
           type: 'parameter',
@@ -89,6 +91,7 @@ export class ModelCommand extends BuiltInCommand {
     context: BuiltInCommandExecutionContext
   ): Promise<BuiltInCommandExecutionResult> {
     const modelState = CONFIG_STATE.getModelState()
+    const visibleSupportedProviders = this.getVisibleSupportedProviders()
     const providerArgument = context.args[0]?.toLowerCase() || ''
     const requestedModel = context.args.slice(1).join(' ').trim()
 
@@ -121,7 +124,7 @@ export class ModelCommand extends BuiltInCommand {
             },
             {
               label: 'Supported providers',
-              value: modelState.getSupportedProviders().join(', ')
+              value: visibleSupportedProviders.join(', ')
             }
           ]
         })
@@ -276,7 +279,7 @@ export class ModelCommand extends BuiltInCommand {
   private createUnsupportedProviderResult(
     provider: string
   ): BuiltInCommandExecutionResult {
-    const supportedProviders = CONFIG_STATE.getModelState().getSupportedProviders()
+    const supportedProviders = this.getVisibleSupportedProviders()
 
     return {
       status: 'error',
@@ -356,5 +359,12 @@ export class ModelCommand extends BuiltInCommand {
       inline_link_href: apiKeyURL,
       tone: 'error'
     }
+  }
+
+  private getVisibleSupportedProviders(): LLMProviders[] {
+    return CONFIG_STATE
+      .getModelState()
+      .getSupportedProviders()
+      .filter((provider) => !HIDDEN_MODEL_COMMAND_PROVIDERS.has(provider))
   }
 }

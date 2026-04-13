@@ -16,6 +16,7 @@ import {
   MODEL_CONFIGURATION_UPDATED_EVENT
 } from '@/core/config-states/config-state-event-emitter'
 import { DotEnvHelper } from '@/helpers/dotenv-helper'
+import { FileHelper } from '@/helpers/file-helper'
 
 const GLOBAL_LLM_ENV_KEY = 'LEON_LLM'
 
@@ -58,6 +59,10 @@ function getSupportedModelProviders(): LLMProviders[] {
     (provider) =>
       provider !== LLMProviders.None && provider !== LLMProviders.Local
   )
+}
+
+function resolveLocalModelCandidatePath(model: string): string {
+  return path.isAbsolute(model) ? model : path.join(LLM_DIR_PATH, model)
 }
 
 export class ModelState {
@@ -165,6 +170,7 @@ export class ModelState {
     model: string
   ): string {
     const normalizedModel = model.trim()
+    const localModelCandidatePath = resolveLocalModelCandidatePath(normalizedModel)
 
     if (!normalizedModel) {
       throw new Error(`The provider "${provider}" requires a model value.`)
@@ -177,7 +183,22 @@ export class ModelState {
     }
 
     if (this.isLocalProvider(provider) && path.isAbsolute(normalizedModel)) {
+      if (!FileHelper.isExistingPath(localModelCandidatePath)) {
+        throw new Error(
+          `The local model path "${normalizedModel}" was not found.`
+        )
+      }
+
       return normalizedModel
+    }
+
+    if (
+      this.isLocalProvider(provider) &&
+      !FileHelper.isExistingPath(localModelCandidatePath)
+    ) {
+      throw new Error(
+        `The local model "${normalizedModel}" was not found in "${LLM_DIR_PATH}".`
+      )
     }
 
     return `${provider}/${normalizedModel}`

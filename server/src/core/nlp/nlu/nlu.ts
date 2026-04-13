@@ -68,7 +68,7 @@ export const DEFAULT_NLU_RESULT = {
 type RoutingRoute = 'workflow' | 'react'
 
 const NO_LLM_ENABLED_MESSAGE =
-  'I need an AI engine before I can answer. Enable local AI or configure an online provider.'
+  'I need an AI engine before I can answer. Enable local AI or configure an online provider. Use the built-in command "/model <provider> <model name>" to configure a model. Just press "/" to open built-in commands.'
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
 
 export default class NLU {
