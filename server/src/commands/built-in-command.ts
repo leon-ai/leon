@@ -35,6 +35,7 @@ export interface BuiltInCommandSession {
   status: 'idle' | 'awaiting_required_parameters' | 'completed' | 'error'
   command_name: string | null
   raw_input: string
+  loading_message: string | null
   required_parameters: string[]
   collected_parameters: Record<string, string>
   pending_input: BuiltInCommandPendingInput | null
@@ -51,6 +52,11 @@ export interface BuiltInCommandPendingInputExecutionContext {
   input: string
   session: BuiltInCommandSession
   resolveCommands: () => BuiltInCommand[]
+}
+
+export interface BuiltInCommandLoadingMessageContext {
+  raw_input: string
+  args: string[]
 }
 
 export type BuiltInCommandResultTone = 'info' | 'success' | 'error'
@@ -117,6 +123,14 @@ export abstract class BuiltInCommand {
 
   public getAliases(): string[] {
     return [...this.aliases]
+  }
+
+  public getLoadingMessage(
+    context: BuiltInCommandLoadingMessageContext
+  ): string | null {
+    void context
+
+    return null
   }
 
   public getSupportedUsages(): string[] {

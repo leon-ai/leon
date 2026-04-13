@@ -1,4 +1,5 @@
 import { BuiltInCommandManager } from '@/commands/built-in-command-manager'
+import { DownloadCommand } from '@/commands/download-command'
 import { HelpCommand } from '@/commands/help-command'
 import { ModelCommand } from '@/commands/model-command'
 import { MoodCommand } from '@/commands/mood-command'
@@ -10,6 +11,7 @@ const WHITELISTED_BUILT_IN_COMMAND_NAMES = [
   'status',
   'routing',
   'help',
+  'download',
   'mood',
   'model',
   'stop'
@@ -18,6 +20,7 @@ const WHITELISTED_BUILT_IN_COMMAND_NAMES = [
 const BUILT_IN_COMMANDS = [
   new StatusCommand(),
   new RoutingCommand(),
+  new DownloadCommand(),
   new MoodCommand(),
   new ModelCommand(),
   new StopCommand(),

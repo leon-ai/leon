@@ -38,6 +38,7 @@ export default class BuiltInCommands {
     this.suggestions = []
     this.recentSuggestions = []
     this.result = null
+    this.loadingMessage = null
     this.pendingInput = null
     this.isOpen = false
     this.isClosing = false
@@ -84,6 +85,7 @@ export default class BuiltInCommands {
         isOpen={this.isOpen}
         isVisible={this.isOpen || this.isClosing}
         isLoading={this.isLoading}
+        loadingMessage={this.loadingMessage}
         commandValue={this.commandValue}
         suggestions={this.suggestions}
         recentSuggestions={this.recentSuggestions}
@@ -229,6 +231,7 @@ export default class BuiltInCommands {
     this.hasSubmitted = false
     if (!this.pendingInput) {
       this.result = null
+      this.loadingMessage = null
       this.queueAutocomplete()
     }
     this.render()
@@ -241,6 +244,7 @@ export default class BuiltInCommands {
       this.origin = origin
       this.commandValue = this.normalizeCommandValue(rawInput)
       this.result = null
+      this.loadingMessage = null
       this.pendingInput = null
       this.hasSubmitted = false
       this.shouldFocusInput = true
@@ -255,6 +259,7 @@ export default class BuiltInCommands {
     this.commandValue = this.normalizeCommandValue(rawInput)
     this.suggestions = []
     this.result = null
+    this.loadingMessage = null
     this.pendingInput = null
     this.selectedSuggestionIndex = -1
     this.hasSubmitted = false
@@ -310,6 +315,7 @@ export default class BuiltInCommands {
       this.sessionId = data.session.id
       this.suggestions = data.suggestions || []
       this.recentSuggestions = data.recent_suggestions || []
+      this.loadingMessage = data.session.loading_message || null
       this.pendingInput = data.session.pending_input || null
       this.selectedSuggestionIndex =
         this.getVisibleSuggestions().length > 0 ? 0 : -1
@@ -336,6 +342,7 @@ export default class BuiltInCommands {
           }
         ]
       }
+      this.loadingMessage = null
       this.render()
     }
   }
@@ -349,6 +356,9 @@ export default class BuiltInCommands {
 
     window.clearTimeout(this.autocompleteTimeout)
     this.autocompleteTimeout = null
+
+    await this.resolveLoadingMessageForSubmission(commandInput)
+
     this.isLoading = true
     this.hasSubmitted = true
     this.result = null
@@ -367,6 +377,7 @@ export default class BuiltInCommands {
       this.sessionId = data.session.id
       this.isLoading = false
       this.result = data.result
+      this.loadingMessage = data.session.loading_message || null
       this.recentSuggestions = data.recent_suggestions || []
       this.pendingInput = data.session.pending_input || null
       this.commandValue = ''
@@ -389,7 +400,23 @@ export default class BuiltInCommands {
           }
         ]
       }
+      this.loadingMessage = null
       this.render()
+    }
+  }
+
+  async resolveLoadingMessageForSubmission(commandInput) {
+    try {
+      const data = await requestBuiltInCommand(this.serverUrl, {
+        mode: 'autocomplete',
+        input: commandInput,
+        session_id: this.sessionId
+      })
+
+      this.sessionId = data.session.id
+      this.loadingMessage = data.session.loading_message || null
+    } catch {
+      this.loadingMessage = null
     }
   }
 
@@ -430,6 +457,7 @@ export default class BuiltInCommands {
 
   applySuggestion(suggestion) {
     this.commandValue = this.normalizeCommandValue(suggestion.value)
+    this.loadingMessage = null
     this.queueAutocomplete()
     this.shouldFocusInput = true
     this.render()
@@ -439,6 +467,7 @@ export default class BuiltInCommands {
     this.sessionId = null
     this.hasSubmitted = false
     this.result = null
+    this.loadingMessage = null
     this.pendingInput = null
     this.commandValue = ''
     this.suggestions = []
@@ -513,6 +542,7 @@ export default class BuiltInCommands {
 
     this.hasSubmitted = false
     this.result = null
+    this.loadingMessage = null
     this.queueAutocomplete()
     this.shouldFocusInput = true
     this.render()
@@ -584,6 +614,7 @@ export default class BuiltInCommands {
     this.commandValue = ''
     this.suggestions = []
     this.result = null
+    this.loadingMessage = null
     this.pendingInput = null
     this.selectedSuggestionIndex = -1
     this.hasSubmitted = false

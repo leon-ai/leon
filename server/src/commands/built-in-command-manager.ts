@@ -64,6 +64,7 @@ export class BuiltInCommandManager {
     ) {
       session.raw_input = parsedInput.normalized_input
       session.command_name = parsedInput.command_name || null
+      session.loading_message = null
     }
 
     if (
@@ -100,6 +101,13 @@ export class BuiltInCommandManager {
     }
 
     const exactCommand = this.getCommand(parsedInput.command_name)
+
+    if (exactCommand) {
+      session.loading_message = exactCommand.getLoadingMessage({
+        raw_input: parsedInput.normalized_input,
+        args: parsedInput.args
+      })
+    }
 
     if (!exactCommand) {
       return {
@@ -156,6 +164,7 @@ export class BuiltInCommandManager {
 
     session.raw_input = parsedInput.normalized_input
     session.command_name = parsedInput.command_name || null
+    session.loading_message = null
     session.required_parameters = []
     session.collected_parameters = {}
     session.pending_input = null
@@ -216,6 +225,10 @@ export class BuiltInCommandManager {
     }
 
     session.command_name = command.getName()
+    session.loading_message = command.getLoadingMessage({
+      raw_input: parsedInput.normalized_input,
+      args: parsedInput.args
+    })
     session.required_parameters = command
       .getRequiredParameters()
       .map((parameter) => parameter.name)
@@ -334,6 +347,7 @@ export class BuiltInCommandManager {
       status: 'idle',
       command_name: null,
       raw_input: '',
+      loading_message: null,
       required_parameters: [],
       collected_parameters: {},
       pending_input: null

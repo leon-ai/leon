@@ -99,14 +99,14 @@ function SuggestionList({
   )
 }
 
-function LoadingState() {
+function LoadingState({ loadingMessage }) {
   return (
     <List>
       <ListHeader>Working</ListHeader>
       <ListItem>
         <Flexbox flexDirection="row" alignItems="center" gap="sm">
           <Loader size="sm" />
-          <Text>Working on it...</Text>
+          <Text>{loadingMessage || 'Working on it...'}</Text>
         </Flexbox>
       </ListItem>
     </List>
@@ -128,6 +128,7 @@ export function BuiltInCommandsModal({
   isOpen,
   isVisible,
   isLoading,
+  loadingMessage,
   commandValue,
   suggestions,
   recentSuggestions,
@@ -206,7 +207,7 @@ export function BuiltInCommandsModal({
           <div className="built-in-commands-modal__scroll-area">
             <ScrollContainer orientation="vertical" height="100%">
               {isLoading ? (
-                <LoadingState />
+                <LoadingState loadingMessage={loadingMessage} />
               ) : result ? (
                 <BuiltInCommandResultRenderer result={result} />
               ) : suggestions.length > 0 ? (
