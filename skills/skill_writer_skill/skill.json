@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Skill Writer",
+  "icon_name": "code-box-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Create/generate new skills from natural language descriptions using OpenCode CLI with multiple LLM providers.",

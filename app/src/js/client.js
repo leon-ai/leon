@@ -509,32 +509,45 @@ export default class Client {
   }
 
   send(keyword) {
-    // Prevent from sending utterance if Leon is still generating text (stream)
-    if (keyword === 'utterance' && this._isLeonGeneratingAnswer) {
-      return false
-    }
-
-    if (this._input.value !== '') {
-      const sentAt = Date.now()
-
-      this.socket.emit(keyword, {
-        client: this.client,
-        value: this._input.value.trim(),
-        sentAt
-      })
-      this.chatbot.sendTo('leon', this._input.value, sentAt)
-      this.chatbot.scrollDown({ force: true })
-
-      this.save()
-
-      return true
+    if (keyword === 'utterance') {
+      return this.sendUtterance(this._input.value)
     }
 
     return false
   }
 
-  save() {
-    let val = this._input.value
+  sendUtterance(value, options = {}) {
+    if (this._isLeonGeneratingAnswer) {
+      return false
+    }
+
+    const trimmedValue = String(value || '').trim()
+
+    if (trimmedValue === '') {
+      return false
+    }
+
+    const sentAt =
+      typeof options.sentAt === 'number' ? options.sentAt : Date.now()
+
+    this.socket.emit('utterance', {
+      client: this.client,
+      value: trimmedValue,
+      sentAt,
+      ...(options.commandContext
+        ? { commandContext: options.commandContext }
+        : {})
+    })
+    this.chatbot.sendTo('leon', trimmedValue, sentAt)
+    this.chatbot.scrollDown({ force: true })
+
+    this.save(trimmedValue)
+
+    return true
+  }
+
+  save(value = this._input.value) {
+    let val = value
 
     if (localStorage.getItem('history') === null) {
       localStorage.setItem('history', JSON.stringify([]))

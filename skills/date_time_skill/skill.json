@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Date/Time",
+  "icon_name": "calendar-2-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Provide date and time related information.",

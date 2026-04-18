@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Random Number",
+  "icon_name": "hashtag",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Leon gives a random number.",

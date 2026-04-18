@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Introduction",
+  "icon_name": "user-smile-line",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Leon introduces himself and remembers basic information about you.",

@@ -4,7 +4,7 @@
   "toolkit_id": "music_audio",
   "name": "Faster Whisper",
   "description": "A tool for speech recognition and audio transcription using the Faster Whisper model.",
-  "icon_name": "mic-2",
+  "icon_name": "mic-2-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

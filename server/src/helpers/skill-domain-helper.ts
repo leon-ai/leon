@@ -39,16 +39,39 @@ interface SkillActionObject {
   action: string
 }
 
+const SKILL_NAME_SUFFIX = '_skill'
+
 export class SkillDomainHelper {
+  public static normalizeSkillName(skillName: string): string {
+    const normalizedSkillName = skillName.trim().toLowerCase()
+
+    if (!normalizedSkillName) {
+      return ''
+    }
+
+    return normalizedSkillName.endsWith(SKILL_NAME_SUFFIX)
+      ? normalizedSkillName
+      : `${normalizedSkillName}${SKILL_NAME_SUFFIX}`
+  }
+
+  public static getSkillCommandName(skillName: string): string {
+    return skillName.endsWith(SKILL_NAME_SUFFIX)
+      ? skillName.slice(0, -SKILL_NAME_SUFFIX.length)
+      : skillName
+  }
+
   /**
    * List all skill folders
    */
-  public static async listSkillFolders(): Promise<string[]> {
-    const skillNames = (await fs.promises.readdir(SKILLS_PATH))
-      .filter((folder) => folder.endsWith('_skill'))
+  public static listSkillFoldersSync(): string[] {
+    return fs
+      .readdirSync(SKILLS_PATH)
+      .filter((folder) => folder.endsWith(SKILL_NAME_SUFFIX))
       .sort()
+  }
 
-    return skillNames
+  public static async listSkillFolders(): Promise<string[]> {
+    return this.listSkillFoldersSync()
   }
 
   /**
@@ -69,6 +92,18 @@ export class SkillDomainHelper {
     return JSON.parse(
       await fs.promises.readFile(skillConfigPath, 'utf8')
     ) as SkillSchema
+  }
+
+  public static getNewSkillConfigSync(
+    skillName: SkillSchema['name']
+  ): SkillSchema | null {
+    const skillConfigPath = SkillDomainHelper.getNewSkillConfigPath(skillName)
+
+    if (!skillConfigPath) {
+      return null
+    }
+
+    return JSON.parse(fs.readFileSync(skillConfigPath, 'utf8')) as SkillSchema
   }
 
   /**

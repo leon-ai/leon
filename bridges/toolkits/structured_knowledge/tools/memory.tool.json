@@ -4,7 +4,7 @@
   "toolkit_id": "structured_knowledge",
   "name": "Memory",
   "description": "Read and write Leon memory entries (persistent, daily, discussion).",
-  "icon_name": "brain-2",
+  "icon_name": "brain-2-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

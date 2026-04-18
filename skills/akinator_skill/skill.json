@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Akinator",
+  "icon_name": "magic-line",
   "bridge": "python",
   "version": "2.0.0",
   "description": "Play a guessing game where Akinator tries to identify who or what you have in mind.",

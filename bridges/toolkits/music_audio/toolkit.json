@@ -2,7 +2,7 @@
   "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
   "name": "Music & Audio",
   "description": "Tools for music and audio processing.",
-  "icon_name": "music-2",
+  "icon_name": "music-2-line",
   "context_files": [
     "GPU_COMPUTE.md"
   ],

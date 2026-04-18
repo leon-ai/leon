@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Have I Been Pwned",
+  "icon_name": "shield-keyhole-line",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Verify if one or several email addresses have been pwned (thanks to haveibeenpwned.com).",

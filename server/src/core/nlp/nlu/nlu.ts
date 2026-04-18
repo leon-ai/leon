@@ -616,6 +616,18 @@ export default class NLU {
   }
 
   private getLeonMode(): RoutingMode {
+    return this.resolveLeonMode()
+  }
+
+  private resolveLeonMode(forcedMode?: RoutingMode): RoutingMode {
+    if (
+      forcedMode === RoutingMode.Workflow ||
+      forcedMode === RoutingMode.Agent ||
+      forcedMode === RoutingMode.Smart
+    ) {
+      return forcedMode
+    }
+
     const runtimeRoutingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
     const mode = String(runtimeRoutingMode || RoutingMode.Smart).toLowerCase()
     if (
@@ -634,12 +646,38 @@ export default class NLU {
     return RoutingMode.Smart
   }
 
-  private getRoutingDecision(): {
+  private getWorkflowUtterance(
+    utterance: NLPUtterance,
+    forcedSkillName?: NLPSkill
+  ): NLPUtterance {
+    if (!forcedSkillName) {
+      return utterance
+    }
+
+    const trimmedUtterance = utterance.trim()
+    const utteranceTokens = trimmedUtterance.split(/\s+/).filter(Boolean)
+    const normalizedCommand = utteranceTokens[0]?.toLowerCase() || ''
+    const normalizedSkillName = SkillDomainHelper.getSkillCommandName(
+      forcedSkillName
+    ).toLowerCase()
+
+    if (
+      utteranceTokens.length < 3 ||
+      (normalizedCommand !== '/skill' && normalizedCommand !== '/s') ||
+      utteranceTokens[1]?.toLowerCase() !== normalizedSkillName
+    ) {
+      return utterance
+    }
+
+    return utteranceTokens.slice(2).join(' ').trim()
+  }
+
+  private getRoutingDecision(forcedMode?: RoutingMode): {
     mode: RoutingMode
     route: RoutingRoute
     reason: string
   } {
-    const mode = this.getLeonMode()
+    const mode = this.resolveLeonMode(forcedMode)
 
     if (mode === RoutingMode.Agent) {
       return { mode, route: this.routingRoutes.react, reason: 'agent_mode' }
@@ -1170,6 +1208,8 @@ export default class NLU {
     utterance: NLPUtterance,
     options?: {
       ownerMessageId?: string
+      forcedRoutingMode?: RoutingMode
+      forcedSkillName?: NLPSkill
     }
   ): Promise<NLUPartialProcessResult | null> {
     // TODO: core rewrite
@@ -1183,6 +1223,10 @@ export default class NLU {
             LogHelper.title('NLU')
             LogHelper.info('Processing...')
             this.hasHandledProviderFailure = false
+            const workflowUtterance = this.getWorkflowUtterance(
+              utterance,
+              options?.forcedSkillName
+            )
 
             await CONVERSATION_LOGGER.push({
               who: 'owner',
@@ -1203,7 +1247,7 @@ export default class NLU {
 
             await NLUProcessResultUpdater.update({
               new: {
-                utterance
+                utterance: workflowUtterance
               }
             })
 
@@ -1216,7 +1260,9 @@ export default class NLU {
               return resolve(null)
             }
 
-            const routingDecision = this.getRoutingDecision()
+            const routingDecision = this.getRoutingDecision(
+              options?.forcedRoutingMode
+            )
             LogHelper.title('NLU')
             LogHelper.info(
               `Routing decision: mode=${routingDecision.mode} route=${routingDecision.route} reason=${routingDecision.reason}`
@@ -1253,11 +1299,15 @@ export default class NLU {
             }
 
             if (shouldPickSkillAction) {
-              this.workflowProgress.showChoosingSkill()
-              const chosenSkill = await this.chooseSkill(utterance)
-              if (this.hasHandledProviderFailure) {
-                this.workflowProgress.reset()
-                return resolve(null)
+              let chosenSkill = options?.forcedSkillName || null
+
+              if (!chosenSkill) {
+                this.workflowProgress.showChoosingSkill()
+                chosenSkill = await this.chooseSkill(workflowUtterance)
+                if (this.hasHandledProviderFailure) {
+                  this.workflowProgress.reset()
+                  return resolve(null)
+                }
               }
 
               const isSkillFound = !!chosenSkill
@@ -1274,14 +1324,16 @@ export default class NLU {
                 return
               }
 
+              const resolvedSkill = chosenSkill as string
+
               await NLUProcessResultUpdater.update({
-                skillName: chosenSkill
+                skillName: resolvedSkill
               })
               this.workflowProgress.showPickingAction()
 
               const parsedActionCallingOutputs = await this.chooseSkillAction(
-                utterance,
-                chosenSkill
+                workflowUtterance,
+                resolvedSkill
               )
               if (this.hasHandledProviderFailure) {
                 this.workflowProgress.reset()

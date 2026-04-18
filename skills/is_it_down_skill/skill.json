@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Is It Down",
+  "icon_name": "wifi-off-line",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Ping domain names and gives the online state.",

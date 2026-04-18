@@ -4,7 +4,7 @@
   "toolkit_id": "operating_system_control",
   "name": "Bash",
   "description": "A tool for executing bash commands on the operating system.",
-  "icon_name": "terminal",
+  "icon_name": "terminal-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

@@ -2,7 +2,7 @@
   "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
   "name": "Sport",
   "description": "Tools for sports data and updates.",
-  "icon_name": "football",
+  "icon_name": "football-line",
   "context_files": [],
   "tools": []
 }

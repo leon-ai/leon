@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Podcast Generator",
+  "icon_name": "mic-2-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Generate podcast conversations between two people on any topic with research.",

@@ -4,7 +4,7 @@
   "toolkit_id": "structured_knowledge",
   "name": "Context",
   "description": "Read and search Leon context files.",
-  "icon_name": "file-list-3",
+  "icon_name": "file-list-3-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

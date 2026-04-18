@@ -4,7 +4,7 @@
   "toolkit_id": "music_audio",
   "name": "Qwen3-ASR",
   "description": "A tool for speech recognition and timestamped transcription using the Qwen3 ASR models.",
-  "icon_name": "qwen-ai",
+  "icon_name": "qwen-ai-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

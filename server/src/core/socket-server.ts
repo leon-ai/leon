@@ -27,6 +27,7 @@ import { Telemetry } from '@/telemetry'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { RoutingMode } from '@/types'
 
 const DEFAULT_CLIENT_CAPABILITIES = {
   supportsWidgets: true
@@ -52,6 +53,10 @@ interface UtteranceDataEvent {
   client: string
   value: string
   sentAt?: number
+  commandContext?: {
+    forcedRoutingMode?: RoutingMode
+    forcedSkillName?: string
+  }
 }
 
 interface WidgetDataEvent {
@@ -420,7 +425,19 @@ export default class SocketServer {
 
               BRAIN.isMuted = false
               const processedData = await NLU.process(utterance, {
-                ownerMessageId
+                ownerMessageId,
+                ...(utteranceData.commandContext?.forcedRoutingMode
+                  ? {
+                      forcedRoutingMode:
+                        utteranceData.commandContext.forcedRoutingMode
+                    }
+                  : {}),
+                ...(utteranceData.commandContext?.forcedSkillName
+                  ? {
+                      forcedSkillName:
+                        utteranceData.commandContext.forcedSkillName
+                    }
+                  : {})
               })
 
               if (processedData) {

@@ -37,6 +37,7 @@ export interface BuiltInCommandExecuteResponse {
   result: BuiltInCommandExecutionResult['result']
   suggestions: BuiltInCommandAutocompleteItem[]
   recent_suggestions: BuiltInCommandAutocompleteItem[]
+  client_action?: BuiltInCommandExecutionResult['client_action']
 }
 
 export class BuiltInCommandManager {
@@ -127,22 +128,27 @@ export class BuiltInCommandManager {
       }
     }
 
+    const autocompleteContext = {
+      raw_input: parsedInput.normalized_input,
+      args: parsedInput.args,
+      ends_with_space: parsedInput.ends_with_space
+    }
     const suggestions = [
-      this.toCommandSuggestion(exactCommand),
-      ...exactCommand.getAutocompleteItems({
-        raw_input: parsedInput.normalized_input,
-        args: parsedInput.args,
-        ends_with_space: parsedInput.ends_with_space
-      })
+      ...(exactCommand.shouldIncludeCommandSuggestionInAutocomplete(
+        autocompleteContext
+      )
+        ? [this.toCommandSuggestion(exactCommand)]
+        : []),
+      ...exactCommand.getAutocompleteItems(autocompleteContext)
     ]
+    const dedupedSuggestions = this.dedupeSuggestions(suggestions)
 
     return {
       mode: 'autocomplete',
       session,
-      suggestions: this.rankSuggestions(
-        this.dedupeSuggestions(suggestions),
-        parsedInput
-      ),
+      suggestions: exactCommand.shouldRankAutocompleteItems(autocompleteContext)
+        ? this.rankSuggestions(dedupedSuggestions, parsedInput)
+        : this.sortSuggestionsAlphabetically(dedupedSuggestions),
       recent_suggestions: this.getRecentSuggestions()
     }
   }
@@ -260,6 +266,9 @@ export class BuiltInCommandManager {
       session,
       status: executionResult.status,
       result: executionResult.result,
+      ...(executionResult.client_action
+        ? { client_action: executionResult.client_action }
+        : {}),
       suggestions:
         executionResult.status === 'awaiting_required_parameters'
           ? command.getAutocompleteItems({
@@ -329,6 +338,9 @@ export class BuiltInCommandManager {
       session,
       status: executionResult.status,
       result: executionResult.result,
+      ...(executionResult.client_action
+        ? { client_action: executionResult.client_action }
+        : {}),
       suggestions: [],
       recent_suggestions: this.getRecentSuggestions()
     }
@@ -544,13 +556,16 @@ export class BuiltInCommandManager {
   }
 
   private parseInput(rawInput: string): ParsedBuiltInCommandInput {
-    const normalizedInput = String(rawInput || '').trimStart()
+    const rawInputString = String(rawInput || '')
+    const normalizedInput = rawInputString
+      .trimStart()
+      .replace(WHITESPACE_PATTERN, ' ')
     const hasCommandPrefix = normalizedInput.startsWith(COMMAND_PREFIX)
     const endsWithSpace = /\s$/.test(rawInput)
 
     if (!hasCommandPrefix) {
       return {
-        raw_input: rawInput,
+        raw_input: rawInputString,
         normalized_input: normalizedInput,
         command_name: '',
         args: [],
@@ -563,7 +578,7 @@ export class BuiltInCommandManager {
 
     if (!inputBody) {
       return {
-        raw_input: rawInput,
+        raw_input: rawInputString,
         normalized_input: normalizedInput,
         command_name: '',
         args: [],
@@ -577,7 +592,7 @@ export class BuiltInCommandManager {
       .filter(Boolean)
 
     return {
-      raw_input: rawInput,
+      raw_input: rawInputString,
       normalized_input: normalizedInput,
       command_name: (commandName || '').toLowerCase(),
       args,

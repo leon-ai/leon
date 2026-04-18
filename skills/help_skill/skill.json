@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Help",
+  "icon_name": "question-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Helps you get started with Leon.",

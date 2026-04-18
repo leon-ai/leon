@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Widget Playground",
+  "icon_name": "layout-grid-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Used to develop widgets. Will be deleted afterwards.",

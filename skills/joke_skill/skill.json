@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Joke",
+  "icon_name": "emotion-laugh-line",
   "bridge": null,
   "version": "1.0.0",
   "description": "Leon says some jokes.",

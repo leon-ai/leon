@@ -4,7 +4,7 @@
   "toolkit_id": "music_audio",
   "name": "Ultimate Vocal Remover ONNX",
   "description": "A tool for vocal separation using the Ultimate Vocal Remover ONNX model.",
-  "icon_name": "scissors-cut",
+  "icon_name": "scissors-cut-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

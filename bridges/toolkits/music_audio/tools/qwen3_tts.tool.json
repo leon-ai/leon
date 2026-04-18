@@ -4,7 +4,7 @@
   "toolkit_id": "music_audio",
   "name": "Qwen3-TTS",
   "description": "A tool for text-to-speech, voice cloning, and voice design using Qwen3-TTS models.",
-  "icon_name": "qwen-ai",
+  "icon_name": "qwen-ai-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

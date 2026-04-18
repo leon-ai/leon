@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Partner Assistant",
+  "icon_name": "discuss-line",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Leon tells about other virtual assistants.",

@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Guess the Number",
+  "icon_name": "gamepad-line",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Find the number between 0 and 100 that Leon has picked.",

@@ -32,7 +32,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const client = new Client(config.app, serverUrl, input)
     const builtInCommands = new BuiltInCommands({
       serverUrl,
-      input
+      input,
+      onSubmitToChat: (clientAction) => {
+        return client.sendUtterance(clientAction.utterance, {
+          commandContext: {
+            forcedRoutingMode: clientAction.command_context?.forced_routing_mode,
+            forcedSkillName: clientAction.command_context?.forced_skill_name
+          }
+        })
+      }
     })
     // let rec = {}
     // let chunks = []

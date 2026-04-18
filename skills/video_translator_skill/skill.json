@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Video Translator",
+  "icon_name": "translate-ai-2",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Download videos from any URL and extract audio for translation purposes.",

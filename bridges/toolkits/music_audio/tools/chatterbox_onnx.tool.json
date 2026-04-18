@@ -4,7 +4,7 @@
   "toolkit_id": "music_audio",
   "name": "Chatterbox ONNX",
   "description": "A tool for text-to-speech synthesis and voice cloning using the Chatterbox ONNX model.",
-  "icon_name": "chat-voice",
+  "icon_name": "chat-voice-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

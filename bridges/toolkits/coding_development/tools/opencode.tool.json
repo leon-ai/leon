@@ -4,18 +4,18 @@
   "toolkit_id": "coding_development",
   "name": "OpenCode",
   "description": "An AI-powered coding agent tool that generates skills using multiple LLM providers (Cerebras, MiniMax, Anthropic, OpenAI, Gemini).",
-  "icon_name": "code-box",
+  "icon_name": "code-box-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
     "url": "https://twitter.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.0/opencode_1.4.0-linux-x86_64.tar.gz",
-    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.0/opencode_1.4.0-linux-aarch64.tar.gz",
-    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.0/opencode_1.4.0-macosx-x86_64.zip",
-    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.0/opencode_1.4.0-macosx-arm64.zip",
-    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.0/opencode_1.4.0-win-amd64.zip"
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.6/opencode_1.4.6-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.6/opencode_1.4.6-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.6/opencode_1.4.6-macosx-x86_64.zip",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.6/opencode_1.4.6-macosx-arm64.zip",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.4.6/opencode_1.4.6-win-amd64.zip"
   },
   "functions": {
     "configureProvider": {

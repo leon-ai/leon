@@ -28,9 +28,10 @@ function isEditableElement(element) {
 }
 
 export default class BuiltInCommands {
-  constructor({ serverUrl, input }) {
+  constructor({ serverUrl, input, onSubmitToChat }) {
     this.serverUrl = serverUrl
     this.input = input
+    this.onSubmitToChat = onSubmitToChat
     this.sessionId = null
     this.origin = 'shortcut'
     this.commandValue = ''
@@ -153,6 +154,22 @@ export default class BuiltInCommands {
         event.preventDefault()
         this.blurCommandInput()
         this.moveSelection(NAVIGATION_DIRECTIONS.previous)
+        return
+      }
+
+      if (event.key === 'Tab') {
+        const suggestion =
+          this.selectedSuggestionIndex >= 0
+            ? this.getVisibleSuggestions()[this.selectedSuggestionIndex]
+            : null
+
+        if (suggestion) {
+          event.preventDefault()
+          this.applySuggestion(suggestion, {
+            appendTrailingSpace: true
+          })
+        }
+
         return
       }
 
@@ -374,6 +391,18 @@ export default class BuiltInCommands {
         session_id: this.sessionId
       })
 
+      if (data.client_action?.type === 'submit_to_chat') {
+        const wasSubmitted = this.onSubmitToChat?.(data.client_action)
+
+        if (!wasSubmitted) {
+          throw new Error('Failed to submit the built-in command to chat.')
+        }
+
+        this.isLoading = false
+        this.close()
+        return
+      }
+
       this.sessionId = data.session.id
       this.isLoading = false
       this.result = data.result
@@ -455,8 +484,10 @@ export default class BuiltInCommands {
     this.applySuggestion(suggestion)
   }
 
-  applySuggestion(suggestion) {
-    this.commandValue = this.normalizeCommandValue(suggestion.value)
+  applySuggestion(suggestion, options = {}) {
+    this.commandValue = `${this.normalizeCommandValue(suggestion.value)}${
+      options.appendTrailingSpace ? ' ' : ''
+    }`
     this.loadingMessage = null
     this.queueAutocomplete()
     this.shouldFocusInput = true

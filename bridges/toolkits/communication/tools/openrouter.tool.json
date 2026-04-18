@@ -4,7 +4,7 @@
   "toolkit_id": "communication",
   "name": "OpenRouter",
   "description": "A tool for interacting with various LLMs through the OpenRouter API gateway.",
-  "icon_name": "route",
+  "icon_name": "route-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

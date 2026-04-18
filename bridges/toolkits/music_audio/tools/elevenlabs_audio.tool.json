@@ -4,7 +4,7 @@
   "toolkit_id": "music_audio",
   "name": "ElevenLabs Audio",
   "description": "A tool for audio processing using ElevenLabs's API.",
-  "icon_name": "sound-module",
+  "icon_name": "sound-module-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

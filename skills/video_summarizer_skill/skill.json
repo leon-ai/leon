@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Video Summarizer",
+  "icon_name": "file-list-3-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Summarize videos from a URL or local path into key points and new knowledge.",

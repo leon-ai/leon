@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Todo List",
+  "icon_name": "task-line",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Manage your lists and items they contain.",

@@ -4,7 +4,7 @@
   "toolkit_id": "search_web",
   "name": "Grok",
   "description": "AI-powered deep research tool with real-time web search and X/Twitter access. Use this for comprehensive web research, trending topics on X, and searching social media posts. Powered by xAI's Grok with live internet and X platform integration.",
-  "icon_name": "grok-ai",
+  "icon_name": "grok-ai-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

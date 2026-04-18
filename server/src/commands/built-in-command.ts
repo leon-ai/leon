@@ -1,3 +1,5 @@
+import type { RoutingMode } from '@/types'
+
 const COMMAND_PREFIX = '/'
 
 export interface RequiredParameter {
@@ -89,10 +91,20 @@ export interface BuiltInCommandResult {
   plain_text: string[]
 }
 
+export interface BuiltInCommandClientAction {
+  type: 'submit_to_chat'
+  utterance: string
+  command_context: {
+    forced_routing_mode?: RoutingMode
+    forced_skill_name?: string
+  }
+}
+
 export interface BuiltInCommandExecutionResult {
   status: 'completed' | 'awaiting_required_parameters' | 'error'
   result: BuiltInCommandResult
   session?: Partial<BuiltInCommandSession>
+  client_action?: BuiltInCommandClientAction
 }
 
 export abstract class BuiltInCommand {
@@ -163,6 +175,22 @@ export abstract class BuiltInCommand {
     void context
 
     return []
+  }
+
+  public shouldIncludeCommandSuggestionInAutocomplete(
+    context: BuiltInCommandAutocompleteContext
+  ): boolean {
+    void context
+
+    return true
+  }
+
+  public shouldRankAutocompleteItems(
+    context: BuiltInCommandAutocompleteContext
+  ): boolean {
+    void context
+
+    return true
   }
 
   public async executePendingInput(

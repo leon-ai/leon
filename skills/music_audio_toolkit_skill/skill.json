@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Music Audio Toolkit",
+  "icon_name": "music-2-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Toolkit skill providing common audio utilities such as audio transcription that can be reused by other skills.",

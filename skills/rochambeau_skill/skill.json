@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Rochambeau",
+  "icon_name": "scissors-cut-line",
   "bridge": "python",
   "version": "1.0.0",
   "description": "Rock paper scissors game.",

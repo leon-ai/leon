@@ -7,6 +7,7 @@ const TERMINAL_ARG_START_INDEX = 2
 const COMMAND_ARG_DELIMITER = ' '
 const PNPM_ARGS_SEPARATOR = '--'
 const COMMAND_PREFIX = '/'
+const DISALLOWED_TERMINAL_COMMANDS = new Set(['skill', 's'])
 
 function printResult(response) {
   for (const line of response.result.plain_text) {
@@ -20,6 +21,7 @@ async function run() {
     .filter((argument) => argument !== PNPM_ARGS_SEPARATOR)
     .join(COMMAND_ARG_DELIMITER)
     .trim()
+  const [commandName] = rawInput.split(COMMAND_ARG_DELIMITER).filter(Boolean)
 
   if (!rawInput) {
     console.error('Please provide a built-in command. Example: pnpm cmd help')
@@ -29,6 +31,17 @@ async function run() {
 
   if (rawInput.startsWith(COMMAND_PREFIX)) {
     console.error('Please run built-in commands without "/". Example: pnpm cmd help')
+    process.exitCode = 1
+    return
+  }
+
+  if (
+    commandName &&
+    DISALLOWED_TERMINAL_COMMANDS.has(commandName.toLowerCase())
+  ) {
+    console.error(
+      'The /skill and /s built-in commands are only available from the chat UI.'
+    )
     process.exitCode = 1
     return
   }

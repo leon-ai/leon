@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Weather Forecast",
+  "icon_name": "sun-cloudy-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Provide quick weather conditions for any location.",

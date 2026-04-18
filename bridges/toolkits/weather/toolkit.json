@@ -2,7 +2,7 @@
   "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
   "name": "Weather",
   "description": "Tools for weather lookup and forecasts.",
-  "icon_name": "sun-cloudy",
+  "icon_name": "sun-cloudy-line",
   "context_files": [],
   "tools": [
     "openmeteo"

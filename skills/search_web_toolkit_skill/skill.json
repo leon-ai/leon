@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Search Web Toolkit",
+  "icon_name": "global-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Toolkit skill providing web and social media search utilities using AI-powered search providers like Grok. Actions can be reused by other skills for research, trend analysis, and information gathering.",

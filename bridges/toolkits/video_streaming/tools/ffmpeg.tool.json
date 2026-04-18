@@ -4,7 +4,7 @@
   "toolkit_id": "video_streaming",
   "name": "FFmpeg",
   "description": "A tool for video/audio processing, conversion, and manipulation. Use this for encoding, decoding, transcoding, muxing, demuxing, streaming, filtering, and playing media files. For analyzing or extracting metadata without modifying files, use ffprobe instead.",
-  "icon_name": "film",
+  "icon_name": "film-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

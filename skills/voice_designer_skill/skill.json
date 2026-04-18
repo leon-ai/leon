@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Voice Designer",
+  "icon_name": "voice-recognition-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Design a custom voice from a description and generate speech audio.",

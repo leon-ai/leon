@@ -1,6 +1,7 @@
 {
   "$schema": "../../schemas/skill-schemas/skill.json",
   "name": "Timer",
+  "icon_name": "timer-line",
   "bridge": "nodejs",
   "version": "1.0.0",
   "description": "Set timers to remind you of things.",

@@ -2,7 +2,7 @@
   "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
   "name": "File System",
   "description": "Tools for file system operations.",
-  "icon_name": "folders",
+  "icon_name": "folders-line",
   "context_files": [],
   "tools": []
 }
