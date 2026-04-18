@@ -4,7 +4,8 @@ import {
   type BuiltInCommandAutocompleteItem,
   type BuiltInCommandLoadingMessageContext,
   type BuiltInCommandExecutionContext,
-  type BuiltInCommandExecutionResult
+  type BuiltInCommandExecutionResult,
+  type BuiltInCommandResult
 } from '@/commands/built-in-command'
 import { createListResult } from '@/commands/built-in-command-renderer'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
@@ -12,8 +13,11 @@ import { RoutingMode } from '@/types'
 
 const SKILL_COMMAND_NAME = 'skill'
 const SKILL_COMMAND_ALIAS = 's'
+const SKILL_ROOT_COMMAND_FORMAT = '/skill'
+const SKILL_ROOT_COMMAND_ALIAS_FORMAT = '/s'
+const SKILL_LIST_SUBCOMMAND = 'list'
+const SKILL_LIST_COMMAND_FORMAT = '/skill list'
 const SKILL_COMMAND_FORMAT = '/skill <skill_name> <query>'
-const SKILL_COMMAND_ALIAS_FORMAT = '/s <skill_name> <query>'
 const SKILL_COMMAND_PREFIXES = new Set([
   `/${SKILL_COMMAND_NAME}`,
   `/${SKILL_COMMAND_ALIAS}`
@@ -24,6 +28,7 @@ interface SkillAutocompleteEntry {
   description: string
   iconName: string
   skillName: string
+  version: string
 }
 
 interface ParsedSkillCommandInput {
@@ -57,13 +62,13 @@ function escapeForRegExp(value: string): string {
 
 export class SkillCommand extends BuiltInCommand {
   protected override description =
-    'Invoke a specific skill directly with a natural language query.'
+    'Browse skill subcommands or invoke a specific skill directly.'
   protected override icon_name = 'ri-magic-line'
   protected override supported_usages = [
-    SKILL_COMMAND_FORMAT,
-    SKILL_COMMAND_ALIAS_FORMAT
+    SKILL_ROOT_COMMAND_FORMAT,
+    SKILL_ROOT_COMMAND_ALIAS_FORMAT
   ]
-  protected override help_usage = SKILL_COMMAND_FORMAT
+  protected override help_usage = SKILL_ROOT_COMMAND_FORMAT
   protected override aliases = [SKILL_COMMAND_ALIAS]
 
   public constructor() {
@@ -75,9 +80,8 @@ export class SkillCommand extends BuiltInCommand {
   ): string | null {
     const parsedInput = this.parseSkillCommandInput(context.raw_input)
     const requestedSkillName = parsedInput.skillEntry?.commandName || ''
-    const { query } = parsedInput
 
-    if (!requestedSkillName || !query) {
+    if (!requestedSkillName) {
       return null
     }
 
@@ -102,9 +106,13 @@ export class SkillCommand extends BuiltInCommand {
   ): BuiltInCommandAutocompleteItem[] {
     const parsedInput = this.parseSkillCommandInput(context.raw_input)
     const skillSelectionStep = this.isSkillSelectionStep(context, parsedInput)
+    const listSuggestion = this.getListSuggestion(
+      parsedInput.commandPrefix,
+      parsedInput.rawSkillCandidate
+    )
 
     if (!skillSelectionStep && !parsedInput.skillEntry) {
-      return []
+      return listSuggestion ? [listSuggestion] : []
     }
 
     if (parsedInput.skillEntry && !skillSelectionStep) {
@@ -117,7 +125,7 @@ export class SkillCommand extends BuiltInCommand {
       ]
     }
 
-    return this.getSortedSkillAutocompleteEntries()
+    const skillSuggestions = this.getSortedSkillAutocompleteEntries()
       .filter((entry) =>
         this.matchesRequestedSkill(entry, parsedInput.rawSkillCandidate)
       )
@@ -126,6 +134,8 @@ export class SkillCommand extends BuiltInCommand {
           commandPrefix: parsedInput.commandPrefix
         })
       )
+
+    return listSuggestion ? [listSuggestion, ...skillSuggestions] : skillSuggestions
   }
 
   public override async execute(
@@ -135,25 +145,19 @@ export class SkillCommand extends BuiltInCommand {
     const rawSkillName = parsedInput.rawSkillCandidate
     const normalizedSkillName = parsedInput.skillEntry?.skillName || ''
     const query = parsedInput.query
+    const normalizedRawSkillName = normalizeSkillSearchValue(rawSkillName)
+
+    if (normalizedRawSkillName === SKILL_LIST_SUBCOMMAND && !query) {
+      return {
+        status: 'completed',
+        result: this.createSkillListResult()
+      }
+    }
 
     if (!rawSkillName) {
       return {
-        status: 'error',
-        result: createListResult({
-          title: 'Missing Skill Name',
-          tone: 'error',
-          items: [
-            {
-              label: 'Please provide a skill name.',
-              tone: 'error'
-            },
-            {
-              label: 'Usage',
-              value: SKILL_COMMAND_FORMAT,
-              tone: 'error'
-            }
-          ]
-        })
+        status: 'completed',
+        result: this.createSkillSubcommandsResult()
       }
     }
 
@@ -177,30 +181,10 @@ export class SkillCommand extends BuiltInCommand {
       }
     }
 
-    if (!query) {
-      return {
-        status: 'error',
-        result: createListResult({
-          title: 'Missing Query',
-          tone: 'error',
-          items: [
-            {
-              label: `Please provide a query for "${SkillDomainHelper.getSkillCommandName(normalizedSkillName)}".`,
-              tone: 'error'
-            },
-            {
-              label: 'Usage',
-              value: SKILL_COMMAND_FORMAT,
-              tone: 'error'
-            }
-          ]
-        })
-      }
-    }
-
     const resolvedSkillCommandName = parsedInput.skillEntry.commandName
-    const commandUtterance =
-      `${parsedInput.commandPrefix} ${resolvedSkillCommandName} ${query}`.trim()
+    const commandUtterance = query
+      ? `${parsedInput.commandPrefix} ${resolvedSkillCommandName} ${query}`
+      : `${parsedInput.commandPrefix} ${resolvedSkillCommandName}`
 
     return {
       status: 'completed',
@@ -252,7 +236,8 @@ export class SkillCommand extends BuiltInCommand {
             commandName: SkillDomainHelper.getSkillCommandName(skillName),
             description: skillConfig.description,
             iconName: skillConfig.icon_name,
-            skillName
+            skillName,
+            version: skillConfig.version
           }
         } catch {
           return null
@@ -355,6 +340,66 @@ export class SkillCommand extends BuiltInCommand {
       supported_usages: this.getSupportedUsages(),
       value: input.value || `${input.commandPrefix} ${entry.commandName}`
     }
+  }
+
+  private getListSuggestion(
+    commandPrefix: string,
+    rawSkillCandidate: string
+  ): BuiltInCommandAutocompleteItem | null {
+    const normalizedRawSkillCandidate = normalizeSkillSearchValue(rawSkillCandidate)
+
+    if (
+      normalizedRawSkillCandidate &&
+      !SKILL_LIST_SUBCOMMAND.startsWith(normalizedRawSkillCandidate)
+    ) {
+      return null
+    }
+
+    return {
+      type: 'parameter',
+      icon_name: 'ri-list-check-3',
+      name: SKILL_LIST_SUBCOMMAND,
+      description: 'List all installed skills.',
+      usage: `${commandPrefix} ${SKILL_LIST_SUBCOMMAND}`,
+      supported_usages: this.getSupportedUsages(),
+      value: `${commandPrefix} ${SKILL_LIST_SUBCOMMAND}`
+    }
+  }
+
+  private createSkillListResult(): BuiltInCommandResult {
+    const skillItems = this.getSortedSkillAutocompleteEntries().map((entry) => {
+      return {
+        label: `${entry.commandName}`,
+        value: `version=${entry.version}`,
+        description: entry.description
+      }
+    })
+
+    return createListResult({
+      title: 'Skills',
+      tone: 'info',
+      header: `${skillItems.length} installed`,
+      items: skillItems
+    })
+  }
+
+  private createSkillSubcommandsResult(): BuiltInCommandResult {
+    const installedSkillsCount = this.getSortedSkillAutocompleteEntries().length
+
+    return createListResult({
+      title: 'Skill Command',
+      tone: 'info',
+      items: [
+        {
+          label: SKILL_LIST_COMMAND_FORMAT,
+          description: `List all installed skills (${installedSkillsCount}).`
+        },
+        {
+          label: SKILL_COMMAND_FORMAT,
+          description: 'Invoke a specific skill directly.'
+        }
+      ]
+    })
   }
 
   private matchSkillPrefix(

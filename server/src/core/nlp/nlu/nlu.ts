@@ -662,7 +662,7 @@ export default class NLU {
     ).toLowerCase()
 
     if (
-      utteranceTokens.length < 3 ||
+      utteranceTokens.length < 2 ||
       (normalizedCommand !== '/skill' && normalizedCommand !== '/s') ||
       utteranceTokens[1]?.toLowerCase() !== normalizedSkillName
     ) {
