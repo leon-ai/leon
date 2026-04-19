@@ -164,8 +164,11 @@ export default class ToolExecutor {
     let runtimeOutput = this.normalizeFilesystemValues(
       runtimeResult.output
     ) as Record<string, unknown>
+    const toolReportedFailure = runtimeResult.success
+      ? this.getToolReportedFailure(runtimeOutput)
+      : null
 
-    if (runtimeResult.success && responseJQ) {
+    if (runtimeResult.success && responseJQ && !toolReportedFailure) {
       try {
         runtimeOutput = await this.applyResponseJQ(runtimeResult.output, responseJQ)
       } catch (error) {
@@ -189,8 +192,9 @@ export default class ToolExecutor {
     })
 
     return this.buildResult({
-      status: runtimeResult.success ? 'success' : 'error',
-      message: runtimeResult.message,
+      status:
+        runtimeResult.success && !toolReportedFailure ? 'success' : 'error',
+      message: toolReportedFailure?.message || runtimeResult.message,
       input: input.toolInput ?? null,
       resolvedTool,
       functionName,
@@ -270,6 +274,41 @@ export default class ToolExecutor {
         : ''
 
     return defaultResponseJQ || null
+  }
+
+  private getToolReportedFailure(output: Record<string, unknown>): {
+    message: string
+  } | null {
+    const outputSuccess = output['success']
+    const outputError =
+      typeof output['error'] === 'string' ? output['error'].trim() : ''
+
+    if (outputSuccess === false) {
+      return {
+        message: outputError || 'Tool reported a failure.'
+      }
+    }
+
+    const result = output['result']
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      return null
+    }
+
+    const nestedResult = result as Record<string, unknown>
+
+    const nestedSuccess = nestedResult['success']
+    const nestedError =
+      typeof nestedResult['error'] === 'string'
+        ? nestedResult['error'].trim()
+        : ''
+
+    if (nestedSuccess === false) {
+      return {
+        message: nestedError || outputError || 'Tool reported a failure.'
+      }
+    }
+
+    return null
   }
 
   private normalizeFilesystemValues(value: unknown): unknown {

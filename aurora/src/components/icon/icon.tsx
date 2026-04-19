@@ -26,6 +26,7 @@ const REMIX_SIZE_MAPPING = {
   xl: 'xl',
   xxl: '2x'
 }
+const REMIX_ICON_TYPE_SUFFIXES = ['-line', '-fill']
 
 /**
  * @see https://remixicon.com/
@@ -41,8 +42,11 @@ export function Icon({
   animated
 }: IconProps) {
   let iconClassName = `ri-${iconName}`
+  const hasExplicitTypeSuffix = REMIX_ICON_TYPE_SUFFIXES.some((suffix) =>
+    iconName?.endsWith(suffix)
+  )
 
-  if (type && type !== 'notype') {
+  if (type && type !== 'notype' && !hasExplicitTypeSuffix) {
     iconClassName = `${iconClassName}-${type}`
   }
 
