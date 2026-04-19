@@ -35,17 +35,13 @@ import {
 import { shouldIgnoreTCPServerError } from '@/utilities'
 import { Updater } from '@/updater'
 import { Telemetry } from '@/telemetry'
-// import { CustomNERLLMDuty } from '@/core/llm-manager/llm-duties/custom-ner-llm-duty'
-// import { SummarizationLLMDuty } from '@/core/llm-manager/llm-duties/summarization-llm-duty'
-// import { TranslationLLMDuty } from '@/core/llm-manager/llm-duties/translation-llm-duty'
-// import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
-// import { ActionRecognitionLLMDuty } from '@/core/llm-manager/llm-duties/action-recognition-llm-duty'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-;(async (): Promise<void> => {
+
+async function bootstrap(): Promise<void> {
   process.title = 'leon'
   const shouldStartPythonTCPServer = SHOULD_START_PYTHON_TCP_SERVER
 
@@ -264,4 +260,6 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
     LogHelper.error(`Unhandled rejection: ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`)
     shutdown(1)
   })
-})()
+}
+
+void bootstrap()
