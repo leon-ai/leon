@@ -1,13 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { LEON_HOME_PATH, LEON_PROFILE_PATH } from '@/leon-roots'
 import { SystemHelper } from '@/helpers/system-helper'
 
 export class RuntimeHelper {
   /**
    * Resolve Leon-managed runtime binaries from the local `bin/` directory first.
    */
-  private static readonly binPath = path.join(process.cwd(), 'bin')
+  private static readonly binPath = path.join(LEON_HOME_PATH, 'bin')
 
   /**
    * Pick the first runtime candidate that already exists on disk.
@@ -212,7 +213,12 @@ export class RuntimeHelper {
    * them up independently from skill source files.
    */
   public static getSkillRuntimePath(skillPath: string): string {
-    return path.join(skillPath, '.runtime')
+    return path.join(
+      LEON_PROFILE_PATH,
+      'skills',
+      path.basename(path.resolve(skillPath)),
+      '.runtime'
+    )
   }
 
   /**

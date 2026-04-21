@@ -1,14 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { PROFILE_ERRORS_FILE_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 
 export class LogHelper {
-  static readonly ERRORS_FILE_PATH = path.join(
-    process.cwd(),
-    'logs',
-    'errors.log'
-  )
+  static readonly ERRORS_FILE_PATH = PROFILE_ERRORS_FILE_PATH
 
   /**
    * This one looks obvious :)
@@ -43,6 +40,8 @@ export class LogHelper {
    */
   public static error(value: string, ...args: unknown[]): void {
     const data = `${DateHelper.getDateTime()} - ${value} ${args.join(' ')}`
+
+    fs.mkdirSync(path.dirname(this.ERRORS_FILE_PATH), { recursive: true })
 
     if (fs.existsSync(this.ERRORS_FILE_PATH)) {
       fs.appendFileSync(this.ERRORS_FILE_PATH, `\n${data}`)

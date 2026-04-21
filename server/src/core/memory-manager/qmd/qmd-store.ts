@@ -146,6 +146,54 @@ async function storeHasRequiredCollections(
     }
   }
 
+  // Validate the persisted QMD collection config too, not only the collection
+  // names. This lets Leon auto-heal when collection roots move, such as the
+  // migration from the codebase `core/memory` folders into `~/.leon/profiles`.
+  const db = store.internal?.db as {
+    prepare?: (sql: string) => {
+      all: () => Array<Record<string, unknown>>
+    }
+  } | undefined
+  if (!db?.prepare) {
+    return true
+  }
+
+  try {
+    const rows = db
+      .prepare(
+        `SELECT name, path, pattern
+         FROM store_collections`
+      )
+      .all()
+    const existingConfigByName = new Map(
+      rows.map((row) => [
+        String(row['name'] || ''),
+        {
+          path: path.resolve(String(row['path'] || '')),
+          pattern: String(row['pattern'] || DEFAULT_PATTERN)
+        }
+      ])
+    )
+
+    for (const collection of collections) {
+      const existingConfig = existingConfigByName.get(collection.name)
+      if (!existingConfig) {
+        return false
+      }
+
+      const expectedPath = path.resolve(collection.dir)
+      const expectedPattern = collection.pattern || DEFAULT_PATTERN
+      if (
+        existingConfig.path !== expectedPath ||
+        existingConfig.pattern !== expectedPattern
+      ) {
+        return false
+      }
+    }
+  } catch {
+    return false
+  }
+
   return true
 }
 
@@ -416,7 +464,7 @@ export async function getQMDStore(
     return existingStorePromise
   }
 
-  const storePromise = (async (): Promise<QMDStore> => {
+  const createStorePromise = async (): Promise<QMDStore> => {
     await ensureStoreRoot(indexName)
     await ensureCollectionDirectories(collections)
     const dbPath = getQMDDbPath(indexName)
@@ -446,7 +494,8 @@ export async function getQMDStore(
 
       return openConfiguredStore(indexName, collections)
     })
-  })()
+  }
+  const storePromise = createStorePromise()
 
   storePromises.set(indexName, storePromise)
 

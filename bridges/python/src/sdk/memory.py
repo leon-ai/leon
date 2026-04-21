@@ -2,7 +2,17 @@ import json
 import os
 from typing import TypedDict, Any
 
-from ..constants import SKILL_PATH, SKILLS_PATH
+from ..constants import PROFILE_SKILLS_PATH, SKILL_PATH
+
+SKILL_NAME_SUFFIX = "_skill"
+
+
+def normalize_skill_name(skill_name: str) -> str:
+    return (
+        skill_name
+        if skill_name.endswith(SKILL_NAME_SUFFIX)
+        else f"{skill_name}{SKILL_NAME_SUFFIX}"
+    )
 
 
 class MemoryOptions(TypedDict, total=False):
@@ -14,8 +24,9 @@ class Memory:
     def __init__(self, options: MemoryOptions):
         self.name = options['name']
         self.default_memory = options['default_memory'] if 'default_memory' in options else None
-        self.memory_path = self.memory_path = os.path.join(
-            SKILL_PATH,
+        self.memory_path = os.path.join(
+            PROFILE_SKILLS_PATH,
+            os.path.basename(SKILL_PATH),
             'memory',
             f'{self.name}.json'
         )
@@ -23,11 +34,10 @@ class Memory:
 
         if ':' in self.name and self.name.count(':') == 2:
             self.__is_from_another_skill = True
-            domain_name, skill_name, memory_name = self.name.split(':')
+            _, skill_name, memory_name = self.name.split(':')
             self.memory_path = os.path.join(
-                SKILLS_PATH,
-                domain_name,
-                skill_name,
+                PROFILE_SKILLS_PATH,
+                normalize_skill_name(skill_name),
                 'memory',
                 memory_name + '.json'
             )
@@ -65,6 +75,7 @@ class Memory:
         """
         if not self.__is_from_another_skill:
             try:
+                os.makedirs(os.path.dirname(self.memory_path), exist_ok=True)
                 with open(self.memory_path, 'w') as f:
                     json.dump(memory, f, indent=2)
 

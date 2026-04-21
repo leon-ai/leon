@@ -1,16 +1,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { CONTEXT_PATH, SKILLS_PATH } from '@/constants'
+import { PROFILE_CONTEXT_PATH, SKILLS_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 
-export const OWNER_CONTEXT_PATH = path.join(CONTEXT_PATH, 'OWNER.md')
+export const OWNER_CONTEXT_PATH = path.join(PROFILE_CONTEXT_PATH, 'OWNER.md')
 export const OWNER_PROFILE_PATH = path.join(
-  CONTEXT_PATH,
+  PROFILE_CONTEXT_PATH,
   '.owner-profile.json'
 )
 const LEGACY_OWNER_PROFILE_PATH = path.join(
-  CONTEXT_PATH,
+  PROFILE_CONTEXT_PATH,
   'private',
   '.owner-profile.json'
 )

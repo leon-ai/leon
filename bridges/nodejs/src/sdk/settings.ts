@@ -1,14 +1,18 @@
 import path from 'node:path'
 import fs from 'node:fs'
 
-import { SKILL_PATH } from '@bridge/constants'
+import { PROFILE_SKILLS_PATH, SKILL_PATH } from '@bridge/constants'
 
 export class Settings<T extends Record<string, unknown>> {
   private readonly settingsPath: string
   private readonly settingsSamplePath: string
 
   constructor() {
-    this.settingsPath = path.join(SKILL_PATH, 'src', 'settings.json')
+    this.settingsPath = path.join(
+      PROFILE_SKILLS_PATH,
+      path.basename(SKILL_PATH),
+      'settings.json'
+    )
     this.settingsSamplePath = path.join(
       SKILL_PATH,
       'src',
@@ -107,6 +111,9 @@ export class Settings<T extends Record<string, unknown>> {
           ? keyOrSettings
           : { ...settings, [keyOrSettings]: value }
 
+      await fs.promises.mkdir(path.dirname(this.settingsPath), {
+        recursive: true
+      })
       await fs.promises.writeFile(
         this.settingsPath,
         JSON.stringify(newSettings, null, 2)

@@ -7,6 +7,30 @@ import threading
 from os.path import join
 from dotenv import load_dotenv
 
+DEFAULT_LEON_PROFILE = "just-me"
+
+
+def resolve_leon_home() -> str:
+    configured_leon_home = os.getenv("LEON_HOME", "").strip()
+
+    if configured_leon_home:
+        return os.path.abspath(configured_leon_home)
+
+    return os.path.join(os.path.expanduser("~"), ".leon")
+
+
+def resolve_leon_profile() -> str:
+    return os.getenv("LEON_PROFILE", "").strip() or DEFAULT_LEON_PROFILE
+
+
+def resolve_leon_profile_path() -> str:
+    configured_profile_path = os.getenv("LEON_PROFILE_PATH", "").strip()
+
+    if configured_profile_path:
+        return os.path.abspath(configured_profile_path)
+
+    return os.path.join(resolve_leon_home(), "profiles", resolve_leon_profile())
+
 
 def _resolve_torch_root(pytorch_path: str) -> str | None:
     normalized_path = os.path.abspath(pytorch_path)
@@ -126,11 +150,7 @@ args = _parse_args()
 os.environ["LEON_PY_TCP_SERVER_LANG"] = args.lang
 _configure_external_libraries(args.pytorch_path, args.nvidia_path)
 
-"""
-os.getcwd() is the same as when we run it from npm run start:tcp-server en
-and when we run it from the binary
-"""
-dotenv_path = join(os.getcwd(), ".env")
+dotenv_path = join(resolve_leon_profile_path(), ".env")
 load_dotenv(dotenv_path)
 
 from lib.tcp_server import TCPServer

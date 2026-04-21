@@ -1,13 +1,13 @@
-import fs from 'node:fs'
-import path from 'node:path'
 import crypto from 'node:crypto'
 
 import dotenv from 'dotenv'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
+import { DotEnvHelper } from '@/helpers/dotenv-helper'
+import { PROFILE_DOT_ENV_PATH } from '@/constants'
 
-dotenv.config()
+dotenv.config({ path: PROFILE_DOT_ENV_PATH })
 
 /**
  * Generate HTTP API key script
@@ -20,25 +20,12 @@ const generateHTTPAPIKey = () =>
     try {
       const shasum = crypto.createHash('sha1')
       const str = StringHelper.random(11)
-      const dotEnvPath = path.join(process.cwd(), '.env')
       const envVarKey = 'LEON_HTTP_API_KEY'
-      let content = await fs.promises.readFile(dotEnvPath, 'utf8')
 
       shasum.update(str)
       const sha1 = shasum.digest('hex')
 
-      let lines = content.split('\n')
-      lines = lines.map((line) => {
-        if (line.indexOf(`${envVarKey}=`) !== -1) {
-          line = `${envVarKey}=${sha1}`
-        }
-
-        return line
-      })
-
-      content = lines.join('\n')
-
-      await fs.promises.writeFile(dotEnvPath, content)
+      await DotEnvHelper.updateVariable(envVarKey, sha1)
       LogHelper.success('HTTP API key generated')
 
       resolve()

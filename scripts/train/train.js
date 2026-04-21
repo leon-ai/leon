@@ -1,10 +1,11 @@
 import dotenv from 'dotenv'
 
+import { PROFILE_DOT_ENV_PATH } from '@/constants'
 import { createSetupStatus } from '../setup/setup-status'
 
 import trainSkillRouterDuty from './train-skill-router-duty.js'
 
-dotenv.config()
+dotenv.config({ path: PROFILE_DOT_ENV_PATH })
 
 /**
  * Training utterance samples script

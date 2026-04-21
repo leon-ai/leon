@@ -1,13 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { CONTEXT_PATH } from '@/constants'
+import { PROFILE_CONTEXT_PATH } from '@/constants'
 
 export class ContextStateStore<T> {
   private readonly stateFilePath: string
 
   public constructor(stateFilename: string, private readonly fallback: T) {
-    this.stateFilePath = path.join(CONTEXT_PATH, stateFilename)
+    this.stateFilePath = path.join(PROFILE_CONTEXT_PATH, stateFilename)
   }
 
   public load(): T {
@@ -25,7 +25,7 @@ export class ContextStateStore<T> {
 
   public save(state: T): void {
     try {
-      fs.mkdirSync(CONTEXT_PATH, { recursive: true })
+      fs.mkdirSync(PROFILE_CONTEXT_PATH, { recursive: true })
       fs.writeFileSync(this.stateFilePath, JSON.stringify(state, null, 2), 'utf8')
     } catch {
       // Ignore state persistence failures.

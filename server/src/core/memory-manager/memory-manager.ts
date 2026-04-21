@@ -5,9 +5,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 
 import {
-  CONTEXT_PATH,
-  MEMORY_DB_PATH,
-  MEMORY_PATH
+  PROFILE_CONTEXT_PATH,
+  PROFILE_MEMORY_DB_PATH,
+  PROFILE_MEMORY_PATH
 } from '@/constants'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
@@ -17,6 +17,7 @@ import MemoryRepository from './memory-repository'
 import QMDBackend from './qmd-backend'
 import { buildDailyMarkdownSummary } from './summarizer'
 import type {
+  KnowledgeNamespace,
   MemoryRecord,
   MemoryWriteInput,
   RecallHit,
@@ -53,6 +54,9 @@ const DISCUSSION_TTL_MS = LEON_MEMORY_DISCUSSION_TTL_DAYS * 24 * 60 * 60 * 1_000
 const DAY_MS = 24 * 60 * 60 * 1_000
 const DAY_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}$/
 const MAINTENANCE_REPORTS_DIRNAME = 'reports'
+const MEMORY_RECOVERY_STATE_FILENAME = '.recovery-state.json'
+const MEMORY_MIRROR_RECOVERY_MIGRATION_ID =
+  'rebuild_missing_memory_markdown_mirrors_v1'
 const EXTRACT_PERSISTENT_MEMORY_SCHEMA = {
   type: 'object',
   properties: {
@@ -131,6 +135,10 @@ interface StorageSnapshot {
   discussionBytes: number
   discussionWarmArchiveBytes: number
   discussionColdArchiveBytes: number
+}
+
+interface MemoryRecoveryState {
+  completedMigrations: string[]
 }
 
 function renderRecallPrompt(result: RecallResult): string {
@@ -213,11 +221,20 @@ export default class MemoryManager {
   private readonly repository = new MemoryRepository()
   private readonly qmdBackend = new QMDBackend()
   private readonly contextChecksums = new Map<string, string>()
-  private readonly persistentPath = path.join(MEMORY_PATH, 'persistent')
-  private readonly dailyPath = path.join(MEMORY_PATH, 'daily')
-  private readonly discussionPath = path.join(MEMORY_PATH, 'discussion')
-  private readonly archivePath = path.join(MEMORY_PATH, 'archive')
-  private readonly reportsPath = path.join(MEMORY_PATH, MAINTENANCE_REPORTS_DIRNAME)
+  private readonly persistentPath = path.join(
+    PROFILE_MEMORY_PATH,
+    'persistent'
+  )
+  private readonly dailyPath = path.join(PROFILE_MEMORY_PATH, 'daily')
+  private readonly discussionPath = path.join(
+    PROFILE_MEMORY_PATH,
+    'discussion'
+  )
+  private readonly archivePath = path.join(PROFILE_MEMORY_PATH, 'archive')
+  private readonly reportsPath = path.join(
+    PROFILE_MEMORY_PATH,
+    MAINTENANCE_REPORTS_DIRNAME
+  )
   private readonly discussionWarmArchivePath = path.join(
     this.archivePath,
     'discussion',
@@ -227,6 +244,10 @@ export default class MemoryManager {
     this.archivePath,
     'discussion',
     'cold'
+  )
+  private readonly recoveryStatePath = path.join(
+    PROFILE_MEMORY_PATH,
+    MEMORY_RECOVERY_STATE_FILENAME
   )
   private readonly qmdIndexPath = path.join(
     process.env['XDG_CACHE_HOME']
@@ -246,6 +267,271 @@ export default class MemoryManager {
     const day = String(date.getUTCDate()).padStart(2, '0')
 
     return path.join(this.persistentPath, year, month, day, `${itemId}.md`)
+  }
+
+  private getDailySummaryFilePath(dayKey: string): string {
+    return path.join(this.dailyPath, `${dayKey}.md`)
+  }
+
+  private getDiscussionDayFilePath(dayKey: string): string {
+    return path.join(this.discussionPath, `${dayKey}.md`)
+  }
+
+  private renderPersistentEntryMarkdown(record: MemoryRecord): string {
+    return `> Persistent memory entry (${record.kind})\n\n# ${
+      record.title || record.kind
+    }\n\nID: ${record.id}\nCreated At: ${new Date(
+      record.createdAt
+    ).toISOString()}\n\n${record.content}\n`
+  }
+
+  private renderDiscussionHeader(dayKey: string): string {
+    return `> Discussion memory for ${dayKey}. Short-term rolling conversation context.\n# ${dayKey}\n\n`
+  }
+
+  private renderDiscussionLine(record: MemoryRecord): string {
+    return `- ${new Date(record.createdAt).toISOString()} | ${record.content.replace(/\n/g, ' | ')}\n`
+  }
+
+  private async countMarkdownFiles(
+    dirPath: string,
+    recursive = false
+  ): Promise<number> {
+    try {
+      const entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
+      let count = 0
+
+      for (const entry of entries) {
+        const entryPath = path.join(dirPath, entry.name)
+        if (entry.isDirectory()) {
+          if (recursive) {
+            count += await this.countMarkdownFiles(entryPath, true)
+          }
+          continue
+        }
+
+        if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+          count += 1
+        }
+      }
+
+      return count
+    } catch {
+      return 0
+    }
+  }
+
+  private async loadRecoveryState(): Promise<MemoryRecoveryState> {
+    try {
+      if (!fs.existsSync(this.recoveryStatePath)) {
+        return { completedMigrations: [] }
+      }
+
+      const state = JSON.parse(
+        await fs.promises.readFile(this.recoveryStatePath, 'utf8')
+      ) as Partial<MemoryRecoveryState>
+
+      return {
+        completedMigrations: Array.isArray(state.completedMigrations)
+          ? state.completedMigrations
+              .filter((value): value is string => typeof value === 'string')
+          : []
+      }
+    } catch {
+      return { completedMigrations: [] }
+    }
+  }
+
+  private async saveRecoveryState(state: MemoryRecoveryState): Promise<void> {
+    await fs.promises.mkdir(path.dirname(this.recoveryStatePath), {
+      recursive: true
+    })
+    await fs.promises.writeFile(
+      this.recoveryStatePath,
+      `${JSON.stringify(state, null, 2)}\n`,
+      'utf8'
+    )
+  }
+
+  private async rebuildMissingPersistentMirrors(): Promise<number> {
+    const records = this.repository.listPersistentMirrorRecords()
+    let repairedCount = 0
+
+    for (const record of records) {
+      const filePath = this.getPersistentEntryFilePath(record.id, record.createdAt)
+      if (fs.existsSync(filePath)) {
+        continue
+      }
+
+      await fs.promises.mkdir(path.dirname(filePath), { recursive: true })
+      await fs.promises.writeFile(
+        filePath,
+        this.renderPersistentEntryMarkdown(record),
+        'utf8'
+      )
+      repairedCount += 1
+    }
+
+    return repairedCount
+  }
+
+  private async rebuildMissingDailySummaryMirrors(): Promise<number> {
+    const records = this.repository.listDailySummaryMirrorRecords()
+    let repairedCount = 0
+
+    for (const record of records) {
+      if (!record.dayKey) {
+        continue
+      }
+
+      const filePath = this.getDailySummaryFilePath(record.dayKey)
+      if (fs.existsSync(filePath)) {
+        continue
+      }
+
+      await fs.promises.writeFile(filePath, record.content, 'utf8')
+      repairedCount += 1
+    }
+
+    return repairedCount
+  }
+
+  private async rebuildMissingDiscussionMirrors(): Promise<number> {
+    const records = this.repository.listDiscussionMirrorRecords()
+    const recordsByDayKey = new Map<string, MemoryRecord[]>()
+
+    for (const record of records) {
+      if (!record.dayKey) {
+        continue
+      }
+
+      const groupedRecords = recordsByDayKey.get(record.dayKey) || []
+      groupedRecords.push(record)
+      recordsByDayKey.set(record.dayKey, groupedRecords)
+    }
+
+    let repairedDayCount = 0
+
+    for (const [dayKey, dayRecords] of recordsByDayKey.entries()) {
+      const filePath = this.getDiscussionDayFilePath(dayKey)
+      if (fs.existsSync(filePath)) {
+        continue
+      }
+
+      const content = `${this.renderDiscussionHeader(dayKey)}${dayRecords
+        .map((record) => this.renderDiscussionLine(record))
+        .join('')}`
+      await fs.promises.writeFile(filePath, content, 'utf8')
+      repairedDayCount += 1
+    }
+
+    return repairedDayCount
+  }
+
+  private async detectMissingMirrorNamespaces(): Promise<KnowledgeNamespace[]> {
+    const missingNamespaces: KnowledgeNamespace[] = []
+    const persistentFileCount = await this.countMarkdownFiles(this.persistentPath, true)
+    const dailyFileCount = await this.countMarkdownFiles(this.dailyPath)
+    const discussionFileCount = await this.countMarkdownFiles(this.discussionPath)
+
+    if (
+      this.repository.countActivePersistentItems() > 0 &&
+      persistentFileCount < this.repository.countActivePersistentItems()
+    ) {
+      missingNamespaces.push('memory_persistent')
+    }
+
+    if (
+      this.repository.countDailySummaryItems() > 0 &&
+      dailyFileCount < this.repository.countDailySummaryItems()
+    ) {
+      missingNamespaces.push('memory_daily')
+    }
+
+    if (
+      this.repository.countActiveDiscussionDays() > 0 &&
+      discussionFileCount < this.repository.countActiveDiscussionDays()
+    ) {
+      missingNamespaces.push('memory_discussion')
+    }
+
+    return missingNamespaces
+  }
+
+  private async repairMissingMemoryMirrors(reason: 'migration' | 'self_recovery'): Promise<KnowledgeNamespace[]> {
+    const missingNamespaces = await this.detectMissingMirrorNamespaces()
+    if (missingNamespaces.length === 0) {
+      return []
+    }
+
+    const repairedNamespaces: KnowledgeNamespace[] = []
+    let persistentRepaired = 0
+    let dailyRepaired = 0
+    let discussionRepaired = 0
+
+    if (missingNamespaces.includes('memory_persistent')) {
+      persistentRepaired = await this.rebuildMissingPersistentMirrors()
+      if (persistentRepaired > 0) {
+        repairedNamespaces.push('memory_persistent')
+      }
+    }
+
+    if (missingNamespaces.includes('memory_daily')) {
+      dailyRepaired = await this.rebuildMissingDailySummaryMirrors()
+      if (dailyRepaired > 0) {
+        repairedNamespaces.push('memory_daily')
+      }
+    }
+
+    if (missingNamespaces.includes('memory_discussion')) {
+      discussionRepaired = await this.rebuildMissingDiscussionMirrors()
+      if (discussionRepaired > 0) {
+        repairedNamespaces.push('memory_discussion')
+      }
+    }
+
+    if (repairedNamespaces.length > 0) {
+      LogHelper.title('Memory Manager')
+      LogHelper.warning(
+        `Recovered missing memory mirrors (${reason}): persistent=${persistentRepaired} daily=${dailyRepaired} discussion_days=${discussionRepaired}`
+      )
+    }
+
+    return repairedNamespaces
+  }
+
+  private async ensureMemoryMirrorIntegrity(): Promise<void> {
+    const recoveryState = await this.loadRecoveryState()
+    let repairedNamespaces: KnowledgeNamespace[] = []
+
+    if (
+      !recoveryState.completedMigrations.includes(
+        MEMORY_MIRROR_RECOVERY_MIGRATION_ID
+      )
+    ) {
+      repairedNamespaces = await this.repairMissingMemoryMirrors('migration')
+      recoveryState.completedMigrations = [
+        ...new Set([
+          ...recoveryState.completedMigrations,
+          MEMORY_MIRROR_RECOVERY_MIGRATION_ID
+        ])
+      ]
+      await this.saveRecoveryState(recoveryState)
+    }
+
+    if (repairedNamespaces.length === 0) {
+      repairedNamespaces = await this.repairMissingMemoryMirrors('self_recovery')
+    }
+
+    if (repairedNamespaces.length === 0) {
+      return
+    }
+
+    for (const namespace of repairedNamespaces) {
+      this.qmdBackend.markDirty(namespace)
+    }
+
+    await this.qmdBackend.refresh(true)
   }
 
   private normalizeForSimilarity(text: string): string {
@@ -375,7 +661,8 @@ export default class MemoryManager {
         fs.promises.mkdir(this.discussionPath, { recursive: true })
       ])
 
-      await this.repository.load(MEMORY_DB_PATH)
+      await this.repository.load(PROFILE_MEMORY_DB_PATH)
+      await this.ensureMemoryMirrorIntegrity()
 
       this._isLoaded = true
       this.scheduleContextSyncAtBoot()
@@ -1011,10 +1298,10 @@ export default class MemoryManager {
       )
     }
     try {
-      const dbStats = fs.statSync(MEMORY_DB_PATH)
+      const dbStats = fs.statSync(PROFILE_MEMORY_DB_PATH)
       const persistentItemCount = this.repository.countActivePersistentItems()
       LogHelper.debug(
-        `Memory index file="${MEMORY_DB_PATH}" size_bytes=${dbStats.size} persistent_items=${persistentItemCount}`
+        `Memory index file="${PROFILE_MEMORY_DB_PATH}" size_bytes=${dbStats.size} persistent_items=${persistentItemCount}`
       )
     } catch {
       // Ignore stat errors for debug stats.
@@ -1481,14 +1768,14 @@ No markdown. No explanation.`
     }
 
     try {
-      await fs.promises.mkdir(CONTEXT_PATH, { recursive: true })
-      const entries = await fs.promises.readdir(CONTEXT_PATH, {
+      await fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true })
+      const entries = await fs.promises.readdir(PROFILE_CONTEXT_PATH, {
         withFileTypes: true
       })
 
       const markdownFiles = entries
         .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-        .map((entry) => path.join(CONTEXT_PATH, entry.name))
+        .map((entry) => path.join(PROFILE_CONTEXT_PATH, entry.name))
 
       let hasChanges = force
       const livePaths = new Set<string>()
@@ -1581,7 +1868,7 @@ No markdown. No explanation.`
       discussionWarmArchiveBytes,
       discussionColdArchiveBytes
     ] = await Promise.all([
-      this.getPathSize(MEMORY_DB_PATH),
+      this.getPathSize(PROFILE_MEMORY_DB_PATH),
       this.getPathSize(this.qmdIndexPath),
       this.getPathSize(this.persistentPath),
       this.getPathSize(this.dailyPath),

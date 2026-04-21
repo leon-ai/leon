@@ -1,11 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { PROFILE_CONTEXT_PATH } from '@bridge/constants'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
-const ROOT_DIR = process.cwd()
-const CONTEXT_DIR = path.join(ROOT_DIR, 'core', 'context')
 const DEFAULT_LIST_LIMIT = 24
 const DEFAULT_TOP_K = 8
 const DEFAULT_SNIPPET_CHARS = Number.MAX_SAFE_INTEGER
@@ -109,7 +108,7 @@ export default class ContextTool extends Tool {
       }
     }
 
-    const filePath = path.join(CONTEXT_DIR, safeFilename)
+    const filePath = path.join(PROFILE_CONTEXT_PATH, safeFilename)
     if (!fs.existsSync(filePath)) {
       return {
         success: false,
@@ -213,7 +212,10 @@ export default class ContextTool extends Tool {
         }
         return lower.includes(token) ? 1 : 0
       })
-      const tokenMatchCount = tokenScores.reduce((total, score) => total + score, 0)
+      const tokenMatchCount = tokenScores.reduce<number>(
+        (total, score) => total + score,
+        0
+      )
       if (tokenMatchCount === 0) {
         continue
       }
@@ -268,7 +270,7 @@ export default class ContextTool extends Tool {
   }
 
   private async ensureContextDir(): Promise<void> {
-    await fs.promises.mkdir(CONTEXT_DIR, { recursive: true })
+    await fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true })
   }
 
   private resolveFilename(filename: string): string | null {
@@ -277,8 +279,8 @@ export default class ContextTool extends Tool {
       return null
     }
 
-    const fullPath = path.join(CONTEXT_DIR, normalized)
-    const relative = path.relative(CONTEXT_DIR, fullPath)
+    const fullPath = path.join(PROFILE_CONTEXT_PATH, normalized)
+    const relative = path.relative(PROFILE_CONTEXT_PATH, fullPath)
     if (relative.startsWith('..') || path.isAbsolute(relative)) {
       return null
     }
@@ -293,7 +295,7 @@ export default class ContextTool extends Tool {
     updatedAt: string
     content: string
   }>> {
-    const entries = await fs.promises.readdir(CONTEXT_DIR, {
+    const entries = await fs.promises.readdir(PROFILE_CONTEXT_PATH, {
       withFileTypes: true
     })
     const markdownFiles = entries
@@ -310,7 +312,7 @@ export default class ContextTool extends Tool {
     }> = []
 
     for (const filename of markdownFiles) {
-      const filePath = path.join(CONTEXT_DIR, filename)
+      const filePath = path.join(PROFILE_CONTEXT_PATH, filename)
       const [stat, content] = await Promise.all([
         fs.promises.stat(filePath),
         fs.promises.readFile(filePath, 'utf8')

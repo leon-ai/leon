@@ -4,6 +4,7 @@ import path from 'node:path'
 import execa from 'execa'
 
 import {
+  CACHE_PATH,
   NODE_VERSION,
   PNPM_RUNTIME_BIN_PATH
 } from '@/constants'
@@ -16,7 +17,8 @@ const NATIVE_NODE_MODULE_REBUILD_PACKAGES = [
   'better-sqlite3'
 ]
 const STAMP_FILE_PATH = path.join(
-  process.cwd(),
+  CACHE_PATH,
+  'setup',
   '.last-native-node-modules-rebuild'
 )
 
@@ -86,6 +88,7 @@ export default async function setupNativeNodeModules() {
       env: RuntimeHelper.getManagedNodeEnvironment()
     })
 
+  await fs.promises.mkdir(path.dirname(STAMP_FILE_PATH), { recursive: true })
   await fs.promises.writeFile(STAMP_FILE_PATH, NODE_VERSION)
 
   status.succeed('Native Node.js modules: ready')

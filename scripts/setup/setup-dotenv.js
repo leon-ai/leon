@@ -1,9 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { PROFILE_DOT_ENV_PATH } from '@/constants'
+
 import { createSetupStatus } from './setup-status'
 
-const DOT_ENV_PATH = path.join(process.cwd(), '.env')
+const DOT_ENV_PATH = PROFILE_DOT_ENV_PATH
 const DOT_ENV_SAMPLE_PATH = path.join(process.cwd(), '.env.sample')
 const ENV_LINE_SEPARATOR_PATTERN = /\r?\n/
 
@@ -114,6 +116,8 @@ export async function updateDotEnvVariable(variableName, value) {
     (line, index, lines) => !(index === lines.length - 1 && line === '')
   )
 
+  await fs.promises.mkdir(path.dirname(DOT_ENV_PATH), { recursive: true })
+
   await fs.promises.writeFile(
     DOT_ENV_PATH,
     `${normalizedLines.join('\n')}\n`
@@ -127,6 +131,7 @@ export default async () => {
   const status = createSetupStatus('Preparing .env...').start()
 
   if (!fs.existsSync(DOT_ENV_PATH)) {
+    await fs.promises.mkdir(path.dirname(DOT_ENV_PATH), { recursive: true })
     await fs.promises.copyFile(DOT_ENV_SAMPLE_PATH, DOT_ENV_PATH)
     status.succeed('.env: created')
 

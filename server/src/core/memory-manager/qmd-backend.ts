@@ -2,8 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import {
-  CONTEXT_PATH,
-  MEMORY_PATH
+  PROFILE_CONTEXT_PATH,
+  PROFILE_MEMORY_PATH
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import {
@@ -69,23 +69,23 @@ type QMDSearchMode = 'query' | 'search'
 const QMD_COLLECTIONS: Record<KnowledgeNamespace, { name: string, dir: string }> = {
   context: {
     name: 'context',
-    dir: CONTEXT_PATH
+    dir: PROFILE_CONTEXT_PATH
   },
   memory_persistent: {
     name: 'memory-persistent',
-    dir: path.join(MEMORY_PATH, 'persistent')
+    dir: path.join(PROFILE_MEMORY_PATH, 'persistent')
   },
   memory_daily: {
     name: 'memory-daily',
-    dir: path.join(MEMORY_PATH, 'daily')
+    dir: path.join(PROFILE_MEMORY_PATH, 'daily')
   },
   memory_discussion: {
     name: 'memory-discussion',
-    dir: path.join(MEMORY_PATH, 'discussion')
+    dir: path.join(PROFILE_MEMORY_PATH, 'discussion')
   },
   conversation_daily: {
     name: 'memory-daily',
-    dir: path.join(MEMORY_PATH, 'daily')
+    dir: path.join(PROFILE_MEMORY_PATH, 'daily')
   }
 }
 

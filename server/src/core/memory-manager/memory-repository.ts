@@ -8,6 +8,7 @@ import type {
   Database as SQLiteDatabase
 } from 'better-sqlite3'
 
+import { CODEBASE_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
 import type {
@@ -23,7 +24,7 @@ function resolveMemorySchemaPath(): string {
   const candidates = [
     path.join(dirName, 'sql', 'schema.sql'),
     path.join(
-      process.cwd(),
+      CODEBASE_PATH,
       'server',
       'src',
       'core',
@@ -388,6 +389,83 @@ export default class MemoryRepository {
       .get()
 
     return Number(row?.['count'] || 0)
+  }
+
+  public countDailySummaryItems(): number {
+    const db = this.ensureDb()
+    const row = db
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM memory_items
+         WHERE scope = 'daily'
+           AND kind = 'summary'
+           AND is_deleted = 0`
+      )
+      .get()
+
+    return Number(row?.['count'] || 0)
+  }
+
+  public countActiveDiscussionDays(): number {
+    const db = this.ensureDb()
+    const row = db
+      .prepare(
+        `SELECT COUNT(DISTINCT day_key) AS count
+         FROM memory_items
+         WHERE scope = 'discussion'
+           AND is_deleted = 0
+           AND day_key IS NOT NULL`
+      )
+      .get()
+
+    return Number(row?.['count'] || 0)
+  }
+
+  public listPersistentMirrorRecords(): MemoryRecord[] {
+    const db = this.ensureDb()
+    const rows = db
+      .prepare(
+        `SELECT *
+         FROM memory_items
+         WHERE scope = 'persistent'
+           AND is_deleted = 0
+         ORDER BY created_at ASC`
+      )
+      .all()
+
+    return rows.map((row) => mapMemoryRow(row as Record<string, unknown>))
+  }
+
+  public listDailySummaryMirrorRecords(): MemoryRecord[] {
+    const db = this.ensureDb()
+    const rows = db
+      .prepare(
+        `SELECT *
+         FROM memory_items
+         WHERE scope = 'daily'
+           AND kind = 'summary'
+           AND is_deleted = 0
+         ORDER BY updated_at DESC`
+      )
+      .all()
+
+    return rows.map((row) => mapMemoryRow(row as Record<string, unknown>))
+  }
+
+  public listDiscussionMirrorRecords(): MemoryRecord[] {
+    const db = this.ensureDb()
+    const rows = db
+      .prepare(
+        `SELECT *
+         FROM memory_items
+         WHERE scope = 'discussion'
+           AND is_deleted = 0
+           AND day_key IS NOT NULL
+         ORDER BY day_key ASC, created_at ASC`
+      )
+      .all()
+
+    return rows.map((row) => mapMemoryRow(row as Record<string, unknown>))
   }
 
   public listRecentPersistentContents(limit = 200): string[] {

@@ -10,7 +10,11 @@ import type {
   SkillBridgeSchema,
   SkillLocaleConfigSchema
 } from '@/schemas/skill-schemas'
-import { SKILLS_PATH } from '@/constants'
+import {
+  GLOBAL_DATA_PATH,
+  PROFILE_SKILLS_PATH,
+  SKILLS_PATH
+} from '@/constants'
 import { FileHelper } from '@/helpers/file-helper'
 
 interface SkillDomain {
@@ -320,7 +324,7 @@ export class SkillDomainHelper {
     configFilePath: string,
     lang: ShortLanguageCode
   ): Promise<SkillConfigWithGlobalEntities> {
-    const sharedDataPath = path.join(process.cwd(), 'core', 'data', lang)
+    const sharedDataPath = path.join(GLOBAL_DATA_PATH, lang)
     const configData = JSON.parse(
       await fs.promises.readFile(configFilePath, 'utf8')
     ) as SkillConfigSchema
@@ -365,19 +369,19 @@ export class SkillDomainHelper {
    * @param memory Memory name
    */
   public static async getSkillMemory(
-    domain: SkillDomain['name'],
+    _domain: SkillDomain['name'],
     skill: SkillSchema['name'],
     memory: string
   ): Promise<Record<string, unknown> | null> {
-    const skillMemoryPath = path.join(
-      SKILLS_PATH,
-      domain,
-      skill,
-      'memory',
-      `${memory}.json`
+    const normalizedSkillName = this.normalizeSkillName(skill)
+    const skillMemoryCandidates = [
+      path.join(PROFILE_SKILLS_PATH, normalizedSkillName, 'memory', `${memory}.json`)
+    ]
+    const skillMemoryPath = skillMemoryCandidates.find((candidate) =>
+      fs.existsSync(candidate)
     )
 
-    if (!fs.existsSync(skillMemoryPath)) {
+    if (!skillMemoryPath) {
       return null
     }
 

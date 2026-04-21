@@ -1,12 +1,13 @@
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import dotenv from 'dotenv'
 import { defineConfig } from 'vitest/config'
 
-const ROOT_DIR = fileURLToPath(new URL('.', import.meta.url))
+import { PROFILE_DOT_ENV_PATH } from './server/src/leon-roots'
 
-dotenv.config({ path: path.join(ROOT_DIR, '.env') })
+const ROOT_DIR = path.resolve()
+
+dotenv.config({ path: PROFILE_DOT_ENV_PATH })
 
 export default defineConfig({
   resolve: {

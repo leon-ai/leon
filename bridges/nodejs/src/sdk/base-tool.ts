@@ -10,9 +10,10 @@ import {
 } from '@/helpers/network-helper'
 
 import {
+  LEON_TOOLKITS_PATH,
   NVIDIA_LIBS_PATH,
-  PYTORCH_TORCH_PATH,
-  TOOLKITS_PATH
+  PROFILE_TOOLS_PATH,
+  PYTORCH_TORCH_PATH
 } from '@bridge/constants'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { reportToolOutput } from '@sdk/tool-reporter'
@@ -128,12 +129,7 @@ export abstract class Tool {
    */
   protected getSettingsPath(toolName?: string): string {
     const resolvedToolName = toolName || this.toolName
-    return path.join(
-      TOOLKITS_PATH,
-      this.toolkit,
-      'settings',
-      `${resolvedToolName}.settings.json`
-    )
+    return path.join(PROFILE_TOOLS_PATH, `${resolvedToolName}.settings.json`)
   }
 
   /**
@@ -571,7 +567,7 @@ export abstract class Tool {
         ? `${actualFilename}.exe`
         : actualFilename
 
-    const binsPath = path.join(TOOLKITS_PATH, this.toolkit, 'bins')
+    const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
 
     // Ensure toolkit bins directory exists
     if (!fs.existsSync(binsPath)) {
@@ -667,9 +663,7 @@ export abstract class Tool {
     }
 
     const resourcePath = path.join(
-      TOOLKITS_PATH,
-      this.toolkit,
-      'bins',
+      path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets'),
       resourceName
     )
 
@@ -1063,7 +1057,7 @@ export abstract class Tool {
     executable: string
   ): Promise<void> {
     try {
-      const binsPath = path.join(TOOLKITS_PATH, this.toolkit, 'bins')
+      const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
       const binaryPath = path.join(binsPath, executable)
 
       await this.report('bridges.tools.binary_not_found', {

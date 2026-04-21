@@ -1,7 +1,18 @@
 import path from 'node:path'
 import fs from 'node:fs'
 
-import { SKILL_PATH, SKILLS_PATH } from '@bridge/constants'
+import {
+  PROFILE_SKILLS_PATH,
+  SKILL_PATH
+} from '@bridge/constants'
+
+const SKILL_NAME_SUFFIX = '_skill'
+
+function normalizeSkillName(skillName: string): string {
+  return skillName.endsWith(SKILL_NAME_SUFFIX)
+    ? skillName
+    : `${skillName}${SKILL_NAME_SUFFIX}`
+}
 
 interface MemoryOptions<T> {
   name: string
@@ -19,17 +30,21 @@ export class Memory<T = unknown> {
 
     this.name = name
     this.defaultMemory = defaultMemory
-    this.memoryPath = path.join(SKILL_PATH, 'memory', `${this.name}.json`)
+    this.memoryPath = path.join(
+      PROFILE_SKILLS_PATH,
+      path.basename(SKILL_PATH),
+      'memory',
+      `${this.name}.json`
+    )
     this.isFromAnotherSkill = false
 
     if (this.name.includes(':') && this.name.split(':').length === 3) {
       this.isFromAnotherSkill = true
 
-      const [domainName, skillName, memoryName] = this.name.split(':')
+      const [, skillName, memoryName] = this.name.split(':')
       this.memoryPath = path.join(
-        SKILLS_PATH,
-        domainName as string,
-        skillName as string,
+        PROFILE_SKILLS_PATH,
+        normalizeSkillName(skillName as string),
         'memory',
         `${memoryName}.json`
       )
@@ -81,6 +96,9 @@ export class Memory<T = unknown> {
   public async write(memory: T): Promise<T> {
     if (!this.isFromAnotherSkill) {
       try {
+        await fs.promises.mkdir(path.dirname(this.memoryPath), {
+          recursive: true
+        })
         await fs.promises.writeFile(
           this.memoryPath,
           JSON.stringify(memory, null, 2)

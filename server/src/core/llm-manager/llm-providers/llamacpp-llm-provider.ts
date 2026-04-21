@@ -14,6 +14,7 @@ import type {
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import {
+  CODEBASE_PATH,
   LLAMACPP_BUILD_PATH,
   LLAMACPP_BUILD_MANIFEST_PATH,
   LLAMACPP_PATH,
@@ -21,7 +22,7 @@ import {
   LLAMACPP_SOURCE_BUILD_PATH,
   LLAMACPP_SOURCE_MANIFEST_PATH,
   LLAMACPP_SOURCE_PATH,
-  LOGS_PATH
+  PROFILE_LOGS_PATH
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
@@ -32,7 +33,10 @@ const LLAMACPP_READY_TIMEOUT_MS = 120_000
 const LLAMACPP_READY_POLL_INTERVAL_MS = 250
 const LLAMA_SERVER_LOG_RESET_INTERVAL_MS = 12 * 60 * 60 * 1_000
 const LLAMACPP_MAX_PORT_CHECKS = 10
-const LLAMA_SERVER_LOG_PATH = path.join(LOGS_PATH, 'llama-server.log')
+const LLAMA_SERVER_LOG_PATH = path.join(
+  PROFILE_LOGS_PATH,
+  'llama-server.log'
+)
 
 function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
@@ -169,7 +173,7 @@ function resolveModelPath(modelPath: string): string {
 
   return path.isAbsolute(normalizedModelPath)
     ? normalizedModelPath
-    : path.resolve(process.cwd(), normalizedModelPath)
+    : path.resolve(CODEBASE_PATH, normalizedModelPath)
 }
 
 /**
@@ -950,7 +954,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     if (!this.serverLogStream) {
       const { flags, nextResetAt } = this.getServerLogOpenState(now)
 
-      fs.mkdirSync(LOGS_PATH, { recursive: true })
+      fs.mkdirSync(PROFILE_LOGS_PATH, { recursive: true })
       this.serverLogStream = fs.createWriteStream(LLAMA_SERVER_LOG_PATH, {
         flags
       })

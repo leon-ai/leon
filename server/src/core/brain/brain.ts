@@ -8,7 +8,7 @@ import type { NLUProcessResult } from '@/core/nlp/types'
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
 import type { BrainProcessResult } from '@/core/brain/types'
 import { SkillActionTypes } from '@/core/brain/types'
-import { HAS_TTS } from '@/constants'
+import { GLOBAL_DATA_PATH, HAS_TTS } from '@/constants'
 import {
   CONVERSATION_LOGGER,
   NLU,
@@ -56,7 +56,7 @@ export default class Brain {
   private answerQueueProcessTimerId: NodeJS.Timeout | undefined = undefined
   private broca: GlobalAnswersSchema = JSON.parse(
     fs.readFileSync(
-      path.join(process.cwd(), 'core', 'data', this._lang, 'answers.json'),
+      path.join(GLOBAL_DATA_PATH, this._lang, 'answers.json'),
       'utf8'
     )
   )
@@ -150,7 +150,7 @@ export default class Brain {
     // Update broca
     this.broca = JSON.parse(
       fs.readFileSync(
-        path.join(process.cwd(), 'core', 'data', this._lang, 'answers.json'),
+        path.join(GLOBAL_DATA_PATH, this._lang, 'answers.json'),
         'utf8'
       )
     )
