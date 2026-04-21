@@ -4,8 +4,9 @@ import { fileURLToPath } from 'node:url'
 import dotenv from 'dotenv'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { PROFILE_DOT_ENV_PATH } from '../server/src/leon-roots.ts'
 
-dotenv.config()
+dotenv.config({ path: PROFILE_DOT_ENV_PATH })
 
 dns.setDefaultResultOrder('verbatim')
 

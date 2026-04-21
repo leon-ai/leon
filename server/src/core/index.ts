@@ -3,6 +3,7 @@ import { EventEmitter } from 'node:events'
 import {
   HOST,
   PORT,
+  PROFILE_CONVERSATION_LOG_PATH,
   PYTHON_TCP_SERVER_HOST,
   PYTHON_TCP_SERVER_PORT
 } from '@/constants'
@@ -49,6 +50,7 @@ export const LLM_MANAGER = new LLMManager()
 export const CONVERSATION_LOGGER = new ConversationLogger({
   loggerName: 'Conversation Logger',
   fileName: 'conversation_log.json',
+  filePath: PROFILE_CONVERSATION_LOG_PATH,
   nbOfLogsToKeep: 1_024,
   nbOfLogsToLoad: 256
 })

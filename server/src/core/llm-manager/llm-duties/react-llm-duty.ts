@@ -32,7 +32,7 @@ import {
   type OpenAIToolChoice
 } from '@/core/llm-manager/types'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
-import { LOGS_PATH } from '@/constants'
+import { PROFILE_LOGS_PATH } from '@/constants'
 import type { MessageLog } from '@/types'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
@@ -105,7 +105,7 @@ const REACT_CONTINUATION_STATE_FILENAME = '.react-execution-continuation-state.j
 const REACT_HISTORY_COMPACTION_STATE_FILENAME =
   '.react-history-compaction-state.json'
 const REACT_CONTINUATION_MAX_AGE_MS = 30 * 60 * 1_000
-const REACT_PROMPTS_LOG_DIR = path.join(LOGS_PATH, 'prompts')
+const REACT_PROMPTS_LOG_DIR = path.join(PROFILE_LOGS_PATH, 'prompts')
 
 type ReactHistoryCompactionScope = 'local' | 'remote'
 

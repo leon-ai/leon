@@ -1,7 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const DOT_ENV_PATH = path.join(process.cwd(), '.env')
+import { PROFILE_DOT_ENV_PATH } from '@/leon-roots'
+
+const DOT_ENV_PATH = PROFILE_DOT_ENV_PATH
 const ENV_LINE_SEPARATOR_PATTERN = /\r?\n/
 const ENV_VARIABLE_NAME_PATTERN = /^[A-Z0-9_]+$/
 
@@ -59,6 +61,8 @@ export class DotEnvHelper {
     const normalizedLines = updatedLines.filter(
       (line, index, lines) => !(index === lines.length - 1 && line === '')
     )
+
+    await fs.promises.mkdir(path.dirname(DOT_ENV_PATH), { recursive: true })
 
     await fs.promises.writeFile(
       DOT_ENV_PATH,

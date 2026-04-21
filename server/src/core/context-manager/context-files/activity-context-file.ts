@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { CONTEXT_PATH } from '@/constants'
+import { PROFILE_CONTEXT_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
@@ -523,7 +523,7 @@ export class ActivityContextFile extends ContextFile {
     const stateFilePath = this.getStateFilePath()
 
     try {
-      fs.mkdirSync(CONTEXT_PATH, { recursive: true })
+      fs.mkdirSync(PROFILE_CONTEXT_PATH, { recursive: true })
       fs.writeFileSync(stateFilePath, JSON.stringify(state, null, 2), 'utf8')
     } catch {
       // Ignore state persistence errors.
@@ -563,6 +563,6 @@ export class ActivityContextFile extends ContextFile {
   }
 
   private getStateFilePath(): string {
-    return path.join(CONTEXT_PATH, ACTIVITY_STATE_FILENAME)
+    return path.join(PROFILE_CONTEXT_PATH, ACTIVITY_STATE_FILENAME)
   }
 }

@@ -38,6 +38,8 @@ import {
   PYTHON_TCP_SERVER_TTS_BERT_BASE_DIR_PATH,
   PYTHON_TCP_SERVER_ASR_MODEL_DIR_PATH,
   AUDIO_MODELS_PATH,
+  CODEBASE_PATH,
+  PROFILE_DOT_ENV_PATH,
   TSX_CLI_PATH,
   LANG,
   HAS_STT,
@@ -56,7 +58,7 @@ import {
   NVIDIA_NVSHMEM_PATH
 } from '@/constants'
 
-dotenv.config()
+dotenv.config({ path: PROFILE_DOT_ENV_PATH })
 
 const CHECK_TMP_DIR_PATH = path.join(process.cwd(), 'scripts', 'tmp')
 const PYTHON_TCP_SERVER_TTS_MODEL_CONFIG_PATH = path.join(
@@ -144,7 +146,7 @@ function buildExtraContext(lang) {
 
 async function createNodejsBridgeIntentObject() {
   const skillConfigPath = path.join(
-    process.cwd(),
+    CODEBASE_PATH,
     'skills',
     'date_time_skill',
     'skill.json'
@@ -179,7 +181,7 @@ async function createNodejsBridgeIntentObject() {
 
 async function createPythonBridgeIntentObject() {
   const skillConfigPath = path.join(
-    process.cwd(),
+    CODEBASE_PATH,
     'skills',
     'color_skill',
     'skill.json'

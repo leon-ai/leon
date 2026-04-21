@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { CONTEXT_PATH } from '@/constants'
+import { PROFILE_CONTEXT_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
 import { ContextProbeHelper } from '@/core/context-manager/context-probe-helper'
@@ -49,7 +49,10 @@ export class MediaProfileContextFile extends ContextFile {
 
   public generate(): string {
     const nowIso = new Date().toISOString()
-    const browserHistoryPath = path.join(CONTEXT_PATH, 'BROWSER_HISTORY.md')
+    const browserHistoryPath = path.join(
+      PROFILE_CONTEXT_PATH,
+      'BROWSER_HISTORY.md'
+    )
     const browserRecords = this.loadBrowserHistoryRecords(browserHistoryPath)
     const runningApps = this.probeHelper
       .probeRunningProcesses(90)

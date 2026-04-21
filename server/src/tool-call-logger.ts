@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { LOGS_PATH } from '@/constants'
+import { PROFILE_LOGS_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -33,7 +33,7 @@ interface ToolOutputLogInput {
   output: Record<string, unknown>
 }
 
-const TOOL_OUTPUT_LOGS_DIR = path.join(LOGS_PATH, 'tool-outputs')
+const TOOL_OUTPUT_LOGS_DIR = path.join(PROFILE_LOGS_PATH, 'tool-outputs')
 const TOOL_OUTPUT_LOG_RETENTION_MS = 12 * 60 * 60 * 1_000
 
 export class ToolCallLogger {
@@ -48,7 +48,10 @@ export class ToolCallLogger {
     LogHelper.success('New instance')
 
     this.settings = settings
-    this.toolCallLogPath = path.join(LOGS_PATH, this.settings.fileName)
+    this.toolCallLogPath = path.join(
+      PROFILE_LOGS_PATH,
+      this.settings.fileName
+    )
     fs.mkdirSync(TOOL_OUTPUT_LOGS_DIR, { recursive: true })
     void this.cleanupToolOutputLogs()
 

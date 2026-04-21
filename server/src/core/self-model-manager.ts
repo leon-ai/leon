@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 
-import { CONTEXT_PATH } from '@/constants'
+import { PROFILE_CONTEXT_PATH } from '@/constants'
 import { runInference } from '@/core/llm-manager/inference'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -106,7 +106,7 @@ interface ReflectionPatch {
   }>
 }
 
-const PRIVATE_CONTEXT_DIR = path.join(CONTEXT_PATH, 'private')
+const PRIVATE_CONTEXT_DIR = path.join(PROFILE_CONTEXT_PATH, 'private')
 const PRIVATE_DIARY_PATH = path.join(
   PRIVATE_CONTEXT_DIR,
   'LEON_PRIVATE_DIARY.md'

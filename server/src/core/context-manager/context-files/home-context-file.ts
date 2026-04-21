@@ -1,10 +1,11 @@
 import path from 'node:path'
 
 import {
-  CONTEXT_PATH,
+  CODEBASE_PATH,
   GLOBAL_DATA_PATH,
-  LOGS_PATH,
   MODELS_PATH,
+  PROFILE_CONTEXT_PATH,
+  PROFILE_LOGS_PATH,
   SERVER_CORE_PATH,
   SKILLS_PATH,
   TMP_PATH,
@@ -23,22 +24,22 @@ export class HomeContextFile extends ContextFile {
   }
 
   public generate(): string {
-    const projectRoot = process.cwd()
-    const serverSourcePath = path.join(projectRoot, 'server', 'src')
+    const codebasePath = CODEBASE_PATH
+    const serverSourcePath = path.join(codebasePath, 'server', 'src')
 
     return [
-      `> Workspace paths and runtime directories. Leon workspace rooted at ${projectRoot}. Key folders for skills, toolkits, models, logs and runtime temp are available.`,
+      `> Workspace paths and runtime directories. Leon workspace rooted at ${codebasePath}. Key folders for skills, toolkits, models, logs and runtime temp are available.`,
       '# HOME',
       `- Generated at: ${DateHelper.getDateTime()}`,
-      `- Project root: ${projectRoot}`,
+      `- Codebase path: ${codebasePath}`,
       `- Skills path: ${SKILLS_PATH}`,
       `- Toolkits path: ${TOOLKITS_PATH}`,
       `- Global data path: ${GLOBAL_DATA_PATH}`,
       `- Models path: ${MODELS_PATH}`,
-      `- Context path: ${CONTEXT_PATH}`,
+      `- Context path: ${PROFILE_CONTEXT_PATH}`,
       `- Server source path: ${serverSourcePath}`,
       `- Server core runtime path: ${SERVER_CORE_PATH}`,
-      `- Logs path: ${LOGS_PATH}`,
+      `- Logs path: ${PROFILE_LOGS_PATH}`,
       `- Temp path: ${TMP_PATH}`
     ].join('\n')
   }

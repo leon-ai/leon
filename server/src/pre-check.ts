@@ -26,7 +26,8 @@ import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import {
   MINIMUM_REQUIRED_RAM,
   VOICE_CONFIG_PATH,
-  GLOBAL_DATA_PATH
+  GLOBAL_DATA_PATH,
+  SKILLS_PATH
 } from '@/constants'
 import { SystemHelper } from '@/helpers/system-helper'
 
@@ -160,7 +161,7 @@ const GLOBAL_DATA_SCHEMAS = {
   const skillNames = await SkillDomainHelper.listSkillFolders()
 
   for (const skillName of skillNames) {
-    const skillPath = path.join(process.cwd(), 'skills', skillName)
+    const skillPath = path.join(SKILLS_PATH, skillName)
     const pathToSkill = path.join(skillPath, 'skill.json')
     const skillObject: SkillSchema = JSON.parse(
       await fs.promises.readFile(pathToSkill, 'utf8')

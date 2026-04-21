@@ -5,9 +5,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { MessageLog } from '@/types'
 import {
-  CONTEXT_PATH,
   LEON_PULSE_ENABLED,
-  LEON_PULSE_INTERVAL_MS
+  LEON_PULSE_INTERVAL_MS,
+  PROFILE_CONTEXT_PATH
 } from '@/constants'
 import { runInference } from '@/core/llm-manager/inference'
 import { DateHelper } from '@/helpers/date-helper'
@@ -103,7 +103,7 @@ interface PulseOwnerReactionOutput {
   behavioral_principle?: string | null
 }
 
-const PRIVATE_CONTEXT_DIR = path.join(CONTEXT_PATH, 'private')
+const PRIVATE_CONTEXT_DIR = path.join(PROFILE_CONTEXT_PATH, 'private')
 const PULSE_MARKDOWN_PATH = path.join(PRIVATE_CONTEXT_DIR, 'PULSE.md')
 const PULSE_STATE_PATH = path.join(PRIVATE_CONTEXT_DIR, '.leon-pulse-state.json')
 const MAX_PENDING_MATTERS = 6
@@ -810,7 +810,7 @@ export default class PulseManager {
     changedSignals: string[]
     nextStamps: Record<string, number>
   }> {
-    const entries = await fs.promises.readdir(CONTEXT_PATH, {
+    const entries = await fs.promises.readdir(PROFILE_CONTEXT_PATH, {
       withFileTypes: true
     })
     const nextStamps: Record<string, number> = {}
@@ -821,7 +821,7 @@ export default class PulseManager {
         continue
       }
 
-      const entryPath = path.join(CONTEXT_PATH, entry.name)
+      const entryPath = path.join(PROFILE_CONTEXT_PATH, entry.name)
       try {
         const stats = await fs.promises.stat(entryPath)
         nextStamps[entry.name] = stats.mtimeMs

@@ -4,7 +4,7 @@ import inspect
 from traceback import print_exc
 from importlib import import_module
 
-from constants import INTENT_OBJECT
+from constants import INTENT_OBJECT, PROFILE_SKILLS_PATH
 from sdk.params_helper import ParamsHelper
 
 
@@ -27,12 +27,9 @@ def resolve_action_function(skill_action_module):
 
 
 def main():
-    skill_src_path = os.path.join(
-        'skills', INTENT_OBJECT['skill_name'], 'src'
-    )
     skill_vendor_path = os.path.abspath(
         os.path.join(
-            'skills',
+            PROFILE_SKILLS_PATH,
             INTENT_OBJECT['skill_name'],
             '.runtime',
             'vendor'
@@ -94,8 +91,7 @@ def main():
 
 if __name__ == '__main__':
     try:
-        raise main()
-    except Exception as e:
-        # Print full traceback error report if skills triggers an error from the call stack
-        if 'exceptions must derive from BaseException' not in str(e):
-            print_exc()
+        main()
+    except Exception:
+        # Print full traceback error report if skills triggers an error from the call stack.
+        print_exc()

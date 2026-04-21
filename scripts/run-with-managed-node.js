@@ -1,10 +1,26 @@
+import os from 'node:os'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 
+const DEFAULT_LEON_HOME_DIRNAME = '.leon'
+
+/**
+ * This launcher must stay plain-Node compatible because it is invoked before
+ * tsx/path aliases are available.
+ */
+function resolveLeonHomePath() {
+  const configuredLeonHome = String(process.env['LEON_HOME'] || '').trim()
+
+  return configuredLeonHome
+    ? path.resolve(configuredLeonHome)
+    : path.join(os.homedir(), DEFAULT_LEON_HOME_DIRNAME)
+}
+
+const leonHomePath = resolveLeonHomePath()
 const managedNodePath = process.platform === 'win32'
-  ? path.join(process.cwd(), 'bin', 'node', 'node.exe')
-  : path.join(process.cwd(), 'bin', 'node', 'bin', 'node')
+  ? path.join(leonHomePath, 'bin', 'node', 'node.exe')
+  : path.join(leonHomePath, 'bin', 'node', 'bin', 'node')
 const args = process.argv.slice(2)
 
 if (!fs.existsSync(managedNodePath)) {

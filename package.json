@@ -120,6 +120,7 @@
     "@stylistic/eslint-plugin": "5.10.0",
     "@tsconfig/node16": "16.1.8",
     "@tsconfig/strictest": "2.0.8",
+    "@types/better-sqlite3": "7.6.13",
     "@types/cli-spinner": "0.2.3",
     "@types/fluent-ffmpeg": "2.1.28",
     "@types/getos": "3.0.4",

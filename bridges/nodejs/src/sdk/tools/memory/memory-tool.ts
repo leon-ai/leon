@@ -5,6 +5,12 @@ import { createHash, randomUUID } from 'node:crypto'
 import SQLite from 'better-sqlite3'
 import type { Database as SQLiteDatabase } from 'better-sqlite3'
 import {
+  CODEBASE_PATH,
+  PROFILE_CONTEXT_PATH,
+  PROFILE_MEMORY_DB_PATH,
+  PROFILE_MEMORY_PATH
+} from '@bridge/constants'
+import {
   type QMDCollectionDefinition,
   type QMDStoreRow,
   QMDWriteLockTimeoutError,
@@ -101,15 +107,11 @@ interface QMDHit {
   namespace: KnowledgeNamespace
 }
 
-const ROOT_DIR = process.cwd()
-const MEMORY_ROOT = path.join(ROOT_DIR, 'core', 'memory')
-const MEMORY_DB_PATH = path.join(MEMORY_ROOT, 'index.sqlite')
-const CONTEXT_PATH = path.join(ROOT_DIR, 'core', 'context')
-const MEMORY_PERSISTENT_PATH = path.join(MEMORY_ROOT, 'persistent')
-const MEMORY_DAILY_PATH = path.join(MEMORY_ROOT, 'daily')
-const MEMORY_DISCUSSION_PATH = path.join(MEMORY_ROOT, 'discussion')
+const MEMORY_PERSISTENT_PATH = path.join(PROFILE_MEMORY_PATH, 'persistent')
+const MEMORY_DAILY_PATH = path.join(PROFILE_MEMORY_PATH, 'daily')
+const MEMORY_DISCUSSION_PATH = path.join(PROFILE_MEMORY_PATH, 'discussion')
 const MEMORY_SCHEMA_PATH = path.join(
-  ROOT_DIR,
+  CODEBASE_PATH,
   'server',
   'src',
   'core',
@@ -123,7 +125,7 @@ type QMDSearchMode = 'query' | 'search'
 const COLLECTIONS: Record<KnowledgeNamespace, { name: string, dir: string }> = {
   context: {
     name: 'context',
-    dir: CONTEXT_PATH
+    dir: PROFILE_CONTEXT_PATH
   },
   memory_persistent: {
     name: 'memory-persistent',
@@ -394,6 +396,9 @@ export default class MemoryTool extends Tool {
           collectionFromQmdPath ||
           collectionFromAbsolutePath ||
           (collectionNames.length === 1 ? collectionNames[0] : '')
+        if (!resolvedCollectionName) {
+          continue
+        }
         const mappedNamespaces = namespaceByCollection.get(resolvedCollectionName) || []
         const namespace =
           namespaces.find((candidate) => mappedNamespaces.includes(candidate)) ||
@@ -998,13 +1003,13 @@ export default class MemoryTool extends Tool {
           typeof item === 'string' && allowed.has(item as KnowledgeNamespace)
         )
       : []
-    const namespaces =
+    const namespaces: KnowledgeNamespace[] =
       input.length > 0
         ? input
         : ['memory_persistent', 'memory_daily', 'memory_discussion']
 
     if (includeContext) {
-      return [...new Set([...namespaces, 'context'])]
+      return Array.from(new Set<KnowledgeNamespace>([...namespaces, 'context']))
     }
 
     return namespaces.filter((namespace) => namespace !== 'context')
@@ -1024,15 +1029,15 @@ export default class MemoryTool extends Tool {
     }
 
     await Promise.all([
-      fs.promises.mkdir(MEMORY_ROOT, { recursive: true }),
+      fs.promises.mkdir(PROFILE_MEMORY_PATH, { recursive: true }),
       fs.promises.mkdir(MEMORY_PERSISTENT_PATH, { recursive: true }),
       fs.promises.mkdir(MEMORY_DAILY_PATH, { recursive: true }),
       fs.promises.mkdir(MEMORY_DISCUSSION_PATH, { recursive: true }),
-      fs.promises.mkdir(CONTEXT_PATH, { recursive: true })
+      fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true })
     ])
 
     if (!MemoryTool.db) {
-      MemoryTool.db = new SQLite(MEMORY_DB_PATH)
+      MemoryTool.db = new SQLite(PROFILE_MEMORY_DB_PATH)
       const schemaSQL = await fs.promises.readFile(MEMORY_SCHEMA_PATH, 'utf8')
       MemoryTool.db.exec(schemaSQL)
     }

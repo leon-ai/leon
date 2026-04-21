@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-import { RECENTLY_USED_COMMANDS_FILE_PATH } from '@/constants'
+import { PROFILE_RECENTLY_USED_COMMANDS_FILE_PATH } from '@/constants'
 import { StringHelper } from '@/helpers/string-helper'
 import {
   type BuiltInCommand,
@@ -519,13 +519,13 @@ export class BuiltInCommandManager {
   }
 
   private readRecentCommandValues(): string[] {
-    if (!fs.existsSync(RECENTLY_USED_COMMANDS_FILE_PATH)) {
+    if (!fs.existsSync(PROFILE_RECENTLY_USED_COMMANDS_FILE_PATH)) {
       return []
     }
 
     try {
       return fs
-        .readFileSync(RECENTLY_USED_COMMANDS_FILE_PATH, 'utf8')
+        .readFileSync(PROFILE_RECENTLY_USED_COMMANDS_FILE_PATH, 'utf8')
         .split('\n')
         .map((commandValue) => commandValue.trim())
         .filter(Boolean)
@@ -546,7 +546,7 @@ export class BuiltInCommandManager {
 
     try {
       fs.writeFileSync(
-        RECENTLY_USED_COMMANDS_FILE_PATH,
+        PROFILE_RECENTLY_USED_COMMANDS_FILE_PATH,
         `${nextRecentCommandValues.join('\n')}\n`,
         'utf8'
       )
