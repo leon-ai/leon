@@ -26,8 +26,7 @@ export class WhatsAppMessagingApp extends MessagingApp<WhatsAppMessagingAppConfi
   public override async handleIncomingMessage(
     payload: MessagingAppIncomingMessage
   ): Promise<void> {
-    void payload
-    this.logPendingImplementation('handleIncomingMessage')
+    await this.forwardIncomingMessage(payload)
   }
 
   protected override async sendMessage(

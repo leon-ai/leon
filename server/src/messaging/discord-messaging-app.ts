@@ -24,8 +24,7 @@ export class DiscordMessagingApp extends MessagingApp<DiscordMessagingAppConfig>
   public override async handleIncomingMessage(
     payload: MessagingAppIncomingMessage
   ): Promise<void> {
-    void payload
-    this.logPendingImplementation('handleIncomingMessage')
+    await this.forwardIncomingMessage(payload)
   }
 
   protected override async sendMessage(

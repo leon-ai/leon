@@ -11,6 +11,7 @@ import { SkillActionTypes } from '@/core/brain/types'
 import { GLOBAL_DATA_PATH, HAS_TTS } from '@/constants'
 import {
   CONVERSATION_LOGGER,
+  MESSAGING_APP_MANAGER,
   NLU,
   SELF_MODEL_MANAGER,
   SOCKET_SERVER,
@@ -22,7 +23,6 @@ import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-
 import { AnswerQueue } from '@/core/brain/answer-queue'
 import { LogicActionSkillHandler } from '@/core/brain/logic-action-skill-handler'
 import { DialogActionSkillHandler } from '@/core/brain/dialog-action-skill-handler'
-import { MESSAGING_APP_MANAGER } from '@/messaging'
 
 type SkillProcess = ChildProcessWithoutNullStreams | undefined
 interface IsTalkingWithVoiceOptions {

@@ -24,8 +24,7 @@ export class TelegramMessagingApp extends MessagingApp<TelegramMessagingAppConfi
   public override async handleIncomingMessage(
     payload: MessagingAppIncomingMessage
   ): Promise<void> {
-    void payload
-    this.logPendingImplementation('handleIncomingMessage')
+    await this.forwardIncomingMessage(payload)
   }
 
   protected override async sendMessage(

@@ -16,14 +16,13 @@ import {
   ASR,
   STT,
   TTS,
-  NLU,
   BRAIN,
+  OWNER_MESSAGE_INGRESS,
   LLM_PROVIDER,
   CONVERSATION_LOGGER
 } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
-import { Telemetry } from '@/telemetry'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
@@ -419,12 +418,8 @@ export default class SocketServer {
 
             try {
               LogHelper.time('Utterance processed in')
-
-              // Always interrupt Leon's voice on answer
-              BRAIN.setIsTalkingWithVoice(false, { shouldInterrupt: true })
-
-              BRAIN.isMuted = false
-              const processedData = await NLU.process(utterance, {
+              await OWNER_MESSAGE_INGRESS.handle({
+                utterance,
                 ownerMessageId,
                 ...(utteranceData.commandContext?.forcedRoutingMode
                   ? {
@@ -439,10 +434,6 @@ export default class SocketServer {
                     }
                   : {})
               })
-
-              if (processedData) {
-                Telemetry.utterance(processedData)
-              }
 
               LogHelper.title('Execution Time')
               LogHelper.timeEnd('Utterance processed in')

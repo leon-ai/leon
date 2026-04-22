@@ -15,6 +15,7 @@ import TextToSpeech from '@/core/tts/tts'
 import AutomaticSpeechRecognition from '@/core/asr/asr'
 import NaturalLanguageUnderstanding from '@/core/nlp/nlu/nlu'
 import Brain from '@/core/brain/brain'
+import { OwnerMessageIngress } from '@/core/owner-message-ingress'
 import LLMManager from '@/core/llm-manager/llm-manager'
 import LLMProvider from '@/core/llm-manager/llm-provider'
 import Persona from '@/core/llm-manager/persona'
@@ -24,6 +25,7 @@ import MemoryManager from '@/core/memory-manager'
 import SelfModelManager from '@/core/self-model-manager'
 import PulseManager from '@/core/pulse-manager'
 import ToolExecutor from '@/core/tool-executor'
+import { createDefaultMessagingApps, MessagingAppManager } from '@/messaging'
 import { ConversationLogger } from '@/conversation-logger'
 import { ToolCallLogger } from '@/tool-call-logger'
 
@@ -84,3 +86,20 @@ export const ASR = new AutomaticSpeechRecognition()
 export const NLU = new NaturalLanguageUnderstanding()
 
 export const BRAIN = new Brain()
+
+export const OWNER_MESSAGE_INGRESS = new OwnerMessageIngress({
+  brain: BRAIN,
+  nlu: NLU
+})
+
+export const MESSAGING_APP_MANAGER = new MessagingAppManager(
+  createDefaultMessagingApps(),
+  {
+    incomingMessageHandler: async (_appName, payload): Promise<void> => {
+      await OWNER_MESSAGE_INGRESS.handle({
+        utterance: payload.message,
+        ...(payload.messageId ? { ownerMessageId: payload.messageId } : {})
+      })
+    }
+  }
+)

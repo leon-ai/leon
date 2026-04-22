@@ -6,11 +6,17 @@ import type {
   MessagingAppState
 } from '@/messaging/types'
 
+type IncomingMessageHandler = (
+  appName: string,
+  payload: MessagingAppIncomingMessage
+) => Promise<void>
+
 export abstract class MessagingApp<
   TConfig extends MessagingAppConfig = MessagingAppConfig
 > {
   protected config: Partial<TConfig> = {}
   private enabled = false
+  private incomingMessageHandler: IncomingMessageHandler | null = null
 
   public abstract readonly name: string
   public abstract readonly displayName: string
@@ -64,6 +70,10 @@ export abstract class MessagingApp<
     }
   }
 
+  public setIncomingMessageHandler(handler: IncomingMessageHandler): void {
+    this.incomingMessageHandler = handler
+  }
+
   public async broadcast(
     payload: MessagingAppBroadcastPayload
   ): Promise<void> {
@@ -97,6 +107,18 @@ export abstract class MessagingApp<
     LogHelper.info(
       `[${this.displayName}] ${methodName} is ready for implementation.`
     )
+  }
+
+  protected async forwardIncomingMessage(
+    payload: MessagingAppIncomingMessage
+  ): Promise<void> {
+    if (!this.incomingMessageHandler) {
+      throw new Error(
+        `No incoming message handler configured for "${this.name}" messaging app`
+      )
+    }
+
+    await this.incomingMessageHandler(this.name, payload)
   }
 
   public abstract handleIncomingMessage(

@@ -7,16 +7,35 @@ import type {
   MessagingAppState
 } from '@/messaging/types'
 
+type IncomingMessageHandler = (
+  appName: string,
+  payload: MessagingAppIncomingMessage
+) => Promise<void>
+
+interface MessagingAppManagerOptions {
+  incomingMessageHandler?: IncomingMessageHandler
+}
+
 export class MessagingAppManager {
   private readonly apps = new Map<string, MessagingApp>()
+  private incomingMessageHandler: IncomingMessageHandler | null = null
 
-  public constructor(apps: MessagingApp[] = []) {
+  public constructor(
+    apps: MessagingApp[] = [],
+    options?: MessagingAppManagerOptions
+  ) {
+    this.incomingMessageHandler = options?.incomingMessageHandler || null
+
     apps.forEach((app) => {
       this.register(app)
     })
   }
 
   public register(app: MessagingApp): void {
+    if (this.incomingMessageHandler) {
+      app.setIncomingMessageHandler(this.incomingMessageHandler)
+    }
+
     this.apps.set(app.name, app)
   }
 
