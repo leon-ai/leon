@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
 import { LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH } from '@/constants'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
@@ -16,6 +17,10 @@ export default () =>
         })
         .join('\n')
 
+      await fs.promises.mkdir(
+        path.dirname(LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH),
+        { recursive: true }
+      )
       await fs.promises.writeFile(
         LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH,
         formattedFriendlyPrompts
