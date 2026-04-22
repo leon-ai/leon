@@ -1,4 +1,20 @@
-import { IS_GITHUB_ACTIONS } from '@/constants'
+import fs from 'node:fs'
+
+import {
+  CACHE_PATH,
+  LEON_HOME_PATH,
+  LEON_PROFILES_PATH,
+  LEON_PROFILE_PATH,
+  LEON_TOOLKITS_PATH,
+  MODELS_PATH,
+  PROFILE_CONTEXT_PATH,
+  PROFILE_LOGS_PATH,
+  PROFILE_MEMORY_PATH,
+  PROFILE_SKILLS_PATH,
+  PROFILE_TOOLS_PATH,
+  TMP_PATH,
+  IS_GITHUB_ACTIONS
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { NetworkHelper } from '@/helpers/network-helper'
 
@@ -43,6 +59,30 @@ import setFfprobePermissions from './set-ffprobe-permissions'
 import setupGitHooks from './setup-git-hooks'
 
 const DISABLED_LLM_TARGET_VALUE = 'none'
+
+/**
+ * Create Leon home directories that setup and runtime expect to exist.
+ */
+async function ensureLeonHomeStructure() {
+  const status = createSetupStatus('Preparing Leon home...').start()
+
+  await Promise.all([
+    fs.promises.mkdir(LEON_HOME_PATH, { recursive: true }),
+    fs.promises.mkdir(LEON_PROFILES_PATH, { recursive: true }),
+    fs.promises.mkdir(LEON_PROFILE_PATH, { recursive: true }),
+    fs.promises.mkdir(CACHE_PATH, { recursive: true }),
+    fs.promises.mkdir(LEON_TOOLKITS_PATH, { recursive: true }),
+    fs.promises.mkdir(MODELS_PATH, { recursive: true }),
+    fs.promises.mkdir(TMP_PATH, { recursive: true }),
+    fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true }),
+    fs.promises.mkdir(PROFILE_MEMORY_PATH, { recursive: true }),
+    fs.promises.mkdir(PROFILE_LOGS_PATH, { recursive: true }),
+    fs.promises.mkdir(PROFILE_SKILLS_PATH, { recursive: true }),
+    fs.promises.mkdir(PROFILE_TOOLS_PATH, { recursive: true })
+  ])
+
+  status.succeed('Leon home: ready')
+}
 
 function isExplicitLocalLLMTarget(value) {
   const normalizedValue = (value || '').trim()
@@ -227,6 +267,8 @@ async function syncLLMSetupChoice(preferences) {
     // Prepare the local runtime, bridges, skills, and shared memory models.
     SetupUI.section('Base Setup')
 
+    currentStep = 'ensureLeonHomeStructure'
+    await ensureLeonHomeStructure()
     currentStep = 'setupDotenv'
     await setupDotenv()
     currentStep = 'syncLLMSetupChoice'
