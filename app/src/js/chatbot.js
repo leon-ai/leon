@@ -13,6 +13,7 @@ const REPLACED_MESSAGES = new Set()
 const AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 24
 const MAXIMUM_BUBBLES_IN_MEMORY = 62
 const MAXIMUM_WIDGET_FETCH_CONCURRENCY = 4
+const SECONDS_PER_MINUTE = 60
 
 function escapeHTML(value) {
   return String(value || '')
@@ -745,6 +746,20 @@ export default class Chatbot {
     `.trim()
   }
 
+  formatTurnDuration(durationMs) {
+    const durationSeconds = Number(durationMs || 0) / 1_000
+    const roundedDurationSeconds = Math.max(0, Number(durationSeconds.toFixed(1)))
+
+    if (roundedDurationSeconds < SECONDS_PER_MINUTE) {
+      return `${roundedDurationSeconds.toFixed(1)}s`
+    }
+
+    const minutes = Math.floor(roundedDurationSeconds / SECONDS_PER_MINUTE)
+    const seconds = roundedDurationSeconds % SECONDS_PER_MINUTE
+
+    return `${minutes}m${seconds.toFixed(1)}s`
+  }
+
   formatMetrics(metrics, sentAt = null) {
     if (!metrics) {
       return ''
@@ -753,7 +768,7 @@ export default class Chatbot {
     const inputTokens = Number(metrics.inputTokens || 0)
     const outputTokens = Number(metrics.outputTokens || 0)
     const totalTokens = Number(metrics.totalTokens || inputTokens + outputTokens)
-    const durationSeconds = Number(metrics.durationMs || 0) / 1_000
+    const turnDuration = this.formatTurnDuration(metrics.durationMs)
     const tokensPerSecond = Number(
       metrics.tokensPerSecond || metrics.averagedPhaseTokensPerSecond || 0
     )
@@ -767,7 +782,7 @@ export default class Chatbot {
       </span>
       <span class="bubble-metric-item">
         <i class="ri-timer-flash-line" aria-hidden="true"></i>
-        <span>${durationSeconds.toFixed(1)}s</span>
+        <span>${turnDuration}</span>
       </span>
       <span class="bubble-metric-item">
         <i class="ri-flashlight-line" aria-hidden="true"></i>
