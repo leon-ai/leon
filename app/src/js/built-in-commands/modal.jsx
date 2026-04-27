@@ -23,12 +23,15 @@ const SLASH_COMMAND_ICON_SVG = (
   </svg>
 )
 
-function parseRemixIcon(rawIconName) {
+function parseRemixIcon(rawIconName, rawIconType) {
   const fallbackIcon = {
     iconName: 'terminal-box',
     type: 'line'
   }
   const normalizedIconName = String(rawIconName || '').trim()
+  const normalizedIconType = ['line', 'fill', 'notype'].includes(rawIconType)
+    ? rawIconType
+    : null
 
   if (!normalizedIconName) {
     return fallbackIcon
@@ -52,7 +55,7 @@ function parseRemixIcon(rawIconName) {
 
   return {
     iconName: iconWithoutPrefix,
-    type: 'notype'
+    type: normalizedIconType || 'notype'
   }
 }
 
@@ -66,7 +69,10 @@ function SuggestionList({
     <List>
       <ListHeader>{headerTitle}</ListHeader>
       {suggestions.map((suggestion, index) => {
-        const parsedIcon = parseRemixIcon(suggestion.icon_name)
+        const parsedIcon = parseRemixIcon(
+          suggestion.icon_name,
+          suggestion.icon_type
+        )
 
         return (
           <ListItem
@@ -145,7 +151,7 @@ export function BuiltInCommandsModal({
 }) {
   const isCommandInputEmpty = commandValue.trim() === ''
   const pendingInputIcon = pendingInput?.icon_name
-    ? parseRemixIcon(pendingInput.icon_name)
+    ? parseRemixIcon(pendingInput.icon_name, pendingInput.icon_type)
     : null
 
   return (
