@@ -8,9 +8,13 @@ const REMOTE_LLM_PROVIDERS = [
   {
     ...getRequiredProviderAccountConfig('openrouter'),
     models: [
-      { label: 'openai/gpt-5.4 (Recommended)', value: 'openai/gpt-5.4' },
+      { label: 'openai/gpt-5.5 (Recommended)', value: 'openai/gpt-5.5' },
+      { label: 'openai/gpt-5.4', value: 'openai/gpt-5.4' },
       { label: 'openai/gpt-5.4-mini', value: 'openai/gpt-5.4-mini' },
-      { label: 'openai/gpt-5.2', value: 'openai/gpt-5.2' },
+      {
+        label: 'anthropic/claude-opus-4.7',
+        value: 'anthropic/claude-opus-4.7'
+      },
       {
         label: 'anthropic/claude-opus-4.6',
         value: 'anthropic/claude-opus-4.6'
@@ -19,26 +23,18 @@ const REMOTE_LLM_PROVIDERS = [
         label: 'anthropic/claude-sonnet-4.6',
         value: 'anthropic/claude-sonnet-4.6'
       },
-      {
-        label: 'anthropic/claude-haiku-4.5',
-        value: 'anthropic/claude-haiku-4.5'
-      },
+      { label: 'xiaomi/mimo-v2.5-pro', value: 'xiaomi/mimo-v2.5-pro' },
+      { label: 'z-ai/glm-5.1', value: 'z-ai/glm-5.1' },
       { label: 'z-ai/glm-5-turbo', value: 'z-ai/glm-5-turbo' },
-      { label: 'z-ai/glm-5', value: 'z-ai/glm-5' },
-      { label: 'xiaomi/mimo-v2-pro', value: 'xiaomi/mimo-v2-pro' },
-      { label: 'xiaomi/mimo-v2-omni', value: 'xiaomi/mimo-v2-omni' },
-      { label: 'minimax/minimax-m2.7', value: 'minimax/minimax-m2.7' },
-      { label: 'moonshotai/kimi-k2.5', value: 'moonshotai/kimi-k2.5' },
-      {
-        label: 'qwen/qwen3.5-397b-a17b',
-        value: 'qwen/qwen3.5-397b-a17b'
-      }
+      { label: 'moonshotai/kimi-k2.6', value: 'moonshotai/kimi-k2.6' },
+      { label: 'minimax/minimax-m2.7', value: 'minimax/minimax-m2.7' }
     ]
   },
   {
     ...getRequiredProviderAccountConfig('openai'),
     models: [
-      { label: 'GPT-5.4 (Recommended)', value: 'gpt-5.4' },
+      { label: 'GPT-5.5 (Recommended)', value: 'gpt-5.5' },
+      { label: 'GPT-5.4', value: 'gpt-5.4' },
       { label: 'GPT-5.4 mini', value: 'gpt-5.4-mini' },
       { label: 'GPT-5.4 nano', value: 'gpt-5.4-nano' }
     ]
@@ -46,7 +42,8 @@ const REMOTE_LLM_PROVIDERS = [
   {
     ...getRequiredProviderAccountConfig('anthropic'),
     models: [
-      { label: 'Claude Opus 4.6 (Recommended)', value: 'claude-opus-4-6' },
+      { label: 'Claude Opus 4.7 (Recommended)', value: 'claude-opus-4-7' },
+      { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
       { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
       { label: 'Claude Haiku 4.5', value: 'claude-haiku-4-5' }
     ]
@@ -54,13 +51,17 @@ const REMOTE_LLM_PROVIDERS = [
   {
     ...getRequiredProviderAccountConfig('zai'),
     models: [
-      { label: 'GLM-5-Turbo (Recommended)', value: 'glm-5-turbo' },
+      { label: 'GLM-5.1 (Recommended)', value: 'glm-5.1' },
+      { label: 'GLM-5-Turbo', value: 'glm-5-turbo' },
       { label: 'GLM-5', value: 'glm-5' }
     ]
   },
   {
     ...getRequiredProviderAccountConfig('moonshotai'),
-    models: [{ label: 'Kimi K2.5', value: 'kimi-k2.5' }]
+    models: [
+      { label: 'Kimi K2.6', value: 'kimi-k2.6' },
+      { label: 'Kimi K2.5', value: 'kimi-k2.5' }
+    ]
   }
 ]
 

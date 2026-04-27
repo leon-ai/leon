@@ -110,7 +110,11 @@ async function isSyncCurrent(projectPath, stampFileName) {
   const pyprojectPath = path.join(projectPath, PYPROJECT_FILE_NAME)
   const stampPath = path.join(projectPath, stampFileName)
 
-  if (!fs.existsSync(pyprojectPath) || !fs.existsSync(stampPath)) {
+  if (
+    !fs.existsSync(pyprojectPath) ||
+    !fs.existsSync(stampPath) ||
+    !fs.existsSync(getProjectVenvPythonPath(projectPath))
+  ) {
     return false
   }
 
