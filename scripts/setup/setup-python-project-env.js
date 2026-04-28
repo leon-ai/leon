@@ -94,7 +94,7 @@ export async function getPyprojectDependencies(projectPath) {
 /**
  * Resolve the Python executable path inside a project-local `.venv`.
  */
-function getProjectVenvPythonPath(projectPath) {
+export function getProjectVenvPythonPath(projectPath) {
   return path.join(
     projectPath,
     '.venv',
