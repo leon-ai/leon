@@ -3,16 +3,19 @@ import path from 'node:path'
 
 import execa from 'execa'
 
-import {
-  PYTHON_TCP_SERVER_RUNTIME_BIN_PATH,
-  PYTHON_TCP_SERVER_SRC_PATH
-} from '@/constants'
+import { PYTHON_TCP_SERVER_SRC_PATH } from '@/constants'
 
-import { setupPythonProjectEnv } from './setup-python-project-env'
+import {
+  getProjectVenvPythonPath,
+  setupPythonProjectEnv
+} from './setup-python-project-env'
 import { createSetupStatus } from './setup-status'
 
 const NLTK_DATA_DIR_NAME = 'nltk_data'
 const NLTK_VENV_DIR_NAME = '.venv'
+const PYTHON_TCP_SERVER_VENV_BIN_PATH = getProjectVenvPythonPath(
+  PYTHON_TCP_SERVER_SRC_PATH
+)
 const NLTK_DATA_PATH = path.join(
   PYTHON_TCP_SERVER_SRC_PATH,
   NLTK_VENV_DIR_NAME,
@@ -73,7 +76,7 @@ async function downloadNLTKData() {
       .join(', ')}`
 
     await execa(
-      PYTHON_TCP_SERVER_RUNTIME_BIN_PATH,
+      PYTHON_TCP_SERVER_VENV_BIN_PATH,
       [
         '-m',
         'nltk.downloader',
