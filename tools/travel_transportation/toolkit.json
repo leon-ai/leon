@@ -1,0 +1,8 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Travel & Transportation",
+  "description": "Tools for travel planning and transportation.",
+  "icon_name": "road-map-line",
+  "context_files": [],
+  "tools": []
+}

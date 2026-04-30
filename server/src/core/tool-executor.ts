@@ -9,6 +9,7 @@ import type { Json as NodeJQJson } from 'node-jq/lib/options'
 
 import { LogHelper } from '@/helpers/log-helper'
 import {
+  CODEBASE_PATH,
   NODE_RUNTIME_BIN_PATH,
   NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
   NODEJS_BRIDGE_ROOT_PATH,
@@ -668,7 +669,10 @@ export default class ToolExecutor {
         {
           cwd: NODEJS_BRIDGE_ROOT_PATH,
           maxBuffer: 1_024 * 1_024 * 10,
-          env: process.env
+          env: {
+            ...process.env,
+            LEON_CODEBASE_PATH: CODEBASE_PATH
+          }
         }
       )
       const output = stdout ? stdout.toString().trim() : ''

@@ -1,0 +1,8 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Social Media",
+  "description": "Tools for interacting with social media platforms.",
+  "icon_name": "share-line",
+  "context_files": [],
+  "tools": []
+}

@@ -3,20 +3,16 @@ import path from 'node:path'
 
 import type { ActionFunction, ActionParams } from '@sdk/types'
 import { leon } from '@sdk/leon'
-import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import OpenCodeTool from '@sdk/tools/opencode'
+import OpenCodeTool from '@tools/coding_development/opencode'
 import { buildSkillPrompt, getContextFiles } from '../lib/skill-prompt'
 
 interface SkillWriterSettings extends Record<string, unknown> {
   opencode_openrouter_model?: string
 }
 
-export const run: ActionFunction = async function (
-  _params: ActionParams,
-  _paramsHelper: ParamsHelper
-) {
+export const run: ActionFunction = async function (_params: ActionParams) {
   try {
     const description = _params.utterance
     const targetPath = process.cwd()

@@ -4,7 +4,7 @@ import dotenv from 'dotenv'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
-import { DotEnvHelper } from '@/helpers/dotenv-helper'
+import { ProfileHelper } from '@/helpers/profile-helper'
 import { PROFILE_DOT_ENV_PATH } from '@/constants'
 
 dotenv.config({ path: PROFILE_DOT_ENV_PATH })
@@ -25,7 +25,7 @@ const generateHTTPAPIKey = () =>
       shasum.update(str)
       const sha1 = shasum.digest('hex')
 
-      await DotEnvHelper.updateVariable(envVarKey, sha1)
+      await ProfileHelper.updateDotEnvVariable(envVarKey, sha1)
       LogHelper.success('HTTP API key generated')
 
       resolve()

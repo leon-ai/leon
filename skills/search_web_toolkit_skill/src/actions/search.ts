@@ -3,7 +3,7 @@ import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import GrokTool from '@sdk/tools/grok'
+import GrokTool from '@tools/search_web/grok'
 
 interface SearchSkillSettings extends Record<string, unknown> {
   search_provider?: string

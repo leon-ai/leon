@@ -6,7 +6,7 @@ import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import Qwen3TtsTool from '@sdk/tools/qwen3_tts'
+import Qwen3TtsTool from '@tools/music_audio/qwen3_tts'
 import { formatFilePath } from '@sdk/utils'
 
 function sanitizeFileName(value: string): string {

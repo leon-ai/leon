@@ -16,6 +16,7 @@ import {
   SKILLS_PATH
 } from '@/constants'
 import { FileHelper } from '@/helpers/file-helper'
+import { ProfileHelper } from '@/helpers/profile-helper'
 
 interface SkillDomain {
   domainId: string
@@ -68,10 +69,24 @@ export class SkillDomainHelper {
    * List all skill folders
    */
   public static listSkillFoldersSync(): string[] {
-    return fs
-      .readdirSync(SKILLS_PATH)
-      .filter((folder) => folder.endsWith(SKILL_NAME_SUFFIX))
-      .sort()
+    const skillFolders = new Set<string>()
+
+    for (const skillsPath of [SKILLS_PATH, PROFILE_SKILLS_PATH]) {
+      if (!fs.existsSync(skillsPath)) {
+        continue
+      }
+
+      for (const folder of fs.readdirSync(skillsPath)) {
+        if (
+          folder.endsWith(SKILL_NAME_SUFFIX) &&
+          !ProfileHelper.isSkillDisabled(folder)
+        ) {
+          skillFolders.add(folder)
+        }
+      }
+    }
+
+    return [...skillFolders].sort()
   }
 
   public static async listSkillFolders(): Promise<string[]> {
@@ -119,7 +134,12 @@ export class SkillDomainHelper {
   public static getNewSkillConfigPath(
     skillName: SkillSchema['name']
   ): string | null {
-    const skillPath = path.join(SKILLS_PATH, skillName)
+    const skillPath = this.resolveSkillPath(skillName)
+
+    if (!skillPath) {
+      return null
+    }
+
     const skillConfigPath = path.join(skillPath, 'skill.json')
 
     if (!fs.existsSync(skillConfigPath)) {
@@ -130,13 +150,40 @@ export class SkillDomainHelper {
   }
 
   /**
+   * Resolve a skill source path for the active profile.
+   * Profile-installed skills override built-in skills with the same ID.
+   * @param skillName Skill name to resolve
+   */
+  public static resolveSkillPath(skillName: SkillSchema['name']): string | null {
+    if (ProfileHelper.isSkillDisabled(skillName)) {
+      return null
+    }
+
+    for (const skillsPath of [PROFILE_SKILLS_PATH, SKILLS_PATH]) {
+      const skillPath = path.join(skillsPath, skillName)
+      const skillConfigPath = path.join(skillPath, 'skill.json')
+
+      if (fs.existsSync(skillConfigPath)) {
+        return skillPath
+      }
+    }
+
+    return null
+  }
+
+  /**
    * Get skill guidance path (SKILL.md)
    * @param skillName Skill name to get guidance path from
    */
   public static getSkillGuidancePath(
     skillName: SkillSchema['name']
   ): string | null {
-    const skillPath = path.join(SKILLS_PATH, skillName)
+    const skillPath = this.resolveSkillPath(skillName)
+
+    if (!skillPath) {
+      return null
+    }
+
     const skillGuidancePath = path.join(skillPath, 'SKILL.md')
 
     if (!fs.existsSync(skillGuidancePath)) {
@@ -439,9 +486,14 @@ export class SkillDomainHelper {
     lang: ShortLanguageCode,
     skillName: SkillSchema['name']
   ): Promise<SkillLocaleConfigSchema | object> {
+    const skillPath = this.resolveSkillPath(skillName)
+
+    if (!skillPath) {
+      return {}
+    }
+
     const skillLocaleConfigPath = path.join(
-      SKILLS_PATH,
-      skillName,
+      skillPath,
       'locales',
       `${lang}.json`
     )

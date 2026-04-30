@@ -8,6 +8,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
+import type { Tool } from '@sdk/base-tool'
+import {
+  TOOLS_PATH
+} from '@bridge/constants'
+
 interface ToolRuntimeCliInput {
   toolkitId: string
   toolId: string
@@ -52,37 +57,23 @@ const parseArgs = (): ToolRuntimeCliInput => {
   }
 }
 
-const resolveToolModulePath = async (
+const resolveToolModulePath = (
+  toolkitId: string,
   toolId: string
-): Promise<string | null> => {
-  const runtimeDir = path.dirname(fileURLToPath(import.meta.url))
-  const toolsRoot = path.join(runtimeDir, 'sdk', 'tools')
-  if (!fs.existsSync(toolsRoot)) {
-    return null
-  }
-
-  const directPath = path.join(toolsRoot, toolId, 'index.ts')
-  if (fs.existsSync(directPath)) {
-    return directPath
-  }
-
-  const normalizedToolId = normalizeName(toolId)
-  const entries = await fs.promises.readdir(toolsRoot, { withFileTypes: true })
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    if (normalizeName(entry.name) === normalizedToolId) {
-      const candidate = path.join(toolsRoot, entry.name, 'index.ts')
-      if (fs.existsSync(candidate)) {
-        return candidate
-      }
-    }
+): string | null => {
+  const flatBuiltInToolPath = path.join(
+    TOOLS_PATH,
+    toolkitId,
+    toolId,
+    'src',
+    'nodejs',
+    'index.ts'
+  )
+  if (fs.existsSync(flatBuiltInToolPath)) {
+    return flatBuiltInToolPath
   }
 
   return null
-}
-
-const normalizeName = (value: string): string => {
-  return value.replace(/[^a-z0-9]/gi, '').toLowerCase()
 }
 
 const setProjectCwd = (): void => {
@@ -97,12 +88,14 @@ const run = async (): Promise<void> => {
   try {
     setProjectCwd()
     const input = parseArgs()
-    const toolModulePath = await resolveToolModulePath(input.toolId)
+    const toolModulePath = resolveToolModulePath(
+      input.toolkitId,
+      input.toolId
+    )
     if (!toolModulePath) {
       throw new Error(`Tool module not found for ${input.toolId}.`)
     }
 
-    const { Tool } = await import('@sdk/base-tool')
     const toolManagerModule = await import('@sdk/tool-manager')
     const ToolManager = toolManagerModule.default
     const isMissingToolSettingsError =
@@ -113,11 +106,11 @@ const run = async (): Promise<void> => {
       throw new Error(`Tool ${input.toolId} has no default export.`)
     }
 
-    let toolInstance: InstanceType<typeof Tool>
+    let toolInstance: Tool
     try {
       toolInstance = (await ToolManager.initTool(
-        ToolClass as new () => InstanceType<typeof Tool>
-      )) as InstanceType<typeof Tool>
+        ToolClass as new () => Tool
+      )) as Tool
     } catch (error) {
       if (isMissingToolSettingsError(error)) {
         process.stdout.write(

@@ -7,7 +7,8 @@
       "@@/*": ["../*"],
       "@/*": ["../server/src/*"],
       "@bridge/*": ["../bridges/nodejs/src/*"],
-      "@sdk/*": ["../bridges/nodejs/src/sdk/*"]
+      "@sdk/*": ["../bridges/nodejs/src/sdk/*"],
+      "@tools/*": ["../tools/*/src/nodejs/index.ts", "../tools/*.ts"]
     }
   }
 }

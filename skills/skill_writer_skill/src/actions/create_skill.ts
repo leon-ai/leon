@@ -6,7 +6,7 @@ import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import OpenCodeTool from '@sdk/tools/opencode'
+import OpenCodeTool from '@tools/coding_development/opencode'
 import { buildSkillPrompt, getContextFiles } from '../lib/skill-prompt'
 
 interface SkillWriterSettings extends Record<string, unknown> {

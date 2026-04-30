@@ -1,8 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { TOOLKITS_PATH } from '@/constants'
+import { TOOLS_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { ProfileHelper } from '@/helpers/profile-helper'
 
 interface ToolkitToolDefinition {
   tool_id: string
@@ -255,100 +256,13 @@ export default class ToolkitRegistry {
     }
 
     try {
-      const entries = await fs.promises.readdir(TOOLKITS_PATH, {
-        withFileTypes: true
-      })
+      const toolkitsById = new Map<string, ToolkitDefinition>()
 
-      const toolkits: ToolkitDefinition[] = []
+      await this.loadBuiltInToolkits(toolkitsById)
 
-      for (const entry of entries) {
-        if (!entry.isDirectory()) {
-          continue
-        }
-
-        const toolkitId = entry.name
-        const toolkitPath = path.join(TOOLKITS_PATH, toolkitId)
-        const toolkitConfigPath = path.join(toolkitPath, 'toolkit.json')
-
-        if (!fs.existsSync(toolkitConfigPath)) {
-          continue
-        }
-
-        try {
-          const toolkitConfigRaw = await fs.promises.readFile(
-            toolkitConfigPath,
-            'utf-8'
-          )
-          const toolkitConfig = JSON.parse(toolkitConfigRaw) as {
-            name: string
-            description: string
-            icon_name: string
-            context_files?: string[]
-            tools?: string[]
-          }
-
-          if (!toolkitConfig.tools || toolkitConfig.tools.length === 0) {
-            continue
-          }
-
-          const contextFiles = Array.isArray(toolkitConfig.context_files)
-            ? [
-                ...new Set(
-                  toolkitConfig.context_files
-                    .map((contextFile) =>
-                      this.normalizeContextFilename(contextFile)
-                    )
-                    .filter((contextFile): contextFile is string =>
-                      Boolean(contextFile)
-                    )
-                )
-              ]
-            : []
-
-          const toolkitTools: Record<string, ToolkitToolDefinition> = {}
-          for (const toolId of toolkitConfig.tools) {
-            const toolConfigPath = path.join(
-              TOOLKITS_PATH,
-              toolkitId,
-              'tools',
-              `${toolId}.tool.json`
-            )
-            if (!fs.existsSync(toolConfigPath)) {
-              continue
-            }
-
-            try {
-              const toolConfigRaw = await fs.promises.readFile(
-                toolConfigPath,
-                'utf-8'
-              )
-              const toolConfig = JSON.parse(
-                toolConfigRaw
-              ) as ToolkitToolDefinition
-              toolkitTools[toolId] = toolConfig
-            } catch (e) {
-              LogHelper.title('Toolkit Registry')
-              LogHelper.error(
-                `Failed to load tool config at "${toolConfigPath}": ${e}`
-              )
-            }
-          }
-
-          toolkits.push({
-            id: toolkitId,
-            name: toolkitConfig.name,
-            description: toolkitConfig.description,
-            iconName: toolkitConfig.icon_name,
-            contextFiles,
-            tools: toolkitTools
-          })
-        } catch (e) {
-          LogHelper.title('Toolkit Registry')
-          LogHelper.error(
-            `Failed to load toolkit config at "${toolkitConfigPath}": ${e}`
-          )
-        }
-      }
+      const toolkits = [...toolkitsById.values()].filter(
+        (toolkit) => toolkit.tools && Object.keys(toolkit.tools).length > 0
+      )
 
       this._toolkits = toolkits
       this._isLoaded = true
@@ -361,7 +275,123 @@ export default class ToolkitRegistry {
     }
   }
 
-  private normalizeContextFilename(filename: string): string | null {
+  private async loadBuiltInToolkits(
+    toolkitsById: Map<string, ToolkitDefinition>
+  ): Promise<void> {
+    if (!fs.existsSync(TOOLS_PATH)) {
+      return
+    }
+
+    const entries = await fs.promises.readdir(TOOLS_PATH, {
+      withFileTypes: true
+    })
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue
+      }
+
+      const toolkitId = entry.name
+      const toolkitPath = path.join(TOOLS_PATH, toolkitId)
+      const toolkitConfigPath = path.join(toolkitPath, 'toolkit.json')
+
+      if (!fs.existsSync(toolkitConfigPath)) {
+        continue
+      }
+
+      try {
+        const toolkitConfig = await this.loadToolkitConfig(toolkitConfigPath)
+        const existingToolkit = toolkitsById.get(toolkitId)
+        const toolkit: ToolkitDefinition = existingToolkit || {
+          id: toolkitId,
+          name: toolkitConfig.name,
+          description: toolkitConfig.description,
+          iconName: toolkitConfig.icon_name,
+          contextFiles: this.normalizeContextFiles(
+            toolkitConfig.context_files
+          ),
+          tools: {}
+        }
+
+        for (const toolId of toolkitConfig.tools || []) {
+          if (ProfileHelper.isToolDisabled(toolId)) {
+            continue
+          }
+
+          await this.loadToolConfig(
+            toolkit,
+            toolId,
+            path.join(toolkitPath, toolId, 'tool.json')
+          )
+        }
+
+        toolkitsById.set(toolkitId, toolkit)
+      } catch (e) {
+        LogHelper.title('Toolkit Registry')
+        LogHelper.error(
+          `Failed to load toolkit config at "${toolkitConfigPath}": ${e}`
+        )
+      }
+    }
+  }
+
+  private async loadToolkitConfig(toolkitConfigPath: string): Promise<{
+    name: string
+    description: string
+    icon_name: string
+    context_files?: string[]
+    tools?: string[]
+  }> {
+    return JSON.parse(
+      await fs.promises.readFile(toolkitConfigPath, 'utf-8')
+    ) as {
+      name: string
+      description: string
+      icon_name: string
+      context_files?: string[]
+      tools?: string[]
+    }
+  }
+
+  private async loadToolConfig(
+    toolkit: ToolkitDefinition,
+    toolId: string,
+    toolConfigPath: string
+  ): Promise<void> {
+    if (!fs.existsSync(toolConfigPath)) {
+      return
+    }
+
+    try {
+      const toolConfigRaw = await fs.promises.readFile(toolConfigPath, 'utf-8')
+      const toolConfig = JSON.parse(toolConfigRaw) as ToolkitToolDefinition
+      toolkit.tools = {
+        ...(toolkit.tools || {}),
+        [toolId]: toolConfig
+      }
+    } catch (e) {
+      LogHelper.title('Toolkit Registry')
+      LogHelper.error(
+        `Failed to load tool config at "${toolConfigPath}": ${e}`
+      )
+    }
+  }
+
+  private normalizeContextFiles(contextFiles: unknown): string[] {
+    return Array.isArray(contextFiles)
+      ? [
+          ...new Set(
+            contextFiles
+              .map((contextFile) => this.normalizeContextFilename(contextFile))
+              .filter((contextFile): contextFile is string =>
+                Boolean(contextFile)
+              )
+          )
+        ]
+      : []
+  }
+
+  private normalizeContextFilename(filename: unknown): string | null {
     if (typeof filename !== 'string') {
       return null
     }

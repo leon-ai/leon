@@ -11,17 +11,19 @@ export const run: ActionFunction = async function (params) {
       : null
 
   if (typeof timeZone !== 'string') {
-    return await leon.answer({
+    await leon.answer({
       key: 'time_zone_not_found'
     })
+    return
   }
 
   try {
     Intl.DateTimeFormat('en', { timeZone })
   } catch {
-    return await leon.answer({
+    await leon.answer({
       key: 'time_zone_not_found'
     })
+    return
   }
 
   const currentDate = new Date(new Date().toLocaleString('en', { timeZone }))

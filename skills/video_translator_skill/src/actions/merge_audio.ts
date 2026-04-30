@@ -5,7 +5,7 @@ import type { ActionFunction, ActionParams } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import FfmpegTool from '@sdk/tools/ffmpeg'
+import FfmpegTool from '@tools/video_streaming/ffmpeg'
 import {
   formatBytes,
   formatFilePath,

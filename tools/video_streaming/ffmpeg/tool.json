@@ -1,0 +1,264 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "ffmpeg",
+  "toolkit_id": "video_streaming",
+  "name": "FFmpeg",
+  "description": "A tool for video/audio processing, conversion, and manipulation. Use this for encoding, decoding, transcoding, muxing, demuxing, streaming, filtering, and playing media files. For analyzing or extracting metadata without modifying files, use ffprobe instead.",
+  "icon_name": "film-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-win-amd64.exe"
+  },
+  "functions": {
+    "convertVideoFormat": {
+      "description": "Convert a video file to a different format.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath"
+        ]
+      }
+    },
+    "extractAudio": {
+      "description": "Extract an audio track from a video file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoPath": {
+            "type": "string"
+          },
+          "audioPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "videoPath",
+          "audioPath"
+        ]
+      }
+    },
+    "trimMedia": {
+      "description": "Trim a media file to a specific time range.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "startTime": {
+            "type": "string"
+          },
+          "endTime": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath",
+          "startTime",
+          "endTime"
+        ]
+      }
+    },
+    "resizeVideo": {
+      "description": "Resize a video to a given width and height.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath",
+          "width",
+          "height"
+        ]
+      }
+    },
+    "combineVideoAndAudio": {
+      "description": "Combine a video file with an audio file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoPath": {
+            "type": "string"
+          },
+          "audioPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "videoPath",
+          "audioPath",
+          "outputPath"
+        ]
+      }
+    },
+    "replaceVideoAudio": {
+      "description": "Replace the audio track in a video file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoPath": {
+            "type": "string"
+          },
+          "audioPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "videoPath",
+          "audioPath",
+          "outputPath"
+        ]
+      }
+    },
+    "compressVideo": {
+      "description": "Compress a video by specifying a target bitrate.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "bitrate": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath",
+          "bitrate"
+        ]
+      }
+    },
+    "adjustTempo": {
+      "description": "Adjust the tempo (speed) of an audio file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "speedFactor": {
+            "type": "number"
+          },
+          "sampleRate": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath",
+          "speedFactor"
+        ]
+      }
+    },
+    "mergeAudio": {
+      "description": "Merge two audio files into one.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "firstAudioPath": {
+            "type": "string"
+          },
+          "secondAudioPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "firstAudioPath",
+          "secondAudioPath",
+          "outputPath"
+        ]
+      }
+    },
+    "assembleAudioSegments": {
+      "description": "Assemble audio segments into a single audio file with precise timing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "segments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "startMs": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "path",
+                "startMs"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "totalDurationMs": {
+            "type": "number"
+          },
+          "sampleRate": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "segments",
+          "outputPath",
+          "totalDurationMs"
+        ]
+      }
+    }
+  }
+}

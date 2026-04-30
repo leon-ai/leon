@@ -10,7 +10,7 @@ import {
 import { createListResult } from '@/commands/built-in-command-renderer'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '@/core/llm-manager/types'
-import { DotEnvHelper } from '@/helpers/dotenv-helper'
+import { ProfileHelper } from '@/helpers/profile-helper'
 
 const API_KEY_PARAMETER_NAME = 'api_key'
 const API_KEY_INPUT_PLACEHOLDER = 'Paste API key here'
@@ -262,7 +262,7 @@ export class ModelCommand extends BuiltInCommand {
     }
 
     process.env[apiKeyEnv] = apiKey
-    await DotEnvHelper.updateVariable(apiKeyEnv, apiKey)
+    await ProfileHelper.updateDotEnvVariable(apiKeyEnv, apiKey)
     await CONFIG_STATE.getModelState().setUnifiedTarget(configuredTarget)
 
     return {

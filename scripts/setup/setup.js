@@ -10,6 +10,7 @@ import {
   PROFILE_CONTEXT_PATH,
   PROFILE_LOGS_PATH,
   PROFILE_MEMORY_PATH,
+  PROFILE_DISABLED_PATH,
   PROFILE_SKILLS_PATH,
   PROFILE_TOOLS_PATH,
   TMP_PATH,
@@ -36,6 +37,7 @@ import setupPython from './setup-python'
 import setupUV from './setup-uv'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
 import setupPythonBridgeEnv from './setup-python-bridge-env'
+import setupToolsDependencies from './setup-tools-dependencies'
 import setupSkills from './setup-skills/setup-skills'
 import setupTCPServerEnv from './setup-tcp-server-env'
 import setupCMake from './setup-cmake'
@@ -80,6 +82,13 @@ async function ensureLeonHomeStructure() {
     fs.promises.mkdir(PROFILE_SKILLS_PATH, { recursive: true }),
     fs.promises.mkdir(PROFILE_TOOLS_PATH, { recursive: true })
   ])
+
+  if (!fs.existsSync(PROFILE_DISABLED_PATH)) {
+    await fs.promises.writeFile(
+      PROFILE_DISABLED_PATH,
+      JSON.stringify({ skills: [], tools: [] }, null, 2)
+    )
+  }
 
   status.succeed('Leon home: ready')
 }
@@ -297,6 +306,8 @@ async function syncLLMSetupChoice(preferences) {
     await setupPythonBridgeEnv()
     currentStep = 'setupTCPServerEnv'
     await setupTCPServerEnv()
+    currentStep = 'setupToolsDependencies'
+    await setupToolsDependencies()
     currentStep = 'setupSkills'
     await setupSkills()
     if (!IS_GITHUB_ACTIONS) {

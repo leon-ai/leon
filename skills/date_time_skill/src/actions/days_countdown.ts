@@ -16,17 +16,19 @@ const daysBetween = (date1: Date, date2: Date): number => {
 export const run: ActionFunction = async function (params) {
   const targetDateValue = params.action_arguments['target_date']
   if (typeof targetDateValue !== 'string') {
-    return await leon.answer({
+    await leon.answer({
       key: 'days_countdown_error'
     })
+    return
   }
 
   const currentDate = new Date()
   const futureDate = new Date(targetDateValue)
   if (Number.isNaN(futureDate.getTime())) {
-    return await leon.answer({
+    await leon.answer({
       key: 'days_countdown_error'
     })
+    return
   }
 
   const daysCountdown = daysBetween(currentDate, futureDate)

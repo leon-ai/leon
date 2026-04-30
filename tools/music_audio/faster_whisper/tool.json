@@ -1,0 +1,61 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "faster_whisper",
+  "toolkit_id": "music_audio",
+  "name": "Faster Whisper",
+  "description": "A tool for speech recognition and audio transcription using the Faster Whisper model.",
+  "icon_name": "mic-2-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/faster_whisper-v1.0.1/faster_whisper_1.0.1-win-amd64.exe"
+  },
+  "resources": {
+    "faster-whisper-large-v3": [
+      "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/config.json?download=true",
+      "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/model.bin?download=true",
+      "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/preprocessor_config.json?download=true",
+      "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/tokenizer.json?download=true",
+      "https://huggingface.co/Systran/faster-whisper-large-v3/resolve/main/vocabulary.json?download=true"
+    ]
+  },
+  "functions": {
+    "transcribeToFile": {
+      "description": "Transcribe audio to a file using faster-whisper.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "cpuThreads": {
+            "type": "number"
+          },
+          "downloadRoot": {
+            "type": "string"
+          },
+          "localFilesOnly": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath"
+        ]
+      }
+    }
+  }
+}

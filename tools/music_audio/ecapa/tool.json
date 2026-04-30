@@ -1,0 +1,45 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "ecapa",
+  "toolkit_id": "music_audio",
+  "name": "ECAPA",
+  "description": "A tool for voice gender classification using ECAPA-TDNN model.",
+  "icon_name": "voice-recognition-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ecapa_voice_gender_classifier-v1.0.0/ecapa_voice_gender_classifier_1.0.0-win-amd64.exe"
+  },
+  "resources": {
+    "ecapa-voice_gender_classifier": [
+      "https://huggingface.co/JaesungHuh/voice-gender-classifier/resolve/main/config.json?download=true",
+      "https://huggingface.co/JaesungHuh/voice-gender-classifier/resolve/main/model.safetensors?download=true"
+    ]
+  },
+  "functions": {
+    "detectGender": {
+      "description": "Detect gender from an audio file using ECAPA-TDNN.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath"
+        ]
+      }
+    }
+  }
+}

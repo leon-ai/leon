@@ -129,7 +129,13 @@ export abstract class Tool {
    */
   protected getSettingsPath(toolName?: string): string {
     const resolvedToolName = toolName || this.toolName
-    return path.join(PROFILE_TOOLS_PATH, `${resolvedToolName}.settings.json`)
+
+    return path.join(
+      PROFILE_TOOLS_PATH,
+      this.toolkit,
+      resolvedToolName,
+      'settings.json'
+    )
   }
 
   /**

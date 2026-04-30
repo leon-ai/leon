@@ -6,6 +6,8 @@ __pycache__/
 **/build/
 **/node_modules/
 **/.venv/
+**/.last-skill-deps-sync
+**/.last-source-deps-sync
 test/coverage/
 **/tmp/*
 core/config/**/*.json

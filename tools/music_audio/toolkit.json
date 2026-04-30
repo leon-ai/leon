@@ -1,0 +1,16 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Music & Audio",
+  "description": "Tools for music and audio processing.",
+  "icon_name": "music-2-line",
+  "context_files": [
+    "GPU_COMPUTE.md"
+  ],
+  "tools": [
+    "qwen3_asr",
+    "qwen3_tts",
+    "ecapa",
+    "chatterbox_onnx",
+    "ultimate_vocal_remover_onnx"
+  ]
+}

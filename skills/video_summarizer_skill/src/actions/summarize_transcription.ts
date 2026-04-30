@@ -5,8 +5,8 @@ import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import OpenRouterTool from '@sdk/tools/openrouter'
-import type { TranscriptionOutput } from '@sdk/tools/transcription-schema'
+import OpenRouterTool from '@tools/communication/openrouter'
+import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
 
 interface VideoSummarizerSettings extends Record<string, unknown> {
   openrouter_model?: string | null
@@ -30,7 +30,7 @@ const buildTranscriptText = (
 const truncateTranscript = (
   transcript: string,
   maxChars: number
-): { text: string; truncated: boolean } => {
+): { text: string, truncated: boolean } => {
   if (transcript.length <= maxChars) {
     return { text: transcript, truncated: false }
   }

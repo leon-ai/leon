@@ -2,11 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ActionFunction, ActionParams } from '@sdk/types'
-import type { TranscriptionOutput } from '@sdk/tools/transcription-schema'
+import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import FfmpegTool from '@sdk/tools/ffmpeg'
+import FfmpegTool from '@tools/video_streaming/ffmpeg'
 import { formatFilePath } from '@sdk/utils'
 
 interface SpeakerReference {
@@ -259,10 +259,10 @@ export const run: ActionFunction = async function (
  * Combines consecutive segments if needed to reach required duration
  */
 function findBestSegment(
-  segments: Array<{ from: number; to: number }>,
+  segments: Array<{ from: number, to: number }>,
   requiredDuration: number,
-  excludeSegment: { start: number; end: number } | null
-): { start: number; end: number } | null {
+  excludeSegment: { start: number, end: number } | null
+): { start: number, end: number } | null {
   // Segments are already sorted by time (from), find the earliest usable one
   for (let i = 0; i < segments.length; i += 1) {
     const currentSegment = segments[i]
@@ -323,13 +323,18 @@ function findBestSegment(
  * Find the longest single segment from the available segments
  */
 function findLongestSegment(
-  segments: Array<{ from: number; to: number }>
-): { start: number; end: number } | null {
+  segments: Array<{ from: number, to: number }>
+): { start: number, end: number } | null {
   if (segments.length === 0) {
     return null
   }
 
-  let longestSegment = segments[0]
+  const firstSegment = segments[0]
+  if (!firstSegment) {
+    return null
+  }
+
+  let longestSegment = firstSegment
   let maxDuration = longestSegment.to - longestSegment.from
 
   for (let i = 1; i < segments.length; i += 1) {

@@ -60,6 +60,7 @@ export const PROFILE_MEMORY_PATH = path.join(LEON_PROFILE_PATH, 'memory')
 export const PROFILE_LOGS_PATH = path.join(LEON_PROFILE_PATH, 'logs')
 export const PROFILE_SKILLS_PATH = path.join(LEON_PROFILE_PATH, 'skills')
 export const PROFILE_TOOLS_PATH = path.join(LEON_PROFILE_PATH, 'tools')
+export const PROFILE_DISABLED_PATH = path.join(LEON_PROFILE_PATH, 'disabled.json')
 export const PROFILE_CONVERSATION_LOG_PATH = path.join(
   LEON_PROFILE_PATH,
   'conversation_log.json'
@@ -72,6 +73,7 @@ export const PNPM_INSTALL_PATH = path.join(BIN_PATH, 'pnpm')
 export const PYTHON_INSTALL_PATH = path.join(BIN_PATH, 'python')
 export const UV_INSTALL_PATH = path.join(BIN_PATH, 'uv')
 export const SKILLS_PATH = path.join(CODEBASE_PATH, 'skills')
+export const TOOLS_PATH = path.join(CODEBASE_PATH, 'tools')
 export const GLOBAL_CORE_PATH = path.join(CODEBASE_PATH, 'core')
 export const GLOBAL_DATA_PATH = path.join(GLOBAL_CORE_PATH, 'data')
 export const PROFILE_MEMORY_DB_PATH = path.join(
@@ -319,7 +321,6 @@ export const PYTORCH_VERSION = PYTORCH_VERSIONS.torch
  */
 export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
 export const BRIDGES_PATH = path.join(CODEBASE_PATH, 'bridges')
-export const TOOLKITS_PATH = path.join(BRIDGES_PATH, 'toolkits')
 export const NODEJS_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'nodejs')
 export const PYTHON_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'python')
 export const PYTHON_TCP_SERVER_ROOT_PATH = path.join(

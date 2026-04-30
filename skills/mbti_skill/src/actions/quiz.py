@@ -2,7 +2,7 @@
 
 from bridges.python.src.sdk.leon import leon
 from bridges.python.src.sdk.types import ActionParams
-from bridges.python.src.sdk.tools.inference import InferenceTool
+from tools.communication.inference import InferenceTool
 from ..lib import memory
 
 groups = [

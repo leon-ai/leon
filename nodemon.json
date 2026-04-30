@@ -6,8 +6,7 @@
     ".git",
     "node_modules",
     "server/src/tmp",
-    "server/dist",
-    "bridges/toolkits"
+    "server/dist"
   ],
   "exec": "node scripts/run-with-managed-node.js node_modules/typescript/bin/tsc --noEmit -p tsconfig.json && node scripts/run-with-managed-node.js node_modules/tsx/dist/cli.mjs server/src/index.ts"
 }

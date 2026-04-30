@@ -1,0 +1,94 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "ultimate_vocal_remover_onnx",
+  "toolkit_id": "music_audio",
+  "name": "Ultimate Vocal Remover ONNX",
+  "description": "A tool for vocal separation using the Ultimate Vocal Remover ONNX model.",
+  "icon_name": "scissors-cut-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ultimate_vocal_remover_onnx-v1.0.1/ultimate_vocal_remover_onnx_1.0.1-win-amd64.exe"
+  },
+  "resources": {
+    "ultimate-vocal-remover-onnx": [
+      "https://huggingface.co/seanghay/uvr_models/resolve/main/UVR-MDX-NET-Inst_HQ_3.onnx?download=true"
+    ]
+  },
+  "functions": {
+    "separateVocals": {
+      "description": "Separate vocals from audio using Ultimate Vocal Remover ONNX.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "audio_path": {
+                    "type": "string"
+                  },
+                  "vocal_output_path": {
+                    "type": "string"
+                  },
+                  "instrumental_output_path": {
+                    "type": "string"
+                  },
+                  "aggression": {
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "audio_path",
+                  "vocal_output_path",
+                  "instrumental_output_path"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "audio_path": {
+                      "type": "string"
+                    },
+                    "vocal_output_path": {
+                      "type": "string"
+                    },
+                    "instrumental_output_path": {
+                      "type": "string"
+                    },
+                    "aggression": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "audio_path",
+                    "vocal_output_path",
+                    "instrumental_output_path"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          },
+          "cudaRuntimePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tasks"
+        ]
+      }
+    }
+  }
+}

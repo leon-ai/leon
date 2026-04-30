@@ -1,0 +1,161 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "cerebras",
+  "toolkit_id": "communication",
+  "name": "Cerebras",
+  "description": "A tool for interacting with Cerebras LLM APIs (e.g., GLM 4.7).",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "chatCompletion": {
+      "description": "Generate a chat completion using the Cerebras API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "messages": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string"
+                    },
+                    "content": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "role",
+                    "content"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "model": {
+                "type": "string"
+              },
+              "temperature": {
+                "type": "number"
+              },
+              "max_tokens": {
+                "type": "number"
+              },
+              "system_prompt": {
+                "type": "string"
+              },
+              "use_structured_output": {
+                "type": "boolean"
+              },
+              "json_schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "messages"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ]
+      }
+    },
+    "completion": {
+      "description": "Generate a completion using the Cerebras API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              },
+              "temperature": {
+                "type": "number"
+              },
+              "max_tokens": {
+                "type": "number"
+              },
+              "system_prompt": {
+                "type": "string"
+              },
+              "use_structured_output": {
+                "type": "boolean"
+              },
+              "json_schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            },
+            "required": [
+              "prompt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ]
+      }
+    },
+    "structuredCompletion": {
+      "description": "Generate a structured completion using a JSON schema.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "json_schema": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "model": {
+                "type": "string"
+              },
+              "temperature": {
+                "type": "number"
+              },
+              "max_tokens": {
+                "type": "number"
+              },
+              "system_prompt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "prompt",
+              "json_schema"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ]
+      }
+    },
+    "listModels": {
+      "description": "List available Cerebras models.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    }
+  }
+}

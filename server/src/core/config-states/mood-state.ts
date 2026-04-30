@@ -3,7 +3,7 @@ import {
   CONFIG_STATE_EVENT_EMITTER,
   MOOD_CONFIGURATION_UPDATED_EVENT
 } from '@/core/config-states/config-state-event-emitter'
-import { DotEnvHelper } from '@/helpers/dotenv-helper'
+import { ProfileHelper } from '@/helpers/profile-helper'
 import { Moods } from '@/types'
 
 const DEFAULT_CONFIGURED_MOOD = 'auto'
@@ -114,7 +114,10 @@ export class MoodState {
         : normalizedConfiguredMood
     process.env[MOOD_ENV_KEY] = normalizedConfiguredMood
 
-    await DotEnvHelper.updateVariable(MOOD_ENV_KEY, normalizedConfiguredMood)
+    await ProfileHelper.updateDotEnvVariable(
+      MOOD_ENV_KEY,
+      normalizedConfiguredMood
+    )
 
     CONFIG_STATE_EVENT_EMITTER.emit(MOOD_CONFIGURATION_UPDATED_EVENT, {
       configuredMood: this.configuredMood,

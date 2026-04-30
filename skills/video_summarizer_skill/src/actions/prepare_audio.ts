@@ -6,8 +6,8 @@ import type { ActionFunction, ActionParams } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import FfmpegTool from '@sdk/tools/ffmpeg'
-import YtdlpTool from '@sdk/tools/ytdlp'
+import FfmpegTool from '@tools/video_streaming/ffmpeg'
+import YtdlpTool from '@tools/video_streaming/ytdlp'
 import { formatFilePath } from '@sdk/utils'
 
 const isHttpUrl = (value: string): boolean => {

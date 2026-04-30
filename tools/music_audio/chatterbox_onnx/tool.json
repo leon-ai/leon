@@ -1,0 +1,132 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "chatterbox_onnx",
+  "toolkit_id": "music_audio",
+  "name": "Chatterbox ONNX",
+  "description": "A tool for text-to-speech synthesis and voice cloning using the Chatterbox ONNX model.",
+  "icon_name": "chat-voice-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-win-amd64.exe"
+  },
+  "resources": {
+    "chatterbox-multilingual-onnx": [
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/Cangjie5_TC.json?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/default_voice.wav?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/tokenizer.json?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/conditional_decoder.onnx?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/conditional_decoder.onnx_data?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/embed_tokens.onnx?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/embed_tokens.onnx_data?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/language_model_q4.onnx?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/language_model_q4.onnx_data?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/speech_encoder.onnx?download=true",
+      "https://huggingface.co/onnx-community/chatterbox-multilingual-ONNX/resolve/main/onnx/speech_encoder.onnx_data?download=true"
+    ]
+  },
+  "functions": {
+    "synthesizeSpeechToFiles": {
+      "description": "Synthesize speech from text using Chatterbox ONNX.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "tasks": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "target_language": {
+                    "type": "string"
+                  },
+                  "audio_path": {
+                    "type": "string"
+                  },
+                  "voice_name": {
+                    "type": "string"
+                  },
+                  "speaker_reference_path": {
+                    "type": "string"
+                  },
+                  "cfg_strength": {
+                    "type": "number"
+                  },
+                  "exaggeration": {
+                    "type": "number"
+                  },
+                  "temperature": {
+                    "type": "number"
+                  },
+                  "auto_split": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "text",
+                  "audio_path"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string"
+                    },
+                    "target_language": {
+                      "type": "string"
+                    },
+                    "audio_path": {
+                      "type": "string"
+                    },
+                    "voice_name": {
+                      "type": "string"
+                    },
+                    "speaker_reference_path": {
+                      "type": "string"
+                    },
+                    "cfg_strength": {
+                      "type": "number"
+                    },
+                    "exaggeration": {
+                      "type": "number"
+                    },
+                    "temperature": {
+                      "type": "number"
+                    },
+                    "auto_split": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "audio_path"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            ]
+          },
+          "cudaRuntimePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "tasks"
+        ]
+      }
+    }
+  }
+}

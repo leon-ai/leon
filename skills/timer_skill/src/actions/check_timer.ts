@@ -11,7 +11,8 @@ export const run: ActionFunction = async function (_params, paramsHelper) {
     : await getNewestTimerMemory()
 
   if (!timerMemory) {
-    return await leon.answer({ key: 'no_timer_set' })
+    await leon.answer({ key: 'no_timer_set' })
+    return
   }
 
   const { interval, finishedAt, duration } = timerMemory

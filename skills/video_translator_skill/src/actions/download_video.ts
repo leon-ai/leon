@@ -6,7 +6,7 @@ import type { ActionFunction, ActionParams } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import YtdlpTool from '@sdk/tools/ytdlp'
+import YtdlpTool from '@tools/video_streaming/ytdlp'
 import { formatFilePath, normalizeLanguageCode } from '@sdk/utils'
 
 import { DownloadProgressWidget } from '../widgets/download-progress-widget'

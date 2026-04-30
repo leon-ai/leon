@@ -40,8 +40,10 @@ PROFILE_MEMORY_PATH = os.path.join(LEON_PROFILE_PATH, "memory")
 PROFILE_MEMORY_DB_PATH = os.path.join(PROFILE_MEMORY_PATH, "index.sqlite")
 PROFILE_SKILLS_PATH = os.path.join(LEON_PROFILE_PATH, "skills")
 PROFILE_TOOLS_PATH = os.path.join(LEON_PROFILE_PATH, "tools")
+PROFILE_DISABLED_PATH = os.path.join(LEON_PROFILE_PATH, "disabled.json")
 
 SKILLS_ROOT_PATH = os.path.join(CODEBASE_PATH, "skills")
+TOOLS_PATH = os.path.join(CODEBASE_PATH, "tools")
 BIN_PATH = os.path.join(LEON_HOME_PATH, "bin")
 BRIDGES_PATH = os.path.join(CODEBASE_PATH, "bridges")
 
@@ -50,9 +52,7 @@ NVIDIA_LIBS_PATH = os.path.join(BIN_PATH, "nvidia")
 PYTORCH_PATH = os.path.join(BIN_PATH, "pytorch")
 PYTORCH_TORCH_PATH = os.path.join(PYTORCH_PATH, "torch")
 
-TOOLKITS_PATH = os.path.join(BRIDGES_PATH, "toolkits")
-
-SKILL_PATH = os.path.join(SKILLS_ROOT_PATH, INTENT_OBJECT["skill_name"])
+SKILL_PATH = os.path.dirname(INTENT_OBJECT["skill_config_path"])
 
 SKILLS_PATH = SKILLS_ROOT_PATH
 

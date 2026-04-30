@@ -2,7 +2,7 @@ import type { ActionFunction } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import OpenMeteoTool from '@sdk/tools/open-meteo'
+import OpenMeteoTool from '@tools/weather/openmeteo'
 import { WeatherForecastWidget } from '../widgets/weather-forecast-widget'
 
 type Units = 'metric' | 'imperial'
