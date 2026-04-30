@@ -53,7 +53,7 @@ export class PlaygroundTestWidget extends Widget<Params> {
               children: 'Shopping List'
             }),
             new Form({
-              onSubmit: (data): unknown => {
+              onSubmit: (data: Record<string, unknown>): unknown => {
                 return this.runSkillAction('submit_shopping_list', data)
               },
               children: [

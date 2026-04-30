@@ -11,11 +11,11 @@
     "url": "https://twitter.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.20/opencode_1.14.20-linux-x86_64.tar.gz",
-    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.20/opencode_1.14.20-linux-aarch64.tar.gz",
-    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.20/opencode_1.14.20-macosx-x86_64.zip",
-    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.20/opencode_1.14.20-macosx-arm64.zip",
-    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.20/opencode_1.14.20-win-amd64.zip"
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-macosx-x86_64.zip",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-macosx-arm64.zip",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-win-amd64.zip"
   },
   "functions": {
     "configureProvider": {

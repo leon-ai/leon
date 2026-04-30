@@ -1,0 +1,36 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "openmeteo",
+  "toolkit_id": "weather",
+  "name": "Open-Meteo",
+  "description": "Fetch current weather conditions using Open-Meteo API without an API key.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "getCurrentConditions": {
+      "description": "Get current weather conditions for a location. Date range is optional when supported.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "location": {
+            "type": "string"
+          },
+          "start_date": {
+            "type": "string",
+            "description": "Start date in YYYY-MM-DD format."
+          },
+          "end_date": {
+            "type": "string",
+            "description": "End date in YYYY-MM-DD format."
+          }
+        },
+        "required": [
+          "location"
+        ]
+      }
+    }
+  }
+}

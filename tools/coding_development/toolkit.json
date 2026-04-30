@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Coding & Development",
+  "description": "Tools for code generation, development, and automation.",
+  "icon_name": "code-s-slash-line",
+  "context_files": [
+    "ARCHITECTURE.md",
+    "WORKSPACE_INTELLIGENCE.md",
+    "LEON_RUNTIME.md",
+    "HOME.md"
+  ],
+  "tools": [
+    "opencode"
+  ]
+}

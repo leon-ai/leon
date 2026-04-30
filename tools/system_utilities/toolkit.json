@@ -1,0 +1,8 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "System Utilities",
+  "description": "Tools for system utilities and maintenance.",
+  "icon_name": "tools-line",
+  "context_files": [],
+  "tools": []
+}

@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { LEON_HOME_PATH, LEON_PROFILE_PATH } from '@/leon-roots'
+import { LEON_HOME_PATH } from '@/leon-roots'
 import { SystemHelper } from '@/helpers/system-helper'
 
 export class RuntimeHelper {
@@ -206,33 +206,6 @@ export class RuntimeHelper {
     ]
 
     return this.firstExistingPath(venvCandidates) || this.getPythonBinPath()
-  }
-
-  /**
-   * Keep skill-owned runtime artifacts out of `src` so install/update can clean
-   * them up independently from skill source files.
-   */
-  public static getSkillRuntimePath(skillPath: string): string {
-    return path.join(
-      LEON_PROFILE_PATH,
-      'skills',
-      path.basename(path.resolve(skillPath)),
-      '.runtime'
-    )
-  }
-
-  /**
-   * Resolve the runtime node_modules directory for a Node.js skill.
-   */
-  public static getNodejsSkillRuntimeNodeModulesPath(skillPath: string): string {
-    return path.join(this.getSkillRuntimePath(skillPath), 'node_modules')
-  }
-
-  /**
-   * Resolve the vendored Python dependency directory for a Python skill.
-   */
-  public static getPythonSkillRuntimeVendorPath(skillPath: string): string {
-    return path.join(this.getSkillRuntimePath(skillPath), 'vendor')
   }
 
   /**

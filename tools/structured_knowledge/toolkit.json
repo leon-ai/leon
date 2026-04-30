@@ -1,0 +1,14 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Structured Knowledge",
+  "description": "Tools for structured knowledge and facts.",
+  "icon_name": "database-2-line",
+  "context_files": [
+    "LEON.md",
+    "ARCHITECTURE.md"
+  ],
+  "tools": [
+    "memory",
+    "context"
+  ]
+}

@@ -6,7 +6,7 @@ import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import ElevenLabsAudioTool from '@sdk/tools/elevenlabs_audio'
+import ElevenLabsAudioTool from '@tools/music_audio/elevenlabs_audio'
 import {
   formatBytes,
   formatFilePath,

@@ -1,0 +1,111 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "opencode",
+  "toolkit_id": "coding_development",
+  "name": "OpenCode",
+  "description": "An AI-powered coding agent tool that generates skills using multiple LLM providers (Cerebras, MiniMax, Anthropic, OpenAI, Gemini).",
+  "icon_name": "code-box-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-macosx-x86_64.zip",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-macosx-arm64.zip",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/opencode-v1.14.29/opencode_1.14.29-win-amd64.zip"
+  },
+  "functions": {
+    "configureProvider": {
+      "description": "Configure a provider with an API key and optional model.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "apiKey"
+        ]
+      }
+    },
+    "getConfiguredProviders": {
+      "description": "List the providers currently configured with API keys.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "getAvailableProviders": {
+      "description": "List providers supported by OpenCode.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    "getDefaultModel": {
+      "description": "Get the default model name for a provider.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider"
+        ]
+      }
+    },
+    "generateSkill": {
+      "description": "Generate a new skill using OpenCode CLI with an agentic loop.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "api_key": {
+            "type": "string"
+          },
+          "target_path": {
+            "type": "string"
+          },
+          "context_files": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "system_prompt": {
+            "type": "string"
+          },
+          "bridge": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "provider",
+          "target_path"
+        ]
+      }
+    }
+  }
+}

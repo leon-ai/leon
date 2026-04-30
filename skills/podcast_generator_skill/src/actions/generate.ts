@@ -3,11 +3,11 @@ import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import GrokTool from '@sdk/tools/grok'
-import OpenRouterTool from '@sdk/tools/openrouter'
-import ChatterboxONNXTool from '@sdk/tools/chatterbox_onnx'
-import FfmpegTool from '@sdk/tools/ffmpeg'
-import FfprobeTool from '@sdk/tools/ffprobe'
+import GrokTool from '@tools/search_web/grok'
+import OpenRouterTool from '@tools/communication/openrouter'
+import ChatterboxONNXTool from '@tools/music_audio/chatterbox_onnx'
+import FfmpegTool from '@tools/video_streaming/ffmpeg'
+import FfprobeTool from '@tools/video_streaming/ffprobe'
 import path from 'node:path'
 import fs from 'node:fs/promises'
 import os from 'node:os'
@@ -233,7 +233,7 @@ Generate the script as a JSON object with this structure:
 
     // Calculate total duration by measuring each segment
     let totalDurationMs = 0
-    const segmentsWithTiming: Array<{ path: string; startMs: number }> = []
+    const segmentsWithTiming: Array<{ path: string, startMs: number }> = []
 
     for (const segmentPath of segmentPaths) {
       const duration = await ffprobe.getDuration(segmentPath)

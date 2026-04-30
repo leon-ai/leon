@@ -1,0 +1,108 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "context",
+  "toolkit_id": "structured_knowledge",
+  "name": "Context",
+  "description": "Read and search Leon context files.",
+  "icon_name": "file-list-3-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "listContextFiles": {
+      "description": "List available context files with short summaries.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "limit": {
+            "type": "number"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "readContextFile": {
+      "description": "Read a context file. By default, returns full file content.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "enum": [
+              "ACTIVITY.md",
+              "ARCHITECTURE.md",
+              "BROWSER_HISTORY.md",
+              "GPU_COMPUTE.md",
+              "HABITS.md",
+              "HOME.md",
+              "HOST_SYSTEM.md",
+              "LEON.md",
+              "LEON_RUNTIME.md",
+              "LOCAL_INVENTORY.md",
+              "MEDIA_PROFILE.md",
+              "NETWORK_ECOSYSTEM.md",
+              "OWNER.md",
+              "STORAGE.md",
+              "SYSTEM_RESOURCES.md",
+              "WORKSPACE_INTELLIGENCE.md"
+            ]
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "offsetChars": {
+                "type": "number"
+              },
+              "maxChars": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "filename"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "searchContext": {
+      "description": "Search relevant content across context files.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "filenames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "topK": {
+                "type": "number"
+              },
+              "snippetChars": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

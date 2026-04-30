@@ -10,7 +10,7 @@ export const run: ActionFunction = async function (params) {
   const answer = answers[Math.floor(Math.random() * answers.length)]
 
   if (answer === 'magical_day') {
-    return leon.answer({
+    await leon.answer({
       key: 'magical_day',
       data: {
         weekday: LEON_BIRTH_DATE.toLocaleString(params.lang, {
@@ -21,10 +21,11 @@ export const run: ActionFunction = async function (params) {
         year: LEON_BIRTH_DATE.getFullYear()
       }
     })
+    return
   }
 
   if (answer === 'commemorate') {
-    return leon.answer({
+    await leon.answer({
       key: 'commemorate',
       data: {
         month: LEON_BIRTH_DATE.toLocaleString(params.lang, { month: 'long' }),
@@ -32,6 +33,7 @@ export const run: ActionFunction = async function (params) {
         year: LEON_BIRTH_DATE.getFullYear()
       }
     })
+    return
   }
 
   const currentDate = new Date()

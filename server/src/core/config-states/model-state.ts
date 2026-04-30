@@ -15,7 +15,7 @@ import {
   CONFIG_STATE_EVENT_EMITTER,
   MODEL_CONFIGURATION_UPDATED_EVENT
 } from '@/core/config-states/config-state-event-emitter'
-import { DotEnvHelper } from '@/helpers/dotenv-helper'
+import { ProfileHelper } from '@/helpers/profile-helper'
 import { FileHelper } from '@/helpers/file-helper'
 
 const GLOBAL_LLM_ENV_KEY = 'LEON_LLM'
@@ -214,7 +214,10 @@ export class ModelState {
 
     process.env[GLOBAL_LLM_ENV_KEY] = normalizedRawTarget
 
-    await DotEnvHelper.updateVariable(GLOBAL_LLM_ENV_KEY, normalizedRawTarget)
+    await ProfileHelper.updateDotEnvVariable(
+      GLOBAL_LLM_ENV_KEY,
+      normalizedRawTarget
+    )
 
     CONFIG_STATE_EVENT_EMITTER.emit(MODEL_CONFIGURATION_UPDATED_EVENT, {
       workflowTarget: this.workflowTarget,

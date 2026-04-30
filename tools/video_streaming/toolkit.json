@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Video Streaming",
+  "description": "Tools for video processing and streaming.",
+  "icon_name": "video-line",
+  "context_files": [
+    "GPU_COMPUTE.md",
+    "STORAGE.md"
+  ],
+  "tools": [
+    "ffmpeg",
+    "ffprobe",
+    "ytdlp"
+  ]
+}

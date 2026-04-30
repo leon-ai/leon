@@ -1,0 +1,120 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "ffprobe",
+  "toolkit_id": "video_streaming",
+  "name": "FFprobe",
+  "description": "A tool for analyzing and extracting metadata from video and audio files. Use this for inspecting media properties like duration, bitrate, codec information, stream details, and format data without modifying the files. For processing or converting media, use ffmpeg instead.",
+  "icon_name": "radar-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-win-amd64.exe"
+  },
+  "functions": {
+    "getMediaFormatInfo": {
+      "description": "Get format information for a media file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    },
+    "listStreams": {
+      "description": "List all streams for a media file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    },
+    "getVideoSteamInfo": {
+      "description": "Get video stream information for a media file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    },
+    "getAudioStreamInfo": {
+      "description": "Get audio stream information for a media file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    },
+    "countFrames": {
+      "description": "Count the number of frames in a media file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    },
+    "getFramesInfo": {
+      "description": "Get frame information for a media file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    },
+    "getDuration": {
+      "description": "Get the duration (in seconds) of a media file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filePath"
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "inference",
+  "toolkit_id": "communication",
+  "name": "Inference",
+  "description": "A generic Leon workflow inference tool backed by the active workflow LLM provider.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "completion": {
+      "description": "Generate a workflow inference completion.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "system_prompt": {
+                "type": "string"
+              },
+              "temperature": {
+                "type": "number"
+              },
+              "max_tokens": {
+                "type": "number"
+              },
+              "thought_tokens_budget": {
+                "type": "number"
+              },
+              "disable_thinking": {
+                "type": "boolean"
+              },
+              "reasoning_mode": {
+                "type": "string"
+              },
+              "track_provider_errors": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    "structuredCompletion": {
+      "description": "Generate a structured workflow inference completion using a JSON schema.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string"
+          },
+          "json_schema": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "system_prompt": {
+                "type": "string"
+              },
+              "temperature": {
+                "type": "number"
+              },
+              "max_tokens": {
+                "type": "number"
+              },
+              "thought_tokens_budget": {
+                "type": "number"
+              },
+              "disable_thinking": {
+                "type": "boolean"
+              },
+              "reasoning_mode": {
+                "type": "string"
+              },
+              "track_provider_errors": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "prompt",
+          "json_schema"
+        ]
+      }
+    }
+  }
+}

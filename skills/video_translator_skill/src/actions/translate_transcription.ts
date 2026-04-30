@@ -2,12 +2,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ActionFunction, ActionParams } from '@sdk/types'
-import type { TranscriptionOutput } from '@sdk/tools/transcription-schema'
+import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import OpenRouterTool from '@sdk/tools/openrouter'
+import OpenRouterTool from '@tools/communication/openrouter'
 import { formatFilePath } from '@sdk/utils'
 
 interface VideoTranslatorSkillSettings extends Record<string, unknown> {

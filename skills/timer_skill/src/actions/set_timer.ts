@@ -18,12 +18,14 @@ export const run: ActionFunction = async function (params) {
     typeof duration.value !== 'number' ||
     typeof duration.unit !== 'string'
   ) {
-    return leon.answer({ key: 'cannot_get_duration' })
+    await leon.answer({ key: 'cannot_get_duration' })
+    return
   }
 
   const normalizedUnit = duration.unit.toLowerCase()
   if (!supportedUnits.includes(normalizedUnit)) {
-    return leon.answer({ key: 'unit_not_supported' })
+    await leon.answer({ key: 'unit_not_supported' })
+    return
   }
 
   const { value: durationValue } = duration

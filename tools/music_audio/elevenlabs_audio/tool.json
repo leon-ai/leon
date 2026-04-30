@@ -1,0 +1,117 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "elevenlabs_audio",
+  "toolkit_id": "music_audio",
+  "name": "ElevenLabs Audio",
+  "description": "A tool for audio processing using ElevenLabs's API.",
+  "icon_name": "sound-module-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "transcribeToFile": {
+      "description": "Transcribe audio to a file using ElevenLabs' Scribe API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "diarize": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath"
+        ]
+      }
+    },
+    "createDubbing": {
+      "description": "Create a dubbing project using ElevenLabs' Dubbing API.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "targetLang": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string"
+          },
+          "sourceLang": {
+            "type": "string"
+          },
+          "numSpeakers": {
+            "type": "number"
+          },
+          "watermark": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "inputPath",
+          "targetLang",
+          "apiKey"
+        ]
+      }
+    },
+    "getDubbingStatus": {
+      "description": "Get the status of a dubbing project.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "dubbingId": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dubbingId",
+          "apiKey"
+        ]
+      }
+    },
+    "downloadDubbedFile": {
+      "description": "Download the dubbed audio file for a dubbing project.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "dubbingId": {
+            "type": "string"
+          },
+          "targetLang": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "apiKey": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "dubbingId",
+          "targetLang",
+          "outputPath",
+          "apiKey"
+        ]
+      }
+    }
+  }
+}

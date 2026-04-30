@@ -9,7 +9,7 @@ import {
   SERVER_CORE_PATH,
   SKILLS_PATH,
   TMP_PATH,
-  TOOLKITS_PATH
+  TOOLS_PATH
 } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
@@ -33,7 +33,7 @@ export class HomeContextFile extends ContextFile {
       `- Generated at: ${DateHelper.getDateTime()}`,
       `- Codebase path: ${codebasePath}`,
       `- Skills path: ${SKILLS_PATH}`,
-      `- Toolkits path: ${TOOLKITS_PATH}`,
+      `- Tools path: ${TOOLS_PATH}`,
       `- Global data path: ${GLOBAL_DATA_PATH}`,
       `- Models path: ${MODELS_PATH}`,
       `- Context path: ${PROFILE_CONTEXT_PATH}`,

@@ -183,7 +183,7 @@ export class WeatherForecastWidget extends Widget<Params> {
 
   private getWeatherIcon(description: string): string {
     const desc = description.toLowerCase()
-    const iconMap: Array<{ keywords: string[]; icon: string }> = [
+    const iconMap: Array<{ keywords: string[], icon: string }> = [
       { keywords: ['clear', 'sunny'], icon: 'sun' },
       { keywords: ['cloud', 'overcast'], icon: 'cloud' },
       { keywords: ['drizzle'], icon: 'drizzle' },

@@ -10,11 +10,11 @@ const globs = [
   'aurora/src/**/*.{ts,tsx,js,jsx}',
   // TODO: deal with it once handling new hotword
   // '"hotword/index.{ts,js}"',
-  // TODO: put it back once tests have been reintroduced into skills
-  // '"skills/**/*.js"',
+  'skills/**/*.{ts,js}',
   'scripts/**/*.{ts,js}',
   'server/src/**/*.{ts,js}',
-  'test/**/*.{ts,js}'
+  'test/**/*.{ts,js}',
+  'tools/**/*.ts'
 ]
 
 /**

@@ -1,0 +1,125 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "memory",
+  "toolkit_id": "structured_knowledge",
+  "name": "Memory",
+  "description": "Read and write Leon memory entries (persistent, daily, discussion).",
+  "icon_name": "brain-2-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "read": {
+      "description": "Recall relevant memories for a query using Leon's memory system. Keep the query short and semantically close to the user's wording. Prefer concrete entities or relationships already mentioned. Avoid long speculative keyword lists.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "namespaces": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "memory_persistent",
+                    "memory_daily",
+                    "memory_discussion",
+                    "conversation_daily",
+                    "context"
+                  ]
+                }
+              },
+              "topK": {
+                "type": "number"
+              },
+              "tokenBudget": {
+                "type": "number"
+              },
+              "includeFacts": {
+                "type": "boolean"
+              },
+              "includeContext": {
+                "type": "boolean"
+              },
+              "contextFilenames": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    "write": {
+      "description": "Write a memory item into Leon memory (persistent/daily/discussion).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "scope": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              },
+              "sourceType": {
+                "type": "string"
+              },
+              "sourceRef": {
+                "type": "string"
+              },
+              "importance": {
+                "type": "number"
+              },
+              "confidence": {
+                "type": "number"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "dayKey": {
+                "type": "string"
+              },
+              "expiresAt": {
+                "type": "number"
+              },
+              "isPinned": {
+                "type": "boolean"
+              },
+              "metadata": {
+                "type": "object"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "content"
+        ]
+      }
+    }
+  }
+}

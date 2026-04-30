@@ -2,7 +2,7 @@ import json
 import os
 from typing import Dict, Any, Optional
 
-from ..constants import PROFILE_TOOLS_PATH, TOOLKITS_PATH
+from ..constants import PROFILE_TOOLS_PATH, TOOLS_PATH
 from .utils import get_platform_name
 
 
@@ -15,7 +15,7 @@ class ToolkitConfig:
     @classmethod
     def load(cls, toolkit_name: str, tool_name: str) -> Dict[str, Any]:
         """
-        Load tool configuration from bridges/toolkits directory
+        Load tool configuration from the flat tools structure.
 
         Args:
             toolkit_name: The toolkit name (e.g., 'video_streaming')
@@ -25,7 +25,7 @@ class ToolkitConfig:
 
         # Load toolkit config if not cached
         if cache_key not in cls._config_cache:
-            config_path = os.path.join(TOOLKITS_PATH, toolkit_name, "toolkit.json")
+            config_path = os.path.join(TOOLS_PATH, toolkit_name, "toolkit.json")
 
             try:
                 with open(config_path, "r", encoding="utf-8") as f:
@@ -40,13 +40,8 @@ class ToolkitConfig:
         toolkit_config = cls._config_cache[cache_key]
         tools_list = toolkit_config.get("tools", [])
 
-        tool_config_path = os.path.join(
-            TOOLKITS_PATH, toolkit_name, "tools", f"{tool_name}.tool.json"
-        )
+        tool_config_path = os.path.join(TOOLS_PATH, toolkit_name, tool_name, "tool.json")
 
-        # toolkit.json remains the discovery surface for agent/runtime registry
-        # flows, but direct skill-side tool usage should still work when the
-        # tool manifest exists.
         if tool_name not in tools_list and not os.path.exists(tool_config_path):
             toolkit_name_display = toolkit_config.get("name", "unknown")
             raise Exception(
@@ -82,7 +77,9 @@ class ToolkitConfig:
         if cache_key in cls._settings_cache:
             return cls._settings_cache[cache_key]
 
-        settings_path = os.path.join(PROFILE_TOOLS_PATH, f"{tool_name}.settings.json")
+        settings_path = os.path.join(
+            PROFILE_TOOLS_PATH, toolkit_name, tool_name, "settings.json"
+        )
         settings_dir = os.path.dirname(settings_path)
         os.makedirs(settings_dir, exist_ok=True)
 

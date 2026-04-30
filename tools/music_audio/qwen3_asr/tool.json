@@ -1,0 +1,72 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "qwen3_asr",
+  "toolkit_id": "music_audio",
+  "name": "Qwen3-ASR",
+  "description": "A tool for speech recognition and timestamped transcription using the Qwen3 ASR models.",
+  "icon_name": "qwen-ai-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/qwen3_asr-v1.0.0/qwen3_asr_1.0.0-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/qwen3_asr-v1.0.0/qwen3_asr_1.0.0-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/qwen3_asr-v1.0.0/qwen3_asr_1.0.0-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/qwen3_asr-v1.0.0/qwen3_asr_1.0.0-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/qwen3_asr-v1.0.0/qwen3_asr_1.0.0-win-amd64.exe"
+  },
+  "resources": {
+    "qwen3-asr-1.7b": [
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/chat_template.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/generation_config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/merges.txt?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/model-00001-of-00002.safetensors?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/model-00002-of-00002.safetensors?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/model.safetensors.index.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/preprocessor_config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/tokenizer_config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ASR-1.7B/resolve/main/vocab.json?download=true"
+    ],
+    "qwen3-forcedaligner-0.6b": [
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/chat_template.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/generation_config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/merges.txt?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/model.safetensors?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/preprocessor_config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/tokenizer_config.json?download=true",
+      "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/resolve/main/vocab.json?download=true"
+    ]
+  },
+  "functions": {
+    "transcribeToFile": {
+      "description": "Transcribe audio to a file using Qwen3 ASR.",
+      "hooks": {
+        "post_execution": {
+          "response_jq": "[.result.segments[].text] | map(select(type == \"string\" and length > 0)) | join(\" \")"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string"
+          },
+          "outputPath": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "inputPath",
+          "outputPath"
+        ]
+      }
+    }
+  }
+}

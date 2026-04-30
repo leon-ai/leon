@@ -475,7 +475,7 @@ def run(params: ActionParams, params_helper: ParamsHelper) -> None:
 \`\`\`
 
 ## Available SDK Tools
-When generating code, you can use these existing tools (import from '@sdk/tools/TOOL_NAME'):
+When generating code, you can use these existing tools (import from '@tools/<toolkit_name>/<tool_name>'):
 - **cerebras-tool**: Cerebras LLM API (chat, completion, structured output, list models)
 - **openrouter-tool**: OpenRouter LLM API (chat, completion, list models)
 - **ytdlp-tool**: Download videos from YouTube and other platforms

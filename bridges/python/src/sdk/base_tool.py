@@ -21,7 +21,6 @@ from ..constants import (
     NVIDIA_LIBS_PATH,
     PROFILE_TOOLS_PATH,
     PYTORCH_TORCH_PATH,
-    TOOLKITS_PATH,
 )
 import subprocess
 import sys
@@ -104,7 +103,10 @@ class BaseTool(ABC):
 
     def _get_settings_path(self, tool_name: Optional[str] = None) -> str:
         resolved_tool_name = tool_name or self.tool_name
-        return os.path.join(PROFILE_TOOLS_PATH, f"{resolved_tool_name}.settings.json")
+
+        return os.path.join(
+            PROFILE_TOOLS_PATH, self.toolkit, resolved_tool_name, "settings.json"
+        )
 
     def _check_required_settings(self, tool_name: Optional[str] = None) -> None:
         if not self.required_settings:

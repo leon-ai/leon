@@ -4,7 +4,7 @@ import type { ActionFunction, ActionParams } from '@sdk/types'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import ECAPATool from '@sdk/tools/ecapa'
+import ECAPATool from '@tools/music_audio/ecapa'
 
 interface SpeakerReference {
   speaker: string
@@ -37,7 +37,7 @@ export const run: ActionFunction = async function (
     }
 
     const tool = await ToolManager.initTool(ECAPATool)
-    const results: { speaker: string; gender: string }[] = []
+    const results: { speaker: string, gender: string }[] = []
 
     for (const ref of speakerReferences) {
       const clips = [ref.reference1_path, ref.reference2_path]

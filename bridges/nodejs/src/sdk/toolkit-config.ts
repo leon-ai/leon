@@ -2,7 +2,10 @@ import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 import { getPlatformName } from '@sdk/utils'
-import { PROFILE_TOOLS_PATH, TOOLKITS_PATH } from '@bridge/constants'
+import {
+  PROFILE_TOOLS_PATH,
+  TOOLS_PATH
+} from '@bridge/constants'
 
 interface ToolConfig {
   tool_id: string
@@ -28,7 +31,7 @@ export class ToolkitConfig {
   private static settingsCache = new Map<string, Record<string, unknown>>()
 
   /**
-   * Load tool configuration from bridges/toolkits directory
+   * Load tool configuration from the flat tools structure.
    * @param toolkitName - The toolkit name (e.g., 'video_streaming')
    * @param toolName - Name of the tool (e.g., 'ffmpeg')
    */
@@ -37,7 +40,7 @@ export class ToolkitConfig {
 
     // Load toolkit config if not cached
     if (!this.configCache.has(cacheKey)) {
-      const configPath = join(TOOLKITS_PATH, toolkitName, 'toolkit.json')
+      const configPath = join(TOOLS_PATH, toolkitName, 'toolkit.json')
       const configContent = readFileSync(configPath, 'utf-8')
       const config = JSON.parse(configContent) as ToolkitConfigData
 
@@ -45,15 +48,8 @@ export class ToolkitConfig {
     }
 
     const toolkitConfig = this.configCache.get(cacheKey)!
-    const toolConfigPath = join(
-      TOOLKITS_PATH,
-      toolkitName,
-      'tools',
-      `${toolName}.tool.json`
-    )
+    const toolConfigPath = join(TOOLS_PATH, toolkitName, toolName, 'tool.json')
 
-    // toolkit.json remains the discovery surface for agent/runtime registry flows,
-    // but direct skill-side tool usage should still work when the tool manifest exists.
     if (!toolkitConfig.tools.includes(toolName) && !existsSync(toolConfigPath)) {
       throw new Error(
         `Tool '${toolName}' not found in toolkit '${toolkitConfig.name}'`
@@ -82,7 +78,12 @@ export class ToolkitConfig {
       return this.settingsCache.get(cacheKey) || {}
     }
 
-    const settingsPath = join(PROFILE_TOOLS_PATH, `${toolName}.settings.json`)
+    const settingsPath = join(
+      PROFILE_TOOLS_PATH,
+      toolkitName,
+      toolName,
+      'settings.json'
+    )
     const settingsDir = dirname(settingsPath)
 
     mkdirSync(settingsDir, { recursive: true })

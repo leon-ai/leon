@@ -1,5 +1,5 @@
 import { LEON_ROUTING_MODE } from '@/constants'
-import { DotEnvHelper } from '@/helpers/dotenv-helper'
+import { ProfileHelper } from '@/helpers/profile-helper'
 import { RoutingMode } from '@/types'
 
 const DEFAULT_ROUTING_MODE = RoutingMode.Smart
@@ -38,7 +38,7 @@ export class RoutingModeState {
     this.routingMode = normalizedRoutingMode
     process.env[ROUTING_MODE_ENV_KEY] = normalizedRoutingMode
 
-    await DotEnvHelper.updateVariable(
+    await ProfileHelper.updateDotEnvVariable(
       ROUTING_MODE_ENV_KEY,
       normalizedRoutingMode
     )

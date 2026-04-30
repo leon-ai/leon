@@ -2,15 +2,17 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ActionFunction, ActionParams } from '@sdk/types'
-import type { TranscriptionOutput } from '@sdk/tools/transcription-schema'
+import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
-import ChatterboxONNXTool from '@sdk/tools/chatterbox_onnx'
-import Qwen3TTSTool from '@sdk/tools/qwen3_tts'
-import FfmpegTool from '@sdk/tools/ffmpeg'
-import FfprobeTool from '@sdk/tools/ffprobe'
+import ChatterboxONNXTool from '@tools/music_audio/chatterbox_onnx'
+import Qwen3TTSTool, {
+  type SupportedLanguage
+} from '@tools/music_audio/qwen3_tts'
+import FfmpegTool from '@tools/video_streaming/ffmpeg'
+import FfprobeTool from '@tools/video_streaming/ffprobe'
 import { formatFilePath, normalizeLanguageCode } from '@sdk/utils'
 
 interface SpeakerReference {
@@ -68,13 +70,13 @@ function toMs(seconds: number): number {
 function splitSegmentText(
   segment: Segment,
   maxChars: number
-): Array<{ text: string; ratio: number }> {
+): Array<{ text: string, ratio: number }> {
   const text = segment.text.trim()
   if (text.length <= maxChars) {
     return [{ text, ratio: 1.0 }]
   }
 
-  const chunks: Array<{ text: string; ratio: number }> = []
+  const chunks: Array<{ text: string, ratio: number }> = []
   let remaining = text
   const totalLength = text.length
 
@@ -314,6 +316,9 @@ export const run: ActionFunction = async function (
       return
     }
 
+    const resolvedTargetLanguageLabel =
+      targetLanguageLabel || getLanguageDisplayName(targetLanguage)
+
     // Read and parse transcription
     const transcriptionContent = await fs.promises.readFile(
       translatedTranscriptionPath,
@@ -333,7 +338,7 @@ export const run: ActionFunction = async function (
       data: {
         segment_count: transcription.segments.length.toString(),
         speaker_count: speakerReferences.length.toString(),
-        target_language: targetLanguageLabel,
+        target_language: resolvedTargetLanguageLabel,
         provider
       }
     })
@@ -465,7 +470,7 @@ export const run: ActionFunction = async function (
           const qwen3TTSTool = await ToolManager.initTool(Qwen3TTSTool)
           const qwenTasks = synthesisTasks.map((task) => ({
             text: task.text,
-            target_language: targetLanguageLabel ?? 'Auto',
+            target_language: resolvedTargetLanguageLabel as SupportedLanguage,
             audio_path: task.audio_path,
             speaker_reference_path: task.speaker_reference_path,
             x_vector_only_mode: true
@@ -699,14 +704,14 @@ export const run: ActionFunction = async function (
         output_path: formatFilePath(finalAudioPath),
         output_folder: formatFilePath(processedSegmentsDir),
         manifest_path: formatFilePath(manifestPath),
-        target_language: targetLanguageLabel
+        target_language: resolvedTargetLanguageLabel
       },
       core: {
         context_data: {
           processed_segments_dir: processedSegmentsDir,
           segments_manifest_path: manifestPath,
           dubbed_audio_path: finalAudioPath,
-          target_language: targetLanguageLabel,
+          target_language: resolvedTargetLanguageLabel,
           target_language_code: targetLanguage
         }
       }

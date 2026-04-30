@@ -1,0 +1,8 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Productivity & Collaboration",
+  "description": "Tools for productivity and collaboration workflows.",
+  "icon_name": "task-line",
+  "context_files": [],
+  "tools": []
+}
