@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Voice Designer",
+  "icon_name": "voice-recognition-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Design a custom voice from a description and generate speech audio.",
+  "author": {
+    "name": "Leon"
+  },
+  "actions": {
+    "design_and_speak": {
+      "type": "logic",
+      "description": "Design a voice from a description and speak the provided text.",
+      "parameters": {
+        "voice_description": {
+          "type": "string",
+          "description": "Description of the desired voice style or persona."
+        },
+        "speech_text": {
+          "type": "string",
+          "description": "The text that should be spoken by the designed voice."
+        }
+      }
+    }
+  }
+}

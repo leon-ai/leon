@@ -5,9 +5,12 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 import {
   PLAN_SYSTEM_PROMPT,
-  DUTY_NAME
+  DUTY_NAME,
+  AGENT_SKILL_SELECTION_SYSTEM_PROMPT,
+  AGENT_SKILL_SELECTION_PROMPT
 } from './constants'
 import type {
+  AgentSkillContext,
   Catalog,
   LLMCaller,
   PlanResult,
@@ -26,13 +29,18 @@ import {
   extractPlanningTextHandoffDraft,
   createPlanFromUnexpectedToolCall,
   buildContextManifestSection,
-  buildSelfModelSection
+  buildSelfModelSection,
+  buildActiveAgentSkillSection,
+  buildAgentSkillDiscoverySection
 } from './phase-helpers'
 import {
   PLAN_RESPONSE_SCHEMA,
   PLAN_STEP_SCHEMA
 } from './plan-contract'
 import { buildPhaseSystemPrompt } from './phase-policy'
+
+const NO_AGENT_SKILL_SELECTION = 'None'
+const MIN_AGENT_SKILL_ALIAS_LENGTH = 3
 
 function getLLMProviderName(): LLMProviders {
   return CONFIG_STATE.getModelState().getAgentProvider()
@@ -85,6 +93,161 @@ function buildPlanningPromptSections(params: {
   return sections
 }
 
+function getAgentSkillIdsFromCatalog(catalog: string): string[] {
+  return catalog
+    .split('\n')
+    .map((line) => {
+      const trimmedLine = line.trim()
+      const numberedSeparatorIndex = trimmedLine.indexOf('. ')
+      const descriptor =
+        numberedSeparatorIndex >= 0
+          ? trimmedLine.slice(numberedSeparatorIndex + 2)
+          : trimmedLine
+      const descriptionSeparatorIndex = descriptor.indexOf(':')
+
+      if (descriptionSeparatorIndex < 0) {
+        return ''
+      }
+
+      return descriptor.slice(0, descriptionSeparatorIndex).trim()
+    })
+    .filter((skillId) => skillId.length > 0)
+}
+
+function normalizeAgentSkillAlias(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
+
+function shouldRunAgentSkillSelection(
+  input: unknown,
+  agentSkillIds: string[]
+): boolean {
+  const normalizedInput = normalizeAgentSkillAlias(String(input || ''))
+
+  if (!normalizedInput) {
+    return false
+  }
+
+  return agentSkillIds.some((skillId) => {
+    const normalizedSkillId = normalizeAgentSkillAlias(skillId)
+
+    if (normalizedSkillId.length < MIN_AGENT_SKILL_ALIAS_LENGTH) {
+      return false
+    }
+
+    return normalizedInput.includes(normalizedSkillId)
+  })
+}
+
+async function selectAgentSkillContext(
+  caller: LLMCaller,
+  catalog: Catalog
+): Promise<AgentSkillContext | null> {
+  if (caller.agentSkillContext) {
+    return caller.agentSkillContext
+  }
+
+  if (
+    !caller.agentSkillCatalog ||
+    caller.agentSkillCatalog.includes('No Agent Skills')
+  ) {
+    return null
+  }
+
+  const agentSkillIds = getAgentSkillIdsFromCatalog(caller.agentSkillCatalog)
+
+  if (agentSkillIds.length === 0) {
+    return null
+  }
+
+  if (!shouldRunAgentSkillSelection(caller.input, agentSkillIds)) {
+    LogHelper.title(`${DUTY_NAME} / planning`)
+    LogHelper.debug(
+      'Agent Skill selection skipped: no explicit Agent Skill name in request.'
+    )
+
+    return null
+  }
+
+  const prompt = AGENT_SKILL_SELECTION_PROMPT
+    .replace('{{ agent_skill_catalog }}', caller.agentSkillCatalog)
+    .replace('{{ catalog }}', catalog.text)
+    .replace('{{ user_request }}', String(caller.input || ''))
+
+  if (caller.supportsNativeTools) {
+    const toolResult = await caller.callLLMWithTools(
+      prompt,
+      AGENT_SKILL_SELECTION_SYSTEM_PROMPT,
+      [
+        {
+          type: 'function',
+          function: {
+            name: 'select_agent_skill',
+            description:
+              'Select the Agent Skill to activate and load now, or "None".',
+            parameters: {
+              type: 'object',
+              properties: {
+                skill_id: {
+                  type: 'string',
+                  enum: [...agentSkillIds, NO_AGENT_SKILL_SELECTION],
+                  description:
+                    'Exact Agent Skill ID from the catalog, or "None" when no Agent Skill should be loaded.'
+                },
+                reason: {
+                  type: 'string',
+                  description: 'Brief reason for the selection.'
+                }
+              },
+              required: ['skill_id'],
+              additionalProperties: false
+            }
+          }
+        }
+      ],
+      'auto',
+      undefined,
+      false,
+      [
+        {
+          name: 'AGENT_SKILL_SELECTION',
+          source:
+            'server/src/core/llm-manager/llm-duties/react-llm-duty/constants.ts',
+          content: prompt
+        }
+      ],
+      {
+        phase: 'planning',
+        reasoningMode: 'guarded'
+      }
+    )
+    const selectedSkillId = toolResult?.toolCall
+      ? String(
+          (parseToolCallArguments(toolResult.toolCall.arguments) || {})[
+            'skill_id'
+          ] || ''
+        ).trim()
+      : ''
+
+    if (selectedSkillId && selectedSkillId !== NO_AGENT_SKILL_SELECTION) {
+      const selectedAgentSkillContext =
+        await caller.getAgentSkillContext(selectedSkillId)
+
+      if (selectedAgentSkillContext) {
+        caller.setAgentSkillContext(selectedAgentSkillContext)
+      }
+
+      return selectedAgentSkillContext
+    }
+  }
+
+  return null
+}
+
 function isOperatingSystemControlOnlyPlan(steps: { function: string }[]): boolean {
   if (steps.length === 0) {
     return false
@@ -134,7 +297,16 @@ export async function runPlanningPhase(
   const contextManifestSection = buildContextManifestSection(
     caller.getContextManifest()
   )
-  const prompt = `<context_manifest>\n${contextManifestSection}\n</context_manifest>\n\n<available_catalog>\n${catalog.text}${catalogNote}\n</available_catalog>\n\n<self_model>\n${selfModelSection}\n</self_model>\n\n<grounding_note>\nEnvironment context is available through structured_knowledge.context tools when needed.\n</grounding_note>\n\n<user_request>\n${caller.input}\n</user_request>`
+  const selectedAgentSkillContext = await selectAgentSkillContext(
+    caller,
+    catalog
+  )
+  const activeAgentSkillSection =
+    buildActiveAgentSkillSection(selectedAgentSkillContext)
+  const agentSkillSection =
+    activeAgentSkillSection ||
+    (caller.supportsNativeTools ? '' : buildAgentSkillDiscoverySection(caller))
+  const prompt = `<context_manifest>\n${contextManifestSection}\n</context_manifest>\n\n${agentSkillSection}\n\n<available_catalog>\n${catalog.text}${catalogNote}\n</available_catalog>\n\n<self_model>\n${selfModelSection}\n</self_model>\n\n<grounding_note>\nEnvironment context is available through structured_knowledge.context tools when needed.\n</grounding_note>\n\n<user_request>\n${caller.input}\n</user_request>`
 
   const planSchema = PLAN_RESPONSE_SCHEMA
 

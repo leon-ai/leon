@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { PROFILE_SKILLS_PATH } from '@/constants'
+import { PROFILE_NATIVE_SKILLS_PATH } from '@/constants'
 
 /**
  * Set up skills settings
@@ -10,7 +10,7 @@ export default async function (skillFriendlyName, currentSkill) {
   const skillName = path.basename(currentSkill.path)
   const skillSrcPath = path.join(currentSkill.path, 'src')
   const settingsPath = path.join(
-    PROFILE_SKILLS_PATH,
+    PROFILE_NATIVE_SKILLS_PATH,
     skillName,
     'settings.json'
   )

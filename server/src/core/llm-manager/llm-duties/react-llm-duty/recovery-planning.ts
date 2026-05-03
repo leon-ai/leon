@@ -23,7 +23,8 @@ import {
   extractPlanningTextHandoffDraft,
   createPlanFromUnexpectedToolCall,
   buildContextManifestSection,
-  buildSelfModelSection
+  buildSelfModelSection,
+  buildActiveAgentSkillSection
 } from './phase-helpers'
 import {
   PLAN_RESPONSE_SCHEMA,
@@ -111,6 +112,9 @@ export async function runRecoveryPlanningPhase(
   const contextManifestSection = buildContextManifestSection(
     caller.getContextManifest()
   )
+  const activeAgentSkillSection = buildActiveAgentSkillSection(
+    caller.agentSkillContext
+  )
   const failedExecution = executionHistory[executionHistory.length - 1]
   const historySection = formatExecutionHistory(executionHistory)
   const pendingStepsSection =
@@ -125,7 +129,7 @@ export async function runRecoveryPlanningPhase(
 ${contextManifestSection}
 </context_manifest>
 
-<available_catalog>
+${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}<available_catalog>
 ${catalog.text}${catalogNote}
 </available_catalog>
 

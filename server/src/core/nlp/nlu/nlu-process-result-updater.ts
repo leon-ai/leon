@@ -8,7 +8,7 @@ import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { SkillBridges } from '@/core/brain/types'
 
-const SKILL_CONFIG_PROPS_TO_KEEP = ['name', 'bridge', 'version', 'flow']
+const SKILL_CONFIG_PROPS_TO_KEEP = ['name', 'bridge', 'version', 'workflow']
 
 export const DEFAULT_NLU_PROCESS_RESULT: NLUProcessResult = {
   // Skill name without the "_skill" prefix
@@ -20,7 +20,7 @@ export const DEFAULT_NLU_PROCESS_RESULT: NLUProcessResult = {
     name: '',
     bridge: SkillBridges.Python,
     version: '',
-    flow: []
+    workflow: []
   },
   localeSkillConfig: {
     variables: {},

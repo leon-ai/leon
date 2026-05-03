@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Speed Test",
+  "icon_name": "radar-line",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Gives info about your network speed.",
+  "author": {
+    "name": "Florian Bouché",
+    "url": "https://github.com/fkeloks"
+  },
+  "actions": {
+    "run": {
+      "type": "logic",
+      "description": "Run an internet speed test and report ping, download, and upload speeds."
+    }
+  }
+}

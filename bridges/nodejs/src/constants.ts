@@ -41,6 +41,14 @@ export const PROFILE_MEMORY_DB_PATH = path.join(
   'index.sqlite'
 )
 export const PROFILE_SKILLS_PATH = path.join(LEON_PROFILE_PATH, 'skills')
+export const PROFILE_NATIVE_SKILLS_PATH = path.join(
+  PROFILE_SKILLS_PATH,
+  'native'
+)
+export const PROFILE_AGENT_SKILLS_PATH = path.join(
+  PROFILE_SKILLS_PATH,
+  'agent'
+)
 export const PROFILE_TOOLS_PATH = path.join(LEON_PROFILE_PATH, 'tools')
 
 const BIN_PATH = path.join(LEON_HOME_PATH, 'bin')
@@ -79,6 +87,8 @@ export const PYTORCH_PATH = path.join(BIN_PATH, 'pytorch')
 export const PYTORCH_TORCH_PATH = path.join(PYTORCH_PATH, 'torch')
 
 export const SKILLS_PATH = path.join(CODEBASE_PATH, 'skills')
+export const NATIVE_SKILLS_PATH = path.join(SKILLS_PATH, 'native')
+export const AGENT_SKILLS_PATH = path.join(SKILLS_PATH, 'agent')
 export const SKILL_PATH =
   runtime === 'skill' && parsedIntentObject
     ? path.dirname(parsedIntentObject.skill_config_path)

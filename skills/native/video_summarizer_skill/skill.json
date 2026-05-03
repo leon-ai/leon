@@ -1,0 +1,44 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Video Summarizer",
+  "icon_name": "file-list-3-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Summarize videos from a URL or local path into key points and new knowledge.",
+  "author": {
+    "name": "Leon"
+  },
+  "workflow": [
+    "prepare_audio",
+    "music_audio_toolkit_skill:transcribe_audio",
+    "summarize_transcription"
+  ],
+  "actions": {
+    "prepare_audio": {
+      "type": "logic",
+      "description": "Prepare an audio track from a video URL or local file for summarization.",
+      "parameters": {
+        "video_source": {
+          "type": "string",
+          "description": "Video URL or local file path to summarize."
+        },
+        "audio_format": {
+          "type": "string",
+          "description": "Audio format to extract or download (e.g., mp3, wav)."
+        },
+        "summary_language": {
+          "type": "string",
+          "description": "Language to use for the summary output (optional)."
+        }
+      },
+      "optional_parameters": ["audio_format", "summary_language"]
+    },
+    "summarize_transcription": {
+      "type": "logic",
+      "description": "Summarize a transcription into key points and new knowledge."
+    }
+  },
+  "action_notes": [
+    "This workflow downloads or extracts audio, transcribes it via music_audio_toolkit_skill, then summarizes it."
+  ]
+}

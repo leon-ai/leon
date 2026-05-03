@@ -6,6 +6,10 @@ import { BUILT_IN_COMMAND_MANAGER } from '@/commands'
 import type { APIOptions } from '@/core/http-server/http-server'
 
 const COMMAND_MODES = ['autocomplete', 'execute'] as const
+const COMMAND_INPUT_SEPARATOR_PATTERN = /\s+/
+const SKILL_COMMAND_NAME = 'skill'
+const SKILL_ENABLE_SUBCOMMAND = 'enable'
+const SKILL_DISABLE_SUBCOMMAND = 'disable'
 
 const postCommandSchema = {
   body: Type.Object({
@@ -40,6 +44,35 @@ async function refreshLLMRuntimeIfModelCommand(input: {
   }
 }
 
+function isSkillToggleCommand(rawInput: string): boolean {
+  const [, subcommand = ''] = rawInput.trim().split(COMMAND_INPUT_SEPARATOR_PATTERN)
+
+  return (
+    subcommand === SKILL_ENABLE_SUBCOMMAND ||
+    subcommand === SKILL_DISABLE_SUBCOMMAND
+  )
+}
+
+async function refreshSkillListIfSkillToggleCommand(input: {
+  mode: (typeof COMMAND_MODES)[number]
+  commandName: string | null
+  rawInput: string
+  status: string | undefined
+}): Promise<void> {
+  if (
+    input.mode !== 'execute' ||
+    input.commandName !== SKILL_COMMAND_NAME ||
+    input.status !== 'completed' ||
+    !isSkillToggleCommand(input.rawInput)
+  ) {
+    return
+  }
+
+  const { LLM_MANAGER } = await import('@/core')
+
+  await LLM_MANAGER.refreshSkillListContent()
+}
+
 export const postCommand: FastifyPluginAsync<APIOptions> = async (
   fastify,
   options
@@ -62,6 +95,12 @@ export const postCommand: FastifyPluginAsync<APIOptions> = async (
         await refreshLLMRuntimeIfModelCommand({
           mode,
           commandName: data.session.command_name,
+          status: 'status' in data ? data.status : undefined
+        })
+        await refreshSkillListIfSkillToggleCommand({
+          mode,
+          commandName: data.session.command_name,
+          rawInput: input,
           status: 'status' in data ? data.status : undefined
         })
 

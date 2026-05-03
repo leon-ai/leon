@@ -24,7 +24,7 @@ export interface SelfModelObservationInput {
   userMessage: string
   assistantMessage: string
   sentAt?: number
-  route: 'react' | 'workflow' | 'pulse'
+  route: 'react' | 'controlled' | 'pulse'
   finalIntent?: FinalIntent
   toolExecutions?: ToolExecutionDigest[]
 }
@@ -53,7 +53,7 @@ interface BehavioralPrinciple {
 
 interface TurnDigest {
   at: string
-  route: 'react' | 'workflow' | 'pulse'
+  route: 'react' | 'controlled' | 'pulse'
   finalIntent: FinalIntent
   ownerSummary: string
   leonSummary: string
@@ -502,7 +502,7 @@ export default class SelfModelManager {
           ? 'react'
           : record['route'] === 'pulse'
             ? 'pulse'
-            : ('workflow' as const)
+            : ('controlled' as const)
       const finalIntent =
         typeof record['finalIntent'] === 'string'
           ? (record['finalIntent'] as FinalIntent)

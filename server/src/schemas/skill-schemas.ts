@@ -258,10 +258,10 @@ export const skillSchemaObject = Type.Strict(
           'A person who has been involved in creating or maintaining this skill.'
       }
     ),
-    flow: Type.Optional(
+    workflow: Type.Optional(
       Type.Array(Type.String(), {
         description:
-          'The flow is a sequence of actions that will be executed in order. Only the first action in the flow will be added to the action calling to avoid overloading the context with too many actions.'
+          'The workflow is a sequence of actions that will be executed in order. Only the first action in the workflow will be added to the action calling to avoid overloading the context with too many actions.'
       })
     ),
     actions: Type.Record(

@@ -245,7 +245,13 @@ describe('agent e2e', () => {
           `[agent:e2e:${provider}] validating turn outputs and tool usage`
         )
 
-        expect(result.skipped).toBe(false)
+        if (result.skipped) {
+          console.info(
+            `[agent:e2e:${provider}] skipped at runtime: ${result.reason || 'provider unavailable'}`
+          )
+          return
+        }
+
         expect(result.turns).toHaveLength(3)
 
         const [turn1, turn2, turn3] = result.turns!

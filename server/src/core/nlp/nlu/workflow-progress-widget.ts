@@ -10,7 +10,7 @@ type WorkflowBaseStep = 'routing' | 'choosing_skill' | 'picking_action' | 'resol
  */
 export class WorkflowProgressWidget {
   private id: string | null = null
-  private routingMode: RoutingMode = RoutingMode.Workflow
+  private routingMode: RoutingMode = RoutingMode.Controlled
   private hasPendingAction = false
   private currentBaseStep: WorkflowBaseStep | null = null
   private actionLabels: string[] = []

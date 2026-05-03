@@ -55,12 +55,13 @@ Leon is no longer just a classic intent-classification assistant like it was for
 
 Today, Leon is being built as a more capable assistant that can understand a goal, choose how to handle it, use tools, remember useful information, and recover when something goes wrong.
 
-- Leon can run in different ways depending on the task: `smart` mode chooses for you, `workflow` mode follows a fixed path, and `agent` mode can plan step by step.
+- Leon can run in different ways depending on the task: `smart` mode chooses for you, `controlled` mode follows deterministic native skills and actions, and `agent` mode can plan step by step.
+- Leon supports native skills for controlled actions and agent skills for `SKILL.md`-backed workflows.
 - Leon can use real tools to get work done instead of only replying with plain text.
 - Leon can use context about your environment so answers stay grounded in what is actually happening on your machine and setup.
 - Leon keeps layered memory so it can remember durable preferences, day-to-day context, and recent discussion context.
 - Leon supports both local and remote AI providers, which helps balance privacy, control, and capability.
-- Under the hood, the core is organized as `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
+- Under the hood, Leon-native skills follow `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 
 Leon also keeps a compact self-model and a bounded proactive pulse system so it can stay more consistent over time without flooding itself with unnecessary context.
 
@@ -116,10 +117,10 @@ By default, Leon runs locally and the app is available on `http://localhost:1337
 
 At a high level, Leon currently consists of:
 
-- `server/`: the main runtime, routing, memory, context management, HTTP API, and agent/workflow execution
+- `server/`: the main runtime, routing, memory, context management, HTTP API, and agent/controlled execution
 - `app/`: the web application
 - `aurora/`: UI components and preview environment
-- `skills/`: user-facing capabilities built on top of the core
+- `skills/`: built-in capabilities, split between `native/` skills and `agent/` skills
 - `bridges/`: Node.js and Python bridges plus toolkit definitions and tool runtimes
 - `tcp_server/`: Python services used by parts of the runtime stack
 - `core/context/`: generated identity and architecture context documents that describe Leon's current behavior

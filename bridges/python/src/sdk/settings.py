@@ -3,13 +3,13 @@ import os
 from os import path
 from typing import Union, Any, overload
 
-from ..constants import PROFILE_SKILLS_PATH, SKILL_PATH
+from ..constants import PROFILE_NATIVE_SKILLS_PATH, SKILL_PATH
 
 
 class Settings:
     def __init__(self):
         self.settings_path = path.join(
-            PROFILE_SKILLS_PATH,
+            PROFILE_NATIVE_SKILLS_PATH,
             path.basename(SKILL_PATH),
             'settings.json'
         )

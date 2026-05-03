@@ -55,7 +55,7 @@ export class ActionCallingLLMDuty extends LLMDuty {
 
 You may resolve required parameters from two sources only:
 1. The current user query.
-2. The provided workflow context from the same active Leon skill flow.
+2. The provided workflow context from the same active Leon skill workflow.
 
 Rules:
 1. Only use values that are directly grounded in the query or the provided workflow context.
@@ -119,16 +119,16 @@ Rules:
     }
   }
 
-  private filterActionsWithFlow(
+  private filterActionsWithWorkflow(
     actions: SkillSchema['actions'],
-    flow: SkillSchema['flow']
+    workflow: SkillSchema['workflow']
   ): SkillSchema['actions'] {
-    if (!flow || !Array.isArray(flow) || flow.length === 0) {
+    if (!workflow || !Array.isArray(workflow) || workflow.length === 0) {
       return actions
     }
 
     const filteredActions: SkillSchema['actions'] = {}
-    const [firstActionName] = flow
+    const [firstActionName] = workflow
     const firstAction = actions[firstActionName as string]
 
     if (firstAction) {
@@ -136,7 +136,7 @@ Rules:
     }
 
     for (const actionName in actions) {
-      if (actions[actionName] && !flow.includes(actionName)) {
+      if (actions[actionName] && !workflow.includes(actionName)) {
         filteredActions[actionName] = actions[actionName]
       }
     }
@@ -187,7 +187,7 @@ Rules:
 
   private handlePreLLMInference(
     actions: SkillSchema['actions'],
-    flow: SkillSchema['flow']
+    workflow: SkillSchema['workflow']
   ): LLMDutyResult | true {
     const actionNames = Object.keys(actions)
 
@@ -213,8 +213,8 @@ Rules:
       }
     }
 
-    if (flow && Array.isArray(flow) && flow.length > 0) {
-      const [firstActionName] = flow
+    if (workflow && Array.isArray(workflow) && workflow.length > 0) {
+      const [firstActionName] = workflow
       const firstAction = actions[firstActionName as string]
       const hasParameters =
         !!firstAction?.parameters && Object.keys(firstAction.parameters).length > 0
@@ -303,8 +303,7 @@ Rules:
 
   private buildPrompt(
     actionNotes: string[],
-    preselectedSingleActionName: string | null,
-    skillGuidance: string | null
+    preselectedSingleActionName: string | null
   ): string {
     const promptLines = [
       'Workflow context (JSON):',
@@ -312,10 +311,6 @@ Rules:
       '',
       `User Query: "${this.input}"`
     ]
-
-    if (skillGuidance) {
-      promptLines.unshift(`Selected skill guidance (SKILL.md):\n${skillGuidance}`)
-    }
 
     if (preselectedSingleActionName) {
       promptLines.unshift(
@@ -365,14 +360,13 @@ Rules:
     LogHelper.info('Executing...')
 
     try {
-      const [skillConfig, skillGuidance] = await Promise.all([
-        SkillDomainHelper.getNewSkillConfig(this.skillName),
-        SkillDomainHelper.getSkillGuidance(this.skillName)
-      ])
+      const skillConfig = await SkillDomainHelper.getNewSkillConfig(
+        this.skillName
+      )
       const {
         action_notes: actionNotes = [],
         actions,
-        flow
+        workflow
       } = skillConfig || {}
 
       if (!skillConfig || !actions || Object.keys(actions).length === 0) {
@@ -387,7 +381,7 @@ Rules:
       const actionNames = Object.keys(actions)
       const preselectedSingleActionName =
         actionNames.length === 1 ? (actionNames[0] as string) : null
-      const maybeResult = this.handlePreLLMInference(actions, flow)
+      const maybeResult = this.handlePreLLMInference(actions, workflow)
 
       if (maybeResult !== true) {
         LogHelper.title(this.name)
@@ -397,12 +391,8 @@ Rules:
         return maybeResult as LLMDutyResult
       }
 
-      const prompt = this.buildPrompt(
-        actionNotes,
-        preselectedSingleActionName,
-        skillGuidance
-      )
-      const filteredActions = this.filterActionsWithFlow(actions, flow)
+      const prompt = this.buildPrompt(actionNotes, preselectedSingleActionName)
+      const filteredActions = this.filterActionsWithWorkflow(actions, workflow)
       const openAITools = this.actionsToOpenAITools(filteredActions)
       const config = LLM_MANAGER.coreLLMDuties[LLMDuties.ActionCalling]
       const completionResult = await LLM_PROVIDER.prompt(prompt, {

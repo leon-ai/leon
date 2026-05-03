@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { ShortLanguageCode } from '@/types'
+import { SkillFormat, type ShortLanguageCode } from '@/types'
 import type { GlobalEntitySchema } from '@/schemas/global-data-schemas'
 import type {
   DomainSchema,
@@ -11,8 +11,11 @@ import type {
   SkillLocaleConfigSchema
 } from '@/schemas/skill-schemas'
 import {
+  AGENT_SKILLS_PATH,
   GLOBAL_DATA_PATH,
-  PROFILE_SKILLS_PATH,
+  NATIVE_SKILLS_PATH,
+  PROFILE_AGENT_SKILLS_PATH,
+  PROFILE_NATIVE_SKILLS_PATH,
   SKILLS_PATH
 } from '@/constants'
 import { FileHelper } from '@/helpers/file-helper'
@@ -44,7 +47,44 @@ interface SkillActionObject {
   action: string
 }
 
+interface SkillLookupOptions {
+  includeDisabled?: boolean
+}
+
+interface AgentSkillFrontmatter {
+  name: string
+  description: string
+}
+
+export interface SkillDescriptor {
+  id: string
+  commandName: string
+  name: string
+  description: string
+  iconName: string
+  version: string
+  format: SkillFormat
+  path: string
+}
+
+export interface AgentSkillExecutionContext {
+  id: string
+  name: string
+  description: string
+  rootPath: string
+  skillPath: string
+  instructions: string
+}
+
 const SKILL_NAME_SUFFIX = '_skill'
+const SKILL_CONFIG_FILENAME = 'skill.json'
+const AGENT_SKILL_FILENAME = 'SKILL.md'
+const AGENT_SKILL_FRONTMATTER_BOUNDARY = '---'
+const AGENT_SKILL_NAME_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+const AGENT_SKILL_NAME_MAX_LENGTH = 64
+const AGENT_SKILL_DESCRIPTION_MAX_LENGTH = 1_024
+const AGENT_SKILL_ICON_NAME = 'ri-apps-ai-line'
+const AGENT_SKILL_VERSION = '1.0.0'
 
 export class SkillDomainHelper {
   public static normalizeSkillName(skillName: string): string {
@@ -65,21 +105,119 @@ export class SkillDomainHelper {
       : skillName
   }
 
+  private static getNativeSkillRootPaths(): string[] {
+    return [NATIVE_SKILLS_PATH, PROFILE_NATIVE_SKILLS_PATH]
+  }
+
+  private static getProfileFirstNativeSkillRootPaths(): string[] {
+    return [PROFILE_NATIVE_SKILLS_PATH, NATIVE_SKILLS_PATH]
+  }
+
+  private static getAgentSkillRootPaths(): string[] {
+    return [AGENT_SKILLS_PATH, PROFILE_AGENT_SKILLS_PATH]
+  }
+
+  private static normalizeAgentSkillFrontmatterValue(value: string): string {
+    const trimmedValue = value.trim()
+
+    if (
+      (trimmedValue.startsWith('"') && trimmedValue.endsWith('"')) ||
+      (trimmedValue.startsWith('\'') && trimmedValue.endsWith('\''))
+    ) {
+      return trimmedValue.slice(1, -1).trim()
+    }
+
+    return trimmedValue
+  }
+
+  private static parseAgentSkillFrontmatter(
+    content: string
+  ): AgentSkillFrontmatter | null {
+    const lines = content.replace(/\r\n/g, '\n').split('\n')
+
+    if (lines[0]?.trim() !== AGENT_SKILL_FRONTMATTER_BOUNDARY) {
+      return null
+    }
+
+    const boundaryIndex = lines.findIndex(
+      (line, index) =>
+        index > 0 && line.trim() === AGENT_SKILL_FRONTMATTER_BOUNDARY
+    )
+
+    if (boundaryIndex === -1) {
+      return null
+    }
+
+    const metadata = new Map<string, string>()
+    const frontmatterLines = lines.slice(1, boundaryIndex)
+
+    for (const line of frontmatterLines) {
+      const separatorIndex = line.indexOf(':')
+
+      if (separatorIndex === -1) {
+        continue
+      }
+
+      const key = line.slice(0, separatorIndex).trim()
+      const value = this.normalizeAgentSkillFrontmatterValue(
+        line.slice(separatorIndex + 1)
+      )
+
+      if (key) {
+        metadata.set(key, value)
+      }
+    }
+
+    const name = metadata.get('name') || ''
+    const description = metadata.get('description') || ''
+
+    if (
+      !AGENT_SKILL_NAME_PATTERN.test(name) ||
+      name.length > AGENT_SKILL_NAME_MAX_LENGTH ||
+      description.length === 0 ||
+      description.length > AGENT_SKILL_DESCRIPTION_MAX_LENGTH
+    ) {
+      return null
+    }
+
+    return { name, description }
+  }
+
+  private static getAgentSkillFrontmatterFromPath(
+    skillPath: string
+  ): AgentSkillFrontmatter | null {
+    const skillMarkdownPath = path.join(skillPath, AGENT_SKILL_FILENAME)
+
+    if (!fs.existsSync(skillMarkdownPath)) {
+      return null
+    }
+
+    return this.parseAgentSkillFrontmatter(
+      fs.readFileSync(skillMarkdownPath, 'utf8')
+    )
+  }
+
   /**
-   * List all skill folders
+   * List all skill folders, including disabled skills.
    */
-  public static listSkillFoldersSync(): string[] {
+  public static listAllSkillFoldersSync(): string[] {
     const skillFolders = new Set<string>()
 
-    for (const skillsPath of [SKILLS_PATH, PROFILE_SKILLS_PATH]) {
+    for (const skillsPath of this.getNativeSkillRootPaths()) {
       if (!fs.existsSync(skillsPath)) {
         continue
       }
 
       for (const folder of fs.readdirSync(skillsPath)) {
+        const skillConfigPath = path.join(
+          skillsPath,
+          folder,
+          SKILL_CONFIG_FILENAME
+        )
+
         if (
           folder.endsWith(SKILL_NAME_SUFFIX) &&
-          !ProfileHelper.isSkillDisabled(folder)
+          fs.existsSync(skillConfigPath)
         ) {
           skillFolders.add(folder)
         }
@@ -89,8 +227,183 @@ export class SkillDomainHelper {
     return [...skillFolders].sort()
   }
 
+  /**
+   * List enabled skill folders.
+   */
+  public static listSkillFoldersSync(): string[] {
+    return this.listAllSkillFoldersSync().filter(
+      (folder) => !ProfileHelper.isSkillDisabled(folder)
+    )
+  }
+
   public static async listSkillFolders(): Promise<string[]> {
     return this.listSkillFoldersSync()
+  }
+
+  /**
+   * List all native and Agent Skill descriptors, including disabled skills.
+   * Profile-installed skills override built-in skills with the same ID.
+   */
+  public static listAllSkillDescriptorsSync(): SkillDescriptor[] {
+    const descriptors = new Map<string, SkillDescriptor>()
+
+    for (const skillsPath of this.getNativeSkillRootPaths()) {
+      if (!fs.existsSync(skillsPath)) {
+        continue
+      }
+
+      for (const folder of fs.readdirSync(skillsPath)) {
+        const skillPath = path.join(skillsPath, folder)
+
+        if (!fs.statSync(skillPath).isDirectory()) {
+          continue
+        }
+
+        const skillConfigPath = path.join(skillPath, SKILL_CONFIG_FILENAME)
+        if (fs.existsSync(skillConfigPath)) {
+          try {
+            const skillConfig = JSON.parse(
+              fs.readFileSync(skillConfigPath, 'utf8')
+            ) as SkillSchema
+
+            descriptors.set(folder, {
+              id: folder,
+              commandName: this.getSkillCommandName(folder),
+              name: skillConfig.name,
+              description: skillConfig.description,
+              iconName: skillConfig.icon_name,
+              version: skillConfig.version,
+              format: SkillFormat.LeonNative,
+              path: skillPath
+            })
+          } catch {
+            continue
+          }
+
+          continue
+        }
+      }
+    }
+
+    for (const skillsPath of this.getAgentSkillRootPaths()) {
+      if (!fs.existsSync(skillsPath)) {
+        continue
+      }
+
+      for (const folder of fs.readdirSync(skillsPath)) {
+        const skillPath = path.join(skillsPath, folder)
+
+        if (!fs.statSync(skillPath).isDirectory()) {
+          continue
+        }
+
+        const frontmatter = this.getAgentSkillFrontmatterFromPath(skillPath)
+
+        if (!frontmatter) {
+          continue
+        }
+
+        descriptors.set(frontmatter.name, {
+          id: frontmatter.name,
+          commandName: frontmatter.name,
+          name: frontmatter.name,
+          description: frontmatter.description,
+          iconName: AGENT_SKILL_ICON_NAME,
+          version: AGENT_SKILL_VERSION,
+          format: SkillFormat.AgentSkill,
+          path: skillPath
+        })
+      }
+    }
+
+    return [...descriptors.values()].sort((firstDescriptor, secondDescriptor) =>
+      firstDescriptor.commandName.localeCompare(secondDescriptor.commandName)
+    )
+  }
+
+  /**
+   * List enabled native and Agent Skill descriptors.
+   */
+  public static listSkillDescriptorsSync(): SkillDescriptor[] {
+    return this.listAllSkillDescriptorsSync().filter(
+      (descriptor) => !ProfileHelper.isSkillDisabled(descriptor.id)
+    )
+  }
+
+  /**
+   * Resolve a skill descriptor by canonical ID.
+   * @param skillId Native skill folder name or Agent Skill frontmatter name
+   */
+  public static getSkillDescriptorSync(
+    skillId: string,
+    options?: SkillLookupOptions
+  ): SkillDescriptor | null {
+    const descriptors = options?.includeDisabled
+      ? this.listAllSkillDescriptorsSync()
+      : this.listSkillDescriptorsSync()
+
+    return descriptors.find((descriptor) => descriptor.id === skillId) || null
+  }
+
+  /**
+   * List enabled Agent Skill discovery metadata for the agent loop.
+   */
+  public static listAgentSkillFriendlyPromptsSync(): string[] {
+    return this.listSkillDescriptorsSync()
+      .filter((descriptor) => descriptor.format === SkillFormat.AgentSkill)
+      .map(
+        (descriptor) =>
+          `${descriptor.id}: ${descriptor.description} (SKILL.md: ${path.join(
+            descriptor.path,
+            AGENT_SKILL_FILENAME
+          )})`
+      )
+      .sort()
+  }
+
+  /**
+   * Build Agent Skill discovery metadata for agent prompts.
+   */
+  public static getAgentSkillCatalogContentSync(): string {
+    const friendlyPrompts = this.listAgentSkillFriendlyPromptsSync()
+
+    if (friendlyPrompts.length === 0) {
+      return 'No Agent Skills are installed.'
+    }
+
+    return friendlyPrompts
+      .map((friendlyPrompt, index) => `${index + 1}. ${friendlyPrompt}`)
+      .join('\n')
+  }
+
+  /**
+   * Load the full Agent Skill instructions for execution.
+   * @param skillId Agent Skill frontmatter name
+   */
+  public static async getAgentSkillExecutionContext(
+    skillId: string
+  ): Promise<AgentSkillExecutionContext | null> {
+    const descriptor = this.getSkillDescriptorSync(skillId)
+
+    if (!descriptor || descriptor.format !== SkillFormat.AgentSkill) {
+      return null
+    }
+
+    const skillPath = path.join(descriptor.path, AGENT_SKILL_FILENAME)
+    const instructions = (await fs.promises.readFile(skillPath, 'utf8')).trim()
+
+    if (!instructions) {
+      return null
+    }
+
+    return {
+      id: descriptor.id,
+      name: descriptor.name,
+      description: descriptor.description,
+      rootPath: descriptor.path,
+      skillPath,
+      instructions
+    }
   }
 
   /**
@@ -100,9 +413,13 @@ export class SkillDomainHelper {
    * @param skillName Skill name to get configuration for
    */
   public static async getNewSkillConfig(
-    skillName: SkillSchema['name']
+    skillName: SkillSchema['name'],
+    options?: SkillLookupOptions
   ): Promise<SkillSchema | null> {
-    const skillConfigPath = SkillDomainHelper.getNewSkillConfigPath(skillName)
+    const skillConfigPath = SkillDomainHelper.getNewSkillConfigPath(
+      skillName,
+      options
+    )
 
     if (!skillConfigPath) {
       return null
@@ -114,9 +431,13 @@ export class SkillDomainHelper {
   }
 
   public static getNewSkillConfigSync(
-    skillName: SkillSchema['name']
+    skillName: SkillSchema['name'],
+    options?: SkillLookupOptions
   ): SkillSchema | null {
-    const skillConfigPath = SkillDomainHelper.getNewSkillConfigPath(skillName)
+    const skillConfigPath = SkillDomainHelper.getNewSkillConfigPath(
+      skillName,
+      options
+    )
 
     if (!skillConfigPath) {
       return null
@@ -132,9 +453,10 @@ export class SkillDomainHelper {
    * @param skillName Skill name to get configuration for
    */
   public static getNewSkillConfigPath(
-    skillName: SkillSchema['name']
+    skillName: SkillSchema['name'],
+    options?: SkillLookupOptions
   ): string | null {
-    const skillPath = this.resolveSkillPath(skillName)
+    const skillPath = this.resolveSkillPath(skillName, options)
 
     if (!skillPath) {
       return null
@@ -154,12 +476,15 @@ export class SkillDomainHelper {
    * Profile-installed skills override built-in skills with the same ID.
    * @param skillName Skill name to resolve
    */
-  public static resolveSkillPath(skillName: SkillSchema['name']): string | null {
-    if (ProfileHelper.isSkillDisabled(skillName)) {
+  public static resolveSkillPath(
+    skillName: SkillSchema['name'],
+    options?: SkillLookupOptions
+  ): string | null {
+    if (!options?.includeDisabled && ProfileHelper.isSkillDisabled(skillName)) {
       return null
     }
 
-    for (const skillsPath of [PROFILE_SKILLS_PATH, SKILLS_PATH]) {
+    for (const skillsPath of this.getProfileFirstNativeSkillRootPaths()) {
       const skillPath = path.join(skillsPath, skillName)
       const skillConfigPath = path.join(skillPath, 'skill.json')
 
@@ -169,47 +494,6 @@ export class SkillDomainHelper {
     }
 
     return null
-  }
-
-  /**
-   * Get skill guidance path (SKILL.md)
-   * @param skillName Skill name to get guidance path from
-   */
-  public static getSkillGuidancePath(
-    skillName: SkillSchema['name']
-  ): string | null {
-    const skillPath = this.resolveSkillPath(skillName)
-
-    if (!skillPath) {
-      return null
-    }
-
-    const skillGuidancePath = path.join(skillPath, 'SKILL.md')
-
-    if (!fs.existsSync(skillGuidancePath)) {
-      return null
-    }
-
-    return skillGuidancePath
-  }
-
-  /**
-   * Get skill guidance (SKILL.md)
-   * @param skillName Skill name to get guidance for
-   */
-  public static async getSkillGuidance(
-    skillName: SkillSchema['name']
-  ): Promise<string | null> {
-    const skillGuidancePath = SkillDomainHelper.getSkillGuidancePath(skillName)
-
-    if (!skillGuidancePath) {
-      return null
-    }
-
-    const guidance = await fs.promises.readFile(skillGuidancePath, 'utf8')
-    const trimmedGuidance = guidance.trim()
-
-    return trimmedGuidance === '' ? null : trimmedGuidance
   }
 
   /**
@@ -422,7 +706,12 @@ export class SkillDomainHelper {
   ): Promise<Record<string, unknown> | null> {
     const normalizedSkillName = this.normalizeSkillName(skill)
     const skillMemoryCandidates = [
-      path.join(PROFILE_SKILLS_PATH, normalizedSkillName, 'memory', `${memory}.json`)
+      path.join(
+        PROFILE_NATIVE_SKILLS_PATH,
+        normalizedSkillName,
+        'memory',
+        `${memory}.json`
+      )
     ]
     const skillMemoryPath = skillMemoryCandidates.find((candidate) =>
       fs.existsSync(candidate)

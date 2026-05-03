@@ -1,0 +1,25 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Is It Down",
+  "icon_name": "wifi-off-line",
+  "bridge": "python",
+  "version": "1.0.0",
+  "description": "Ping domain names and gives the online state.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "run": {
+      "type": "logic",
+      "description": "Check whether a website or domain name is reachable.",
+      "parameters": {
+        "domain": {
+          "type": "string",
+          "description": "The website domain or URL to test, for example github.com."
+        }
+      }
+    }
+  }
+}

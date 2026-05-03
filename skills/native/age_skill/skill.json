@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Age",
+  "icon_name": "cake-2-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Leon tells his age.",
+  "author": {
+    "name": "Théo LUDWIG",
+    "email": "contact@theoludwig.fr",
+    "url": "https://theoludwig.fr"
+  },
+  "actions": {
+    "run": {
+      "type": "logic",
+      "description": "Tell Leon's age and creation date."
+    }
+  }
+}

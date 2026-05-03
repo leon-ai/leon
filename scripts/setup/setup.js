@@ -8,9 +8,11 @@ import {
   LEON_TOOLKITS_PATH,
   MODELS_PATH,
   PROFILE_CONTEXT_PATH,
+  PROFILE_AGENT_SKILLS_PATH,
   PROFILE_LOGS_PATH,
   PROFILE_MEMORY_PATH,
   PROFILE_DISABLED_PATH,
+  PROFILE_NATIVE_SKILLS_PATH,
   PROFILE_SKILLS_PATH,
   PROFILE_TOOLS_PATH,
   TMP_PATH,
@@ -80,6 +82,8 @@ async function ensureLeonHomeStructure() {
     fs.promises.mkdir(PROFILE_MEMORY_PATH, { recursive: true }),
     fs.promises.mkdir(PROFILE_LOGS_PATH, { recursive: true }),
     fs.promises.mkdir(PROFILE_SKILLS_PATH, { recursive: true }),
+    fs.promises.mkdir(PROFILE_NATIVE_SKILLS_PATH, { recursive: true }),
+    fs.promises.mkdir(PROFILE_AGENT_SKILLS_PATH, { recursive: true }),
     fs.promises.mkdir(PROFILE_TOOLS_PATH, { recursive: true })
   ])
 

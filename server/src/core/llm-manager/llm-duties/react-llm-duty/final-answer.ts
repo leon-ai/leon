@@ -165,6 +165,15 @@ ${FORMATTING_RULES}`
         candidateAnswer = textResult.output.trim()
       }
 
+      if (!candidateAnswer && !textResult && handoffSignal?.draft.trim()) {
+        LogHelper.title(`${DUTY_NAME} / final_answer`)
+        LogHelper.warning(
+          'Final answer synthesis failed; using the phase handoff draft.'
+        )
+
+        return handoffSignal.draft.trim()
+      }
+
       if (!candidateAnswer) {
         const answerTool: OpenAITool = {
           type: 'function',

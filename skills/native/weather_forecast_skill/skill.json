@@ -1,0 +1,37 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Weather Forecast",
+  "icon_name": "sun-cloudy-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Provide quick weather conditions for any location.",
+  "author": {
+    "name": "Leon"
+  },
+  "actions": {
+    "get_forecast": {
+      "type": "logic",
+      "description": "Provide temperature, wind, and humidity for a location.",
+      "parameters": {
+        "location": {
+          "type": "string",
+          "description": "The city, region, or place to check."
+        },
+        "start_date": {
+          "type": "string",
+          "description": "Start date in YYYY-MM-DD format."
+        },
+        "end_date": {
+          "type": "string",
+          "description": "End date in YYYY-MM-DD format."
+        },
+        "units": {
+          "type": "string",
+          "enum": ["metric", "imperial"],
+          "description": "Measurement system for temperature and wind."
+        }
+      },
+      "optional_parameters": ["start_date", "end_date", "units"]
+    }
+  }
+}

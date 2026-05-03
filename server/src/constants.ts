@@ -73,6 +73,16 @@ export const PNPM_INSTALL_PATH = path.join(BIN_PATH, 'pnpm')
 export const PYTHON_INSTALL_PATH = path.join(BIN_PATH, 'python')
 export const UV_INSTALL_PATH = path.join(BIN_PATH, 'uv')
 export const SKILLS_PATH = path.join(CODEBASE_PATH, 'skills')
+export const NATIVE_SKILLS_PATH = path.join(SKILLS_PATH, 'native')
+export const AGENT_SKILLS_PATH = path.join(SKILLS_PATH, 'agent')
+export const PROFILE_NATIVE_SKILLS_PATH = path.join(
+  PROFILE_SKILLS_PATH,
+  'native'
+)
+export const PROFILE_AGENT_SKILLS_PATH = path.join(
+  PROFILE_SKILLS_PATH,
+  'agent'
+)
 export const TOOLS_PATH = path.join(CODEBASE_PATH, 'tools')
 export const GLOBAL_CORE_PATH = path.join(CODEBASE_PATH, 'core')
 export const GLOBAL_DATA_PATH = path.join(GLOBAL_CORE_PATH, 'data')

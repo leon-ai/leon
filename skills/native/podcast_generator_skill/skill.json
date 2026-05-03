@@ -1,0 +1,28 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Podcast Generator",
+  "icon_name": "mic-2-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Generate podcast conversations between two people on any topic with research.",
+  "author": {
+    "name": "Leon"
+  },
+  "actions": {
+    "generate": {
+      "type": "logic",
+      "description": "Generate a podcast conversation on any topic with customizable duration and research.",
+      "parameters": {
+        "topic": {
+          "type": "string",
+          "description": "The topic to discuss in the podcast episode."
+        },
+        "duration": {
+          "type": "number",
+          "description": "Duration in minutes (1-30 minutes)."
+        }
+      },
+      "optional_parameters": ["duration"]
+    }
+  }
+}

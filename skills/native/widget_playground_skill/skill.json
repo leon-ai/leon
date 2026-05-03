@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Widget Playground",
+  "icon_name": "layout-grid-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Used to develop widgets. Will be deleted afterwards.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "run": {
+      "type": "logic",
+      "description": "Render the widget playground test widget."
+    }
+  }
+}

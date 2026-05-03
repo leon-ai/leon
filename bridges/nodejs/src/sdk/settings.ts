@@ -1,7 +1,7 @@
 import path from 'node:path'
 import fs from 'node:fs'
 
-import { PROFILE_SKILLS_PATH, SKILL_PATH } from '@bridge/constants'
+import { PROFILE_NATIVE_SKILLS_PATH, SKILL_PATH } from '@bridge/constants'
 
 export class Settings<T extends Record<string, unknown>> {
   private readonly settingsPath: string
@@ -9,7 +9,7 @@ export class Settings<T extends Record<string, unknown>> {
 
   constructor() {
     this.settingsPath = path.join(
-      PROFILE_SKILLS_PATH,
+      PROFILE_NATIVE_SKILLS_PATH,
       path.basename(SKILL_PATH),
       'settings.json'
     )

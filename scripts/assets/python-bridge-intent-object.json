@@ -8,9 +8,9 @@
     "name": "Guess the Number",
     "bridge": "python",
     "version": "1.0.0",
-    "flow": []
+    "workflow": []
   },
-  "skill_config_path": "skills/guess_the_number_skill/skill.json",
+  "skill_config_path": "skills/native/guess_the_number_skill/skill.json",
   "utterance": "my guess is 42",
   "entities": [],
   "action_arguments": {

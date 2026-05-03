@@ -1416,7 +1416,7 @@ export default class PulseManager {
         userMessage: string
         assistantMessage: string
         sentAt: number
-        route: 'react' | 'workflow' | 'pulse'
+        route: 'react' | 'controlled' | 'pulse'
         toolExecutions?: Array<{
           functionName: string
           status: 'success' | 'error'
@@ -1434,7 +1434,7 @@ export default class PulseManager {
         userMessage: string
         assistantMessage: string
         sentAt?: number
-        route: 'react' | 'workflow' | 'pulse'
+        route: 'react' | 'controlled' | 'pulse'
         finalIntent?: 'answer' | 'clarification' | 'cancelled' | 'blocked' | 'error'
         toolExecutions?: Array<{
           functionName: string

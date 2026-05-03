@@ -20,7 +20,7 @@ class SkillConfig(TypedDict):
     name: str
     bridge: Union[Literal['python'], Literal['nodejs']]
     version: str
-    flow: list[str]
+    workflow: list[str]
 
 
 class ExtraContext(TypedDict):

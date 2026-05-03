@@ -1507,9 +1507,8 @@ class OpenCodeTool(BaseTool):
         context += "## Step 2: Read and Understand Tool Implementations\n\n"
         context += "**CRITICAL**: You MUST read the actual source code of tools before using them!\n\n"
         file_ext = ".ts" if bridge == "nodejs" else ".py"
-        bridge_path = "nodejs" if bridge == "nodejs" else "python"
         context += f"For EACH tool you plan to use:\n"
-        context += f"1. **Read the tool file** at `bridges/{bridge_path}/src/sdk/tools/{{tool-name}}-tool{file_ext}`\n"
+        context += f"1. **Read the tool source** under `tools/{{toolkit-name}}/{{tool-name}}/src/{bridge}/{{tool-name}}-tool{file_ext}`\n"
         context += (
             "2. **Understand ALL available methods** - Don't assume, READ the code\n"
         )
