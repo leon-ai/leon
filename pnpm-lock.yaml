@@ -42,8 +42,8 @@ importers:
         specifier: 5.2.5
         version: 5.2.5
       '@openrouter/ai-sdk-provider':
-        specifier: 2.5.1
-        version: 2.5.1(ai@6.0.158(zod@4.3.6))(zod@4.3.6)
+        specifier: 2.9.0
+        version: 2.9.0(ai@6.0.158(zod@4.3.6))(zod@4.3.6)
       '@segment/ajv-human-errors':
         specifier: 2.16.0
         version: 2.16.0(ajv@8.18.0)
@@ -943,8 +943,8 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@openrouter/ai-sdk-provider@2.5.1':
-    resolution: {integrity: sha512-r1fJL1Cb3gQDa2MpWH/sfx1BsEW0uzlRriJM6eihaKqbtKDmZoBisF32VcVaQYassighX7NGCkF68EsrZA43uQ==}
+  '@openrouter/ai-sdk-provider@2.9.0':
+    resolution: {integrity: sha512-Seva+NCa0WUQnJIUE5GzHsUv1WTIeyqwz0ELl2VtS6NP+eF+77yCXGFVOMbvoCM7QMjlnhv7931e89R+8pJdcQ==}
     engines: {node: '>=18'}
     peerDependencies:
       ai: ^6.0.0
@@ -5300,7 +5300,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.18.0
 
-  '@openrouter/ai-sdk-provider@2.5.1(ai@6.0.158(zod@4.3.6))(zod@4.3.6)':
+  '@openrouter/ai-sdk-provider@2.9.0(ai@6.0.158(zod@4.3.6))(zod@4.3.6)':
     dependencies:
       ai: 6.0.158(zod@4.3.6)
       zod: 4.3.6
