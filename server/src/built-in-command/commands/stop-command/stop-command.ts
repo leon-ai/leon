@@ -2,8 +2,8 @@ import {
   BuiltInCommand,
   type BuiltInCommandExecutionContext,
   type BuiltInCommandExecutionResult
-} from '@/commands/built-in-command'
-import { createListResult } from '@/commands/built-in-command-renderer'
+} from '@/built-in-command/built-in-command'
+import { createListResult } from '@/built-in-command/built-in-command-renderer'
 
 export class StopCommand extends BuiltInCommand {
   protected override description = 'Stop the current Leon server.'

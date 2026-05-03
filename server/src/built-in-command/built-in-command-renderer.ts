@@ -3,7 +3,7 @@ import type {
   BuiltInCommandRenderListItem,
   BuiltInCommandResult,
   BuiltInCommandResultTone
-} from '@/commands/built-in-command'
+} from '@/built-in-command/built-in-command'
 
 export type BuiltInCommandRenderRuntime = 'ui' | 'terminal'
 

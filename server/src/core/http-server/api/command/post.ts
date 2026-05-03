@@ -2,7 +2,7 @@ import type { FastifyPluginAsync, FastifySchema } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import type { Static } from '@sinclair/typebox'
 
-import { BUILT_IN_COMMAND_MANAGER } from '@/commands'
+import { BUILT_IN_COMMAND_MANAGER } from '@/built-in-command'
 import type { APIOptions } from '@/core/http-server/http-server'
 
 const COMMAND_MODES = ['autocomplete', 'execute'] as const

@@ -17,8 +17,8 @@ import {
   BuiltInCommand,
   type BuiltInCommandExecutionContext,
   type BuiltInCommandExecutionResult
-} from '@/commands/built-in-command'
-import { createListResult } from '@/commands/built-in-command-renderer'
+} from '@/built-in-command/built-in-command'
+import { createListResult } from '@/built-in-command/built-in-command-renderer'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { DateHelper } from '@/helpers/date-helper'
 import { SystemHelper } from '@/helpers/system-helper'

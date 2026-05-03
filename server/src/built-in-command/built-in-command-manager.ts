@@ -7,8 +7,8 @@ import {
   type BuiltInCommandAutocompleteItem,
   type BuiltInCommandExecutionResult,
   type BuiltInCommandSession
-} from '@/commands/built-in-command'
-import { createListResult } from '@/commands/built-in-command-renderer'
+} from '@/built-in-command/built-in-command'
+import { createListResult } from '@/built-in-command/built-in-command-renderer'
 
 const COMMAND_PREFIX = '/'
 const MAX_RECENT_COMMANDS = 3

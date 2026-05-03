@@ -7,8 +7,8 @@ import {
   BuiltInCommand,
   type BuiltInCommandExecutionContext,
   type BuiltInCommandExecutionResult
-} from '@/commands/built-in-command'
-import { createListResult } from '@/commands/built-in-command-renderer'
+} from '@/built-in-command/built-in-command'
+import { createListResult } from '@/built-in-command/built-in-command-renderer'
 import { LLM_DIR_PATH } from '@/constants'
 import { FileHelper } from '@/helpers/file-helper'
 
