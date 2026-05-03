@@ -81,7 +81,7 @@
     "@fastify/static": "9.1.0",
     "@ffprobe-installer/ffprobe": "2.1.2",
     "@fontsource/source-sans-pro": "5.2.5",
-    "@openrouter/ai-sdk-provider": "2.5.1",
+    "@openrouter/ai-sdk-provider": "2.9.0",
     "@segment/ajv-human-errors": "2.16.0",
     "@sinclair/typebox": "0.31.23",
     "@tobilu/qmd": "2.1.0",
