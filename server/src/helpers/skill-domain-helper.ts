@@ -322,12 +322,140 @@ export class SkillDomainHelper {
   }
 
   /**
+   * List only skills installed in the active profile.
+   */
+  public static listProfileSkillDescriptorsSync(): SkillDescriptor[] {
+    const descriptors = new Map<string, SkillDescriptor>()
+
+    if (fs.existsSync(PROFILE_NATIVE_SKILLS_PATH)) {
+      for (const folder of fs.readdirSync(PROFILE_NATIVE_SKILLS_PATH)) {
+        const skillPath = path.join(PROFILE_NATIVE_SKILLS_PATH, folder)
+
+        if (!fs.statSync(skillPath).isDirectory()) {
+          continue
+        }
+
+        const skillConfigPath = path.join(skillPath, SKILL_CONFIG_FILENAME)
+        if (!fs.existsSync(skillConfigPath)) {
+          continue
+        }
+
+        try {
+          const skillConfig = JSON.parse(
+            fs.readFileSync(skillConfigPath, 'utf8')
+          ) as SkillSchema
+
+          descriptors.set(folder, {
+            id: folder,
+            commandName: this.getSkillCommandName(folder),
+            name: skillConfig.name,
+            description: skillConfig.description,
+            iconName: skillConfig.icon_name,
+            version: skillConfig.version,
+            format: SkillFormat.LeonNative,
+            path: skillPath
+          })
+        } catch {
+          continue
+        }
+      }
+    }
+
+    if (fs.existsSync(PROFILE_AGENT_SKILLS_PATH)) {
+      for (const folder of fs.readdirSync(PROFILE_AGENT_SKILLS_PATH)) {
+        const skillPath = path.join(PROFILE_AGENT_SKILLS_PATH, folder)
+
+        if (!fs.statSync(skillPath).isDirectory()) {
+          continue
+        }
+
+        const frontmatter = this.getAgentSkillFrontmatterFromPath(skillPath)
+
+        if (!frontmatter) {
+          continue
+        }
+
+        descriptors.set(frontmatter.name, {
+          id: frontmatter.name,
+          commandName: frontmatter.name,
+          name: frontmatter.name,
+          description: frontmatter.description,
+          iconName: AGENT_SKILL_ICON_NAME,
+          version: AGENT_SKILL_VERSION,
+          format: SkillFormat.AgentSkill,
+          path: skillPath
+        })
+      }
+    }
+
+    return [...descriptors.values()].sort((firstDescriptor, secondDescriptor) =>
+      firstDescriptor.commandName.localeCompare(secondDescriptor.commandName)
+    )
+  }
+
+  /**
+   * Remove a skill installed in the active profile.
+   */
+  public static async removeProfileSkill(
+    skillId: string
+  ): Promise<SkillDescriptor | null> {
+    const descriptor =
+      this.listProfileSkillDescriptorsSync().find(
+        (profileSkillDescriptor) => profileSkillDescriptor.id === skillId
+      ) || null
+
+    if (!descriptor) {
+      return null
+    }
+
+    const profileSkillRootPath =
+      descriptor.format === SkillFormat.LeonNative
+        ? PROFILE_NATIVE_SKILLS_PATH
+        : PROFILE_AGENT_SKILLS_PATH
+
+    if (!this.isSafeProfileSkillPath(descriptor.path, profileSkillRootPath)) {
+      throw new Error(
+        `Refusing to remove skill outside the active profile: ${descriptor.path}`
+      )
+    }
+
+    await fs.promises.rm(descriptor.path, {
+      recursive: true,
+      force: false
+    })
+
+    return descriptor
+  }
+
+  /**
    * List enabled native and Agent Skill descriptors.
    */
   public static listSkillDescriptorsSync(): SkillDescriptor[] {
     return this.listAllSkillDescriptorsSync().filter(
       (descriptor) => !ProfileHelper.isSkillDisabled(descriptor.id)
     )
+  }
+
+  private static isSafeProfileSkillPath(
+    candidatePath: string,
+    profileSkillRootPath: string
+  ): boolean {
+    try {
+      const realCandidatePath = fs.realpathSync(candidatePath)
+      const realProfileSkillRootPath = fs.realpathSync(profileSkillRootPath)
+      const relativePath = path.relative(
+        realProfileSkillRootPath,
+        realCandidatePath
+      )
+
+      return (
+        relativePath.length > 0 &&
+        !relativePath.startsWith('..') &&
+        !path.isAbsolute(relativePath)
+      )
+    } catch {
+      return false
+    }
   }
 
   /**

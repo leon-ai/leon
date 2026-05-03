@@ -1,7 +1,7 @@
 import readline from 'node:readline/promises'
 import { stdin as input, stdout as output } from 'node:process'
 
-import { BUILT_IN_COMMAND_MANAGER } from '@/commands'
+import { BUILT_IN_COMMAND_MANAGER } from '@/built-in-command'
 
 const TERMINAL_ARG_START_INDEX = 2
 const COMMAND_ARG_DELIMITER = ' '
