@@ -8,9 +8,9 @@
     "name": "Weather Forecast",
     "bridge": "nodejs",
     "version": "1.0.0",
-    "flow": []
+    "workflow": []
   },
-  "skill_config_path": "skills/weather_forecast_skill/skill.json",
+  "skill_config_path": "skills/native/weather_forecast_skill/skill.json",
   "utterance": "Is github.com down?",
   "entities": [],
   "action_arguments": {

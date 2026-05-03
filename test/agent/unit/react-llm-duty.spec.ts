@@ -118,6 +118,8 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty/plan-widget', () => ({
 }))
 
 let ReActLLMDuty: typeof import('@/core/llm-manager/llm-duties/react-llm-duty').ReActLLMDuty
+let runFinalAnswerPhase: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/final-answer').runFinalAnswerPhase
+let runPlanningPhaseDirect: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/planning').runPlanningPhase
 
 function createMessageLog(
   who: 'owner' | 'leon',
@@ -186,6 +188,12 @@ async function createDuty(input: string): Promise<InstanceType<typeof ReActLLMDu
 
 beforeAll(async () => {
   ;({ ReActLLMDuty } = await import('@/core/llm-manager/llm-duties/react-llm-duty'))
+  ;({ runFinalAnswerPhase } = await import(
+    '@/core/llm-manager/llm-duties/react-llm-duty/final-answer'
+  ))
+  ;({ runPlanningPhase: runPlanningPhaseDirect } = await import(
+    '@/core/llm-manager/llm-duties/react-llm-duty/planning'
+  ))
 })
 
 beforeEach(() => {
@@ -206,6 +214,93 @@ beforeEach(() => {
 })
 
 describe('ReActLLMDuty agent loop', () => {
+  it('skips Agent Skill selection when no skill name is mentioned', async () => {
+    const callLLMWithTools = vi.fn(async () => ({
+      toolCall: {
+        functionName: 'create_plan',
+        arguments: JSON.stringify({
+          type: 'final',
+          answer: 'Acknowledge the thanks.',
+          intent: 'answer'
+        })
+      }
+    }))
+    const caller = {
+      callLLM: vi.fn(),
+      callLLMText: vi.fn(),
+      callLLMWithTools,
+      supportsNativeTools: true,
+      input: 'Awesome, thanks',
+      history: [],
+      agentSkillCatalog:
+        '1. tiny-web-crawler: Crawl from starting web pages, fetch readable content, search within pages, and follow relevant links.',
+      setAgentSkillContext: vi.fn(),
+      getAgentSkillContext: vi.fn(),
+      getContextFileContent: vi.fn(() => null),
+      getContextManifest: vi.fn(() => ''),
+      getSelfModelSnapshot: vi.fn(() => ''),
+      consumeProviderErrorMessage: vi.fn(() => null)
+    }
+
+    const result = await runPlanningPhaseDirect(
+      caller,
+      {
+        text: 'mock catalog',
+        mode: 'function'
+      },
+      []
+    )
+
+    expect(callLLMWithTools).toHaveBeenCalledOnce()
+    expect(callLLMWithTools.mock.calls[0]?.[2]?.[0]?.function.name).toBe(
+      'create_plan'
+    )
+    expect(result).toEqual({
+      type: 'handoff',
+      signal: {
+        intent: 'answer',
+        draft: 'Acknowledge the thanks.',
+        source: 'planning'
+      }
+    })
+  })
+
+  it('uses the handoff draft when final answer synthesis fails', async () => {
+    const callLLMText = vi.fn(async () => null)
+    const callLLMWithTools = vi.fn()
+    const caller = {
+      callLLM: vi.fn(),
+      callLLMText,
+      callLLMWithTools,
+      supportsNativeTools: true,
+      input: 'Summarize the completed research.',
+      history: [],
+      agentSkillCatalog: '',
+      setAgentSkillContext: vi.fn(),
+      getAgentSkillContext: vi.fn(),
+      getContextFileContent: vi.fn(() => null),
+      getContextManifest: vi.fn(() => ''),
+      getSelfModelSnapshot: vi.fn(() => ''),
+      consumeProviderErrorMessage: vi.fn(() => null)
+    }
+
+    const result = await runFinalAnswerPhase(
+      caller,
+      [],
+      {
+        intent: 'answer',
+        draft: 'Research complete. The useful summary is already here.',
+        source: 'execution'
+      }
+    )
+
+    expect(result).toBe(
+      'Research complete. The useful summary is already here.'
+    )
+    expect(callLLMText).toHaveBeenCalledOnce()
+    expect(callLLMWithTools).not.toHaveBeenCalled()
+  })
+
   it('finalizes directly when planning returns a handoff', async () => {
     logUnitProgress('planning handoff scenario', {
       input: 'Hi there, what do you reply if I tell you "ping"?',
@@ -291,6 +386,54 @@ describe('ReActLLMDuty agent loop', () => {
     ])
   })
 
+  it('keeps a selected Agent Skill active during execution', async () => {
+    const agentSkillContext = {
+      id: 'tiny-web-crawler',
+      name: 'tiny-web-crawler',
+      description: 'Fetch and crawl web pages.',
+      rootPath: '/tmp/tiny-web-crawler',
+      skillPath: '/tmp/tiny-web-crawler/SKILL.md',
+      instructions: '# Tiny Web Crawler'
+    }
+
+    phaseMocks.runPlanningPhase.mockImplementation(async (caller) => {
+      caller.setAgentSkillContext(agentSkillContext)
+
+      return {
+        type: 'plan',
+        steps: [
+          {
+            function: 'operating_system_control.bash.executeBashCommand',
+            label: 'Fetch target page'
+          }
+        ],
+        summary: 'Fetching the target page...'
+      }
+    })
+    phaseMocks.runExecutionStep.mockImplementation(async (caller) => {
+      expect(caller.agentSkillContext).toEqual(agentSkillContext)
+
+      return {
+        type: 'executed',
+        execution: {
+          function: 'operating_system_control.bash.executeBashCommand',
+          status: 'success',
+          observation: 'Fetched with skill script.',
+          stepLabel: 'Fetch target page'
+        }
+      }
+    })
+    phaseMocks.runFinalAnswerPhase.mockResolvedValue('Fetched with skill script.')
+
+    const duty = await createDuty(
+      'Use the tiny-web-crawler skill to inspect a page.'
+    )
+    const result = await duty.execute()
+
+    expect(phaseMocks.runExecutionStep).toHaveBeenCalledOnce()
+    expect(result?.output).toBe('Fetched with skill script.')
+  })
+
   it('short-circuits to final synthesis when a tool returns a handoff signal', async () => {
     // This covers the path where a tool result already contains the semantic
     // handoff Leon should forward into the final-answer phase.
@@ -354,6 +497,93 @@ describe('ReActLLMDuty agent loop', () => {
         requestedToolInput: '{"command":"ls -1"}'
       }
     ])
+  })
+
+  it('pauses for clarification during execution and resumes pending steps', async () => {
+    interface SavedContinuationState {
+      originalInput: string
+      clarificationQuestion: string
+      pendingSteps: Array<{ function: string, label: string }>
+    }
+
+    let savedContinuation: SavedContinuationState | null = null
+    const fileCreationStep = {
+      function: 'operating_system_control.bash.executeBashCommand',
+      label: 'Create file'
+    }
+
+    phaseMocks.runPlanningPhase.mockResolvedValue({
+      type: 'plan',
+      steps: [fileCreationStep],
+      summary: 'Preparing the file creation...'
+    })
+    phaseMocks.runExecutionStep
+      .mockResolvedValueOnce({
+        type: 'handoff',
+        signal: {
+          intent: 'clarification',
+          draft: 'What filename should I use?',
+          source: 'execution'
+        }
+      })
+      .mockImplementationOnce(async (caller, currentStep) => {
+        expect(caller.input).toContain(
+          'Previous clarification request: "What filename should I use?"'
+        )
+        expect(caller.input).toContain('Clarification reply: "test.txt"')
+        expect(currentStep).toEqual(fileCreationStep)
+
+        return {
+          type: 'executed',
+          execution: {
+            function: 'operating_system_control.bash.executeBashCommand',
+            status: 'success',
+            observation: 'Created /home/louis/Downloads/test.txt',
+            stepLabel: 'Create file',
+            requestedToolInput: '{"command":"touch /home/louis/Downloads/test.txt"}'
+          }
+        }
+      })
+    phaseMocks.runFinalAnswerPhase
+      .mockResolvedValueOnce('What filename should I use?')
+      .mockResolvedValueOnce(
+        'Done. I created [FILE_PATH]/home/louis/Downloads/test.txt[/FILE_PATH].'
+      )
+
+    const initialDuty = await createDuty(
+      'Create a text file in Downloads, but ask me for the filename first.'
+    )
+    vi.spyOn(
+      initialDuty as never,
+      'saveExecutionContinuation' as never
+    ).mockImplementation((state: SavedContinuationState) => {
+      savedContinuation = state
+    })
+
+    const clarificationResult = await initialDuty.execute()
+
+    expect(clarificationResult?.output).toBe('What filename should I use?')
+    expect(clarificationResult?.data.finalIntent).toBe('clarification')
+    expect(savedContinuation?.pendingSteps).toEqual([fileCreationStep])
+
+    const resumeDuty = await createDuty('test.txt')
+    vi.spyOn(
+      resumeDuty as never,
+      'loadExecutionContinuation' as never
+    ).mockReturnValue(savedContinuation)
+    vi.spyOn(
+      resumeDuty as never,
+      'clearExecutionContinuation' as never
+    ).mockImplementation(() => undefined)
+
+    const resumedResult = await resumeDuty.execute()
+
+    expect(phaseMocks.runPlanningPhase).toHaveBeenCalledOnce()
+    expect(phaseMocks.runExecutionStep).toHaveBeenCalledTimes(2)
+    expect(resumedResult?.output).toBe(
+      'Done. I created [FILE_PATH]/home/louis/Downloads/test.txt[/FILE_PATH].'
+    )
+    expect(resumedResult?.data.finalIntent).toBe('answer')
   })
 
   describe('history compaction', () => {

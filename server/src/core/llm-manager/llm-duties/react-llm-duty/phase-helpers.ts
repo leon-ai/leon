@@ -3,6 +3,7 @@ import { TOOLKIT_REGISTRY } from '@/core'
 
 import { CHARS_PER_TOKEN, DUTY_NAME } from './constants'
 import type {
+  AgentSkillContext,
   ExecutionRecord,
   LLMCaller,
   PlanResult
@@ -273,6 +274,42 @@ export function buildSelfModelSection(snapshot: string): string {
   }
 
   return normalized
+}
+
+export function buildActiveAgentSkillSection(
+  agentSkillContext: AgentSkillContext | null | undefined
+): string {
+  if (!agentSkillContext) {
+    return ''
+  }
+
+  return [
+    '<active_agent_skill>',
+    `id: ${agentSkillContext.id}`,
+    `name: ${agentSkillContext.name}`,
+    `description: ${agentSkillContext.description}`,
+    `root_path: ${agentSkillContext.rootPath}`,
+    `skill_path: ${agentSkillContext.skillPath}`,
+    '',
+    agentSkillContext.instructions,
+    '</active_agent_skill>',
+    '',
+    '<active_agent_skill_policy>',
+    'This Agent Skill is the selected execution scope for the request. Follow its SKILL.md instructions throughout planning, execution, recovery, and final synthesis.',
+    'When the skill provides scripts or other resources that can perform the needed work, use those resources before any generic overlapping tool.',
+    'For script-backed Agent Skills, execute the relevant script through operating_system_control.bash.executeBashCommand from the skill root path.',
+    'Do not replace the selected Agent Skill with generic web, search, deep-research, or ad hoc scraping tools unless the skill script/resource was attempted and cannot satisfy the step.',
+    'If recovery is needed, recover by adjusting the selected Agent Skill script/resource usage first.',
+    '</active_agent_skill_policy>'
+  ].join('\n')
+}
+
+export function buildAgentSkillDiscoverySection(caller: LLMCaller): string {
+  return [
+    '<available_agent_skills>',
+    caller.agentSkillCatalog,
+    '</available_agent_skills>'
+  ].join('\n')
 }
 
 export function stripInlineToolMarkup(text: string): string {

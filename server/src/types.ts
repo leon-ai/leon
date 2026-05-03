@@ -43,8 +43,16 @@ export enum CPUArchitectures {
  */
 export enum RoutingMode {
   Smart = 'smart',
-  Workflow = 'workflow',
+  Controlled = 'controlled',
   Agent = 'agent'
+}
+
+/**
+ * Skill package format.
+ */
+export enum SkillFormat {
+  LeonNative = 'leon-native',
+  AgentSkill = 'agent-skill'
 }
 
 /**

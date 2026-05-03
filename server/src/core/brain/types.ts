@@ -67,7 +67,7 @@ export interface ActionParams {
     name: string
     bridge: SkillBridges
     version: string
-    flow: string[]
+    workflow: string[]
   }
   skill_config_path: string
   extra_context: {
@@ -90,7 +90,7 @@ export interface IntentObject {
     name: NLUProcessResult['skillConfig']['name']
     bridge: NLUProcessResult['skillConfig']['bridge']
     version: NLUProcessResult['skillConfig']['version']
-    flow: NLUProcessResult['skillConfig']['flow']
+    workflow: NLUProcessResult['skillConfig']['workflow']
   }
   skill_config_path: NLUProcessResult['skillConfigPath']
   utterance: NLUProcessResult['new']['utterance']

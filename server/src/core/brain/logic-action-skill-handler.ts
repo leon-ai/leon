@@ -417,7 +417,7 @@ export class LogicActionSkillHandler {
         name: nluProcessResult.skillConfig.name,
         bridge: nluProcessResult.skillConfig.bridge as SkillBridges,
         version: nluProcessResult.skillConfig.version,
-        flow: nluProcessResult.skillConfig.flow as string[]
+        workflow: nluProcessResult.skillConfig.workflow as string[]
       },
       skill_config_path: nluProcessResult.skillConfigPath,
       utterance: nluProcessResult.new.utterance,

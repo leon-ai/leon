@@ -36,6 +36,7 @@ import { PROFILE_LOGS_PATH } from '@/constants'
 import type { MessageLog } from '@/types'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 function getLLMProviderName(): LLMProviders {
   return CONFIG_STATE.getModelState().getAgentProvider()
@@ -70,7 +71,8 @@ import type {
   PromptLogSection,
   LLMCallOptions,
   FinalResponseSignal,
-  ReactPhase
+  ReactPhase,
+  AgentSkillContext
 } from './react-llm-duty/types'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
 import {
@@ -132,6 +134,30 @@ interface ReactExecutionContinuationPayload {
 interface PreparedReactHistory {
   messageLogs: MessageLog[]
   localChatHistory?: ChatHistoryItem[]
+}
+
+function emitAgentSkillActivityToWebApp(
+  agentSkillContext: AgentSkillContext
+): void {
+  const skillGroupId =
+    `react_agent_skill_${agentSkillContext.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+  SOCKET_SERVER.emitAnswerToChatClients({
+    answer: `Using Agent Skill: ${agentSkillContext.name}\nFollowing: ${agentSkillContext.skillPath}`,
+    isToolOutput: true,
+    toolDisplayMode: 'activity_card',
+    activityType: 'agent_skill',
+    status: 'selected',
+    toolGroupId: skillGroupId,
+    key: `agent_skill.${agentSkillContext.id}.selected`,
+    agentSkill: {
+      id: agentSkillContext.id,
+      name: agentSkillContext.name,
+      description: agentSkillContext.description,
+      rootPath: agentSkillContext.rootPath,
+      skillPath: agentSkillContext.skillPath
+    }
+  })
 }
 
 interface ReactHistoryCompactionProviderState {
@@ -221,6 +247,7 @@ export class ReActLLMDuty extends LLMDuty {
   private finalAnswerPhaseCompleted = false
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
+  private activeAgentSkillContext: AgentSkillContext | null
 
   constructor(params: ReactLLMDutyParams) {
     super()
@@ -233,6 +260,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     this.input = params.input
+    this.activeAgentSkillContext = params.agentSkill || null
     this.systemPrompt = PERSONA.getCompactDutySystemPrompt(PLAN_SYSTEM_PROMPT, {
       includePersonality: false,
       includeMood: false
@@ -346,7 +374,21 @@ export class ReActLLMDuty extends LLMDuty {
       let trackedSteps: TrackedPlanStep[] = []
       let currentStepIndex = 0
       let currentExecutingFunction: string | null = null
+      let emittedAgentSkillActivityId: string | null = null
       const caller = this.createLLMCaller(history, effectiveInput)
+      const emitActiveAgentSkillActivity = (): void => {
+        const activeAgentSkillContext = caller.agentSkillContext
+
+        if (
+          !activeAgentSkillContext ||
+          emittedAgentSkillActivityId === activeAgentSkillContext.id
+        ) {
+          return
+        }
+
+        emitAgentSkillActivityToWebApp(activeAgentSkillContext)
+        emittedAgentSkillActivityId = activeAgentSkillContext.id
+      }
       const finalizeWithPostAnswerMaintenance = async (
         finalAnswer: string,
         finalIntent: FinalResponseSignal['intent'] = 'answer'
@@ -451,6 +493,7 @@ export class ReActLLMDuty extends LLMDuty {
           history,
           updatePlanningStage
         )
+        emitActiveAgentSkillActivity()
 
         if (planResult.type === 'handoff') {
           if (hasPlanningWidget) {
@@ -1653,6 +1696,12 @@ export class ReActLLMDuty extends LLMDuty {
     history: MessageLog[],
     inputOverride?: string | object | null
   ): LLMCaller {
+    const getActiveAgentSkillContext = (): AgentSkillContext | null =>
+      this.activeAgentSkillContext
+    const setActiveAgentSkillContext = (context: AgentSkillContext): void => {
+      this.activeAgentSkillContext = context
+    }
+
     return {
       callLLM: this.callLLM.bind(this),
       callLLMText: this.callLLMText.bind(this),
@@ -1660,6 +1709,13 @@ export class ReActLLMDuty extends LLMDuty {
       supportsNativeTools: this.supportsNativeTools,
       input: inputOverride ?? this.input,
       history,
+      get agentSkillContext(): AgentSkillContext | null {
+        return getActiveAgentSkillContext()
+      },
+      agentSkillCatalog: SkillDomainHelper.getAgentSkillCatalogContentSync(),
+      setAgentSkillContext: setActiveAgentSkillContext,
+      getAgentSkillContext:
+        SkillDomainHelper.getAgentSkillExecutionContext.bind(SkillDomainHelper),
       getContextFileContent: CONTEXT_MANAGER.getContextFileContent.bind(
         CONTEXT_MANAGER
       ),

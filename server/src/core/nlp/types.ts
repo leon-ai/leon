@@ -95,7 +95,7 @@ export interface NLUProcessResult {
     name: SkillSchema['name']
     bridge: SkillSchema['bridge']
     version: SkillSchema['version']
-    flow: SkillSchema['flow']
+    workflow: SkillSchema['workflow']
   }
   localeSkillConfig: {
     variables: SkillLocaleConfigSchema['variables']

@@ -8,6 +8,7 @@ import { LLMDuties } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 interface CoreLLMDutyConfig {
   maxTokens?: number
@@ -69,6 +70,14 @@ function cloneCoreDutyConfig(): CoreLLMDuties {
         }
       : {})
   }
+}
+
+async function buildSkillListContent(): Promise<string> {
+  const friendlyPrompts = await SkillDomainHelper.listSkillFriendlyPrompts()
+
+  return friendlyPrompts
+    .map((friendlyPrompt, index) => `${index + 1}. ${friendlyPrompt}`)
+    .join('\n')
 }
 
 export default class LLMManager {
@@ -161,6 +170,15 @@ export default class LLMManager {
     )
     LogHelper.success(`LLM manager initialized with ${llmDisplay.value}`)
     LogHelper.timeEnd('LLM Manager init')
+  }
+
+  public async refreshSkillListContent(): Promise<void> {
+    const skillListContent = await buildSkillListContent()
+
+    this._skillListContent = skillListContent
+
+    LogHelper.title('LLM Manager')
+    LogHelper.success('Skill router skill list has been refreshed in memory')
   }
 
   public async loadHistory(

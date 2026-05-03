@@ -20,7 +20,7 @@ import { LogHelper } from '@/helpers/log-helper'
         'utf8'
       )
       const regex =
-        '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|scripts|server|agent mode|workflow mode|aurora|messaging app|built-in command|hotword|python tcp server|bridge\\/(python|nodejs)|tool\\/([\\w-]+)|skill\\/([\\w-]+)|provider\\/(llamacpp|sglang|openrouter|zai|openai|anthropic|moonshotai|huggingface|cerebras|groq)))?\\)?: .{1,50}'
+        '(build|BREAKING|chore|ci|docs|feat|fix|perf|refactor|style|test)(\\((web app|scripts|server|agent mode|controlled mode|aurora|messaging app|built-in command|hotword|python tcp server|bridge\\/(python|nodejs)|tool\\/([\\w-]+)|skill\\/([\\w-]+)|provider\\/(llamacpp|sglang|openrouter|zai|openai|anthropic|moonshotai|huggingface|cerebras|groq)))?\\)?: .{1,50}'
       
       if (commitMessage.match(regex) !== null) {
         LogHelper.success('Commit message validated')

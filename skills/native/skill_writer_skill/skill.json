@@ -1,0 +1,30 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Skill Writer",
+  "icon_name": "code-box-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Create/generate new skills from natural language descriptions using OpenCode CLI with multiple LLM providers.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "actions": {
+    "create_skill": {
+      "type": "logic",
+      "description": "Generate a complete skill using OpenCode CLI with autonomous code generation, validation, and fixing.",
+      "parameters": {
+        "bridge": {
+          "type": "string",
+          "description": "Bridge to use for the skill (nodejs or python). Defaults to nodejs."
+        }
+      },
+      "optional_parameters": ["bridge"]
+    },
+    "modify_skill": {
+      "type": "logic",
+      "description": "Modify an existing skill using OpenCode CLI by updating or adding actions within the current skill."
+    }
+  }
+}

@@ -856,6 +856,26 @@ export default class LLMProvider {
     return this.truncateForLog(this.safeSerialize(details))
   }
 
+  private formatPromptErrorForLog(error: unknown): string {
+    const errorObject =
+      error && typeof error === 'object'
+        ? (error as { message?: unknown, name?: unknown })
+        : null
+    const message =
+      typeof errorObject?.message === 'string'
+        ? errorObject.message
+        : String(error)
+    const name =
+      typeof errorObject?.name === 'string' ? errorObject.name : 'Error'
+
+    if (message && message !== '[object Object]') {
+      return `${name}: ${message}`
+    }
+
+    const details = this.buildProviderErrorDetails(error)
+    return details || String(error)
+  }
+
   private isPromptAbortReason(value: unknown): value is LLMPromptAbortReason {
     if (!value || typeof value !== 'object') {
       return false
@@ -2085,12 +2105,23 @@ export default class LLMProvider {
     }
 
     const onTokenWithStreamStart = (chunk: OnTokenChunk): void => {
-      markStreamStarted()
+      if (typeof chunk === 'string' && chunk.length === 0) {
+        markStreamStarted()
+        userOnToken?.(chunk)
+        return
+      }
 
+      markStreamStarted()
       userOnToken?.(chunk)
     }
 
     const onReasoningTokenWithStreamStart = (reasoningChunk: string): void => {
+      if (reasoningChunk.length === 0) {
+        markStreamStarted()
+        userOnReasoningToken?.(reasoningChunk)
+        return
+      }
+
       markStreamStarted()
       userOnReasoningToken?.(reasoningChunk)
     }
@@ -2159,13 +2190,15 @@ export default class LLMProvider {
     } catch (e) {
       removeCallerAbortListener()
       LogHelper.title('LLM Provider')
-      LogHelper.error(`Error to complete prompt: ${String(e)}`)
+      LogHelper.error(
+        `Error to complete prompt: ${this.formatPromptErrorForLog(e)}`
+      )
       LogHelper.timeEnd(measureExecutionTimeLabel)
 
       if (trackProviderErrors) {
         this.lastProviderErrorMessage = this.buildProviderErrorMessage(
           providerName,
-          String(e),
+          this.formatPromptErrorForLog(e),
           this.buildProviderErrorDetails(e),
           isRemoteProvider
         )
@@ -2211,7 +2244,9 @@ export default class LLMProvider {
       }
 
       LogHelper.title('LLM Provider')
-      LogHelper.error(`Error to complete prompt: ${String(e)}`)
+      LogHelper.error(
+        `Error to complete prompt: ${this.formatPromptErrorForLog(e)}`
+      )
       LogHelper.timeEnd(measureExecutionTimeLabel)
 
       const isTimeoutError = this.isTimeoutLikeError(e)
@@ -2346,8 +2381,10 @@ export default class LLMProvider {
         this.lastProviderErrorMessage = this.buildProviderErrorMessage(
           providerName,
           statusLike !== undefined
-            ? `${String(e)} (statusCode=${String(statusLike)})`
-            : String(e),
+            ? `${this.formatPromptErrorForLog(e)} (statusCode=${String(
+                statusLike
+              )})`
+            : this.formatPromptErrorForLog(e),
           apiErrorDetails,
           isRemoteProvider
         )

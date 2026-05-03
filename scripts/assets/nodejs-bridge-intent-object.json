@@ -8,9 +8,9 @@
     "name": "Color",
     "bridge": "python",
     "version": "1.0.0",
-    "flow": []
+    "workflow": []
   },
-  "skill_config_path": "skills/color_skill/skill.json",
+  "skill_config_path": "skills/native/color_skill/skill.json",
   "utterance": "what is the hexadecimal color for red?",
   "entities": [],
   "action_arguments": {

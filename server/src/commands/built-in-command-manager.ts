@@ -411,13 +411,15 @@ export class BuiltInCommandManager {
 
     const normalizedInput = parsedInput.normalized_input.toLowerCase()
 
+    const autocompleteContext = {
+      raw_input: parsedInput.normalized_input,
+      args: parsedInput.args,
+      ends_with_space: parsedInput.ends_with_space
+    }
+
     return (
       command
-        .getAutocompleteItems({
-          raw_input: parsedInput.normalized_input,
-          args: parsedInput.args,
-          ends_with_space: parsedInput.ends_with_space
-        })
+        .getAutocompleteItems(autocompleteContext)
         .find((suggestion) => suggestion.value.toLowerCase() === normalizedInput) ||
       null
     )

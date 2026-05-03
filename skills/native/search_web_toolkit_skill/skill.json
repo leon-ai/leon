@@ -1,0 +1,39 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Search Web Toolkit",
+  "icon_name": "global-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Toolkit skill providing web and social media search utilities using AI-powered search providers like Grok. Actions can be reused by other skills for research, trend analysis, and information gathering.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "actions": {
+    "search": {
+      "type": "logic",
+      "description": "Search the web, X/Twitter, or both using AI-powered search with real-time data. Supports deep research, trend analysis, and social media monitoring.",
+      "parameters": {
+        "query": {
+          "type": "string",
+          "description": "The search query or topic to research."
+        },
+        "search_type": {
+          "type": "string",
+          "enum": ["web", "x", "both"],
+          "description": "Type of search: 'web' for web search only, 'x' for X/Twitter only, 'both' for combined search."
+        },
+        "max_results": {
+          "type": "number",
+          "description": "Maximum number of results to return (default: 10)."
+        },
+        "deep_research": {
+          "type": "string",
+          "description": "Set to 'true' to perform comprehensive deep research on the topic instead of simple search."
+        }
+      },
+      "optional_parameters": ["search_type", "max_results", "deep_research"]
+    }
+  }
+}

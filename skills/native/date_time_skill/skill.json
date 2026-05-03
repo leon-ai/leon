@@ -1,0 +1,56 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Date/Time",
+  "icon_name": "calendar-2-line",
+  "bridge": "nodejs",
+  "version": "1.0.0",
+  "description": "Provide date and time related information.",
+  "author": {
+    "name": "Théo LUDWIG",
+    "email": "contact@theoludwig.fr",
+    "url": "https://theoludwig.fr"
+  },
+  "actions": {
+    "current_date_time": {
+      "type": "logic",
+      "description": "Tell the current date and time."
+    },
+    "current_date": {
+      "type": "logic",
+      "description": "Tell the current date."
+    },
+    "current_time": {
+      "type": "logic",
+      "description": "Tell the current time."
+    },
+    "current_week_number": {
+      "type": "logic",
+      "description": "Tell the current week number of the year."
+    },
+    "days_countdown": {
+      "type": "logic",
+      "description": "Count how many days remain until a target date.",
+      "parameters": {
+        "target_date": {
+          "type": "string",
+          "description": "The target calendar date to count down to."
+        }
+      }
+    },
+    "current_date_time_with_time_zone": {
+      "type": "logic",
+      "description": "Tell the local date and time for a requested place or time zone.",
+      "parameters": {
+        "time_zone": {
+          "type": "string",
+          "description": "The IANA time zone identifier, for example Europe/Paris or America/New_York."
+        },
+        "location_name": {
+          "type": "string",
+          "description": "A friendly label for the requested location, for example Paris or New York."
+        }
+      },
+      "optional_parameters": ["location_name"]
+    }
+  }
+}

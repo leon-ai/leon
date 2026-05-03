@@ -327,11 +327,11 @@ export default class Brain {
               userMessage: ownerMessage,
               assistantMessage: textAnswer,
               sentAt,
-              route: 'workflow',
+              route: 'controlled',
               finalIntent: 'answer'
             }).catch((error: unknown) => {
               LogHelper.title('Brain')
-              LogHelper.warning(`Failed to update workflow self model: ${error}`)
+              LogHelper.warning(`Failed to update controlled self model: ${error}`)
             })
           }
 

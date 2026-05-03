@@ -6,7 +6,18 @@ import type {
   OpenAIToolChoice
 } from '@/core/llm-manager/types'
 
-export type ReactLLMDutyParams = LLMDutyParams
+export interface AgentSkillContext {
+  id: string
+  name: string
+  description: string
+  rootPath: string
+  skillPath: string
+  instructions: string
+}
+
+export interface ReactLLMDutyParams extends LLMDutyParams {
+  agentSkill?: AgentSkillContext | null
+}
 
 export interface FunctionConfig {
   description: string
@@ -155,6 +166,10 @@ export interface LLMCaller {
   readonly supportsNativeTools: boolean
   readonly input: string | object | null
   readonly history: MessageLog[]
+  readonly agentSkillContext?: AgentSkillContext | null
+  readonly agentSkillCatalog: string
+  setAgentSkillContext(context: AgentSkillContext): void
+  getAgentSkillContext(skillId: string): Promise<AgentSkillContext | null>
   getContextFileContent(filename: string): string | null
   getContextManifest(): string
   getSelfModelSnapshot(): string

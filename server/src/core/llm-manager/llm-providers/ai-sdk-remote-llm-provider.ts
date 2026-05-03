@@ -754,6 +754,56 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
+  private serializeStreamError(error: unknown): string {
+    if (error instanceof Error) {
+      return error.message
+    }
+
+    if (typeof error === 'string') {
+      return error
+    }
+
+    if (!error || typeof error !== 'object') {
+      return String(error)
+    }
+
+    try {
+      return JSON.stringify(error)
+    } catch {
+      return String(error)
+    }
+  }
+
+  private createStreamError(error: unknown): Error {
+    if (error instanceof Error) {
+      return error
+    }
+
+    const streamError = new Error(this.serializeStreamError(error))
+
+    if (error && typeof error === 'object') {
+      const errorObject = error as Record<string, unknown>
+      const streamErrorWithMetadata = streamError as Error & {
+        status?: number
+        statusCode?: number
+        cause?: unknown
+      }
+
+      if (typeof errorObject['name'] === 'string') {
+        streamError.name = errorObject['name'] as string
+      }
+      if (typeof errorObject['statusCode'] === 'number') {
+        streamErrorWithMetadata.statusCode = errorObject['statusCode'] as number
+      }
+      if (typeof errorObject['status'] === 'number') {
+        streamErrorWithMetadata.status = errorObject['status'] as number
+      }
+      streamErrorWithMetadata.cause = error
+    }
+
+    return streamError
+  }
+
   private buildOpenAICompatiblePayload(
     state: CallState
   ): Record<string, unknown> {
@@ -1012,11 +1062,7 @@ export default class AISDKRemoteLLMProvider {
       }
 
       if (type === 'error') {
-        throw (
-          part['error'] instanceof Error
-            ? part['error']
-            : new Error(String(part['error']))
-        )
+        throw this.createStreamError(part['error'])
       }
     }
 

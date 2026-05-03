@@ -1967,9 +1967,7 @@ export default class OpenCodeTool extends Tool {
     context += '## Step 2: Read and Understand Tool Implementations\n\n'
     context += '**CRITICAL**: You MUST read the actual source code of tools before using them!\n\n'
     context += 'For EACH tool you plan to use:\n'
-    context += `1. **Read the tool file** at \`bridges/${
-      bridge === 'nodejs' ? 'nodejs' : 'python'
-    }/src/sdk/tools/{tool-name}-tool.${fileExtension}\`\n`
+    context += `1. **Read the tool source** under \`tools/{toolkit-name}/{tool-name}/src/${bridge}/{tool-name}-tool.${fileExtension}\`\n`
     context += '2. **Understand ALL available methods** - Don\'t assume, READ the code\n'
     context += '3. **Check for batch/efficient operations** - Many tools support batch processing!\n'
     context += '4. **Note the method signatures** - Parameter names, types, return values\n'

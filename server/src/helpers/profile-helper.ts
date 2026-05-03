@@ -46,6 +46,17 @@ function readDisabledConfig(): ProfileDisabledConfig {
   }
 }
 
+async function writeDisabledConfig(config: ProfileDisabledConfig): Promise<void> {
+  await fs.promises.mkdir(path.dirname(PROFILE_DISABLED_PATH), {
+    recursive: true
+  })
+
+  await fs.promises.writeFile(
+    PROFILE_DISABLED_PATH,
+    `${JSON.stringify(config, null, 2)}\n`
+  )
+}
+
 function normalizeDisabledIds(ids: unknown): Set<string> {
   if (!Array.isArray(ids)) {
     return new Set()
@@ -57,6 +68,10 @@ function normalizeDisabledIds(ids: unknown): Set<string> {
       .map((id) => id.trim())
       .filter((id) => id.length > 0)
   )
+}
+
+function serializeDisabledIds(ids: Set<string>): string[] {
+  return [...ids].sort((firstId, secondId) => firstId.localeCompare(secondId))
 }
 
 export class ProfileHelper {
@@ -80,6 +95,40 @@ export class ProfileHelper {
    */
   public static isSkillDisabled(skillName: string): boolean {
     return this.getDisabledSkills().has(skillName)
+  }
+
+  /**
+   * Add a skill id to the active profile disabled skill list.
+   * @param skillName The skill id
+   */
+  public static async disableSkill(skillName: string): Promise<void> {
+    const disabledConfig = readDisabledConfig()
+    const disabledSkills = normalizeDisabledIds(disabledConfig.skills)
+
+    disabledSkills.add(skillName)
+
+    await writeDisabledConfig({
+      ...disabledConfig,
+      skills: serializeDisabledIds(disabledSkills),
+      tools: serializeDisabledIds(normalizeDisabledIds(disabledConfig.tools))
+    })
+  }
+
+  /**
+   * Remove a skill id from the active profile disabled skill list.
+   * @param skillName The skill id
+   */
+  public static async enableSkill(skillName: string): Promise<void> {
+    const disabledConfig = readDisabledConfig()
+    const disabledSkills = normalizeDisabledIds(disabledConfig.skills)
+
+    disabledSkills.delete(skillName)
+
+    await writeDisabledConfig({
+      ...disabledConfig,
+      skills: serializeDisabledIds(disabledSkills),
+      tools: serializeDisabledIds(normalizeDisabledIds(disabledConfig.tools))
+    })
   }
 
   /**

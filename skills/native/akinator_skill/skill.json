@@ -1,0 +1,53 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Akinator",
+  "icon_name": "magic-line",
+  "bridge": "python",
+  "version": "2.0.0",
+  "description": "Play a guessing game where Akinator tries to identify who or what you have in mind.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "start_game": {
+      "type": "logic",
+      "description": "Start a new Akinator round for a selected thematic.",
+      "parameters": {
+        "thematic": {
+          "type": "string",
+          "enum": ["characters", "objects", "animals"],
+          "description": "The thematic to play with for the new Akinator round."
+        }
+      }
+    },
+    "restart_game": {
+      "type": "logic",
+      "description": "Restart Akinator with the previously selected thematic."
+    },
+    "guess": {
+      "type": "logic",
+      "description": "Answer Akinator's current question to continue the round.",
+      "parameters": {
+        "answer": {
+          "type": "string",
+          "enum": ["yes", "no", "dont_know", "probably", "probably_not"],
+          "description": "The owner's answer to the current Akinator question."
+        }
+      },
+      "is_loop": true
+    },
+    "retry": {
+      "type": "logic",
+      "description": "Confirm whether the owner wants another Akinator round.",
+      "parameters": {
+        "confirmation": {
+          "type": "boolean",
+          "description": "Whether the owner wants to immediately play another round."
+        }
+      },
+      "is_loop": true
+    }
+  }
+}

@@ -81,8 +81,7 @@ def main():
             INTENT_OBJECT['action_name'] + '.py'
         )
         spec = util.spec_from_file_location(
-            'skills.'
-            + INTENT_OBJECT['skill_name']
+            INTENT_OBJECT['skill_name']
             + '.src.actions.'
             + INTENT_OBJECT['action_name'],
             action_path

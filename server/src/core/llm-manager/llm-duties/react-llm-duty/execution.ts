@@ -26,6 +26,7 @@ import type {
   LLMCaller,
   FunctionConfig,
   PromptLogSection,
+  LLMCallOptions,
   FinalPhaseIntent,
   FinalResponseSignal
 } from './types'
@@ -47,11 +48,20 @@ import {
   buildPreviouslyUsedInputsSection,
   buildToolkitContextSection,
   buildContextManifestSection,
-  buildSelfModelSection
+  buildSelfModelSection,
+  buildActiveAgentSkillSection
 } from './phase-helpers'
 import {
   buildPhaseSystemPrompt
 } from './phase-policy'
+
+// Tool argument generation may still need execution reasoning to replan when
+// prerequisites are missing. Only disable provider streaming here, so timeouts
+// still protect tool calls if a stream opens but stalls before a final result.
+const TOOL_ARGUMENT_LLM_OPTIONS = {
+  phase: 'execution',
+  streamToProvider: false
+} satisfies LLMCallOptions
 
 async function buildExecutionMemorySection(
   _caller: LLMCaller,
@@ -658,6 +668,9 @@ async function resolveToolFunctionWithNativeTools(
     toolkitId,
     toolId
   )
+  const activeAgentSkillSection = buildActiveAgentSkillSection(
+    caller.agentSkillContext
+  )
   const historySection = formatExecutionHistory(executionHistory)
   const resolveSystemPrompt = buildPhaseSystemPrompt(
     RESOLVE_FUNCTION_SYSTEM_PROMPT,
@@ -675,7 +688,7 @@ async function resolveToolFunctionWithNativeTools(
     })
   )
 
-  const prompt = `<tool>\n${toolkitId}.${toolId}\n</tool>\n\n<current_plan_step>\n${stepLabel}\n</current_plan_step>\n\n${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>\n\n<task>\nSelect the appropriate function for the current plan step and provide arguments.\n</task>`
+  const prompt = `<tool>\n${toolkitId}.${toolId}\n</tool>\n\n<current_plan_step>\n${stepLabel}\n</current_plan_step>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>\n\n<task>\nSelect the appropriate function for the current plan step and provide arguments.\n</task>`
 
   const result = await caller.callLLMWithTools(
     prompt,
@@ -694,9 +707,7 @@ async function resolveToolFunctionWithNativeTools(
         'server/src/core/llm-manager/llm-duties/react-llm-duty/constants.ts',
       tools
     }),
-    {
-      phase: 'execution'
-    }
+    TOOL_ARGUMENT_LLM_OPTIONS
   )
 
   if (!result) {
@@ -850,6 +861,9 @@ async function resolveToolFunctionWithJSONMode(
     effectiveToolkitId,
     effectiveToolId
   )
+  const activeAgentSkillSection = buildActiveAgentSkillSection(
+    caller.agentSkillContext
+  )
   const functionsSection = functionEntries
     .map(([fnName, fnConfig]) => {
       const params = JSON.stringify(fnConfig.parameters)
@@ -862,7 +876,7 @@ async function resolveToolFunctionWithJSONMode(
     RESOLVE_FUNCTION_SYSTEM_PROMPT,
     'execution'
   )
-  const prompt = `<tool>\n${effectiveToolkitId}.${effectiveToolId}\n</tool>\n\n<current_plan_step>\n${stepLabel}\n</current_plan_step>\n\n${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<available_functions>\n${functionsSection}\n</available_functions>\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>\n\n<task>\nSelect the appropriate function for the current plan step and provide tool_input.\n</task>`
+  const prompt = `<tool>\n${effectiveToolkitId}.${effectiveToolId}\n</tool>\n\n<current_plan_step>\n${stepLabel}\n</current_plan_step>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<available_functions>\n${functionsSection}\n</available_functions>\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>\n\n<task>\nSelect the appropriate function for the current plan step and provide tool_input.\n</task>`
 
   const resolveSchema = {
     type: 'object',
@@ -944,9 +958,7 @@ async function resolveToolFunctionWithJSONMode(
         'server/src/core/llm-manager/llm-duties/react-llm-duty/constants.ts',
       schema: resolveSchema
     }),
-    {
-      phase: 'execution'
-    }
+    TOOL_ARGUMENT_LLM_OPTIONS
   )
   const parsed = parseOutput(completionResult?.output)
 
@@ -1100,6 +1112,9 @@ async function executeFunctionWithNativeTools(
     toolkitId,
     toolId
   )
+  const activeAgentSkillSection = buildActiveAgentSkillSection(
+    caller.agentSkillContext
+  )
   const historySection = formatExecutionHistory(executionHistory)
   const executeSystemPrompt = buildPhaseSystemPrompt(
     EXECUTE_SYSTEM_PROMPT,
@@ -1204,7 +1219,7 @@ async function executeFunctionWithNativeTools(
     const retryNote = lastError
       ? `\n\nPrevious attempt failed: ${lastError}.${lastFailedToolInput ? `\nPrevious failed tool_input: ${lastFailedToolInput}\nDo not reuse the same tool_input. Change the arguments to address the failure.` : ' Please fix the arguments.'}`
       : ''
-    const prompt = `<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}`
+    const prompt = `<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}`
 
     const result = await caller.callLLMWithTools(
       prompt,
@@ -1223,9 +1238,7 @@ async function executeFunctionWithNativeTools(
           'server/src/core/llm-manager/llm-duties/react-llm-duty/constants.ts',
         tools: [tool]
       }),
-      {
-        phase: 'execution'
-      }
+      TOOL_ARGUMENT_LLM_OPTIONS
     )
 
     if (!result) {
@@ -1379,6 +1392,9 @@ async function executeFunctionWithJSONMode(
     toolkitId,
     toolId
   )
+  const activeAgentSkillSection = buildActiveAgentSkillSection(
+    caller.agentSkillContext
+  )
   const historySection = formatExecutionHistory(executionHistory)
   const executeSystemPrompt = buildPhaseSystemPrompt(
     EXECUTE_SYSTEM_PROMPT,
@@ -1442,7 +1458,7 @@ async function executeFunctionWithJSONMode(
     const retryNote = lastError
       ? `\n\nPrevious attempt failed: ${lastError}.${lastFailedToolInput ? `\nPrevious failed tool_input: ${lastFailedToolInput}\nDo not reuse the same tool_input. Change the arguments to address the failure.` : ' Please fix the tool_input.'}`
       : ''
-    const prompt = `<function>\nName: ${qualifiedName}\nDescription: ${functionConfig.description}\n</function>\n\n<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n<parameters_schema>\n${paramsSchema}\n</parameters_schema>\n\n${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}\n\n<task>\nProvide the tool_input for this function.\n</task>`
+    const prompt = `<function>\nName: ${qualifiedName}\nDescription: ${functionConfig.description}\n</function>\n\n<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n<parameters_schema>\n${paramsSchema}\n</parameters_schema>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}\n\n<task>\nProvide the tool_input for this function.\n</task>`
 
     const completionResult = await caller.callLLM(
       prompt,
@@ -1459,9 +1475,7 @@ async function executeFunctionWithJSONMode(
           'server/src/core/llm-manager/llm-duties/react-llm-duty/constants.ts',
         schema: executeSchema
       }),
-      {
-        phase: 'execution'
-      }
+      TOOL_ARGUMENT_LLM_OPTIONS
     )
     if (!completionResult) {
       const providerFailureObservation =

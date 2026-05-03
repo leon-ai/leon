@@ -1,0 +1,19 @@
+{
+  "$schema": "../../../schemas/skill-schemas/skill.json",
+  "name": "Joke",
+  "icon_name": "emotion-laugh-line",
+  "bridge": null,
+  "version": "1.0.0",
+  "description": "Leon says some jokes.",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://github.com/louistiti"
+  },
+  "actions": {
+    "run": {
+      "type": "dialog",
+      "description": "Tell a joke."
+    }
+  }
+}

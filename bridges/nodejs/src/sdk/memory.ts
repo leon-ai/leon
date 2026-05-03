@@ -2,7 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 import {
-  PROFILE_SKILLS_PATH,
+  PROFILE_NATIVE_SKILLS_PATH,
   SKILL_PATH
 } from '@bridge/constants'
 
@@ -31,7 +31,7 @@ export class Memory<T = unknown> {
     this.name = name
     this.defaultMemory = defaultMemory
     this.memoryPath = path.join(
-      PROFILE_SKILLS_PATH,
+      PROFILE_NATIVE_SKILLS_PATH,
       path.basename(SKILL_PATH),
       'memory',
       `${this.name}.json`
@@ -43,7 +43,7 @@ export class Memory<T = unknown> {
 
       const [, skillName, memoryName] = this.name.split(':')
       this.memoryPath = path.join(
-        PROFILE_SKILLS_PATH,
+        PROFILE_NATIVE_SKILLS_PATH,
         normalizeSkillName(skillName as string),
         'memory',
         `${memoryName}.json`

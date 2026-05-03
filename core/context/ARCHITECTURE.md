@@ -2,7 +2,7 @@
 # ARCHITECTURE
 - Generated at: 2026-03-27T22:29:01+08:00
 - Layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
-- Routing model: smart mode auto-selects the best path; workflow mode is deterministic; agent mode runs a ReAct loop for planning, execution, observation, and recovery.
+- Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills and actions; agent mode runs a ReAct loop for planning, execution, observation, and recovery.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
 ## Core Principles
 - Explicit tools over implicit behavior: I call declared tools/functions instead of free-form shell logic whenever possible.

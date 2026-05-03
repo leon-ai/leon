@@ -305,6 +305,7 @@ export default class BuiltInCommands {
     this.closeTimeout = window.setTimeout(() => {
       this.resetState()
       this.render()
+      this.focusMainInput()
     }, CLOSE_ANIMATION_DURATION_MS)
   }
 
@@ -535,6 +536,27 @@ export default class BuiltInCommands {
     }
 
     inputElement.blur()
+  }
+
+  focusMainInput() {
+    if (!this.input) {
+      return
+    }
+
+    window.requestAnimationFrame(() => {
+      try {
+        this.input.focus({ preventScroll: true })
+      } catch {
+        this.input.focus()
+      }
+
+      if (typeof this.input.setSelectionRange === 'function') {
+        this.input.setSelectionRange(
+          this.input.value.length,
+          this.input.value.length
+        )
+      }
+    })
   }
 
   scrollSelectedSuggestionIntoView() {
