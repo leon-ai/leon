@@ -14,11 +14,17 @@ export default async function () {
   const status = createSetupStatus('Setting up skills...').start()
 
   try {
-    const skillNames = await SkillDomainHelper.listSkillFolders()
+    const skillNames = SkillDomainHelper.listAllSkillFoldersSync()
 
     for (const skillName of skillNames) {
-      const currentSkill = await SkillDomainHelper.getNewSkillConfig(skillName)
-      const currentSkillPath = SkillDomainHelper.getNewSkillConfigPath(skillName)
+      const currentSkill = await SkillDomainHelper.getNewSkillConfig(
+        skillName,
+        { includeDisabled: true }
+      )
+      const currentSkillPath = SkillDomainHelper.getNewSkillConfigPath(
+        skillName,
+        { includeDisabled: true }
+      )
 
       if (!currentSkill || !currentSkillPath) {
         continue

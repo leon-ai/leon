@@ -1,8 +1,0 @@
-{
-  "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
-  "name": "Food & Drink",
-  "description": "Tools for food and drink queries.",
-  "icon_name": "restaurant-2-line",
-  "context_files": [],
-  "tools": []
-}

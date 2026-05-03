@@ -26,6 +26,36 @@ interface ToolkitConfigData {
   tools: string[]
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  )
+}
+
+function mergeMissingSettings(
+  defaultSettings: Record<string, unknown>,
+  existingSettings: Record<string, unknown>
+): Record<string, unknown> {
+  const mergedSettings = { ...existingSettings }
+
+  for (const [key, defaultValue] of Object.entries(defaultSettings)) {
+    const existingValue = existingSettings[key]
+
+    if (!Object.prototype.hasOwnProperty.call(existingSettings, key)) {
+      mergedSettings[key] = defaultValue
+      continue
+    }
+
+    if (isPlainObject(defaultValue) && isPlainObject(existingValue)) {
+      mergedSettings[key] = mergeMissingSettings(defaultValue, existingValue)
+    }
+  }
+
+  return mergedSettings
+}
+
 export class ToolkitConfig {
   private static configCache = new Map<string, ToolkitConfigData>()
   private static settingsCache = new Map<string, Record<string, unknown>>()
@@ -84,7 +114,18 @@ export class ToolkitConfig {
       toolName,
       'settings.json'
     )
+    const settingsSamplePath = join(
+      TOOLS_PATH,
+      toolkitName,
+      toolName,
+      'settings.sample.json'
+    )
     const settingsDir = dirname(settingsPath)
+    const defaultSettings = existsSync(settingsSamplePath)
+      ? (JSON.parse(
+        readFileSync(settingsSamplePath, 'utf-8')
+      ) as Record<string, unknown>)
+      : defaults
 
     mkdirSync(settingsDir, { recursive: true })
 
@@ -98,15 +139,10 @@ export class ToolkitConfig {
       shouldWrite = true
     }
 
-    const mergedSettings = { ...defaults, ...toolSettings }
+    const mergedSettings = mergeMissingSettings(defaultSettings, toolSettings)
 
     if (!shouldWrite) {
-      for (const key of Object.keys(defaults)) {
-        if (!Object.prototype.hasOwnProperty.call(toolSettings, key)) {
-          shouldWrite = true
-          break
-        }
-      }
+      shouldWrite = JSON.stringify(toolSettings) !== JSON.stringify(mergedSettings)
     }
 
     if (shouldWrite) {

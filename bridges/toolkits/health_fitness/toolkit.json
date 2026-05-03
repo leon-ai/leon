@@ -1,8 +1,0 @@
-{
-  "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
-  "name": "Health & Fitness",
-  "description": "Tools for health and fitness information.",
-  "icon_name": "heart-pulse-line",
-  "context_files": [],
-  "tools": []
-}
