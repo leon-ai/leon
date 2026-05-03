@@ -230,20 +230,31 @@ kbd {
 
 main {
   position: absolute;
-  width: 63%;
+  width: 80%;
   top: 0;
   left: 50%;
   height: 100%;
   transform: translate(-50%, 0);
 }
 
-footer {
+#footer {
+  display: flex;
   position: absolute;
-  text-align: center;
+  align-items: center;
+  justify-content: space-between;
   left: 50%;
-  bottom: 0;
+  bottom: 2%;
+  width: 80%;
   line-height: 18px;
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, 0);
+}
+#logo-container {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+#version {
+  color: var(--grey-color);
 }
 
 textarea {
@@ -287,14 +298,13 @@ textarea::-webkit-scrollbar-thumb {
 
 #logo {
   background: no-repeat url(../img/logo.svg);
-  margin: 0 auto;
   width: 40px;
   height: 40px;
 }
 
 #top-container {
   position: absolute;
-  top: 4%;
+  top: 2%;
   color: var(--grey-color);
   display: flex;
   width: 100%;
@@ -317,8 +327,8 @@ textarea::-webkit-scrollbar-thumb {
 #feed {
   position: absolute;
   width: 100%;
-  top: 8%;
-  height: 50%;
+  top: 6%;
+  height: 58%;
   overflow-y: auto;
   border: 2px solid var(--grey-color);
   border-radius: 12px;
@@ -338,10 +348,9 @@ textarea::-webkit-scrollbar-thumb {
 
 #is-typing {
   position: absolute;
-  top: 59%;
+  top: 65%;
   padding: 0 8px;
   opacity: 0;
-  margin-top: 20px;
   transition: opacity 0.3s;
 }
 #is-typing.on {
@@ -452,7 +461,7 @@ textarea::-webkit-scrollbar-thumb {
   display: flex;
   flex-direction: column;
   width: fit-content;
-  max-width: 60%;
+  max-width: 85%;
 }
 .bubble-container.me {
   margin-left: auto;
@@ -532,7 +541,7 @@ textarea::-webkit-scrollbar-thumb {
 #input-container {
   position: absolute;
   width: 100%;
-  bottom: 18%;
+  bottom: 13%;
 }
 
 #mic-container {
