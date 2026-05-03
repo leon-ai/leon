@@ -1,0 +1,4 @@
+{
+  "OPENAI_AUDIO_API_KEY": null,
+  "OPENAI_AUDIO_MODEL": "whisper-1"
+}

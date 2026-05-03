@@ -1,8 +1,0 @@
-{
-  "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
-  "name": "Business & Finance",
-  "description": "Tools for business and finance.",
-  "icon_name": "money-dollar-circle-line",
-  "context_files": [],
-  "tools": []
-}

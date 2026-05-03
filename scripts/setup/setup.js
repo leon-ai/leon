@@ -40,6 +40,7 @@ import setupUV from './setup-uv'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
 import setupPythonBridgeEnv from './setup-python-bridge-env'
 import setupToolsDependencies from './setup-tools-dependencies'
+import setupToolsSettings from './setup-tools-settings'
 import setupSkills from './setup-skills/setup-skills'
 import setupTCPServerEnv from './setup-tcp-server-env'
 import setupCMake from './setup-cmake'
@@ -312,6 +313,8 @@ async function syncLLMSetupChoice(preferences) {
     await setupTCPServerEnv()
     currentStep = 'setupToolsDependencies'
     await setupToolsDependencies()
+    currentStep = 'setupToolsSettings'
+    await setupToolsSettings()
     currentStep = 'setupSkills'
     await setupSkills()
     if (!IS_GITHUB_ACTIONS) {

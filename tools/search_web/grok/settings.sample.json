@@ -1,0 +1,4 @@
+{
+  "GROK_API_KEY": null,
+  "GROK_MODEL": "grok-4-1-fast-reasoning"
+}

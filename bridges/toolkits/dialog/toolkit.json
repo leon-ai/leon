@@ -1,8 +1,0 @@
-{
-  "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
-  "name": "Dialog",
-  "description": "Tools for dialog and conversation handling.",
-  "icon_name": "discuss-line",
-  "context_files": [],
-  "tools": []
-}

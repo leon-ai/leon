@@ -3,6 +3,8 @@ import path from 'node:path'
 
 import { PROFILE_NATIVE_SKILLS_PATH } from '@/constants'
 
+import { mergeMissingSettings } from '../settings-merge'
+
 /**
  * Set up skills settings
  */
@@ -26,34 +28,13 @@ export default async function (skillFriendlyName, currentSkill) {
       const settingsSample = JSON.parse(
         await fs.promises.readFile(settingsSamplePath, 'utf8')
       )
-      const settingsKeys = Object.keys(settings)
-      const settingsSampleKeys = Object.keys(settingsSample)
+      const mergedSettings = mergeMissingSettings(settingsSample, settings)
 
-      // Check if there is a new settings key in the settings sample compared to the settings.json
-      if (JSON.stringify(settingsKeys) !== JSON.stringify(settingsSampleKeys)) {
-        // Browse settings keys of the new settings config
-        for (let j = 0; j < settingsSampleKeys.length; j += 1) {
-          // Check if the current settings key does not exist
-          if (!settingsKeys.includes(settingsSampleKeys[j])) {
-            // Prepare to inject the new settings key object
-            const configKey = {
-              [settingsSampleKeys[j]]: settingsSample[settingsSampleKeys[j]]
-            }
-
-            try {
-              settings[settingsSampleKeys[j]] = configKey[settingsSampleKeys[j]]
-            } catch (e) {
-              throw new Error(
-                `Error while adding "${settingsSampleKeys[j]}" settings key to ${settingsPath}: ${e}`
-              )
-            }
-          }
-        }
-
+      if (JSON.stringify(settings) !== JSON.stringify(mergedSettings)) {
         await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true })
         await fs.promises.writeFile(
           settingsPath,
-          `${JSON.stringify(settings, null, 2)}\n`
+          `${JSON.stringify(mergedSettings, null, 2)}\n`
         )
       }
     } else if (!fs.existsSync(settingsSamplePath)) {

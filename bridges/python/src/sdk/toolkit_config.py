@@ -6,6 +6,25 @@ from ..constants import PROFILE_TOOLS_PATH, TOOLS_PATH
 from .utils import get_platform_name
 
 
+def merge_missing_settings(
+    default_settings: Dict[str, Any], existing_settings: Dict[str, Any]
+) -> Dict[str, Any]:
+    merged_settings = {**existing_settings}
+
+    for key, default_value in default_settings.items():
+        if key not in existing_settings:
+            merged_settings[key] = default_value
+            continue
+
+        existing_value = existing_settings[key]
+        if isinstance(default_value, dict) and isinstance(existing_value, dict):
+            merged_settings[key] = merge_missing_settings(
+                default_value, existing_value
+            )
+
+    return merged_settings
+
+
 class ToolkitConfig:
     """Toolkit configuration loader"""
 
@@ -80,8 +99,21 @@ class ToolkitConfig:
         settings_path = os.path.join(
             PROFILE_TOOLS_PATH, toolkit_name, tool_name, "settings.json"
         )
+        settings_sample_path = os.path.join(
+            TOOLS_PATH, toolkit_name, tool_name, "settings.sample.json"
+        )
         settings_dir = os.path.dirname(settings_path)
         os.makedirs(settings_dir, exist_ok=True)
+        default_settings = defaults or {}
+
+        if os.path.exists(settings_sample_path):
+            try:
+                with open(settings_sample_path, "r", encoding="utf-8") as f:
+                    default_settings = json.load(f)
+            except json.JSONDecodeError as e:
+                raise Exception(
+                    f"Failed to load tool settings sample from '{settings_sample_path}': {str(e)}"
+                )
 
         tool_settings: Dict[str, Any] = {}
         should_write = False
@@ -97,14 +129,10 @@ class ToolkitConfig:
         else:
             should_write = True
 
-        defaults = defaults or {}
-        merged_settings = {**defaults, **tool_settings}
+        merged_settings = merge_missing_settings(default_settings, tool_settings)
 
         if not should_write:
-            for key in defaults.keys():
-                if key not in tool_settings:
-                    should_write = True
-                    break
+            should_write = tool_settings != merged_settings
 
         if should_write:
             with open(settings_path, "w", encoding="utf-8") as f:

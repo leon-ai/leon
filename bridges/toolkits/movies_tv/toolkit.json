@@ -1,8 +1,0 @@
-{
-  "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
-  "name": "Movies & TV",
-  "description": "Tools for movies and TV information.",
-  "icon_name": "movie-2-line",
-  "context_files": [],
-  "tools": []
-}

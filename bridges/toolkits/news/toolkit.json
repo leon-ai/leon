@@ -1,8 +1,0 @@
-{
-  "$schema": "../../../schemas/toolkit-schemas/toolkit.json",
-  "name": "News",
-  "description": "Tools for news and current events.",
-  "icon_name": "newspaper-line",
-  "context_files": [],
-  "tools": []
-}
