@@ -1,5 +1,6 @@
 import os
 import re
+import shlex
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Optional, Union, List, Any
 from pypdl import Pypdl
@@ -136,19 +137,8 @@ class BaseTool(ABC):
 
     def _escape_shell_arg(self, arg: str) -> str:
         """
-        Escape shell argument by escaping special characters with backslashes
-        This follows the Unix/Linux shell escaping convention
+        Escape a shell argument.
         """
-        # Don't escape URLs - they have their own structure
-        try:
-            parsed = urlparse(arg)
-            # If urlparse succeeds and has a scheme, it's likely a valid URL
-            if parsed.scheme:
-                return arg
-        except Exception:
-            # Not a valid URL, continue with normal escaping
-            pass
-
         if is_windows():
             # Windows: wrap in double quotes and escape internal quotes
             if " " in arg or '"' in arg or "&" in arg or "|" in arg:
@@ -157,8 +147,7 @@ class BaseTool(ABC):
                 )
             return arg
         else:
-            # Unix/Linux: escape special characters with backslashes
-            return re.sub(r'(["\s\'$`\\(){}[\]|&;<>*?!])', r"\\\1", arg)
+            return shlex.quote(arg)
 
     def _get_tool_dir(self, module_file: str) -> str:
         return os.path.dirname(os.path.abspath(module_file))

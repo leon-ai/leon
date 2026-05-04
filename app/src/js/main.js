@@ -6,6 +6,7 @@ window.leonInitStatusEvent = new EventTarget()
 import './init'
 import Client from './client'
 import { BuiltInCommands } from './built-in-commands'
+import FileSystemAutocomplete from './file-system-autocomplete'
 // import Recorder from './recorder'
 // import listener from './listener'
 import { onkeydownstartrecording, onkeydowninput } from './onkeydown'
@@ -30,6 +31,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const v = document.querySelector('#version small')
     const infoButton = document.querySelector('#info')
     const client = new Client(config.app, serverUrl, input)
+    const fileSystemAutocomplete = new FileSystemAutocomplete({
+      serverUrl,
+      input
+    })
     const builtInCommands = new BuiltInCommands({
       serverUrl,
       input,
@@ -69,6 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     client.updateMood(window.leonConfigInfo.mood)
     client.init()
+    fileSystemAutocomplete.attach(input)
     builtInCommands.init()
 
     infoButton.addEventListener('click', () => {

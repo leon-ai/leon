@@ -1,13 +1,20 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { PROFILE_CONTEXT_PATH } from '@bridge/constants'
+import {
+  CODEBASE_CONTEXT_PATH,
+  PROFILE_CONTEXT_PATH
+} from '@bridge/constants'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
 const DEFAULT_LIST_LIMIT = 24
 const DEFAULT_TOP_K = 8
 const DEFAULT_SNIPPET_CHARS = Number.MAX_SAFE_INTEGER
+const CODEBASE_CONTEXT_FILES = new Set([
+  'ARCHITECTURE.md',
+  'LEON.md'
+])
 
 interface ContextListEntry {
   filename: string
@@ -108,7 +115,7 @@ export default class ContextTool extends Tool {
       }
     }
 
-    const filePath = path.join(PROFILE_CONTEXT_PATH, safeFilename)
+    const filePath = this.resolveContextFilePath(safeFilename)
     if (!fs.existsSync(filePath)) {
       return {
         success: false,
@@ -279,13 +286,27 @@ export default class ContextTool extends Tool {
       return null
     }
 
-    const fullPath = path.join(PROFILE_CONTEXT_PATH, normalized)
-    const relative = path.relative(PROFILE_CONTEXT_PATH, fullPath)
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    if (!this.isSafeContextFilename(normalized)) {
       return null
     }
 
     return normalized
+  }
+
+  private resolveContextFilePath(filename: string): string {
+    return path.join(this.getContextDirectory(filename), filename)
+  }
+
+  private getContextDirectory(filename: string): string {
+    if (CODEBASE_CONTEXT_FILES.has(filename)) {
+      return CODEBASE_CONTEXT_PATH
+    }
+
+    return PROFILE_CONTEXT_PATH
+  }
+
+  private isSafeContextFilename(filename: string): boolean {
+    return path.basename(filename) === filename
   }
 
   private async readContextEntries(): Promise<Array<{
@@ -295,13 +316,7 @@ export default class ContextTool extends Tool {
     updatedAt: string
     content: string
   }>> {
-    const entries = await fs.promises.readdir(PROFILE_CONTEXT_PATH, {
-      withFileTypes: true
-    })
-    const markdownFiles = entries
-      .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.md'))
-      .map((entry) => entry.name)
-      .sort((a, b) => a.localeCompare(b))
+    const markdownFiles = await this.listContextFilenames()
 
     const output: Array<{
       filename: string
@@ -312,7 +327,7 @@ export default class ContextTool extends Tool {
     }> = []
 
     for (const filename of markdownFiles) {
-      const filePath = path.join(PROFILE_CONTEXT_PATH, filename)
+      const filePath = this.resolveContextFilePath(filename)
       const [stat, content] = await Promise.all([
         fs.promises.stat(filePath),
         fs.promises.readFile(filePath, 'utf8')
@@ -328,6 +343,51 @@ export default class ContextTool extends Tool {
     }
 
     return output
+  }
+
+  private async listContextFilenames(): Promise<string[]> {
+    const filenames = new Set<string>()
+
+    await this.addContextFilenamesFromDirectory(
+      CODEBASE_CONTEXT_PATH,
+      filenames,
+      (filename) => CODEBASE_CONTEXT_FILES.has(filename)
+    )
+    await this.addContextFilenamesFromDirectory(
+      PROFILE_CONTEXT_PATH,
+      filenames,
+      (filename) => !CODEBASE_CONTEXT_FILES.has(filename)
+    )
+
+    return [...filenames].sort((a, b) => a.localeCompare(b))
+  }
+
+  private async addContextFilenamesFromDirectory(
+    directoryPath: string,
+    filenames: Set<string>,
+    shouldInclude: (filename: string) => boolean
+  ): Promise<void> {
+    let entries: fs.Dirent[] = []
+    try {
+      entries = await fs.promises.readdir(directoryPath, {
+        withFileTypes: true
+      })
+    } catch {
+      return
+    }
+
+    for (const entry of entries) {
+      if (
+        !entry.isFile() ||
+        !entry.name.toLowerCase().endsWith('.md') ||
+        !this.isSafeContextFilename(entry.name) ||
+        !shouldInclude(entry.name)
+      ) {
+        continue
+      }
+
+      filenames.add(entry.name)
+    }
   }
 
   private extractSummary(content: string): string {
