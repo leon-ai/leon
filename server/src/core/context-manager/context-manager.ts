@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 import {
+  CODEBASE_CONTEXT_PATH,
   CODEBASE_PATH,
   LEON_DISABLED_CONTEXT_FILES,
   NODE_RUNTIME_BIN_PATH,
@@ -38,7 +39,7 @@ const CONTEXT_FILES_SOURCE_DIR = path.join(
   'context-files'
 )
 const CONTEXT_MANAGER_DIR = path.dirname(fileURLToPath(import.meta.url))
-const SOURCE_AWARE_STATIC_CONTEXT_FILES = new Set([
+const CODEBASE_CONTEXT_FILES = new Set([
   'LEON.md',
   'ARCHITECTURE.md'
 ])
@@ -127,8 +128,10 @@ export default class ContextManager {
 
     try {
       await fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true })
+      await fs.promises.mkdir(CODEBASE_CONTEXT_PATH, { recursive: true })
       this.cleanupDisabledContextFiles()
       this.cleanupRetiredContextFiles()
+      this.cleanupProfileCopiesOfCodebaseContextFiles()
       this.refreshContextFilesAtBootInBackground()
 
       await this.syncContextReadFilenameEnum()
@@ -282,6 +285,14 @@ export default class ContextManager {
   }
 
   private getContextFilePath(filename: string): string {
+    if (CODEBASE_CONTEXT_FILES.has(filename)) {
+      return path.join(CODEBASE_CONTEXT_PATH, filename)
+    }
+
+    return path.join(PROFILE_CONTEXT_PATH, filename)
+  }
+
+  private getProfileContextFilePath(filename: string): string {
     return path.join(PROFILE_CONTEXT_PATH, filename)
   }
 
@@ -323,7 +334,7 @@ export default class ContextManager {
       return true
     }
 
-    if (SOURCE_AWARE_STATIC_CONTEXT_FILES.has(definition.filename)) {
+    if (CODEBASE_CONTEXT_FILES.has(definition.filename)) {
       const sourceUpdatedAt = this.getContextSourceUpdatedAt(definition)
       if (
         typeof sourceUpdatedAt === 'number' &&
@@ -482,7 +493,7 @@ export default class ContextManager {
 
       const filePath = this.getContextFilePath(definition.filename)
       const content = this.ensureTrailingNewline(parsed.content)
-      fs.mkdirSync(PROFILE_CONTEXT_PATH, { recursive: true })
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
       fs.writeFileSync(filePath, content, 'utf-8')
       this.metadata.set(definition.filename, {
         lastGeneratedAt: Date.now()
@@ -650,7 +661,7 @@ export default class ContextManager {
     try {
       const content = this.ensureTrailingNewline(definition.generate())
 
-      fs.mkdirSync(PROFILE_CONTEXT_PATH, { recursive: true })
+      fs.mkdirSync(path.dirname(filePath), { recursive: true })
       fs.writeFileSync(filePath, content, 'utf-8')
       this.metadata.set(definition.filename, {
         lastGeneratedAt: Date.now()
@@ -735,8 +746,26 @@ export default class ContextManager {
 
   private cleanupDisabledContextFiles(): void {
     for (const filename of this.disabledContextFiles) {
-      const filePath = this.getContextFilePath(filename)
+      const filePath = CODEBASE_CONTEXT_FILES.has(filename)
+        ? this.getProfileContextFilePath(filename)
+        : this.getContextFilePath(filename)
       this.metadata.delete(filename)
+
+      if (!fs.existsSync(filePath)) {
+        continue
+      }
+
+      try {
+        fs.rmSync(filePath, { force: true })
+      } catch {
+        continue
+      }
+    }
+  }
+
+  private cleanupProfileCopiesOfCodebaseContextFiles(): void {
+    for (const filename of CODEBASE_CONTEXT_FILES) {
+      const filePath = this.getProfileContextFilePath(filename)
 
       if (!fs.existsSync(filePath)) {
         continue

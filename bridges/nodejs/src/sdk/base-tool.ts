@@ -211,19 +211,9 @@ export abstract class Tool {
   }
 
   /**
-   * Escape shell argument by escaping special characters with backslashes
-   * This follows the Unix/Linux shell escaping convention
+   * Escape a shell argument.
    */
   private escapeShellArg(arg: string): string {
-    // Don't escape URLs - they have their own structure
-    try {
-      new URL(arg)
-      // If URL constructor succeeds, it's a valid URL - don't escape it
-      return arg
-    } catch {
-      // Not a valid URL, continue with normal escaping
-    }
-
     if (isWindows()) {
       // Windows: wrap in double quotes and escape internal quotes
       if (
@@ -238,8 +228,7 @@ export abstract class Tool {
       return arg
     }
 
-    // Unix/Linux: escape special characters with backslashes
-    return arg.replace(/(["\s'$`\\(){}[\]|&;<>*?!])/g, '\\$1')
+    return `'${arg.replace(/'/g, `'\\''`)}'`
   }
 
   /**

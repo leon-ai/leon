@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 
 import { requestBuiltInCommand } from './api'
 import { BuiltInCommandsModal } from './modal'
+import FileSystemAutocomplete from '../file-system-autocomplete'
 
 const AUTOCOMPLETE_DELAY_MS = 90
 const CLOSE_ANIMATION_DURATION_MS = 180
@@ -49,6 +50,12 @@ export default class BuiltInCommands {
     this.closeTimeout = null
     this.shouldFocusInput = false
     this.modalInputRef = createRef()
+    this.fileSystemAutocomplete = new FileSystemAutocomplete({
+      serverUrl,
+      onValueChange: (value) => {
+        this.handleCommandChange(value)
+      }
+    })
   }
 
   init() {
@@ -78,6 +85,15 @@ export default class BuiltInCommands {
   }
 
   render() {
+    const focusedInputElement = this.modalInputRef.current
+    const shouldRestoreCommandInputFocus =
+      focusedInputElement && document.activeElement === focusedInputElement
+    const selectionStart = shouldRestoreCommandInputFocus
+      ? focusedInputElement.selectionStart
+      : null
+    const selectionEnd = shouldRestoreCommandInputFocus
+      ? focusedInputElement.selectionEnd
+      : null
     const { recentSelectedSuggestionIndex, suggestionSelectedSuggestionIndex } =
       this.getSelectedSuggestionIndices()
 
@@ -117,6 +133,10 @@ export default class BuiltInCommands {
       window.requestAnimationFrame(() => {
         this.focusCommandInput()
       })
+    } else if (shouldRestoreCommandInputFocus) {
+      window.requestAnimationFrame(() => {
+        this.restoreCommandInputFocus(selectionStart, selectionEnd)
+      })
     }
 
     if (
@@ -129,6 +149,20 @@ export default class BuiltInCommands {
         this.scrollSelectedSuggestionIntoView()
       })
     }
+
+    window.requestAnimationFrame(() => {
+      this.attachFileSystemAutocomplete()
+    })
+  }
+
+  attachFileSystemAutocomplete() {
+    const inputElement = this.modalInputRef.current
+
+    if (!inputElement) {
+      return
+    }
+
+    this.fileSystemAutocomplete.attach(inputElement)
   }
 
   handleDocumentKeyDown(event) {
@@ -300,6 +334,7 @@ export default class BuiltInCommands {
 
     this.isClosing = true
     this.isOpen = false
+    this.fileSystemAutocomplete.close()
     this.render()
 
     this.closeTimeout = window.setTimeout(() => {
@@ -525,6 +560,30 @@ export default class BuiltInCommands {
         inputElement.value.length,
         inputElement.value.length
       )
+    }
+  }
+
+  restoreCommandInputFocus(selectionStart, selectionEnd) {
+    const inputElement = this.modalInputRef.current
+
+    if (!inputElement) {
+      return
+    }
+
+    if (document.activeElement !== inputElement) {
+      try {
+        inputElement.focus({ preventScroll: true })
+      } catch {
+        inputElement.focus()
+      }
+    }
+
+    if (
+      typeof inputElement.setSelectionRange === 'function' &&
+      selectionStart !== null &&
+      selectionEnd !== null
+    ) {
+      inputElement.setSelectionRange(selectionStart, selectionEnd)
     }
   }
 

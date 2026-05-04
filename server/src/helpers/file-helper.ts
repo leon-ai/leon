@@ -9,9 +9,132 @@ import {
 } from '@/helpers/network-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 
+const DEFAULT_FILE_ICON_NAME = 'file-line'
+const FOLDER_ICON_NAME = 'folder-3-line'
 const ZIP_ARCHIVE_EXTENSIONS = new Set(['.zip', '.whl'])
+const IMAGE_FILE_EXTENSIONS = [
+  '.avif',
+  '.bmp',
+  '.gif',
+  '.heic',
+  '.heif',
+  '.ico',
+  '.jpeg',
+  '.jpg',
+  '.png',
+  '.svg',
+  '.tif',
+  '.tiff',
+  '.webp'
+]
+const VIDEO_FILE_EXTENSIONS = [
+  '.avi',
+  '.flv',
+  '.m4v',
+  '.mkv',
+  '.mov',
+  '.mp4',
+  '.mpeg',
+  '.mpg',
+  '.ogv',
+  '.webm',
+  '.wmv'
+]
+const AUDIO_FILE_EXTENSIONS = [
+  '.aac',
+  '.aiff',
+  '.alac',
+  '.flac',
+  '.m4a',
+  '.mp3',
+  '.ogg',
+  '.opus',
+  '.wav',
+  '.wma'
+]
+const CODE_FILE_EXTENSIONS = [
+  '.c',
+  '.cc',
+  '.clj',
+  '.cpp',
+  '.cs',
+  '.css',
+  '.dart',
+  '.ex',
+  '.exs',
+  '.go',
+  '.h',
+  '.hpp',
+  '.html',
+  '.java',
+  '.js',
+  '.jsx',
+  '.kt',
+  '.lua',
+  '.mjs',
+  '.php',
+  '.pl',
+  '.ps1',
+  '.py',
+  '.rb',
+  '.rs',
+  '.sass',
+  '.scss',
+  '.sh',
+  '.sql',
+  '.swift',
+  '.ts',
+  '.tsx',
+  '.vue',
+  '.xml',
+  '.yaml',
+  '.yml',
+  '.zig'
+]
+const TEXT_FILE_EXTENSIONS = ['.csv', '.log', '.rtf', '.txt']
+const ARCHIVE_FILE_EXTENSIONS = [
+  '.7z',
+  '.bz2',
+  '.gz',
+  '.rar',
+  '.tar',
+  '.tgz',
+  '.xz',
+  '.zip'
+]
+function mapExtensionsToIcon(
+  extensions: string[],
+  iconName: string
+): Array<[string, string]> {
+  return extensions.map((extension) => [extension, iconName])
+}
+
+const FILE_EXTENSION_REMIX_ICON_NAMES = new Map<string, string>([
+  ...mapExtensionsToIcon(IMAGE_FILE_EXTENSIONS, 'file-image-line'),
+  ...mapExtensionsToIcon(VIDEO_FILE_EXTENSIONS, 'file-video-line'),
+  ...mapExtensionsToIcon(AUDIO_FILE_EXTENSIONS, 'file-music-line'),
+  ...mapExtensionsToIcon(CODE_FILE_EXTENSIONS, 'file-code-line'),
+  ...mapExtensionsToIcon(TEXT_FILE_EXTENSIONS, 'file-text-line'),
+  ...mapExtensionsToIcon(ARCHIVE_FILE_EXTENSIONS, 'file-zip-line'),
+  ['.doc', 'file-word-line'],
+  ['.docx', 'file-word-line'],
+  ['.md', 'markdown-line'],
+  ['.mdx', 'markdown-line'],
+  ['.odp', 'file-ppt-line'],
+  ['.ods', 'file-excel-line'],
+  ['.odt', 'file-word-line'],
+  ['.pdf', 'file-pdf-2-line'],
+  ['.ppt', 'file-ppt-line'],
+  ['.pptx', 'file-ppt-line'],
+  ['.xls', 'file-excel-line'],
+  ['.xlsx', 'file-excel-line']
+])
 
 export class FileHelper {
+  public static readonly DEFAULT_FILE_REMIX_ICON_NAME = DEFAULT_FILE_ICON_NAME
+
+  public static readonly FOLDER_REMIX_ICON_NAME = FOLDER_ICON_NAME
+
   /**
    * Check whether a path exists on disk.
    * @param filePath The path to inspect
@@ -19,6 +142,20 @@ export class FileHelper {
    */
   public static isExistingPath(filePath: string): boolean {
     return fs.existsSync(filePath)
+  }
+
+  /**
+   * Resolve the Remix icon name for a file path based on its extension.
+   * @param filePath The file path or file name to inspect
+   * @returns The Remix icon name with its "-line" suffix
+   */
+  public static getRemixIconName(filePath: string): string {
+    const extension = path.extname(filePath).toLowerCase()
+
+    return (
+      FILE_EXTENSION_REMIX_ICON_NAMES.get(extension) ||
+      DEFAULT_FILE_ICON_NAME
+    )
   }
 
   /**
