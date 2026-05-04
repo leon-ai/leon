@@ -1,0 +1,45 @@
+---
+title: What Is Leon?
+description: Leon is an open-source personal AI assistant built around owner control.
+---
+
+# What Is Leon?
+
+Leon is an open-source personal AI assistant.
+
+It can answer, act, use tools, remember useful context, and work through goals across different execution modes. Leon is designed to live close to the owner: on your machine, connected to your environment, and extensible through skills and tools.
+
+## What Leon Is Built For
+
+Leon is built for practical help:
+
+- understand what you want to do
+- choose the right way to handle the request
+- use declared tools instead of guessing
+- remember durable preferences and useful history
+- use local context when it helps
+- keep the owner in control
+
+## What Makes Leon Different
+
+Leon is not designed as a thin wrapper around a remote model. The core is shaped around ownership.
+
+That means local-first thinking, explicit tools, inspectable architecture, memory with boundaries, and a system that can evolve with the person using it.
+
+Leon can use remote providers when they are useful. It can also run with local model support when your hardware allows it. The point is choice, not dependency.
+
+## The Current 2.0 Direction
+
+Leon 2.0 moves the project toward a more agentic core:
+
+- `smart` mode chooses the best path
+- `controlled` mode runs deterministic Leon-native skills
+- `agent` mode can plan, execute, observe, recover, and answer
+
+The core architecture is layered as:
+
+```txt
+Skills -> Actions -> Tools -> Functions (-> Binaries)
+```
+
+That structure keeps the assistant extensible without turning every task into vague model behavior.

@@ -1,0 +1,32 @@
+{
+  "name": "@leon-ai/docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@types/mdx": "2.0.13",
+    "fumadocs-core": "16.8.7",
+    "fumadocs-mdx": "14.3.2",
+    "fumadocs-ui": "16.8.7",
+    "lucide-react": "1.14.0",
+    "next": "16.2.4",
+    "react": "19.2.5",
+    "react-dom": "19.2.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@next/eslint-plugin-next": "16.2.4",
+    "@types/node": "25.6.0",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "10.3.0",
+    "eslint-config-next": "16.2.4",
+    "tailwindcss": "4.2.4",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.59.1"
+  }
+}

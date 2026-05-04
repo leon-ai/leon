@@ -1,0 +1,58 @@
+---
+title: Quick Start
+description: Install, run, and check Leon from source.
+---
+
+# Quick Start
+
+<span className="leon-status">Developer Preview</span>
+
+Leon 2.0 currently targets developers and contributors who are comfortable running the project from source.
+
+## Requirements
+
+- Node.js `>= 24.0.0`
+- pnpm
+- Linux, macOS, or Windows
+
+Using Volta or another Node version manager is recommended.
+
+## Install
+
+```sh
+git clone https://github.com/leon-ai/leon.git
+cd leon
+npm install --global pnpm@latest
+pnpm install
+```
+
+## Run
+
+```sh
+pnpm start
+```
+
+By default, Leon is available at:
+
+```txt
+http://localhost:1337
+```
+
+## Check The Setup
+
+```sh
+pnpm run check
+```
+
+This command reports whether Leon is installed and configured correctly.
+
+## Development
+
+For development, the main scripts are:
+
+```sh
+pnpm run dev:server
+pnpm run dev:app
+```
+
+Use the server script for the Leon runtime and the app script for the web interface.

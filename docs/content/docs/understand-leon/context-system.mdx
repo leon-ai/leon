@@ -1,0 +1,37 @@
+---
+title: Context System
+description: How Leon uses environment context without overloading prompts.
+---
+
+# Context System
+
+Context is live or generated knowledge about Leon's environment.
+
+It helps Leon stay grounded in the owner's real setup.
+
+## Context Files
+
+Leon can maintain context files for areas such as:
+
+- system
+- activity
+- browser
+- network
+- workspace
+- habits
+- inventory
+- media
+- architecture
+- identity
+
+## Context Before Memory
+
+For runtime and environment questions, context should be checked before memory.
+
+Memory answers what happened or what the owner prefers. Context answers what is true about the current environment.
+
+## Progressive Grounding
+
+Leon should load only relevant context.
+
+This keeps prompts efficient and reduces the risk of stale or unrelated details influencing the answer.

@@ -1,0 +1,41 @@
+---
+title: Context
+description: How Leon grounds answers in the real runtime and environment.
+---
+
+# Context
+
+Context is current information about Leon's runtime and environment.
+
+It helps Leon answer questions about what is actually happening on your machine instead of guessing.
+
+## Context Examples
+
+Leon can maintain context about areas such as:
+
+- host system
+- workspace
+- runtime
+- network
+- activity
+- local inventory
+- media profile
+- architecture
+
+## Context-First Policy
+
+For environment questions, Leon should inspect context before memory or shell commands.
+
+Example:
+
+```txt
+Am I connected to the VPN?
+```
+
+That kind of question should be grounded in runtime context rather than memory.
+
+## Progressive Context
+
+Leon should not load every piece of context into every prompt.
+
+Instead, it uses relevant context depending on the toolkit, mode, and task. This keeps prompts cleaner and reduces hallucination risk.

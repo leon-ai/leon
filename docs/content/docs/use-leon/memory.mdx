@@ -1,0 +1,36 @@
+---
+title: Memory
+description: How Leon remembers useful information over time.
+---
+
+# Memory
+
+Leon uses layered memory so it can stay useful across time.
+
+The goal is continuity. If something matters days or weeks later, Leon should be able to retrieve it and help you continue naturally.
+
+## Memory Layers
+
+Leon separates memory into:
+
+- persistent memory for durable facts and preferences
+- daily memory for per-day summaries and timelines
+- discussion memory for recent working context
+
+This keeps memory more precise than a single unstructured bucket.
+
+## Explicit Memory
+
+When you say something like:
+
+```txt
+Remember that I prefer pnpm for this project.
+```
+
+Leon should treat that as a durable memory request.
+
+## Retrieved Memory
+
+Leon retrieves memory through indexed search and adaptive follow-up passes when initial recall looks weak.
+
+The system is designed to avoid relying on the model's raw guess about the past.

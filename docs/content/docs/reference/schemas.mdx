@@ -1,0 +1,34 @@
+---
+title: Schemas
+description: JSON schema areas used by Leon.
+---
+
+# Schemas
+
+Leon uses schemas to keep extension points explicit.
+
+The main schema files live under:
+
+```txt
+server/src/schemas
+```
+
+## Current Areas
+
+Important schema areas include:
+
+- skill manifests
+- tool manifests
+- toolkit manifests
+- global data
+- voice configuration
+
+## Why Schemas Matter
+
+Schemas make Leon easier to extend safely.
+
+They help validate manifests, guide tool calls, reduce malformed execution, and make docs generation possible in the future.
+
+## Documentation Direction
+
+Reference pages for manifests should eventually be generated or derived from these schemas so the docs stay synchronized with the runtime.

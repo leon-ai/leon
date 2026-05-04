@@ -1,0 +1,10 @@
+{
+  "title": "Reference",
+  "pages": [
+    "configuration",
+    "scripts",
+    "schemas",
+    "providers",
+    "directory-structure"
+  ]
+}

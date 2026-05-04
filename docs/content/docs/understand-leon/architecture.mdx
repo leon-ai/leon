@@ -1,0 +1,39 @@
+---
+title: Architecture
+description: A high-level map of Leon 2.0.
+---
+
+# Architecture
+
+Leon 2.0 is organized around a layered execution model:
+
+```txt
+Skills -> Actions -> Tools -> Functions (-> Binaries)
+```
+
+This model keeps Leon extensible while still making behavior inspectable.
+
+## Main Areas
+
+The current repository is organized around these areas:
+
+- `server/`: runtime, routing, memory, context, HTTP API, execution
+- `app/`: web application
+- `aurora/`: UI components and preview environment
+- `skills/`: native and agent skills
+- `tools/`: toolkits and tool manifests
+- `bridges/`: Node.js and Python bridge runtimes
+- `tcp_server/`: Python services used by the runtime stack
+- `core/context/`: generated identity and architecture context
+
+## Runtime Shape
+
+At runtime, Leon receives input, chooses a route, executes work through skills or tools, observes results, and returns an answer.
+
+The more dynamic the task, the more important schemas, tool observations, and recovery loops become.
+
+## Principle
+
+Leon should prefer explicit capabilities over hidden behavior.
+
+That makes the assistant easier to debug, safer to extend, and more honest about what it did.

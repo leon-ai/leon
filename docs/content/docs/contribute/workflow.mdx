@@ -1,0 +1,46 @@
+---
+title: Workflow
+description: The basic development workflow for Leon contributions.
+---
+
+# Workflow
+
+## Install
+
+```sh
+pnpm install
+```
+
+## Check
+
+```sh
+pnpm run check
+```
+
+## Develop
+
+```sh
+pnpm run dev:server
+pnpm run dev:app
+```
+
+## Validate
+
+```sh
+pnpm run lint
+pnpm test
+```
+
+Use narrower tests when the change is focused, then broaden when the change touches shared behavior.
+
+## Commit Format
+
+Commit messages are validated by `scripts/commit-msg.js`.
+
+Examples:
+
+```txt
+docs: add 2.0 docs foundation
+fix(server): handle missing tool output
+feat(skill/timer_skill): improve timer follow-up
+```

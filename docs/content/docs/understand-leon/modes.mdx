@@ -1,0 +1,32 @@
+---
+title: Modes
+description: How Leon chooses between smart, controlled, and agent execution.
+---
+
+# Modes
+
+Leon can run requests through different modes.
+
+## Smart
+
+`smart` is the default mode.
+
+Leon decides whether the request should be handled directly, through controlled skills, or through agentic execution.
+
+## Controlled
+
+`controlled` mode runs deterministic Leon-native skills and actions.
+
+This is useful when the behavior should be predictable, localized, and tightly connected to a known skill.
+
+## Agent
+
+`agent` mode handles goals that need planning, tool use, observation, and recovery.
+
+Agent mode is more flexible, but it also needs stronger safeguards: schemas, tool validation, retries, and clear final synthesis.
+
+## Choosing A Mode
+
+As an owner, you usually should not need to think about modes.
+
+As a contributor, modes matter because they shape where new behavior belongs. If the task has a stable deterministic path, start with controlled behavior. If the task is open-ended and tool-driven, agent mode may be the better fit.

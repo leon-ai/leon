@@ -1,0 +1,46 @@
+---
+title: Create A Tool
+description: Add callable functions Leon can use during execution.
+---
+
+# Create A Tool
+
+Tools let Leon do real work.
+
+Use a tool when agent mode needs a declared capability it can call through a schema.
+
+## Tool Location
+
+Tools live under toolkit folders in:
+
+```txt
+tools
+```
+
+Each tool belongs to a toolkit and includes a `tool.json` manifest.
+
+## Manifest
+
+A tool manifest describes:
+
+- stable tool ID
+- toolkit ID
+- name and description
+- author metadata
+- callable functions
+- function parameter schemas
+- optional output schemas
+- optional binaries and resources
+- optional hooks
+
+## Function Design
+
+Good tool functions are specific.
+
+They should accept clear arguments, validate input, return structured output, and avoid hiding multiple unrelated behaviors behind one vague function.
+
+## Hooks
+
+Hooks can shape tool output after execution.
+
+For example, a post-execution hook can extract only the part of a large JSON result that the model needs. This keeps agent prompts leaner and more useful.

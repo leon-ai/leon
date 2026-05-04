@@ -1,0 +1,38 @@
+---
+title: Agent Loop
+description: How Leon plans, executes, observes, recovers, and answers.
+---
+
+# Agent Loop
+
+Agent mode uses a ReAct-style loop.
+
+The loop lets Leon plan a task, call tools, observe results, recover from failures, and produce a final answer.
+
+## Planning
+
+Leon decides whether it can answer directly or needs a tool plan.
+
+The plan should use short, understandable step labels so execution remains inspectable.
+
+## Execution
+
+Leon resolves function arguments, validates schemas, runs tools, and captures structured observations.
+
+Tool calls should not depend on vague model output when a schema can make the call explicit.
+
+## Pause And Resume
+
+If a required input is missing, Leon can ask a clarification question and resume the same step after the owner replies.
+
+This avoids restarting the whole task when only one missing value is needed.
+
+## Recovery
+
+When a step fails, Leon should replan from the failure state while preserving useful progress.
+
+The goal is not to retry blindly. The goal is to recover with context.
+
+## Final Answer
+
+The final answer should be based on observed results, not imagined execution.

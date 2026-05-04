@@ -1,0 +1,52 @@
+---
+title: Core Ideas
+description: The concepts that explain how Leon 2.0 works.
+---
+
+# Core Ideas
+
+Leon 2.0 is easier to understand when you separate the main ideas.
+
+## Owner
+
+The owner is the person Leon serves.
+
+Leon can adapt to the owner's preferences, environment, and history. The owner stays in control of what Leon can access, remember, and do.
+
+## Skills
+
+Skills are high-level capabilities.
+
+Native skills provide controlled behavior. Agent skills can define workflows with `SKILL.md` files and guide agentic execution.
+
+## Tools
+
+Tools are declared capabilities Leon can call to do real work.
+
+Tools belong to toolkits. They expose functions with schemas, settings, outputs, and optional hooks.
+
+## Context
+
+Context is current information about Leon's runtime and environment.
+
+Examples include system state, workspace data, network details, activity, inventory, and architecture. Leon should use context when answering environment or runtime questions.
+
+## Memory
+
+Memory stores useful history over time.
+
+Leon separates persistent memory, daily memory, and discussion memory so each layer can serve a different purpose.
+
+## Modes
+
+Leon can operate in different modes:
+
+- `smart`: choose the best route automatically
+- `controlled`: run deterministic native skills and actions
+- `agent`: plan and execute dynamically with tools
+
+## Proactivity
+
+Leon can eventually act before being asked when it has a clear, bounded, owner-aligned reason.
+
+This is handled through a pulse mechanism that should stay conservative, deduplicated, and respectful of owner declines.

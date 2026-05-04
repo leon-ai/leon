@@ -1,0 +1,31 @@
+---
+title: Bridge SDKs
+description: Build tool and skill logic through Node.js and Python bridges.
+---
+
+# Bridge SDKs
+
+Leon supports bridge runtimes so capability logic can run outside the core server.
+
+The current bridge areas are:
+
+```txt
+bridges/nodejs
+bridges/python
+```
+
+## Node.js Bridge
+
+Use the Node.js bridge when the tool or skill logic fits naturally in TypeScript or JavaScript.
+
+The SDK provides helpers for settings, network access, memory, widgets, tool reporting, and toolkit configuration.
+
+## Python Bridge
+
+Use the Python bridge when the capability depends on Python libraries, ML tooling, media processing, or existing Python code.
+
+## Rule Of Thumb
+
+Use the language that keeps the implementation smaller and easier to maintain.
+
+Do not move logic into a bridge just to make it feel more advanced. Bridge code should exist because it makes the capability clearer or more practical.

@@ -1,0 +1,36 @@
+---
+title: Configuration
+description: Where Leon configuration lives and how to approach it.
+---
+
+# Configuration
+
+Leon configuration is split across environment files, generated profile files, tool settings, and sample config files.
+
+## Start Here
+
+Run:
+
+```sh
+pnpm run check
+```
+
+This is the safest first command because it inspects the current setup and reports what needs attention.
+
+## Common Areas
+
+Important configuration areas include:
+
+- `.env`
+- `.env.sample`
+- `core/config`
+- profile-specific tool settings
+- provider keys
+- voice provider settings
+- local AI setup files
+
+## Principle
+
+Configuration should stay explicit.
+
+If a capability needs credentials, permissions, or local resources, the owner should be able to see where that setup lives.

@@ -1,0 +1,11 @@
+{
+  "title": "Build With Leon",
+  "pages": [
+    "index",
+    "create-a-skill",
+    "create-a-tool",
+    "bridge-sdks",
+    "widgets",
+    "testing"
+  ]
+}

@@ -1,0 +1,43 @@
+---
+title: Scripts
+description: Common pnpm scripts in the Leon repository.
+---
+
+# Scripts
+
+The root `package.json` contains the main project scripts.
+
+## Daily Development
+
+```sh
+pnpm run dev:server
+pnpm run dev:app
+pnpm run check
+pnpm run lint
+```
+
+## Build And Start
+
+```sh
+pnpm run build
+pnpm start
+```
+
+## Tests
+
+```sh
+pnpm test
+pnpm test:agent:unit
+pnpm test:controlled:unit
+pnpm test:controlled:e2e
+```
+
+## Generation
+
+```sh
+pnpm run generate:http-api-key
+pnpm run generate:json-schemas
+pnpm run generate:prompt
+```
+
+Use scripts instead of reaching into internals directly when a script already exists.

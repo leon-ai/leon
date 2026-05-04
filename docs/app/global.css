@@ -1,0 +1,30 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/preset.css';
+
+:root {
+  --leon-accent: #1f8a70;
+}
+
+body {
+  font-feature-settings: 'kern';
+}
+
+.leon-status {
+  align-items: center;
+  border: 1px solid var(--color-fd-border);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: 0.375rem;
+  line-height: 1;
+  padding: 0.375rem 0.625rem;
+}
+
+.leon-status::before {
+  background: var(--leon-accent);
+  border-radius: 999px;
+  content: '';
+  height: 0.5rem;
+  width: 0.5rem;
+}

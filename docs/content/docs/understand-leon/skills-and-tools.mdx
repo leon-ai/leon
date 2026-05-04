@@ -1,0 +1,38 @@
+---
+title: Skills And Tools
+description: How skills, actions, toolkits, tools, and functions relate.
+---
+
+# Skills And Tools
+
+Leon separates intent-level capabilities from executable functions.
+
+## Skills
+
+Skills describe what Leon can do at a higher level.
+
+Native skills live under `skills/native`. Agent skills live under `skills/agent` and can define workflow instructions with `SKILL.md`.
+
+## Actions
+
+Actions are the behavior exposed by native skills.
+
+An action can be dialog-only or backed by logic through a bridge.
+
+## Toolkits
+
+Toolkits group tools by domain.
+
+Examples include weather, operating system control, structured knowledge, coding development, and productivity collaboration.
+
+## Tools
+
+Tools expose callable functions with schemas.
+
+Tool manifests describe metadata, function parameters, optional output schemas, settings, resources, binaries, and hooks.
+
+## Functions
+
+Functions are what Leon can actually call.
+
+They should be specific, schema-guided, and designed to return useful structured observations.

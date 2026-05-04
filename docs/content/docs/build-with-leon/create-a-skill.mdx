@@ -1,0 +1,42 @@
+---
+title: Create A Skill
+description: Add owner-facing behavior to Leon.
+---
+
+# Create A Skill
+
+Skills are owner-facing capabilities.
+
+Use a skill when you are adding something Leon should understand as a capability, such as a timer, weather forecast, todo list, or guided workflow.
+
+## Native Skills
+
+Native skills live under:
+
+```txt
+skills/native
+```
+
+They define a `skill.json` manifest, localized data, actions, and optional bridge-backed logic.
+
+## Agent Skills
+
+Agent skills live under:
+
+```txt
+skills/agent
+```
+
+They use `SKILL.md` instructions to guide agentic workflows.
+
+## Skill Design
+
+A good skill should define:
+
+- what the owner can ask
+- what action should run
+- which parameters are required
+- what answer Leon should return
+- whether logic is needed
+
+Keep the first version narrow. A small useful skill is better than a broad skill that is hard to maintain.

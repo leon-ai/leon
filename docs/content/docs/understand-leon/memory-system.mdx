@@ -1,0 +1,36 @@
+---
+title: Memory System
+description: The layered memory model behind Leon.
+---
+
+# Memory System
+
+Leon's memory system is built for continuity.
+
+The more you work with Leon, the more it should understand useful facts, preferences, and prior context.
+
+## Layers
+
+Leon separates memory into:
+
+- persistent memory
+- daily memory
+- discussion memory
+
+It also maintains an owner profile document that acts as a curated summary, separate from raw memory.
+
+## Retrieval
+
+Memory retrieval uses indexed search so Leon can look up relevant history instead of guessing.
+
+When the first result looks weak, the system can run adaptive rescue passes to improve recall.
+
+## Maintenance
+
+Memory should stay useful over time.
+
+Older short-term memory can be compacted or pruned, while durable facts remain available through persistent memory.
+
+## Design Goal
+
+Memory should make Leon feel continuous without making every prompt heavy, noisy, or unsafe.

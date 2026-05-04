@@ -1,0 +1,44 @@
+---
+title: Configure Providers
+description: Choose how Leon connects to AI providers.
+---
+
+# Configure Providers
+
+Leon can work with local and remote AI providers.
+
+The provider you choose affects privacy, latency, cost, quality, and available model features.
+
+## Provider Mindset
+
+Use the provider that matches the task:
+
+- local models when ownership and privacy matter most
+- remote models when capability and reliability matter most
+- OpenAI-compatible providers when you need flexibility
+
+Leon 2.0 is being built to handle provider differences more carefully because agentic execution depends on stable model behavior.
+
+## Common Provider Areas
+
+Leon has active provider work around:
+
+- OpenAI
+- OpenRouter
+- Anthropic
+- llama.cpp
+- OpenAI-compatible APIs
+
+Other providers can be supported through the provider layer as the project evolves.
+
+## Configuration
+
+Provider configuration is handled through environment variables and generated setup files.
+
+Start with:
+
+```sh
+pnpm run check
+```
+
+Then review the generated setup output and the sample environment files in the repository.

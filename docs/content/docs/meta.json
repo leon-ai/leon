@@ -1,0 +1,13 @@
+{
+  "title": "Leon Docs",
+  "pages": [
+    "index",
+    "welcome",
+    "use-leon",
+    "understand-leon",
+    "build-with-leon",
+    "reference",
+    "roadmap",
+    "contribute"
+  ]
+}

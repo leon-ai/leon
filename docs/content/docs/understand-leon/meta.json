@@ -1,0 +1,12 @@
+{
+  "title": "Understand Leon",
+  "pages": [
+    "architecture",
+    "modes",
+    "skills-and-tools",
+    "agent-loop",
+    "memory-system",
+    "context-system",
+    "proactivity"
+  ]
+}

@@ -1,0 +1,32 @@
+---
+title: Testing
+description: Validate Leon changes with focused tests and linting.
+---
+
+# Testing
+
+Every meaningful change should be validated.
+
+Use the smallest test scope that gives confidence, then expand when the change touches shared behavior.
+
+## Common Commands
+
+```sh
+pnpm run lint
+pnpm test
+pnpm test:agent:unit
+pnpm test:controlled:unit
+pnpm test:controlled:e2e
+```
+
+For agent end-to-end tests, use the OpenAI provider unless a broader provider run is explicitly needed:
+
+```sh
+pnpm test:agent:e2e -- -t openai
+```
+
+## Testing Mindset
+
+Test behavior, not implementation details.
+
+For skills and tools, focus on routing, required parameters, schema behavior, successful execution, and clear failure handling.

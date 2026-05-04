@@ -1,0 +1,14 @@
+{
+  "title": "Use Leon",
+  "pages": [
+    "quick-start",
+    "configure-providers",
+    "local-llms",
+    "chat",
+    "voice",
+    "memory",
+    "context",
+    "messaging-apps",
+    "desktop-app"
+  ]
+}

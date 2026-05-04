@@ -1,0 +1,35 @@
+---
+title: Directory Structure
+description: A quick map of the Leon repository.
+---
+
+# Directory Structure
+
+```txt
+app/              Web application
+aurora/           UI components and preview environment
+bridges/          Node.js and Python bridge runtimes
+core/             Shared core data and generated context
+docs/             Leon 2.0 documentation
+scripts/          Setup, build, release, lint, and generation scripts
+server/           Main runtime and API
+skills/           Native and agent skills
+tcp_server/       Python TCP services
+tools/            Toolkits and tools
+```
+
+## Where To Start
+
+If you are learning the runtime, start with:
+
+```txt
+core/context/LEON.md
+core/context/ARCHITECTURE.md
+server/src/core
+server/src/schemas
+skills
+tools
+bridges
+```
+
+The context files summarize the current architecture and identity of Leon.
