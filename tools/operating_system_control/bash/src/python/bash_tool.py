@@ -9,6 +9,13 @@ from bridges.python.src.sdk.toolkit_config import ToolkitConfig
 DEFAULT_SETTINGS: Dict[str, Any] = {}
 REQUIRED_SETTINGS: List[str] = []
 
+DEFAULT_TIMEOUT_SECONDS = 30
+TIMEOUT_MILLISECONDS_INPUT_THRESHOLD = 10_000
+DEFAULT_TIMEOUT_RETRIES = 2
+MAX_TIMEOUT_RETRIES = 5
+TIMEOUT_RETRY_MULTIPLIER = 2
+MILLISECONDS_PER_SECOND = 1_000
+
 CRITICAL_COMMAND_SEQUENCES: Sequence[Sequence[str]] = (
     ("rm", "-rf", "/"),
     ("rm", "-rf", "/*"),
@@ -69,6 +76,8 @@ class BashTool(BaseTool):
         command: str,
         cwd: Optional[str] = None,
         timeout: Optional[int] = 30,
+        timeout_unit: Optional[str] = None,
+        timeout_retries: Optional[int] = None,
         capture_output: bool = True,
     ) -> Dict[str, Any]:
         analyzed_command = self._resolve_command_for_safety_analysis(command)
@@ -86,20 +95,45 @@ class BashTool(BaseTool):
             }
 
         requires_visible_terminal = self._requires_visible_terminal(analyzed_command)
+        timeout_seconds = self._normalize_timeout_seconds(timeout, timeout_unit)
+        timeout_retry_count = self._normalize_timeout_retries(timeout_retries)
+        effective_timeout_retries = 0 if requires_visible_terminal else timeout_retry_count
 
-        try:
-            if requires_visible_terminal:
-                self.report("bridges.tools.command_requires_terminal_auth")
+        for attempt in range(effective_timeout_retries + 1):
+            try:
+                if requires_visible_terminal:
+                    self.report("bridges.tools.command_requires_terminal_auth")
 
-                self.execute_command(
+                    self.execute_command(
+                        ExecuteCommandOptions(
+                            binary_name="bash",
+                            args=["-c", command],
+                            options={
+                                "open_in_terminal": True,
+                                "wait_for_exit": True,
+                                "cwd": cwd or os.getcwd(),
+                                "timeout": int(timeout_seconds * MILLISECONDS_PER_SECOND),
+                            },
+                            skip_binary_download=True,
+                        )
+                    )
+
+                    return {
+                        "success": True,
+                        "stdout": "Command executed in a visible terminal. Review that terminal for command output.",
+                        "stderr": "",
+                        "returncode": 0,
+                        "command": command,
+                    }
+
+                result_output = self.execute_command(
                     ExecuteCommandOptions(
                         binary_name="bash",
                         args=["-c", command],
                         options={
-                            "open_in_terminal": True,
-                            "wait_for_exit": True,
+                            "sync": True,
                             "cwd": cwd or os.getcwd(),
-                            "timeout": timeout * 1_000 if timeout is not None else None,
+                            "timeout": timeout_seconds,
                         },
                         skip_binary_download=True,
                     )
@@ -107,71 +141,110 @@ class BashTool(BaseTool):
 
                 return {
                     "success": True,
-                    "stdout": "Command executed in a visible terminal. Review that terminal for command output.",
+                    "stdout": result_output.strip(),
                     "stderr": "",
                     "returncode": 0,
                     "command": command,
                 }
+            except Exception as error:
+                error_message = str(error)
+                timed_out = self._is_timeout_error_message(error_message)
 
-            result_output = self.execute_command(
-                ExecuteCommandOptions(
-                    binary_name="bash",
-                    args=["-c", command],
-                    options={
-                        "sync": True,
-                        "cwd": cwd or os.getcwd(),
-                        "timeout": timeout,
-                    },
-                    skip_binary_download=True,
-                )
-            )
+                if timed_out and attempt < effective_timeout_retries:
+                    timeout_seconds *= TIMEOUT_RETRY_MULTIPLIER
+                    continue
 
-            return {
-                "success": True,
-                "stdout": result_output.strip(),
-                "stderr": "",
-                "returncode": 0,
-                "command": command,
-            }
-        except Exception as error:
-            error_message = str(error)
+                if timed_out:
+                    return {
+                        "success": False,
+                        "stdout": "",
+                        "stderr": (
+                            f"Command timed out after "
+                            f"{self._format_timeout_seconds(timeout_seconds)} "
+                            f"({attempt + 1} "
+                            f"attempt{'' if attempt == 0 else 's'})"
+                        ),
+                        "returncode": -1,
+                        "command": command,
+                    }
 
-            if "timed out" in error_message.lower():
+                if "failed with exit code" in error_message:
+                    exit_code_match = re.search(r"exit code (\d+)", error_message)
+                    exit_code = (
+                        int(exit_code_match.group(1)) if exit_code_match else -1
+                    )
+                    stderr_match = re.search(r"exit code \d+: (.+)$", error_message)
+                    stderr = stderr_match.group(1) if stderr_match else error_message
+
+                    return {
+                        "success": False,
+                        "stdout": "",
+                        "stderr": (
+                            f"Command failed in the visible terminal with exit code {exit_code}. Review that terminal for details."
+                            if requires_visible_terminal
+                            else stderr
+                        ),
+                        "returncode": exit_code,
+                        "command": command,
+                    }
+
                 return {
                     "success": False,
                     "stdout": "",
-                    "stderr": f"Command timed out after {timeout} seconds",
+                    "stderr": error_message,
                     "returncode": -1,
                     "command": command,
                 }
 
-            if "failed with exit code" in error_message:
-                exit_code_match = re.search(r"exit code (\d+)", error_message)
-                exit_code = (
-                    int(exit_code_match.group(1)) if exit_code_match else -1
-                )
-                stderr_match = re.search(r"exit code \d+: (.+)$", error_message)
-                stderr = stderr_match.group(1) if stderr_match else error_message
+        return {
+            "success": False,
+            "stdout": "",
+            "stderr": "Command failed without an execution result.",
+            "returncode": -1,
+            "command": command,
+        }
 
-                return {
-                    "success": False,
-                    "stdout": "",
-                    "stderr": (
-                        f"Command failed in the visible terminal with exit code {exit_code}. Review that terminal for details."
-                        if requires_visible_terminal
-                        else stderr
-                    ),
-                    "returncode": exit_code,
-                    "command": command,
-                }
+    @staticmethod
+    def _normalize_timeout_seconds(
+        timeout: Optional[int], timeout_unit: Optional[str] = None
+    ) -> float:
+        if timeout is None or timeout <= 0:
+            return float(DEFAULT_TIMEOUT_SECONDS)
 
-            return {
-                "success": False,
-                "stdout": "",
-                "stderr": error_message,
-                "returncode": -1,
-                "command": command,
-            }
+        if timeout_unit == "milliseconds":
+            return timeout / MILLISECONDS_PER_SECOND
+
+        if timeout_unit == "seconds":
+            return float(timeout)
+
+        if timeout >= TIMEOUT_MILLISECONDS_INPUT_THRESHOLD:
+            return timeout / MILLISECONDS_PER_SECOND
+
+        return float(timeout)
+
+    @staticmethod
+    def _normalize_timeout_retries(timeout_retries: Optional[int]) -> int:
+        if timeout_retries is None:
+            return DEFAULT_TIMEOUT_RETRIES
+
+        return min(max(int(timeout_retries), 0), MAX_TIMEOUT_RETRIES)
+
+    @staticmethod
+    def _format_timeout_seconds(timeout_seconds: float) -> str:
+        if timeout_seconds.is_integer():
+            return f"{int(timeout_seconds)} seconds"
+
+        return f"{timeout_seconds:.3f} seconds"
+
+    @staticmethod
+    def _is_timeout_error_message(error_message: str) -> bool:
+        normalized_error_message = error_message.lower()
+
+        return (
+            "timed out" in normalized_error_message
+            or "timeout" in normalized_error_message
+            or "etimedout" in normalized_error_message
+        )
 
     def is_safe_command(self, command: str) -> bool:
         command_lower = command.lower()

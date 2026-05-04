@@ -85,6 +85,7 @@ export const PROFILE_AGENT_SKILLS_PATH = path.join(
 )
 export const TOOLS_PATH = path.join(CODEBASE_PATH, 'tools')
 export const GLOBAL_CORE_PATH = path.join(CODEBASE_PATH, 'core')
+export const CODEBASE_CONTEXT_PATH = path.join(GLOBAL_CORE_PATH, 'context')
 export const GLOBAL_DATA_PATH = path.join(GLOBAL_CORE_PATH, 'data')
 export const PROFILE_MEMORY_DB_PATH = path.join(
   PROFILE_MEMORY_PATH,
