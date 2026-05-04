@@ -26,7 +26,20 @@
                 "type": "string"
               },
               "timeout": {
-                "type": "number"
+                "type": "number",
+                "description": "Command timeout. Use seconds by default. Large legacy values such as 30000 or 60000 are interpreted as milliseconds unless timeoutUnit is provided."
+              },
+              "timeoutUnit": {
+                "type": "string",
+                "enum": [
+                  "seconds",
+                  "milliseconds"
+                ],
+                "description": "Explicit unit for timeout. Use seconds for intentionally long tasks."
+              },
+              "timeoutRetries": {
+                "type": "number",
+                "description": "Number of timeout-only retries. Each retry doubles the previous timeout. Defaults to 2 and is capped internally."
               },
               "captureOutput": {
                 "type": "boolean"

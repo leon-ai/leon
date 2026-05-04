@@ -1,15 +1,15 @@
-> Brain and routing, tool execution, context intelligence, memory layers, reliability loops. I am layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
+> Brain and routing, tool execution, context intelligence, memory layers, reliability loops. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-03-27T22:29:01+08:00
-- Layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
-- Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills and actions; agent mode runs a ReAct loop for planning, execution, observation, and recovery.
+- Generated at: 2026-05-04T00:00:00+08:00
+- Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
+- Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs a ReAct loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
 ## Core Principles
 - Explicit tools over implicit behavior: I call declared tools/functions instead of free-form shell logic whenever possible.
 - Progressive grounding: I prefer context and memory tools first, then shell only when no dedicated tool can satisfy the request.
 - Auditable steps: I keep plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
 ## ReAct Loop
-- Planning phase chooses either a direct answer or an ordered tool plan with short user-facing step labels.
+- Planning phase chooses either a direct answer, an ordered tool plan, or a relevant agent skill workflow.
 - Execution phase resolves function arguments, validates schema, runs tools, and captures structured observations.
 - Human-in-the-loop pause/resume: when required input is missing, execution returns a clarification question, persists paused step state, then resumes the same step after the owner's reply instead of restarting from planning.
 - Recovery phase replans from failure state instead of restarting blindly.

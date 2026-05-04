@@ -18,8 +18,17 @@ interface BashResult {
 interface ExecuteOptions {
   cwd?: string
   timeout?: number
+  timeoutUnit?: 'seconds' | 'milliseconds'
+  timeoutRetries?: number
   captureOutput?: boolean
 }
+
+const DEFAULT_TIMEOUT_SECONDS = 30
+const TIMEOUT_MILLISECONDS_INPUT_THRESHOLD = 10_000
+const DEFAULT_TIMEOUT_RETRIES = 2
+const MAX_TIMEOUT_RETRIES = 5
+const TIMEOUT_RETRY_MULTIPLIER = 2
+const MILLISECONDS_PER_SECOND = 1_000
 
 const CRITICAL_COMMAND_SEQUENCES = [
   ['rm', '-rf', '/'],
@@ -90,7 +99,14 @@ export default class BashTool extends Tool {
     command: string,
     options: ExecuteOptions = {}
   ): Promise<BashResult> {
-    const { cwd = process.cwd(), timeout = 30 } = options
+    const { cwd = process.cwd() } = options
+    const initialTimeoutMs = BashTool.normalizeTimeoutMs(
+      options.timeout,
+      options.timeoutUnit
+    )
+    const timeoutRetries = BashTool.normalizeTimeoutRetries(
+      options.timeoutRetries
+    )
     const analyzedCommand = await this.resolveCommandForSafetyAnalysis(command)
     const isSafe = await this.isSafeCommand(analyzedCommand)
 
@@ -108,93 +124,174 @@ export default class BashTool extends Tool {
     }
 
     const requiresVisibleTerminal = this.requiresVisibleTerminal(analyzedCommand)
+    const effectiveTimeoutRetries = requiresVisibleTerminal ? 0 : timeoutRetries
+    let timeoutMs = initialTimeoutMs
 
-    try {
-      if (requiresVisibleTerminal) {
-        await this.report('bridges.tools.command_requires_terminal_auth')
+    for (let attempt = 0; attempt <= effectiveTimeoutRetries; attempt += 1) {
+      try {
+        if (requiresVisibleTerminal) {
+          await this.report('bridges.tools.command_requires_terminal_auth')
 
-        await this.executeCommand({
+          await this.executeCommand({
+            binaryName: 'bash',
+            args: ['-c', command],
+            options: {
+              openInTerminal: true,
+              waitForExit: true,
+              cwd,
+              timeout: timeoutMs
+            },
+            skipBinaryDownload: true
+          })
+
+          return {
+            success: true,
+            stdout:
+              'Command executed in a visible terminal. Review that terminal for command output.',
+            stderr: '',
+            returncode: 0,
+            command
+          }
+        }
+
+        const resultOutput = await this.executeCommand({
           binaryName: 'bash',
           args: ['-c', command],
           options: {
-            openInTerminal: true,
-            waitForExit: true,
+            sync: true,
             cwd,
-            timeout: timeout * 1_000
+            timeout: timeoutMs
           },
           skipBinaryDownload: true
         })
 
         return {
           success: true,
-          stdout:
-            'Command executed in a visible terminal. Review that terminal for command output.',
+          stdout: resultOutput.trim(),
           stderr: '',
           returncode: 0,
           command
         }
-      }
+      } catch (error: unknown) {
+        const errorMessage = (error as Error).message
+        const timedOut = BashTool.isTimeoutErrorMessage(errorMessage)
 
-      const resultOutput = await this.executeCommand({
-        binaryName: 'bash',
-        args: ['-c', command],
-        options: {
-          sync: true,
-          cwd,
-          timeout: timeout * 1_000
-        },
-        skipBinaryDownload: true
-      })
+        if (timedOut && attempt < effectiveTimeoutRetries) {
+          timeoutMs *= TIMEOUT_RETRY_MULTIPLIER
+          continue
+        }
 
-      return {
-        success: true,
-        stdout: resultOutput.trim(),
-        stderr: '',
-        returncode: 0,
-        command
-      }
-    } catch (error: unknown) {
-      const errorMessage = (error as Error).message
+        if (timedOut) {
+          return {
+            success: false,
+            stdout: '',
+            stderr: `Command timed out after ${BashTool.formatTimeoutMs(timeoutMs)} (${attempt + 1} attempt${attempt === 0 ? '' : 's'})`,
+            returncode: -1,
+            command
+          }
+        }
 
-      if (errorMessage.toLowerCase().includes('timed out')) {
+        if (errorMessage.includes('failed with exit code')) {
+          const exitCodeMatch = errorMessage.match(/exit code (\d+)/)
+          const exitCode =
+            exitCodeMatch && exitCodeMatch[1]
+              ? parseInt(exitCodeMatch[1], 10)
+              : -1
+          const stderrMatch = errorMessage.match(/exit code \d+: (.+)$/)
+          const stderr =
+            stderrMatch && stderrMatch[1] ? stderrMatch[1] : errorMessage
+
+          return {
+            success: false,
+            stdout: '',
+            stderr: requiresVisibleTerminal
+              ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
+              : stderr,
+            returncode: exitCode,
+            command
+          }
+        }
+
         return {
           success: false,
           stdout: '',
-          stderr: `Command timed out after ${timeout} seconds`,
+          stderr: errorMessage,
           returncode: -1,
           command
         }
       }
-
-      if (errorMessage.includes('failed with exit code')) {
-        const exitCodeMatch = errorMessage.match(/exit code (\d+)/)
-        const exitCode =
-          exitCodeMatch && exitCodeMatch[1]
-            ? parseInt(exitCodeMatch[1], 10)
-            : -1
-        const stderrMatch = errorMessage.match(/exit code \d+: (.+)$/)
-        const stderr =
-          stderrMatch && stderrMatch[1] ? stderrMatch[1] : errorMessage
-
-        return {
-          success: false,
-          stdout: '',
-          stderr: requiresVisibleTerminal
-            ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
-            : stderr,
-          returncode: exitCode,
-          command
-        }
-      }
-
-      return {
-        success: false,
-        stdout: '',
-        stderr: errorMessage,
-        returncode: -1,
-        command
-      }
     }
+
+    return {
+      success: false,
+      stdout: '',
+      stderr: 'Command failed without an execution result.',
+      returncode: -1,
+      command
+    }
+  }
+
+  /**
+   * Normalizes timeout input to milliseconds while keeping compatibility with
+   * older calls that used seconds and generated calls that often use ms.
+   */
+  private static normalizeTimeoutMs(
+    timeout?: number,
+    timeoutUnit?: ExecuteOptions['timeoutUnit']
+  ): number {
+    const fallbackTimeoutMs = DEFAULT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND
+
+    if (!Number.isFinite(timeout) || timeout === undefined || timeout <= 0) {
+      return fallbackTimeoutMs
+    }
+
+    if (timeoutUnit === 'milliseconds') {
+      return Math.round(timeout)
+    }
+
+    if (timeoutUnit === 'seconds') {
+      return Math.round(timeout * MILLISECONDS_PER_SECOND)
+    }
+
+    if (timeout >= TIMEOUT_MILLISECONDS_INPUT_THRESHOLD) {
+      return Math.round(timeout)
+    }
+
+    return Math.round(timeout * MILLISECONDS_PER_SECOND)
+  }
+
+  /**
+   * Returns a bounded retry count for timeout-only retries.
+   */
+  private static normalizeTimeoutRetries(timeoutRetries?: number): number {
+    if (!Number.isFinite(timeoutRetries) || timeoutRetries === undefined) {
+      return DEFAULT_TIMEOUT_RETRIES
+    }
+
+    return Math.min(
+      Math.max(Math.floor(timeoutRetries), 0),
+      MAX_TIMEOUT_RETRIES
+    )
+  }
+
+  private static formatTimeoutMs(timeoutMs: number): string {
+    const seconds = timeoutMs / MILLISECONDS_PER_SECOND
+
+    if (Number.isInteger(seconds)) {
+      return `${seconds} seconds`
+    }
+
+    return `${timeoutMs}ms`
+  }
+
+  private static isTimeoutErrorMessage(errorMessage: string): boolean {
+    const normalizedErrorMessage = errorMessage.toLowerCase()
+
+    return (
+      normalizedErrorMessage.includes('timed out') ||
+      normalizedErrorMessage.includes('timeout') ||
+      normalizedErrorMessage.includes('etimedout')
+    )
   }
 
   async isSafeCommand(command: string): Promise<boolean> {
