@@ -22,7 +22,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <RootProvider>{children}</RootProvider>
+        <RootProvider
+          theme={{
+            attribute: 'class',
+            defaultTheme: 'dark',
+            enableSystem: false
+          }}
+        >
+          {children}
+        </RootProvider>
       </body>
     </html>
   )

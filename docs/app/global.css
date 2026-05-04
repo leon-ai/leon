@@ -2,17 +2,82 @@
 @import 'fumadocs-ui/css/preset.css';
 
 :root {
-  --leon-accent: #1f8a70;
+  --leon-black: #000;
+  --leon-ink: #11101d;
+  --leon-blue: #1c75db;
+  --leon-pink: #ed297a;
+  --leon-green: #1cdba2;
+  --leon-slate: #45515e;
+  --leon-muted: #9ea7b0;
+  --leon-border-light: #d1dce5;
+  --leon-accent: var(--leon-blue);
+  --leon-status-background: rgba(28, 117, 219, 0.08);
+  --leon-status-foreground: #0f3765;
+  --leon-page-background:
+    radial-gradient(circle at 50% 0%, rgba(28, 117, 219, 0.1), transparent 30rem),
+    #ffffff;
+  --color-fd-background: #ffffff;
+  --color-fd-foreground: var(--leon-ink);
+  --color-fd-muted: #f4f7fb;
+  --color-fd-muted-foreground: var(--leon-slate);
+  --color-fd-popover: #ffffff;
+  --color-fd-popover-foreground: var(--leon-ink);
+  --color-fd-card: #ffffff;
+  --color-fd-card-foreground: var(--leon-ink);
+  --color-fd-border: rgba(17, 16, 29, 0.14);
+  --color-fd-primary: var(--leon-blue);
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #eef4fb;
+  --color-fd-secondary-foreground: var(--leon-ink);
+  --color-fd-accent: rgba(28, 117, 219, 0.1);
+  --color-fd-accent-foreground: #0f3765;
+  --color-fd-ring: rgba(28, 117, 219, 0.7);
+  --color-fd-overlay: rgba(0, 0, 0, 0.5);
+}
+
+.dark {
+  --leon-accent: var(--leon-green);
+  --leon-status-background: rgba(28, 219, 162, 0.1);
+  --leon-status-foreground: #d9fff4;
+  --leon-page-background:
+    radial-gradient(circle at 42% 0%, rgba(28, 117, 219, 0.16), transparent 32rem),
+    radial-gradient(circle at 72% 8%, rgba(237, 41, 122, 0.11), transparent 24rem),
+    #000000;
+  --color-fd-background: #000000;
+  --color-fd-foreground: #f9fafc;
+  --color-fd-muted: var(--leon-ink);
+  --color-fd-muted-foreground: var(--leon-muted);
+  --color-fd-popover: #080812;
+  --color-fd-popover-foreground: #f9fafc;
+  --color-fd-card: #0b0b15;
+  --color-fd-card-foreground: #fafafa;
+  --color-fd-border: hsla(0, 0%, 100%, 0.1);
+  --color-fd-primary: var(--leon-blue);
+  --color-fd-primary-foreground: #ffffff;
+  --color-fd-secondary: #11101d;
+  --color-fd-secondary-foreground: #f9fafc;
+  --color-fd-accent: rgba(237, 41, 122, 0.16);
+  --color-fd-accent-foreground: #ffffff;
+  --color-fd-ring: rgba(237, 41, 122, 0.72);
+  --color-fd-overlay: rgba(0, 0, 0, 0.9);
+}
+
+html {
+  background: var(--color-fd-background);
 }
 
 body {
+  background: var(--leon-page-background);
   font-feature-settings: 'kern';
+  font-family: 'Source Sans Pro', ui-sans-serif, system-ui, sans-serif;
 }
 
 .leon-status {
   align-items: center;
+  background: var(--leon-status-background);
   border: 1px solid var(--color-fd-border);
   border-radius: 999px;
+  color: var(--leon-status-foreground);
   display: inline-flex;
   font-size: 0.75rem;
   font-weight: 600;
