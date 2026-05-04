@@ -7,6 +7,8 @@ description: AI provider areas Leon can integrate with.
 
 Leon can use different model providers depending on the owner's setup and task.
 
+This is good, but it also means we need to be careful. Providers do not all behave the same way.
+
 ## Provider Areas
 
 Current provider work includes:
@@ -30,3 +32,5 @@ Providers can differ in subtle ways:
 - feature availability
 
 Leon handles these differences in the provider layer so the rest of the agent loop can stay more stable.
+
+This layer will keep evolving as providers and models evolve too.

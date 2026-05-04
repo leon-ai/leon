@@ -7,6 +7,8 @@ description: Common pnpm scripts in the Leon repository.
 
 The root `package.json` contains the main project scripts.
 
+Most of the time, you should use these scripts instead of calling internals directly.
+
 ## Daily Development
 
 ```sh
@@ -41,3 +43,5 @@ pnpm run generate:prompt
 ```
 
 Use scripts instead of reaching into internals directly when a script already exists.
+
+It keeps the development workflow more stable for everyone.

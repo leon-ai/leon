@@ -7,39 +7,52 @@ description: Leon is an open-source personal AI assistant built around owner con
 
 Leon is an open-source personal AI assistant.
 
-It can answer, act, use tools, remember useful context, and work through goals across different execution modes. Leon is designed to live close to the owner: on your machine, connected to your environment, and extensible through skills and tools.
+That sentence sounds simple, but it is actually the whole point.
+
+Leon is not meant to be only a chat interface. He should be able to understand what you want, use tools, remember useful things, know a bit about the environment he runs in, and help you complete tasks from start to finish.
+
+The important part is ownership. Leon is designed to live close to you, on your machine or infrastructure, with an architecture you can inspect and extend.
 
 ## What Leon Is Built For
 
-Leon is built for practical help:
+Leon is built to help in a practical way:
 
-- understand what you want to do
-- choose the right way to handle the request
-- use declared tools instead of guessing
-- remember durable preferences and useful history
-- use local context when it helps
+- understand what the owner asks
+- choose the right way to handle it
+- use declared tools instead of guessing everything
+- remember useful preferences and history
+- use local context when it actually helps
 - keep the owner in control
 
 ## What Makes Leon Different
 
-Leon is not designed as a thin wrapper around a remote model. The core is shaped around ownership.
+Leon is not built as a thin wrapper around a remote model.
 
-That means local-first thinking, explicit tools, inspectable architecture, memory with boundaries, and a system that can evolve with the person using it.
+Of course, remote models can be useful. I use them too. But I do not want Leon to depend on the idea that everything must live in someone else's black box.
 
-Leon can use remote providers when they are useful. It can also run with local model support when your hardware allows it. The point is choice, not dependency.
+So Leon is shaped around:
+
+- local-first thinking
+- explicit tools
+- inspectable architecture
+- memory with boundaries
+- context that is grounded in the real setup
+- extensibility through skills, tools, and bridges
+
+The point is choice, not dependency.
 
 ## The Current 2.0 Direction
 
-Leon 2.0 moves the project toward a more agentic core:
+Leon 2.0 moves the project toward a more capable core:
 
 - `smart` mode chooses the best path
-- `controlled` mode runs deterministic Leon-native skills
+- `controlled` mode runs deterministic native skills
 - `agent` mode can plan, execute, observe, recover, and answer
 
-The core architecture is layered as:
+Under the hood, the main layer model is:
 
 ```txt
 Skills -> Actions -> Tools -> Functions (-> Binaries)
 ```
 
-That structure keeps the assistant extensible without turning every task into vague model behavior.
+This structure matters because it avoids putting everything into a single magical prompt. Leon should have clear boundaries, clear capabilities, and clear places where contributors can build.

@@ -7,7 +7,9 @@ description: Install, run, and check Leon from source.
 
 <span className="leon-status">Developer Preview</span>
 
-Leon 2.0 currently targets developers and contributors who are comfortable running the project from source.
+For now, Leon 2.0 is for developers and contributors who are comfortable running the project from source.
+
+It will become easier later. The desktop app will help a lot here. But today, this is the path.
 
 ## Requirements
 
@@ -19,6 +21,8 @@ Using Volta or another Node version manager is recommended.
 
 ## Install
 
+Clone the repository and install the dependencies:
+
 ```sh
 git clone https://github.com/leon-ai/leon.git
 cd leon
@@ -27,6 +31,8 @@ pnpm install
 ```
 
 ## Run
+
+Start Leon:
 
 ```sh
 pnpm start
@@ -40,19 +46,21 @@ http://localhost:1337
 
 ## Check The Setup
 
+Then check if your setup looks good:
+
 ```sh
 pnpm run check
 ```
 
-This command reports whether Leon is installed and configured correctly.
+This command is important. It reports what is ready and what still needs attention.
 
 ## Development
 
-For development, the main scripts are:
+If you are working on Leon, you will mostly use:
 
 ```sh
 pnpm run dev:server
 pnpm run dev:app
 ```
 
-Use the server script for the Leon runtime and the app script for the web interface.
+The first one runs the Leon runtime. The second one runs the web app.

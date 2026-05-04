@@ -7,7 +7,9 @@ description: Add owner-facing behavior to Leon.
 
 Skills are owner-facing capabilities.
 
-Use a skill when you are adding something Leon should understand as a capability, such as a timer, weather forecast, todo list, or guided workflow.
+Use a skill when you are adding something Leon should understand as a meaningful capability.
+
+For example: a timer, weather forecast, todo list, game, or guided workflow.
 
 ## Native Skills
 
@@ -19,6 +21,8 @@ skills/native
 
 They define a `skill.json` manifest, localized data, actions, and optional bridge-backed logic.
 
+This is the controlled path. It is useful when the behavior should be predictable.
+
 ## Agent Skills
 
 Agent skills live under:
@@ -28,6 +32,8 @@ skills/agent
 ```
 
 They use `SKILL.md` instructions to guide agentic workflows.
+
+This is useful when the skill is more about a process than a single deterministic action.
 
 ## Skill Design
 
@@ -39,4 +45,6 @@ A good skill should define:
 - what answer Leon should return
 - whether logic is needed
 
-Keep the first version narrow. A small useful skill is better than a broad skill that is hard to maintain.
+Keep the first version narrow.
+
+A small useful skill is better than a broad skill that is hard to maintain. We can always improve it later.

@@ -7,17 +7,21 @@ description: Choose how Leon connects to AI providers.
 
 Leon can work with local and remote AI providers.
 
-The provider you choose affects privacy, latency, cost, quality, and available model features.
+The provider you choose matters. It affects privacy, latency, cost, quality, and available model features.
 
 ## Provider Mindset
 
-Use the provider that matches the task:
+There is no single perfect provider for everything.
+
+Use the one that matches the situation:
 
 - local models when ownership and privacy matter most
 - remote models when capability and reliability matter most
 - OpenAI-compatible providers when you need flexibility
 
 Leon 2.0 is being built to handle provider differences more carefully because agentic execution depends on stable model behavior.
+
+When a model is asked to use tools, small differences can have a big impact. So this layer matters.
 
 ## Common Provider Areas
 
@@ -41,4 +45,6 @@ Start with:
 pnpm run check
 ```
 
-Then review the generated setup output and the sample environment files in the repository.
+Then review the setup output and the sample environment files in the repository.
+
+If something is missing, the check command should point you in the right direction.

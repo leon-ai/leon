@@ -9,9 +9,11 @@ Agent mode uses a ReAct-style loop.
 
 The loop lets Leon plan a task, call tools, observe results, recover from failures, and produce a final answer.
 
+This is where Leon starts to feel much more capable than a classic intent classifier.
+
 ## Planning
 
-Leon decides whether it can answer directly or needs a tool plan.
+Leon decides whether he can answer directly or needs a tool plan.
 
 The plan should use short, understandable step labels so execution remains inspectable.
 
@@ -36,3 +38,5 @@ The goal is not to retry blindly. The goal is to recover with context.
 ## Final Answer
 
 The final answer should be based on observed results, not imagined execution.
+
+This point is not optional. If Leon says something was done, it should come from what actually happened.

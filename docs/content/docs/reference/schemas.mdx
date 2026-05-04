@@ -7,6 +7,8 @@ description: JSON schema areas used by Leon.
 
 Leon uses schemas to keep extension points explicit.
 
+This is one of the things that makes the project easier to grow without losing control.
+
 The main schema files live under:
 
 ```txt
@@ -32,3 +34,5 @@ They help validate manifests, guide tool calls, reduce malformed execution, and 
 ## Documentation Direction
 
 Reference pages for manifests should eventually be generated or derived from these schemas so the docs stay synchronized with the runtime.
+
+That way, we avoid writing docs that slowly drift away from the code.

@@ -5,30 +5,40 @@ description: How Leon thinks about privacy, local control, and permissions.
 
 # Privacy
 
-Privacy is not a feature added at the end. It is part of why Leon exists.
+Privacy is not a feature added at the end.
 
-Leon should help you use AI without giving up ownership of your environment, history, and personal workflows.
+It is one of the reasons Leon exists.
+
+Leon should help you use AI without forcing you to give up ownership of your environment, history, and personal workflows.
 
 ## Local When Possible
 
 Leon can use local capabilities when your setup supports them. Local model support through llama.cpp is part of that direction.
 
-Remote providers can still be useful. The important part is that the owner should understand the tradeoff and choose the provider that fits the task.
+Remote providers can still be useful. I do not want to pretend otherwise.
+
+The important part is that the owner understands the tradeoff and chooses the provider that fits the task.
 
 ## Context With Permission
 
 Leon becomes more useful when it can understand the environment it runs in.
 
-That context can include system details, workspace information, activity signals, and other local state. These signals should be gathered and used with clear intent, not treated as free data to collect without thought.
+That context can include system details, workspace information, activity signals, and other local state.
+
+But context is not free data to collect without thinking. It should exist for a clear purpose: helping Leon answer and act better for the owner.
 
 ## Memory With Boundaries
 
 Leon should remember useful things, but memory should stay structured.
 
-Durable facts, daily summaries, and recent discussion context should not be treated as the same kind of data. Keeping memory layered makes the system easier to reason about and easier to improve.
+Durable facts, daily summaries, and recent discussion context should not be treated as the same kind of data.
+
+Keeping memory layered makes the system easier to reason about and easier to improve.
 
 ## Tools Are Auditable
 
 Leon should prefer explicit tools over hidden behavior.
 
-When tools have schemas, settings, and logs, the assistant becomes easier to inspect. That matters when an AI assistant can act on your machine.
+When tools have schemas, settings, and logs, the assistant becomes easier to inspect.
+
+And yes, this matters a lot when an AI assistant can act on your machine.

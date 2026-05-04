@@ -7,11 +7,11 @@ description: Talk to Leon through the web interface.
 
 Chat is the simplest way to interact with Leon.
 
-You can ask questions, request actions, continue previous work, and trigger skills or tools depending on the request.
+You can ask questions, request actions, continue previous work, and trigger skills or tools depending on what you ask.
 
 ## What Happens On A Turn
 
-At a high level, Leon receives your input and decides how to handle it:
+At a high level, Leon receives your utterance and decides how to handle it:
 
 - answer directly when the request is simple
 - route to controlled mode for deterministic skills
@@ -20,7 +20,9 @@ At a high level, Leon receives your input and decides how to handle it:
 
 ## Good Requests
 
-Good requests are specific enough for Leon to act:
+Good requests are specific enough for Leon to act.
+
+For example:
 
 ```txt
 Summarize this video and save the key points.
@@ -34,4 +36,4 @@ Check if my setup is ready to run local models.
 Remember that I prefer concise technical answers.
 ```
 
-Leon can handle vague requests, but clear goals help the assistant choose better tools and recover faster when something fails.
+Leon can handle vague requests, but clear goals help him choose better tools and recover faster when something fails.

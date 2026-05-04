@@ -5,17 +5,23 @@ description: The concepts that explain how Leon 2.0 works.
 
 # Core Ideas
 
-Leon 2.0 is easier to understand when you separate the main ideas.
+Before going into code, it is important to understand the vocabulary.
+
+Leon 2.0 is built around a few concepts. Once these concepts are clear, the rest of the architecture makes much more sense.
 
 ## Owner
 
 The owner is the person Leon serves.
 
-Leon can adapt to the owner's preferences, environment, and history. The owner stays in control of what Leon can access, remember, and do.
+That can be you, me, or anybody running a Leon.
+
+Leon can adapt to the owner's preferences, environment, and history. But the owner stays in control of what Leon can access, remember, and do.
 
 ## Skills
 
 Skills are high-level capabilities.
+
+You can think of a skill as something Leon knows how to do, like managing a timer, getting the weather, or running a workflow.
 
 Native skills provide controlled behavior. Agent skills can define workflows with `SKILL.md` files and guide agentic execution.
 
@@ -23,19 +29,23 @@ Native skills provide controlled behavior. Agent skills can define workflows wit
 
 Tools are declared capabilities Leon can call to do real work.
 
-Tools belong to toolkits. They expose functions with schemas, settings, outputs, and optional hooks.
+They belong to toolkits and expose functions with schemas, settings, outputs, and optional hooks.
+
+This is important: tools are not vague. They describe what can be called and what parameters are expected.
 
 ## Context
 
 Context is current information about Leon's runtime and environment.
 
-Examples include system state, workspace data, network details, activity, inventory, and architecture. Leon should use context when answering environment or runtime questions.
+Examples include system state, workspace data, network details, activity, inventory, and architecture.
+
+If you ask something about the current environment, Leon should check context first. Not guess.
 
 ## Memory
 
 Memory stores useful history over time.
 
-Leon separates persistent memory, daily memory, and discussion memory so each layer can serve a different purpose.
+Leon separates persistent memory, daily memory, and discussion memory. Each layer has a different purpose, because not every remembered thing should have the same lifetime.
 
 ## Modes
 
@@ -49,4 +59,6 @@ Leon can operate in different modes:
 
 Leon can eventually act before being asked when it has a clear, bounded, owner-aligned reason.
 
-This is handled through a pulse mechanism that should stay conservative, deduplicated, and respectful of owner declines.
+This is handled through a pulse mechanism. It should stay conservative, deduplicated, and respectful of owner declines.
+
+Because helpful is good. Noisy is not.

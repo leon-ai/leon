@@ -7,11 +7,15 @@ description: How skills, actions, toolkits, tools, and functions relate.
 
 Leon separates intent-level capabilities from executable functions.
 
+This vocabulary is important. If we use the right words, it becomes much easier to understand where a feature should live.
+
 ## Skills
 
 Skills describe what Leon can do at a higher level.
 
 Native skills live under `skills/native`. Agent skills live under `skills/agent` and can define workflow instructions with `SKILL.md`.
+
+For example, a timer can be a skill. A weather forecast can be a skill. A guided workflow can also be a skill.
 
 ## Actions
 
@@ -36,3 +40,5 @@ Tool manifests describe metadata, function parameters, optional output schemas, 
 Functions are what Leon can actually call.
 
 They should be specific, schema-guided, and designed to return useful structured observations.
+
+This is the part agent mode relies on when it needs to do real work.
