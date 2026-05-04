@@ -82,6 +82,13 @@ export default class Qwen3ASRTool extends Tool {
     let jsonFilePath: string | null = null
 
     try {
+      const inputStats = await fs.promises.stat(inputPath).catch(() => null)
+      if (!inputStats?.isFile()) {
+        throw new Error(`Input audio file does not exist: ${inputPath}`)
+      }
+
+      await fs.promises.mkdir(path.dirname(outputPath), { recursive: true })
+
       const modelPath = await this.getResourcePath(MODEL_NAME)
       const forcedAlignerPath =
         returnTimestamps && useForcedAligner

@@ -2079,6 +2079,7 @@ export default class LLMProvider {
 
     const abortController = new AbortController()
     let timeoutHandle: NodeJS.Timeout | null = null
+    let streamStallTimeoutHandle: NodeJS.Timeout | null = null
     let hasStartedStreaming = false
     const completionStartedAt = Date.now()
     let generationStartedAt: number | null = null
@@ -2089,6 +2090,31 @@ export default class LLMProvider {
     type OnTokenChunk = Parameters<
       NonNullable<CompletionParams['onToken']>
     >[0]
+    let rejectStreamStall: ((error: Error) => void) | null = null
+    const clearStreamStallTimeout = (): void => {
+      if (streamStallTimeoutHandle) {
+        clearTimeout(streamStallTimeoutHandle)
+        streamStallTimeoutHandle = null
+      }
+    }
+    const resetStreamStallTimeout = (): void => {
+      if (!shouldStreamOutput || !completionParams.timeout) {
+        return
+      }
+
+      clearStreamStallTimeout()
+      streamStallTimeoutHandle = setTimeout(() => {
+        if (!abortController.signal.aborted) {
+          abortController.abort()
+        }
+
+        rejectStreamStall?.(
+          new Error(
+            `Timeout (${completionParams.timeout}ms) for "${completionParams.dutyType}" duty after streaming stalled`
+          )
+        )
+      }, completionParams.timeout)
+    }
     const markStreamStarted = (): void => {
       if (!hasStartedStreaming) {
         hasStartedStreaming = true
@@ -2098,7 +2124,7 @@ export default class LLMProvider {
           timeoutHandle = null
           LogHelper.title('LLM Provider')
           LogHelper.debug(
-            'Streaming started; inference timeout watchdog disabled for this completion'
+            'Streaming started; inference timeout watchdog replaced by stream stall watchdog for this completion'
           )
         }
       }
@@ -2107,22 +2133,26 @@ export default class LLMProvider {
     const onTokenWithStreamStart = (chunk: OnTokenChunk): void => {
       if (typeof chunk === 'string' && chunk.length === 0) {
         markStreamStarted()
+        resetStreamStallTimeout()
         userOnToken?.(chunk)
         return
       }
 
       markStreamStarted()
+      resetStreamStallTimeout()
       userOnToken?.(chunk)
     }
 
     const onReasoningTokenWithStreamStart = (reasoningChunk: string): void => {
       if (reasoningChunk.length === 0) {
         markStreamStarted()
+        resetStreamStallTimeout()
         userOnReasoningToken?.(reasoningChunk)
         return
       }
 
       markStreamStarted()
+      resetStreamStallTimeout()
       userOnReasoningToken?.(reasoningChunk)
     }
 
@@ -2224,6 +2254,9 @@ export default class LLMProvider {
         )
       }, completionParams.timeout)
     })
+    const streamStallTimeoutPromise = new Promise((_, reject) => {
+      rejectStreamStall = reject
+    })
 
     let rawResult
     let rawResultString
@@ -2232,16 +2265,20 @@ export default class LLMProvider {
       rawResult = await Promise.race([
         rawResultPromise,
         timeoutPromise,
+        streamStallTimeoutPromise,
         callerAbortPromise
       ])
       if (timeoutHandle) {
         clearTimeout(timeoutHandle)
       }
+      clearStreamStallTimeout()
     } catch (e) {
       removeCallerAbortListener()
       if (timeoutHandle) {
         clearTimeout(timeoutHandle)
       }
+      clearStreamStallTimeout()
+      rejectStreamStall = null
 
       LogHelper.title('LLM Provider')
       LogHelper.error(
@@ -2463,11 +2500,16 @@ export default class LLMProvider {
             : ({
                 data: remoteStreamCandidate
               } as AxiosResponse)
-        const normalized = await this.normalizeStreamingCompletionResult(
-          streamResponse,
-          completionParams,
-          providerName
-        )
+        resetStreamStallTimeout()
+        const normalized = (await Promise.race([
+          this.normalizeStreamingCompletionResult(
+            streamResponse,
+            completionParams,
+            providerName
+          ),
+          streamStallTimeoutPromise,
+          callerAbortPromise
+        ])) as NormalizedCompletionResult
 
         rawResult = normalized.rawResult
         usedInputTokens = normalized.usedInputTokens
@@ -2572,12 +2614,16 @@ export default class LLMProvider {
         }
       }
     } catch (e) {
+      clearStreamStallTimeout()
+      rejectStreamStall = null
       LogHelper.title('LLM Provider')
       LogHelper.error(`Failed to normalize completion result: ${String(e)}`)
       LogHelper.timeEnd(measureExecutionTimeLabel)
 
       return null
     }
+    clearStreamStallTimeout()
+    rejectStreamStall = null
 
     // Guard against silent empty provider responses which otherwise trigger
     // an unnecessary planning fallback and double latency.

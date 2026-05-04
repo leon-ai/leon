@@ -1,11 +1,32 @@
-import { mkdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, statSync } from 'node:fs'
+import { basename, dirname, extname, join } from 'node:path'
 
 import { Tool, type ProgressCallback } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
+const DOWNLOAD_DESTINATION_PATTERN = /Destination:\s+(.+)$/
+const ALREADY_DOWNLOADED_PATTERN =
+  /\[download\]\s+(.+)\s+has already been downloaded/
+const SUBTITLE_DESTINATION_PATTERN =
+  /Writing (?:video subtitles|video automatic captions) to:\s+(.+)$/
+const DOWNLOAD_PROGRESS_PATTERN =
+  /\[download\]\s+(\d+\.?\d*)%\s+of\s+(?:~?\s*)([\d.]+\w+)\s+at\s+([\d.]+\w+\/s)\s+ETA\s+([\d:]+)/
+const YTDLP_EXT_TEMPLATE = '%(ext)s'
+const YTDLP_TITLE_TEMPLATE = '%(title)s'
+const YTDLP_PLAYLIST_INDEX_TEMPLATE = '%(playlist_index)s'
+const SUBTITLE_FORMAT = 'srt/best'
+const SUBTITLE_CONVERT_FORMAT = 'srt'
+const LANGUAGE_CODE_SEPARATOR = ','
+const SUBTITLE_OUTPUT_TYPE = 'subtitle'
+const TYPED_OUTPUT_SEPARATOR = ':'
+
+interface OutputTarget {
+  directoryPath: string
+  outputTemplate: string
+  predictedFilePath?: string
+}
 
 export default class YtdlpTool extends Tool {
   private static readonly TOOLKIT = 'video_streaming'
@@ -44,6 +65,159 @@ export default class YtdlpTool extends Tool {
   }
 
   /**
+   * Resolves media output using yt-dlp filename templates.
+   */
+  private static resolveMediaOutputTarget(
+    outputPath: string,
+    expectedExtension?: string
+  ): OutputTarget {
+    const extension = extname(outputPath)
+    const looksLikeFile = extension !== ''
+    const existingFileLikeDirectory =
+      looksLikeFile && existsSync(outputPath) && statSync(outputPath).isDirectory()
+
+    if (!looksLikeFile) {
+      return {
+        directoryPath: outputPath,
+        outputTemplate: join(
+          outputPath,
+          `${YTDLP_TITLE_TEMPLATE}.${YTDLP_EXT_TEMPLATE}`
+        )
+      }
+    }
+
+    const stem = basename(outputPath, extension)
+    const directoryPath = existingFileLikeDirectory ? outputPath : dirname(outputPath)
+    const outputTemplate = join(directoryPath, `${stem}.${YTDLP_EXT_TEMPLATE}`)
+    const predictedFilePath = expectedExtension
+      ? join(directoryPath, `${stem}.${expectedExtension}`)
+      : undefined
+
+    return { directoryPath, outputTemplate, predictedFilePath }
+  }
+
+  /**
+   * Resolves subtitle output using yt-dlp's typed output template.
+   */
+  private static resolveSubtitleOutputTarget(
+    outputPath: string,
+    languageCode: string
+  ): OutputTarget {
+    const extension = extname(outputPath)
+    const looksLikeFile = extension !== ''
+    const primaryLanguageCode = this.getPrimaryLanguageCode(languageCode)
+    const existingFileLikeDirectory =
+      looksLikeFile && existsSync(outputPath) && statSync(outputPath).isDirectory()
+
+    if (!looksLikeFile) {
+      return {
+        directoryPath: outputPath,
+        outputTemplate: join(
+          outputPath,
+          `${YTDLP_TITLE_TEMPLATE}.${YTDLP_EXT_TEMPLATE}`
+        )
+      }
+    }
+
+    const requestedStem = basename(outputPath, extension)
+    const stem = this.stripSubtitleLanguageSuffix(
+      requestedStem,
+      primaryLanguageCode
+    )
+    const directoryPath = existingFileLikeDirectory ? outputPath : dirname(outputPath)
+
+    return {
+      directoryPath,
+      outputTemplate: join(directoryPath, `${stem}.${YTDLP_EXT_TEMPLATE}`),
+      predictedFilePath: join(
+        directoryPath,
+        `${stem}.${primaryLanguageCode}.${SUBTITLE_CONVERT_FORMAT}`
+      )
+    }
+  }
+
+  /**
+   * Returns the first language code when yt-dlp receives a language list.
+   */
+  private static getPrimaryLanguageCode(languageCode: string): string {
+    return languageCode.split(LANGUAGE_CODE_SEPARATOR)[0]?.trim() || languageCode
+  }
+
+  /**
+   * Removes a trailing subtitle language suffix from a requested file stem.
+   */
+  private static stripSubtitleLanguageSuffix(
+    stem: string,
+    languageCode: string
+  ): string {
+    const suffix = `.${languageCode}`
+    return stem.endsWith(suffix) ? stem.slice(0, -suffix.length) : stem
+  }
+
+  /**
+   * Builds a typed yt-dlp output template, e.g. "subtitle:path.%(ext)s".
+   */
+  private static buildTypedOutputTemplate(type: string, template: string): string {
+    return `${type}${TYPED_OUTPUT_SEPARATOR}${template}`
+  }
+
+  /**
+   * Parses file paths reported by yt-dlp.
+   */
+  private static parseOutputFilePath(output: string): string | null {
+    for (const line of output.split('\n')) {
+      const match =
+        line.match(DOWNLOAD_DESTINATION_PATTERN) ||
+        line.match(ALREADY_DOWNLOADED_PATTERN) ||
+        line.match(SUBTITLE_DESTINATION_PATTERN)
+
+      if (match?.[1]) {
+        return match[1].trim()
+      }
+    }
+
+    return null
+  }
+
+  /**
+   * Resolves a media path from yt-dlp output or a deterministic file target.
+   */
+  private static resolveDownloadedMediaPath(
+    output: string,
+    target: OutputTarget
+  ): string {
+    if (target.predictedFilePath && existsSync(target.predictedFilePath)) {
+      return target.predictedFilePath
+    }
+
+    const parsedPath = this.parseOutputFilePath(output)
+
+    if (parsedPath) {
+      return parsedPath
+    }
+
+    throw new Error('yt-dlp completed but no output file path could be resolved')
+  }
+
+  /**
+   * Resolves a subtitle path and ensures a subtitle file was created.
+   */
+  private static resolveDownloadedSubtitlePath(
+    output: string,
+    target: OutputTarget
+  ): string {
+    const parsedPath = this.parseOutputFilePath(output)
+
+    for (const candidate of [target.predictedFilePath, parsedPath]) {
+      if (candidate && existsSync(candidate) && statSync(candidate).isFile()) {
+        return candidate
+      }
+    }
+
+    throw new Error('yt-dlp completed but no subtitle file was created')
+  }
+
+  /**
    * Downloads a single video from the provided URL.
    * @param videoUrl The URL of the video to download.
    * @param outputPath The directory where the video will be saved.
@@ -51,34 +225,16 @@ export default class YtdlpTool extends Tool {
    */
   async downloadVideo(videoUrl: string, outputPath: string): Promise<string> {
     try {
-      // Ensure output directory exists
-      mkdirSync(outputPath, { recursive: true })
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
+      mkdirSync(target.directoryPath, { recursive: true })
 
-      // Run yt-dlp with output template
-      const outputTemplate = join(outputPath, '%(title)s.%(ext)s')
       const result = await this.executeCommand({
         binaryName: 'yt-dlp',
-        args: [...this.getConfigArgs(), videoUrl, '-o', outputTemplate],
+        args: [...this.getConfigArgs(), videoUrl, '-o', target.outputTemplate],
         options: { sync: true }
       })
 
-      // Parse the output to get the actual filename
-      const lines = result.split('\n')
-      let downloadedFilePath = outputTemplate
-
-      for (const line of lines) {
-        if (line.includes('Destination:')) {
-          const match = line.match(/Destination:\s+(.+)$/)
-          if (match && match[1]) downloadedFilePath = match[1].trim()
-        } else if (line.includes('has already been downloaded')) {
-          const match = line.match(
-            /\[download\]\s+(.+)\s+has already been downloaded/
-          )
-          if (match && match[1]) downloadedFilePath = match[1].trim()
-        }
-      }
-
-      return downloadedFilePath
+      return YtdlpTool.resolveDownloadedMediaPath(result, target)
     } catch (error: unknown) {
       throw new Error(`Video download failed: ${(error as Error).message}`)
     }
@@ -97,11 +253,9 @@ export default class YtdlpTool extends Tool {
     audioFormat: string
   ): Promise<string> {
     try {
-      // Ensure output directory exists
-      mkdirSync(outputPath, { recursive: true })
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath, audioFormat)
+      mkdirSync(target.directoryPath, { recursive: true })
 
-      // Run yt-dlp with audio extraction
-      const outputTemplate = join(outputPath, `%(title)s.${audioFormat}`)
       const result = await this.executeCommand({
         binaryName: 'yt-dlp',
         args: [
@@ -111,28 +265,12 @@ export default class YtdlpTool extends Tool {
           '--audio-format',
           audioFormat,
           '-o',
-          outputTemplate
+          target.outputTemplate
         ],
         options: { sync: true }
       })
 
-      // Parse the output to get the actual filename
-      const lines = result.split('\n')
-      let downloadedFilePath = outputTemplate
-
-      for (const line of lines) {
-        if (line.includes('Destination:')) {
-          const match = line.match(/Destination:\s+(.+)$/)
-          if (match && match[1]) downloadedFilePath = match[1].trim()
-        } else if (line.includes('has already been downloaded')) {
-          const match = line.match(
-            /\[download\]\s+(.+)\s+has already been downloaded/
-          )
-          if (match && match[1]) downloadedFilePath = match[1].trim()
-        }
-      }
-
-      return downloadedFilePath
+      return YtdlpTool.resolveDownloadedMediaPath(result, target)
     } catch (error: unknown) {
       throw new Error(`Audio download failed: ${(error as Error).message}`)
     }
@@ -155,7 +293,7 @@ export default class YtdlpTool extends Tool {
       // Run yt-dlp for playlist
       const outputTemplate = join(
         outputPath,
-        '%(playlist_index)s - %(title)s.%(ext)s'
+        `${YTDLP_PLAYLIST_INDEX_TEMPLATE} - ${YTDLP_TITLE_TEMPLATE}.${YTDLP_EXT_TEMPLATE}`
       )
       await this.executeCommand({
         binaryName: 'yt-dlp',
@@ -184,9 +322,6 @@ export default class YtdlpTool extends Tool {
     onProgress?: ProgressCallback
   ): Promise<string> {
     try {
-      // Ensure output directory exists
-      mkdirSync(outputPath, { recursive: true })
-
       // Convert quality to yt-dlp format
       let formatSelector: string
       if (quality === 'best') {
@@ -201,8 +336,9 @@ export default class YtdlpTool extends Tool {
         formatSelector = quality
       }
 
-      const outputTemplate = join(outputPath, '%(title)s.%(ext)s')
-      let downloadedFilePath = outputTemplate
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
+      mkdirSync(target.directoryPath, { recursive: true })
+      let downloadedFilePath = ''
 
       await this.executeCommand({
         binaryName: 'yt-dlp',
@@ -212,7 +348,7 @@ export default class YtdlpTool extends Tool {
           '-f',
           formatSelector,
           '-o',
-          outputTemplate,
+          target.outputTemplate,
           '--newline'
         ],
         options: { sync: false },
@@ -224,9 +360,7 @@ export default class YtdlpTool extends Tool {
             for (const line of lines) {
               // Parse download progress
               if (line.includes('[download]')) {
-                const progressMatch = line.match(
-                  /\[download\]\s+(\d+\.?\d*)%\s+of\s+(?:~?\s*)([\d.]+\w+)\s+at\s+([\d.]+\w+\/s)\s+ETA\s+([\d:]+)/
-                )
+                const progressMatch = line.match(DOWNLOAD_PROGRESS_PATTERN)
                 if (
                   progressMatch &&
                   progressMatch[1] &&
@@ -245,19 +379,9 @@ export default class YtdlpTool extends Tool {
                 }
               }
 
-              // Check for completed download or destination file
-              if (
-                line.includes('Destination:') ||
-                line.includes('has already been downloaded')
-              ) {
-                const pathMatch =
-                  line.match(/Destination:\s+(.+)$/) ||
-                  line.match(
-                    /\[download\]\s+(.+)\s+has already been downloaded/
-                  )
-                if (pathMatch && pathMatch[1]) {
-                  downloadedFilePath = pathMatch[1].trim()
-                }
+              const pathMatch = YtdlpTool.parseOutputFilePath(line)
+              if (pathMatch) {
+                downloadedFilePath = pathMatch
               }
 
               // Check for download completion
@@ -272,7 +396,7 @@ export default class YtdlpTool extends Tool {
         }
       })
 
-      return downloadedFilePath
+      return YtdlpTool.resolveDownloadedMediaPath(downloadedFilePath, target)
     } catch (error: unknown) {
       throw new Error(
         `Quality-specific video download failed: ${(error as Error).message}`
@@ -293,32 +417,36 @@ export default class YtdlpTool extends Tool {
     languageCode: string
   ): Promise<string> {
     try {
-      // Ensure output directory exists
-      mkdirSync(outputPath, { recursive: true })
+      const target = YtdlpTool.resolveSubtitleOutputTarget(
+        outputPath,
+        languageCode
+      )
+      mkdirSync(target.directoryPath, { recursive: true })
 
-      // Download subtitles only
-      const outputTemplate = join(outputPath, '%(title)s.%(ext)s')
-      await this.executeCommand({
+      const result = await this.executeCommand({
         binaryName: 'yt-dlp',
         args: [
           ...this.getConfigArgs(),
           videoUrl,
           '--write-subs',
+          '--write-auto-subs',
           '--sub-langs',
           languageCode,
+          '--sub-format',
+          SUBTITLE_FORMAT,
+          '--convert-subs',
+          SUBTITLE_CONVERT_FORMAT,
           '--skip-download',
           '-o',
-          outputTemplate
+          YtdlpTool.buildTypedOutputTemplate(
+            SUBTITLE_OUTPUT_TYPE,
+            target.outputTemplate
+          )
         ],
         options: { sync: true }
       })
 
-      // The subtitle file will have the same name but with .srt extension
-      const subtitleFile = outputTemplate.replace(
-        '.%(ext)s',
-        `.${languageCode}.srt`
-      )
-      return subtitleFile
+      return YtdlpTool.resolveDownloadedSubtitlePath(result, target)
     } catch (error: unknown) {
       throw new Error(`Subtitle download failed: ${(error as Error).message}`)
     }
@@ -335,11 +463,9 @@ export default class YtdlpTool extends Tool {
     outputPath: string
   ): Promise<string> {
     try {
-      // Ensure output directory exists
-      mkdirSync(outputPath, { recursive: true })
+      const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
+      mkdirSync(target.directoryPath, { recursive: true })
 
-      // Download with thumbnail embedding
-      const outputTemplate = join(outputPath, '%(title)s.%(ext)s')
       const result = await this.executeCommand({
         binaryName: 'yt-dlp',
         args: [
@@ -348,28 +474,12 @@ export default class YtdlpTool extends Tool {
           '--embed-thumbnail',
           '--write-thumbnail',
           '-o',
-          outputTemplate
+          target.outputTemplate
         ],
         options: { sync: true }
       })
 
-      // Parse the output to get the actual filename
-      const lines = result.split('\n')
-      let downloadedFilePath = outputTemplate
-
-      for (const line of lines) {
-        if (line.includes('Destination:')) {
-          const match = line.match(/Destination:\s+(.+)$/)
-          if (match && match[1]) downloadedFilePath = match[1].trim()
-        } else if (line.includes('has already been downloaded')) {
-          const match = line.match(
-            /\[download\]\s+(.+)\s+has already been downloaded/
-          )
-          if (match && match[1]) downloadedFilePath = match[1].trim()
-        }
-      }
-
-      return downloadedFilePath
+      return YtdlpTool.resolveDownloadedMediaPath(result, target)
     } catch (error: unknown) {
       throw new Error(
         `Video with thumbnail download failed: ${(error as Error).message}`
