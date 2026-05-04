@@ -900,7 +900,7 @@ class BaseTool(ABC):
 
             self.report("bridges.tools.binary_not_found", {"binary_name": binary_name})
 
-            self._download_binary(binary_url, binary_path)
+            self._download_binary(binary_url, binary_path, binary_name)
 
             self.report("bridges.tools.binary_downloaded", {"binary_name": binary_name})
 
@@ -971,7 +971,9 @@ class BaseTool(ABC):
             or basename.endswith(".tgz")
         )
 
-    def _download_binary(self, url: str, output_path: str) -> None:
+    def _download_binary(
+        self, url: str, output_path: str, binary_name: Optional[str] = None
+    ) -> None:
         """Download binary from URL using pypdl (faster parallel downloader)
         If the downloaded file is an archive, it will be extracted automatically"""
 
@@ -1034,18 +1036,33 @@ class BaseTool(ABC):
                 extract_archive(download_path, temp_extract_path)
 
                 # Find the binary in the extracted directory (recursively if needed)
+                preferred_executable_names = {
+                    name
+                    for name in (
+                        os.path.basename(output_path),
+                        binary_name,
+                        f"{binary_name}.exe" if binary_name and is_windows() else None,
+                    )
+                    if name
+                }
+                fallback_file_path = None
+
                 def find_binary_file(dir_path):
-                    """Find the first file in the directory tree"""
+                    """Find the expected executable in the directory tree."""
+                    nonlocal fallback_file_path
                     try:
                         entries = os.listdir(dir_path)
 
-                        # First, look for files in the current directory
+                        # First, look for the expected executable in the current directory.
                         for entry in entries:
                             full_path = os.path.join(dir_path, entry)
                             if os.path.isfile(full_path):
-                                return full_path
+                                if fallback_file_path is None:
+                                    fallback_file_path = full_path
+                                if entry in preferred_executable_names:
+                                    return full_path
 
-                        # If no files found, look in subdirectories (one level deep)
+                        # If not found, look in subdirectories.
                         for entry in entries:
                             full_path = os.path.join(dir_path, entry)
                             if os.path.isdir(full_path):
@@ -1057,15 +1074,28 @@ class BaseTool(ABC):
 
                     return None
 
-                binary_file_path = find_binary_file(temp_extract_path)
+                binary_file_path = find_binary_file(temp_extract_path) or fallback_file_path
 
                 if not binary_file_path:
                     raise Exception("Archive extraction resulted in no files")
 
-                # Move the binary to the final output path
-                import shutil
+                binary_directory_path = os.path.dirname(binary_file_path)
+                archive_has_sidecars = len(os.listdir(binary_directory_path)) > 1
 
-                shutil.move(binary_file_path, output_path)
+                if archive_has_sidecars:
+                    shutil.copytree(
+                        binary_directory_path,
+                        os.path.dirname(output_path),
+                        dirs_exist_ok=True,
+                    )
+                    copied_binary_path = os.path.join(
+                        os.path.dirname(output_path),
+                        os.path.basename(binary_file_path),
+                    )
+                    if copied_binary_path != output_path:
+                        shutil.move(copied_binary_path, output_path)
+                else:
+                    shutil.move(binary_file_path, output_path)
 
                 # Clean up temporary files
                 if os.path.exists(download_path):

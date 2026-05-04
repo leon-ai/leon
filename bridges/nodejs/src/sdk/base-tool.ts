@@ -1070,7 +1070,7 @@ export abstract class Tool {
         binary_name: binaryName
       })
 
-      await this.downloadBinary(binaryUrl, binaryPath)
+      await this.downloadBinary(binaryUrl, binaryPath, binaryName)
 
       await this.report('bridges.tools.binary_downloaded', {
         binary_name: binaryName
@@ -1122,7 +1122,11 @@ export abstract class Tool {
    * Download binary from URL using the core download helper.
    * If the downloaded file is an archive, it will be extracted automatically
    */
-  private async downloadBinary(url: string, outputPath: string): Promise<void> {
+  private async downloadBinary(
+    url: string,
+    outputPath: string,
+    binaryName?: string
+  ): Promise<void> {
     try {
       await this.report('bridges.tools.downloading_from_url')
 
@@ -1169,18 +1173,30 @@ export abstract class Tool {
         // Find the binary in the extracted directory (recursively if needed)
         let binaryFilePath: string | null = null
 
+        const preferredExecutableNames = new Set(
+          [
+            path.basename(outputPath),
+            binaryName,
+            binaryName && isWindows() ? `${binaryName}.exe` : undefined
+          ].filter(Boolean) as string[]
+        )
+        let fallbackFilePath: string | null = null
+
         const findBinaryFile = (dir: string): string | null => {
           const entries = fs.readdirSync(dir, { withFileTypes: true })
 
-          // First, look for files in the current directory
+          // First, look for the expected executable in the current directory.
           for (const entry of entries) {
             const fullPath = path.join(dir, entry.name)
             if (entry.isFile()) {
-              return fullPath
+              fallbackFilePath ||= fullPath
+              if (preferredExecutableNames.has(entry.name)) {
+                return fullPath
+              }
             }
           }
 
-          // If no files found, look in subdirectories (one level deep)
+          // If not found, look in subdirectories.
           for (const entry of entries) {
             const fullPath = path.join(dir, entry.name)
             if (entry.isDirectory()) {
@@ -1194,14 +1210,33 @@ export abstract class Tool {
           return null
         }
 
-        binaryFilePath = findBinaryFile(tempExtractPath)
+        binaryFilePath = findBinaryFile(tempExtractPath) || fallbackFilePath
 
         if (!binaryFilePath) {
           throw new Error('Archive extraction resulted in no files')
         }
 
-        // Move the binary to the final output path
-        fs.renameSync(binaryFilePath, outputPath)
+        const binaryDirectoryPath = path.dirname(binaryFilePath)
+        const archiveHasSidecars =
+          fs.readdirSync(binaryDirectoryPath).length > 1
+
+        if (archiveHasSidecars) {
+          fs.cpSync(binaryDirectoryPath, path.dirname(outputPath), {
+            recursive: true,
+            force: true
+          })
+
+          const copiedBinaryPath = path.join(
+            path.dirname(outputPath),
+            path.basename(binaryFilePath)
+          )
+
+          if (copiedBinaryPath !== outputPath) {
+            fs.renameSync(copiedBinaryPath, outputPath)
+          }
+        } else {
+          fs.renameSync(binaryFilePath, outputPath)
+        }
 
         // Report successful extraction
         await this.report('bridges.tools.archive_extracted', {

@@ -1,0 +1,65 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "pi",
+  "toolkit_id": "coding_development",
+  "name": "Pi",
+  "description": "Run Pi coding-agent tasks for code creation, modification, and repository maintenance.",
+  "icon_name": "code-box-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/pi-v0.72.1/pi_0.72.1-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/pi-v0.72.1/pi_0.72.1-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/pi-v0.72.1/pi_0.72.1-macosx-x86_64.tar.gz",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/pi-v0.72.1/pi_0.72.1-macosx-arm64.tar.gz",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/pi-v0.72.1/pi_0.72.1-win-amd64.zip"
+  },
+  "functions": {
+    "runCodingTask": {
+      "description": "Run a non-interactive Pi coding-agent task in a repository.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Coding task prompt to execute."
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Repository or directory where Pi should run."
+          },
+          "provider": {
+            "type": "string",
+            "description": "Optional Pi provider name, such as openai or anthropic."
+          },
+          "model": {
+            "type": "string",
+            "description": "Optional Pi model selector."
+          },
+          "apiKey": {
+            "type": "string",
+            "description": "Optional provider API key passed to Pi for this run."
+          },
+          "thinking": {
+            "type": "string",
+            "description": "Optional Pi thinking level: off, minimal, low, medium, high, or xhigh."
+          },
+          "tools": {
+            "type": "string",
+            "description": "Optional comma-separated Pi tool allowlist."
+          },
+          "timeout": {
+            "type": "number",
+            "description": "Timeout in seconds."
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    }
+  }
+}

@@ -55,7 +55,6 @@
     "clean:python-deps": "shx rm -rf ./bridges/python/src/.venv ./tcp_server/src/.venv && pnpm run postinstall",
     "generate:http-api-key": "tsx scripts/generate/run-generate-http-api-key.js",
     "generate:json-schemas": "tsx scripts/generate/run-generate-json-schemas.js",
-    "generate:prompt": "tsx scripts/generate/run-generate-prompt.js",
     "build": "pnpm run build:app && pnpm run build:server",
     "build:aurora": "tsx scripts/build-aurora.js",
     "build:app": "cross-env LEON_NODE_ENV=production tsx scripts/app/run-build-app.js",

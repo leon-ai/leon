@@ -517,14 +517,14 @@ export default class NLU {
 
       if (!BRAIN.isMuted) {
         await BRAIN.talk(
-          'I couldn\'t find a matching skill or action for this request. Do you want me to fall back to agent mode for it, write the code for a new skill, or cancel?',
+          'I couldn\'t find a matching skill or action for this request. Do you want me to fall back to agent mode for it, create a new skill, or cancel?',
           true
         )
       }
 
       BRAIN.suggest([
         'Fallback to agent mode',
-        'Write the skill code',
+        'Create a new skill',
         'Cancel'
       ])
       return
@@ -563,7 +563,7 @@ export default class NLU {
       input: {
         slotName: 'workflow_not_found_choice',
         slotDescription:
-          'Return exactly one of these values: "fallback_to_agent" if the owner wants Leon to handle the original request via agent mode, "write_skill_code" if the owner wants Leon to write the code for a new skill, or "cancel" if the owner does not want either option.',
+          'Return exactly one of these values: "fallback_to_agent" if the owner wants Leon to handle the original request via agent mode, "create_skill" if the owner wants Leon to create a new skill, or "cancel" if the owner does not want either option.',
         slotType: 'string',
         latestUtterance: utterance,
         recentUtterances: this._nluProcessResult.context.utterances.slice(-4)
@@ -595,9 +595,9 @@ export default class NLU {
       return true
     }
 
-    if (choiceValue === 'write_skill_code') {
+    if (choiceValue === 'create_skill') {
       this.pendingWorkflowNotFoundChoice = null
-      await this.runSkillWriterCreateSkill(originalUtterance)
+      await this.runSkillCreator(originalUtterance)
       return true
     }
 
@@ -888,29 +888,14 @@ export default class NLU {
       )
     }
   }
-  private async runSkillWriterCreateSkill(
-    utterance: NLPUtterance
-  ): Promise<void> {
+  private async runSkillCreator(utterance: NLPUtterance): Promise<void> {
     LogHelper.title('NLU')
-    LogHelper.info('Routing to Skill Writer...')
+    LogHelper.info('Routing to Skill Creator Agent Skill...')
 
-    await NLUProcessResultUpdater.update({
-      new: {
-        utterance
-      }
-    })
-    await NLUProcessResultUpdater.update({
-      skillName: 'skill_writer_skill'
-    })
-    await NLUProcessResultUpdater.update({
-      actionName: 'create_skill'
-    })
-
-    await this.handleActionSuccess({
-      status: ActionCallingStatus.Success,
-      name: 'create_skill',
-      arguments: {}
-    })
+    await this.runReAct(
+      `Create a new Leon skill for this original owner request:\n\n${utterance}`,
+      'skill-creator'
+    )
   }
 
   /**
