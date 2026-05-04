@@ -83,6 +83,11 @@ class Qwen3ASRTool(BaseTool):
             The path to the transcription file
         """
         try:
+            if not os.path.isfile(input_path):
+                raise FileNotFoundError(f"Input audio file does not exist: {input_path}")
+
+            os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+
             model_path = self.get_resource_path(MODEL_NAME)
             forced_aligner_path = None
             nvidia_libs_path = (
