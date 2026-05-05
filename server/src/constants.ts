@@ -36,6 +36,7 @@ const TESTING_ENV = 'testing'
 
 export const GITHUB_URL = 'https://github.com/leon-ai/leon'
 export const API_VERSION = 'v1'
+export const WEB_APP_DEV_SERVER_PORT = 5_173
 export const REMIX_ICON_NAME_PATTERN = '^(?!.*-fill$).+$'
 
 export const { default: LANG_CONFIGS } = await import('@@/core/langs.json', {

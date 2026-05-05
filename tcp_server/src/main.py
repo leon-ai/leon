@@ -8,6 +8,8 @@ from os.path import join
 from dotenv import load_dotenv
 
 DEFAULT_LEON_PROFILE = "just-me"
+DEFAULT_TCP_SERVER_HOST = "127.0.0.1"
+DEFAULT_TCP_SERVER_PORT = 5_367
 
 
 def resolve_leon_home() -> str:
@@ -155,8 +157,8 @@ load_dotenv(dotenv_path)
 
 from lib.tcp_server import TCPServer
 
-tcp_server_host = os.environ.get("LEON_PY_TCP_SERVER_HOST", "0.0.0.0")
-tcp_server_port = os.environ.get("LEON_PY_TCP_SERVER_PORT", 1342)
+tcp_server_host = os.environ.get("LEON_PY_TCP_SERVER_HOST", DEFAULT_TCP_SERVER_HOST)
+tcp_server_port = os.environ.get("LEON_PY_TCP_SERVER_PORT", DEFAULT_TCP_SERVER_PORT)
 
 tcp_server = TCPServer(tcp_server_host, tcp_server_port)
 

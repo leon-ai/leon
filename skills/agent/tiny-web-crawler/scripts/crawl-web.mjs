@@ -8,6 +8,8 @@ const DEFAULT_MAX_PAGES = 8
 const DEFAULT_MAX_DEPTH = 2
 const DEFAULT_SAME_DOMAIN_LIMIT = 5
 const DEFAULT_MAX_SEARCH_QUERIES = 3
+const DEFAULT_FETCH_MAX_TEXT_CHARS = 6_000
+const DEFAULT_FETCH_MAX_LINKS = 150
 const STRONG_MATCH_SCORE = 8
 
 function parseArgs(argv) {
@@ -110,7 +112,13 @@ function runFetchPage(url, query) {
     '--url',
     url,
     '--query',
-    query
+    query,
+    '--mode',
+    'summary',
+    '--max-text-chars',
+    String(DEFAULT_FETCH_MAX_TEXT_CHARS),
+    '--max-links',
+    String(DEFAULT_FETCH_MAX_LINKS)
   ], {
     encoding: 'utf8',
     maxBuffer: 8 * 1_024 * 1_024
@@ -230,6 +238,9 @@ async function crawl(args) {
       via: item.via,
       linkText: item.linkText,
       score: Number(page.score || 0),
+      textLength: Number(page.textLength || 0),
+      chunk: page.chunk || null,
+      rawTruncated: page.rawTruncated === true,
       snippets: Array.isArray(page.snippets) ? page.snippets : [],
       error: page.error || null
     }

@@ -1,16 +1,37 @@
 #!/usr/bin/env node
 
 const DEFAULT_TIMEOUT_MS = 15_000
-const DEFAULT_MAX_TEXT_CHARS = 40_000
-const DEFAULT_MAX_LINKS = 500
+const DEFAULT_MAX_RAW_CHARS = 500_000
+const DEFAULT_MAX_TEXT_CHARS = 8_000
+const DEFAULT_TEXT_PREVIEW_CHARS = 1_500
+const DEFAULT_MAX_LINKS = 150
+const DEFAULT_MODE = 'summary'
 const USER_AGENT =
-  'Leon Web Research Skill/1.0 (+https://github.com/leon-ai/leon)'
+  'Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.7815.2 Safari/537.36'
+const REMOVED_BLOCK_TAGS = [
+  'script',
+  'style',
+  'noscript',
+  'svg',
+  'canvas',
+  'iframe',
+  'form',
+  'select',
+  'button',
+  'nav',
+  'footer',
+  'aside'
+]
 
 function parseArgs(argv) {
   const args = {
     url: '',
     query: '',
+    mode: DEFAULT_MODE,
+    includeText: false,
+    offset: 0,
     timeoutMs: DEFAULT_TIMEOUT_MS,
+    maxRawChars: DEFAULT_MAX_RAW_CHARS,
     maxTextChars: DEFAULT_MAX_TEXT_CHARS,
     maxLinks: DEFAULT_MAX_LINKS
   }
@@ -25,8 +46,23 @@ function parseArgs(argv) {
     } else if (arg === '--query' && next) {
       args.query = next
       i += 1
+    } else if (arg === '--mode' && next) {
+      args.mode = next === 'full' ? 'full' : DEFAULT_MODE
+      i += 1
+    } else if (arg === '--include-text') {
+      args.includeText = next !== 'false'
+
+      if (next === 'true' || next === 'false') {
+        i += 1
+      }
+    } else if (arg === '--offset' && next) {
+      args.offset = Number(next)
+      i += 1
     } else if (arg === '--timeout-ms' && next) {
       args.timeoutMs = Number(next)
+      i += 1
+    } else if (arg === '--max-raw-chars' && next) {
+      args.maxRawChars = Number(next)
       i += 1
     } else if (arg === '--max-text-chars' && next) {
       args.maxTextChars = Number(next)
@@ -38,6 +74,10 @@ function parseArgs(argv) {
   }
 
   return args
+}
+
+function getPositiveInteger(value, fallback) {
+  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback
 }
 
 function decodeHtmlEntities(value) {
@@ -64,13 +104,22 @@ function normalizeWhitespace(value) {
   return value.replace(/\s+/g, ' ').trim()
 }
 
+function removeBlockTag(html, tagName) {
+  return html.replace(
+    new RegExp(`<${tagName}\\b[^>]*>[\\s\\S]*?<\\/${tagName}>`, 'gi'),
+    ' '
+  )
+}
+
 function stripHtml(html) {
+  const cleanedHtml = REMOVED_BLOCK_TAGS.reduce(
+    (result, tagName) => removeBlockTag(result, tagName),
+    html
+  )
+
   return normalizeWhitespace(
     decodeHtmlEntities(
-      html
-        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
-        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
-        .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+      cleanedHtml
         .replace(/<!--[\s\S]*?-->/g, ' ')
         .replace(/<\/(p|div|section|article|header|footer|main|li|tr|h[1-6])>/gi, '\n')
         .replace(/<[^>]+>/g, ' ')
@@ -198,6 +247,28 @@ function findSnippets(text, query, maxSnippets = 8) {
   return snippets
 }
 
+function getTextChunk(text, offset, maxTextChars) {
+  const safeOffset = Math.min(
+    Math.max(0, getPositiveInteger(offset, 0)),
+    text.length
+  )
+  const safeMaxTextChars = getPositiveInteger(
+    maxTextChars,
+    DEFAULT_MAX_TEXT_CHARS
+  )
+  const textChunk = text.slice(safeOffset, safeOffset + safeMaxTextChars)
+  const nextOffset = safeOffset + textChunk.length
+  const hasMore = nextOffset < text.length
+
+  return {
+    text: textChunk,
+    offset: safeOffset,
+    chars: textChunk.length,
+    hasMore,
+    nextOffset: hasMore ? nextOffset : null
+  }
+}
+
 function scoreText(text, query) {
   const lowerText = text.toLowerCase()
 
@@ -206,6 +277,53 @@ function scoreText(text, query) {
 
     return score + (matches ? matches.length : 0)
   }, 0)
+}
+
+async function readResponseText(response, maxRawChars) {
+  const safeMaxRawChars = getPositiveInteger(
+    maxRawChars,
+    DEFAULT_MAX_RAW_CHARS
+  )
+
+  if (!response.body || typeof response.body.getReader !== 'function') {
+    const raw = await response.text()
+
+    return {
+      raw: raw.slice(0, safeMaxRawChars),
+      rawTruncated: raw.length > safeMaxRawChars
+    }
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let raw = ''
+  let rawTruncated = false
+
+  while (raw.length < safeMaxRawChars) {
+    const { done, value } = await reader.read()
+
+    if (done) {
+      break
+    }
+
+    raw += decoder.decode(value, { stream: true })
+
+    if (raw.length >= safeMaxRawChars) {
+      raw = raw.slice(0, safeMaxRawChars)
+      rawTruncated = true
+      await reader.cancel()
+      break
+    }
+  }
+
+  if (!rawTruncated) {
+    raw += decoder.decode()
+  }
+
+  return {
+    raw,
+    rawTruncated
+  }
 }
 
 async function fetchPage(args) {
@@ -227,27 +345,43 @@ async function fetchPage(args) {
     })
     const finalUrl = normalizeUrl(response.url || args.url)
     const contentType = response.headers.get('content-type') || ''
-    const raw = await response.text()
-    const isHtml = /html|xml/i.test(contentType) || /<html|<body|<a\s/i.test(raw)
-    const text = (isHtml ? stripHtml(raw) : normalizeWhitespace(raw)).slice(
-      0,
-      args.maxTextChars
+    const { raw, rawTruncated } = await readResponseText(
+      response,
+      args.maxRawChars
     )
+    const isHtml = /html|xml/i.test(contentType) || /<html|<body|<a\s/i.test(raw)
+    const readableText = isHtml ? stripHtml(raw) : normalizeWhitespace(raw)
+    const chunk = getTextChunk(readableText, args.offset, args.maxTextChars)
     const title = isHtml ? extractTitle(raw) : ''
     const links = isHtml ? extractLinks(raw, finalUrl, args.maxLinks) : []
-
-    return {
+    const includeText = args.mode === 'full' || args.includeText
+    const result = {
       ok: response.ok,
       status: response.status,
       url: finalUrl,
       contentType,
       title,
-      text,
-      textLength: text.length,
-      score: args.query ? scoreText(`${title} ${text}`, args.query) : 0,
-      snippets: args.query ? findSnippets(text, args.query) : [],
+      mode: args.mode,
+      rawTruncated,
+      textLength: readableText.length,
+      chunk: {
+        offset: chunk.offset,
+        chars: chunk.chars,
+        hasMore: chunk.hasMore,
+        nextOffset: chunk.nextOffset
+      },
+      score: args.query ? scoreText(`${title} ${readableText}`, args.query) : 0,
+      snippets: args.query ? findSnippets(readableText, args.query) : [],
       links
     }
+
+    if (includeText) {
+      result.text = chunk.text
+    } else {
+      result.textPreview = chunk.text.slice(0, DEFAULT_TEXT_PREVIEW_CHARS)
+    }
+
+    return result
   } finally {
     clearTimeout(timeout)
   }

@@ -3,6 +3,8 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const AURORA_PREVIEW_DEV_SERVER_PORT = 5_175
+
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
   resolve: {
@@ -18,7 +20,7 @@ export default defineConfig({
     ]
   },
   server: {
-    port: 3001
+    port: AURORA_PREVIEW_DEV_SERVER_PORT
   },
   plugins: [react()]
 })
