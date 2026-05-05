@@ -214,7 +214,7 @@ beforeEach(() => {
 })
 
 describe('ReActLLMDuty agent loop', () => {
-  it('skips Agent Skill selection when no skill name is mentioned', async () => {
+  it('skips Agent Skill selection when no name or metadata match is present', async () => {
     const callLLMWithTools = vi.fn(async () => ({
       toolCall: {
         functionName: 'create_plan',
@@ -262,6 +262,90 @@ describe('ReActLLMDuty agent loop', () => {
         draft: 'Acknowledge the thanks.',
         source: 'planning'
       }
+    })
+  })
+
+  it('attempts Agent Skill selection on a clear metadata match', async () => {
+    const agentSkillContext = {
+      id: 'tiny-web-crawler',
+      name: 'tiny-web-crawler',
+      description: 'Crawl from starting web pages.',
+      rootPath: '/tmp/tiny-web-crawler',
+      skillPath: '/tmp/tiny-web-crawler/SKILL.md',
+      instructions: '# Tiny Web Crawler'
+    }
+    const callLLMWithTools = vi
+      .fn()
+      .mockResolvedValueOnce({
+        toolCall: {
+          functionName: 'select_agent_skill',
+          arguments: JSON.stringify({
+            skill_id: 'tiny-web-crawler',
+            reason: 'The request asks to crawl and fetch web page content.'
+          })
+        }
+      })
+      .mockResolvedValueOnce({
+        toolCall: {
+          functionName: 'create_plan',
+          arguments: JSON.stringify({
+            type: 'plan',
+            steps: [
+              {
+                function: 'operating_system_control.bash.executeBashCommand',
+                label: 'Fetch target page'
+              }
+            ],
+            summary: 'Fetching the target page...',
+            answer: null,
+            intent: null
+          })
+        }
+      })
+    const caller = {
+      callLLM: vi.fn(),
+      callLLMText: vi.fn(),
+      callLLMWithTools,
+      supportsNativeTools: true,
+      input:
+        'Please crawl from https://example.com, fetch readable content, and follow relevant links to find pricing.',
+      history: [],
+      agentSkillCatalog:
+        '1. tiny-web-crawler: Crawl from starting web pages, fetch readable content, search within pages, and follow relevant links.',
+      setAgentSkillContext: vi.fn(),
+      getAgentSkillContext: vi.fn(async () => agentSkillContext),
+      getContextFileContent: vi.fn(() => null),
+      getContextManifest: vi.fn(() => ''),
+      getSelfModelSnapshot: vi.fn(() => ''),
+      consumeProviderErrorMessage: vi.fn(() => null)
+    }
+
+    const result = await runPlanningPhaseDirect(
+      caller,
+      {
+        text: 'mock catalog',
+        mode: 'function'
+      },
+      []
+    )
+
+    expect(callLLMWithTools).toHaveBeenCalledTimes(2)
+    expect(callLLMWithTools.mock.calls[0]?.[2]?.[0]?.function.name).toBe(
+      'select_agent_skill'
+    )
+    expect(callLLMWithTools.mock.calls[1]?.[2]?.[0]?.function.name).toBe(
+      'create_plan'
+    )
+    expect(caller.setAgentSkillContext).toHaveBeenCalledWith(agentSkillContext)
+    expect(result).toEqual({
+      type: 'plan',
+      steps: [
+        {
+          function: 'operating_system_control.bash.executeBashCommand',
+          label: 'Fetch target page'
+        }
+      ],
+      summary: 'Fetching the target page...'
     })
   })
 

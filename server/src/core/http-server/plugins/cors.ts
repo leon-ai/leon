@@ -1,11 +1,14 @@
 import type { onRequestHookHandler } from 'fastify'
 
-import { HOST, IS_PRODUCTION_ENV } from '@/constants'
+import { HOST, IS_PRODUCTION_ENV, WEB_APP_DEV_SERVER_PORT } from '@/constants'
 
 export const corsMidd: onRequestHookHandler = async (_request, reply) => {
   // Allow only a specific client to request to the API (depending on the env)
   if (!IS_PRODUCTION_ENV) {
-    reply.header('Access-Control-Allow-Origin', `${HOST}:3000`)
+    reply.header(
+      'Access-Control-Allow-Origin',
+      `${HOST}:${WEB_APP_DEV_SERVER_PORT}`
+    )
   }
 
   // Allow several headers for our requests
