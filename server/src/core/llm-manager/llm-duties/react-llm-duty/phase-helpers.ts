@@ -1,5 +1,11 @@
 import { LogHelper } from '@/helpers/log-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
+import {
+  NODE_RUNTIME_BIN_PATH,
+  PNPM_RUNTIME_BIN_PATH,
+  PYTHON_RUNTIME_BIN_PATH,
+  UV_RUNTIME_BIN_PATH
+} from '@/constants'
 
 import { CHARS_PER_TOKEN, DUTY_NAME } from './constants'
 import type {
@@ -290,6 +296,14 @@ export function buildActiveAgentSkillSection(
     `description: ${agentSkillContext.description}`,
     `root_path: ${agentSkillContext.rootPath}`,
     `skill_path: ${agentSkillContext.skillPath}`,
+    '',
+    '<leon_agent_skill_runtime>',
+    `node: ${NODE_RUNTIME_BIN_PATH}`,
+    `python: ${PYTHON_RUNTIME_BIN_PATH}`,
+    `pnpm: ${PNPM_RUNTIME_BIN_PATH}`,
+    `uv: ${UV_RUNTIME_BIN_PATH}`,
+    'When running local scripts for this active agent skill, prefer these managed binaries over bare node, python, pnpm, or uv commands.',
+    '</leon_agent_skill_runtime>',
     '',
     agentSkillContext.instructions,
     '</active_agent_skill>',
