@@ -8,7 +8,8 @@ import {
   HAS_TTS,
   SHOULD_START_PYTHON_TCP_SERVER,
   IS_DEVELOPMENT_ENV,
-  API_VERSION
+  API_VERSION,
+  WEB_APP_DEV_SERVER_PORT
 } from '@/constants'
 import {
   HTTP_SERVER,
@@ -306,7 +307,7 @@ export default class SocketServer {
   public async init(): Promise<void> {
     const io = IS_DEVELOPMENT_ENV
       ? new SocketIOServer(HTTP_SERVER.httpServer, {
-          cors: { origin: `${HTTP_SERVER.host}:3000` }
+          cors: { origin: `${HTTP_SERVER.host}:${WEB_APP_DEV_SERVER_PORT}` }
         })
       : new SocketIOServer(HTTP_SERVER.httpServer)
 

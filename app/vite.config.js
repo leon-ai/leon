@@ -6,6 +6,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { PROFILE_DOT_ENV_PATH } from '../server/src/leon-roots.ts'
 
+const APP_DEV_SERVER_PORT = 5_173
+
 dotenv.config({ path: PROFILE_DOT_ENV_PATH })
 
 dns.setDefaultResultOrder('verbatim')
@@ -38,7 +40,7 @@ export default defineConfig({
     emptyOutDir: true
   },
   server: {
-    port: 3000
+    port: APP_DEV_SERVER_PORT
   },
   plugins: [react()]
 })

@@ -111,7 +111,7 @@ pnpm start
 pnpm run check
 ```
 
-By default, Leon runs locally and the app is available on `http://localhost:1337`.
+By default, Leon runs locally and the app is available on `http://localhost:5366`.
 
 ## 🏗️ Architecture Snapshot
 

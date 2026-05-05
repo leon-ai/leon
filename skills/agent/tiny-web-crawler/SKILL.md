@@ -14,7 +14,7 @@ Use this skill to inspect web pages by fetching content, searching within it, an
 
 Use the bundled scripts for the actual web fetching and bounded crawling:
 
-- `scripts/fetch-page.mjs`: fetch one page, extract readable text, links, and query snippets.
+- `scripts/fetch-page.mjs`: fetch one page, extract compact readable text, links, and query snippets.
 - `scripts/crawl-web.mjs`: crawl from one or more start URLs, follow relevant links, and stop at limits or strong matches.
 
 Run scripts with a portable Node binary. Resolve Node in this order:
@@ -35,11 +35,12 @@ If `LEON_HOME` is not set or that path does not exist, use `node scripts/crawl-w
 1. Clarify the target only when the requested information or starting point is ambiguous.
 2. Start from the owner-provided URL when one is given.
 3. Use `scripts/crawl-web.mjs` to fetch pages, search within content, and follow relevant links.
-4. Use `scripts/fetch-page.mjs` for one-off page inspection.
-5. Search within fetched content for exact names, phrases, dates, numbers, headings, or nearby synonyms.
-6. Track visited URLs and do not revisit the same page.
-7. Stop as soon as the target information is found with enough context to answer.
-8. If the limit is reached, report what was checked and what remains unresolved.
+4. Use `scripts/fetch-page.mjs` for one-off page inspection or deeper inspection of a promising page.
+5. Start with compact fetches. Read full or later text chunks only when snippets, title, or links show the page is likely relevant.
+6. Search within fetched content for exact names, phrases, dates, numbers, headings, or nearby synonyms.
+7. Track visited URLs and do not revisit the same page.
+8. Stop as soon as the target information is found with enough context to answer.
+9. If the limit is reached, report what was checked and what remains unresolved.
 
 ## Limits
 
@@ -50,6 +51,17 @@ Default limits unless the owner specifies otherwise:
 - Max pages from the same domain: 5
 
 Prefer stopping early over crawling broadly.
+
+## Progressive Fetching
+
+`fetch-page.mjs` returns compact output by default:
+
+- `textPreview`: short readable preview
+- `snippets`: query matches with nearby context
+- `links`: normalized URLs with short labels and context
+- `chunk.hasMore` and `chunk.nextOffset`: use these to fetch more text only when needed
+
+For deeper inspection, use `--include-text --offset <number> --max-text-chars <number>`.
 
 ## Link Selection
 

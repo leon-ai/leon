@@ -41,6 +41,13 @@ import { buildPhaseSystemPrompt } from './phase-policy'
 
 const NO_AGENT_SKILL_SELECTION = 'None'
 const MIN_AGENT_SKILL_ALIAS_LENGTH = 3
+const MIN_AGENT_SKILL_METADATA_TERM_LENGTH = 4
+const MIN_AGENT_SKILL_METADATA_MATCHES = 2
+
+interface AgentSkillCatalogEntry {
+  id: string
+  description: string
+}
 
 function getLLMProviderName(): LLMProviders {
   return CONFIG_STATE.getModelState().getAgentProvider()
@@ -93,7 +100,7 @@ function buildPlanningPromptSections(params: {
   return sections
 }
 
-function getAgentSkillIdsFromCatalog(catalog: string): string[] {
+function getAgentSkillEntriesFromCatalog(catalog: string): AgentSkillCatalogEntry[] {
   return catalog
     .split('\n')
     .map((line) => {
@@ -106,12 +113,25 @@ function getAgentSkillIdsFromCatalog(catalog: string): string[] {
       const descriptionSeparatorIndex = descriptor.indexOf(':')
 
       if (descriptionSeparatorIndex < 0) {
-        return ''
+        return null
       }
 
-      return descriptor.slice(0, descriptionSeparatorIndex).trim()
+      const id = descriptor.slice(0, descriptionSeparatorIndex).trim()
+      const description = descriptor
+        .slice(descriptionSeparatorIndex + 1)
+        .replace(/\s+\(SKILL\.md:[\s\S]*?\)\s*$/i, '')
+        .trim()
+
+      if (!id || !description) {
+        return null
+      }
+
+      return {
+        id,
+        description
+      }
     })
-    .filter((skillId) => skillId.length > 0)
+    .filter((entry): entry is AgentSkillCatalogEntry => Boolean(entry))
 }
 
 function normalizeAgentSkillAlias(value: string): string {
@@ -122,9 +142,71 @@ function normalizeAgentSkillAlias(value: string): string {
     .replace(/\s+/g, ' ')
 }
 
+function normalizeAgentSkillMetadataTerm(term: string): string {
+  const normalizedTerm = term.toLowerCase()
+
+  if (normalizedTerm.length <= MIN_AGENT_SKILL_METADATA_TERM_LENGTH) {
+    return normalizedTerm
+  }
+
+  return normalizedTerm
+    .replace(/(?:ing|ed|es|s)$/i, '')
+    .trim()
+}
+
+function getAgentSkillMetadataTerms(value: string): Set<string> {
+  const normalizedValue = normalizeAgentSkillAlias(value)
+
+  if (!normalizedValue) {
+    return new Set()
+  }
+
+  return new Set(
+    normalizedValue
+      .split(' ')
+      .map(normalizeAgentSkillMetadataTerm)
+      .filter((term) => term.length >= MIN_AGENT_SKILL_METADATA_TERM_LENGTH)
+  )
+}
+
+function hasExplicitAgentSkillReference(
+  normalizedInput: string,
+  skillId: string
+): boolean {
+  const normalizedSkillId = normalizeAgentSkillAlias(skillId)
+
+  if (normalizedSkillId.length < MIN_AGENT_SKILL_ALIAS_LENGTH) {
+    return false
+  }
+
+  return normalizedInput.includes(normalizedSkillId)
+}
+
+function hasAgentSkillMetadataMatch(
+  inputTerms: Set<string>,
+  entry: AgentSkillCatalogEntry
+): boolean {
+  const metadataTerms = getAgentSkillMetadataTerms(
+    `${entry.id} ${entry.description}`
+  )
+  let matchCount = 0
+
+  for (const term of metadataTerms) {
+    if (inputTerms.has(term)) {
+      matchCount += 1
+
+      if (matchCount >= MIN_AGENT_SKILL_METADATA_MATCHES) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
 function shouldRunAgentSkillSelection(
   input: unknown,
-  agentSkillIds: string[]
+  agentSkillEntries: AgentSkillCatalogEntry[]
 ): boolean {
   const normalizedInput = normalizeAgentSkillAlias(String(input || ''))
 
@@ -132,15 +214,19 @@ function shouldRunAgentSkillSelection(
     return false
   }
 
-  return agentSkillIds.some((skillId) => {
-    const normalizedSkillId = normalizeAgentSkillAlias(skillId)
+  if (
+    agentSkillEntries.some((entry) =>
+      hasExplicitAgentSkillReference(normalizedInput, entry.id)
+    )
+  ) {
+    return true
+  }
 
-    if (normalizedSkillId.length < MIN_AGENT_SKILL_ALIAS_LENGTH) {
-      return false
-    }
+  const inputTerms = getAgentSkillMetadataTerms(normalizedInput)
 
-    return normalizedInput.includes(normalizedSkillId)
-  })
+  return agentSkillEntries.some((entry) =>
+    hasAgentSkillMetadataMatch(inputTerms, entry)
+  )
 }
 
 async function selectAgentSkillContext(
@@ -158,16 +244,19 @@ async function selectAgentSkillContext(
     return null
   }
 
-  const agentSkillIds = getAgentSkillIdsFromCatalog(caller.agentSkillCatalog)
+  const agentSkillEntries = getAgentSkillEntriesFromCatalog(
+    caller.agentSkillCatalog
+  )
+  const agentSkillIds = agentSkillEntries.map((entry) => entry.id)
 
-  if (agentSkillIds.length === 0) {
+  if (agentSkillEntries.length === 0) {
     return null
   }
 
-  if (!shouldRunAgentSkillSelection(caller.input, agentSkillIds)) {
+  if (!shouldRunAgentSkillSelection(caller.input, agentSkillEntries)) {
     LogHelper.title(`${DUTY_NAME} / planning`)
     LogHelper.debug(
-      'Agent Skill selection skipped: no explicit Agent Skill name in request.'
+      'Agent Skill selection skipped: no explicit Agent Skill name or clear metadata match in request.'
     )
 
     return null
