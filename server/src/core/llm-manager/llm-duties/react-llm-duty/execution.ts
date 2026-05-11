@@ -3,10 +3,12 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 import { LogHelper } from '@/helpers/log-helper'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
 import {
   TOOLKIT_REGISTRY,
   TOOL_EXECUTOR,
-  SOCKET_SERVER
+  SOCKET_SERVER,
+  BRAIN
 } from '@/core'
 import type { OpenAITool } from '@/core/llm-manager/types'
 
@@ -62,6 +64,31 @@ const TOOL_ARGUMENT_LLM_OPTIONS = {
   phase: 'execution',
   streamToProvider: false
 } satisfies LLMCallOptions
+
+const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
+  'bridges.tools.creating_bins_directory',
+  'bridges.tools.binary_not_found',
+  'bridges.tools.downloading_from_url',
+  'bridges.tools.download_progress',
+  'bridges.tools.download_progress_with_details',
+  'bridges.tools.extracting_archive',
+  'bridges.tools.making_executable',
+  'bridges.tools.removing_quarantine',
+  'bridges.tools.creating_resource_directory',
+  'bridges.tools.downloading_resource',
+  'bridges.tools.downloading_resource_file'
+])
+const TOOL_PREPARATION_READY_REPORT_KEYS = new Set([
+  'bridges.tools.binary_ready',
+  'bridges.tools.resource_downloaded'
+])
+const TOOL_PREPARATION_FAILED_REPORT_KEYS = new Set([
+  'bridges.tools.no_binary_url',
+  'bridges.tools.no_resource_urls',
+  'bridges.tools.download_failed',
+  'bridges.tools.download_url_failed',
+  'bridges.tools.resource_file_download_failed'
+])
 
 async function buildExecutionMemorySection(
   _caller: LLMCaller,
@@ -163,6 +190,61 @@ function shouldInjectContextManifestForExecution(
   return toolkitId === 'structured_knowledge' && toolId === 'context'
 }
 
+function resolveUniqueFunctionByLeafName(
+  functionName: string
+): string | null {
+  const normalizedFunctionName = functionName.trim()
+  if (!normalizedFunctionName) {
+    return null
+  }
+
+  const matches: string[] = []
+  for (const tool of TOOLKIT_REGISTRY.getFlattenedTools()) {
+    const functions = TOOLKIT_REGISTRY.getToolFunctions(
+      tool.toolkitId,
+      tool.toolId
+    )
+
+    if (functions?.[normalizedFunctionName]) {
+      matches.push(
+        `${tool.toolkitId}.${tool.toolId}.${normalizedFunctionName}`
+      )
+    }
+  }
+
+  return matches.length === 1 ? matches[0]! : null
+}
+
+function resolvePlannedFunctionReference(qualifiedName: string): string | null {
+  const normalizedQualifiedName = qualifiedName.trim()
+  if (!normalizedQualifiedName) {
+    return null
+  }
+
+  const parts = normalizedQualifiedName.split('.').filter(Boolean)
+  if (parts.length >= 3) {
+    const toolkitId = parts[0] || ''
+    const toolId = parts[1] || ''
+    const functionName = parts.slice(2).join('.') || ''
+    const functions = TOOLKIT_REGISTRY.getToolFunctions(toolkitId, toolId)
+
+    if (functions?.[functionName]) {
+      return normalizedQualifiedName
+    }
+  }
+
+  if (parts.length <= 2) {
+    const toolkitId = parts.length === 2 ? parts[0] : undefined
+    const toolId = parts.length === 2 ? parts[1] : parts[0]
+    if (toolId && TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)) {
+      return normalizedQualifiedName
+    }
+  }
+
+  const leafName = parts[parts.length - 1] || ''
+  return resolveUniqueFunctionByLeafName(leafName)
+}
+
 function buildExecutionContextManifestSection(
   caller: LLMCaller,
   toolkitId: string,
@@ -204,25 +286,53 @@ function stringifyToolPanelValue(value: unknown): string {
   }
 }
 
-function emitToolExecutionToWebApp(params: {
+function createToolGroupId(
+  toolkitId: string,
+  toolId: string,
+  functionName: string
+): string {
+  return `react_${toolkitId}_${toolId}_${functionName}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+}
+
+function getToolDisplayContext(
+  toolkitId: string,
+  toolId: string,
+  functionName: string
+): {
+  toolkitName: string
+  toolName: string
+  toolkitIconName?: string
+  toolIconName?: string
+  key: string
+} {
+  const resolvedTool = TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)
+
+  return {
+    toolkitName: resolvedTool?.toolkitName || toolkitId,
+    toolName: resolvedTool?.toolName || toolId,
+    ...(resolvedTool?.toolkitIconName
+      ? { toolkitIconName: resolvedTool.toolkitIconName }
+      : {}),
+    ...(resolvedTool?.toolIconName
+      ? { toolIconName: resolvedTool.toolIconName }
+      : {}),
+    key: `${toolkitId}.${toolId}.${functionName}`
+  }
+}
+
+function emitToolExecutionInputToWebApp(params: {
   toolkitId: string
   toolId: string
   functionName: string
   toolInput: string
-  output: Record<string, unknown>
-  status: string
-  message: string
+  toolGroupId: string
   stepLabel?: string
 }): void {
-  const resolvedTool = TOOLKIT_REGISTRY.resolveToolById(
+  const displayContext = getToolDisplayContext(
+    params.toolkitId,
     params.toolId,
-    params.toolkitId
+    params.functionName
   )
-  const toolkitName = resolvedTool?.toolkitName || params.toolkitId
-  const toolName = resolvedTool?.toolName || params.toolId
-  const toolGroupId =
-    `react_${params.toolkitId}_${params.toolId}_${params.functionName}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
-
   const prefixLines = params.stepLabel
     ? [`Step: ${params.stepLabel}`, '']
     : []
@@ -231,6 +341,80 @@ function emitToolExecutionToWebApp(params: {
     'Input:',
     stringifyToolPanelValue(params.toolInput)
   ].join('\n')
+
+  SOCKET_SERVER.emitAnswerToChatClients({
+    answer: inputMessage,
+    isToolOutput: true,
+    toolDisplayMode: 'activity_card',
+    toolPhase: 'input',
+    ...displayContext,
+    toolGroupId: params.toolGroupId,
+    functionName: params.functionName,
+    toolInput: params.toolInput,
+    ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
+  })
+}
+
+function emitToolPreparationProgressToWebApp(params: {
+  toolkitId: string
+  toolId: string
+  functionName: string
+  toolGroupId: string
+  message: string
+  stepLabel?: string
+}): void {
+  const message = params.message.trim()
+  if (!message) {
+    return
+  }
+
+  SOCKET_SERVER.emitAnswerToChatClients({
+    answer: message,
+    isToolOutput: true,
+    toolDisplayMode: 'activity_card',
+    toolPhase: 'preparation',
+    ...getToolDisplayContext(
+      params.toolkitId,
+      params.toolId,
+      params.functionName
+    ),
+    toolGroupId: params.toolGroupId,
+    functionName: params.functionName,
+    status: 'running',
+    message,
+    ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
+  })
+}
+
+function emitToolPreparationOwnerMessage(
+  key: string,
+  toolName: string
+): void {
+  const message = BRAIN.wernicke(key, '', {
+    '{{ tool_name }}': toolName
+  })
+  if (!message) {
+    return
+  }
+
+  void BRAIN.talk(message).catch((error) => {
+    LogHelper.title(`${DUTY_NAME} / execution`)
+    LogHelper.warning(
+      `Failed to emit tool preparation owner message: ${String(error)}`
+    )
+  })
+}
+
+function emitToolExecutionOutputToWebApp(params: {
+  toolkitId: string
+  toolId: string
+  functionName: string
+  toolGroupId: string
+  output: Record<string, unknown>
+  status: string
+  message: string
+  stepLabel?: string
+}): void {
   const outputPayload = {
     status: params.status,
     message: params.message,
@@ -242,27 +426,16 @@ function emitToolExecutionToWebApp(params: {
   ].join('\n')
 
   SOCKET_SERVER.emitAnswerToChatClients({
-    answer: inputMessage,
-    isToolOutput: true,
-    toolDisplayMode: 'activity_card',
-    toolPhase: 'input',
-    toolkitName,
-    toolName,
-    toolGroupId,
-    key: `${params.toolkitId}.${params.toolId}.${params.functionName}`,
-    functionName: params.functionName,
-    toolInput: params.toolInput,
-    ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
-  })
-  SOCKET_SERVER.emitAnswerToChatClients({
     answer: outputMessage,
     isToolOutput: true,
     toolDisplayMode: 'activity_card',
     toolPhase: 'output',
-    toolkitName,
-    toolName,
-    toolGroupId,
-    key: `${params.toolkitId}.${params.toolId}.${params.functionName}`,
+    ...getToolDisplayContext(
+      params.toolkitId,
+      params.toolId,
+      params.functionName
+    ),
+    toolGroupId: params.toolGroupId,
     functionName: params.functionName,
     status: params.status,
     message: params.message,
@@ -328,6 +501,7 @@ Use only the user request and collected observations to decide whether the reque
   - {"type":"replan","steps":[{"function":"toolkit_id.tool_id.function_name","label":"Short verb-first label"}],"reason":"..."} when more tool steps are still needed.
 - Treat the task as complete only when every requested deliverable is already satisfied or explicitly blocked by the observations.
 - If any requested artifact, transformation, verification, write step, or follow-up action is still missing, choose "replan".
+- Do not add fallback/alternative steps after the primary path already satisfied the deliverable.
 - If a read, probe, or discovery step reveals another instruction or subtask to carry out, the task is still incomplete until that revealed instruction is executed or explicitly blocked.
 - Reading, quoting, or summarizing an instruction does not count as completing the instruction itself.
 - Base your decision strictly on observations, not assumptions.
@@ -404,7 +578,7 @@ Use only the user request and collected observations to decide whether the reque
     prompt,
     systemPrompt,
     schema,
-    undefined,
+    caller.history,
     buildExecutionPromptSections({
       prompt,
       systemPrompt,
@@ -462,7 +636,27 @@ export async function runExecutionStep(
   executionHistory: ExecutionRecord[],
   catalog: Catalog
 ): Promise<ExecutionStepResult> {
-  const qualifiedName = step.function
+  const resolvedQualifiedName = resolvePlannedFunctionReference(step.function)
+
+  if (!resolvedQualifiedName) {
+    return {
+      type: 'executed',
+      execution: {
+        function: step.function,
+        status: 'error',
+        observation: `Invalid function reference "${step.function}". Use a function from the available catalog.`
+      }
+    }
+  }
+
+  if (resolvedQualifiedName !== step.function) {
+    LogHelper.title(`${DUTY_NAME} / execution`)
+    LogHelper.debug(
+      `Normalized planned function "${step.function}" -> "${resolvedQualifiedName}"`
+    )
+  }
+
+  const qualifiedName = resolvedQualifiedName
   const parts = qualifiedName.split('.')
 
   // If the plan only has tool-level references (from tool-level catalog),
@@ -695,7 +889,7 @@ async function resolveToolFunctionWithNativeTools(
     resolveSystemPrompt,
     tools,
     'auto',
-    undefined,
+    caller.history,
     false,
     buildExecutionPromptSections({
       prompt,
@@ -947,7 +1141,7 @@ async function resolveToolFunctionWithJSONMode(
     prompt,
     resolveSystemPrompt,
     resolveSchema,
-    undefined,
+    caller.history,
     buildExecutionPromptSections({
       prompt,
       systemPrompt: resolveSystemPrompt,
@@ -1226,7 +1420,7 @@ async function executeFunctionWithNativeTools(
       executeSystemPrompt,
       [tool],
       'auto',
-      undefined,
+      caller.history,
       false,
       buildExecutionPromptSections({
         prompt,
@@ -1464,7 +1658,7 @@ async function executeFunctionWithJSONMode(
       prompt,
       executeSystemPrompt,
       executeSchema,
-      undefined,
+      caller.history,
       buildExecutionPromptSections({
         prompt,
         systemPrompt: executeSystemPrompt,
@@ -1652,6 +1846,7 @@ export async function runToolExecution(
     functionName: string
     toolInput: string
     parsedInput?: Record<string, unknown>
+    onProgress?: (progress: { message: string, key?: string }) => void
   } = {
     toolId,
     toolkitId,
@@ -1696,7 +1891,20 @@ export async function runToolExecution(
       scriptDir,
       `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.sh`
     )
-    writeFileSync(bashScriptPath, `set -e\n${command}\n`, { mode: 0o755 })
+    const managedRuntimeFunctions = RuntimeHelper.buildManagedRuntimeShellFunctions()
+    writeFileSync(
+      bashScriptPath,
+      [
+        '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
+        managedRuntimeFunctions,
+        '',
+        '# LLM-generated bash command starts here.',
+        'set -e',
+        command,
+        ''
+      ].join('\n'),
+      { mode: 0o755 }
+    )
 
     // Replace the command with the script path
     toolExecutionInput.parsedInput = {
@@ -1711,6 +1919,69 @@ export async function runToolExecution(
   LogHelper.title(`${DUTY_NAME} / execution`)
   LogHelper.debug(`Running tool: ${qualifiedName}`)
   LogHelper.debug(`Tool input: ${toolInput}`)
+
+  const toolGroupId = createToolGroupId(toolkitId, toolId, functionName)
+  emitToolExecutionInputToWebApp({
+    toolkitId,
+    toolId,
+    functionName,
+    toolInput: requestedToolInput,
+    toolGroupId,
+    ...(stepLabel ? { stepLabel } : {})
+  })
+
+  const toolDisplayContext = getToolDisplayContext(
+    toolkitId,
+    toolId,
+    functionName
+  )
+  let didNotifyOwnerPreparationStarted = false
+  let didNotifyOwnerPreparationReady = false
+  let didObservePreparationFailure = false
+  toolExecutionInput.onProgress = (progress): void => {
+    emitToolPreparationProgressToWebApp({
+      toolkitId,
+      toolId,
+      functionName,
+      toolGroupId,
+      message: progress.message,
+      ...(stepLabel ? { stepLabel } : {})
+    })
+
+    if (!progress.key) {
+      return
+    }
+
+    if (TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)) {
+      didObservePreparationFailure = true
+      return
+    }
+
+    if (
+      !didNotifyOwnerPreparationStarted &&
+      TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key)
+    ) {
+      didNotifyOwnerPreparationStarted = true
+      emitToolPreparationOwnerMessage(
+        'react.tool.preparing',
+        toolDisplayContext.toolName
+      )
+      return
+    }
+
+    if (
+      didNotifyOwnerPreparationStarted &&
+      !didNotifyOwnerPreparationReady &&
+      !didObservePreparationFailure &&
+      TOOL_PREPARATION_READY_REPORT_KEYS.has(progress.key)
+    ) {
+      didNotifyOwnerPreparationReady = true
+      emitToolPreparationOwnerMessage(
+        'react.tool.ready',
+        toolDisplayContext.toolName
+      )
+    }
+  }
 
   const toolExecutionResult =
     await TOOL_EXECUTOR.executeTool(toolExecutionInput)
@@ -1751,11 +2022,11 @@ export async function runToolExecution(
     `Tool output: ${JSON.stringify(toolExecutionResult.data?.output)}`
   )
 
-  emitToolExecutionToWebApp({
+  emitToolExecutionOutputToWebApp({
     toolkitId,
     toolId,
     functionName,
-    toolInput: requestedToolInput,
+    toolGroupId,
     output: toolExecutionResult.data?.output || {},
     status: effectiveStatus,
     message: effectiveMessage,

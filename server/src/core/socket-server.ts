@@ -29,6 +29,7 @@ import { LLMProviders } from '@/core/llm-manager/types'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { RoutingMode } from '@/types'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
 const DEFAULT_CLIENT_CAPABILITIES = {
   supportsWidgets: true
@@ -48,6 +49,7 @@ interface ClientCapabilities {
 interface InitDataEvent {
   client: string
   capabilities?: Partial<ClientCapabilities>
+  sessionId?: string
 }
 
 interface UtteranceDataEvent {
@@ -57,7 +59,9 @@ interface UtteranceDataEvent {
   commandContext?: {
     forcedRoutingMode?: RoutingMode
     forcedSkillName?: string
+    forcedToolName?: string
   }
+  sessionId?: string
 }
 
 interface WidgetDataEvent {
@@ -72,6 +76,7 @@ interface WidgetDataEvent {
 interface ConnectedChatClient {
   client: string
   capabilities: ClientCapabilities
+  sessionId: string
   socket: Socket<DefaultEventsMap, DefaultEventsMap>
 }
 
@@ -107,6 +112,7 @@ export default class SocketServer {
 
     return {
       client: data.client,
+      ...(data.sessionId ? { sessionId: data.sessionId } : {}),
       capabilities: {
         ...DEFAULT_CLIENT_CAPABILITIES,
         ...(data.capabilities || {})
@@ -128,8 +134,20 @@ export default class SocketServer {
         ...DEFAULT_CLIENT_CAPABILITIES,
         ...(initData.capabilities || {})
       },
+      sessionId:
+        initData.sessionId || CONVERSATION_SESSION_MANAGER.getActiveSessionId(),
       socket
     })
+  }
+
+  private setChatClientSession(socketId: string, sessionId: string): void {
+    const chatClient = this.chatClients.get(socketId)
+
+    if (!chatClient) {
+      return
+    }
+
+    chatClient.sessionId = sessionId
   }
 
   private unregisterChatClient(socketId: string): void {
@@ -140,8 +158,16 @@ export default class SocketServer {
     }
   }
 
-  public emitToChatClients(eventName: string, payload?: unknown): void {
+  public emitToChatClients(
+    eventName: string,
+    payload?: unknown,
+    options?: { sessionId?: string | null }
+  ): void {
     for (const chatClient of this.chatClients.values()) {
+      if (options?.sessionId && chatClient.sessionId !== options.sessionId) {
+        continue
+      }
+
       if (typeof payload === 'undefined') {
         chatClient.socket.emit(eventName)
       } else {
@@ -153,10 +179,15 @@ export default class SocketServer {
   public emitToOtherChatClients(
     sourceSocketId: string,
     eventName: string,
-    payload?: unknown
+    payload?: unknown,
+    options?: { sessionId?: string | null }
   ): void {
     for (const [socketId, chatClient] of this.chatClients.entries()) {
       if (socketId === sourceSocketId) {
+        continue
+      }
+
+      if (options?.sessionId && chatClient.sessionId !== options.sessionId) {
         continue
       }
 
@@ -216,7 +247,12 @@ export default class SocketServer {
     }
   }
 
-  public emitAnswerToChatClients(answerData: unknown): void {
+  public emitAnswerToChatClients(
+    answerData: unknown,
+    options?: { sessionId?: string | null }
+  ): void {
+    const sessionId =
+      options?.sessionId || CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
     const answerDataRecord =
       answerData && typeof answerData === 'object'
         ? (answerData as Record<string, unknown>)
@@ -253,6 +289,10 @@ export default class SocketServer {
     }
 
     for (const chatClient of this.chatClients.values()) {
+      if (sessionId && chatClient.sessionId !== sessionId) {
+        continue
+      }
+
       const transformedAnswerData = this.transformAnswerForClient(
         answerData,
         chatClient.capabilities
@@ -394,16 +434,29 @@ export default class SocketServer {
             socket.broadcast.emit('enable-record')
           })
         } else {
+          socket.on('session-change', (sessionId: string) => {
+            this.setActiveSocket(socket)
+            const session = CONVERSATION_SESSION_MANAGER.setActiveSession(
+              sessionId
+            )
+
+            this.setChatClientSession(socket.id, session.id)
+          })
+
           // Listen for new utterance
           socket.on('utterance', async (utteranceData: UtteranceDataEvent) => {
             this.setActiveSocket(socket)
+            const sessionId =
+              utteranceData.sessionId ||
+              this.chatClients.get(socket.id)?.sessionId ||
+              CONVERSATION_SESSION_MANAGER.getActiveSessionId()
 
             LogHelper.title('Socket')
             LogHelper.info(
               `${utteranceData.client} emitted: ${utteranceData.value}`
             )
 
-            this.emitToChatClients('is-typing', true)
+            this.emitToChatClients('is-typing', true, { sessionId })
 
             const { value: utterance } = utteranceData
             const ownerMessageId = `owner-${Date.now()}-${StringHelper.random(6)}`
@@ -412,43 +465,61 @@ export default class SocketServer {
                 ? utteranceData.sentAt
                 : Date.now()
 
-            this.emitToOtherChatClients(socket.id, 'owner-utterance', {
-              utterance,
-              messageId: ownerMessageId,
-              sentAt: ownerMessageSentAt
-            })
+            this.emitToOtherChatClients(
+              socket.id,
+              'owner-utterance',
+              {
+                utterance,
+                messageId: ownerMessageId,
+                sentAt: ownerMessageSentAt
+              },
+              { sessionId }
+            )
 
             try {
-              LogHelper.time('Utterance processed in')
+              await CONVERSATION_SESSION_MANAGER.runWithSession(
+                sessionId,
+                async () => {
+                  LogHelper.time('Utterance processed in')
 
-              // Always interrupt Leon's voice on answer
-              BRAIN.setIsTalkingWithVoice(false, { shouldInterrupt: true })
+                  // Always interrupt Leon's voice on answer
+                  BRAIN.setIsTalkingWithVoice(false, { shouldInterrupt: true })
 
-              BRAIN.isMuted = false
-              const processedData = await NLU.process(utterance, {
-                ownerMessageId,
-                ...(utteranceData.commandContext?.forcedRoutingMode
-                  ? {
-                      forcedRoutingMode:
-                        utteranceData.commandContext.forcedRoutingMode
-                    }
-                  : {}),
-                ...(utteranceData.commandContext?.forcedSkillName
-                  ? {
-                      forcedSkillName:
-                        utteranceData.commandContext.forcedSkillName
-                    }
-                  : {})
-              })
+                  BRAIN.isMuted = false
+                  const processedData = await NLU.process(utterance, {
+                    ownerMessageId,
+                    ...(utteranceData.commandContext?.forcedRoutingMode
+                      ? {
+                          forcedRoutingMode:
+                            utteranceData.commandContext.forcedRoutingMode
+                        }
+                      : {}),
+                    ...(utteranceData.commandContext?.forcedSkillName
+                      ? {
+                          forcedSkillName:
+                            utteranceData.commandContext.forcedSkillName
+                        }
+                      : {}),
+                    ...(utteranceData.commandContext?.forcedToolName
+                      ? {
+                          forcedToolName:
+                            utteranceData.commandContext.forcedToolName
+                        }
+                      : {})
+                  })
 
-              if (processedData) {
-                Telemetry.utterance(processedData)
-              }
+                  if (processedData) {
+                    Telemetry.utterance(processedData)
+                  }
 
-              LogHelper.title('Execution Time')
-              LogHelper.timeEnd('Utterance processed in')
+                  LogHelper.title('Execution Time')
+                  LogHelper.timeEnd('Utterance processed in')
+                }
+              )
             } catch (e) {
               LogHelper.error(`Failed to process utterance: ${e}`)
+            } finally {
+              this.emitToChatClients('is-typing', false, { sessionId })
             }
           })
 
@@ -474,40 +545,49 @@ export default class SocketServer {
           // Listen for widget events
           socket.on('widget-event', async (event: WidgetDataEvent) => {
             this.setActiveSocket(socket)
+            const sessionId =
+              this.chatClients.get(socket.id)?.sessionId ||
+              CONVERSATION_SESSION_MANAGER.getActiveSessionId()
 
             LogHelper.title('Socket')
             LogHelper.info(`Widget event: ${JSON.stringify(event)}`)
 
-            this.emitToChatClients('is-typing', true)
+            this.emitToChatClients('is-typing', true, { sessionId })
 
             try {
-              const { method } = event
+              await CONVERSATION_SESSION_MANAGER.runWithSession(
+                sessionId,
+                async () => {
+                  const { method } = event
 
-              if (method.methodName === 'send_utterance') {
-                const utterance = method.methodParams['utterance']
+                  if (method.methodName === 'send_utterance') {
+                    const utterance = method.methodParams['utterance']
 
-                if (method.methodParams['from'] === 'leon') {
-                  await BRAIN.talk(utterance as string, true)
-                } else {
-                  socket.emit('widget-send-utterance', utterance)
-                }
-              } else if (method.methodName === 'run_skill_action') {
-                const { actionName, params } = method.methodParams
+                    if (method.methodParams['from'] === 'leon') {
+                      await BRAIN.talk(utterance as string, true)
+                    } else {
+                      socket.emit('widget-send-utterance', utterance)
+                    }
+                  } else if (method.methodName === 'run_skill_action') {
+                    const { actionName, params } = method.methodParams
 
-                await axios.post(
-                  `${HTTP_SERVER.host}:${HTTP_SERVER.port}/api/${API_VERSION}/run-action`,
-                  {
-                    skill_action: actionName,
-                    action_params: params
+                    await axios.post(
+                      `${HTTP_SERVER.host}:${HTTP_SERVER.port}/api/${API_VERSION}/run-action`,
+                      {
+                        skill_action: actionName,
+                        action_params: params,
+                        session_id: sessionId
+                      }
+                    )
                   }
-                )
-              }
+                }
+              )
             } catch (e) {
               // eslint-disable-next-line @typescript-eslint/ban-ts-comment
               // @ts-expect-error
               LogHelper.error(`Failed to handle widget event: ${e.errors || e}`)
             } finally {
-              this.emitToChatClients('is-typing', false)
+              this.emitToChatClients('is-typing', false, { sessionId })
             }
           })
         }

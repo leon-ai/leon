@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
 import { basename, dirname, extname, join } from 'node:path'
 
 import { Tool, type ProgressCallback } from '@sdk/base-tool'
@@ -9,6 +9,7 @@ const REQUIRED_SETTINGS: string[] = []
 const DOWNLOAD_DESTINATION_PATTERN = /Destination:\s+(.+)$/
 const ALREADY_DOWNLOADED_PATTERN =
   /\[download\]\s+(.+)\s+has already been downloaded/
+const MERGED_FILE_PATTERN = /\[Merger\]\s+Merging formats into\s+"(.+)"$/
 const SUBTITLE_DESTINATION_PATTERN =
   /Writing (?:video subtitles|video automatic captions) to:\s+(.+)$/
 const DOWNLOAD_PROGRESS_PATTERN =
@@ -18,14 +19,39 @@ const YTDLP_TITLE_TEMPLATE = '%(title)s'
 const YTDLP_PLAYLIST_INDEX_TEMPLATE = '%(playlist_index)s'
 const SUBTITLE_FORMAT = 'srt/best'
 const SUBTITLE_CONVERT_FORMAT = 'srt'
+const IGNORED_MEDIA_OUTPUT_EXTENSIONS = new Set([
+  '.part',
+  '.ytdl',
+  '.tmp',
+  '.temp',
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.webp',
+  '.json'
+])
 const LANGUAGE_CODE_SEPARATOR = ','
 const SUBTITLE_OUTPUT_TYPE = 'subtitle'
 const TYPED_OUTPUT_SEPARATOR = ':'
+const SUBTITLE_METADATA_LANGUAGE_FIELDS = [
+  'language',
+  'language_code',
+  'original_language'
+]
+const IGNORED_SUBTITLE_LANGUAGE_CODES = new Set(['live_chat'])
 
 interface OutputTarget {
   directoryPath: string
   outputTemplate: string
   predictedFilePath?: string
+}
+
+interface VideoMetadata {
+  language?: unknown
+  language_code?: unknown
+  original_language?: unknown
+  subtitles?: unknown
+  automatic_captions?: unknown
 }
 
 export default class YtdlpTool extends Tool {
@@ -165,18 +191,157 @@ export default class YtdlpTool extends Tool {
    * Parses file paths reported by yt-dlp.
    */
   private static parseOutputFilePath(output: string): string | null {
+    let parsedPath: string | null = null
+
     for (const line of output.split('\n')) {
       const match =
         line.match(DOWNLOAD_DESTINATION_PATTERN) ||
         line.match(ALREADY_DOWNLOADED_PATTERN) ||
+        line.match(MERGED_FILE_PATTERN) ||
         line.match(SUBTITLE_DESTINATION_PATTERN)
 
       if (match?.[1]) {
-        return match[1].trim()
+        parsedPath = match[1].trim()
       }
     }
 
-    return null
+    return parsedPath
+  }
+
+  private static asRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null
+    }
+
+    return value as Record<string, unknown>
+  }
+
+  private static getMetadataLanguageCodes(value: unknown): string[] {
+    const record = this.asRecord(value)
+    if (!record) {
+      return []
+    }
+
+    return Object.keys(record)
+      .map((languageCode) => languageCode.trim())
+      .filter((languageCode) =>
+        Boolean(languageCode) &&
+        !IGNORED_SUBTITLE_LANGUAGE_CODES.has(languageCode)
+      )
+  }
+
+  private static getVideoLanguageCandidates(metadata: VideoMetadata): string[] {
+    const languageCodes = SUBTITLE_METADATA_LANGUAGE_FIELDS
+      .map((field) => metadata[field as keyof VideoMetadata])
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.trim())
+      .filter(Boolean)
+
+    return [...new Set(languageCodes)]
+  }
+
+  private static selectMatchingLanguage(
+    requestedLanguageCode: string,
+    availableLanguageCodes: string[]
+  ): string | null {
+    const normalizedRequested = requestedLanguageCode.trim().toLowerCase()
+    if (!normalizedRequested) {
+      return null
+    }
+
+    return (
+      availableLanguageCodes.find((languageCode) => {
+        const normalizedLanguageCode = languageCode.toLowerCase()
+        return (
+          normalizedLanguageCode === normalizedRequested ||
+          normalizedLanguageCode.startsWith(`${normalizedRequested}-`) ||
+          normalizedRequested.startsWith(`${normalizedLanguageCode}-`)
+        )
+      }) || null
+    )
+  }
+
+  private static selectSubtitleLanguage(
+    metadata: VideoMetadata,
+    requestedLanguageCode?: string
+  ): string {
+    const subtitleLanguageCodes = this.getMetadataLanguageCodes(
+      metadata.subtitles
+    )
+    const automaticCaptionLanguageCodes = this.getMetadataLanguageCodes(
+      metadata.automatic_captions
+    )
+    const requested = requestedLanguageCode?.trim()
+
+    if (requested) {
+      return (
+        this.selectMatchingLanguage(requested, subtitleLanguageCodes) ||
+        this.selectMatchingLanguage(requested, automaticCaptionLanguageCodes) ||
+        requested
+      )
+    }
+
+    for (const languageCode of this.getVideoLanguageCandidates(metadata)) {
+      const matchingLanguageCode =
+        this.selectMatchingLanguage(languageCode, subtitleLanguageCodes) ||
+        this.selectMatchingLanguage(languageCode, automaticCaptionLanguageCodes)
+
+      if (matchingLanguageCode) {
+        return matchingLanguageCode
+      }
+    }
+
+    if (subtitleLanguageCodes.length > 0) {
+      return subtitleLanguageCodes[0]!
+    }
+
+    if (automaticCaptionLanguageCodes.length > 0) {
+      return automaticCaptionLanguageCodes[0]!
+    }
+
+    throw new Error(
+      'No subtitles or automatic captions are available for this video.'
+    )
+  }
+
+  /**
+   * Finds the newest file created or updated in the output directory.
+   */
+  private static findNewestOutputFile(
+    directoryPath: string,
+    startedAtMs?: number
+  ): string | null {
+    if (!existsSync(directoryPath) || !statSync(directoryPath).isDirectory()) {
+      return null
+    }
+
+    const minModifiedTime = startedAtMs ? startedAtMs - 2_000 : 0
+    let newestPath: string | null = null
+    let newestModifiedTime = 0
+
+    for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
+      if (!entry.isFile()) {
+        continue
+      }
+
+      const candidatePath = join(directoryPath, entry.name)
+      if (IGNORED_MEDIA_OUTPUT_EXTENSIONS.has(extname(candidatePath))) {
+        continue
+      }
+
+      const stats = statSync(candidatePath)
+
+      if (stats.mtimeMs < minModifiedTime) {
+        continue
+      }
+
+      if (stats.mtimeMs >= newestModifiedTime) {
+        newestPath = candidatePath
+        newestModifiedTime = stats.mtimeMs
+      }
+    }
+
+    return newestPath
   }
 
   /**
@@ -184,13 +349,27 @@ export default class YtdlpTool extends Tool {
    */
   private static resolveDownloadedMediaPath(
     output: string,
-    target: OutputTarget
+    target: OutputTarget,
+    startedAtMs?: number
   ): string {
     if (target.predictedFilePath && existsSync(target.predictedFilePath)) {
       return target.predictedFilePath
     }
 
     const parsedPath = this.parseOutputFilePath(output)
+
+    if (parsedPath && existsSync(parsedPath)) {
+      return parsedPath
+    }
+
+    const newestOutputFile = this.findNewestOutputFile(
+      target.directoryPath,
+      startedAtMs
+    )
+
+    if (newestOutputFile) {
+      return newestOutputFile
+    }
 
     if (parsedPath) {
       return parsedPath
@@ -218,6 +397,19 @@ export default class YtdlpTool extends Tool {
   }
 
   /**
+   * Loads video metadata to select the best available subtitle language.
+   */
+  private async getVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
+    const output = await this.executeCommand({
+      binaryName: 'yt-dlp',
+      args: [...this.getConfigArgs(), videoUrl, '--dump-single-json', '--skip-download'],
+      options: { sync: true }
+    })
+
+    return JSON.parse(output.trim()) as VideoMetadata
+  }
+
+  /**
    * Downloads a single video from the provided URL.
    * @param videoUrl The URL of the video to download.
    * @param outputPath The directory where the video will be saved.
@@ -227,6 +419,7 @@ export default class YtdlpTool extends Tool {
     try {
       const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
       mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
 
       const result = await this.executeCommand({
         binaryName: 'yt-dlp',
@@ -234,7 +427,11 @@ export default class YtdlpTool extends Tool {
         options: { sync: true }
       })
 
-      return YtdlpTool.resolveDownloadedMediaPath(result, target)
+      return YtdlpTool.resolveDownloadedMediaPath(
+        result,
+        target,
+        commandStartedAtMs
+      )
     } catch (error: unknown) {
       throw new Error(`Video download failed: ${(error as Error).message}`)
     }
@@ -255,6 +452,7 @@ export default class YtdlpTool extends Tool {
     try {
       const target = YtdlpTool.resolveMediaOutputTarget(outputPath, audioFormat)
       mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
 
       const result = await this.executeCommand({
         binaryName: 'yt-dlp',
@@ -270,7 +468,11 @@ export default class YtdlpTool extends Tool {
         options: { sync: true }
       })
 
-      return YtdlpTool.resolveDownloadedMediaPath(result, target)
+      return YtdlpTool.resolveDownloadedMediaPath(
+        result,
+        target,
+        commandStartedAtMs
+      )
     } catch (error: unknown) {
       throw new Error(`Audio download failed: ${(error as Error).message}`)
     }
@@ -338,9 +540,10 @@ export default class YtdlpTool extends Tool {
 
       const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
       mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
       let downloadedFilePath = ''
 
-      await this.executeCommand({
+      const result = await this.executeCommand({
         binaryName: 'yt-dlp',
         args: [
           ...this.getConfigArgs(),
@@ -354,49 +557,51 @@ export default class YtdlpTool extends Tool {
         options: { sync: false },
         onProgress,
         onOutput: (output, isError) => {
-          if (!isError) {
-            const lines = output.split('\n')
+          const lines = output.split('\n')
 
-            for (const line of lines) {
-              // Parse download progress
-              if (line.includes('[download]')) {
-                const progressMatch = line.match(DOWNLOAD_PROGRESS_PATTERN)
-                if (
-                  progressMatch &&
-                  progressMatch[1] &&
-                  progressMatch[2] &&
-                  progressMatch[3] &&
-                  progressMatch[4] &&
-                  onProgress
-                ) {
-                  onProgress({
-                    percentage: parseFloat(progressMatch[1]),
-                    size: progressMatch[2],
-                    speed: progressMatch[3],
-                    eta: progressMatch[4],
-                    status: 'downloading'
-                  })
-                }
-              }
-
-              const pathMatch = YtdlpTool.parseOutputFilePath(line)
-              if (pathMatch) {
-                downloadedFilePath = pathMatch
-              }
-
-              // Check for download completion
-              if (line.includes('[download] 100%') && onProgress) {
+          for (const line of lines) {
+            // Parse download progress
+            if (!isError && line.includes('[download]')) {
+              const progressMatch = line.match(DOWNLOAD_PROGRESS_PATTERN)
+              if (
+                progressMatch &&
+                progressMatch[1] &&
+                progressMatch[2] &&
+                progressMatch[3] &&
+                progressMatch[4] &&
+                onProgress
+              ) {
                 onProgress({
-                  percentage: 100,
-                  status: 'completed'
+                  percentage: parseFloat(progressMatch[1]),
+                  size: progressMatch[2],
+                  speed: progressMatch[3],
+                  eta: progressMatch[4],
+                  status: 'downloading'
                 })
               }
+            }
+
+            const pathMatch = YtdlpTool.parseOutputFilePath(line)
+            if (pathMatch) {
+              downloadedFilePath = pathMatch
+            }
+
+            // Check for download completion
+            if (!isError && line.includes('[download] 100%') && onProgress) {
+              onProgress({
+                percentage: 100,
+                status: 'completed'
+              })
             }
           }
         }
       })
 
-      return YtdlpTool.resolveDownloadedMediaPath(downloadedFilePath, target)
+      return YtdlpTool.resolveDownloadedMediaPath(
+        [downloadedFilePath, result].filter(Boolean).join('\n'),
+        target,
+        commandStartedAtMs
+      )
     } catch (error: unknown) {
       throw new Error(
         `Quality-specific video download failed: ${(error as Error).message}`
@@ -408,18 +613,22 @@ export default class YtdlpTool extends Tool {
    * Downloads the subtitles for a video.
    * @param videoUrl The URL of the video.
    * @param outputPath The directory to save the subtitle file in.
-   * @param languageCode The language code for the desired subtitles (e.g., 'en', 'es').
+   * @param languageCode Optional language code for the desired subtitles (e.g., 'en', 'fr').
    * @returns A promise that resolves with the file path of the downloaded subtitle file.
    */
   async downloadSubtitles(
     videoUrl: string,
     outputPath: string,
-    languageCode: string
+    languageCode?: string
   ): Promise<string> {
     try {
+      const resolvedLanguageCode = YtdlpTool.selectSubtitleLanguage(
+        await this.getVideoMetadata(videoUrl),
+        languageCode
+      )
       const target = YtdlpTool.resolveSubtitleOutputTarget(
         outputPath,
-        languageCode
+        resolvedLanguageCode
       )
       mkdirSync(target.directoryPath, { recursive: true })
 
@@ -431,7 +640,7 @@ export default class YtdlpTool extends Tool {
           '--write-subs',
           '--write-auto-subs',
           '--sub-langs',
-          languageCode,
+          resolvedLanguageCode,
           '--sub-format',
           SUBTITLE_FORMAT,
           '--convert-subs',
@@ -465,6 +674,7 @@ export default class YtdlpTool extends Tool {
     try {
       const target = YtdlpTool.resolveMediaOutputTarget(outputPath)
       mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
 
       const result = await this.executeCommand({
         binaryName: 'yt-dlp',
@@ -479,7 +689,11 @@ export default class YtdlpTool extends Tool {
         options: { sync: true }
       })
 
-      return YtdlpTool.resolveDownloadedMediaPath(result, target)
+      return YtdlpTool.resolveDownloadedMediaPath(
+        result,
+        target,
+        commandStartedAtMs
+      )
     } catch (error: unknown) {
       throw new Error(
         `Video with thumbnail download failed: ${(error as Error).message}`

@@ -17,6 +17,7 @@ import {
 } from '@/core/config-states/config-state-event-emitter'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { FileHelper } from '@/helpers/file-helper'
+import { getActiveConversationSessionModelTarget } from '@/core/session-manager/session-context'
 
 const GLOBAL_LLM_ENV_KEY = 'LEON_LLM'
 
@@ -71,24 +72,38 @@ export class ModelState {
   private workflowTarget = resolveTarget(this.workflowTargetValue)
   private agentTarget = resolveTarget(this.agentTargetValue)
 
+  private getActiveSessionTargetValue(): string | null {
+    const target = getActiveConversationSessionModelTarget()
+
+    return target && target.trim() ? target.trim() : null
+  }
+
   public getSupportedProviders(): LLMProviders[] {
     return getSupportedModelProviders()
   }
 
   public getWorkflowTargetValue(): string {
-    return this.workflowTargetValue
+    return this.getActiveSessionTargetValue() || this.workflowTargetValue
   }
 
   public getAgentTargetValue(): string {
-    return this.agentTargetValue
+    return this.getActiveSessionTargetValue() || this.agentTargetValue
   }
 
   public getWorkflowTarget(): ResolvedLLMTarget {
-    return this.workflowTarget
+    const activeSessionTargetValue = this.getActiveSessionTargetValue()
+
+    return activeSessionTargetValue
+      ? resolveTarget(activeSessionTargetValue)
+      : this.workflowTarget
   }
 
   public getAgentTarget(): ResolvedLLMTarget {
-    return this.agentTarget
+    const activeSessionTargetValue = this.getActiveSessionTargetValue()
+
+    return activeSessionTargetValue
+      ? resolveTarget(activeSessionTargetValue)
+      : this.agentTarget
   }
 
   public hasEnabledTarget(): boolean {

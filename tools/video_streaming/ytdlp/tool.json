@@ -120,7 +120,7 @@
       }
     },
     "downloadSubtitles": {
-      "description": "Download subtitles for a video.",
+      "description": "Download subtitles for a video. Pass languageCode only when the owner requested a specific language; otherwise omit it so the tool auto-selects from available subtitles.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -136,8 +136,7 @@
         },
         "required": [
           "videoUrl",
-          "outputPath",
-          "languageCode"
+          "outputPath"
         ]
       }
     },

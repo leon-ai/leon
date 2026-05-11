@@ -1,8 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { spawn } from 'node:child_process'
 
 import jq from 'node-jq'
 import type { Json as NodeJQJson } from 'node-jq/lib/options'
@@ -10,16 +9,22 @@ import type { Json as NodeJQJson } from 'node-jq/lib/options'
 import { LogHelper } from '@/helpers/log-helper'
 import {
   CODEBASE_PATH,
+  GLOBAL_DATA_PATH,
+  LANG,
   NODE_RUNTIME_BIN_PATH,
   NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
   NODEJS_BRIDGE_ROOT_PATH,
   TSX_CLI_PATH
 } from '@/constants'
+import { LangHelper } from '@/helpers/lang-helper'
 import { TOOLKIT_REGISTRY, TOOL_CALL_LOGGER } from '@/core'
+import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
+import { StringHelper } from '@/helpers/string-helper'
 
-const execFileAsync = promisify(execFile)
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
+const TOOL_RUNTIME_LOG_PREFIX = '[LEON_TOOL_LOG]'
+const TOOL_RUNTIME_REPORT_PREFIX = '[LEON_TOOL_REPORT]'
 
 interface ToolExecutionInput {
   toolId: string
@@ -27,6 +32,7 @@ interface ToolExecutionInput {
   functionName?: string
   toolInput?: string
   parsedInput?: Record<string, unknown>
+  onProgress?: (progress: ToolRuntimeProgress) => void
 }
 
 interface ToolExecutionResult {
@@ -43,10 +49,42 @@ interface ToolExecutionResult {
   toolLabel?: string | undefined
 }
 
+interface ToolRuntimeProgress {
+  source: 'log' | 'report'
+  message: string
+  key?: string
+  data?: Record<string, unknown>
+}
+
 export default class ToolExecutor {
   private static instance: ToolExecutor
+  private readonly globalAnswersCache = new Map<
+    string,
+    GlobalAnswersSchema['answers']
+  >()
 
-  private logToolRuntimeMessages(
+  private emitToolRuntimeProgress(
+    line: string,
+    onProgress?: (progress: ToolRuntimeProgress) => void
+  ): void {
+    const trimmedLine = line.trim()
+    if (!trimmedLine) {
+      return
+    }
+
+    const toolReport = this.parseToolRuntimeReport(trimmedLine)
+    if (toolReport) {
+      onProgress?.(toolReport)
+      return
+    }
+
+    const toolLog = this.parseToolRuntimeLog(trimmedLine)
+    if (toolLog) {
+      onProgress?.(toolLog)
+    }
+  }
+
+  private logMemoryToolRuntimeMessages(
     toolkitId: string,
     toolId: string,
     runtimeStderr: string
@@ -62,14 +100,116 @@ export default class ToolExecutor {
     const toolLogLines = runtimeStderr
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line.startsWith('[LEON_TOOL_LOG]'))
-      .map((line) => line.replace('[LEON_TOOL_LOG]', '').trim())
+      .filter((line) => line.startsWith(TOOL_RUNTIME_LOG_PREFIX))
+      .map((line) => line.replace(TOOL_RUNTIME_LOG_PREFIX, '').trim())
       .filter(Boolean)
 
     for (const line of toolLogLines) {
       LogHelper.title('Memory Tool')
       LogHelper.debug(line)
     }
+  }
+
+  private parseToolRuntimeLog(line: string): ToolRuntimeProgress | null {
+    if (!line.startsWith(TOOL_RUNTIME_LOG_PREFIX)) {
+      return null
+    }
+
+    const message = line.replace(TOOL_RUNTIME_LOG_PREFIX, '').trim()
+    if (!message) {
+      return null
+    }
+
+    return {
+      source: 'log',
+      message
+    }
+  }
+
+  private parseToolRuntimeReport(line: string): ToolRuntimeProgress | null {
+    if (!line.startsWith(TOOL_RUNTIME_REPORT_PREFIX)) {
+      return null
+    }
+
+    const rawReport = line.replace(TOOL_RUNTIME_REPORT_PREFIX, '').trim()
+    if (!rawReport) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(rawReport) as Record<string, unknown>
+      const key = typeof parsed['key'] === 'string' ? parsed['key'] : ''
+      const data =
+        parsed['data'] &&
+        typeof parsed['data'] === 'object' &&
+        !Array.isArray(parsed['data'])
+          ? (parsed['data'] as Record<string, unknown>)
+          : {}
+
+      return {
+        source: 'report',
+        message: this.resolveToolRuntimeReportMessage(key, data),
+        ...(key ? { key } : {}),
+        data
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private resolveToolRuntimeReportMessage(
+    key: string,
+    data: Record<string, unknown>
+  ): string {
+    if (!key) {
+      return ''
+    }
+
+    const answers = this.getCurrentGlobalAnswers()
+    const fallbackAnswers = this.getGlobalAnswers('en')
+    const answer = answers[key] || fallbackAnswers[key]
+    if (!answer) {
+      return key
+    }
+
+    const selectedAnswer = Array.isArray(answer)
+      ? answer[Math.floor(Math.random() * answer.length)] || key
+      : Object.values(answer)[0] || key
+    const replacements = Object.fromEntries(
+      Object.entries(data).map(([dataKey, value]) => [
+        `{{ ${dataKey} }}`,
+        String(value)
+      ])
+    )
+    if (Object.keys(replacements).length === 0) {
+      return selectedAnswer
+    }
+
+    return StringHelper.findAndMap(selectedAnswer, replacements)
+  }
+
+  private getCurrentGlobalAnswers(): GlobalAnswersSchema['answers'] {
+    try {
+      const lang = LANG ? LangHelper.getShortCode(LANG) : 'en'
+      return this.getGlobalAnswers(lang)
+    } catch {
+      return this.getGlobalAnswers('en')
+    }
+  }
+
+  private getGlobalAnswers(lang: string): GlobalAnswersSchema['answers'] {
+    const cachedAnswers = this.globalAnswersCache.get(lang)
+    if (cachedAnswers) {
+      return cachedAnswers
+    }
+
+    const answersPath = path.join(GLOBAL_DATA_PATH, lang, 'answers.json')
+    const answers = JSON.parse(
+      fs.readFileSync(answersPath, 'utf8')
+    ) as GlobalAnswersSchema
+    this.globalAnswersCache.set(lang, answers.answers)
+
+    return answers.answers
   }
 
   constructor() {
@@ -160,7 +300,8 @@ export default class ToolExecutor {
       toolkitId: resolvedTool.toolkitId,
       toolId: resolvedTool.toolId,
       functionName,
-      args: argsArray
+      args: argsArray,
+      ...(input.onProgress ? { onProgress: input.onProgress } : {})
     })
     let runtimeOutput = this.normalizeFilesystemValues(
       runtimeResult.output
@@ -636,6 +777,7 @@ export default class ToolExecutor {
     toolId: string
     functionName: string
     args: unknown[]
+    onProgress?: (progress: ToolRuntimeProgress) => void
   }): Promise<{
     success: boolean
     message: string
@@ -662,103 +804,108 @@ export default class ToolExecutor {
       JSON.stringify(params.args)
     ]
 
-    try {
-      const { stdout, stderr } = await execFileAsync(
-        NODE_RUNTIME_BIN_PATH,
-        cliArgs,
-        {
-          cwd: NODEJS_BRIDGE_ROOT_PATH,
-          maxBuffer: 1_024 * 1_024 * 10,
-          env: {
-            ...process.env,
-            LEON_CODEBASE_PATH: CODEBASE_PATH
-          }
-        }
-      )
-      const output = stdout ? stdout.toString().trim() : ''
-      const runtimeStderr = stderr ? stderr.toString() : ''
-      this.logToolRuntimeMessages(
-        params.toolkitId,
-        params.toolId,
-        runtimeStderr
-      )
-      if (!output) {
-        return {
-          success: false,
-          message: 'Tool runtime returned empty output.',
-          output: {
-            runtime_stdout: stdout ? stdout.toString() : '',
-            runtime_stderr: runtimeStderr
-          }
+    return new Promise((resolve) => {
+      let stdout = ''
+      let runtimeStderr = ''
+      let stderrLineBuffer = ''
+
+      const processRuntimeStderrChunk = (chunk: string): void => {
+        runtimeStderr += chunk
+        stderrLineBuffer += chunk
+
+        const lines = stderrLineBuffer.split('\n')
+        stderrLineBuffer = lines.pop() || ''
+
+        for (const line of lines) {
+          this.emitToolRuntimeProgress(line, params.onProgress)
         }
       }
 
-      try {
-        const parsed = JSON.parse(output) as {
-          success: boolean
-          message: string
-          output?: Record<string, unknown>
+      const childProcess = spawn(NODE_RUNTIME_BIN_PATH, cliArgs, {
+        cwd: NODEJS_BRIDGE_ROOT_PATH,
+        env: {
+          ...process.env,
+          LEON_CODEBASE_PATH: CODEBASE_PATH
         }
-        return {
-          success: Boolean(parsed.success),
-          message: parsed.message || 'Tool runtime error.',
-          output: parsed.output || {}
-        }
-      } catch (parseError) {
-        return {
+      })
+
+      childProcess.stdout.on('data', (data: Buffer) => {
+        stdout += data.toString()
+      })
+
+      childProcess.stderr.on('data', (data: Buffer) => {
+        processRuntimeStderrChunk(data.toString())
+      })
+
+      childProcess.on('error', (error: Error) => {
+        resolve({
           success: false,
-          message: `Tool runtime returned invalid JSON: ${
-            (parseError as Error).message
-          }`,
+          message: `Tool runtime error: ${error.message}`,
           output: {
-            runtime_stdout: stdout ? stdout.toString() : '',
+            runtime_stdout: stdout,
             runtime_stderr: runtimeStderr
           }
+        })
+      })
+
+      childProcess.on('close', (exitCode) => {
+        if (stderrLineBuffer.trim()) {
+          this.emitToolRuntimeProgress(stderrLineBuffer, params.onProgress)
         }
-      }
-    } catch (error) {
-      const execError = error as Error & {
-        stdout?: Buffer | string
-        stderr?: Buffer | string
-      }
-      const runtimeStdout = execError.stdout ? execError.stdout.toString() : ''
-      const runtimeStderr = execError.stderr ? execError.stderr.toString() : ''
-      this.logToolRuntimeMessages(
-        params.toolkitId,
-        params.toolId,
-        runtimeStderr
-      )
-      if (runtimeStdout) {
+
+        const output = stdout.trim()
+        this.logMemoryToolRuntimeMessages(
+          params.toolkitId,
+          params.toolId,
+          runtimeStderr
+        )
+
+        if (!output) {
+          resolve({
+            success: false,
+            message: 'Tool runtime returned empty output.',
+            output: {
+              runtime_stdout: stdout,
+              runtime_stderr: runtimeStderr
+            }
+          })
+          return
+        }
+
         try {
-          const parsed = JSON.parse(runtimeStdout) as {
+          const parsed = JSON.parse(output) as {
             success: boolean
             message: string
             output?: Record<string, unknown>
           }
-          return {
+          const parsedOutput = parsed.output || {}
+
+          resolve({
             success: Boolean(parsed.success),
             message: parsed.message || 'Tool runtime error.',
+            output:
+              exitCode && runtimeStderr
+                ? {
+                    ...parsedOutput,
+                    runtime_stderr: runtimeStderr
+                  }
+                : parsedOutput
+          })
+          return
+        } catch (parseError) {
+          resolve({
+            success: false,
+            message: `Tool runtime returned invalid JSON: ${
+              (parseError as Error).message
+            }`,
             output: {
-              ...(parsed.output || {}),
+              runtime_stdout: stdout,
               runtime_stderr: runtimeStderr
             }
-          }
-        } catch {
-          // Fall through to stderr message
+          })
+          return
         }
-      }
-      const stderrMessage = runtimeStderr.trim()
-      const message = stderrMessage
-        ? `Tool runtime error: ${stderrMessage}`
-        : `Tool runtime error: ${execError.message}`
-      return {
-        success: false,
-        message,
-        output: {
-          runtime_stdout: runtimeStdout,
-          runtime_stderr: runtimeStderr
-        }
-      }
-    }
+      })
+    })
   }
 }
