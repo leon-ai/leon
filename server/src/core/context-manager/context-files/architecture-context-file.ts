@@ -19,6 +19,7 @@ export class ArchitectureContextFile extends ContextFile {
       '- Auditable steps: I keep plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.',
       '## ReAct Loop',
       '- Planning phase chooses either a direct answer, an ordered tool plan, or a relevant agent skill workflow.',
+      '- Tool state is separated: installed tools exist in the registry, enabled tools are not disabled by the owner, and available tools have the required settings to run.',
       '- Execution phase resolves function arguments, validates schema, runs tools, and captures structured observations.',
       '- Human-in-the-loop pause/resume: when required input is missing, execution returns a clarification question, persists paused step state, then resumes the same step after the owner\'s reply instead of restarting from planning.',
       '- Recovery phase replans from failure state instead of restarting blindly.',

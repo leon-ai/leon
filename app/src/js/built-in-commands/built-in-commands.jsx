@@ -29,10 +29,18 @@ function isEditableElement(element) {
 }
 
 export default class BuiltInCommands {
-  constructor({ serverUrl, input, onSubmitToChat }) {
+  constructor({
+    serverUrl,
+    input,
+    onSubmitToChat,
+    getActiveSessionId,
+    onCommandExecuted
+  }) {
     this.serverUrl = serverUrl
     this.input = input
     this.onSubmitToChat = onSubmitToChat
+    this.getActiveSessionId = getActiveSessionId
+    this.onCommandExecuted = onCommandExecuted
     this.sessionId = null
     this.origin = 'shortcut'
     this.commandValue = ''
@@ -358,7 +366,8 @@ export default class BuiltInCommands {
       const data = await requestBuiltInCommand(this.serverUrl, {
         mode: 'autocomplete',
         input: this.buildCommandInput(),
-        session_id: this.sessionId
+        session_id: this.sessionId,
+        conversation_session_id: this.getActiveSessionId?.()
       })
 
       if (!this.isOpen || this.hasSubmitted) {
@@ -424,7 +433,8 @@ export default class BuiltInCommands {
       const data = await requestBuiltInCommand(this.serverUrl, {
         mode: 'execute',
         input: commandInput,
-        session_id: this.sessionId
+        session_id: this.sessionId,
+        conversation_session_id: this.getActiveSessionId?.()
       })
 
       if (data.client_action?.type === 'submit_to_chat') {
@@ -442,6 +452,7 @@ export default class BuiltInCommands {
       this.sessionId = data.session.id
       this.isLoading = false
       this.result = data.result
+      this.onCommandExecuted?.(commandInput, data)
       this.loadingMessage = data.session.loading_message || null
       this.recentSuggestions = data.recent_suggestions || []
       this.pendingInput = data.session.pending_input || null
@@ -475,7 +486,8 @@ export default class BuiltInCommands {
       const data = await requestBuiltInCommand(this.serverUrl, {
         mode: 'autocomplete',
         input: commandInput,
-        session_id: this.sessionId
+        session_id: this.sessionId,
+        conversation_session_id: this.getActiveSessionId?.()
       })
 
       this.sessionId = data.session.id

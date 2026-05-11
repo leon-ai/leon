@@ -7,6 +7,7 @@
     "BROWSER_HISTORY.md"
   ],
   "tools": [
+    "hosted",
     "grok"
   ]
 }

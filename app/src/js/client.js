@@ -6,15 +6,16 @@ import { INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
 
 export default class Client {
-  constructor(client, serverUrl, input) {
+  constructor(client, serverUrl, input, options = {}) {
     this.client = client
     this._input = input
     this.voiceSpeechElement = document.querySelector('#voice-speech')
     this.serverUrl = serverUrl
     this.socket = io(this.serverUrl)
+    this.activeSessionId = options.activeSessionId || null
     this.history = localStorage.getItem('history')
     this.parsedHistory = []
-    this.chatbot = new Chatbot(this.socket, this.serverUrl)
+    this.chatbot = new Chatbot(this.socket, this.serverUrl, this.activeSessionId)
     this.voiceEnergy = new VoiceEnergy(this)
     this._recorder = {}
     this._suggestions = []
@@ -55,6 +56,22 @@ export default class Client {
 
     moodContainer.textContent = `Leon's mood: ${mood.emoji}`
     moodContainer.setAttribute('title', mood.type)
+  }
+
+  setSessionPanel(sessionPanel) {
+    this.sessionPanel = sessionPanel
+  }
+
+  async setActiveSession(sessionId) {
+    if (!sessionId || sessionId === this.activeSessionId) {
+      return
+    }
+
+    this.activeSessionId = sessionId
+    this.chatbot.setSessionId(sessionId)
+    this.socket.emit('session-change', sessionId)
+    await this.chatbot.loadFeed()
+    this.chatbot.scrollDown({ force: true })
   }
 
   async sendInitMessages() {
@@ -140,6 +157,7 @@ export default class Client {
     this.socket.on('connect', () => {
       this.socket.emit('init', {
         client: this.client,
+        sessionId: this.activeSessionId,
         capabilities: {
           supportsWidgets: true
         }
@@ -286,6 +304,7 @@ export default class Client {
 
       this._activeStreamGenerationId = null
       this._answerGenerationId = 'xxx'
+      void this.sessionPanel?.refresh()
     })
 
     this.socket.on('suggest', (data) => {
@@ -534,6 +553,7 @@ export default class Client {
       client: this.client,
       value: trimmedValue,
       sentAt,
+      sessionId: this.activeSessionId,
       ...(options.commandContext
         ? { commandContext: options.commandContext }
         : {})

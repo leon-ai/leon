@@ -95,6 +95,26 @@ export default class ToolUIHandler {
       : this.createLegacyToolGroupContainer(params)
   }
 
+  getRemixIconClass(iconName) {
+    const fallbackIconName = 'ri-magic-line'
+    if (typeof iconName !== 'string') {
+      return fallbackIconName
+    }
+
+    const trimmedIconName = iconName.trim()
+    if (!trimmedIconName || trimmedIconName.includes(' ')) {
+      return fallbackIconName
+    }
+
+    return trimmedIconName.startsWith('ri-')
+      ? trimmedIconName
+      : `ri-${trimmedIconName}`
+  }
+
+  getToolActivityIconClass(data) {
+    return this.getRemixIconClass(data.toolIconName || data.toolkitIconName)
+  }
+
   /**
    * Create the legacy shell-like tool group container.
    */
@@ -159,7 +179,7 @@ export default class ToolUIHandler {
     heading.className = 'tool-activity-heading'
 
     const icon = document.createElement('i')
-    icon.className = 'ri-magic-line tool-icon'
+    icon.className = `${this.getToolActivityIconClass(data)} tool-icon`
 
     const titleBlock = document.createElement('div')
     titleBlock.className = 'tool-activity-title-block'
@@ -250,6 +270,7 @@ export default class ToolUIHandler {
       rawDetails,
       rawInput: null,
       rawOutput: null,
+      preparationLog: [],
       isNew: true
     }
   }
@@ -428,6 +449,23 @@ export default class ToolUIHandler {
       }
     }
 
+    if (data.toolPhase === 'preparation') {
+      const progressMessage = data.message || data.answer || ''
+      this.setStatusChip(toolGroupContainer.statusChip, 'running')
+
+      if (progressMessage) {
+        toolGroupContainer.summary.textContent = progressMessage
+        toolGroupContainer.preparationLog.push(progressMessage)
+        this.renderPreparationLog(
+          toolGroupContainer.outputBody,
+          toolGroupContainer.preparationLog
+        )
+        toolGroupContainer.rawOutput = {
+          preparation: toolGroupContainer.preparationLog
+        }
+      }
+    }
+
     if (data.toolPhase === 'output') {
       const isError = data.status === 'error'
       toolGroupContainer.summary.textContent =
@@ -526,6 +564,29 @@ export default class ToolUIHandler {
 
     const preview = this.buildValueNode(data.output)
     container.appendChild(preview)
+  }
+
+  /**
+   * Render preparation progress before the final tool output is available.
+   */
+  renderPreparationLog(container, messages) {
+    container.innerHTML = ''
+
+    if (!messages.length) {
+      this.renderPlaceholder(container, 'Waiting for function output...')
+      return
+    }
+
+    const list = document.createElement('ul')
+    list.className = 'tool-value-list'
+
+    messages.forEach((message) => {
+      const item = document.createElement('li')
+      item.textContent = message
+      list.appendChild(item)
+    })
+
+    container.appendChild(list)
   }
 
   /**

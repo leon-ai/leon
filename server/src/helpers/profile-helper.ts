@@ -134,9 +134,50 @@ export class ProfileHelper {
   /**
    * Check whether a tool is disabled in the active profile.
    * @param toolId The tool id
+   * @param toolkitId The optional toolkit id
    */
-  public static isToolDisabled(toolId: string): boolean {
-    return this.getDisabledTools().has(toolId)
+  public static isToolDisabled(toolId: string, toolkitId?: string): boolean {
+    const disabledTools = this.getDisabledTools()
+
+    if (disabledTools.has(toolId)) {
+      return true
+    }
+
+    return toolkitId ? disabledTools.has(`${toolkitId}.${toolId}`) : false
+  }
+
+  /**
+   * Add a tool id to the active profile disabled tool list.
+   * @param toolId The qualified tool id
+   */
+  public static async disableTool(toolId: string): Promise<void> {
+    const disabledConfig = readDisabledConfig()
+    const disabledTools = normalizeDisabledIds(disabledConfig.tools)
+
+    disabledTools.add(toolId)
+
+    await writeDisabledConfig({
+      ...disabledConfig,
+      skills: serializeDisabledIds(normalizeDisabledIds(disabledConfig.skills)),
+      tools: serializeDisabledIds(disabledTools)
+    })
+  }
+
+  /**
+   * Remove a tool id from the active profile disabled tool list.
+   * @param toolId The qualified tool id
+   */
+  public static async enableTool(toolId: string): Promise<void> {
+    const disabledConfig = readDisabledConfig()
+    const disabledTools = normalizeDisabledIds(disabledConfig.tools)
+
+    disabledTools.delete(toolId)
+
+    await writeDisabledConfig({
+      ...disabledConfig,
+      skills: serializeDisabledIds(normalizeDisabledIds(disabledConfig.skills)),
+      tools: serializeDisabledIds(disabledTools)
+    })
   }
 
   /**

@@ -1,0 +1,160 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "hosted",
+  "toolkit_id": "search_web",
+  "name": "Hosted LLM Search",
+  "description": "Native web search through the configured LLM provider. Reuses the same provider, model, and API key configured for the active LLM in .env.",
+  "icon_name": "global-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "searchWeb": {
+      "description": "Search the web using the active LLM provider's native hosted search when supported. Reuses the same provider, model, and API key configured for the active LLM in .env.",
+      "hooks": {
+        "post_execution": {
+          "response_jq": ".result.content"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "openai",
+                  "openrouter",
+                  "anthropic"
+                ]
+              },
+              "model": {
+                "type": "string"
+              },
+              "max_output_tokens": {
+                "type": "number"
+              },
+              "temperature": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    "searchOpenAI": {
+      "description": "Search the web using OpenAI's native hosted web search and the configured LEON_OPENAI_API_KEY.",
+      "hooks": {
+        "post_execution": {
+          "response_jq": ".result.content"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "max_output_tokens": {
+                "type": "number"
+              },
+              "temperature": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    "searchOpenRouter": {
+      "description": "Search the web using OpenRouter's native hosted web search and the configured LEON_OPENROUTER_API_KEY.",
+      "hooks": {
+        "post_execution": {
+          "response_jq": ".result.content"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "max_output_tokens": {
+                "type": "number"
+              },
+              "temperature": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    "searchAnthropic": {
+      "description": "Search the web using Anthropic's native hosted web search and the configured LEON_ANTHROPIC_API_KEY.",
+      "hooks": {
+        "post_execution": {
+          "response_jq": ".result.content"
+        }
+      },
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "max_output_tokens": {
+                "type": "number"
+              },
+              "temperature": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    }
+  }
+}

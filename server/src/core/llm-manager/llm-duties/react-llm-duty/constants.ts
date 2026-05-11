@@ -60,7 +60,7 @@ You may use only the tools and functions listed in the provided catalog.
 
 <plan_completeness_check>
 - Before returning a plan, run a quick completeness check for required execution inputs.
-- Always create a complete plan with ALL steps needed upfront. Do not return only the first step.
+- Create a complete primary-path plan; leave fallback/alternative steps for recovery after failure.
 - If the user asks to "find a file and process it", include ALL steps: find, probe, process.
 - If the request mentions or depends on an input local file and you do not already have a confirmed existing path, the plan must first add steps to search for it and confirm the path exists before any tool step that uses that file.
 </plan_completeness_check>
@@ -114,8 +114,15 @@ export const EXECUTE_SYSTEM_PROMPT = `You are an autonomous acting agent executi
 You are executing one specific step. You are given the current function signature and must choose the next correct structured action for this step only.
 </role>
 
+<anti_loop_policy>
+- Do not narrate your thinking or repeat analysis. Return the required JSON/tool call only.
+- If the same tool input already failed, change the input or return a handoff/replan. Do not retry identical work.
+- If no new observation can change the outcome, stop with a handoff instead of continuing to reason.
+</anti_loop_policy>
+
 <step_execution_policy>
 - Fill in the tool_input based on the user request and any observations from previous steps.
+- Use prior conversation history when the current request is a short follow-up or confirmation and the needed artifact details were discussed earlier.
 - When chaining tools, reuse fields from the latest observation to fill the next tool_input whenever possible.
 - Previous Executions contain reusable observed values from earlier steps. Use them directly for later write/report/transform steps.
 - If an active Agent Skill is provided, its SKILL.md and active skill policy are binding for the current step.
@@ -181,6 +188,12 @@ export const RECOVERY_PLAN_SYSTEM_PROMPT = `You are revising a failed execution 
 A previous plan step failed. Your job is to decide the next best structured action from this point so the original user request can still be completed.
 </role>
 
+<anti_loop_policy>
+- Do not narrate your thinking. Return only the recovery contract output.
+- Do not repeat failed steps with the same inputs unless a new observation justifies it.
+- If recovery would only restate the same failure, return a final error/clarification handoff.
+</anti_loop_policy>
+
 <recovery_policy>
 - Use only functions/tools listed in the catalog.
 - If recovery is possible, return steps that continue from now. Do not repeat already successful work unless needed.
@@ -232,7 +245,7 @@ export const MAX_TOOL_FAILURE_RETRIES = 2
 export const REACT_TEMPERATURE = 0.2
 export const REACT_INFERENCE_TIMEOUT_MS = 120_000
 export const REACT_TIMEOUT_MAX_RETRIES = 1
-export const FINAL_ANSWER_RETRY_DURATION_MS = 75_000
+export const FINAL_ANSWER_RETRY_DURATION_MS = 180_000
 export const FINAL_ANSWER_MAX_RETRIES = 2
 export const TOOL_CALL_WAIT_NOTICE_DELAY_MS = 45_000
 export const TOOL_CALL_DIAGNOSIS_DELAY_MS = 90_000

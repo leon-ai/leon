@@ -12,6 +12,7 @@ import type { Tool } from '@sdk/base-tool'
 import {
   TOOLS_PATH
 } from '@bridge/constants'
+import { setToolReporter } from '@sdk/tool-reporter'
 
 interface ToolRuntimeCliInput {
   toolkitId: string
@@ -84,9 +85,16 @@ const setProjectCwd = (): void => {
   }
 }
 
+const setRuntimeToolReporter = (): void => {
+  setToolReporter(async (input) => {
+    process.stderr.write(`[LEON_TOOL_REPORT] ${JSON.stringify(input)}\n`)
+  })
+}
+
 const run = async (): Promise<void> => {
   try {
     setProjectCwd()
+    setRuntimeToolReporter()
     const input = parseArgs()
     const toolModulePath = resolveToolModulePath(
       input.toolkitId,
