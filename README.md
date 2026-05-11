@@ -174,36 +174,10 @@ Leon started in 2017 and has been active since 2019. If you want the longer back
 
 ## 👍 Sponsors
 
-<table>
-  <tbody>
-    <tr>
-      <td align="center" valign="middle" width="128">
-        <a href="https://github.com/Appwrite">
-          <img src="https://github.com/Appwrite.png?size=128" />
-          Appwrite
-        </a><br>
-        <sub><sup>250 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
-        <img src="https://getleon.ai/img/anonymous.svg" width="128" />
-        Anonymous
-        <br>
-        <sub><sup>100 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
-        <a href="https://github.com/herbundkraut">
-          <img src="https://github.com/herbundkraut.png?size=128" />
-          herbundkraut
-        </a><br>
-        <sub><sup>10 USD / month</sup></sub>
-      </td>
-      <td align="center" valign="middle" width="128">
-        <a href="http://sponsor.getleon.ai/">
-          You?
-        </a>
-      </td>
-    </tr>
-  </tbody>
-</table>
-
 You can also contribute by [sponsoring Leon](http://sponsor.getleon.ai).
+
+## Thanks
+
+| ![OpenAI logo.](./.github/assets/thanks/openai-logo-light-mode.svg?v=2#gh-light-mode-only)![OpenAI logo.](./.github/assets/thanks/openai-logo-dark-mode.svg?v=2#gh-dark-mode-only) | ![JetBrains logo.](./.github/assets/thanks/jetbrains-mono-black.svg?v=2#gh-light-mode-only)![JetBrains logo.](./.github/assets/thanks/jetbrains-mono-white.svg?v=2#gh-dark-mode-only) | ![MacStadium logo.](./.github/assets/thanks/macstadium-logo-light-mode.svg?v=2#gh-light-mode-only)![MacStadium logo.](./.github/assets/thanks/macstadium-logo-dark-mode.svg?v=2#gh-dark-mode-only) |
+| --- | --- | --- |
+| [openai.com/form/codex-for-oss](https://openai.com/form/codex-for-oss/) | [jb.gg/OpenSource](https://jb.gg/OpenSource) | [macstadium.com/company/opensource](https://macstadium.com/company/opensource) |
