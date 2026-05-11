@@ -2,8 +2,8 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 import type { ConversationWidgetData, LLMAnswerMetrics, MessageLog } from '@/types'
-import { PROFILE_LOGS_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
 interface ConversationLoggerSettings {
   loggerName: string
@@ -15,11 +15,13 @@ interface ConversationLoggerSettings {
 
 interface LoadParams {
   nbOfLogsToLoad?: number
+  sessionId?: string
 }
 
 interface UpsertParams {
   replaceMessageId?: string | null
   refreshSentAt?: boolean
+  sessionId?: string
 }
 
 /**
@@ -31,7 +33,6 @@ interface UpsertParams {
  */
 export class ConversationLogger {
   private readonly settings: ConversationLoggerSettings
-  private readonly conversationLogPath: string
   private operations = Promise.resolve()
   private static readonly WIDGET_PLACEHOLDER_PREFIX =
     '__LEON_INLINE_WIDGET__'
@@ -47,9 +48,6 @@ export class ConversationLogger {
     LogHelper.success('New instance')
 
     this.settings = settings
-    this.conversationLogPath =
-      this.settings.filePath ||
-      path.join(PROFILE_LOGS_PATH, this.settings.fileName)
   }
 
   private enqueue<T>(operation: () => Promise<T>): Promise<T> {
@@ -63,13 +61,21 @@ export class ConversationLogger {
     return nextOperation
   }
 
-  private async createConversationLogFile(): Promise<void> {
+  private resolveConversationLogPath(sessionId?: string | null): string {
+    return CONVERSATION_SESSION_MANAGER.resolveConversationLogPath(
+      sessionId || null
+    )
+  }
+
+  private async createConversationLogFile(
+    conversationLogPath: string
+  ): Promise<void> {
     try {
-      if (!fs.existsSync(this.conversationLogPath)) {
-        await fs.promises.mkdir(path.dirname(this.conversationLogPath), {
+      if (!fs.existsSync(conversationLogPath)) {
+        await fs.promises.mkdir(path.dirname(conversationLogPath), {
           recursive: true
         })
-        await fs.promises.writeFile(this.conversationLogPath, '[]', 'utf-8')
+        await fs.promises.writeFile(conversationLogPath, '[]', 'utf-8')
       }
     } catch (e) {
       LogHelper.title(this.settings.loggerName)
@@ -77,16 +83,17 @@ export class ConversationLogger {
     }
   }
 
-  private async getAllLogs(): Promise<MessageLog[]> {
+  private async getAllLogs(sessionId?: string | null): Promise<MessageLog[]> {
     try {
       let conversationLog: MessageLog[] = []
+      const conversationLogPath = this.resolveConversationLogPath(sessionId)
 
-      if (fs.existsSync(this.conversationLogPath)) {
+      if (fs.existsSync(conversationLogPath)) {
         conversationLog = JSON.parse(
-          await fs.promises.readFile(this.conversationLogPath, 'utf-8')
+          await fs.promises.readFile(conversationLogPath, 'utf-8')
         )
       } else {
-        await this.createConversationLogFile()
+        await this.createConversationLogFile(conversationLogPath)
       }
 
       return conversationLog
@@ -180,7 +187,7 @@ export class ConversationLogger {
   ): Promise<void> {
     await this.enqueue(async () => {
       try {
-        const conversationLogs = await this.getAllLogs()
+        const conversationLogs = await this.getAllLogs(params?.sessionId)
         const targetMessageId =
           params?.replaceMessageId || newRecord.messageId || null
 
@@ -229,9 +236,13 @@ export class ConversationLogger {
         }
 
         await fs.promises.writeFile(
-          this.conversationLogPath,
+          this.resolveConversationLogPath(params?.sessionId),
           this.serializeLogs(conversationLogs),
           'utf-8'
+        )
+        CONVERSATION_SESSION_MANAGER.updateSessionFromLogs(
+          params?.sessionId,
+          conversationLogs
         )
       } catch (e) {
         LogHelper.title(this.settings.loggerName)
@@ -243,7 +254,7 @@ export class ConversationLogger {
   public async load(params?: LoadParams): Promise<MessageLog[]> {
     return this.enqueue(async () => {
       try {
-        const conversationLog = await this.getAllLogs()
+        const conversationLog = await this.getAllLogs(params?.sessionId)
         const nbOfLogsToLoad =
           params?.nbOfLogsToLoad || this.settings.nbOfLogsToLoad
 
@@ -257,10 +268,10 @@ export class ConversationLogger {
     })
   }
 
-  public async loadAll(): Promise<MessageLog[]> {
+  public async loadAll(params?: { sessionId?: string }): Promise<MessageLog[]> {
     return this.enqueue(async () => {
       try {
-        return await this.getAllLogs()
+        return await this.getAllLogs(params?.sessionId)
       } catch (e) {
         LogHelper.title(this.settings.loggerName)
         LogHelper.error(`Failed to load all conversation logs: ${e})`)
@@ -270,10 +281,15 @@ export class ConversationLogger {
     })
   }
 
-  public async clear(): Promise<void> {
+  public async clear(params?: { sessionId?: string }): Promise<void> {
     await this.enqueue(async () => {
       try {
-        await fs.promises.writeFile(this.conversationLogPath, '[]', 'utf-8')
+        await fs.promises.writeFile(
+          this.resolveConversationLogPath(params?.sessionId),
+          '[]',
+          'utf-8'
+        )
+        CONVERSATION_SESSION_MANAGER.updateSessionFromLogs(params?.sessionId, [])
       } catch (e) {
         LogHelper.title(this.settings.loggerName)
         LogHelper.error(`Failed to clear conversation log: ${e})`)

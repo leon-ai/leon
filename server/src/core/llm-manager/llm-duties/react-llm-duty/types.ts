@@ -17,6 +17,7 @@ export interface AgentSkillContext {
 
 export interface ReactLLMDutyParams extends LLMDutyParams {
   agentSkill?: AgentSkillContext | null
+  forcedToolName?: string | null
 }
 
 export interface FunctionConfig {
@@ -45,7 +46,7 @@ export interface ExecutionRecord {
   requestedToolInput?: string
 }
 
-export type PlanStepStatus = 'pending' | 'in_progress' | 'completed'
+export type PlanStepStatus = 'pending' | 'in_progress' | 'completed' | 'error'
 
 export interface TrackedPlanStep {
   label: string

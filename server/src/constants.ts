@@ -66,6 +66,11 @@ export const PROFILE_CONVERSATION_LOG_PATH = path.join(
   LEON_PROFILE_PATH,
   'conversation_log.json'
 )
+export const PROFILE_SESSIONS_PATH = path.join(LEON_PROFILE_PATH, 'sessions')
+export const PROFILE_SESSIONS_INDEX_PATH = path.join(
+  PROFILE_SESSIONS_PATH,
+  'index.json'
+)
 
 export const BIN_PATH = path.join(LEON_HOME_PATH, 'bin')
 export const CODEBASE_BIN_PATH = path.join(CODEBASE_PATH, 'bin')

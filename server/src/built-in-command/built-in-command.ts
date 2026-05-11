@@ -97,6 +97,7 @@ export interface BuiltInCommandClientAction {
   command_context: {
     forced_routing_mode?: RoutingMode
     forced_skill_name?: string
+    forced_tool_name?: string
   }
 }
 

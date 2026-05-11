@@ -10,7 +10,8 @@ import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper
 const getConversationHistorySchema = {
   querystring: Type.Object({
     supports_widgets: Type.Optional(Type.String()),
-    nb_of_logs_to_load: Type.Optional(Type.String())
+    nb_of_logs_to_load: Type.Optional(Type.String()),
+    session_id: Type.Optional(Type.String())
   })
 } satisfies FastifySchema
 
@@ -46,11 +47,15 @@ export const getConversationHistory: FastifyPluginAsync<APIOptions> = async (
         const nbOfLogsToLoad = request.query.nb_of_logs_to_load
           ? Number(request.query.nb_of_logs_to_load)
           : null
+        const sessionOptions = request.query.session_id
+          ? { sessionId: request.query.session_id }
+          : {}
         const rawConversationLogs = nbOfLogsToLoad && nbOfLogsToLoad > 0
           ? await CONVERSATION_LOGGER.load({
-              nbOfLogsToLoad
+              nbOfLogsToLoad,
+              ...sessionOptions
             })
-          : await CONVERSATION_LOGGER.loadAll()
+          : await CONVERSATION_LOGGER.loadAll(sessionOptions)
         const conversationLogs = rawConversationLogs.filter(
           (conversationLog) => ConversationHistoryHelper.isAddedToHistory(conversationLog)
         )

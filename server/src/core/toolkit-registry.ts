@@ -1,7 +1,10 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { TOOLS_PATH } from '@/constants'
+import {
+  PROFILE_TOOLS_PATH,
+  TOOLS_PATH
+} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
 
@@ -39,6 +42,18 @@ interface FlattenedToolkitTool {
   toolIconName: string
 }
 
+interface UnavailableToolkitTool extends FlattenedToolkitTool {
+  missingSettings: string[]
+  settingsPath: string
+}
+
+interface ToolAvailability {
+  available: boolean
+  requiredSettings: string[]
+  missingSettings: string[]
+  settingsPath: string | null
+}
+
 interface ResolvedToolkitTool {
   toolkitId: string
   toolkitName: string
@@ -69,6 +84,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 export default class ToolkitRegistry {
   private static instance: ToolkitRegistry
   private _toolkits: ToolkitDefinition[] = []
+  private _toolAvailability = new Map<string, ToolAvailability>()
   private _isLoaded = false
 
   constructor() {
@@ -97,6 +113,10 @@ export default class ToolkitRegistry {
       }
 
       for (const [toolId, tool] of Object.entries(toolkit.tools)) {
+        if (!this.isToolAvailable(toolkit.id, toolId)) {
+          continue
+        }
+
         flattened.push({
           toolkitId: toolkit.id,
           toolkitName: toolkit.name,
@@ -111,6 +131,79 @@ export default class ToolkitRegistry {
     }
 
     return flattened
+  }
+
+  public getUnavailableTools(): UnavailableToolkitTool[] {
+    const unavailable: UnavailableToolkitTool[] = []
+
+    for (const toolkit of this._toolkits) {
+      if (!toolkit.tools) {
+        continue
+      }
+
+      for (const [toolId, tool] of Object.entries(toolkit.tools)) {
+        const availability = this.getToolAvailability(toolkit.id, toolId)
+        if (availability.available || !availability.settingsPath) {
+          continue
+        }
+
+        unavailable.push({
+          toolkitId: toolkit.id,
+          toolkitName: toolkit.name,
+          toolkitDescription: toolkit.description,
+          toolkitIconName: toolkit.iconName,
+          toolId,
+          toolName: tool.name,
+          toolDescription: tool.description,
+          toolIconName: tool.icon_name || toolkit.iconName,
+          missingSettings: availability.missingSettings,
+          settingsPath: availability.settingsPath
+        })
+      }
+    }
+
+    return unavailable
+  }
+
+  public getToolAvailability(
+    toolkitId: string,
+    toolId: string
+  ): ToolAvailability {
+    const availability = this._toolAvailability.get(
+      this.getQualifiedToolId(toolkitId, toolId)
+    )
+
+    if (!availability) {
+      return {
+        available: true,
+        requiredSettings: [],
+        missingSettings: [],
+        settingsPath: null
+      }
+    }
+
+    if (availability.requiredSettings.length === 0 || !availability.settingsPath) {
+      return {
+        ...availability,
+        available: true,
+        missingSettings: []
+      }
+    }
+
+    const configuredSettings = this.readSettingsSync(availability.settingsPath)
+    const missingSettings = availability.requiredSettings.filter((key) =>
+      this.isMissingSetting(configuredSettings[key])
+    )
+
+    return {
+      ...availability,
+      available: missingSettings.length === 0,
+      missingSettings
+    }
+  }
+
+  public isToolAvailable(toolkitId: string, toolId: string): boolean {
+    return this.getToolAvailability(toolkitId, toolId).available
   }
 
   public resolveToolById(
@@ -275,62 +368,72 @@ export default class ToolkitRegistry {
     }
   }
 
+  public async reload(): Promise<void> {
+    this._toolkits = []
+    this._toolAvailability.clear()
+    this._isLoaded = false
+
+    await this.load()
+  }
+
   private async loadBuiltInToolkits(
     toolkitsById: Map<string, ToolkitDefinition>
   ): Promise<void> {
-    if (!fs.existsSync(TOOLS_PATH)) {
-      return
-    }
-
-    const entries = await fs.promises.readdir(TOOLS_PATH, {
-      withFileTypes: true
-    })
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
+    for (const toolsPath of [TOOLS_PATH, PROFILE_TOOLS_PATH]) {
+      if (!fs.existsSync(toolsPath)) {
         continue
       }
 
-      const toolkitId = entry.name
-      const toolkitPath = path.join(TOOLS_PATH, toolkitId)
-      const toolkitConfigPath = path.join(toolkitPath, 'toolkit.json')
+      const entries = await fs.promises.readdir(toolsPath, {
+        withFileTypes: true
+      })
 
-      if (!fs.existsSync(toolkitConfigPath)) {
-        continue
-      }
-
-      try {
-        const toolkitConfig = await this.loadToolkitConfig(toolkitConfigPath)
-        const existingToolkit = toolkitsById.get(toolkitId)
-        const toolkit: ToolkitDefinition = existingToolkit || {
-          id: toolkitId,
-          name: toolkitConfig.name,
-          description: toolkitConfig.description,
-          iconName: toolkitConfig.icon_name,
-          contextFiles: this.normalizeContextFiles(
-            toolkitConfig.context_files
-          ),
-          tools: {}
+      for (const entry of entries) {
+        if (!entry.isDirectory()) {
+          continue
         }
 
-        for (const toolId of toolkitConfig.tools || []) {
-          if (ProfileHelper.isToolDisabled(toolId)) {
-            continue
+        const toolkitId = entry.name
+        const toolkitPath = path.join(toolsPath, toolkitId)
+        const toolkitConfigPath = path.join(toolkitPath, 'toolkit.json')
+
+        if (!fs.existsSync(toolkitConfigPath)) {
+          continue
+        }
+
+        try {
+          const toolkitConfig = await this.loadToolkitConfig(toolkitConfigPath)
+          const existingToolkit = toolkitsById.get(toolkitId)
+          const toolkit: ToolkitDefinition = existingToolkit || {
+            id: toolkitId,
+            name: toolkitConfig.name,
+            description: toolkitConfig.description,
+            iconName: toolkitConfig.icon_name,
+            contextFiles: this.normalizeContextFiles(
+              toolkitConfig.context_files
+            ),
+            tools: {}
           }
 
-          await this.loadToolConfig(
-            toolkit,
-            toolId,
-            path.join(toolkitPath, toolId, 'tool.json')
+          for (const toolId of toolkitConfig.tools || []) {
+            if (ProfileHelper.isToolDisabled(toolId, toolkitId)) {
+              continue
+            }
+
+            await this.loadToolConfig(
+              toolkit,
+              toolId,
+              path.join(toolkitPath, toolId, 'tool.json')
+            )
+          }
+
+          toolkitsById.set(toolkitId, toolkit)
+        } catch (e) {
+          LogHelper.title('Toolkit Registry')
+          LogHelper.error(
+            `Failed to load toolkit config at "${toolkitConfigPath}": ${e}`
           )
         }
-
-        toolkitsById.set(toolkitId, toolkit)
-      } catch (e) {
-        LogHelper.title('Toolkit Registry')
-        LogHelper.error(
-          `Failed to load toolkit config at "${toolkitConfigPath}": ${e}`
-        )
       }
     }
   }
@@ -369,6 +472,10 @@ export default class ToolkitRegistry {
         ...(toolkit.tools || {}),
         [toolId]: toolConfig
       }
+      this._toolAvailability.set(
+        this.getQualifiedToolId(toolkit.id, toolId),
+        await this.resolveToolAvailability(toolkit.id, toolId, toolConfigPath)
+      )
     } catch (e) {
       LogHelper.title('Toolkit Registry')
       LogHelper.error(
@@ -409,5 +516,95 @@ export default class ToolkitRegistry {
     }
 
     return `${normalizedBasename}.md`
+  }
+
+  private getQualifiedToolId(toolkitId: string, toolId: string): string {
+    return `${toolkitId}.${toolId}`
+  }
+
+  private async resolveToolAvailability(
+    toolkitId: string,
+    toolId: string,
+    toolConfigPath: string
+  ): Promise<ToolAvailability> {
+    const settingsPath = path.join(
+      PROFILE_TOOLS_PATH,
+      toolkitId,
+      toolId,
+      'settings.json'
+    )
+    const settingsSamplePath = path.join(
+      path.dirname(toolConfigPath),
+      'settings.sample.json'
+    )
+    const requiredSettings = await this.getRequiredSettings(settingsSamplePath)
+
+    if (requiredSettings.length === 0) {
+      return {
+        available: true,
+        requiredSettings,
+        missingSettings: [],
+        settingsPath
+      }
+    }
+
+    const configuredSettings = await this.readSettings(settingsPath)
+    const missingSettings = requiredSettings.filter((key) =>
+      this.isMissingSetting(configuredSettings[key])
+    )
+
+    return {
+      available: missingSettings.length === 0,
+      requiredSettings,
+      missingSettings,
+      settingsPath
+    }
+  }
+
+  private async getRequiredSettings(settingsSamplePath: string): Promise<string[]> {
+    const sampleSettings = await this.readSettings(settingsSamplePath)
+
+    return Object.entries(sampleSettings)
+      .filter(([, value]) => value === null)
+      .map(([key]) => key)
+  }
+
+  private async readSettings(
+    settingsPath: string
+  ): Promise<Record<string, unknown>> {
+    try {
+      if (!fs.existsSync(settingsPath)) {
+        return {}
+      }
+
+      return JSON.parse(
+        await fs.promises.readFile(settingsPath, 'utf-8')
+      ) as Record<string, unknown>
+    } catch {
+      return {}
+    }
+  }
+
+  private readSettingsSync(settingsPath: string): Record<string, unknown> {
+    try {
+      if (!fs.existsSync(settingsPath)) {
+        return {}
+      }
+
+      return JSON.parse(fs.readFileSync(settingsPath, 'utf-8')) as Record<
+        string,
+        unknown
+      >
+    } catch {
+      return {}
+    }
+  }
+
+  private isMissingSetting(value: unknown): boolean {
+    return (
+      value === undefined ||
+      value === null ||
+      (typeof value === 'string' && value.trim() === '')
+    )
   }
 }

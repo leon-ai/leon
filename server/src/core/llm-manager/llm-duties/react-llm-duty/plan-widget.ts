@@ -93,6 +93,38 @@ export function buildPlanComponentTree(
         },
         events: []
       }
+    } else if (step.status === 'error') {
+      child = {
+        component: 'Flexbox',
+        id: widgetId('flexbox'),
+        props: {
+          alignItems: 'center',
+          flexDirection: 'row',
+          gap: 'sm',
+          children: [
+            {
+              component: 'Icon',
+              id: widgetId('icon'),
+              props: {
+                size: 'sm',
+                bgShape: 'circle',
+                bgColor: 'transparent-red',
+                color: 'red',
+                type: 'line',
+                iconName: 'close'
+              },
+              events: []
+            },
+            {
+              component: 'Text',
+              id: widgetId('text'),
+              props: { children: step.label },
+              events: []
+            }
+          ]
+        },
+        events: []
+      }
     } else {
       // Checkbox
       const isCompleted = step.status === 'completed'
@@ -239,6 +271,7 @@ export function emitPlanWidget(
 ): void {
   const activeStep =
     steps.find((step) => step.status === 'in_progress') ||
+    steps.find((step) => step.status === 'error') ||
     steps[steps.length - 1] ||
     null
   const componentTree = buildPlanComponentTree(

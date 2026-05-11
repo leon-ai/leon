@@ -25,9 +25,10 @@ function escapeHTML(value) {
 }
 
 export default class Chatbot {
-  constructor(socket, serverURL) {
+  constructor(socket, serverURL, sessionId = null) {
     this.socket = socket
     this.serverURL = serverURL
+    this.sessionId = sessionId
     this.et = new EventTarget()
     this.feed = document.querySelector('#feed')
     this.typing = document.querySelector('#is-typing')
@@ -261,7 +262,7 @@ export default class Chatbot {
       }
 
       const data = await axios.get(
-        `${this.serverURL}/api/v1/fetch-widget?skill_action=${widgetContainer.onFetch.actionName}&widget_id=${widgetContainer.widgetId}`
+        `${this.serverURL}/api/v1/fetch-widget?skill_action=${widgetContainer.onFetch.actionName}&widget_id=${widgetContainer.widgetId}${this.sessionId ? `&session_id=${encodeURIComponent(this.sessionId)}` : ''}`
       )
       const fetchedWidget = data.data.widget
       const reactNode = fetchedWidget
@@ -321,14 +322,38 @@ export default class Chatbot {
     return this.widgetHydrationPromise
   }
 
+  setSessionId(sessionId) {
+    this.sessionId = sessionId
+  }
+
+  resetFeed() {
+    WIDGETS_TO_FETCH.length = 0
+    this.feed.innerHTML = ''
+    this.noBubbleMessage = document.createElement('p')
+    this.noBubbleMessage.id = 'no-bubble'
+    this.noBubbleMessage.className = 'hide'
+    this.noBubbleMessage.textContent =
+      'You can start to interact with me, don\'t be shy.'
+    this.feed.appendChild(this.noBubbleMessage)
+    this.parsedBubbles = []
+    this.reasoningBlocks.clear()
+    this.feedAutoScrollEnabled = true
+  }
+
   async loadFeed() {
     WIDGETS_TO_FETCH.length = 0
+    this.resetFeed()
+    const sessionQuery = this.sessionId
+      ? `&session_id=${encodeURIComponent(this.sessionId)}`
+      : ''
 
     const [historyResponse, systemWidgetsResponse] = await Promise.all([
       axios.get(
-        `${this.serverURL}/api/v1/conversation-history?supports_widgets=true`
+        `${this.serverURL}/api/v1/conversation-history?supports_widgets=true${sessionQuery}`
       ),
-      axios.get(`${this.serverURL}/api/v1/system-widgets?supports_widgets=true`)
+      axios.get(
+        `${this.serverURL}/api/v1/system-widgets?supports_widgets=true${sessionQuery}`
+      )
     ])
     const history = Array.isArray(historyResponse.data?.history)
       ? historyResponse.data.history

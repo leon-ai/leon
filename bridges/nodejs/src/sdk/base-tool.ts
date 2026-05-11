@@ -1202,7 +1202,8 @@ export abstract class Tool {
         fs.rmSync(tempExtractPath, { recursive: true, force: true })
 
         await this.report('bridges.tools.archive_extracted', {
-          binary_name: path.basename(outputPath)
+          binary_name: path.basename(outputPath),
+          binary_path: outputPath
         })
       }
     } catch (error) {
@@ -1266,34 +1267,44 @@ export abstract class Tool {
       const eta =
         progress.etaMs !== null ? formatETA(progress.etaMs / 1_000) : ''
 
-      let progressLine = `Downloading ${fileName}`
-
-      if (progress.percentage !== null) {
-        progressLine += `: ${percentage}%`
+      const progressData: Record<string, string | number> = {
+        file_name: fileName,
+        percentage: percentage,
+        speed: '',
+        eta: '',
+        downloaded_size: '',
+        total_size: ''
       }
-
       if (speed) {
-        progressLine += ` at ${speed}`
+        progressData['speed'] = speed
       }
-
       if (eta && eta !== '∞') {
-        progressLine += ` (ETA: ${eta})`
+        progressData['eta'] = eta
       }
-
       if (
         progress.totalBytes !== null &&
         progress.downloadedBytes <= progress.totalBytes
       ) {
-        progressLine += ` [${formatBytes(progress.downloadedBytes)}/${formatBytes(progress.totalBytes)}]`
+        progressData['downloaded_size'] = formatBytes(progress.downloadedBytes)
+        progressData['total_size'] = formatBytes(progress.totalBytes)
       }
 
-      this.log(progressLine)
+      const progressKey =
+        progressData['speed'] &&
+        progressData['eta'] &&
+        progressData['downloaded_size'] &&
+        progressData['total_size']
+          ? 'bridges.tools.download_progress_with_details'
+          : 'bridges.tools.download_progress'
+      void this.report(progressKey, progressData)
 
       if (
         progress.totalBytes !== null &&
         progress.downloadedBytes === progress.totalBytes
       ) {
-        this.log(`Download completed: ${fileName}`)
+        void this.report('bridges.tools.download_completed', {
+          file_name: fileName
+        })
       }
 
       lastLoggedPercentage = percentage

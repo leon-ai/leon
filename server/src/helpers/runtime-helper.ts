@@ -49,6 +49,23 @@ export class RuntimeHelper {
     return `"${value.replaceAll('"', '\\"')}"`
   }
 
+  private static buildManagedRuntimeShellFunction(
+    name: string,
+    executablePath: string
+  ): string {
+    const escapedExecutablePath = this.escapeShellArgument(executablePath)
+
+    return [
+      `${name}() {`,
+      `  if [ -x ${escapedExecutablePath} ]; then`,
+      `    ${escapedExecutablePath} "$@"`,
+      '  else',
+      `    command ${name} "$@"`,
+      '  fi',
+      '}'
+    ].join('\n')
+  }
+
   /**
    * Resolve the Node.js runtime binary Leon should use.
    */
@@ -126,6 +143,26 @@ export class RuntimeHelper {
       npm_config_node_execpath: nodeBinPath,
       npm_node_execpath: nodeBinPath
     }
+  }
+
+  /**
+   * Render shell functions that make temp scripts call Leon-managed runtimes
+   * explicitly instead of resolving bare commands through PATH.
+   */
+  public static buildManagedRuntimeShellFunctions(): string {
+    const functions: Array<[string, string]> = [
+      ['node', this.getNodeBinPath()],
+      ['python', this.getPythonBinPath()],
+      ['python3', this.getPythonBinPath()],
+      ['pnpm', this.getPNPMBinPath()],
+      ['uv', this.getUVBinPath()]
+    ]
+
+    return functions
+      .map(([name, executablePath]) =>
+        this.buildManagedRuntimeShellFunction(name, executablePath)
+      )
+      .join('\n\n')
   }
 
   /**

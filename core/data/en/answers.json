@@ -169,6 +169,18 @@
       "Downloading binary data...",
       "Getting binary file from server..."
     ],
+    "bridges.tools.download_progress": [
+      "Downloading {{ file_name }}: {{ percentage }}%.",
+      "Download progress for {{ file_name }}: {{ percentage }}%."
+    ],
+    "bridges.tools.download_progress_with_details": [
+      "Downloading {{ file_name }}: {{ percentage }}% at {{ speed }} (ETA: {{ eta }}) [{{ downloaded_size }}/{{ total_size }}].",
+      "Download progress for {{ file_name }}: {{ percentage }}% at {{ speed }} (ETA: {{ eta }}) [{{ downloaded_size }}/{{ total_size }}]."
+    ],
+    "bridges.tools.download_completed": [
+      "Download completed: {{ file_name }}.",
+      "{{ file_name }} download completed."
+    ],
     "bridges.tools.download_url_failed": [
       "Download failed with error: {{ error }}.",
       "Could not download from URL: {{ error }}.",
@@ -328,6 +340,12 @@
     ],
     "react.tool_call.diagnosis": [
       "Still running this step. Quick diagnosis while it continues: provider={{ provider }}, tool choice={{ tool_choice }}, tools={{ tool_count }}, estimated tokens={{ total_tokens }} (prompt={{ prompt_tokens }}, tools={{ tool_tokens }}, history={{ history_tokens }}). Slowdowns usually come from provider queueing or large context."
+    ],
+    "react.tool.preparing": [
+      "Preparing the {{ tool_name }} tool..."
+    ],
+    "react.tool.ready": [
+      "{{ tool_name }} is ready to be used."
     ],
     "bridges.tools.resource_downloaded": [
       "{{ resource_name }} resource downloaded successfully to {{ resource_path }}.",
