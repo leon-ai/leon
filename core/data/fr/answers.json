@@ -58,6 +58,12 @@
     ],
     "llm_remote_provider_error": [
       "J'ai rencontre une erreur avec le provider distant {{ provider }} pendant l'inference : {{ error }}{{ api_error }}"
+    ],
+    "react.tool.preparing": [
+      "Préparation de l'outil {{ tool_name }}..."
+    ],
+    "react.tool.ready": [
+      "{{ tool_name }} est prêt à être utilisé."
     ]
   }
 }

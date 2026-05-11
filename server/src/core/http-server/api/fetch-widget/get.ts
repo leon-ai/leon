@@ -4,6 +4,7 @@ import type { APIOptions } from '@/core/http-server/http-server'
 import { BRAIN, NLU } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { NLUProcessResultUpdater } from '@/core/nlp/nlu/nlu-process-result-updater'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
 export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
   fastify,
@@ -17,7 +18,11 @@ export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
 
       try {
         const queryParams = _request.query as Record<string, string>
-        const { skill_action: skillAction, widget_id: widgetId } = queryParams
+        const {
+          skill_action: skillAction,
+          widget_id: widgetId,
+          session_id: sessionId
+        } = queryParams
 
         if (!skillAction || !widgetId) {
           reply.statusCode = 400
@@ -79,7 +84,10 @@ export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
           }
         })
 
-        const processedData = await BRAIN.runSkillAction(NLU.nluProcessResult)
+        const processedData = await CONVERSATION_SESSION_MANAGER.runWithSession(
+          sessionId || CONVERSATION_SESSION_MANAGER.getActiveSessionId(),
+          () => BRAIN.runSkillAction(NLU.nluProcessResult)
+        )
 
         console.log('processedData', processedData)
 

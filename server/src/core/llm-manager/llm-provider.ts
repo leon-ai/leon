@@ -103,6 +103,9 @@ export default class LLMProvider {
 
   private workflowLLMProvider: Provider | undefined = undefined
   private agentLLMProvider: Provider | undefined = undefined
+  private workflowLLMProviderTargetLabel: string | null = null
+  private agentLLMProviderTargetLabel: string | null = null
+  private readonly sessionLLMProviders = new Map<string, Provider>()
   private lastProviderErrorMessage: string | null = null
   private llamaCPPServerBootErrorMessage: string | null = null
 
@@ -221,6 +224,8 @@ export default class LLMProvider {
       this.disposeCurrentProviders()
       this.workflowLLMProvider = undefined
       this.agentLLMProvider = undefined
+      this.workflowLLMProviderTargetLabel = null
+      this.agentLLMProviderTargetLabel = null
 
       LogHelper.title('LLM Provider')
       LogHelper.warning(
@@ -259,6 +264,12 @@ export default class LLMProvider {
       : agentTarget.isEnabled
         ? await this.createProvider(agentTarget)
         : undefined
+    this.workflowLLMProviderTargetLabel = workflowTarget.isEnabled
+      ? workflowTarget.label
+      : null
+    this.agentLLMProviderTargetLabel = agentTarget.isEnabled
+      ? agentTarget.label
+      : null
 
     try {
       await this.bootLocalServerProviders()
@@ -290,6 +301,8 @@ export default class LLMProvider {
     this.disposeCurrentProviders()
     this.workflowLLMProvider = undefined
     this.agentLLMProvider = undefined
+    this.workflowLLMProviderTargetLabel = null
+    this.agentLLMProviderTargetLabel = null
   }
 
   private async createProvider(target: ResolvedLLMTarget): Promise<Provider> {
@@ -318,12 +331,15 @@ export default class LLMProvider {
   private disposeCurrentProviders(): void {
     const providers = new Set([
       this.workflowLLMProvider as { dispose?: () => void } | undefined,
-      this.agentLLMProvider as { dispose?: () => void } | undefined
+      this.agentLLMProvider as { dispose?: () => void } | undefined,
+      ...this.sessionLLMProviders.values()
     ])
 
     for (const provider of providers) {
       provider?.dispose?.()
     }
+
+    this.sessionLLMProviders.clear()
   }
 
   private async bootLocalServerProviders(): Promise<void> {
@@ -357,6 +373,47 @@ export default class LLMProvider {
     return dutyType === LLMDuties.ReAct
       ? this.agentLLMProvider
       : this.workflowLLMProvider
+  }
+
+  private getProviderTargetLabelForDuty(dutyType: LLMDuties | null): string | null {
+    return dutyType === LLMDuties.ReAct
+      ? this.agentLLMProviderTargetLabel
+      : this.workflowLLMProviderTargetLabel
+  }
+
+  private getSessionProviderCacheKey(
+    dutyType: LLMDuties | null,
+    target: ResolvedLLMTarget
+  ): string {
+    return `${dutyType || 'workflow'}:${target.label}`
+  }
+
+  private async resolveProviderForDuty(
+    dutyType: LLMDuties | null
+  ): Promise<Provider | undefined> {
+    const target = this.getTargetForDuty(dutyType)
+
+    if (this.getProviderTargetLabelForDuty(dutyType) === target.label) {
+      return this.getProviderForDuty(dutyType)
+    }
+
+    if (!target.isEnabled || !target.isResolved) {
+      return undefined
+    }
+
+    const cacheKey = this.getSessionProviderCacheKey(dutyType, target)
+    const cachedProvider = this.sessionLLMProviders.get(cacheKey)
+
+    if (cachedProvider) {
+      return cachedProvider
+    }
+
+    const provider = await this.createProvider(target)
+
+    await provider.boot?.()
+    this.sessionLLMProviders.set(cacheKey, provider)
+
+    return provider
   }
 
   private getUnavailableProviderMessage(target: ResolvedLLMTarget): string {
@@ -1990,7 +2047,7 @@ export default class LLMProvider {
   ): Promise<CompletionResult | null> {
     completionParams.dutyType = completionParams.dutyType ?? null
     const providerName = this.getProviderNameForDuty(completionParams.dutyType)
-    const provider = this.getProviderForDuty(completionParams.dutyType)
+    const provider = await this.resolveProviderForDuty(completionParams.dutyType)
     const trackProviderErrors = completionParams.trackProviderErrors !== false
     if (trackProviderErrors) {
       this.lastProviderErrorMessage = null

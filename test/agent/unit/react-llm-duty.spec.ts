@@ -25,7 +25,56 @@ const coreMocks = vi.hoisted(() => ({
   },
   toolkitRegistry: {
     isLoaded: true,
-    load: vi.fn()
+    load: vi.fn(),
+    getFlattenedTools: vi.fn(() => [
+      {
+        toolkitId: 'operating_system_control',
+        toolkitName: 'Operating System Control',
+        toolkitDescription: 'Control the operating system.',
+        toolkitIconName: 'terminal',
+        toolId: 'bash',
+        toolName: 'Bash',
+        toolDescription: 'Execute shell commands.',
+        toolIconName: 'terminal'
+      }
+    ]),
+    getToolFunctions: vi.fn((toolkitId: string, toolId: string) => {
+      if (toolkitId !== 'operating_system_control' || toolId !== 'bash') {
+        return null
+      }
+
+      return {
+        executeBashCommand: {
+          description: 'Execute a bash command and return the result.',
+          parameters: {
+            type: 'object',
+            properties: {
+              command: { type: 'string' }
+            },
+            required: ['command']
+          }
+        }
+      }
+    }),
+    resolveToolById: vi.fn((toolId: string, toolkitId?: string) => {
+      if (
+        toolId !== 'bash' ||
+        (toolkitId && toolkitId !== 'operating_system_control')
+      ) {
+        return null
+      }
+
+      return {
+        toolkitId: 'operating_system_control',
+        toolkitName: 'Operating System Control',
+        toolkitIconName: 'terminal',
+        toolId: 'bash',
+        toolName: 'Bash',
+        toolDescription: 'Execute shell commands.',
+        toolIconName: 'terminal'
+      }
+    }),
+    getToolkitContextFiles: vi.fn(() => [])
   },
   contextManager: {
     isLoaded: true,
@@ -91,6 +140,9 @@ vi.mock('@/core', () => ({
   LLM_PROVIDER: coreMocks.llmProvider,
   PERSONA: coreMocks.persona,
   TOOLKIT_REGISTRY: coreMocks.toolkitRegistry,
+  TOOL_EXECUTOR: {
+    execute: vi.fn()
+  },
   CONTEXT_MANAGER: coreMocks.contextManager,
   SELF_MODEL_MANAGER: coreMocks.selfModelManager,
   CONVERSATION_LOGGER: coreMocks.conversationLogger,
@@ -120,6 +172,8 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty/plan-widget', () => ({
 let ReActLLMDuty: typeof import('@/core/llm-manager/llm-duties/react-llm-duty').ReActLLMDuty
 let runFinalAnswerPhase: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/final-answer').runFinalAnswerPhase
 let runPlanningPhaseDirect: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/planning').runPlanningPhase
+let runExecutionStepDirect: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/execution').runExecutionStep
+let runExecutionSelfObservationPhaseDirect: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/execution').runExecutionSelfObservationPhase
 
 function createMessageLog(
   who: 'owner' | 'leon',
@@ -194,6 +248,10 @@ beforeAll(async () => {
   ;({ runPlanningPhase: runPlanningPhaseDirect } = await import(
     '@/core/llm-manager/llm-duties/react-llm-duty/planning'
   ))
+  ;({
+    runExecutionStep: runExecutionStepDirect,
+    runExecutionSelfObservationPhase: runExecutionSelfObservationPhaseDirect
+  } = await import('@/core/llm-manager/llm-duties/react-llm-duty/execution'))
 })
 
 beforeEach(() => {
@@ -214,6 +272,108 @@ beforeEach(() => {
 })
 
 describe('ReActLLMDuty agent loop', () => {
+  it('passes conversation history into execution tool argument selection', async () => {
+    const history = [
+      createMessageLog(
+        'leon',
+        'Install a local Obsidian smooth cursor plugin named leon-smooth-cursor across the detected vaults.',
+        1
+      ),
+      createMessageLog('owner', 'Then do it', 2)
+    ]
+    const callLLMWithTools = vi.fn(async () => ({
+      textContent: JSON.stringify({
+        type: 'handoff',
+        intent: 'answer',
+        draft: 'Execution context retained.'
+      })
+    }))
+    const caller = {
+      callLLM: vi.fn(),
+      callLLMText: vi.fn(),
+      callLLMWithTools,
+      supportsNativeTools: true,
+      input: 'Then do it',
+      history,
+      agentSkillCatalog: '',
+      setAgentSkillContext: vi.fn(),
+      getAgentSkillContext: vi.fn(),
+      getContextFileContent: vi.fn(() => null),
+      getContextManifest: vi.fn(() => ''),
+      getSelfModelSnapshot: vi.fn(() => ''),
+      consumeProviderErrorMessage: vi.fn(() => null)
+    }
+
+    const result = await runExecutionStepDirect(
+      caller,
+      {
+        function: 'functions.executeBashCommand',
+        label: 'Install smooth cursor plugin'
+      },
+      [],
+      {
+        text: 'mock catalog',
+        mode: 'function'
+      }
+    )
+
+    expect(result).toEqual({
+      type: 'handoff',
+      signal: {
+        intent: 'answer',
+        draft: 'Execution context retained.',
+        source: 'execution'
+      }
+    })
+    expect(callLLMWithTools).toHaveBeenCalledOnce()
+    expect(callLLMWithTools.mock.calls[0]?.[4]).toBe(history)
+  })
+
+  it('passes conversation history into execution self-observation', async () => {
+    const history = [
+      createMessageLog('leon', 'The next step is to write plugin files.', 1),
+      createMessageLog('owner', 'Then do it', 2)
+    ]
+    const callLLM = vi.fn(async () => ({
+      output: {
+        type: 'handoff',
+        intent: 'answer',
+        draft: 'No more steps needed.',
+        functions: null,
+        steps: null,
+        reason: null
+      }
+    }))
+    const caller = {
+      callLLM,
+      callLLMText: vi.fn(),
+      callLLMWithTools: vi.fn(),
+      supportsNativeTools: true,
+      input: 'Then do it',
+      history,
+      agentSkillCatalog: '',
+      setAgentSkillContext: vi.fn(),
+      getAgentSkillContext: vi.fn(),
+      getContextFileContent: vi.fn(() => null),
+      getContextManifest: vi.fn(() => ''),
+      getSelfModelSnapshot: vi.fn(() => ''),
+      consumeProviderErrorMessage: vi.fn(() => null)
+    }
+
+    const result = await runExecutionSelfObservationPhaseDirect(caller, [])
+
+    expect(result).toEqual({
+      type: 'handoff',
+      signal: {
+        intent: 'answer',
+        draft: 'No more steps needed.',
+        source: 'self_observation'
+      }
+    })
+    expect(callLLM).toHaveBeenCalledOnce()
+    expect(callLLM.mock.calls[0]?.[3]).toBe(history)
+  })
+
   it('skips Agent Skill selection when no name or metadata match is present', async () => {
     const callLLMWithTools = vi.fn(async () => ({
       toolCall: {

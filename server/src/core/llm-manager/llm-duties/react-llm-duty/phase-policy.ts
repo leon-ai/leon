@@ -33,7 +33,7 @@ const REACT_PHASE_POLICIES: Record<ReactPhase, ReactPhasePolicy> = {
     promptProfile: 'lean',
     includePersonality: false,
     includeMood: false,
-    reasoningMode: 'guarded',
+    reasoningMode: 'on',
     streamToProvider: true,
     streamToUser: false,
     emitReasoning: true

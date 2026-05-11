@@ -9,7 +9,8 @@ import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper
 
 const getSystemWidgetsSchema = {
   querystring: Type.Object({
-    supports_widgets: Type.Optional(Type.String())
+    supports_widgets: Type.Optional(Type.String()),
+    session_id: Type.Optional(Type.String())
   })
 } satisfies FastifySchema
 
@@ -42,7 +43,12 @@ export const getSystemWidgets: FastifyPluginAsync<APIOptions> = async (
         const supportsWidgets = parseBooleanQuery(
           request.query.supports_widgets
         )
-        const systemWidgetLogs = (await CONVERSATION_LOGGER.loadAll()).filter(
+        const sessionOptions = request.query.session_id
+          ? { sessionId: request.query.session_id }
+          : {}
+        const systemWidgetLogs = (
+          await CONVERSATION_LOGGER.loadAll(sessionOptions)
+        ).filter(
           (conversationLog) =>
             !ConversationHistoryHelper.isAddedToHistory(conversationLog) &&
             ConversationHistoryHelper.isSystemWidget(conversationLog.widget)
