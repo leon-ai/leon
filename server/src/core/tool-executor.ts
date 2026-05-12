@@ -238,6 +238,36 @@ export default class ToolExecutor {
       })
     }
 
+    const availability = TOOLKIT_REGISTRY.getToolAvailability(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
+    if (!availability.available) {
+      const missingSettings = availability.missingSettings
+      const reason =
+        availability.reason ||
+        (missingSettings.length > 0
+          ? `Missing settings: ${missingSettings.join(', ')}`
+          : 'Tool is not available in the current runtime.')
+
+      return this.buildResult({
+        status: 'error',
+        message: reason,
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        output: {
+          ...(missingSettings.length > 0
+            ? { missing_settings: missingSettings }
+            : {}),
+          ...(availability.settingsPath
+            ? { settings_path: availability.settingsPath }
+            : {}),
+          ...(availability.reason ? { unavailable_reason: availability.reason } : {})
+        }
+      })
+    }
+
     if (!functionName) {
       return this.buildResult({
         status: 'invalid_input',

@@ -316,7 +316,7 @@ export default class ToolUIHandler {
 
     const statusChip = document.createElement('span')
     statusChip.className = 'tool-status-chip selected'
-    statusChip.textContent = 'Selected'
+    statusChip.textContent = 'In use'
 
     const expandIcon = document.createElement('i')
     expandIcon.className = 'ri-arrow-down-s-line expand-icon'
@@ -331,14 +331,14 @@ export default class ToolUIHandler {
 
     const summary = document.createElement('div')
     summary.className = 'tool-activity-summary'
-    summary.textContent = 'Following SKILL.md instructions for this run.'
+    summary.textContent = 'Following SKILL.md instructions for this step.'
 
     const sections = document.createElement('div')
     sections.className = 'tool-activity-sections single'
 
     const skillPanel = this.createActivityPanel(
       'Skill',
-      'Selected Agent Skill context'
+      'Agent Skill context for this step'
     )
     sections.appendChild(skillPanel.panel)
 
@@ -776,7 +776,7 @@ export default class ToolUIHandler {
 
     if (status === 'selected') {
       chip.classList.add('selected')
-      chip.textContent = 'Selected'
+      chip.textContent = 'In use'
       return
     }
 
