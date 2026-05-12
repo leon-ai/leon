@@ -1,0 +1,17 @@
+# Leon setup depends on native/binary packages whose install scripts must run
+dangerouslyAllowAllBuilds: true
+
+# Fail early when the active Node.js version does not satisfy package engines
+engineStrict: true
+
+# Keep dependency versions pinned when adding packages
+saveExact: true
+
+# Do not let `pnpm run` auto-install dependencies before running scripts
+verifyDepsBeforeRun: false
+
+# Keep pnpm install output readable without cursor manipulation
+reporter: append-only
+
+# Always run install lifecycle scripts, even when dependencies are up to date
+optimisticRepeatInstall: false

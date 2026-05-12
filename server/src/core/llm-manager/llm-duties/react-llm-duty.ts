@@ -470,7 +470,8 @@ export class ReActLLMDuty extends LLMDuty {
       if (continuation) {
         pendingSteps = continuation.state.pendingSteps.map((step) => ({
           function: step.function,
-          label: step.label
+          label: step.label,
+          ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
         }))
         executionHistory.push(
           ...continuation.state.executionHistory.map((item) => ({ ...item }))
@@ -751,7 +752,8 @@ export class ReActLLMDuty extends LLMDuty {
 
           pendingSteps = stepResult.steps.map((step) => ({
             function: step.function,
-            label: step.label
+            label: step.label,
+            ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
           }))
 
           // Rebuild tracked steps: keep completed ones, replace remaining
@@ -1137,7 +1139,8 @@ export class ReActLLMDuty extends LLMDuty {
             replanCount += 1
             pendingSteps = selfObservationResult.steps.map((step) => ({
               function: step.function,
-              label: step.label
+              label: step.label,
+              ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
             }))
 
             LogHelper.title(this.name)

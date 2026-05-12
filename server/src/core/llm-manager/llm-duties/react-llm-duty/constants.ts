@@ -45,7 +45,7 @@ You may use only the tools and functions listed in the provided catalog.
 - Use memory for owner-specific facts, preferences, commitments, and cross-session history.
 - Use context files for environment, runtime, workspace, browser, network, and system facts.
 - If an active Agent Skill is provided, follow its SKILL.md instructions for the request.
-- If available Agent Skills are listed and one clearly matches the request, load its SKILL.md before executing the skill-specific workflow.
+- If a listed Agent Skill is needed for a specific step, set that step's "agent_skill_id" to the exact skill id. Otherwise omit it.
 - For Agent Skills, treat referenced scripts, references, and assets as lazy resources under the listed skill root path. Read or execute them only when needed.
 - Ask a clarification only when the relevant retrieval path still cannot resolve the missing info.
 - Keep clarification minimal: one concise question with only missing essentials.
@@ -75,6 +75,7 @@ You may use only the tools and functions listed in the provided catalog.
 - "steps" is an ordered array of functions to call. Each step has:
   - "function": the fully qualified name (toolkit_id.tool_id.function_name). If the catalog only lists tools, use toolkit_id.tool_id.
   - "label": a very short user-facing description of what this step does. Must start with a verb (e.g. "Search for video files", "Download the page", "List matching items"). Keep it under 8 words.
+  - Optional "agent_skill_id": exact id from available_agent_skills, only when that step needs the skill workflow.
 - "summary" is a short natural language progress update that will be shown to the user.
 - "summary" must be written from your own perspective, using neutral or first-person phrasing.
 - Do not describe your own internal actions as the user's actions. Avoid "you" or "your" for your own work.
@@ -83,30 +84,6 @@ You may use only the tools and functions listed in the provided catalog.
 </output_contract>
 
 No other keys.`
-
-export const AGENT_SKILL_SELECTION_SYSTEM_PROMPT = `You decide whether to load an Agent Skill using progressive disclosure.
-
-Load a full SKILL.md only when the current request explicitly names a skill or clearly matches that skill's description.
-
-Prefer the normal catalog when it has a dedicated tool or function for the request. Agent Skills are for specialized workflows, not generic fallback.
-
-Call select_agent_skill only when one Agent Skill is clearly needed now. Otherwise do not call any tool.
-
-Choose no tool call when native tools, built-in context, memory, local files, direct conversation, or ordinary planning can handle the request. Ignore prior topics unless the current request explicitly continues that same skill-specific work. When uncertain, do not call any tool.`
-
-export const AGENT_SKILL_SELECTION_PROMPT = `<available_agent_skills>
-{{ agent_skill_catalog }}
-</available_agent_skills>
-
-<available_catalog>
-{{ catalog }}
-</available_catalog>
-
-<user_request>
-{{ user_request }}
-</user_request>
-
-Call select_agent_skill only if an Agent Skill should be loaded now. Otherwise answer "None" without calling tools.`
 
 export const EXECUTE_SYSTEM_PROMPT = `You are an autonomous acting agent executing a plan step by step.
 
@@ -200,6 +177,7 @@ A previous plan step failed. Your job is to decide the next best structured acti
 - Add discovery or verification steps when required to resolve missing or invalid inputs.
 - Keep steps ordered, concrete, and minimal.
 - If an active Agent Skill is provided, keep recovery inside that skill's SKILL.md workflow before switching to generic overlapping tools.
+- If a listed Agent Skill is needed for a recovery step, set that step's "agent_skill_id" to the exact skill id. Otherwise omit it.
 - When a Leon Self-Model Snapshot is provided, use it for continuity, durable owner-tailored behavioral habits, and safe optional initiative only.
 - When a Context File is provided, prefer grounded context retrieval before clarification for environment/runtime questions.
 - If the current best answer would still rely on weak hints or unresolved uncertainty that context or memory could reduce, return a revised plan with grounding steps instead of a final answer.

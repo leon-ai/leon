@@ -11,20 +11,6 @@
     "url": "https://twitter.com/grenlouis"
   },
   "functions": {
-    "setApiKey": {
-      "description": "Set the Grok API key.",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "apiKey": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "apiKey"
-        ]
-      }
-    },
     "listModels": {
       "description": "List available Grok models.",
       "parameters": {

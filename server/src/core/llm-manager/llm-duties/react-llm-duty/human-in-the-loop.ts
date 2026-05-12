@@ -85,6 +85,14 @@ export function isExecutionContinuationStateValid(
   return state.phase === 'execution' && Array.isArray(state.pendingSteps)
 }
 
+function copyPlanStep(step: PlanStep): PlanStep {
+  return {
+    function: step.function,
+    label: step.label,
+    ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
+  }
+}
+
 export function createExecutionContinuationState(
   params: CreateExecutionContinuationStateParams
 ): ReactExecutionContinuationState {
@@ -94,10 +102,7 @@ export function createExecutionContinuationState(
     planWidgetId: params.planWidgetId,
     originalInput: params.originalInput,
     clarificationQuestion: params.clarificationQuestion,
-    pendingSteps: [params.currentStep, ...params.pendingSteps].map((step) => ({
-      function: step.function,
-      label: step.label
-    })),
+    pendingSteps: [params.currentStep, ...params.pendingSteps].map(copyPlanStep),
     executionHistory: params.executionHistory.map((item) => ({ ...item })),
     trackedSteps: params.trackedSteps.map((step) => ({ ...step })),
     currentStepIndex:

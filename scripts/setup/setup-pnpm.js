@@ -21,28 +21,28 @@ function getBinaryPath() {
 function getAssetFileName() {
   if (SystemHelper.isLinux()) {
     if (CPU_ARCH === CPUArchitectures.X64) {
-      return 'pnpm-linux-x64'
+      return 'pnpm-linux-x64.tar.gz'
     }
 
     if (CPU_ARCH === CPUArchitectures.ARM64) {
-      return 'pnpm-linux-arm64'
+      return 'pnpm-linux-arm64.tar.gz'
     }
   }
 
   if (SystemHelper.isMacOS()) {
     if (CPU_ARCH === CPUArchitectures.X64) {
-      return 'pnpm-macos-x64'
+      throw new Error('pnpm 11 no longer ships a standalone macOS x64 binary')
     }
 
     if (CPU_ARCH === CPUArchitectures.ARM64) {
-      return 'pnpm-macos-arm64'
+      return 'pnpm-darwin-arm64.tar.gz'
     }
   }
 
   if (SystemHelper.isWindows()) {
     return CPU_ARCH === CPUArchitectures.ARM64
-      ? 'pnpm-win-arm64.exe'
-      : 'pnpm-win-x64.exe'
+      ? 'pnpm-win32-arm64.zip'
+      : 'pnpm-win32-x64.zip'
   }
 
   throw new Error(
@@ -60,6 +60,7 @@ export default async function setupPNPM() {
     installPath: PNPM_INSTALL_PATH,
     manifestPath: PNPM_MANIFEST_PATH,
     binaryPath: getBinaryPath(),
-    downloadURL: `https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/${assetFileName}`
+    downloadURL: `https://github.com/pnpm/pnpm/releases/download/v${PNPM_VERSION}/${assetFileName}`,
+    archiveFileName: assetFileName
   })
 }
