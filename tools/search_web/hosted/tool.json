@@ -32,7 +32,6 @@
                 "enum": [
                   "auto",
                   "openai",
-                  "openrouter",
                   "anthropic"
                 ]
               },
@@ -56,40 +55,6 @@
     },
     "searchOpenAI": {
       "description": "Search the web using OpenAI's native hosted web search and the configured LEON_OPENAI_API_KEY.",
-      "hooks": {
-        "post_execution": {
-          "response_jq": ".result.content"
-        }
-      },
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "query": {
-            "type": "string"
-          },
-          "options": {
-            "type": "object",
-            "properties": {
-              "model": {
-                "type": "string"
-              },
-              "max_output_tokens": {
-                "type": "number"
-              },
-              "temperature": {
-                "type": "number"
-              }
-            },
-            "additionalProperties": false
-          }
-        },
-        "required": [
-          "query"
-        ]
-      }
-    },
-    "searchOpenRouter": {
-      "description": "Search the web using OpenRouter's native hosted web search and the configured LEON_OPENROUTER_API_KEY.",
       "hooks": {
         "post_execution": {
           "response_jq": ".result.content"

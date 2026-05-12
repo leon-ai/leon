@@ -472,7 +472,13 @@ export function parseStepsFromArgs(
       label:
         typeof s['label'] === 'string' && (s['label'] as string).trim()
           ? (s['label'] as string).trim()
-          : (s['function'] as string).trim()
+          : (s['function'] as string).trim(),
+      ...(
+        typeof s['agent_skill_id'] === 'string' &&
+        (s['agent_skill_id'] as string).trim()
+          ? { agentSkillId: (s['agent_skill_id'] as string).trim() }
+          : {}
+      )
     }))
 }
 

@@ -5,8 +5,17 @@ import {
   PROFILE_TOOLS_PATH,
   TOOLS_PATH
 } from '@/constants'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
+
+const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
+const HOSTED_SEARCH_TOOL_ID = 'hosted'
+const HOSTED_SEARCH_PROVIDERS = new Set<LLMProviders>([
+  LLMProviders.OpenAI,
+  LLMProviders.Anthropic
+])
 
 interface ToolkitToolDefinition {
   tool_id: string
@@ -44,7 +53,8 @@ interface FlattenedToolkitTool {
 
 interface UnavailableToolkitTool extends FlattenedToolkitTool {
   missingSettings: string[]
-  settingsPath: string
+  settingsPath: string | null
+  reason?: string
 }
 
 interface ToolAvailability {
@@ -52,6 +62,7 @@ interface ToolAvailability {
   requiredSettings: string[]
   missingSettings: string[]
   settingsPath: string | null
+  reason?: string
 }
 
 interface ResolvedToolkitTool {
@@ -143,11 +154,11 @@ export default class ToolkitRegistry {
 
       for (const [toolId, tool] of Object.entries(toolkit.tools)) {
         const availability = this.getToolAvailability(toolkit.id, toolId)
-        if (availability.available || !availability.settingsPath) {
+        if (availability.available) {
           continue
         }
 
-        unavailable.push({
+        const unavailableTool: UnavailableToolkitTool = {
           toolkitId: toolkit.id,
           toolkitName: toolkit.name,
           toolkitDescription: toolkit.description,
@@ -158,7 +169,12 @@ export default class ToolkitRegistry {
           toolIconName: tool.icon_name || toolkit.iconName,
           missingSettings: availability.missingSettings,
           settingsPath: availability.settingsPath
-        })
+        }
+        if (availability.reason) {
+          unavailableTool.reason = availability.reason
+        }
+
+        unavailable.push(unavailableTool)
       }
     }
 
@@ -182,11 +198,19 @@ export default class ToolkitRegistry {
       }
     }
 
+    const dynamicUnavailableReason = this.getDynamicUnavailableReason(
+      toolkitId,
+      toolId
+    )
+
     if (availability.requiredSettings.length === 0 || !availability.settingsPath) {
       return {
         ...availability,
-        available: true,
-        missingSettings: []
+        available: !dynamicUnavailableReason,
+        missingSettings: [],
+        ...(dynamicUnavailableReason
+          ? { reason: dynamicUnavailableReason }
+          : {})
       }
     }
 
@@ -197,8 +221,11 @@ export default class ToolkitRegistry {
 
     return {
       ...availability,
-      available: missingSettings.length === 0,
-      missingSettings
+      available: missingSettings.length === 0 && !dynamicUnavailableReason,
+      missingSettings,
+      ...(dynamicUnavailableReason
+        ? { reason: dynamicUnavailableReason }
+        : {})
     }
   }
 
@@ -520,6 +547,37 @@ export default class ToolkitRegistry {
 
   private getQualifiedToolId(toolkitId: string, toolId: string): string {
     return `${toolkitId}.${toolId}`
+  }
+
+  private getDynamicUnavailableReason(
+    toolkitId: string,
+    toolId: string
+  ): string | null {
+    if (
+      toolkitId !== HOSTED_SEARCH_TOOLKIT_ID ||
+      toolId !== HOSTED_SEARCH_TOOL_ID
+    ) {
+      return null
+    }
+
+    const target = CONFIG_STATE.getModelState().getAgentTarget()
+    if (!target.isEnabled) {
+      return 'active agent LLM is disabled'
+    }
+
+    if (!target.isResolved || !target.model) {
+      return 'active agent LLM target is not resolved'
+    }
+
+    if (this.supportsHostedSearch(target.provider)) {
+      return null
+    }
+
+    return `active agent LLM ${target.provider}/${target.model} does not support native hosted search`
+  }
+
+  private supportsHostedSearch(provider: LLMProviders): boolean {
+    return HOSTED_SEARCH_PROVIDERS.has(provider)
   }
 
   private async resolveToolAvailability(

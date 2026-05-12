@@ -1,6 +1,7 @@
 export const PLAN_STEP_PROPERTIES_SCHEMA = {
   function: { type: 'string' },
-  label: { type: 'string' }
+  label: { type: 'string' },
+  agent_skill_id: { type: 'string' }
 }
 
 export const PLAN_STEP_SCHEMA = {

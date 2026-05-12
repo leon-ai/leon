@@ -74,14 +74,18 @@ export function buildCatalog(): Catalog {
     }
 
     const unavailableLines = unavailableTools.map((tool) => {
-      return `- ${tool.toolkitId}.${tool.toolId}: missing ${tool.missingSettings.join(', ')}; configure ${tool.settingsPath}`
+      if (tool.missingSettings.length > 0 && tool.settingsPath) {
+        return `- ${tool.toolkitId}.${tool.toolId}: missing ${tool.missingSettings.join(', ')}; configure ${tool.settingsPath}`
+      }
+
+      return `- ${tool.toolkitId}.${tool.toolId}: ${tool.reason || 'not available in the current runtime'}`
     })
 
     return [
       '',
       '',
       'Unavailable Installed Tools:',
-      'These tools are installed but not callable until configured. Do not plan them as executable steps; if the owner explicitly asks for one, explain the missing settings path.',
+      'These tools are installed but not callable right now. Do not plan them as executable steps; if the owner explicitly asks for one, explain the listed reason or missing settings path.',
       ...unavailableLines
     ].join('\n')
   }
