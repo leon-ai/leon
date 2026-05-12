@@ -16,7 +16,8 @@ import { LogHelper } from '@/helpers/log-helper'
     PYTHON_BRIDGE_RUNTIME_BIN_PATH,
     [PYTHON_BRIDGE_ENTRY_PATH, ...args],
     {
-      stdio: 'inherit'
+      stdio: 'inherit',
+      windowsHide: true
     }
   )
 

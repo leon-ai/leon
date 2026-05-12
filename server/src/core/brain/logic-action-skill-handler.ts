@@ -367,7 +367,10 @@ export class LogicActionSkillHandler {
           LogHelper.info(`Running command: ${pythonBridgeCommand}`)
           BRAIN.skillProcess = spawn(
             PYTHON_BRIDGE_RUNTIME_BIN_PATH,
-            pythonBridgeCommandArgs
+            pythonBridgeCommandArgs,
+            {
+              windowsHide: true
+            }
           )
         } else if (skillBridge === SkillBridges.NodeJS) {
           const nodejsBridgeCommandArgs = [
@@ -386,7 +389,10 @@ export class LogicActionSkillHandler {
           LogHelper.info(`Running command: ${nodejsBridgeCommand}`)
           BRAIN.skillProcess = spawn(
             NODE_RUNTIME_BIN_PATH,
-            nodejsBridgeCommandArgs
+            nodejsBridgeCommandArgs,
+            {
+              windowsHide: true
+            }
           )
         } else {
           LogHelper.error(`The skill bridge is not supported: ${skillBridge}`)

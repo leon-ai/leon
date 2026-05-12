@@ -63,7 +63,8 @@ function getShortCommitHash(): string {
   try {
     return execFileSync('git', SHORT_COMMIT_HASH_ARGS, {
       cwd: process.cwd(),
-      encoding: 'utf8'
+      encoding: 'utf8',
+      windowsHide: true
     }).trim()
   } catch {
     return 'unknown'

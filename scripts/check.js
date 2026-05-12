@@ -265,7 +265,8 @@ function startTCPServerCheck() {
   return new Promise((resolve) => {
     const child = spawn(PYTHON_TCP_SERVER_RUNTIME_BIN_PATH, args, {
       env,
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
     })
 
     const timeoutMs = 3 * 60_000

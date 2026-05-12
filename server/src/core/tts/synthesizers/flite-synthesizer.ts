@@ -62,7 +62,9 @@ export default class FliteSynthesizer extends TTSSynthesizerBase {
       `int_f0_target_stddev=${FLITE_CONFIG.int_f0_target_stddev}`,
       '-o',
       audioFilePath
-    ])
+    ], {
+      windowsHide: true
+    })
 
     await new Promise((resolve, reject) => {
       process.stdout.on('end', resolve)
