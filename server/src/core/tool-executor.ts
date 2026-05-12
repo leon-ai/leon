@@ -856,7 +856,8 @@ export default class ToolExecutor {
         env: {
           ...process.env,
           LEON_CODEBASE_PATH: CODEBASE_PATH
-        }
+        },
+        windowsHide: true
       })
 
       childProcess.stdout.on('data', (data: Buffer) => {

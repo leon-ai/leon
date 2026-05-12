@@ -109,8 +109,9 @@ async function bootstrap(): Promise<void> {
       PYTHON_TCP_SERVER_RUNTIME_BIN_PATH,
       tcpServerCommandArgs,
       {
-      detached: IS_DEVELOPMENT_ENV,
-      env: tcpServerEnv
+        detached: IS_DEVELOPMENT_ENV,
+        env: tcpServerEnv,
+        windowsHide: true
       }
     )
     global.pythonTCPServerProcess.stdout.on('data', (data: Buffer) => {

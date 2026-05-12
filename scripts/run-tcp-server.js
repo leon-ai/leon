@@ -53,7 +53,8 @@ import {
 
   const child = spawn(PYTHON_TCP_SERVER_RUNTIME_BIN_PATH, args, {
     stdio: 'inherit',
-    env
+    env,
+    windowsHide: true
   })
 
   child.on('exit', (code) => {

@@ -223,11 +223,13 @@ export class FileHelper {
       if (ZIP_ARCHIVE_EXTENSIONS.has(ext)) {
         if (SystemHelper.isWindows()) {
           execFileSync('tar', ['-xf', archivePath, '-C', targetPath], {
-            stdio: 'inherit'
+            stdio: 'inherit',
+            windowsHide: true
           })
         } else {
           execFileSync('unzip', ['-o', '-q', archivePath, '-d', targetPath], {
-            stdio: 'inherit'
+            stdio: 'inherit',
+            windowsHide: true
           })
         }
       } else if (
@@ -243,7 +245,8 @@ export class FileHelper {
         }
 
         execFileSync('tar', tarArgs, {
-          stdio: 'inherit'
+          stdio: 'inherit',
+          windowsHide: true
         })
       } else {
         throw new Error(`Unsupported archive format: ${archivePath}`)

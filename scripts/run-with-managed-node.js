@@ -37,7 +37,8 @@ if (args.length === 0) {
 
 const child = spawn(managedNodePath, args, {
   cwd: process.cwd(),
-  stdio: 'inherit'
+  stdio: 'inherit',
+  windowsHide: true
 })
 
 child.on('error', (error) => {

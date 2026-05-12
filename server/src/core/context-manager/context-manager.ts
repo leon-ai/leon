@@ -479,7 +479,8 @@ export default class ContextManager {
     try {
       const { stdout } = await execFileAsync(NODE_RUNTIME_BIN_PATH, workerArgs, {
         cwd: CODEBASE_PATH,
-        maxBuffer: CONTEXT_REFRESH_WORKER_MAX_BUFFER
+        maxBuffer: CONTEXT_REFRESH_WORKER_MAX_BUFFER,
+        windowsHide: true
       })
       const parsed = JSON.parse(String(stdout || '{}')) as {
         success?: boolean

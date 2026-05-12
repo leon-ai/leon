@@ -71,7 +71,8 @@ const childProcess = spawn(
             LEON_AGENT_PROVIDER_PATTERN: testNamePattern
           }
         : {})
-    }
+    },
+    windowsHide: true
   }
 )
 
