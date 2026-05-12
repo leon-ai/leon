@@ -24,7 +24,8 @@ import {
   createPlanFromUnexpectedToolCall,
   buildContextManifestSection,
   buildSelfModelSection,
-  buildActiveAgentSkillSection
+  buildActiveAgentSkillSection,
+  buildAgentSkillDiscoverySection
 } from './phase-helpers'
 import {
   PLAN_RESPONSE_SCHEMA,
@@ -112,24 +113,34 @@ export async function runRecoveryPlanningPhase(
   const contextManifestSection = buildContextManifestSection(
     caller.getContextManifest()
   )
+  const failedStepAgentSkillContext = failedStep.agentSkillId
+    ? await caller.getAgentSkillContext(failedStep.agentSkillId)
+    : null
   const activeAgentSkillSection = buildActiveAgentSkillSection(
-    caller.agentSkillContext
+    failedStepAgentSkillContext || caller.agentSkillContext
   )
+  const agentSkillSection =
+    activeAgentSkillSection || buildAgentSkillDiscoverySection(caller)
   const failedExecution = executionHistory[executionHistory.length - 1]
   const historySection = formatExecutionHistory(executionHistory)
   const pendingStepsSection =
     pendingSteps.length > 0
       ? pendingSteps
-          .map(
-            (step, index) => `- ${index + 1}. ${step.function} | "${step.label}"`
-          )
+          .map((step, index) => {
+            const skillSuffix = step.agentSkillId
+              ? ` | agent_skill_id=${step.agentSkillId}`
+              : ''
+            return `- ${index + 1}. ${step.function}${skillSuffix} | "${step.label}"`
+          })
           .join('\n')
       : '- none'
   const prompt = `<context_manifest>
 ${contextManifestSection}
 </context_manifest>
 
-${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}<available_catalog>
+${agentSkillSection}
+
+<available_catalog>
 ${catalog.text}${catalogNote}
 </available_catalog>
 
@@ -201,6 +212,11 @@ Create a revised plan from this point to complete the user request.
                       type: 'string',
                       description:
                         'Short user-facing task description starting with a verb, under 8 words'
+                    },
+                    agent_skill_id: {
+                      type: 'string',
+                      description:
+                        'Optional exact Agent Skill id from available_agent_skills for this step only'
                     }
                   },
                   required: ['function', 'label']

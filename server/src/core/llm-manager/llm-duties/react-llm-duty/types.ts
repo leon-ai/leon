@@ -36,6 +36,7 @@ export type ToolFunctionsMap = Record<string, FunctionConfig>
 export interface PlanStep {
   function: string
   label: string
+  agentSkillId?: string
 }
 
 export interface ExecutionRecord {

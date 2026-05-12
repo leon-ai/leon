@@ -30,7 +30,8 @@ import type {
   PromptLogSection,
   LLMCallOptions,
   FinalPhaseIntent,
-  FinalResponseSignal
+  FinalResponseSignal,
+  AgentSkillContext
 } from './types'
 import {
   isToolLevel,
@@ -320,6 +321,32 @@ function getToolDisplayContext(
   }
 }
 
+function emitAgentSkillActivityToWebApp(
+  agentSkillContext: AgentSkillContext,
+  stepLabel: string
+): void {
+  const skillGroupId =
+    `react_agent_skill_${agentSkillContext.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+
+  SOCKET_SERVER.emitAnswerToChatClients({
+    answer: `Using Agent Skill: ${agentSkillContext.name}\nStep: ${stepLabel}\nFollowing: ${agentSkillContext.skillPath}`,
+    isToolOutput: true,
+    toolDisplayMode: 'activity_card',
+    activityType: 'agent_skill',
+    status: 'selected',
+    toolGroupId: skillGroupId,
+    key: `agent_skill.${agentSkillContext.id}.using`,
+    agentSkill: {
+      id: agentSkillContext.id,
+      name: agentSkillContext.name,
+      description: agentSkillContext.description,
+      rootPath: agentSkillContext.rootPath,
+      skillPath: agentSkillContext.skillPath,
+      stepLabel
+    }
+  })
+}
+
 function emitToolExecutionInputToWebApp(params: {
   toolkitId: string
   toolId: string
@@ -463,7 +490,15 @@ function extractExecutionReplanSteps(
 
         return {
           function: functionName,
-          label
+          label,
+          ...(
+            typeof step['agent_skill_id'] === 'string' &&
+            (step['agent_skill_id'] as string).trim()
+              ? {
+                  agentSkillId: (step['agent_skill_id'] as string).trim()
+                }
+              : {}
+          )
         }
       })
   }
@@ -630,6 +665,41 @@ Use only the user request and collected observations to decide whether the reque
   return null
 }
 
+async function resolveStepAgentSkillContext(
+  caller: LLMCaller,
+  step: PlanStep
+): Promise<{
+  context: AgentSkillContext | null
+  error?: string
+}> {
+  if (!step.agentSkillId) {
+    return {
+      context: caller.agentSkillContext || null
+    }
+  }
+
+  const agentSkillContext = await caller.getAgentSkillContext(
+    step.agentSkillId
+  )
+
+  if (!agentSkillContext) {
+    return {
+      context: null,
+      error: `Agent Skill "${step.agentSkillId}" is not installed or enabled.`
+    }
+  }
+
+  LogHelper.title(`${DUTY_NAME} / execution`)
+  LogHelper.debug(
+    `Loaded Agent Skill "${step.agentSkillId}" for step "${step.label}".`
+  )
+  emitAgentSkillActivityToWebApp(agentSkillContext, step.label)
+
+  return {
+    context: agentSkillContext
+  }
+}
+
 export async function runExecutionStep(
   caller: LLMCaller,
   step: PlanStep,
@@ -658,6 +728,20 @@ export async function runExecutionStep(
 
   const qualifiedName = resolvedQualifiedName
   const parts = qualifiedName.split('.')
+  const agentSkillResolution = await resolveStepAgentSkillContext(caller, step)
+
+  if (agentSkillResolution.error) {
+    return {
+      type: 'executed',
+      execution: {
+        function: qualifiedName,
+        status: 'error',
+        observation: agentSkillResolution.error
+      }
+    }
+  }
+
+  const agentSkillContext = agentSkillResolution.context
 
   // If the plan only has tool-level references (from tool-level catalog),
   // we need an extra resolution step to pick the right function.
@@ -668,7 +752,8 @@ export async function runExecutionStep(
       step.label,
       parts,
       executionHistory,
-      catalog
+      catalog,
+      agentSkillContext
     )
   }
 
@@ -748,7 +833,8 @@ export async function runExecutionStep(
     functionName,
     step.label,
     resolvedConfig,
-    executionHistory
+    executionHistory,
+    agentSkillContext
   )
 }
 
@@ -763,8 +849,8 @@ async function runToolLevelExecution(
   stepLabel: string,
   parts: string[],
   executionHistory: ExecutionRecord[],
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  _catalog: Catalog
+  _catalog: Catalog,
+  agentSkillContext: AgentSkillContext | null
 ): Promise<ExecutionStepResult> {
   const toolkitId = parts[0] || ''
   const toolId = parts[1] || parts[0] || ''
@@ -807,7 +893,8 @@ async function runToolLevelExecution(
       fnName,
       stepLabel,
       fnConfig,
-      executionHistory
+      executionHistory,
+      agentSkillContext
     )
   }
 
@@ -822,7 +909,8 @@ async function runToolLevelExecution(
       effectiveToolkitId,
       effectiveToolId,
       toolFunctions as Record<string, FunctionConfig>,
-      executionHistory
+      executionHistory,
+      agentSkillContext
     )
   }
 
@@ -835,7 +923,8 @@ async function runToolLevelExecution(
     effectiveToolId,
     toolFunctions as Record<string, FunctionConfig>,
     functionEntries,
-    executionHistory
+    executionHistory,
+    agentSkillContext
   )
 }
 
@@ -850,7 +939,8 @@ async function resolveToolFunctionWithNativeTools(
   toolkitId: string,
   toolId: string,
   toolFunctions: Record<string, FunctionConfig>,
-  executionHistory: ExecutionRecord[]
+  executionHistory: ExecutionRecord[],
+  agentSkillContext: AgentSkillContext | null
 ): Promise<ExecutionStepResult> {
   const toolkitContextSection = buildToolkitContextSection(caller, toolkitId)
   const executionMemorySection = await buildExecutionMemorySection(
@@ -862,9 +952,8 @@ async function resolveToolFunctionWithNativeTools(
     toolkitId,
     toolId
   )
-  const activeAgentSkillSection = buildActiveAgentSkillSection(
-    caller.agentSkillContext
-  )
+  const activeAgentSkillSection =
+    buildActiveAgentSkillSection(agentSkillContext)
   const historySection = formatExecutionHistory(executionHistory)
   const resolveSystemPrompt = buildPhaseSystemPrompt(
     RESOLVE_FUNCTION_SYSTEM_PROMPT,
@@ -1040,7 +1129,8 @@ async function resolveToolFunctionWithJSONMode(
   effectiveToolId: string,
   toolFunctions: Record<string, FunctionConfig>,
   functionEntries: [string, FunctionConfig][],
-  executionHistory: ExecutionRecord[]
+  executionHistory: ExecutionRecord[],
+  agentSkillContext: AgentSkillContext | null
 ): Promise<ExecutionStepResult> {
   const toolkitContextSection = buildToolkitContextSection(
     caller,
@@ -1055,9 +1145,8 @@ async function resolveToolFunctionWithJSONMode(
     effectiveToolkitId,
     effectiveToolId
   )
-  const activeAgentSkillSection = buildActiveAgentSkillSection(
-    caller.agentSkillContext
-  )
+  const activeAgentSkillSection =
+    buildActiveAgentSkillSection(agentSkillContext)
   const functionsSection = functionEntries
     .map(([fnName, fnConfig]) => {
       const params = JSON.stringify(fnConfig.parameters)
@@ -1250,7 +1339,8 @@ async function executeFunction(
   functionName: string,
   stepLabel: string,
   functionConfig: FunctionConfig,
-  executionHistory: ExecutionRecord[]
+  executionHistory: ExecutionRecord[],
+  agentSkillContext: AgentSkillContext | null
 ): Promise<ExecutionStepResult> {
   // --- Native tool calling path ---
   if (caller.supportsNativeTools) {
@@ -1261,7 +1351,8 @@ async function executeFunction(
       functionName,
       stepLabel,
       functionConfig,
-      executionHistory
+      executionHistory,
+      agentSkillContext
     )
   }
 
@@ -1273,7 +1364,8 @@ async function executeFunction(
     functionName,
     stepLabel,
     functionConfig,
-    executionHistory
+    executionHistory,
+    agentSkillContext
   )
 }
 
@@ -1287,7 +1379,8 @@ async function executeFunctionWithNativeTools(
   functionName: string,
   stepLabel: string,
   functionConfig: FunctionConfig,
-  executionHistory: ExecutionRecord[]
+  executionHistory: ExecutionRecord[],
+  agentSkillContext: AgentSkillContext | null
 ): Promise<ExecutionStepResult> {
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
   const currentStepLabel = stepLabel || qualifiedName
@@ -1306,9 +1399,8 @@ async function executeFunctionWithNativeTools(
     toolkitId,
     toolId
   )
-  const activeAgentSkillSection = buildActiveAgentSkillSection(
-    caller.agentSkillContext
-  )
+  const activeAgentSkillSection =
+    buildActiveAgentSkillSection(agentSkillContext)
   const historySection = formatExecutionHistory(executionHistory)
   const executeSystemPrompt = buildPhaseSystemPrompt(
     EXECUTE_SYSTEM_PROMPT,
@@ -1566,7 +1658,8 @@ async function executeFunctionWithJSONMode(
   functionName: string,
   stepLabel: string,
   functionConfig: FunctionConfig,
-  executionHistory: ExecutionRecord[]
+  executionHistory: ExecutionRecord[],
+  agentSkillContext: AgentSkillContext | null
 ): Promise<ExecutionStepResult> {
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
   const currentStepLabel = stepLabel || qualifiedName
@@ -1586,9 +1679,8 @@ async function executeFunctionWithJSONMode(
     toolkitId,
     toolId
   )
-  const activeAgentSkillSection = buildActiveAgentSkillSection(
-    caller.agentSkillContext
-  )
+  const activeAgentSkillSection =
+    buildActiveAgentSkillSection(agentSkillContext)
   const historySection = formatExecutionHistory(executionHistory)
   const executeSystemPrompt = buildPhaseSystemPrompt(
     EXECUTE_SYSTEM_PROMPT,

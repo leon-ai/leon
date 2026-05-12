@@ -54,10 +54,11 @@ export default async function setupNodejsBridgeEnv() {
 
   await execa(PNPM_RUNTIME_BIN_PATH, [
       'install',
-      '--dir',
-      NODEJS_BRIDGE_ROOT_PATH,
+      '--ignore-workspace',
+      '--config.confirmModulesPurge=false',
       '--lockfile=false'
     ], {
+      cwd: NODEJS_BRIDGE_ROOT_PATH,
       env: RuntimeHelper.getManagedNodeEnvironment()
     })
 

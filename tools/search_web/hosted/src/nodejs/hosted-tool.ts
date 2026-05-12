@@ -1,6 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
-import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
@@ -9,10 +8,9 @@ const TOOLKIT_ID = 'search_web'
 const TOOL_ID = 'hosted'
 const DEFAULT_MAX_OUTPUT_TOKENS = 2_000
 const DEFAULT_TEMPERATURE = 0.2
-const OPENROUTER_HOSTED_SEARCH_ENGINE = 'native'
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 
-type HostedSearchProvider = 'openai' | 'openrouter' | 'anthropic'
+type HostedSearchProvider = 'openai' | 'anthropic'
 
 interface HostedSearchOptions {
   provider?: 'auto' | HostedSearchProvider
@@ -92,17 +90,6 @@ export default class HostedTool extends Tool {
     )
   }
 
-  async searchOpenRouter(
-    query: string,
-    options?: Omit<HostedSearchOptions, 'provider'>
-  ): Promise<HostedSearchResult> {
-    return this.searchWithProvider(
-      query,
-      this.resolveTarget('openrouter', options?.model),
-      options
-    )
-  }
-
   async searchAnthropic(
     query: string,
     options?: Omit<HostedSearchOptions, 'provider'>
@@ -137,7 +124,7 @@ export default class HostedTool extends Tool {
     }
 
     throw new Error(
-      'The active LLM provider does not support hosted search. Choose provider openai, openrouter, or anthropic.'
+      'The active LLM provider does not support hosted search. Choose provider openai or anthropic.'
     )
   }
 
@@ -204,21 +191,6 @@ export default class HostedTool extends Tool {
       return provider.responses(target.model)
     }
 
-    if (target.provider === 'openrouter') {
-      const apiKey = this.readRequiredEnv('LEON_OPENROUTER_API_KEY')
-      const provider = createOpenRouter({
-        apiKey,
-        baseURL: 'https://openrouter.ai/api/v1',
-        compatibility: 'strict'
-      })
-
-      return provider.chat(target.model, {
-        usage: {
-          include: true
-        }
-      })
-    }
-
     const apiKey = this.readRequiredEnv('LEON_ANTHROPIC_API_KEY')
     const provider = createAnthropic({
       apiKey,
@@ -234,13 +206,6 @@ export default class HostedTool extends Tool {
     if (providerName === 'openai') {
       const provider = createOpenAI()
       return provider.tools.webSearch() as unknown as Record<string, unknown>
-    }
-
-    if (providerName === 'openrouter') {
-      const provider = createOpenRouter()
-      return provider.tools.webSearch({
-        engine: OPENROUTER_HOSTED_SEARCH_ENGINE
-      }) as unknown as Record<string, unknown>
     }
 
     const provider = createAnthropic()
@@ -284,7 +249,6 @@ export default class HostedTool extends Tool {
     }
 
     this.appendUsage(state, result['usage'])
-    this.appendOpenRouterUsage(state, result['providerMetadata'])
 
     return state
   }
@@ -311,20 +275,6 @@ export default class HostedTool extends Tool {
     }
     if (typeof outputTokens === 'number') {
       state.usedOutputTokens = outputTokens
-    }
-  }
-
-  private appendOpenRouterUsage(
-    state: GenerationState,
-    providerMetadata: unknown
-  ): void {
-    if (!providerMetadata || typeof providerMetadata !== 'object') {
-      return
-    }
-
-    const openrouter = (providerMetadata as Record<string, unknown>)['openrouter']
-    if (openrouter && typeof openrouter === 'object') {
-      this.appendUsage(state, (openrouter as Record<string, unknown>)['usage'])
     }
   }
 
@@ -413,7 +363,6 @@ export default class HostedTool extends Tool {
   ): providerName is HostedSearchProvider {
     return (
       providerName === 'openai' ||
-      providerName === 'openrouter' ||
       providerName === 'anthropic'
     )
   }

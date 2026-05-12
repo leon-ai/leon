@@ -31,10 +31,7 @@
     }
   },
   "volta": {
-    "node": "24.13.1"
-  },
-  "pnpm": {
-    "neverBuiltDependencies": []
+    "node": "24.15.0"
   },
   "scripts": {
     "pre-commit": "lint-staged",
@@ -45,7 +42,7 @@
     "test:controlled:unit": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/controlled/unit",
     "test:controlled:e2e": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/controlled/e2e",
     "preinstall": "node scripts/setup/preinstall.js",
-    "postinstall": "tsx scripts/setup/setup.js",
+    "postinstall": "node scripts/setup/run-setup.js",
     "dev:app": "vite --config app/vite.config.js",
     "dev:aurora": "vite --config aurora/preview/vite.config.js --open",
     "dev:server": "pnpm --silent run train && cross-env LEON_NODE_ENV=development nodemon",
