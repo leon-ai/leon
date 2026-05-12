@@ -378,7 +378,8 @@ export abstract class Tool {
 
       const childProcess = spawn(binaryPath, args, {
         cwd: execOptions.cwd,
-        env
+        env,
+        windowsHide: true
       })
 
       // Handle stdout
@@ -1025,7 +1026,11 @@ export abstract class Tool {
   }
 
   private spawnDetached(command: string, args: string[]): void {
-    const child = spawn(command, args, { detached: true, stdio: 'ignore' })
+    const child = spawn(command, args, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide: true
+    })
     child.unref()
   }
 

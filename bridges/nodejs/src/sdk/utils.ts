@@ -263,11 +263,13 @@ export async function extractArchive(
     if (ZIP_ARCHIVE_EXTENSIONS.has(ext)) {
       if (isWindows()) {
         execFileSync('tar', ['-xf', archivePath, '-C', targetPath], {
-          stdio: 'inherit'
+          stdio: 'inherit',
+          windowsHide: true
         })
       } else {
         execFileSync('unzip', ['-o', '-q', archivePath, '-d', targetPath], {
-          stdio: 'inherit'
+          stdio: 'inherit',
+          windowsHide: true
         })
       }
     } else if (
@@ -283,7 +285,8 @@ export async function extractArchive(
       }
 
       execFileSync('tar', tarArgs, {
-        stdio: 'inherit'
+        stdio: 'inherit',
+        windowsHide: true
       })
     } else {
       throw new Error(`Unsupported archive format: ${archivePath}`)

@@ -123,7 +123,8 @@ export class ContextProbeHelper {
         const output = execFileSync(candidate, args, {
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],
-          timeout: options?.timeoutMs ?? 5_000
+          timeout: options?.timeoutMs ?? 5_000,
+          windowsHide: true
         }).trim()
 
         if (output.length > 0) {
@@ -561,7 +562,7 @@ const pingArgs = (ip) => {
 
 const pingIp = (ip) =>
   new Promise((resolve) => {
-    execFile('ping', pingArgs(ip), { timeout: 1400 }, (error) => {
+    execFile('ping', pingArgs(ip), { timeout: 1400, windowsHide: true }, (error) => {
       resolve(!error)
     })
   })

@@ -746,7 +746,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       ],
       {
         cwd: process.cwd(),
-        env: process.env
+        env: process.env,
+        windowsHide: true
       }
     )
 
