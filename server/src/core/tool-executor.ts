@@ -25,6 +25,7 @@ const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
 const TOOL_RUNTIME_LOG_PREFIX = '[LEON_TOOL_LOG]'
 const TOOL_RUNTIME_REPORT_PREFIX = '[LEON_TOOL_REPORT]'
+const GENERIC_TOOL_FAILURE_MESSAGE = 'Tool reported a failure.'
 
 interface ToolExecutionInput {
   toolId: string
@@ -54,6 +55,16 @@ interface ToolRuntimeProgress {
   message: string
   key?: string
   data?: Record<string, unknown>
+}
+
+interface ToolFunctionConfig {
+  parameters: Record<string, unknown>
+  output_schema?: Record<string, unknown>
+  hooks?: {
+    post_execution?: {
+      response_jq?: string
+    }
+  }
 }
 
 export default class ToolExecutor {
@@ -337,7 +348,7 @@ export default class ToolExecutor {
       runtimeResult.output
     ) as Record<string, unknown>
     const toolReportedFailure = runtimeResult.success
-      ? this.getToolReportedFailure(runtimeOutput)
+      ? this.getToolReportedFailure(runtimeOutput, functionConfig)
       : null
 
     if (runtimeResult.success && responseJQ && !toolReportedFailure) {
@@ -432,14 +443,7 @@ export default class ToolExecutor {
     return null
   }
 
-  private getResponseJQ(functionConfig: {
-      hooks?: {
-        post_execution?: {
-          response_jq?: string
-        }
-      }
-    }
-  ): string | null {
+  private getResponseJQ(functionConfig: ToolFunctionConfig): string | null {
     const defaultResponseJQ =
       typeof functionConfig.hooks?.post_execution?.response_jq === 'string'
         ? functionConfig.hooks.post_execution.response_jq.trim()
@@ -448,16 +452,19 @@ export default class ToolExecutor {
     return defaultResponseJQ || null
   }
 
-  private getToolReportedFailure(output: Record<string, unknown>): {
-    message: string
-  } | null {
+  private getToolReportedFailure(
+    output: Record<string, unknown>,
+    functionConfig: ToolFunctionConfig
+  ): { message: string } | null {
     const outputSuccess = output['success']
-    const outputError =
-      typeof output['error'] === 'string' ? output['error'].trim() : ''
+    const outputDetail = this.getToolFailureDetail(
+      output,
+      functionConfig.output_schema
+    )
 
     if (outputSuccess === false) {
       return {
-        message: outputError || 'Tool reported a failure.'
+        message: outputDetail || GENERIC_TOOL_FAILURE_MESSAGE
       }
     }
 
@@ -469,18 +476,92 @@ export default class ToolExecutor {
     const nestedResult = result as Record<string, unknown>
 
     const nestedSuccess = nestedResult['success']
-    const nestedError =
-      typeof nestedResult['error'] === 'string'
-        ? nestedResult['error'].trim()
-        : ''
+    const nestedDetail = this.getToolFailureDetail(
+      nestedResult,
+      functionConfig.output_schema
+    )
 
     if (nestedSuccess === false) {
       return {
-        message: nestedError || outputError || 'Tool reported a failure.'
+        message: nestedDetail || outputDetail || GENERIC_TOOL_FAILURE_MESSAGE
       }
     }
 
     return null
+  }
+
+  private getToolFailureDetail(
+    output: unknown,
+    schema?: Record<string, unknown>
+  ): string {
+    const properties = schema?.['properties']
+    if (
+      schema &&
+      (!properties || typeof properties !== 'object' || Array.isArray(properties))
+    ) {
+      return this.stringifySchemaValue(output)
+    }
+
+    const outputRecord =
+      output && typeof output === 'object' && !Array.isArray(output)
+        ? output as Record<string, unknown>
+        : null
+    if (!outputRecord) {
+      return this.stringifySchemaValue(output)
+    }
+
+    const propertyEntries =
+      properties && typeof properties === 'object' && !Array.isArray(properties)
+        ? Object.entries(properties)
+        : Object.keys(outputRecord).map((propertyName) => [
+            propertyName,
+            undefined
+          ] as [string, undefined])
+
+    const detailParts: string[] = []
+    for (const [propertyName, propertySchema] of propertyEntries) {
+      if (!(propertyName in outputRecord)) {
+        continue
+      }
+
+      const propertyDetail = this.getToolFailureDetail(
+        outputRecord[propertyName],
+        propertySchema && typeof propertySchema === 'object' &&
+          !Array.isArray(propertySchema)
+          ? propertySchema as Record<string, unknown>
+          : undefined
+      )
+
+      if (propertyDetail) {
+        detailParts.push(`${propertyName}=${propertyDetail}`)
+      }
+    }
+
+    return detailParts.join(' | ')
+  }
+
+  private stringifySchemaValue(value: unknown): string {
+    if (typeof value === 'string') {
+      return value.trim()
+    }
+
+    if (
+      typeof value === 'number' ||
+      typeof value === 'boolean' ||
+      value === null
+    ) {
+      return String(value)
+    }
+
+    if (Array.isArray(value) && value.length > 0) {
+      try {
+        return JSON.stringify(value)
+      } catch {
+        return String(value)
+      }
+    }
+
+    return ''
   }
 
   private normalizeFilesystemValues(value: unknown): unknown {

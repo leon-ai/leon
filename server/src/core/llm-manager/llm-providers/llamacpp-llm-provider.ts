@@ -37,6 +37,10 @@ const LLAMA_SERVER_LOG_PATH = path.join(
   PROFILE_LOGS_PATH,
   'llama-server.log'
 )
+const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
+  enable_thinking: false
+}
+const LLAMACPP_DISABLE_THINKING_REASONING_FORMAT = 'none'
 
 function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
@@ -176,6 +180,33 @@ function resolveModelPath(modelPath: string): string {
     : path.resolve(CODEBASE_PATH, normalizedModelPath)
 }
 
+function disableThinkingForStructuredRequest(
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const hasTools = Array.isArray(args['tools'])
+  const hasResponseFormat = Boolean(args['response_format'])
+
+  if (!hasTools && !hasResponseFormat) {
+    return args
+  }
+
+  const existingChatTemplateKwargs =
+    args['chat_template_kwargs'] &&
+    typeof args['chat_template_kwargs'] === 'object' &&
+    !Array.isArray(args['chat_template_kwargs'])
+      ? (args['chat_template_kwargs'] as Record<string, unknown>)
+      : {}
+
+  return {
+    ...args,
+    chat_template_kwargs: {
+      ...existingChatTemplateKwargs,
+      ...LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS
+    },
+    reasoning_format: LLAMACPP_DISABLE_THINKING_REASONING_FORMAT
+  }
+}
+
 /**
  * Share one llama-server process across workflow and agent providers.
  */
@@ -201,7 +232,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         model: target.model,
         baseURL: LlamaCPPLLMProvider.runtimeBaseURL,
         flavor: 'openai-compatible',
-        requiresApiKey: false
+        requiresApiKey: false,
+        transformRequestBody: disableThinkingForStructuredRequest
       }
     )
 
@@ -331,9 +363,9 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
     if (completionParams.disableThinking === true) {
       payload['chat_template_kwargs'] = {
-        enable_thinking: false
+        ...LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS
       }
-      payload['reasoning_format'] = 'none'
+      payload['reasoning_format'] = LLAMACPP_DISABLE_THINKING_REASONING_FORMAT
     }
 
     return payload

@@ -20,7 +20,12 @@ const DEFAULT_SESSION_TITLE = 'New session'
 const MIGRATED_SESSION_TITLE = 'Previous conversation'
 const TITLE_MAX_LENGTH = 64
 const TITLE_FALLBACK_WORD_LIMIT = 8
+const SESSION_TITLE_TIMEOUT_MS = 15_000
+const SESSION_TITLE_MAX_RETRIES = 0
 const WHITESPACE_PATTERN = /\s+/
+const TITLE_THINKING_TAG_NAMES = ['analysis', 'think', 'thinking', 'thought']
+const TITLE_LEADING_CHANNEL_PATTERN = /^<\|?channel\|?>\s*([a-z_]+)?\s*/i
+const TITLE_CHANNEL_END_TAG = '<channel|>'
 const SESSION_TITLE_SYSTEM_PROMPT =
   'Create a concise conversation title. Use 2 to 6 words. Return only the title, without quotes or punctuation at the end.'
 
@@ -74,6 +79,50 @@ function createFallbackTitle(message: string): string {
     .join(' ')
 
   return normalizeTitle(words) || DEFAULT_SESSION_TITLE
+}
+
+function stripLeadingTitleTemplateTags(title: string): string {
+  const trimmedTitle = title.trim()
+  const leadingChannelMatch = trimmedTitle.match(TITLE_LEADING_CHANNEL_PATTERN)
+
+  if (leadingChannelMatch) {
+    const channelLabel = (leadingChannelMatch[1] || '').toLowerCase()
+
+    if (channelLabel === 'final') {
+      return trimmedTitle.slice(leadingChannelMatch[0].length).trimStart()
+    }
+
+    const channelEndIndex = trimmedTitle
+      .toLowerCase()
+      .indexOf(TITLE_CHANNEL_END_TAG)
+
+    return channelEndIndex === -1
+      ? ''
+      : trimmedTitle
+          .slice(channelEndIndex + TITLE_CHANNEL_END_TAG.length)
+          .trimStart()
+  }
+
+  const lowerTitle = trimmedTitle.toLowerCase()
+
+  for (const tagName of TITLE_THINKING_TAG_NAMES) {
+    const openingTag = `<${tagName}>`
+
+    if (!lowerTitle.startsWith(openingTag)) {
+      continue
+    }
+
+    const closingTag = `</${tagName}>`
+    const closingTagIndex = lowerTitle.indexOf(closingTag)
+
+    return closingTagIndex === -1
+      ? ''
+      : trimmedTitle
+          .slice(closingTagIndex + closingTag.length)
+          .trimStart()
+  }
+
+  return trimmedTitle
 }
 
 function createSession(title = DEFAULT_SESSION_TITLE): ConversationSession {
@@ -274,11 +323,16 @@ export class ConversationSessionManager {
     this.emitUpdated()
   }
 
-  public generateTitleFromFirstMessage(sessionId: string, message: string): void {
-    void this.generateTitle(sessionId, message).catch((error: unknown) => {
+  public async generateTitleFromFirstMessage(
+    sessionId: string,
+    message: string
+  ): Promise<void> {
+    try {
+      await this.generateTitle(sessionId, message)
+    } catch (error: unknown) {
       LogHelper.title('Session Manager')
       LogHelper.warning(`Failed to generate session title: ${error}`)
-    })
+    }
   }
 
   public runWithSession<T>(sessionId: string, callback: () => T): T {
@@ -299,25 +353,42 @@ export class ConversationSessionManager {
   ): Promise<void> {
     const session = this.requireSession(sessionId)
 
-    if (session.isTitleGenerated || session.messageCount > 1) {
+    if (session.isTitleGenerated || session.messageCount > 2) {
       return
     }
 
     const { LLM_PROVIDER } = await import('@/core')
-    const { LLMDuties } = await import('@/core/llm-manager/types')
+    const { CONFIG_STATE } = await import('@/core/config-states/config-state')
+    const { LLMDuties, LLMProviders } = await import('@/core/llm-manager/types')
+    const workflowProvider = CONFIG_STATE.getModelState().getWorkflowTarget().provider
+    const shouldDisableThinking = [
+      LLMProviders.LlamaCPP,
+      LLMProviders.SGLang
+    ].includes(workflowProvider)
+
+    LogHelper.title('Session Manager')
+    LogHelper.debug(`Generating title for session ${sessionId}`)
+
     const titleResult = await this.runWithSession(sessionId, () =>
       LLM_PROVIDER.prompt(message, {
         dutyType: LLMDuties.Inference,
         systemPrompt: SESSION_TITLE_SYSTEM_PROMPT,
         maxTokens: 24,
+        timeout: SESSION_TITLE_TIMEOUT_MS,
+        maxRetries: SESSION_TITLE_MAX_RETRIES,
         temperature: 0.2,
         shouldStream: false,
-        trackProviderErrors: false
+        trackProviderErrors: false,
+        ...(shouldDisableThinking ? { disableThinking: true } : {})
       })
     )
-    const title = normalizeTitle(String(titleResult?.output || ''))
+    const title = normalizeTitle(
+      stripLeadingTitleTemplateTags(String(titleResult?.output || ''))
+    )
 
     if (!title) {
+      LogHelper.title('Session Manager')
+      LogHelper.warning(`Session title generation returned no usable title for ${sessionId}`)
       return
     }
 
@@ -326,6 +397,9 @@ export class ConversationSessionManager {
     session.updatedAt = now()
     this.persistIndex()
     this.emitUpdated()
+
+    LogHelper.title('Session Manager')
+    LogHelper.success(`Generated session title: ${title}`)
   }
 
   private loadOrCreateIndex(): ConversationSessionIndex {
