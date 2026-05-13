@@ -22,6 +22,7 @@ import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-
 import { AnswerQueue } from '@/core/brain/answer-queue'
 import { LogicActionSkillHandler } from '@/core/brain/logic-action-skill-handler'
 import { DialogActionSkillHandler } from '@/core/brain/dialog-action-skill-handler'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
 type SkillProcess = ChildProcessWithoutNullStreams | undefined
 interface IsTalkingWithVoiceOptions {
@@ -341,6 +342,10 @@ export default class Brain {
             isAddedToHistory: true,
             ...(llmMetrics ? { llmMetrics } : {})
           })
+          await CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(
+            CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
+            ownerMessage
+          )
         }
 
         // SOCKET_SERVER.socket?.emit('is-typing', false)
@@ -388,19 +393,10 @@ export default class Brain {
     }
 
     this.answerQueue.push(answer)
-    /**
-     * If the answer queue is not processing and not empty,
-     * then process the queue,
-     * otherwise clean up the new answer queue timer right away to not have multiple timers running
-     */
-    const answerTimerCheckerId = setInterval(() => {
-      if (!this.answerQueue.isProcessing && !this.answerQueue.isEmpty()) {
-        this.processAnswerQueue(end)
-      } else {
-        this.cleanUpAnswerQueueTimer(answerTimerCheckerId)
-      }
-    }, 300)
-    this.answerQueueProcessTimerId = answerTimerCheckerId
+
+    if (!this.answerQueue.isProcessing && !this.answerQueue.isEmpty()) {
+      await this.processAnswerQueue(end)
+    }
   }
 
   /**

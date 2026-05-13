@@ -812,57 +812,6 @@ export default class NLU {
           )
       : []
 
-    if (output) {
-      const sentAt = Date.now()
-      void MEMORY_MANAGER.observeTurn({
-        userMessage: utterance,
-        assistantMessage: String(output),
-        sentAt,
-        route: 'react',
-        toolExecutions
-      }).catch((error: unknown) => {
-        LogHelper.title('NLU')
-        LogHelper.warning(`Failed to store turn memory: ${error}`)
-      })
-      void SELF_MODEL_MANAGER.observeTurn({
-        userMessage: utterance,
-        assistantMessage: String(output),
-        sentAt,
-        route: 'react',
-        finalIntent,
-        toolExecutions
-      }).catch((error: unknown) => {
-        LogHelper.title('NLU')
-        LogHelper.warning(`Failed to update self model: ${error}`)
-      })
-      void syncOwnerProfileFromTurn(
-        utterance,
-        String(output),
-        toolExecutions
-      ).catch((error: unknown) => {
-        LogHelper.title('NLU')
-        LogHelper.warning(`Failed to sync owner profile from turn: ${error}`)
-      })
-
-      if (!hasExplicitMemoryWrite) {
-        void MEMORY_MANAGER.savePersistentMemoryCandidatesFromTurn(
-          utterance,
-          String(output),
-          sentAt
-        ).catch((error: unknown) => {
-          LogHelper.title('NLU')
-          LogHelper.warning(
-            `Failed to save persistent memory candidates: ${error}`
-          )
-        })
-      } else {
-        LogHelper.title('NLU')
-        LogHelper.debug(
-          'Skipping automatic persistent extraction: explicit memory.write already executed in this turn'
-        )
-      }
-    }
-
     if (output && !BRAIN.isMuted) {
       await BRAIN.talk(
         llmMetrics
@@ -929,6 +878,57 @@ export default class NLU {
           : String(output),
         true
       )
+    }
+
+    if (output) {
+      const sentAt = Date.now()
+      void MEMORY_MANAGER.observeTurn({
+        userMessage: utterance,
+        assistantMessage: String(output),
+        sentAt,
+        route: 'react',
+        toolExecutions
+      }).catch((error: unknown) => {
+        LogHelper.title('NLU')
+        LogHelper.warning(`Failed to store turn memory: ${error}`)
+      })
+      void SELF_MODEL_MANAGER.observeTurn({
+        userMessage: utterance,
+        assistantMessage: String(output),
+        sentAt,
+        route: 'react',
+        finalIntent,
+        toolExecutions
+      }).catch((error: unknown) => {
+        LogHelper.title('NLU')
+        LogHelper.warning(`Failed to update self model: ${error}`)
+      })
+      void syncOwnerProfileFromTurn(
+        utterance,
+        String(output),
+        toolExecutions
+      ).catch((error: unknown) => {
+        LogHelper.title('NLU')
+        LogHelper.warning(`Failed to sync owner profile from turn: ${error}`)
+      })
+
+      if (!hasExplicitMemoryWrite) {
+        void MEMORY_MANAGER.savePersistentMemoryCandidatesFromTurn(
+          utterance,
+          String(output),
+          sentAt
+        ).catch((error: unknown) => {
+          LogHelper.title('NLU')
+          LogHelper.warning(
+            `Failed to save persistent memory candidates: ${error}`
+          )
+        })
+      } else {
+        LogHelper.title('NLU')
+        LogHelper.debug(
+          'Skipping automatic persistent extraction: explicit memory.write already executed in this turn'
+        )
+      }
     }
   }
   private async runSkillWriterCreateSkill(
@@ -1303,10 +1303,6 @@ export default class NLU {
             const currentSessionId =
               CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
             CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(
-              currentSessionId,
-              utterance
-            )
-            CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(
               currentSessionId,
               utterance
             )

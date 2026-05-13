@@ -1,5 +1,6 @@
 import { LogHelper } from '@/helpers/log-helper'
 import type { OpenAITool } from '@/core/llm-manager/types'
+import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 import {
   FORMATTING_RULES,
@@ -19,11 +20,82 @@ import {
 } from './phase-helpers'
 import { buildPhaseSystemPrompt } from './phase-policy'
 
+const FINAL_ANSWER_FINAL_CHANNEL_LABEL = 'final'
+const FINAL_ANSWER_THINKING_TAG_NAMES = [
+  'analysis',
+  'think',
+  'thinking',
+  'thought'
+]
+const FINAL_ANSWER_LEADING_CHANNEL_PATTERN = new RegExp(
+  '^<\\|?channel\\|?>\\s*([a-z_]+)?\\s*',
+  'i'
+)
+const FINAL_ANSWER_CHANNEL_END_TAG = '<channel|>'
+
+function isLocalFinalAnswerProvider(): boolean {
+  const modelState = CONFIG_STATE.getModelState()
+
+  return modelState.isLocalProvider(modelState.getAgentProvider())
+}
+
+function sanitizeLocalFinalAnswer(answer: string, shouldSanitize: boolean): string {
+  const trimmedAnswer = answer.trim()
+
+  if (!shouldSanitize) {
+    return trimmedAnswer
+  }
+
+  const leadingChannelMatch = trimmedAnswer.match(
+    FINAL_ANSWER_LEADING_CHANNEL_PATTERN
+  )
+  if (leadingChannelMatch) {
+    const channelLabel = (leadingChannelMatch[1] || '').toLowerCase()
+
+    if (channelLabel === FINAL_ANSWER_FINAL_CHANNEL_LABEL) {
+      return trimmedAnswer.slice(leadingChannelMatch[0].length).trimStart()
+    }
+
+    const channelEndIndex = trimmedAnswer
+      .toLowerCase()
+      .indexOf(FINAL_ANSWER_CHANNEL_END_TAG)
+
+    return channelEndIndex === -1
+      ? ''
+      : trimmedAnswer
+          .slice(channelEndIndex + FINAL_ANSWER_CHANNEL_END_TAG.length)
+          .trimStart()
+  }
+
+  const lowerAnswer = trimmedAnswer.toLowerCase()
+
+  for (const tagName of FINAL_ANSWER_THINKING_TAG_NAMES) {
+    const openingTag = `<${tagName}>`
+
+    if (!lowerAnswer.startsWith(openingTag)) {
+      continue
+    }
+
+    const closingTag = `</${tagName}>`
+    const closingTagIndex = lowerAnswer.indexOf(closingTag)
+
+    return closingTagIndex === -1
+      ? ''
+      : trimmedAnswer
+          .slice(closingTagIndex + closingTag.length)
+          .trimStart()
+  }
+
+  return trimmedAnswer
+}
+
 export async function runFinalAnswerPhase(
   caller: LLMCaller,
   executionHistory: ExecutionRecord[],
   handoffSignal?: FinalResponseSignal | null
 ): Promise<string> {
+  const shouldSanitizeFinalAnswer = isLocalFinalAnswerProvider()
+
   if (
     handoffSignal?.intent === 'clarification' &&
     handoffSignal.draft.trim()
@@ -271,6 +343,14 @@ ${FORMATTING_RULES}`
     }
 
     const elapsedMs = Date.now() - attemptStart
+    if (!candidateAnswer) {
+      continue
+    }
+
+    candidateAnswer = sanitizeLocalFinalAnswer(
+      candidateAnswer,
+      shouldSanitizeFinalAnswer
+    )
     if (!candidateAnswer) {
       continue
     }

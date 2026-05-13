@@ -155,6 +155,12 @@ export class ConversationHistoryHelper {
     return widget?.historyMode === SYSTEM_WIDGET_HISTORY_MODE
   }
 
+  public static isRenderableWidget(
+    widget: ConversationWidgetData | null | undefined
+  ): widget is ConversationWidgetData {
+    return !!(widget?.id && widget.widget && widget.componentTree)
+  }
+
   public static serializeWidget(widget: ConversationWidgetData): string {
     return JSON.stringify(widget)
   }
@@ -168,7 +174,8 @@ export class ConversationHistoryHelper {
   ): ConversationHistoryItem[] {
     return conversationLogs.map((conversationLog) => {
       const bubbleString =
-        options.supportsWidgets && conversationLog.widget
+        options.supportsWidgets &&
+        this.isRenderableWidget(conversationLog.widget)
           ? this.serializeWidget(conversationLog.widget)
           : conversationLog.message
       const llmMetrics = conversationLog.llmMetrics

@@ -40,6 +40,7 @@ interface AISDKRemoteProviderConfig {
   requiresApiKey?: boolean
   sendApiKeyAsBearer?: boolean
   headers?: (apiKey: string) => Record<string, string>
+  transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown>
 }
 
 interface CallState {
@@ -138,6 +139,9 @@ export default class AISDKRemoteLLMProvider {
         name: this.config.providerName,
         baseURL: this.config.baseURL,
         includeUsage: true,
+        ...(this.config.transformRequestBody
+          ? { transformRequestBody: this.config.transformRequestBody }
+          : {}),
         ...(
           this.config.sendApiKeyAsBearer === false || !apiKey
             ? {}
