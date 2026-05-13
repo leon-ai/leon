@@ -17,18 +17,17 @@ Use the bundled scripts for the actual web fetching and bounded crawling:
 - `scripts/fetch-page.mjs`: fetch one page, extract compact readable text, links, and query snippets.
 - `scripts/crawl-web.mjs`: crawl from one or more start URLs, follow relevant links, and stop at limits or strong matches.
 
-Run scripts with a portable Node binary. Resolve Node in this order:
-
-1. `$LEON_HOME/bin/node/bin/node` when `LEON_HOME` is set.
-2. `node` from `PATH`.
+Run scripts with `node`. Leon's bash tool injects runtime shims, so `node`
+uses Leon's managed Node.js binary when available and falls back to `PATH` only
+when the managed binary is missing.
 
 Example:
 
 ```bash
-"$LEON_HOME/bin/node/bin/node" scripts/crawl-web.mjs --url "https://example.com" --query "target phrase" --max-pages 8 --max-depth 2
+node scripts/crawl-web.mjs --url "https://example.com" --query "target phrase" --max-pages 8 --max-depth 2
 ```
 
-If `LEON_HOME` is not set or that path does not exist, use `node scripts/crawl-web.mjs ...`.
+Do not build `$LEON_HOME/bin/node/...` or `/bin/node/...` paths manually.
 
 ## Workflow
 
