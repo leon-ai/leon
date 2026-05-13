@@ -112,6 +112,7 @@ export interface LLMCallOptions {
   emitReasoning?: boolean
   streamToProvider?: boolean
   streamToUser?: boolean
+  maxTokens?: number
 }
 
 /**

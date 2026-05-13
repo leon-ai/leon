@@ -49,6 +49,9 @@ import {
   REACT_TEMPERATURE,
   REACT_INFERENCE_TIMEOUT_MS,
   REACT_TIMEOUT_MAX_RETRIES,
+  REACT_PLANNING_MAX_TOKENS,
+  REACT_EXECUTION_MAX_TOKENS,
+  REACT_RECOVERY_MAX_TOKENS,
   CHARS_PER_TOKEN,
   TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   TOOL_CALL_DIAGNOSIS_DELAY_MS,
@@ -114,6 +117,30 @@ import {
   type ReactExecutionContinuationPayload,
   type ReactExecutionContinuationState
 } from './react-llm-duty/human-in-the-loop'
+
+function getDefaultMaxTokensForPhase(phase: ReactPhase): number | undefined {
+  const providerName = getLLMProviderName()
+  const isLocalProvider =
+    providerName === LLMProviders.Local || providerName === LLMProviders.LlamaCPP
+
+  if (!isLocalProvider) {
+    return undefined
+  }
+
+  if (phase === 'planning') {
+    return REACT_PLANNING_MAX_TOKENS
+  }
+
+  if (phase === 'execution') {
+    return REACT_EXECUTION_MAX_TOKENS
+  }
+
+  if (phase === 'recovery') {
+    return REACT_RECOVERY_MAX_TOKENS
+  }
+
+  return undefined
+}
 
 const REACT_CONTINUATION_STATE_FILENAME = '.react-execution-continuation-state.json'
 const REACT_HISTORY_COMPACTION_STATE_FILENAME =
@@ -1917,12 +1944,15 @@ export class ReActLLMDuty extends LLMDuty {
 
   /**
    * Whether the current LLM provider supports native OpenAI-style tool calling.
-   * All remote providers support the OpenAI-compatible tools API.
-   * The local provider (node-llama-cpp) uses a different function calling
-   * mechanism and stays on grammar-based JSON mode.
+   * Local OpenAI-compatible servers can expose the tools API but still perform
+   * better on the grammar-based JSON path.
    */
   private get supportsNativeTools(): boolean {
-    return getLLMProviderName() !== LLMProviders.Local
+    return ![
+      LLMProviders.Local,
+      LLMProviders.LlamaCPP,
+      LLMProviders.SGLang
+    ].includes(getLLMProviderName())
   }
 
   /**
@@ -2051,6 +2081,7 @@ export class ReActLLMDuty extends LLMDuty {
       temperature: REACT_TEMPERATURE,
       timeout: REACT_INFERENCE_TIMEOUT_MS,
       maxRetries: REACT_TIMEOUT_MAX_RETRIES,
+      maxTokens: options?.maxTokens ?? getDefaultMaxTokensForPhase(phase),
       shouldStream,
       ...(shouldEmitReasoning && reasoningGenerationId
         ? {
@@ -2166,6 +2197,7 @@ export class ReActLLMDuty extends LLMDuty {
       temperature: REACT_TEMPERATURE,
       timeout: REACT_INFERENCE_TIMEOUT_MS,
       maxRetries: REACT_TIMEOUT_MAX_RETRIES,
+      maxTokens: options?.maxTokens ?? getDefaultMaxTokensForPhase(phase),
       shouldStream: shouldStreamEffective,
       ...(shouldEmitReasoning && reasoningGenerationId
         ? {
@@ -2419,6 +2451,7 @@ export class ReActLLMDuty extends LLMDuty {
         temperature: REACT_TEMPERATURE,
         timeout: REACT_INFERENCE_TIMEOUT_MS,
         maxRetries: REACT_TIMEOUT_MAX_RETRIES,
+        maxTokens: options?.maxTokens ?? getDefaultMaxTokensForPhase(phase),
         shouldStream: shouldStreamEffective,
         ...(shouldEmitReasoning && reasoningGenerationId
           ? {
@@ -3079,7 +3112,12 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     try {
-      await BRAIN.talk(message)
+      SOCKET_SERVER.emitAnswerToChatClients({
+        id: `react-progress-${StringHelper.random(8, { onlyLetters: true })}`,
+        answer: message,
+        fallbackText: message,
+        historyMode: 'system_widget'
+      })
     } catch (error) {
       this.logTitle('execution')
       LogHelper.warning(

@@ -108,6 +108,7 @@ export default class LLMProvider {
   private readonly sessionLLMProviders = new Map<string, Provider>()
   private lastProviderErrorMessage: string | null = null
   private llamaCPPServerBootErrorMessage: string | null = null
+  private promptSequence = 0
 
   constructor() {
     if (!LLMProvider.instance) {
@@ -2053,7 +2054,9 @@ export default class LLMProvider {
       this.lastProviderErrorMessage = null
     }
 
-    const measureExecutionTimeLabel = `Inference time for "${completionParams.dutyType}" duty`
+    this.promptSequence += 1
+    const measureExecutionTimeLabel =
+      `Inference time for "${completionParams.dutyType}" duty #${this.promptSequence}`
 
     LogHelper.title('LLM Provider')
     LogHelper.info(`Using "${providerName}" provider for completion...`)

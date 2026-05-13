@@ -614,7 +614,13 @@ describe('ReActLLMDuty agent loop', () => {
       executionHistory: result?.data.executionHistory
     })
 
-    expect(coreMocks.brain.talk).toHaveBeenCalledWith('Checking the weather...')
+    expect(coreMocks.socket.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answer: 'Checking the weather...',
+        fallbackText: 'Checking the weather...',
+        historyMode: 'system_widget'
+      })
+    )
     expect(phaseMocks.runExecutionStep).toHaveBeenCalledOnce()
     expect(phaseMocks.runExecutionSelfObservationPhase).toHaveBeenCalledOnce()
     expect(result?.output).toBe('It is 24C and sunny in Shenzhen.')
@@ -724,8 +730,12 @@ describe('ReActLLMDuty agent loop', () => {
       finalIntent: result?.data.finalIntent
     })
 
-    expect(coreMocks.brain.talk).toHaveBeenCalledWith(
-      'Listing the project root...'
+    expect(coreMocks.socket.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        answer: 'Listing the project root...',
+        fallbackText: 'Listing the project root...',
+        historyMode: 'system_widget'
+      })
     )
     expect(phaseMocks.runExecutionStep).toHaveBeenCalledOnce()
     expect(phaseMocks.runExecutionSelfObservationPhase).not.toHaveBeenCalled()
