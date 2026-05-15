@@ -61,6 +61,12 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       value: LLMProviders.HuggingFace,
       apiKeyEnv: 'LEON_HUGGINGFACE_API_KEY',
       apiKeyURL: 'https://huggingface.co/settings/tokens'
+    },
+    {
+      label: 'Astraflow',
+      value: LLMProviders.Astraflow,
+      apiKeyEnv: 'LEON_ASTRAFLOW_API_KEY',
+      apiKeyURL: 'https://astraflow.ucloud-global.com'
     }
   ])
 
