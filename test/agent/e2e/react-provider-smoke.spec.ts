@@ -125,6 +125,48 @@ function collectTurnTrace(
     .join('\n')
 }
 
+function summarizeText(value: string | undefined, maxLength = 500): string {
+  if (!value) {
+    return ''
+  }
+
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}...`
+}
+
+function summarizeScenarioResult(result: ProviderScenarioResult): string {
+  return JSON.stringify(
+    {
+      provider: result.provider,
+      skipped: result.skipped,
+      reason: result.reason,
+      assetPath: result.assetPath,
+      turns: result.turns?.map((turn, index) => ({
+        turn: index + 1,
+        input: turn.input,
+        output: summarizeText(turn.output),
+        finalIntent: turn.finalIntent,
+        executionHistory: turn.executionHistory.map((item) => ({
+          function: item.function,
+          status: item.status,
+          stepLabel: item.stepLabel,
+          observation: summarizeText(item.observation),
+          requestedToolInput: summarizeText(item.requestedToolInput)
+        })),
+        toolCalls: turn.toolCalls.map((item) => ({
+          toolkitId: item.toolkitId,
+          toolId: item.toolId,
+          functionName: item.functionName,
+          toolInput: summarizeText(item.toolInput),
+          parsedInput: item.parsedInput,
+          toolOutput: summarizeText(item.toolOutput)
+        }))
+      }))
+    },
+    null,
+    2
+  )
+}
+
 function formatProgressEvent(event: ProviderProgressEvent): string {
   const prefix = `[agent:e2e:${event.provider}]`
 
@@ -245,62 +287,69 @@ describe('agent e2e', () => {
           `[agent:e2e:${provider}] validating turn outputs and tool usage`
         )
 
-        if (result.skipped) {
-          console.info(
-            `[agent:e2e:${provider}] skipped at runtime: ${result.reason || 'provider unavailable'}`
+        try {
+          if (result.skipped) {
+            console.info(
+              `[agent:e2e:${provider}] skipped at runtime: ${result.reason || 'provider unavailable'}`
+            )
+            return
+          }
+
+          expect(result.turns).toHaveLength(3)
+
+          const [turn1, turn2, turn3] = result.turns!
+          const turn2Trace = collectTurnTrace(turn2!)
+          const turn3Trace = collectTurnTrace(turn3!)
+
+          expect(turn1!.output.trim().length).toBeGreaterThan(0)
+          expect(turn1!.output).toMatch(/ping|pong/i)
+          expect(turn1!.finalIntent).toBe('answer')
+
+          expect(turn2!.output.trim().length).toBeGreaterThan(0)
+          expect(turn2!.finalIntent).toBe('answer')
+          expect(
+            turn2!.executionHistory.some(
+              (item) =>
+                item.function === 'weather.openmeteo.getCurrentConditions'
+            ) ||
+              turn2!.toolCalls.some(
+                (item) =>
+                  item.toolkitId === 'weather' &&
+                  item.toolId === 'openmeteo' &&
+                  item.functionName === 'getCurrentConditions'
+              )
+          ).toBe(true)
+          expect(turn2Trace).toMatch(/shenzhen/i)
+          expect(turn2Trace).toMatch(
+            /clear|rain|cloud|temperature|feels|humidity|wind|weather|°c|°f/i
           )
-          return
+
+          /**
+           * The third turn is intentionally structural: we care that Leon read
+           * the injected file and listed the project root, not about exact prose.
+           */
+          expect(turn3!.output.trim().length).toBeGreaterThan(0)
+          expect(turn3!.finalIntent).toBe('answer')
+          expect(
+            turn3!.executionHistory.some(
+              (item) =>
+                item.function ===
+                'operating_system_control.shell.executeCommand'
+            ) ||
+              turn3!.toolCalls.some(
+                (item) =>
+                  item.toolkitId === 'operating_system_control' &&
+                  item.toolId === 'shell'
+              )
+          ).toBe(true)
+          expect(turn3Trace).toContain(result.assetPath!)
+          expect(turn3Trace).toMatch(/project root/i)
+        } catch (error) {
+          console.info(
+            `[agent:e2e:${provider}] scenario result on assertion failure:\n${summarizeScenarioResult(result)}`
+          )
+          throw error
         }
-
-        expect(result.turns).toHaveLength(3)
-
-        const [turn1, turn2, turn3] = result.turns!
-        const turn2Trace = collectTurnTrace(turn2!)
-        const turn3Trace = collectTurnTrace(turn3!)
-
-        expect(turn1!.output.trim().length).toBeGreaterThan(0)
-        expect(turn1!.output).toMatch(/ping|pong/i)
-        expect(turn1!.finalIntent).toBe('answer')
-
-        expect(turn2!.output.trim().length).toBeGreaterThan(0)
-        expect(turn2!.finalIntent).toBe('answer')
-        expect(
-          turn2!.executionHistory.some(
-            (item) =>
-              item.function === 'weather.openmeteo.getCurrentConditions'
-          ) ||
-            turn2!.toolCalls.some(
-              (item) =>
-                item.toolkitId === 'weather' &&
-                item.toolId === 'openmeteo' &&
-                item.functionName === 'getCurrentConditions'
-            )
-        ).toBe(true)
-        expect(turn2Trace).toMatch(/shenzhen/i)
-        expect(turn2Trace).toMatch(
-          /clear|rain|cloud|temperature|feels|humidity|wind|weather|°c|°f/i
-        )
-
-        /**
-         * The third turn is intentionally structural: we care that Leon read
-         * the injected file and listed the project root, not about exact prose.
-         */
-        expect(turn3!.output.trim().length).toBeGreaterThan(0)
-        expect(turn3!.finalIntent).toBe('answer')
-        expect(
-          turn3!.executionHistory.some(
-            (item) =>
-              item.function ===
-              'operating_system_control.bash.executeBashCommand'
-          ) ||
-            turn3!.toolCalls.some(
-              (item) =>
-                item.toolkitId === 'operating_system_control' &&
-                item.toolId === 'bash'
-            )
-        ).toBe(true)
-        expect(turn3Trace).toContain(result.assetPath!)
-        expect(turn3Trace).toMatch(/project root/i)
       },
       330_000
     )

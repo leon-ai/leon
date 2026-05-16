@@ -1,0 +1,138 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "file",
+  "toolkit_id": "operating_system_control",
+  "name": "File",
+  "description": "Read, write, and append local text files without shell commands.",
+  "icon_name": "file-text-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://twitter.com/grenlouis"
+  },
+  "functions": {
+    "read": {
+      "description": "Read a local text file. Rejects likely binary files. Use head, tail, or maxChars to limit output when needed.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "head": {
+                "type": "number",
+                "description": "Return only the first N lines."
+              },
+              "tail": {
+                "type": "number",
+                "description": "Return only the last N lines."
+              },
+              "maxChars": {
+                "type": "number",
+                "description": "Maximum characters to return."
+              },
+              "offsetChars": {
+                "type": "number",
+                "description": "Character offset to start reading from."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "readToolArtifact": {
+      "description": "Read a previous tool output artifact from an outputLogPath listed in previous_tool_artifacts.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "outputLogPath": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "maxChars": {
+                "type": "number"
+              },
+              "offsetChars": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "outputLogPath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "write": {
+      "description": "Write text content to a local file. If the file exists, overwrite must be true.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "overwrite": {
+                "type": "boolean"
+              },
+              "createParents": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "append": {
+      "description": "Append text content to a local file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "createParents": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -35,6 +35,7 @@ You may use only the tools and functions listed in the provided catalog.
 <decision_policy>
 - Only use functions/tools listed in the catalog.
 - If no tool is needed (chat/general answer), return type="final". Use it only when you can answer confidently from the request and already-available conversation state.
+- If the owner confirms a previously proposed tool action, return type="plan" for that action; do not answer as if it already ran.
 - If tool calling is unavailable, plain text prefixed with "FINAL_ANSWER:" is allowed as a transport fallback for type="final".
 - Use memory tool and context tool for any needed fact: add retrieval steps before answering or asking.
 - Do not guess, deny, or rely on weak hints when stronger grounding may exist.
@@ -44,6 +45,7 @@ You may use only the tools and functions listed in the provided catalog.
 - If the question is about whether you know, remember, or have a fact, check the relevant retrieval path before concluding yes or no.
 - Use memory for owner-specific facts, preferences, commitments, and cross-session history.
 - Use context files for environment, runtime, workspace, browser, network, and system facts.
+- If previous tool artifacts are listed and the owner asks to continue, retry, or reuse prior work, use operating_system_control.file.readToolArtifact on relevant outputLogPath files before rerunning equivalent tools.
 - If an active Agent Skill is provided, follow its SKILL.md instructions for the request.
 - If a listed Agent Skill is needed for a specific step, set that step's "agent_skill_id" to the exact skill id. Otherwise omit it.
 - For Agent Skills, treat referenced scripts, references, and assets as lazy resources under the listed skill root path. Read or execute them only when needed.
@@ -175,6 +177,7 @@ A previous plan step failed. Your job is to decide the next best structured acti
 - Use only functions/tools listed in the catalog.
 - If recovery is possible, return steps that continue from now. Do not repeat already successful work unless needed.
 - Add discovery or verification steps when required to resolve missing or invalid inputs.
+- When recovering from a failed shell command, verify the executable's accepted arguments or environment before trying another command with nearby arguments.
 - Keep steps ordered, concrete, and minimal.
 - If an active Agent Skill is provided, keep recovery inside that skill's SKILL.md workflow before switching to generic overlapping tools.
 - If a listed Agent Skill is needed for a recovery step, set that step's "agent_skill_id" to the exact skill id. Otherwise omit it.
@@ -222,7 +225,7 @@ export const MAX_RETRIES_PER_FUNCTION = 2
 export const MAX_TOOL_FAILURE_RETRIES = 2
 export const REACT_TEMPERATURE = 0.2
 export const REACT_INFERENCE_TIMEOUT_MS = 120_000
-export const REACT_TIMEOUT_MAX_RETRIES = 1
+export const REACT_TIMEOUT_MAX_RETRIES = 2
 export const REACT_PLANNING_MAX_TOKENS = 768
 export const REACT_EXECUTION_MAX_TOKENS = 1_024
 export const REACT_RECOVERY_MAX_TOKENS = 768

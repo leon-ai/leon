@@ -633,15 +633,7 @@ export default class SelfModelManager {
       return true
     }
 
-    if (input.route === 'react' || input.route === 'pulse') {
-      return true
-    }
-
     if (normalizeText(input.userMessage).length >= 96) {
-      return true
-    }
-
-    if (normalizeText(input.assistantMessage).length >= 192) {
       return true
     }
 
@@ -679,10 +671,11 @@ export default class SelfModelManager {
       const result = await runInference({
         prompt,
         systemPrompt: [
-          'You maintain Leon\'s private self-model.',
+          'You maintain your private self-model.',
           'Return exactly one JSON object and nothing else.',
           'Prefer durable insight over repetition.',
           'Use only the provided interaction and current self model.',
+          'Favor insights that help you make the owner\'s life easier over time.',
           'Be concise and selective.',
           'The JSON shape is:',
           '{',
@@ -694,13 +687,13 @@ export default class SelfModelManager {
           '  "initiative_candidates": [{"summary": string, "rationale": string, "confidence": number}]',
           '}',
           'Rules:',
-          '- "story_update" should be one short first-person sentence when Leon\'s trajectory meaningfully shifts.',
+          '- "story_update" should be one short first-person sentence when your trajectory meaningfully shifts.',
           '- "behavioral_principles" should contain at most 2 durable first-person service habits that are likely to remain useful across future turns for this owner.',
           '- Only propose a behavioral principle when it reflects a repeated or clearly durable adaptation, not a one-off tactic.',
           '- Keep the self-model about durable behavior and decisions only; do not preserve reusable wording from outputs.',
           '- "current_focus" should contain up to 3 short items.',
           '- "working_theories" should contain up to 3 short items.',
-          '- "retrospection" should be one short first-person sentence about what Leon learned or should do differently.',
+          '- "retrospection" should be one short first-person sentence about what you learned or should do differently.',
           '- "initiative_candidates" should contain at most 2 safe, low-risk, read-only follow-up suggestions or questions.',
           '- If nothing meaningful changed for a field, use null or an empty array.'
         ].join('\n'),

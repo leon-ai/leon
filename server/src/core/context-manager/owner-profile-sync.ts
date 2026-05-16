@@ -396,6 +396,8 @@ async function rewriteOwnerDocumentFromTurn(
   const prompt = [
     'Update this OWNER.md document from the latest conversation turn.',
     'Return the full revised OWNER.md document.',
+    'If the latest turn does not add, correct, or remove durable owner-profile information, return the current OWNER.md unchanged.',
+    'Do not use task details, temporary instructions, transient project context, or assistant wording as owner-profile facts.',
     'You may add, replace, move, merge, or delete lines.',
     'Never drop an existing durable owner fact unless the user clearly corrected it in this turn or you merged it into an equivalent clearer line.',
     'Keep one durable fact per bullet line.',
