@@ -167,6 +167,7 @@ export interface LLMCaller {
   } | null>
 
   readonly supportsNativeTools: boolean
+  readonly isLocalProvider: boolean
   readonly input: string | object | null
   readonly history: MessageLog[]
   readonly agentSkillContext?: AgentSkillContext | null

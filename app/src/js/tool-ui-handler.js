@@ -1,3 +1,8 @@
+const COMMAND_OUTPUT_MAX_DISPLAY_CHARS = 80_000
+const ANSI_ESCAPE_PATTERN =
+  // eslint-disable-next-line no-control-regex
+  /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))/g
+
 /**
  * Tool UI Handler
  * Renders tool executions as expandable activity cards.
@@ -270,6 +275,7 @@ export default class ToolUIHandler {
       rawDetails,
       rawInput: null,
       rawOutput: null,
+      commandOutputText: '',
       preparationLog: [],
       isNew: true
     }
@@ -466,14 +472,39 @@ export default class ToolUIHandler {
       }
     }
 
+    if (data.toolPhase === 'output_delta') {
+      const outputDelta = data.outputDelta || data.answer || ''
+      this.setStatusChip(toolGroupContainer.statusChip, 'running')
+
+      if (outputDelta) {
+        toolGroupContainer.summary.textContent = 'Receiving command output...'
+        toolGroupContainer.commandOutputText = this.mergeCommandOutput(
+          toolGroupContainer.commandOutputText,
+          outputDelta
+        )
+        this.renderCommandOutputLog(
+          toolGroupContainer.outputBody,
+          toolGroupContainer.commandOutputText
+        )
+        toolGroupContainer.rawOutput = {
+          output: toolGroupContainer.commandOutputText
+        }
+      }
+    }
+
     if (data.toolPhase === 'output') {
       const isError = data.status === 'error'
+      const isObserved = data.status === 'observed'
       toolGroupContainer.summary.textContent =
         data.message ||
-        (isError ? 'The function failed.' : 'The function completed.')
+        (isError
+          ? 'The function failed.'
+          : isObserved
+            ? 'The function returned an observation.'
+            : 'The function completed.')
       this.setStatusChip(
         toolGroupContainer.statusChip,
-        isError ? 'error' : 'success'
+        isError ? 'error' : isObserved ? 'observed' : 'success'
       )
 
       const outputPayload = {
@@ -587,6 +618,84 @@ export default class ToolUIHandler {
     })
 
     container.appendChild(list)
+  }
+
+  /**
+   * Merge terminal output chunks while respecting carriage-return progress
+   * updates used by CLI tools to repaint the current line.
+   */
+  mergeCommandOutput(currentOutput, nextChunk) {
+    const cleanChunk = this.cleanCommandOutputChunk(nextChunk)
+    if (!cleanChunk) {
+      return currentOutput || ''
+    }
+
+    let output = currentOutput || ''
+    let replaceCurrentLine = false
+
+    for (const char of cleanChunk) {
+      if (char === '\r') {
+        replaceCurrentLine = true
+        continue
+      }
+
+      if (char === '\n') {
+        output += '\n'
+        replaceCurrentLine = false
+        continue
+      }
+
+      if (replaceCurrentLine) {
+        const lineStartIndex = output.lastIndexOf('\n') + 1
+        output = output.slice(0, lineStartIndex)
+        replaceCurrentLine = false
+      }
+
+      output += char
+    }
+
+    if (output.length <= COMMAND_OUTPUT_MAX_DISPLAY_CHARS) {
+      return output
+    }
+
+    return output.slice(output.length - COMMAND_OUTPUT_MAX_DISPLAY_CHARS)
+  }
+
+  /**
+   * Strip terminal control sequences that do not render usefully in HTML.
+   */
+  cleanCommandOutputChunk(chunk) {
+    const withoutAnsi = String(chunk || '').replace(ANSI_ESCAPE_PATTERN, '')
+    const output = []
+
+    for (const char of withoutAnsi) {
+      if (char === '\b') {
+        output.pop()
+        continue
+      }
+
+      output.push(char)
+    }
+
+    return output.join('')
+  }
+
+  /**
+   * Render live command output in the result panel.
+   */
+  renderCommandOutputLog(container, outputText) {
+    container.innerHTML = ''
+
+    if (!outputText) {
+      this.renderPlaceholder(container, 'Waiting for function output...')
+      return
+    }
+
+    const output = document.createElement('pre')
+    output.className = 'tool-command-output'
+    output.textContent = outputText
+    container.appendChild(output)
+    output.scrollTop = output.scrollHeight
   }
 
   /**
@@ -760,7 +869,7 @@ export default class ToolUIHandler {
    * Update the status chip for the activity card.
    */
   setStatusChip(chip, status) {
-    chip.classList.remove('running', 'success', 'error', 'selected')
+    chip.classList.remove('running', 'success', 'error', 'selected', 'observed')
 
     if (status === 'error') {
       chip.classList.add('error')
@@ -777,6 +886,12 @@ export default class ToolUIHandler {
     if (status === 'selected') {
       chip.classList.add('selected')
       chip.textContent = 'In use'
+      return
+    }
+
+    if (status === 'observed') {
+      chip.classList.add('observed')
+      chip.textContent = 'Observed'
       return
     }
 

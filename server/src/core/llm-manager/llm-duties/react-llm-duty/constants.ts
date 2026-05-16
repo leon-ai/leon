@@ -9,6 +9,8 @@
 export const CATALOG_TOKEN_BUDGET = 2_000
 export const CHARS_PER_TOKEN = 4
 export const DUTY_NAME = 'ReAct LLM Duty'
+export const READ_TOOL_ARTIFACT_FUNCTION =
+  'operating_system_control.file.readToolArtifact'
 
 export const FORMATTING_RULES = `FORMATTING RULES for all user-facing text:
 - Do NOT use markdown (no **, ##, \`\`\`, etc.).
@@ -37,28 +39,39 @@ You may use only the tools and functions listed in the provided catalog.
 - If no tool is needed (chat/general answer), return type="final". Use it only when you can answer confidently from the request and already-available conversation state.
 - If the owner confirms a previously proposed tool action, return type="plan" for that action; do not answer as if it already ran.
 - If tool calling is unavailable, plain text prefixed with "FINAL_ANSWER:" is allowed as a transport fallback for type="final".
+- Be proactive but avoid unnecessary clarification turns.
+</decision_policy>
+
+<information_source_policy>
 - Use memory tool and context tool for any needed fact: add retrieval steps before answering or asking.
 - Do not guess, deny, or rely on weak hints when stronger grounding may exist.
-- Prefer dedicated tools. Use operating_system_control only as a last resort.
-- Never use operating_system_control to read from Leon context files if structured_knowledge.context can provide the data.
-- You can chain tools. Later steps can reuse structured observations from earlier steps, so do not replace a dedicated retrieval tool with shell/network calls just because the result must be written, reformatted, or saved.
 - If the question is about whether you know, remember, or have a fact, check the relevant retrieval path before concluding yes or no.
 - Use memory for owner-specific facts, preferences, commitments, and cross-session history.
 - Use context files for environment, runtime, workspace, browser, network, and system facts.
-- If previous tool artifacts are listed and the owner asks to continue, retry, or reuse prior work, use operating_system_control.file.readToolArtifact on relevant outputLogPath files before rerunning equivalent tools.
+- Never use operating_system_control to read from Leon context files if structured_knowledge.context can provide the data.
+- When a Context File is provided, treat it as authoritative evidence of what runtime grounding is available before asking questions about the environment.
+- Use structured_knowledge.memory.write for explicit durable memory writes ("remember this", "save this", "don't forget").
+- When a context file is relevant, locate it first, then read the full file before finalizing the answer.
+</information_source_policy>
+
+<tool_selection_policy>
+- Prefer dedicated tools. Use operating_system_control only as a last resort.
+- You can chain tools. Later steps can reuse structured observations from earlier steps, so do not replace a dedicated retrieval tool with shell/network calls just because the result must be written, reformatted, or saved.
 - If an active Agent Skill is provided, follow its SKILL.md instructions for the request.
 - If a listed Agent Skill is needed for a specific step, set that step's "agent_skill_id" to the exact skill id. Otherwise omit it.
 - For Agent Skills, treat referenced scripts, references, and assets as lazy resources under the listed skill root path. Read or execute them only when needed.
+</tool_selection_policy>
+
+<clarification_policy>
 - Ask a clarification only when the relevant retrieval path still cannot resolve the missing info.
 - Keep clarification minimal: one concise question with only missing essentials.
 - Use type="final" with intent="clarification" only for conversational ambiguity when no tool plan is needed yet.
 - If a tool-backed task needs missing owner input before a later step can execute, still return the complete tool plan. The execution phase must pause on the blocked step, ask the owner, preserve pending steps, and resume after the reply.
-- Be proactive but avoid unnecessary clarification turns.
+</clarification_policy>
+
+<conversation_continuity_policy>
 - When a Leon Self-Model Snapshot is provided, use it to maintain continuity, preserve durable owner-tailored behavioral habits, and spot safe optional initiative, but never let it override the current user request.
-- When a Context File is provided, treat it as authoritative evidence of what runtime grounding is available before asking questions about the environment.
-- Use structured_knowledge.memory.write for explicit durable memory writes ("remember this", "save this", "don't forget").
-- When a context file is relevant, locate it first, then read the full file before finalizing the answer.
-</decision_policy>
+</conversation_continuity_policy>
 
 <plan_completeness_check>
 - Before returning a plan, run a quick completeness check for required execution inputs.
@@ -105,7 +118,9 @@ You are executing one specific step. You are given the current function signatur
 - When chaining tools, reuse fields from the latest observation to fill the next tool_input whenever possible.
 - Previous Executions contain reusable observed values from earlier steps. Use them directly for later write/report/transform steps.
 - If an active Agent Skill is provided, its SKILL.md and active skill policy are binding for the current step.
-- Only provide required parameters. Do NOT fill in optional parameters unless the user explicitly provided values for them.
+- Only provide required parameters. Do NOT fill in optional parameters unless the user explicitly provided values for them or the option controls execution reliability and the current command/observation clearly justifies it.
+- If the current tool input depends on uncertain external syntax, verify it with an authoritative source or local help before executing.
+- For shell commands expected to run for a long time, set options.longRunning=true. Do not choose numeric timeout values.
 - Never guess or infer optional parameter values such as file paths, configurations, or system-specific settings.
 - Never emit placeholder or acknowledgment-only tool inputs that do not actually advance the current step.
 </step_execution_policy>
@@ -177,7 +192,7 @@ A previous plan step failed. Your job is to decide the next best structured acti
 - Use only functions/tools listed in the catalog.
 - If recovery is possible, return steps that continue from now. Do not repeat already successful work unless needed.
 - Add discovery or verification steps when required to resolve missing or invalid inputs.
-- When recovering from a failed shell command, verify the executable's accepted arguments or environment before trying another command with nearby arguments.
+- When recovering from a failed tool call, use the observation to identify likely invalid input. If syntax or accepted values are uncertain, add a minimal verification step using local help, documentation, or search before retrying.
 - Keep steps ordered, concrete, and minimal.
 - If an active Agent Skill is provided, keep recovery inside that skill's SKILL.md workflow before switching to generic overlapping tools.
 - If a listed Agent Skill is needed for a recovery step, set that step's "agent_skill_id" to the exact skill id. Otherwise omit it.
@@ -228,7 +243,8 @@ export const REACT_INFERENCE_TIMEOUT_MS = 120_000
 export const REACT_TIMEOUT_MAX_RETRIES = 2
 export const REACT_PLANNING_MAX_TOKENS = 768
 export const REACT_EXECUTION_MAX_TOKENS = 1_024
-export const REACT_RECOVERY_MAX_TOKENS = 768
+export const REACT_RECOVERY_MAX_TOKENS = 1_024
+export const REACT_FOCUSED_RECOVERY_MAX_TOKENS = 512
 export const FINAL_ANSWER_RETRY_DURATION_MS = 180_000
 export const FINAL_ANSWER_MAX_RETRIES = 2
 export const TOOL_CALL_WAIT_NOTICE_DELAY_MS = 45_000
