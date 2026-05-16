@@ -224,6 +224,12 @@
   border-color: rgba(36, 178, 101, 0.28);
 }
 
+.tool-status-chip.observed {
+  color: #f5d48a;
+  background-color: rgba(210, 157, 38, 0.15);
+  border-color: rgba(210, 157, 38, 0.3);
+}
+
 .tool-status-chip.error {
   color: #ffb0b0;
   background-color: rgba(237, 41, 122, 0.14);
@@ -321,6 +327,18 @@
 .tool-rich-text {
   color: rgba(255, 255, 255, 0.88);
   line-height: 1.45;
+  word-break: break-word;
+}
+
+.tool-command-output {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  color: rgba(255, 255, 255, 0.86);
+  font-family: 'Courier New', Consolas, monospace;
+  font-size: 0.84rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
   word-break: break-word;
 }
 

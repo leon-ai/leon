@@ -103,7 +103,9 @@ export function extractFailureMessageFromObservation(observation: string): strin
     return message
   }
 
-  const toolOutputFailure = asRecord(parsed['tool_output_failure'])
+  const toolOutputFailure =
+    asRecord(parsed['observed_tool_failure']) ||
+    asRecord(parsed['tool_output_failure'])
   const failureError =
     toolOutputFailure && typeof toolOutputFailure['error'] === 'string'
       ? (toolOutputFailure['error'] as string).trim()
