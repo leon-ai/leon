@@ -11,6 +11,11 @@ import {
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import {
+  LLMDuties,
+  LLMProviders,
+  type CompletionParams
+} from '@/core/llm-manager/types'
+import {
   getActiveConversationSessionId,
   runWithConversationSession
 } from '@/core/session-manager/session-context'
@@ -20,6 +25,7 @@ const DEFAULT_SESSION_TITLE = 'New session'
 const MIGRATED_SESSION_TITLE = 'Previous conversation'
 const TITLE_MAX_LENGTH = 64
 const TITLE_FALLBACK_WORD_LIMIT = 8
+const SESSION_TITLE_MAX_TOKENS = 64
 const SESSION_TITLE_TIMEOUT_MS = 15_000
 const SESSION_TITLE_MAX_RETRIES = 0
 const WHITESPACE_PATTERN = /\s+/
@@ -28,6 +34,20 @@ const TITLE_LEADING_CHANNEL_PATTERN = /^<\|?channel\|?>\s*([a-z_]+)?\s*/i
 const TITLE_CHANNEL_END_TAG = '<channel|>'
 const SESSION_TITLE_SYSTEM_PROMPT =
   'Create a concise conversation title. Use 2 to 6 words. Return only the title, without quotes or punctuation at the end.'
+const TITLE_DISABLE_THINKING_PROVIDERS = [
+  LLMProviders.LlamaCPP,
+  LLMProviders.SGLang
+] as const
+const TITLE_REASONING_MODE_OFF_PROVIDERS = [
+  LLMProviders.OpenAI,
+  LLMProviders.OpenRouter,
+  LLMProviders.ZAI,
+  LLMProviders.Anthropic,
+  LLMProviders.MoonshotAI,
+  LLMProviders.HuggingFace,
+  LLMProviders.Cerebras,
+  LLMProviders.Groq
+] as const
 
 export interface ConversationSession {
   id: string
@@ -123,6 +143,24 @@ function stripLeadingTitleTemplateTags(title: string): string {
   }
 
   return trimmedTitle
+}
+
+function getTitleReasoningParams(
+  provider: LLMProviders
+): Pick<CompletionParams, 'disableThinking' | 'reasoningMode'> {
+  if (TITLE_DISABLE_THINKING_PROVIDERS.includes(
+    provider as (typeof TITLE_DISABLE_THINKING_PROVIDERS)[number]
+  )) {
+    return { disableThinking: true }
+  }
+
+  if (TITLE_REASONING_MODE_OFF_PROVIDERS.includes(
+    provider as (typeof TITLE_REASONING_MODE_OFF_PROVIDERS)[number]
+  )) {
+    return { reasoningMode: 'off' }
+  }
+
+  return {}
 }
 
 function createSession(title = DEFAULT_SESSION_TITLE): ConversationSession {
@@ -359,12 +397,7 @@ export class ConversationSessionManager {
 
     const { LLM_PROVIDER } = await import('@/core')
     const { CONFIG_STATE } = await import('@/core/config-states/config-state')
-    const { LLMDuties, LLMProviders } = await import('@/core/llm-manager/types')
     const workflowProvider = CONFIG_STATE.getModelState().getWorkflowTarget().provider
-    const shouldDisableThinking = [
-      LLMProviders.LlamaCPP,
-      LLMProviders.SGLang
-    ].includes(workflowProvider)
 
     LogHelper.title('Session Manager')
     LogHelper.debug(`Generating title for session ${sessionId}`)
@@ -373,13 +406,13 @@ export class ConversationSessionManager {
       LLM_PROVIDER.prompt(message, {
         dutyType: LLMDuties.Inference,
         systemPrompt: SESSION_TITLE_SYSTEM_PROMPT,
-        maxTokens: 24,
+        maxTokens: SESSION_TITLE_MAX_TOKENS,
         timeout: SESSION_TITLE_TIMEOUT_MS,
         maxRetries: SESSION_TITLE_MAX_RETRIES,
         temperature: 0.2,
         shouldStream: false,
         trackProviderErrors: false,
-        ...(shouldDisableThinking ? { disableThinking: true } : {})
+        ...getTitleReasoningParams(workflowProvider)
       })
     )
     const title = normalizeTitle(
@@ -387,8 +420,16 @@ export class ConversationSessionManager {
     )
 
     if (!title) {
+      session.title = createFallbackTitle(message)
+      session.isTitleGenerated = true
+      session.updatedAt = now()
+      this.persistIndex()
+      this.emitUpdated()
+
       LogHelper.title('Session Manager')
-      LogHelper.warning(`Session title generation returned no usable title for ${sessionId}`)
+      LogHelper.warning(
+        `Session title generation returned no usable title for ${sessionId}; using fallback title`
+      )
       return
     }
 

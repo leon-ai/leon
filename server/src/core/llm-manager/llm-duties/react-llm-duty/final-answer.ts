@@ -103,6 +103,17 @@ export async function runFinalAnswerPhase(
     return handoffSignal.draft.trim()
   }
 
+  if (
+    handoffSignal &&
+    handoffSignal.intent !== 'answer' &&
+    handoffSignal.draft.trim()
+  ) {
+    return sanitizeLocalFinalAnswer(
+      handoffSignal.draft,
+      shouldSanitizeFinalAnswer
+    )
+  }
+
   LogHelper.title(`${DUTY_NAME} / final_answer`)
   LogHelper.debug('Synthesizing final answer from execution history...')
 

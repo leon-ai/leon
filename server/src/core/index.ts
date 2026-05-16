@@ -23,6 +23,7 @@ import ContextManager from '@/core/context-manager'
 import MemoryManager from '@/core/memory-manager'
 import SelfModelManager from '@/core/self-model-manager'
 import PulseManager from '@/core/pulse-manager'
+import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
 import ToolExecutor from '@/core/tool-executor'
 import { ConversationLogger } from '@/conversation-logger'
 import { ToolCallLogger } from '@/tool-call-logger'
@@ -74,6 +75,7 @@ export const CONTEXT_MANAGER = new ContextManager()
 export const MEMORY_MANAGER = new MemoryManager()
 export const SELF_MODEL_MANAGER = new SelfModelManager()
 export const PULSE_MANAGER = new PulseManager()
+export const POST_TURN_MAINTENANCE_QUEUE = new PostTurnMaintenanceQueue()
 
 export const STT = new SpeechToText()
 

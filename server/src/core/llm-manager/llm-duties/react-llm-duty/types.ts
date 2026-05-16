@@ -176,5 +176,6 @@ export interface LLMCaller {
   getContextFileContent(filename: string): string | null
   getContextManifest(): string
   getSelfModelSnapshot(): string
+  getPreviousToolArtifacts?(): Promise<string>
   consumeProviderErrorMessage(): string | null
 }

@@ -22,6 +22,7 @@ import {
 } from './utils'
 import {
   shouldTreatPlanningTextAsFinalAnswer,
+  shouldTreatPlainPlanningTextAsFinalAnswer,
   extractPlanningMarkedFinalAnswer,
   extractPlanningTextHandoffDraft,
   createPlanFromUnexpectedToolCall,
@@ -140,9 +141,70 @@ export async function runPlanningPhase(
     buildActiveAgentSkillSection(caller.agentSkillContext)
   const agentSkillSection =
     activeAgentSkillSection || buildAgentSkillDiscoverySection(caller)
-  const prompt = `<context_manifest>\n${contextManifestSection}\n</context_manifest>\n\n${agentSkillSection}\n\n<available_catalog>\n${catalog.text}${catalogNote}\n</available_catalog>\n\n<self_model>\n${selfModelSection}\n</self_model>\n\n<grounding_note>\nEnvironment context is available through structured_knowledge.context tools when needed.\n</grounding_note>\n\n<user_request>\n${caller.input}\n</user_request>`
+  const previousToolArtifacts =
+    (await caller.getPreviousToolArtifacts?.())?.trim() || ''
+  const previousToolArtifactsSection = previousToolArtifacts
+    ? `\n\n<previous_tool_artifacts>\n${previousToolArtifacts}\n</previous_tool_artifacts>`
+    : ''
+  const prompt = `<context_manifest>\n${contextManifestSection}\n</context_manifest>\n\n${agentSkillSection}\n\n<available_catalog>\n${catalog.text}${catalogNote}\n</available_catalog>\n\n<self_model>\n${selfModelSection}\n</self_model>\n\n<grounding_note>\nEnvironment context is available through structured_knowledge.context tools when needed.\n</grounding_note>${previousToolArtifactsSection}\n\n<user_request>\n${caller.input}\n</user_request>`
 
   const planSchema = PLAN_RESPONSE_SCHEMA
+
+  const attemptForcedPlanOnlyFallback = async (): Promise<PlanResult | null> => {
+    onPlanningStage?.('thinking')
+    const forcedPlanPrompt = `${prompt}\n\n<safety_fallback>\nReturn ONLY type="plan" with one or more concrete tool steps. Do not return type="final".\n</safety_fallback>`
+    const forcedPlanSchema = {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['plan'] },
+        steps: {
+          type: 'array',
+          minItems: 1,
+          items: PLAN_STEP_SCHEMA
+        },
+        summary: { type: 'string' }
+      },
+      required: ['type', 'steps', 'summary'],
+      additionalProperties: false
+    }
+
+    const forcedPlanResult = await caller.callLLM(
+      forcedPlanPrompt,
+      planSystemPrompt,
+      forcedPlanSchema,
+      history,
+      buildPlanningPromptSections({
+        prompt: forcedPlanPrompt,
+        systemPrompt: planSystemPrompt,
+        includeSchema: true,
+        schemaOverride: forcedPlanSchema
+      }),
+      {
+        phase: 'planning'
+      }
+    )
+
+    const forcedParsed = parseOutput(forcedPlanResult?.output)
+    const forcedInterpreted =
+      (forcedParsed
+        ? extractPlanResultFromCreatePlanArgs(forcedParsed, {
+            allowLegacySummaryAsFinal: false,
+            source: 'planning'
+          })
+        : null) || extractPlanFromParsed(forcedParsed, 'planning')
+
+    if (forcedInterpreted?.type === 'plan' && forcedInterpreted.steps.length > 0) {
+      LogHelper.debug(
+        'Planning: forced plan-only fallback produced executable steps'
+      )
+      return forcedInterpreted
+    }
+
+    LogHelper.debug(
+      'Planning: forced plan-only fallback did not produce a valid plan'
+    )
+    return null
+  }
 
   // --- Remote providers: use native tool calling to force structured output ---
   if (caller.supportsNativeTools) {
@@ -259,64 +321,14 @@ export async function runPlanningPhase(
     const missingCreatePlanToolCall =
       !toolResult?.toolCall && !toolResult?.unexpectedToolCall
 
-    const attemptForcedPlanOnlyFallback = async (): Promise<PlanResult | null> => {
+    const attemptForcedPlanFallbackAfterMissingToolCall = async (): Promise<
+      PlanResult | null
+    > => {
       if (!missingCreatePlanToolCall) {
         return null
       }
 
-      onPlanningStage?.('thinking')
-      const forcedPlanPrompt = `${prompt}\n\n<safety_fallback>\nReturn ONLY type="plan" with one or more concrete tool steps. Do not return type="final".\n</safety_fallback>`
-      const forcedPlanSchema = {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['plan'] },
-          steps: {
-            type: 'array',
-            minItems: 1,
-            items: PLAN_STEP_SCHEMA
-          },
-          summary: { type: 'string' }
-        },
-        required: ['type', 'steps', 'summary'],
-        additionalProperties: false
-      }
-
-      const forcedPlanResult = await caller.callLLM(
-        forcedPlanPrompt,
-        planSystemPrompt,
-        forcedPlanSchema,
-        history,
-        buildPlanningPromptSections({
-          prompt: forcedPlanPrompt,
-          systemPrompt: planSystemPrompt,
-          includeSchema: true,
-          schemaOverride: forcedPlanSchema
-        }),
-        {
-          phase: 'planning'
-        }
-      )
-
-      const forcedParsed = parseOutput(forcedPlanResult?.output)
-      const forcedInterpreted =
-        (forcedParsed
-          ? extractPlanResultFromCreatePlanArgs(forcedParsed, {
-              allowLegacySummaryAsFinal: false,
-              source: 'planning'
-            })
-          : null) || extractPlanFromParsed(forcedParsed, 'planning')
-
-      if (forcedInterpreted?.type === 'plan' && forcedInterpreted.steps.length > 0) {
-        LogHelper.debug(
-          'Planning: forced plan-only fallback produced executable steps'
-        )
-        return forcedInterpreted
-      }
-
-      LogHelper.debug(
-        'Planning: forced plan-only fallback did not produce a valid plan'
-      )
-      return null
+      return attemptForcedPlanOnlyFallback()
     }
 
     if (toolResult?.toolCall) {
@@ -396,7 +408,8 @@ export async function runPlanningPhase(
           : null) || extractPlanFromParsed(textFallbackParsed, 'planning')
       if (textFallbackPlan) {
         if (shouldAttemptForcedPlanFallback(textFallbackPlan)) {
-          const forcedPlan = await attemptForcedPlanOnlyFallback()
+          const forcedPlan =
+            await attemptForcedPlanFallbackAfterMissingToolCall()
           if (forcedPlan) {
             return forcedPlan
           }
@@ -466,7 +479,8 @@ export async function runPlanningPhase(
         : null) || extractPlanFromParsed(parsed, 'planning')
     if (planResult) {
       if (shouldAttemptForcedPlanFallback(planResult)) {
-        const forcedPlan = await attemptForcedPlanOnlyFallback()
+        const forcedPlan =
+          await attemptForcedPlanFallbackAfterMissingToolCall()
         if (forcedPlan) {
           return forcedPlan
         }
@@ -484,7 +498,8 @@ export async function runPlanningPhase(
         : null) || extractPlanFromParsed(textFallbackParsed, 'planning')
     if (textFallbackPlan) {
       if (shouldAttemptForcedPlanFallback(textFallbackPlan)) {
-        const forcedPlan = await attemptForcedPlanOnlyFallback()
+        const forcedPlan =
+          await attemptForcedPlanFallbackAfterMissingToolCall()
         if (forcedPlan) {
           return forcedPlan
         }
@@ -518,7 +533,8 @@ export async function runPlanningPhase(
           : null) || extractPlanFromParsed(parsedRaw, 'planning')
       if (parsedRawPlan) {
         if (shouldAttemptForcedPlanFallback(parsedRawPlan)) {
-          const forcedPlan = await attemptForcedPlanOnlyFallback()
+          const forcedPlan =
+            await attemptForcedPlanFallbackAfterMissingToolCall()
           if (forcedPlan) {
             return forcedPlan
           }
@@ -532,7 +548,7 @@ export async function runPlanningPhase(
     }
 
     if (textFallback) {
-      const forcedPlan = await attemptForcedPlanOnlyFallback()
+      const forcedPlan = await attemptForcedPlanFallbackAfterMissingToolCall()
       if (forcedPlan) {
         return forcedPlan
       }
@@ -587,6 +603,13 @@ export async function runPlanningPhase(
         })
       : null) || extractPlanFromParsed(parsed, 'planning')
   if (planResult) {
+    if (shouldAttemptForcedPlanFallback(planResult)) {
+      const forcedPlan = await attemptForcedPlanOnlyFallback()
+      if (forcedPlan) {
+        return forcedPlan
+      }
+    }
+
     return planResult
   }
 
@@ -605,6 +628,13 @@ export async function runPlanningPhase(
           })
         : null) || extractPlanFromParsed(parsedRaw, 'planning')
     if (parsedRawPlan) {
+      if (shouldAttemptForcedPlanFallback(parsedRawPlan)) {
+        const forcedPlan = await attemptForcedPlanOnlyFallback()
+        if (forcedPlan) {
+          return forcedPlan
+        }
+      }
+
       return parsedRawPlan
     }
 
@@ -612,6 +642,18 @@ export async function runPlanningPhase(
     if (rawHandoffDraft) {
       return createPlanningHandoff(rawHandoffDraft, 'answer')
     }
+
+    if (shouldTreatPlainPlanningTextAsFinalAnswer(raw)) {
+      LogHelper.debug(
+        'Planning: local JSON mode returned plain conversational text; routing to final answer handoff'
+      )
+      return createPlanningHandoff(raw, 'answer')
+    }
+  }
+
+  const forcedPlan = await attemptForcedPlanOnlyFallback()
+  if (forcedPlan) {
+    return forcedPlan
   }
 
   return createPlanningHandoff(
