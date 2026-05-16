@@ -3,6 +3,13 @@ interface RandomStringOptions {
   onlyNumbers?: boolean
 }
 
+const REDACTED_SECRET = '[REDACTED_SECRET]'
+const SECRET_PATTERNS = [
+  /(\b(?:api[_\s-]?key|token|password|secret)\b["']?\s*[:=]\s*)(["']?)([A-Za-z0-9._\-+/=]{16,})(\2)/gi,
+  /(\bBearer\s+)([A-Za-z0-9._\-+/=]{16,})/gi,
+  /(--api-token\s+)([^\s"'`]+)/gi
+] as const
+
 export class StringHelper {
   /**
    * Parse, map (with object) and replace value(s) in a string
@@ -102,5 +109,30 @@ export class StringHelper {
    */
   public static normalizeUserFacingText(str: string): string {
     return String(str || '').replace(/[\u2012-\u2015\u2e3a\u2e3b]/gu, '-')
+  }
+
+  /**
+   * Redact common secret values from strings before persisting logs.
+   * @param str String to redact
+   * @example redactSecrets('apiKey: abcdefghijklmnop') // apiKey: [REDACTED_SECRET]
+   */
+  public static redactSecrets(str: string): string {
+    let redacted = String(str || '')
+
+    redacted = redacted.replace(
+      SECRET_PATTERNS[0],
+      (_match, prefix: string, quote: string, _secret: string, suffix: string) =>
+        `${prefix}${quote}${REDACTED_SECRET}${suffix}`
+    )
+    redacted = redacted.replace(
+      SECRET_PATTERNS[1],
+      (_match, prefix: string) => `${prefix}${REDACTED_SECRET}`
+    )
+    redacted = redacted.replace(
+      SECRET_PATTERNS[2],
+      (_match, prefix: string) => `${prefix}${REDACTED_SECRET}`
+    )
+
+    return redacted
   }
 }

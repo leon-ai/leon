@@ -9,7 +9,7 @@ import { ToolkitConfig } from '@sdk/toolkit-config'
 
 // Hardcoded default settings for Grok tool
 const GROK_API_KEY: string | null = null
-const GROK_MODEL = 'grok-4-1-fast-reasoning'
+const GROK_MODEL = 'grok-4-fast-reasoning-latest'
 const DEFAULT_SETTINGS: Record<string, unknown> = {
   GROK_API_KEY,
   GROK_MODEL
@@ -43,7 +43,7 @@ interface GrokChatOptions {
   input: GrokMessage[] // Responses API uses "input" not "messages"
   model?: string
   temperature?: number
-  max_completion_tokens?: number
+  max_output_tokens?: number
   stream?: boolean
   tools?: Array<WebSearchTool | XSearchTool>
 }
@@ -225,7 +225,7 @@ export default class GrokTool extends Tool {
       input,
       model,
       temperature = 0.7,
-      max_completion_tokens = 4096,
+      max_output_tokens = 4096,
       stream = false,
       tools
     } = options
@@ -238,7 +238,7 @@ export default class GrokTool extends Tool {
         model: finalModel,
         input,
         temperature,
-        max_completion_tokens,
+        max_output_tokens,
         stream
       }
 

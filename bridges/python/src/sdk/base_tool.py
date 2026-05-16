@@ -45,6 +45,9 @@ NVIDIA_LIBRARY_FOLDERS = [
     "nvjitlink",
 ]
 
+COMMAND_OUTPUT_PROGRESS_INTERVAL_SECONDS = 2.0
+COMMAND_OUTPUT_MAX_CHARS = 4_000
+
 
 # Command execution options
 class ExecuteCommandOptions:
@@ -152,16 +155,19 @@ class BaseTool(ABC):
     def _get_tool_dir(self, module_file: str) -> str:
         return os.path.dirname(os.path.abspath(module_file))
 
-    def _format_command_output(self, output: str) -> Optional[str]:
+    def _format_command_output(
+        self, output: str, preserve_whitespace: bool = False
+    ) -> Optional[str]:
         trimmed = output.strip()
         if not trimmed:
             return None
 
-        max_length = 4000
-        if len(trimmed) <= max_length:
-            return trimmed
+        value = output if preserve_whitespace else trimmed
+        max_length = COMMAND_OUTPUT_MAX_CHARS
+        if len(value) <= max_length:
+            return value
 
-        return f"{trimmed[:max_length]}\n... (truncated)"
+        return f"{value[:max_length]}\n... (truncated)"
 
     def _report_command_output(
         self, output: str, command: str, tool_group_id: Optional[str]
@@ -172,6 +178,19 @@ class BaseTool(ABC):
 
         self.report(
             "bridges.tools.command_output",
+            {"command": command, "output": formatted},
+            tool_group_id,
+        )
+
+    def _report_command_output_delta(
+        self, output: str, command: str, tool_group_id: Optional[str]
+    ) -> None:
+        formatted = self._format_command_output(output, preserve_whitespace=True)
+        if not formatted:
+            return
+
+        self.report(
+            "bridges.tools.command_output_delta",
             {"command": command, "output": formatted},
             tool_group_id,
         )
@@ -339,6 +358,35 @@ class BaseTool(ABC):
         try:
             start_time = time.time()
             output_buffer = ""
+            pending_output = ""
+            last_output_reported_at = time.time()
+
+            def append_output_delta(output: str) -> None:
+                nonlocal pending_output, last_output_reported_at
+                pending_output += output
+                now = time.time()
+                if (
+                    now - last_output_reported_at
+                    < COMMAND_OUTPUT_PROGRESS_INTERVAL_SECONDS
+                ):
+                    return
+
+                self._report_command_output_delta(
+                    pending_output, command_string, tool_group_id
+                )
+                pending_output = ""
+                last_output_reported_at = now
+
+            def flush_output_delta() -> None:
+                nonlocal pending_output, last_output_reported_at
+                if not pending_output:
+                    return
+
+                self._report_command_output_delta(
+                    pending_output, command_string, tool_group_id
+                )
+                pending_output = ""
+                last_output_reported_at = time.time()
 
             process = subprocess.Popen(
                 [binary_path] + args,
@@ -356,6 +404,7 @@ class BaseTool(ABC):
 
                 if stdout_line:
                     output_buffer += stdout_line
+                    append_output_delta(stdout_line)
                     if on_output:
                         on_output(stdout_line, False)
                     if on_progress:
@@ -363,6 +412,7 @@ class BaseTool(ABC):
 
                 if stderr_line:
                     output_buffer += stderr_line
+                    append_output_delta(stderr_line)
                     if on_output:
                         on_output(stderr_line, True)
 
@@ -370,6 +420,7 @@ class BaseTool(ABC):
                     break
 
             execution_time = int((time.time() - start_time) * 1000)
+            flush_output_delta()
 
             if process.returncode == 0:
                 self.report(
@@ -404,6 +455,8 @@ class BaseTool(ABC):
                 )
 
         except Exception as e:
+            if "flush_output_delta" in locals():
+                flush_output_delta()
             self.report(
                 "bridges.tools.command_error",
                 {"command": command_string, "error": str(e)},

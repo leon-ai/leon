@@ -92,6 +92,9 @@ const coreMocks = vi.hoisted(() => ({
   toolCallLogger: {
     getRecentArtifactManifest: vi.fn(() => '')
   },
+  postTurnMaintenanceQueue: {
+    enqueue: vi.fn()
+  },
   llmProvider: {
     consumeLastProviderErrorMessage: vi.fn(() => null),
     prompt: vi.fn(),
@@ -152,6 +155,7 @@ vi.mock('@/core', () => ({
   CONVERSATION_LOGGER: coreMocks.conversationLogger,
   TOOL_CALL_LOGGER: coreMocks.toolCallLogger,
   BRAIN: coreMocks.brain,
+  POST_TURN_MAINTENANCE_QUEUE: coreMocks.postTurnMaintenanceQueue,
   SOCKET_SERVER: {
     socket: coreMocks.socket,
     emitToChatClients: coreMocks.socket.emit,
@@ -299,6 +303,7 @@ describe('ReActLLMDuty agent loop', () => {
       callLLMText: vi.fn(),
       callLLMWithTools,
       supportsNativeTools: true,
+      isLocalProvider: false,
       input: 'Then do it',
       history,
       agentSkillCatalog: '',
@@ -355,6 +360,7 @@ describe('ReActLLMDuty agent loop', () => {
       callLLMText: vi.fn(),
       callLLMWithTools: vi.fn(),
       supportsNativeTools: true,
+      isLocalProvider: false,
       input: 'Then do it',
       history,
       agentSkillCatalog: '',
@@ -396,6 +402,7 @@ describe('ReActLLMDuty agent loop', () => {
       callLLMText: vi.fn(),
       callLLMWithTools,
       supportsNativeTools: true,
+      isLocalProvider: false,
       input: 'Awesome, thanks',
       history: [],
       agentSkillCatalog:
@@ -440,6 +447,7 @@ describe('ReActLLMDuty agent loop', () => {
       callLLMText: vi.fn(),
       callLLMWithTools: vi.fn(),
       supportsNativeTools: false,
+      isLocalProvider: true,
       input: 'Good morning Leon',
       history: [],
       agentSkillCatalog: '',
@@ -468,6 +476,109 @@ describe('ReActLLMDuty agent loop', () => {
         draft: 'Good morning. I am here and ready.',
         source: 'planning'
       }
+    })
+  })
+
+  it('recovers a local plan step that uses function_name', async () => {
+    const callLLM = vi.fn(async () => ({
+      output: {
+        type: 'plan',
+        steps: [
+          {
+            function_name: 'operating_system_control.shell.executeCommand',
+            label: 'Run shell command'
+          }
+        ],
+        summary: 'Running the shell command...',
+        answer: null,
+        intent: null
+      }
+    }))
+    const caller = {
+      callLLM,
+      callLLMText: vi.fn(),
+      callLLMWithTools: vi.fn(),
+      supportsNativeTools: false,
+      isLocalProvider: true,
+      input: 'Run a command',
+      history: [],
+      agentSkillCatalog: '',
+      setAgentSkillContext: vi.fn(),
+      getAgentSkillContext: vi.fn(),
+      getContextFileContent: vi.fn(() => null),
+      getContextManifest: vi.fn(() => ''),
+      getSelfModelSnapshot: vi.fn(() => ''),
+      consumeProviderErrorMessage: vi.fn(() => null)
+    }
+
+    const result = await runPlanningPhaseDirect(
+      caller,
+      {
+        text: '- operating_system_control.shell.executeCommand (command): Execute a command.',
+        mode: 'function'
+      },
+      []
+    )
+
+    expect(result).toEqual({
+      type: 'plan',
+      steps: [
+        {
+          function: 'operating_system_control.shell.executeCommand',
+          label: 'Run shell command'
+        }
+      ],
+      summary: 'Running the shell command...'
+    })
+  })
+
+  it('recovers exact catalog function names from local planning text', async () => {
+    const callLLM = vi.fn(async () => ({
+      output:
+        'I will use search_web.grok.search first, then operating_system_control.shell.executeCommand.'
+    }))
+    const caller = {
+      callLLM,
+      callLLMText: vi.fn(),
+      callLLMWithTools: vi.fn(),
+      supportsNativeTools: false,
+      isLocalProvider: true,
+      input: 'Search and run a command',
+      history: [],
+      agentSkillCatalog: '',
+      setAgentSkillContext: vi.fn(),
+      getAgentSkillContext: vi.fn(),
+      getContextFileContent: vi.fn(() => null),
+      getContextManifest: vi.fn(() => ''),
+      getSelfModelSnapshot: vi.fn(() => ''),
+      consumeProviderErrorMessage: vi.fn(() => null)
+    }
+
+    const result = await runPlanningPhaseDirect(
+      caller,
+      {
+        text: [
+          '- search_web.grok.search (query): Search both web and X.',
+          '- operating_system_control.shell.executeCommand (command): Execute a command.'
+        ].join('\n'),
+        mode: 'function'
+      },
+      []
+    )
+
+    expect(result).toEqual({
+      type: 'plan',
+      steps: [
+        {
+          function: 'search_web.grok.search',
+          label: 'Run search'
+        },
+        {
+          function: 'operating_system_control.shell.executeCommand',
+          label: 'Run executeCommand'
+        }
+      ],
+      summary: 'Running the recovered tool plan...'
     })
   })
 
@@ -503,6 +614,7 @@ describe('ReActLLMDuty agent loop', () => {
       callLLMText: vi.fn(),
       callLLMWithTools,
       supportsNativeTools: true,
+      isLocalProvider: false,
       input:
         'Please crawl from https://example.com, fetch readable content, and follow relevant links to find pricing.',
       history: [],
@@ -551,6 +663,7 @@ describe('ReActLLMDuty agent loop', () => {
       callLLMText,
       callLLMWithTools,
       supportsNativeTools: true,
+      isLocalProvider: false,
       input: 'Summarize the completed research.',
       history: [],
       agentSkillCatalog: '',
@@ -667,6 +780,139 @@ describe('ReActLLMDuty agent loop', () => {
         stepLabel: 'Check weather',
         requestedToolInput: '{"location":"Shenzhen"}'
       }
+    ])
+  })
+
+  it('finalizes an observed tool result when self-observation says it satisfies the request', async () => {
+    phaseMocks.runPlanningPhase.mockResolvedValue({
+      type: 'plan',
+      steps: [
+        {
+          function: 'operating_system_control.shell.executeCommand',
+          label: 'Run scanner'
+        }
+      ],
+      summary: 'Running the scanner...'
+    })
+    phaseMocks.runExecutionStep.mockResolvedValue({
+      type: 'executed',
+      execution: {
+        function: 'operating_system_control.shell.executeCommand',
+        status: 'observed',
+        observation: JSON.stringify({
+          status: 'observed',
+          data: {
+            output: {
+              result: {
+                success: false,
+                stdout: 'Scan completed with useful findings.',
+                returncode: 5
+              }
+            }
+          }
+        }),
+        stepLabel: 'Run scanner',
+        requestedToolInput: '{"command":"scanner --target example.test"}'
+      }
+    })
+    phaseMocks.runExecutionSelfObservationPhase.mockResolvedValue({
+      type: 'handoff',
+      signal: {
+        intent: 'answer',
+        draft: 'Report the scan findings.',
+        source: 'self_observation'
+      }
+    })
+    phaseMocks.runFinalAnswerPhase.mockResolvedValue(
+      'The scan completed and returned useful findings.'
+    )
+
+    const duty = await createDuty('Run the scanner and tell me what it finds.')
+    const result = await duty.execute()
+
+    expect(phaseMocks.runExecutionSelfObservationPhase).toHaveBeenCalledOnce()
+    expect(phaseMocks.runRecoveryPlanningPhase).not.toHaveBeenCalled()
+    expect(result?.output).toBe(
+      'The scan completed and returned useful findings.'
+    )
+    expect(result?.data.executionHistory).toEqual([
+      expect.objectContaining({
+        function: 'operating_system_control.shell.executeCommand',
+        status: 'observed',
+        stepLabel: 'Run scanner'
+      })
+    ])
+  })
+
+  it('replans from an observed tool result when self-observation says more work is needed', async () => {
+    phaseMocks.runPlanningPhase.mockResolvedValue({
+      type: 'plan',
+      steps: [
+        {
+          function: 'operating_system_control.shell.executeCommand',
+          label: 'Run invalid command'
+        }
+      ],
+      summary: 'Running the command...'
+    })
+    phaseMocks.runExecutionStep
+      .mockResolvedValueOnce({
+        type: 'executed',
+        execution: {
+          function: 'operating_system_control.shell.executeCommand',
+          status: 'observed',
+          observation: JSON.stringify({
+            status: 'observed',
+            observed_tool_failure: {
+              success: false,
+              error: 'Invalid option'
+            }
+          }),
+          stepLabel: 'Run invalid command',
+          requestedToolInput: '{"command":"scanner --bad-option"}'
+        }
+      })
+      .mockResolvedValueOnce({
+        type: 'executed',
+        execution: {
+          function: 'operating_system_control.shell.executeCommand',
+          status: 'success',
+          observation: 'Command completed with corrected options.',
+          stepLabel: 'Run corrected command',
+          requestedToolInput: '{"command":"scanner --good-option"}'
+        }
+      })
+    phaseMocks.runExecutionSelfObservationPhase
+      .mockResolvedValueOnce({
+        type: 'replan',
+        reason: 'Correcting the command options...',
+        steps: [
+          {
+            function: 'operating_system_control.shell.executeCommand',
+            label: 'Run corrected command'
+          }
+        ]
+      })
+      .mockResolvedValueOnce(null)
+    phaseMocks.runFinalAnswerPhase.mockResolvedValue(
+      'The corrected command completed.'
+    )
+
+    const duty = await createDuty('Run the scanner.')
+    const result = await duty.execute()
+
+    expect(phaseMocks.runExecutionStep).toHaveBeenCalledTimes(2)
+    expect(phaseMocks.runExecutionSelfObservationPhase).toHaveBeenCalledTimes(2)
+    expect(result?.output).toBe('The corrected command completed.')
+    expect(result?.data.executionHistory).toEqual([
+      expect.objectContaining({
+        status: 'error',
+        stepLabel: 'Run invalid command'
+      }),
+      expect.objectContaining({
+        status: 'success',
+        stepLabel: 'Run corrected command'
+      })
     ])
   })
 

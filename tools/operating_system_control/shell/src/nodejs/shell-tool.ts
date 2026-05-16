@@ -10,6 +10,7 @@ const REQUIRED_SETTINGS: string[] = []
 
 interface ShellResult {
   success: boolean
+  commandSucceeded?: boolean
   error?: string
   stdout: string
   stderr: string
@@ -28,9 +29,7 @@ interface ShellAttempt {
 
 interface ExecuteOptions {
   cwd?: string
-  timeout?: number
-  timeoutUnit?: 'seconds' | 'milliseconds'
-  timeoutRetries?: number
+  longRunning?: boolean
   captureOutput?: boolean
 }
 
@@ -47,10 +46,7 @@ interface ShellInvocation {
 }
 
 const DEFAULT_TIMEOUT_SECONDS = 30
-const TIMEOUT_MILLISECONDS_INPUT_THRESHOLD = 10_000
-const DEFAULT_TIMEOUT_RETRIES = 2
-const MAX_TIMEOUT_RETRIES = 5
-const TIMEOUT_RETRY_MULTIPLIER = 2
+const LONG_RUNNING_TIMEOUT_SECONDS = 86_400
 const MILLISECONDS_PER_SECOND = 1_000
 
 const CRITICAL_COMMAND_SEQUENCES = [
@@ -146,13 +142,7 @@ export default class ShellTool extends Tool {
     options: ExecuteOptions = {}
   ): Promise<ShellResult> {
     const { cwd = process.cwd() } = options
-    const initialTimeoutMs = ShellTool.normalizeTimeoutMs(
-      options.timeout,
-      options.timeoutUnit
-    )
-    const timeoutRetries = ShellTool.normalizeTimeoutRetries(
-      options.timeoutRetries
-    )
+    const timeoutMs = ShellTool.getTimeoutMs(options)
     const shellInvocation = ShellTool.getShellInvocation(command)
     const analyzedCommand = await this.resolveCommandForSafetyAnalysis(command)
     const isSafe = await this.isSafeCommand(analyzedCommand)
@@ -173,57 +163,27 @@ export default class ShellTool extends Tool {
     }
 
     const requiresVisibleTerminal = this.requiresVisibleTerminal(analyzedCommand)
-    const effectiveTimeoutRetries = requiresVisibleTerminal ? 0 : timeoutRetries
-    let timeoutMs = initialTimeoutMs
     const attempts: ShellAttempt[] = []
+    const attempt = 1
+    const attemptStartedAt = Date.now()
 
-    for (let attempt = 0; attempt <= effectiveTimeoutRetries; attempt += 1) {
-      const attemptStartedAt = Date.now()
-      try {
-        if (requiresVisibleTerminal) {
-          await this.report('bridges.tools.command_requires_terminal_auth')
+    try {
+      if (requiresVisibleTerminal) {
+        await this.report('bridges.tools.command_requires_terminal_auth')
 
-          await super.executeCommand({
-            binaryName: shellInvocation.binaryName,
-            args: shellInvocation.args,
-            options: {
-              openInTerminal: true,
-              waitForExit: true,
-              cwd,
-              timeout: timeoutMs
-            },
-            skipBinaryDownload: true
-          })
-          attempts.push({
-            attempt: attempt + 1,
-            timeoutMs,
-            durationMs: Date.now() - attemptStartedAt,
-            status: 'success'
-          })
-
-          return {
-            success: true,
-            stdout:
-              'Command executed in a visible terminal. Review that terminal for command output.',
-            stderr: '',
-            returncode: 0,
-            command,
-            attempts
-          }
-        }
-
-        const resultOutput = await super.executeCommand({
+        await super.executeCommand({
           binaryName: shellInvocation.binaryName,
           args: shellInvocation.args,
           options: {
-            sync: true,
+            openInTerminal: true,
+            waitForExit: true,
             cwd,
             timeout: timeoutMs
           },
           skipBinaryDownload: true
         })
         attempts.push({
-          attempt: attempt + 1,
+          attempt,
           timeoutMs,
           durationMs: Date.now() - attemptStartedAt,
           status: 'success'
@@ -231,126 +191,137 @@ export default class ShellTool extends Tool {
 
         return {
           success: true,
-          stdout: resultOutput.trim(),
+          commandSucceeded: true,
+          stdout:
+            'Command executed in a visible terminal. Review that terminal for command output.',
           stderr: '',
           returncode: 0,
           command,
           attempts
         }
-      } catch (error: unknown) {
-        const errorMessage = (error as Error).message
-        const processError = ShellTool.readProcessError(error)
-        const timedOut = ShellTool.isTimeoutErrorMessage(errorMessage)
-        const durationMs = Date.now() - attemptStartedAt
+      }
 
-        if (timedOut && attempt < effectiveTimeoutRetries) {
-          attempts.push({
-            attempt: attempt + 1,
-            timeoutMs,
-            durationMs,
-            status: 'timeout',
-            error: `Command timed out after ${ShellTool.formatTimeoutMs(timeoutMs)}`
-          })
-          timeoutMs *= TIMEOUT_RETRY_MULTIPLIER
-          continue
-        }
+      const resultOutput = await super.executeCommand({
+        binaryName: shellInvocation.binaryName,
+        args: shellInvocation.args,
+        options: {
+          sync: false,
+          cwd,
+          timeout: timeoutMs
+        },
+        skipBinaryDownload: true
+      })
+      attempts.push({
+        attempt,
+        timeoutMs,
+        durationMs: Date.now() - attemptStartedAt,
+        status: 'success'
+      })
 
-        if (timedOut) {
-          const timeoutMessage = `Command timed out after ${ShellTool.formatTimeoutMs(timeoutMs)} (${attempt + 1} attempt${attempt === 0 ? '' : 's'})`
+      return {
+        success: true,
+        commandSucceeded: true,
+        stdout: resultOutput.trim(),
+        stderr: '',
+        returncode: 0,
+        command,
+        attempts
+      }
+    } catch (error: unknown) {
+      const errorMessage = (error as Error).message
+      const processError = ShellTool.readProcessError(error)
+      const timedOut = ShellTool.isTimeoutErrorMessage(errorMessage)
+      const durationMs = Date.now() - attemptStartedAt
 
-          return {
-            success: false,
-            error: timeoutMessage,
-            stdout: '',
-            stderr: timeoutMessage,
-            returncode: -1,
-            command,
-            attempts: [
-              ...attempts,
-              {
-                attempt: attempt + 1,
-                timeoutMs,
-                durationMs,
-                status: 'timeout',
-                error: timeoutMessage
-              }
-            ]
-          }
-        }
-
-        if (
-          errorMessage.includes('failed with exit code') ||
-          processError.exitCode !== -1
-        ) {
-          const exitCodeMatch = errorMessage.match(/exit code (\d+)/)
-          const exitCode =
-            processError.exitCode !== -1
-              ? processError.exitCode
-              : exitCodeMatch && exitCodeMatch[1]
-                ? parseInt(exitCodeMatch[1], 10)
-                : -1
-          const stderrMatch = errorMessage.match(/exit code \d+: (.+)$/)
-          const stderr = processError.stderr ||
-            (stderrMatch && stderrMatch[1] ? stderrMatch[1] : errorMessage)
-          const failureOutput = ShellTool.joinOutput([
-            processError.stdout,
-            stderr
-          ]) || errorMessage
-          attempts.push({
-            attempt: attempt + 1,
-            timeoutMs,
-            durationMs,
-            status: 'error',
-            error: failureOutput
-          })
-
-          return {
-            success: false,
-            error: requiresVisibleTerminal
-              ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
-              : failureOutput,
-            stdout: processError.stdout,
-            stderr: requiresVisibleTerminal
-              ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
-              : stderr,
-            returncode: exitCode,
-            command,
-            attempts
-          }
-        }
-
-        const failureOutput = ShellTool.joinOutput([
-          processError.stdout,
-          processError.stderr
-        ]) || errorMessage
-        attempts.push({
-          attempt: attempt + 1,
-          timeoutMs,
-          durationMs,
-          status: 'error',
-          error: failureOutput
-        })
+      if (timedOut) {
+        const timeoutMessage = `Command timed out after ${ShellTool.formatTimeoutMs(timeoutMs)} (1 attempt)`
 
         return {
           success: false,
-          error: failureOutput,
-          stdout: processError.stdout,
-          stderr: processError.stderr || errorMessage,
+          error: timeoutMessage,
+          stdout: '',
+          stderr: timeoutMessage,
           returncode: -1,
+          command,
+          attempts: [
+            ...attempts,
+            {
+              attempt,
+              timeoutMs,
+              durationMs,
+              status: 'timeout',
+              error: timeoutMessage
+            }
+          ]
+        }
+      }
+
+      if (
+        errorMessage.includes('failed with exit code') ||
+        processError.exitCode !== -1
+      ) {
+        const exitCodeMatch = errorMessage.match(/exit code (\d+)/)
+        const exitCode =
+          processError.exitCode !== -1
+            ? processError.exitCode
+            : exitCodeMatch && exitCodeMatch[1]
+              ? parseInt(exitCodeMatch[1], 10)
+              : -1
+        const stderrMatch = errorMessage.match(/exit code \d+: ([\s\S]*)$/)
+        const parsedErrorOutput =
+          stderrMatch && stderrMatch[1] ? stderrMatch[1].trim() : errorMessage
+        const stderr =
+          processError.stderr || (processError.stdout ? '' : parsedErrorOutput)
+        const failureOutput = ShellTool.joinOutput([
+          processError.stdout,
+          stderr
+        ]) || errorMessage
+        const attemptResult: ShellAttempt = {
+          attempt,
+          timeoutMs,
+          durationMs,
+          status: 'error'
+        }
+        attemptResult.error = failureOutput
+        attempts.push(attemptResult)
+
+        return {
+          success: false,
+          commandSucceeded: false,
+          error: requiresVisibleTerminal
+            ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
+            : failureOutput,
+          stdout: processError.stdout,
+          stderr: requiresVisibleTerminal
+            ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
+            : stderr,
+          returncode: exitCode,
           command,
           attempts
         }
       }
-    }
 
-    return {
-      success: false,
-      error: 'Command failed without an execution result.',
-      stdout: '',
-      stderr: 'Command failed without an execution result.',
-      returncode: -1,
-      command,
-      attempts
+      const failureOutput = ShellTool.joinOutput([
+        processError.stdout,
+        processError.stderr
+      ]) || errorMessage
+      attempts.push({
+        attempt,
+        timeoutMs,
+        durationMs,
+        status: 'error',
+        error: failureOutput
+      })
+
+      return {
+        success: false,
+        error: failureOutput,
+        stdout: processError.stdout,
+        stderr: processError.stderr || errorMessage,
+        returncode: -1,
+        command,
+        attempts
+      }
     }
   }
 
@@ -391,47 +362,12 @@ export default class ShellTool extends Tool {
     }
   }
 
-  /**
-   * Normalizes timeout input to milliseconds while keeping compatibility with
-   * older calls that used seconds and generated calls that often use ms.
-   */
-  private static normalizeTimeoutMs(
-    timeout?: number,
-    timeoutUnit?: ExecuteOptions['timeoutUnit']
-  ): number {
-    const fallbackTimeoutMs = DEFAULT_TIMEOUT_SECONDS * MILLISECONDS_PER_SECOND
+  private static getTimeoutMs(options: ExecuteOptions): number {
+    const timeoutSeconds = options.longRunning
+      ? LONG_RUNNING_TIMEOUT_SECONDS
+      : DEFAULT_TIMEOUT_SECONDS
 
-    if (!Number.isFinite(timeout) || timeout === undefined || timeout <= 0) {
-      return fallbackTimeoutMs
-    }
-
-    if (timeoutUnit === 'milliseconds') {
-      return Math.round(timeout)
-    }
-
-    if (timeoutUnit === 'seconds') {
-      return Math.round(timeout * MILLISECONDS_PER_SECOND)
-    }
-
-    if (timeout >= TIMEOUT_MILLISECONDS_INPUT_THRESHOLD) {
-      return Math.round(timeout)
-    }
-
-    return Math.round(timeout * MILLISECONDS_PER_SECOND)
-  }
-
-  /**
-   * Returns a bounded retry count for timeout-only retries.
-   */
-  private static normalizeTimeoutRetries(timeoutRetries?: number): number {
-    if (!Number.isFinite(timeoutRetries) || timeoutRetries === undefined) {
-      return DEFAULT_TIMEOUT_RETRIES
-    }
-
-    return Math.min(
-      Math.max(Math.floor(timeoutRetries), 0),
-      MAX_TIMEOUT_RETRIES
-    )
+    return timeoutSeconds * MILLISECONDS_PER_SECOND
   }
 
   private static formatTimeoutMs(timeoutMs: number): string {

@@ -46,6 +46,28 @@ function getLLMProviderName(): LLMProviders {
   return CONFIG_STATE.getModelState().getAgentProvider()
 }
 
+const RECOVERY_FAILURE_OBSERVATION_MAX_CHARS = 360
+
+function clipObservationForUser(value: string): string {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= RECOVERY_FAILURE_OBSERVATION_MAX_CHARS) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, RECOVERY_FAILURE_OBSERVATION_MAX_CHARS - 3).trimEnd()}...`
+}
+
+function buildExecutionFailureDraft(execution: ExecutionRecord): string {
+  const observation = StringHelper.redactSecrets(
+    clipObservationForUser(execution.observation)
+  )
+  const statusText = execution.status === 'error'
+    ? `${execution.function} failed`
+    : `${execution.function} stopped making progress`
+
+  return `I couldn't complete the task because ${statusText}. Latest observation: ${observation || 'No detailed observation was returned.'}`
+}
+
 import {
   PLAN_SYSTEM_PROMPT,
   REACT_TEMPERATURE,
@@ -149,10 +171,6 @@ const REACT_HISTORY_COMPACTION_STATE_FILENAME =
   '.react-history-compaction-state.json'
 const REACT_SESSION_STATE_FILENAME_SEPARATOR = '--'
 const REACT_PROMPTS_LOG_DIR = path.join(PROFILE_LOGS_PATH, 'prompts')
-const LOCAL_REACT_MIN_REASONING_PHASES = new Set<ReactPhase>([
-  'execution',
-  'recovery'
-])
 const REPEATED_EXECUTION_LOOP_THRESHOLD = 2
 
 function isLocalAgentProvider(): boolean {
@@ -162,21 +180,9 @@ function isLocalAgentProvider(): boolean {
 }
 
 function getEffectiveReasoningMode(
-  phase: ReactPhase,
+  _phase: ReactPhase,
   requestedMode: LLMReasoningMode
 ): LLMReasoningMode {
-  if (!isLocalAgentProvider()) {
-    return requestedMode
-  }
-
-  if (LOCAL_REACT_MIN_REASONING_PHASES.has(phase)) {
-    return 'off'
-  }
-
-  if (phase === 'planning' && requestedMode === 'on') {
-    return 'guarded'
-  }
-
   return requestedMode
 }
 
@@ -647,6 +653,8 @@ export class ReActLLMDuty extends LLMDuty {
       this.logTitle('execution')
       LogHelper.debug('Phase 2: Execution loop...')
 
+      let focusedRecoveryAfterReplanLimitUsed = false
+
       while (pendingSteps.length > 0 && executionCount < MAX_EXECUTIONS) {
         const currentStep = pendingSteps.shift()!
         executionCount += 1
@@ -834,8 +842,7 @@ export class ReActLLMDuty extends LLMDuty {
           return await finalizeFromSignal({
             intent:
               stepResult.execution.status === 'error' ? 'error' : 'blocked',
-            draft:
-              'Execution stopped because the same tool result repeated without new progress. Summarize the repeated observation and explain the next concrete input or setup needed.',
+            draft: `${buildExecutionFailureDraft(stepResult.execution)} Execution stopped because the same tool result repeated without new progress.`,
             source: 'execution'
           })
         }
@@ -928,8 +935,102 @@ export class ReActLLMDuty extends LLMDuty {
           }
         }
 
+        if (
+          stepResult.execution.status === 'observed' &&
+          pendingSteps.length === 0
+        ) {
+          const selfObservationResult = await runExecutionSelfObservationPhase(
+            caller,
+            executionHistory
+          )
+
+          if (selfObservationResult?.type === 'handoff') {
+            if (currentStepIndex < trackedSteps.length) {
+              trackedSteps[currentStepIndex]!.status = 'completed'
+            }
+            currentExecutingFunction = null
+            emitPlanWidget(
+              trackedSteps,
+              currentStepIndex,
+              planWidgetIdValue,
+              true,
+              currentExecutingFunction
+            )
+
+            return await finalizeFromSignal(selfObservationResult.signal)
+          }
+
+          if (
+            selfObservationResult?.type === 'replan' &&
+            selfObservationResult.steps.length > 0
+          ) {
+            if (replanCount >= MAX_REPLANS) {
+              LogHelper.title(this.name)
+              LogHelper.warning(
+                'Observed-output replanning skipped: max re-plans reached'
+              )
+              stepResult.execution.status = 'error'
+            } else {
+              replanCount += 1
+              stepResult.execution.status = 'error'
+              pendingSteps = selfObservationResult.steps.map((step) => ({
+                function: step.function,
+                label: step.label,
+                ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
+              }))
+
+              LogHelper.title(this.name)
+              LogHelper.debug(
+                `Observed-output re-plan ${replanCount}/${MAX_REPLANS}: ${pendingSteps.map((s) => s.function).join(' -> ')}`
+              )
+              if (selfObservationResult.reason) {
+                LogHelper.debug(
+                  `Observed-output reason: "${selfObservationResult.reason}"`
+                )
+                const normalizedReason = selfObservationResult.reason
+                  .trim()
+                  .replace(/[.?!]+$/g, '')
+                await this.emitProgress(
+                  normalizedReason ? `${normalizedReason}...` : 'Working...'
+                )
+              }
+
+              if (currentStepIndex < trackedSteps.length) {
+                trackedSteps[currentStepIndex]!.status = 'error'
+              }
+              const appendedSteps: TrackedPlanStep[] = pendingSteps.map((s) => ({
+                label: s.label,
+                status: 'pending' as PlanStepStatus
+              }))
+              if (appendedSteps.length > 0) {
+                appendedSteps[0]!.status = 'in_progress'
+              }
+              trackedSteps = [
+                ...trackedSteps.slice(0, currentStepIndex + 1),
+                ...appendedSteps
+              ]
+              currentStepIndex += 1
+
+              currentExecutingFunction = null
+              emitPlanWidget(
+                trackedSteps,
+                null,
+                planWidgetIdValue,
+                true,
+                currentExecutingFunction
+              )
+              continue
+            }
+          } else {
+            stepResult.execution.status = 'error'
+          }
+        }
+
         if (stepResult.execution.status === 'error') {
-          if (replanCount >= MAX_REPLANS) {
+          const shouldUseFocusedRecovery =
+            replanCount >= MAX_REPLANS &&
+            !focusedRecoveryAfterReplanLimitUsed
+          if (replanCount >= MAX_REPLANS && !shouldUseFocusedRecovery) {
             LogHelper.title(this.name)
             LogHelper.warning(
               'Recovery replanning skipped: max re-plans reached'
@@ -948,21 +1049,28 @@ export class ReActLLMDuty extends LLMDuty {
 
             return await finalizeFromSignal({
               intent: 'error',
-              draft:
-                'The task failed after exhausting recovery attempts. Summarize the failed tool observation and what input or setup is needed next.',
+              draft: `${buildExecutionFailureDraft(stepResult.execution)} Recovery attempts were exhausted.`,
               source: 'recovery'
             })
           }
 
           let recoveryPlanResult = null
           try {
+            if (shouldUseFocusedRecovery) {
+              focusedRecoveryAfterReplanLimitUsed = true
+              LogHelper.title(this.name)
+              LogHelper.debug(
+                'Max re-plans reached; trying focused recovery before stopping'
+              )
+            }
             recoveryPlanResult = await runRecoveryPlanningPhase(
               caller,
               catalog,
               history,
               executionHistory,
               currentStep,
-              pendingSteps
+              pendingSteps,
+              { focusedOnly: shouldUseFocusedRecovery }
             )
           } catch (error) {
             LogHelper.title(this.name)
@@ -1106,8 +1214,7 @@ export class ReActLLMDuty extends LLMDuty {
 
           return await finalizeFromSignal({
             intent: 'error',
-            draft:
-              'The tool step failed and recovery could not find another executable path. Explain the failure from execution history and ask for the missing artifact or configuration needed to continue.',
+            draft: `${buildExecutionFailureDraft(stepResult.execution)} Recovery could not find another executable path.`,
             source: 'recovery'
           })
         }
@@ -1972,6 +2079,7 @@ export class ReActLLMDuty extends LLMDuty {
       callLLMText: this.callLLMText.bind(this),
       callLLMWithTools: this.callLLMWithTools.bind(this),
       supportsNativeTools: this.supportsNativeTools,
+      isLocalProvider: isLocalAgentProvider(),
       input: inputOverride ?? this.input,
       history,
       get agentSkillContext(): AgentSkillContext | null {
@@ -2053,8 +2161,7 @@ export class ReActLLMDuty extends LLMDuty {
         ? false
         : (options?.emitReasoning ?? phasePolicy.emitReasoning)
     const shouldStream =
-      (options?.streamToProvider ?? phasePolicy.streamToProvider) &&
-      getLLMProviderName() !== LLMProviders.Local
+      options?.streamToProvider ?? phasePolicy.streamToProvider
     const reasoningGenerationId = shouldEmitReasoning
       ? this.getReasoningGenerationId(
           phase,
@@ -2109,6 +2216,30 @@ export class ReActLLMDuty extends LLMDuty {
       )
     } else {
       result = await LLM_PROVIDER.prompt(prompt, completionParams)
+    }
+
+    if (
+      result &&
+      isLocalAgentProvider() &&
+      shouldStream &&
+      shouldEmitReasoning &&
+      typeof result.output === 'string'
+    ) {
+      this.logTitle(phase)
+      LogHelper.debug(
+        'Retrying local structured completion with thinking disabled after non-JSON streamed output.'
+      )
+      const retryCompletionParams = {
+        ...completionParams
+      }
+      delete retryCompletionParams.onReasoningToken
+
+      result = await LLM_PROVIDER.prompt(prompt, {
+        ...retryCompletionParams,
+        shouldStream: false,
+        reasoningMode: 'off',
+        disableThinking: true
+      })
     }
 
     if (result) {
@@ -2167,8 +2298,7 @@ export class ReActLLMDuty extends LLMDuty {
     const shouldStreamToUser =
       options?.streamToUser ?? shouldStream ?? phasePolicy.streamToUser
     const shouldStreamEffective =
-      (options?.streamToProvider ?? phasePolicy.streamToProvider) &&
-      getLLMProviderName() !== LLMProviders.Local
+      options?.streamToProvider ?? phasePolicy.streamToProvider
     const reasoningGenerationId = shouldEmitReasoning
       ? this.getReasoningGenerationId(
           phase,
@@ -2344,8 +2474,7 @@ export class ReActLLMDuty extends LLMDuty {
     const shouldStreamToUserEffective =
       options?.streamToUser ?? shouldStreamToUser ?? phasePolicy.streamToUser
     const shouldStreamEffective =
-      (options?.streamToProvider ?? phasePolicy.streamToProvider) &&
-      getLLMProviderName() !== LLMProviders.Local
+      options?.streamToProvider ?? phasePolicy.streamToProvider
 
     const toolNames = tools.map((t) => t.function.name).join(', ')
     const choiceLabel =
@@ -2710,14 +2839,14 @@ export class ReActLLMDuty extends LLMDuty {
       return ''
     }
 
-    return JSON.stringify(
+    return StringHelper.redactSecrets(JSON.stringify(
       history.map((log) => ({
         who: log.who,
         message: log.message
       })),
       null,
       2
-    )
+    ))
   }
 
   private buildLogTitle(context?: string): string {
@@ -2771,10 +2900,10 @@ export class ReActLLMDuty extends LLMDuty {
       ]
       const sectionLines = [
         '--- SYSTEM_PROMPT ---',
-        params.systemPrompt,
+        StringHelper.redactSecrets(params.systemPrompt),
         '',
         '--- PHASE_INPUT ---',
-        params.prompt,
+        StringHelper.redactSecrets(params.prompt),
         ''
       ]
 

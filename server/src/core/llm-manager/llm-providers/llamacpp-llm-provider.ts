@@ -40,6 +40,9 @@ const LLAMA_SERVER_LOG_PATH = path.join(
 const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
   enable_thinking: false
 }
+const LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
+  enable_thinking: true
+}
 const LLAMACPP_DISABLE_THINKING_REASONING_FORMAT = 'none'
 
 function wait(delayMs: number): Promise<void> {
@@ -185,6 +188,7 @@ function disableThinkingForStructuredRequest(
 ): Record<string, unknown> {
   const hasTools = Array.isArray(args['tools'])
   const hasResponseFormat = Boolean(args['response_format'])
+  const shouldStream = args['stream'] === true
 
   if (!hasTools && !hasResponseFormat) {
     return args
@@ -196,6 +200,16 @@ function disableThinkingForStructuredRequest(
     !Array.isArray(args['chat_template_kwargs'])
       ? (args['chat_template_kwargs'] as Record<string, unknown>)
       : {}
+
+  if (shouldStream) {
+    return {
+      ...args,
+      chat_template_kwargs: {
+        ...existingChatTemplateKwargs,
+        ...LLAMACPP_ENABLE_THINKING_CHAT_TEMPLATE_KWARGS
+      }
+    }
+  }
 
   return {
     ...args,
@@ -285,7 +299,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
     if (completionParams.shouldStream === true && isPlainTextRequest) {
       LogHelper.title('llama.cpp LLM Provider')
-      LogHelper.info(
+      LogHelper.debug(
         'Using direct llama.cpp streaming chat completion for plain-text request.'
       )
 
@@ -294,7 +308,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
     if (completionParams.shouldStream !== true && isPlainTextRequest) {
       LogHelper.title('llama.cpp LLM Provider')
-      LogHelper.info(
+      LogHelper.debug(
         'Using direct non-stream llama.cpp chat completion for plain-text request.'
       )
 

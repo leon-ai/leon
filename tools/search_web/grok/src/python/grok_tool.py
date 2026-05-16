@@ -13,7 +13,7 @@ from bridges.python.src.sdk.toolkit_config import ToolkitConfig
 
 # Hardcoded default settings for Grok tool
 GROK_API_KEY = None
-GROK_MODEL = "grok-4-1-fast-reasoning"
+GROK_MODEL = "grok-4-fast-reasoning-latest"
 DEFAULT_SETTINGS = {
     "GROK_API_KEY": GROK_API_KEY,
     "GROK_MODEL": GROK_MODEL,
@@ -102,7 +102,7 @@ class GrokTool(BaseTool):
         input: List[Dict[str, str]],
         model: Optional[str] = None,
         temperature: float = 0.7,
-        max_completion_tokens: int = 4096,
+        max_output_tokens: int = 4096,
         stream: bool = False,
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
@@ -125,7 +125,7 @@ class GrokTool(BaseTool):
                 "model": model,
                 "input": input,
                 "temperature": temperature,
-                "max_completion_tokens": max_completion_tokens,
+                "max_output_tokens": max_output_tokens,
                 "stream": stream,
             }
 
