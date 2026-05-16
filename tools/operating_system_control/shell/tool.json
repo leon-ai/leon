@@ -1,18 +1,18 @@
 {
   "$schema": "../../../schemas/tool-schemas/tool.json",
-  "tool_id": "bash",
+  "tool_id": "shell",
   "toolkit_id": "operating_system_control",
-  "name": "Bash",
-  "description": "A tool for executing bash commands on the operating system.",
-  "icon_name": "terminal-line",
+  "name": "Shell",
+  "description": "Execute commands in the active platform shell. Uses Bash-compatible shell commands on Linux/macOS and PowerShell commands on Windows.",
+  "icon_name": "terminal-box-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
     "url": "https://twitter.com/grenlouis"
   },
   "functions": {
-    "executeBashCommand": {
-      "description": "Execute a bash command and return the result.",
+    "executeCommand": {
+      "description": "Execute a command in the active platform shell and return the result.",
       "parameters": {
         "type": "object",
         "properties": {

@@ -21,7 +21,9 @@ import {
   SELF_MODEL_MANAGER,
   CONVERSATION_LOGGER,
   BRAIN,
-  SOCKET_SERVER
+  SOCKET_SERVER,
+  TOOL_CALL_LOGGER,
+  POST_TURN_MAINTENANCE_QUEUE
 } from '@/core'
 import {
   LLMDuties,
@@ -470,17 +472,13 @@ export class ReActLLMDuty extends LLMDuty {
           ...item
         }))
         const dutyResult = this.makeDutyResult(finalAnswer)
-        try {
-          await this.maybeCompactHistoryAfterAnswer(
+        POST_TURN_MAINTENANCE_QUEUE.enqueue(
+          'react history compaction',
+          () => this.maybeCompactHistoryAfterAnswer(
             planWidgetIdValue,
             trackedSteps
           )
-        } catch (error) {
-          LogHelper.title(this.name)
-          LogHelper.warning(
-            `Post-answer history compaction failed: ${String(error)}`
-          )
-        }
+        )
         return dutyResult
       }
       const finalizeFromSignal = async (
@@ -1989,6 +1987,8 @@ export class ReActLLMDuty extends LLMDuty {
       getContextManifest: CONTEXT_MANAGER.getManifest.bind(CONTEXT_MANAGER),
       getSelfModelSnapshot:
         SELF_MODEL_MANAGER.getSnapshot.bind(SELF_MODEL_MANAGER),
+      getPreviousToolArtifacts:
+        TOOL_CALL_LOGGER.getRecentArtifactManifest.bind(TOOL_CALL_LOGGER),
       consumeProviderErrorMessage:
         LLM_PROVIDER.consumeLastProviderErrorMessage.bind(LLM_PROVIDER)
     }

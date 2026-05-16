@@ -13,6 +13,7 @@ import {
   CONVERSATION_LOGGER,
   MESSAGING_APP_MANAGER,
   NLU,
+  POST_TURN_MAINTENANCE_QUEUE,
   SELF_MODEL_MANAGER,
   SOCKET_SERVER,
   TTS
@@ -304,6 +305,7 @@ export default class Brain {
          * It may happen that only a speech is needed
          */
         if (textAnswer) {
+          const finalTextAnswer = textAnswer
           const recentConversationLogs = await CONVERSATION_LOGGER.load({
             nbOfLogsToLoad: 12
           })
@@ -318,37 +320,40 @@ export default class Brain {
           SOCKET_SERVER.emitAnswerToChatClients(
             llmMetrics
               ? {
-                  answer: textAnswer,
+                  answer: finalTextAnswer,
                   llmMetrics
                 }
-              : textAnswer
+              : finalTextAnswer
           )
           await MESSAGING_APP_MANAGER.broadcast({
             message: textAnswer
           })
 
           if (NLU.currentResponseRoute !== 'react') {
-            void SELF_MODEL_MANAGER.observeTurn({
-              userMessage: ownerMessage,
-              assistantMessage: textAnswer,
-              sentAt,
-              route: 'controlled',
-              finalIntent: 'answer'
-            }).catch((error: unknown) => {
-              LogHelper.title('Brain')
-              LogHelper.warning(`Failed to update controlled self model: ${error}`)
-            })
+            POST_TURN_MAINTENANCE_QUEUE.enqueue(
+              'controlled self-model reflection',
+              () => SELF_MODEL_MANAGER.observeTurn({
+                userMessage: ownerMessage,
+                assistantMessage: finalTextAnswer,
+                sentAt,
+                route: 'controlled',
+                finalIntent: 'answer'
+              })
+            )
           }
 
           await CONVERSATION_LOGGER.push({
             who: 'leon',
-            message: textAnswer,
+            message: finalTextAnswer,
             isAddedToHistory: true,
             ...(llmMetrics ? { llmMetrics } : {})
           })
-          await CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(
-            CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
-            ownerMessage
+          POST_TURN_MAINTENANCE_QUEUE.enqueue(
+            'session title generation',
+            () => CONVERSATION_SESSION_MANAGER.generateTitleFromFirstMessage(
+              CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
+              ownerMessage
+            )
           )
         }
 

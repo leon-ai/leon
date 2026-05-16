@@ -66,6 +66,28 @@ export class RuntimeHelper {
     ].join('\n')
   }
 
+  private static escapePowerShellSingleQuotedString(value: string): string {
+    return `'${value.replaceAll('\'', '\'\'')}'`
+  }
+
+  private static buildManagedRuntimePowerShellFunction(
+    name: string,
+    executablePath: string
+  ): string {
+    const escapedExecutablePath =
+      this.escapePowerShellSingleQuotedString(executablePath)
+
+    return [
+      `function ${name} {`,
+      `  if (Test-Path -LiteralPath ${escapedExecutablePath}) {`,
+      `    & ${escapedExecutablePath} @args`,
+      '  } else {',
+      `    & ${name} @args`,
+      '  }',
+      '}'
+    ].join('\n')
+  }
+
   /**
    * Resolve the Node.js runtime binary Leon should use.
    */
@@ -161,6 +183,26 @@ export class RuntimeHelper {
     return functions
       .map(([name, executablePath]) =>
         this.buildManagedRuntimeShellFunction(name, executablePath)
+      )
+      .join('\n\n')
+  }
+
+  /**
+   * Render PowerShell functions that make temp scripts call Leon-managed
+   * runtimes explicitly instead of resolving bare commands through PATH.
+   */
+  public static buildManagedRuntimePowerShellFunctions(): string {
+    const functions: Array<[string, string]> = [
+      ['node', this.getNodeBinPath()],
+      ['python', this.getPythonBinPath()],
+      ['python3', this.getPythonBinPath()],
+      ['pnpm', this.getPNPMBinPath()],
+      ['uv', this.getUVBinPath()]
+    ]
+
+    return functions
+      .map(([name, executablePath]) =>
+        this.buildManagedRuntimePowerShellFunction(name, executablePath)
       )
       .join('\n\n')
   }
