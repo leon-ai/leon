@@ -1,6 +1,6 @@
 {
   "search_provider": "grok",
-  "grok_model": "grok-4-1-fast-reasoning",
+  "grok_model": "grok-4-fast-reasoning-latest",
   "grok_temperature": 0.7,
   "grok_max_tokens": 4096
 }

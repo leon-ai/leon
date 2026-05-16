@@ -11,6 +11,8 @@ type ExecutionHistoryFormatMode = 'compact' | 'complete'
 
 const COMPACT_EXECUTION_HISTORY_MAX_DETAILED_STEPS = 6
 const STRUCTURED_SUMMARY_PRIORITIES = [
+  'output_log_path',
+  'outputLogPath',
   'content',
   'snippet',
   'text',
@@ -289,6 +291,10 @@ function formatObservationSummary(
     typeof parsed['status'] === 'string' ? parsed['status'].trim() : ''
   const message =
     typeof parsed['message'] === 'string' ? clipText(parsed['message'], 160) : ''
+  const outputLogPath =
+    typeof parsed['output_log_path'] === 'string'
+      ? parsed['output_log_path'].trim()
+      : ''
 
   if (status) {
     parts.push(status)
@@ -298,12 +304,20 @@ function formatObservationSummary(
     parts.push(message)
   }
 
+  if (outputLogPath) {
+    parts.push(`outputLogPath=${outputLogPath}`)
+  }
+
   const toolFailure =
-    parsed['tool_output_failure'] &&
-    typeof parsed['tool_output_failure'] === 'object' &&
-    !Array.isArray(parsed['tool_output_failure'])
-      ? (parsed['tool_output_failure'] as Record<string, unknown>)
-      : null
+    parsed['observed_tool_failure'] &&
+    typeof parsed['observed_tool_failure'] === 'object' &&
+    !Array.isArray(parsed['observed_tool_failure'])
+      ? (parsed['observed_tool_failure'] as Record<string, unknown>)
+      : parsed['tool_output_failure'] &&
+          typeof parsed['tool_output_failure'] === 'object' &&
+          !Array.isArray(parsed['tool_output_failure'])
+        ? (parsed['tool_output_failure'] as Record<string, unknown>)
+        : null
   const toolFailureError =
     toolFailure && typeof toolFailure['error'] === 'string'
       ? clipText(toolFailure['error'] as string, 160)
@@ -462,24 +476,33 @@ export function parseStepsFromArgs(
   rawSteps: Record<string, unknown>[]
 ): PlanStep[] {
   return rawSteps
-    .filter(
-      (s) =>
-        typeof s['function'] === 'string' &&
-        (s['function'] as string).trim()
-    )
-    .map((s) => ({
-      function: (s['function'] as string).trim(),
-      label:
-        typeof s['label'] === 'string' && (s['label'] as string).trim()
-          ? (s['label'] as string).trim()
-          : (s['function'] as string).trim(),
-      ...(
-        typeof s['agent_skill_id'] === 'string' &&
-        (s['agent_skill_id'] as string).trim()
-          ? { agentSkillId: (s['agent_skill_id'] as string).trim() }
-          : {}
-      )
-    }))
+    .map((s) => {
+      const functionName =
+        typeof s['function'] === 'string' && s['function'].trim()
+          ? s['function'].trim()
+          : typeof s['function_name'] === 'string' && s['function_name'].trim()
+            ? s['function_name'].trim()
+            : ''
+
+      if (!functionName) {
+        return null
+      }
+
+      return {
+        function: functionName,
+        label:
+          typeof s['label'] === 'string' && (s['label'] as string).trim()
+            ? (s['label'] as string).trim()
+            : functionName,
+        ...(
+          typeof s['agent_skill_id'] === 'string' &&
+          (s['agent_skill_id'] as string).trim()
+            ? { agentSkillId: (s['agent_skill_id'] as string).trim() }
+            : {}
+        )
+      }
+    })
+    .filter((step): step is PlanStep => Boolean(step))
 }
 
 /**

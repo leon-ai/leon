@@ -28,6 +28,9 @@ import {
   extractArchive
 } from '@sdk/utils'
 
+const COMMAND_OUTPUT_PROGRESS_INTERVAL_MS = 2_000
+const COMMAND_OUTPUT_MAX_CHARS = 4_000
+
 // Progress callback type for reporting tool progress
 export type ProgressCallback = (progress: {
   percentage?: number
@@ -374,7 +377,47 @@ export abstract class Tool {
     return new Promise((resolve, reject) => {
       const startTime = Date.now()
       let outputBuffer = ''
+      let pendingOutput = ''
+      let outputFlushTimer: NodeJS.Timeout | null = null
+      let timeoutHandle: NodeJS.Timeout | null = null
       const env = this.getBundledLibraryEnv()
+      const flushOutputDelta = async (): Promise<void> => {
+        if (!pendingOutput) {
+          return
+        }
+
+        const output = pendingOutput
+        pendingOutput = ''
+        await this.reportCommandOutputDelta(output, commandString, toolGroupId)
+      }
+      const scheduleOutputDelta = (output: string): void => {
+        pendingOutput += output
+
+        if (outputFlushTimer) {
+          return
+        }
+
+        outputFlushTimer = setTimeout(() => {
+          outputFlushTimer = null
+          void flushOutputDelta()
+        }, COMMAND_OUTPUT_PROGRESS_INTERVAL_MS)
+      }
+      const clearOutputFlushTimer = (): void => {
+        if (!outputFlushTimer) {
+          return
+        }
+
+        clearTimeout(outputFlushTimer)
+        outputFlushTimer = null
+      }
+      const clearCommandTimeout = (): void => {
+        if (!timeoutHandle) {
+          return
+        }
+
+        clearTimeout(timeoutHandle)
+        timeoutHandle = null
+      }
 
       const childProcess = spawn(binaryPath, args, {
         cwd: execOptions.cwd,
@@ -386,6 +429,7 @@ export abstract class Tool {
       childProcess.stdout.on('data', (data) => {
         const output = data.toString()
         outputBuffer += output
+        scheduleOutputDelta(output)
 
         if (onOutput) {
           onOutput(output, false)
@@ -401,6 +445,7 @@ export abstract class Tool {
       childProcess.stderr.on('data', (data) => {
         const output = data.toString()
         outputBuffer += output
+        scheduleOutputDelta(output)
 
         if (onOutput) {
           onOutput(output, true)
@@ -410,6 +455,9 @@ export abstract class Tool {
       // Handle process completion
       childProcess.on('close', async (code) => {
         const executionTime = Date.now() - startTime
+        clearCommandTimeout()
+        clearOutputFlushTimer()
+        await flushOutputDelta()
 
         if (code === 0) {
           await this.report(
@@ -447,14 +495,25 @@ export abstract class Tool {
             commandString,
             toolGroupId
           )
-          reject(
-            new Error(`Command failed with exit code ${code}: ${outputBuffer}`)
-          )
+          const commandError = new Error(
+            `Command failed with exit code ${code}: ${outputBuffer}`
+          ) as Error & {
+            stdout?: string
+            stderr?: string
+            status?: number | null
+          }
+          commandError.stdout = outputBuffer
+          commandError.stderr = ''
+          commandError.status = code
+          reject(commandError)
         }
       })
 
       // Handle process errors
       childProcess.on('error', async (error) => {
+        clearCommandTimeout()
+        clearOutputFlushTimer()
+        await flushOutputDelta()
         await this.report(
           'bridges.tools.command_error',
           {
@@ -468,7 +527,10 @@ export abstract class Tool {
 
       // Handle timeout
       if (execOptions.timeout) {
-        setTimeout(() => {
+        timeoutHandle = setTimeout(() => {
+          timeoutHandle = null
+          clearOutputFlushTimer()
+          void flushOutputDelta()
           childProcess.kill('SIGTERM')
           this.report(
             'bridges.tools.command_timeout',
@@ -598,18 +660,22 @@ export abstract class Tool {
     return binaryPath
   }
 
-  private formatCommandOutput(output: string): string | null {
+  private formatCommandOutput(
+    output: string,
+    options: { preserveWhitespace?: boolean } = {}
+  ): string | null {
     const trimmed = output.trim()
     if (!trimmed) {
       return null
     }
 
-    const maxLength = 4000
-    if (trimmed.length <= maxLength) {
-      return trimmed
+    const value = options.preserveWhitespace ? output : trimmed
+    const maxLength = COMMAND_OUTPUT_MAX_CHARS
+    if (value.length <= maxLength) {
+      return value
     }
 
-    return `${trimmed.slice(0, maxLength)}\n... (truncated)`
+    return `${value.slice(0, maxLength)}\n... (truncated)`
   }
 
   private async reportCommandOutput(
@@ -624,6 +690,28 @@ export abstract class Tool {
 
     await this.report(
       'bridges.tools.command_output',
+      {
+        command,
+        output: formatted
+      },
+      toolGroupId
+    )
+  }
+
+  private async reportCommandOutputDelta(
+    output: string,
+    command: string,
+    toolGroupId: string
+  ): Promise<void> {
+    const formatted = this.formatCommandOutput(output, {
+      preserveWhitespace: true
+    })
+    if (!formatted) {
+      return
+    }
+
+    await this.report(
+      'bridges.tools.command_output_delta',
       {
         command,
         output: formatted

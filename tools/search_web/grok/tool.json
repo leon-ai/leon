@@ -56,7 +56,7 @@
               "temperature": {
                 "type": "number"
               },
-              "max_completion_tokens": {
+              "max_output_tokens": {
                 "type": "number"
               },
               "stream": {

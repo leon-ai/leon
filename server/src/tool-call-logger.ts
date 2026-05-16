@@ -5,6 +5,7 @@ import path from 'node:path'
 import { PROFILE_LOGS_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
+import { StringHelper } from '@/helpers/string-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 
 interface ToolCallLogEntry {
@@ -118,13 +119,27 @@ export class ToolCallLogger {
 
   private serializeLogValue(value: unknown): string {
     if (typeof value === 'string') {
+      return StringHelper.redactSecrets(value)
+    }
+
+    try {
+      return StringHelper.redactSecrets(JSON.stringify(value, null, 2))
+    } catch {
+      return StringHelper.redactSecrets(String(value))
+    }
+  }
+
+  private redactLogRecordValue<T>(value: T): T {
+    if (value === null || value === undefined) {
       return value
     }
 
     try {
-      return JSON.stringify(value, null, 2)
+      return JSON.parse(
+        StringHelper.redactSecrets(JSON.stringify(value))
+      ) as T
     } catch {
-      return String(value)
+      return value
     }
   }
 
@@ -216,7 +231,7 @@ export class ToolCallLogger {
     const lines = [
       dateTime,
       `Status: ${input.status}`,
-      `Message: ${input.message}`,
+      `Message: ${StringHelper.redactSecrets(input.message)}`,
       `Toolkit ID: ${input.toolkitId || 'null'}`,
       `Tool ID: ${input.toolId}`,
       `Function Name: ${input.functionName || 'null'}`,
@@ -287,7 +302,7 @@ export class ToolCallLogger {
     }
 
     target.status = input.status
-    target.message = input.message
+    target.message = StringHelper.redactSecrets(input.message)
     target.outputLogPath = outputLogPath
     target.outputPreview = this.buildOutputPreview(input.output)
   }
@@ -299,7 +314,7 @@ export class ToolCallLogger {
     const queryId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 
     this.pendingRecords.set(queryId, {
-      ownerQuery,
+      ownerQuery: StringHelper.redactSecrets(ownerQuery),
       sessionId: getActiveConversationSessionId(),
       createdAt: Date.now(),
       toolCalls: []
@@ -335,16 +350,20 @@ export class ToolCallLogger {
 
     record.toolCalls.push({
       toolName: `${input.toolkitId}.${input.toolId}.${input.functionName}`,
-      params: input.params
+      params: this.redactLogRecordValue(input.params)
     })
   }
 
-  public async recordToolOutput(input: ToolOutputLogInput): Promise<void> {
+  public async recordToolOutput(
+    input: ToolOutputLogInput
+  ): Promise<string | null> {
     const outputLogPath = await this.queueToolOutputPersist(input)
 
     if (outputLogPath) {
       this.attachToolOutputToActiveRecord(input, outputLogPath)
     }
+
+    return outputLogPath
   }
 
   public async getRecentArtifactManifest(): Promise<string> {

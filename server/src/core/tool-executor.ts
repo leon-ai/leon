@@ -44,6 +44,7 @@ interface ToolExecutionResult {
     function_name: string | null
     input: string | null
     parsed_input: Record<string, unknown> | null
+    output_log_path?: string | null
     output: Record<string, unknown>
   }
   toolLabel?: string | undefined
@@ -401,7 +402,7 @@ export default class ToolExecutor {
       result.toolLabel = `${params.resolvedTool.toolkitId}.${params.resolvedTool.toolId}`
     }
 
-    await TOOL_CALL_LOGGER.recordToolOutput({
+    const outputLogPath = await TOOL_CALL_LOGGER.recordToolOutput({
       toolkitId: result.data.toolkit_id,
       toolId: result.data.tool_id || params.resolvedTool?.toolId || 'unknown',
       functionName: result.data.function_name,
@@ -411,6 +412,10 @@ export default class ToolExecutor {
       parsedInput: result.data.parsed_input,
       output: result.data.output
     })
+
+    if (outputLogPath) {
+      result.data.output_log_path = outputLogPath
+    }
 
     return result
   }
