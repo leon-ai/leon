@@ -52,7 +52,10 @@ import setupNVIDIALibs from './setup-nvidia-libs.js'
 import setupPyTorch from './setup-pytorch.js'
 import setupTCPServerModels from './setup-tcp-server-models'
 import inspectLocalAICapability from './local-ai-capability'
-import inspectVoiceSetupState from './inspect-voice-setup-state'
+import {
+  inspectLocalAISetupState,
+  inspectVoiceSetupState
+} from './inspect-setup-state'
 import postSetup from './post-setup'
 import { printSetupBanner } from './setup-banner'
 import { tellSetupCompletionJoke } from './setup-jokes'
@@ -126,6 +129,11 @@ async function resolveExistingLLMChoice() {
       setupLocalAI: overrideTargets.some((target) =>
         isExplicitLocalLLMTarget(target)
       ),
+      targetType: overrideTargets.some((target) =>
+        isExplicitLocalLLMTarget(target)
+      )
+        ? 'explicitLocal'
+        : 'remote',
       label: overrideTargets.join(', ')
     }
   }
@@ -134,6 +142,7 @@ async function resolveExistingLLMChoice() {
     return {
       hasResolvedChoice: false,
       setupLocalAI: false,
+      targetType: 'disabled',
       label: ''
     }
   }
@@ -141,6 +150,12 @@ async function resolveExistingLLMChoice() {
   return {
     hasResolvedChoice: true,
     setupLocalAI: leonLLM === '' || isExplicitLocalLLMTarget(leonLLM),
+    targetType:
+      leonLLM === ''
+        ? 'defaultLocal'
+        : isExplicitLocalLLMTarget(leonLLM)
+          ? 'explicitLocal'
+          : 'remote',
     label: leonLLM === '' ? 'Local AI' : leonLLM
   }
 }
@@ -209,8 +224,12 @@ async function syncLLMSetupChoice(preferences) {
     setupVoice: false
   }
   let localAICapability = null
+  let localAISetupState = {
+    isInstalled: false,
+    label: ''
+  }
   let voiceSetupState = {
-    isReady: false
+    isInstalled: false
   }
   const getExitCodeFromSignal = (signal) => (signal === 'SIGINT' ? 130 : 143)
 
@@ -267,6 +286,8 @@ async function syncLLMSetupChoice(preferences) {
 
       currentStep = 'resolveExistingLLMChoice'
       const existingLLMChoice = await resolveExistingLLMChoice()
+      currentStep = 'inspectLocalAISetupState'
+      localAISetupState = inspectLocalAISetupState()
       currentStep = 'inspectVoiceSetupState'
       voiceSetupState = inspectVoiceSetupState()
 
@@ -274,6 +295,7 @@ async function syncLLMSetupChoice(preferences) {
       preferences = await setupPreferences(
         localAICapability,
         existingLLMChoice,
+        localAISetupState,
         voiceSetupState
       )
     }

@@ -17,7 +17,7 @@ Use the bundled scripts for the actual web fetching and bounded crawling:
 - `scripts/fetch-page.mjs`: fetch one page, extract compact readable text, links, and query snippets.
 - `scripts/crawl-web.mjs`: crawl from one or more start URLs, follow relevant links, and stop at limits or strong matches.
 
-Run scripts with `node`. Leon's bash tool injects runtime shims, so `node`
+Run scripts with `node`. Leon's shell tool injects runtime shims, so `node`
 uses Leon's managed Node.js binary when available and falls back to `PATH` only
 when the managed binary is missing.
 

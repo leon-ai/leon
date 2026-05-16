@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { SystemHelper } from '@/helpers/system-helper'
 import { LEON_HOME_PATH } from '@/leon-roots'
 import {
   TOOLKIT_REGISTRY,
@@ -67,6 +68,10 @@ const TOOL_ARGUMENT_LLM_OPTIONS = {
   streamToProvider: false
 } satisfies LLMCallOptions
 
+const SHELL_EXECUTE_FUNCTION = 'operating_system_control.shell.executeCommand'
+const READ_TOOL_ARTIFACT_FUNCTION =
+  'operating_system_control.file.readToolArtifact'
+
 const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
   'bridges.tools.creating_bins_directory',
   'bridges.tools.binary_not_found',
@@ -101,6 +106,22 @@ async function buildExecutionMemorySection(
     `Execution memory injection disabled [${toolkitId}] (use structured_knowledge.memory.read when memory is needed)`
   )
   return 'Execution Memory: none'
+}
+
+async function buildPreviousToolArtifactsExecutionSection(
+  caller: LLMCaller,
+  qualifiedName: string
+): Promise<string> {
+  if (qualifiedName !== READ_TOOL_ARTIFACT_FUNCTION) {
+    return ''
+  }
+
+  const previousToolArtifacts =
+    (await caller.getPreviousToolArtifacts?.())?.trim() || ''
+
+  return previousToolArtifacts
+    ? `\n\n<previous_tool_artifacts>\n${previousToolArtifacts}\n</previous_tool_artifacts>`
+    : ''
 }
 
 function buildExecutionPromptSections(params: {
@@ -1407,6 +1428,8 @@ async function executeFunctionWithNativeTools(
     EXECUTE_SYSTEM_PROMPT,
     'execution'
   )
+  const previousToolArtifactsSection =
+    await buildPreviousToolArtifactsExecutionSection(caller, qualifiedName)
 
   const tool: OpenAITool = {
     type: 'function',
@@ -1489,6 +1512,10 @@ async function executeFunctionWithNativeTools(
     }
 
     if (toolResult.execution.status === 'error') {
+      if (qualifiedName === SHELL_EXECUTE_FUNCTION) {
+        return toolResult
+      }
+
       if (toolFailureRetries < MAX_TOOL_FAILURE_RETRIES) {
         toolFailureRetries += 1
         lastError = extractFailureMessageFromObservation(
@@ -1506,7 +1533,7 @@ async function executeFunctionWithNativeTools(
     const retryNote = lastError
       ? `\n\nPrevious attempt failed: ${lastError}.${lastFailedToolInput ? `\nPrevious failed tool_input: ${lastFailedToolInput}\nDo not reuse the same tool_input. Change the arguments to address the failure.` : ' Please fix the arguments.'}`
       : ''
-    const prompt = `<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}`
+    const prompt = `<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}${previousToolArtifactsSection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}`
 
     const result = await caller.callLLMWithTools(
       prompt,
@@ -1687,6 +1714,8 @@ async function executeFunctionWithJSONMode(
     EXECUTE_SYSTEM_PROMPT,
     'execution'
   )
+  const previousToolArtifactsSection =
+    await buildPreviousToolArtifactsExecutionSection(caller, qualifiedName)
 
   const executeSchema = {
     type: 'object',
@@ -1745,7 +1774,7 @@ async function executeFunctionWithJSONMode(
     const retryNote = lastError
       ? `\n\nPrevious attempt failed: ${lastError}.${lastFailedToolInput ? `\nPrevious failed tool_input: ${lastFailedToolInput}\nDo not reuse the same tool_input. Change the arguments to address the failure.` : ' Please fix the tool_input.'}`
       : ''
-    const prompt = `<function>\nName: ${qualifiedName}\nDescription: ${functionConfig.description}\n</function>\n\n<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n<parameters_schema>\n${paramsSchema}\n</parameters_schema>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}\n\n<task>\nProvide the tool_input for this function.\n</task>`
+    const prompt = `<function>\nName: ${qualifiedName}\nDescription: ${functionConfig.description}\n</function>\n\n<current_plan_step>\nNumber: ${currentStepNumber}\nLabel: ${currentStepLabel}\nInstruction: Execute only this step now and focus on this step objective.${previousInputsSection}\n</current_plan_step>\n\n<parameters_schema>\n${paramsSchema}\n</parameters_schema>\n\n${activeAgentSkillSection ? `${activeAgentSkillSection}\n\n` : ''}${toolkitContextSection}${contextManifestSection ? `\n\n${contextManifestSection}` : ''}\n\n${executionMemorySection}${previousToolArtifactsSection}\n\n<execution_history>\n${historySection}\n</execution_history>\n\n<user_request>\n${caller.input}\n</user_request>${retryNote ? `\n\n<retry_context>\n${retryNote.trim()}\n</retry_context>` : ''}\n\n<task>\nProvide the tool_input for this function.\n</task>`
 
     const completionResult = await caller.callLLM(
       prompt,
@@ -1891,6 +1920,10 @@ async function executeFunctionWithJSONMode(
       }
 
       if (toolResult.execution.status === 'error') {
+        if (qualifiedName === SHELL_EXECUTE_FUNCTION) {
+          return toolResult
+        }
+
         if (toolFailureRetries < MAX_TOOL_FAILURE_RETRIES) {
           toolFailureRetries += 1
           lastError = extractFailureMessageFromObservation(
@@ -1967,46 +2000,63 @@ export async function runToolExecution(
     }
   }
 
-  // For bash commands, write the command to a temp script file so that
-  // base-tool's escapeShellArg does not destroy shell metacharacters
-  // (quotes, pipes, redirects, etc.). The bash tool receives a simple
+  // For shell commands, write the command to a temp script file so that
+  // base-tool's argument escaping does not destroy shell metacharacters
+  // (quotes, pipes, redirects, etc.). The shell tool receives a simple
   // file path instead of a raw command string.
-  let bashScriptPath: string | null = null
+  let shellScriptPath: string | null = null
   if (
-    toolId === 'bash' &&
-    functionName === 'executeBashCommand' &&
+    toolId === 'shell' &&
+    functionName === 'executeCommand' &&
     toolExecutionInput.parsedInput?.['command']
   ) {
     const command = toolExecutionInput.parsedInput['command'] as string
-    const scriptDir = join(tmpdir(), 'leon_bash_scripts')
+    const scriptDir = join(tmpdir(), 'leon_shell_scripts')
     mkdirSync(scriptDir, { recursive: true })
-    bashScriptPath = join(
+    const scriptExtension = SystemHelper.isWindows() ? 'ps1' : 'sh'
+    shellScriptPath = join(
       scriptDir,
-      `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.sh`
+      `cmd_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.${scriptExtension}`
     )
-    const managedRuntimeFunctions = RuntimeHelper.buildManagedRuntimeShellFunctions()
-    const escapedLeonHomePath = LEON_HOME_PATH.replaceAll('"', '\\"')
+    const escapedLeonHomePath = SystemHelper.isWindows()
+      ? LEON_HOME_PATH.replaceAll('\'', '\'\'')
+      : LEON_HOME_PATH.replaceAll('"', '\\"')
+    const scriptContent = SystemHelper.isWindows()
+      ? [
+          '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
+          `$env:LEON_HOME = '${escapedLeonHomePath}'`,
+          `$env:LEON_HOME_PATH = '${escapedLeonHomePath}'`,
+          '',
+          RuntimeHelper.buildManagedRuntimePowerShellFunctions(),
+          '',
+          '# LLM-generated PowerShell command starts here.',
+          '$ErrorActionPreference = "Stop"',
+          command,
+          ''
+        ].join('\n')
+      : [
+          '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
+          `export LEON_HOME="${escapedLeonHomePath}"`,
+          `export LEON_HOME_PATH="${escapedLeonHomePath}"`,
+          '',
+          RuntimeHelper.buildManagedRuntimeShellFunctions(),
+          '',
+          '# LLM-generated shell command starts here.',
+          'set -e',
+          command,
+          ''
+        ].join('\n')
+
     writeFileSync(
-      bashScriptPath,
-      [
-        '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
-        `export LEON_HOME="${escapedLeonHomePath}"`,
-        `export LEON_HOME_PATH="${escapedLeonHomePath}"`,
-        '',
-        managedRuntimeFunctions,
-        '',
-        '# LLM-generated bash command starts here.',
-        'set -e',
-        command,
-        ''
-      ].join('\n'),
+      shellScriptPath,
+      scriptContent,
       { mode: 0o755 }
     )
 
     // Replace the command with the script path
     toolExecutionInput.parsedInput = {
       ...toolExecutionInput.parsedInput,
-      command: bashScriptPath
+      command: shellScriptPath
     }
     toolExecutionInput.toolInput = JSON.stringify(
       toolExecutionInput.parsedInput

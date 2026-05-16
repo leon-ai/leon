@@ -249,7 +249,7 @@ async function main(): Promise<void> {
 
   await fs.writeFile(
     tempAssetPath,
-    'Hey Leon, please list the files on your project root.\n',
+    `Please list the files in this exact project root directory: ${process.cwd()}.\n`,
     'utf8'
   )
 

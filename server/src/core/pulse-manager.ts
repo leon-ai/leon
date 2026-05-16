@@ -1113,14 +1113,17 @@ export default class PulseManager {
         route: 'pulse',
         toolExecutions
       })
-      await core.SELF_MODEL_MANAGER.observeTurn({
-        userMessage: `${PULSE_REACT_SENTINEL} ${matter.turnPrompt}`,
-        assistantMessage: output,
-        sentAt: nowTs,
-        route: 'pulse',
-        finalIntent,
-        toolExecutions
-      })
+      core.POST_TURN_MAINTENANCE_QUEUE.enqueue(
+        'pulse self-model reflection',
+        () => core.SELF_MODEL_MANAGER.observeTurn({
+          userMessage: `${PULSE_REACT_SENTINEL} ${matter.turnPrompt}`,
+          assistantMessage: output,
+          sentAt: nowTs,
+          route: 'pulse',
+          finalIntent,
+          toolExecutions
+        })
+      )
     }
 
     if (output && matter.notifyOwner) {
@@ -1446,6 +1449,9 @@ export default class PulseManager {
         text: string,
         confidence?: number
       ): Promise<void>
+    }
+    POST_TURN_MAINTENANCE_QUEUE: {
+      enqueue(label: string, task: () => Promise<void> | void): void
     }
     SOCKET_SERVER: {
       emitAnswerToChatClients(answerData: unknown): void

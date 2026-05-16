@@ -37,6 +37,8 @@ const PERSISTENT_EXTRACTION_MAX_RETRIES = 1
 const PERSISTENT_EXTRACTION_MAX_TOKENS = 220
 const PERSISTENT_EXTRACTION_MAX_USER_CHARS = 1_600
 const PERSISTENT_EXTRACTION_MAX_ASSISTANT_CHARS = 1_200
+const PERSISTENT_EXTRACTION_MIN_USER_CHARS = 72
+const PERSISTENT_EXTRACTION_MIN_USER_WORDS = 12
 const STORAGE_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1_000
 const SOFT_DELETED_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000
 const DISCUSSION_ACTIVE_RETENTION_DAYS = 30
@@ -199,15 +201,15 @@ function truncateForExtraction(content: string, maxChars: number): string {
   return `${content.slice(0, maxChars).trimEnd()}...`
 }
 
-function shouldAttemptPersistentExtraction(
-  userMessage: string,
-  assistantMessage: string
-): boolean {
+function shouldAttemptPersistentExtraction(userMessage: string): boolean {
   const userWordCount = userMessage.split(/\s+/).filter(Boolean).length
-  const assistantWordCount = assistantMessage.split(/\s+/).filter(Boolean).length
 
-  // Keep this generic (no keyword checks): skip only very short/low-signal turns.
-  return userWordCount >= 4 || assistantWordCount >= 8
+  // Keep this generic (no keyword checks): only owner-authored substance
+  // should trigger this background LLM extraction.
+  return (
+    userMessage.length >= PERSISTENT_EXTRACTION_MIN_USER_CHARS ||
+    userWordCount >= PERSISTENT_EXTRACTION_MIN_USER_WORDS
+  )
 }
 
 export default class MemoryManager {
@@ -1511,8 +1513,7 @@ export default class MemoryManager {
 
     if (
       !shouldAttemptPersistentExtraction(
-        normalizedUserMessage,
-        normalizedAssistantMessage
+        normalizedUserMessage
       )
     ) {
       LogHelper.title('Memory Manager')
