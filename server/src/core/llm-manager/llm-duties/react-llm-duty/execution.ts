@@ -77,7 +77,6 @@ const MAX_SHELL_REPAIR_ATTEMPTS = 1
 const SHELL_EXECUTE_FUNCTION = 'operating_system_control.shell.executeCommand'
 interface ShellCommandProbe {
   executable: string
-  hasOptions: boolean
 }
 
 const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
@@ -236,15 +235,6 @@ function clipShellObservation(value: string, maxChars: number): string {
   return `${normalized.slice(0, maxChars - 3).trimEnd()}...`
 }
 
-function quotePosixShellArg(value: string): string {
-  const escaped = value.replaceAll('\'', '\'\\\'\'')
-  return `'${escaped}'`
-}
-
-function quotePowerShellString(value: string): string {
-  return `'${value.replaceAll('\'', '\'\'')}'`
-}
-
 function tokenizeFirstShellCommand(command: string): string[] {
   const tokens: string[] = []
   let current = ''
@@ -343,7 +333,7 @@ function extractShellCommandProbe(command: string): ShellCommandProbe | null {
   while (
     commandIndex < tokens.length &&
     isEnvironmentAssignmentToken(tokens[commandIndex]!)
-  ) {
+    ) {
     commandIndex += 1
   }
 
@@ -352,28 +342,13 @@ function extractShellCommandProbe(command: string): ShellCommandProbe | null {
     return null
   }
 
-  const args = tokens.slice(commandIndex + 1)
   return {
-    executable,
-    hasOptions: args.some((arg) => arg.length > 1 && arg.startsWith('-'))
+    executable
   }
 }
 
 function buildShellHelpStepLabel(executable: string): string {
   return `Inspect ${executable} help`
-}
-
-function hasObservedShellHelp(
-  executionHistory: ExecutionRecord[],
-  executable: string
-): boolean {
-  const expectedStepLabel = buildShellHelpStepLabel(executable)
-  return executionHistory.some(
-    (execution) =>
-      execution.function === SHELL_EXECUTE_FUNCTION &&
-      execution.stepLabel === expectedStepLabel &&
-      execution.status === 'success'
-  )
 }
 
 function findObservedShellHelp(
@@ -433,62 +408,6 @@ function buildObservedShellHelpSection(
     : ''
 }
 
-function buildShellHelpProbeCommand(executable: string): string {
-  if (SystemHelper.isWindows()) {
-    const quotedExecutable = quotePowerShellString(executable)
-    return [
-      `$command = Get-Command ${quotedExecutable} -ErrorAction SilentlyContinue`,
-      `if (-not $command) { throw "Command not found: ${executable}" }`,
-      `try { & ${quotedExecutable} --help }`,
-      `catch { try { & ${quotedExecutable} -h } catch { & ${quotedExecutable} help } }`
-    ].join('\n')
-  }
-
-  const quotedExecutable = quotePosixShellArg(executable)
-  return [
-    `command -v ${quotedExecutable} >/dev/null 2>&1`,
-    `{ ${quotedExecutable} --help || ${quotedExecutable} -h || ${quotedExecutable} help; } 2>&1 | head -n 200`
-  ].join('\n')
-}
-
-function buildShellHelpProbeToolInput(executable: string): string {
-  return JSON.stringify({
-    command: buildShellHelpProbeCommand(executable),
-    options: {
-      captureOutput: true
-    }
-  })
-}
-
-async function runShellHelpProbe(params: {
-  executable: string
-  toolkitId: string
-  toolId: string
-  functionName: string
-  functionConfig: FunctionConfig
-  executionHistory: ExecutionRecord[]
-}): Promise<string> {
-  const helpToolInput = buildShellHelpProbeToolInput(params.executable)
-  const helpResult = await runToolExecution(
-    params.toolkitId,
-    params.toolId,
-    params.functionName,
-    helpToolInput,
-    params.functionConfig,
-    JSON.parse(helpToolInput) as Record<string, unknown>,
-    buildShellHelpStepLabel(params.executable)
-  )
-
-  params.executionHistory.push(helpResult.execution)
-
-  const statusLabel =
-    helpResult.execution.status === 'success' ? 'observed' : 'failed'
-  return `Local help probe for "${params.executable}" ${statusLabel}: ${clipShellObservation(
-    helpResult.execution.observation,
-    SHELL_HELP_OBSERVATION_MAX_CHARS
-  )}`
-}
-
 function getShellCommandFromToolInput(toolInput: string): string {
   try {
     const parsed = JSON.parse(toolInput) as Record<string, unknown>
@@ -538,9 +457,9 @@ async function runShellToolInputRepair(params: {
   }
   const helpSection = observedHelp
     ? `<local_command_help>\n${clipShellObservation(
-        observedHelp,
-        SHELL_HELP_OBSERVATION_MAX_CHARS
-      )}\n</local_command_help>\n\n`
+      observedHelp,
+      SHELL_HELP_OBSERVATION_MAX_CHARS
+    )}\n</local_command_help>\n\n`
     : ''
   const prompt = `<function>
 Name: ${params.qualifiedName}
@@ -561,9 +480,9 @@ ${params.failedToolInput}
 
 <failed_observation>
 ${clipShellObservation(
-  params.failedObservation,
-  SHELL_REPAIR_OBSERVATION_MAX_CHARS
-)}
+    params.failedObservation,
+    SHELL_REPAIR_OBSERVATION_MAX_CHARS
+  )}
 </failed_observation>
 
 <task>
@@ -950,8 +869,8 @@ function extractExecutionReplanSteps(
             typeof step['agent_skill_id'] === 'string' &&
             (step['agent_skill_id'] as string).trim()
               ? {
-                  agentSkillId: (step['agent_skill_id'] as string).trim()
-                }
+                agentSkillId: (step['agent_skill_id'] as string).trim()
+              }
               : {}
           )
         }
@@ -999,6 +918,7 @@ Use only the user request and collected observations to decide whether the reque
 - Treat inferred runtime signals (timezone, locale, VPN/proxy, IP/location hints) as environment hints, not confirmed owner facts.
 - If the remaining gap is a missing owner fact or a missing dedicated retrieval step before a write/report step, choose "replan" instead of assuming.
 - If the current best answer would still rely on weak hints or unresolved uncertainty that context or memory could reduce, choose "replan" and add grounding steps instead of handing off an answer.
+- If the current best answer would rely on mutable, current, exact, or environment-specific facts that are not present in observations, choose "replan" and add the smallest useful grounding or verification steps.
 - If your best draft would mention a next step, remaining work, or that something still needs to be done, choose "replan" instead of "handoff".
 - For "replan", "reason" must be a short progress update in present progressive form, written in neutral or first-person phrasing, and end with "...". Example: "Checking additional context files...".
 - For "replan", every step label must be a short user-facing action, start with a verb, and stay under 8 words.
@@ -1882,7 +1802,6 @@ async function executeFunctionWithNativeTools(
   let shellRepairAttempts = 0
   let lastFailedToolInput: string | null = null
   const attemptedInputsInCurrentStep = new Set<string>()
-  const shellHelpProbeExecutables = new Set<string>()
   const maxRetriesPerFunction = MAX_RETRIES_PER_FUNCTION
 
   const runValidatedToolInput = async (
@@ -1916,31 +1835,6 @@ async function executeFunctionWithNativeTools(
         `Rejected duplicate tool_input for "${qualifiedName}" at step ${currentStepNumber}: matches step ${duplicateInputMatch.stepNumber}`
       )
       return { retry: true }
-    }
-
-    if (qualifiedName === SHELL_EXECUTE_FUNCTION) {
-      const command =
-        typeof inputValidation.parsedValue?.['command'] === 'string'
-          ? inputValidation.parsedValue['command']
-          : ''
-      const commandProbe = command ? extractShellCommandProbe(command) : null
-
-      if (
-        commandProbe?.hasOptions &&
-        !shellHelpProbeExecutables.has(commandProbe.executable) &&
-        !hasObservedShellHelp(executionHistory, commandProbe.executable)
-      ) {
-        shellHelpProbeExecutables.add(commandProbe.executable)
-        lastError = await runShellHelpProbe({
-          executable: commandProbe.executable,
-          toolkitId,
-          toolId,
-          functionName,
-          functionConfig,
-          executionHistory
-        })
-        return { retry: true }
-      }
     }
 
     const normalizedCurrentAttempt = normalizeToolInputForComparison(
@@ -1994,7 +1888,7 @@ async function executeFunctionWithNativeTools(
           if (
             repairedToolInput &&
             normalizeToolInputForComparison(repairedToolInput) !==
-              normalizeToolInputForComparison(validatedToolInput)
+            normalizeToolInputForComparison(validatedToolInput)
           ) {
             lastError = extractFailureMessageFromObservation(
               toolResult.execution.observation
@@ -2269,7 +2163,6 @@ async function executeFunctionWithJSONMode(
   let shellRepairAttempts = 0
   let lastFailedToolInput: string | null = null
   const attemptedInputsInCurrentStep = new Set<string>()
-  const shellHelpProbeExecutables = new Set<string>()
   const maxRetriesPerFunction = MAX_RETRIES_PER_FUNCTION
 
   while (retries <= maxRetriesPerFunction) {
@@ -2393,31 +2286,6 @@ async function executeFunctionWithJSONMode(
         continue
       }
 
-      if (qualifiedName === SHELL_EXECUTE_FUNCTION) {
-        const command =
-          typeof inputValidation.parsedValue?.['command'] === 'string'
-            ? inputValidation.parsedValue['command']
-            : ''
-        const commandProbe = command ? extractShellCommandProbe(command) : null
-
-        if (
-          commandProbe?.hasOptions &&
-          !shellHelpProbeExecutables.has(commandProbe.executable) &&
-          !hasObservedShellHelp(executionHistory, commandProbe.executable)
-        ) {
-          shellHelpProbeExecutables.add(commandProbe.executable)
-          lastError = await runShellHelpProbe({
-            executable: commandProbe.executable,
-            toolkitId,
-            toolId,
-            functionName,
-            functionConfig,
-            executionHistory
-          })
-          continue
-        }
-      }
-
       const normalizedCurrentAttempt = normalizeToolInputForComparison(
         validatedToolInput
       )
@@ -2470,7 +2338,7 @@ async function executeFunctionWithJSONMode(
             if (
               repairedToolInput &&
               normalizeToolInputForComparison(repairedToolInput) !==
-                normalizeToolInputForComparison(validatedToolInput)
+              normalizeToolInputForComparison(validatedToolInput)
             ) {
               lastError = extractFailureMessageFromObservation(
                 toolResult.execution.observation
@@ -2606,29 +2474,29 @@ export async function runToolExecution(
       : LEON_HOME_PATH.replaceAll('"', '\\"')
     const scriptContent = SystemHelper.isWindows()
       ? [
-          '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
-          `$env:LEON_HOME = '${escapedLeonHomePath}'`,
-          `$env:LEON_HOME_PATH = '${escapedLeonHomePath}'`,
-          '',
-          RuntimeHelper.buildManagedRuntimePowerShellFunctions(),
-          '',
-          '# LLM-generated PowerShell command starts here.',
-          '$ErrorActionPreference = "Stop"',
-          command,
-          ''
-        ].join('\n')
+        '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
+        `$env:LEON_HOME = '${escapedLeonHomePath}'`,
+        `$env:LEON_HOME_PATH = '${escapedLeonHomePath}'`,
+        '',
+        RuntimeHelper.buildManagedRuntimePowerShellFunctions(),
+        '',
+        '# LLM-generated PowerShell command starts here.',
+        '$ErrorActionPreference = "Stop"',
+        command,
+        ''
+      ].join('\n')
       : [
-          '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
-          `export LEON_HOME="${escapedLeonHomePath}"`,
-          `export LEON_HOME_PATH="${escapedLeonHomePath}"`,
-          '',
-          RuntimeHelper.buildManagedRuntimeShellFunctions(),
-          '',
-          '# LLM-generated shell command starts here.',
-          'set -e',
-          command,
-          ''
-        ].join('\n')
+        '# Leon-injected managed runtime shims. This block is not generated by the LLM.',
+        `export LEON_HOME="${escapedLeonHomePath}"`,
+        `export LEON_HOME_PATH="${escapedLeonHomePath}"`,
+        '',
+        RuntimeHelper.buildManagedRuntimeShellFunctions(),
+        '',
+        '# LLM-generated shell command starts here.',
+        'set -e',
+        command,
+        ''
+      ].join('\n')
 
     writeFileSync(
       shellScriptPath,
@@ -2856,11 +2724,11 @@ export async function runToolExecution(
     data: toolExecutionResult.data,
     ...(hasObservedToolFailure
       ? {
-          observed_tool_failure: {
-            success: nestedResultSuccess ?? toolOutputSuccess,
-            error: nestedResultError || toolOutputError || effectiveMessage
-          }
+        observed_tool_failure: {
+          success: nestedResultSuccess ?? toolOutputSuccess,
+          error: nestedResultError || toolOutputError || effectiveMessage
         }
+      }
       : {})
   })
 
