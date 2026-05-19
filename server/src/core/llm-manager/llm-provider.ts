@@ -83,7 +83,8 @@ const LLM_PROVIDERS_MAP = {
   [LLMProviders.Anthropic]: 'anthropic-llm-provider',
   [LLMProviders.MoonshotAI]: 'moonshotai-llm-provider',
   [LLMProviders.Cerebras]: 'cerebras-llm-provider',
-  [LLMProviders.HuggingFace]: 'huggingface-llm-provider'
+  [LLMProviders.HuggingFace]: 'huggingface-llm-provider',
+  [LLMProviders.Astraflow]: 'astraflow-llm-provider'
 }
 const DEFAULT_MAX_EXECUTION_RETRIES = 2
 const DEFAULT_REMOTE_PROVIDER_ERROR_RETRIES = 1

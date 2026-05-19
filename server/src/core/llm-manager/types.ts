@@ -35,7 +35,8 @@ export enum LLMProviders {
   Anthropic = 'anthropic',
   MoonshotAI = 'moonshotai',
   Cerebras = 'cerebras',
-  HuggingFace = 'huggingface'
+  HuggingFace = 'huggingface',
+  Astraflow = 'astraflow'
 }
 
 export enum ActionCallingStatus {
