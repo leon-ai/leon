@@ -2,7 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 
-import { PROFILE_CONTEXT_PATH } from '@/constants'
+import {
+  LEON_PRIVATE_DIARY_ENABLED,
+  PROFILE_CONTEXT_PATH
+} from '@/constants'
 import { runInference } from '@/core/llm-manager/inference'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -228,12 +231,20 @@ export default class SelfModelManager {
       LogHelper.success('New instance')
 
       SelfModelManager.instance = this
+      if (!LEON_PRIVATE_DIARY_ENABLED) {
+        return
+      }
+
       this.ensureLoaded()
       this.persist()
     }
   }
 
   public getSnapshot(): string {
+    if (!LEON_PRIVATE_DIARY_ENABLED) {
+      return ''
+    }
+
     const state = this.ensureLoaded()
     const lines = ['Leon Self-Model Snapshot:']
 
@@ -269,11 +280,18 @@ export default class SelfModelManager {
   }
 
   public getDiaryPath(): string {
-    this.ensureLoaded()
+    if (LEON_PRIVATE_DIARY_ENABLED) {
+      this.ensureLoaded()
+    }
+
     return PRIVATE_DIARY_PATH
   }
 
   public async observeTurn(input: SelfModelObservationInput): Promise<void> {
+    if (!LEON_PRIVATE_DIARY_ENABLED) {
+      return
+    }
+
     this.queue = this.queue
       .then(async () => {
         await this.observeTurnInternal(input)
@@ -292,6 +310,10 @@ export default class SelfModelManager {
     text: string,
     confidence = 0.88
   ): Promise<void> {
+    if (!LEON_PRIVATE_DIARY_ENABLED) {
+      return
+    }
+
     const normalizedText = normalizeListItem(text, 180)
     if (!normalizedText) {
       return
@@ -913,6 +935,10 @@ export default class SelfModelManager {
   }
 
   private persist(): void {
+    if (!LEON_PRIVATE_DIARY_ENABLED) {
+      return
+    }
+
     const state = this.ensureLoaded()
 
     try {

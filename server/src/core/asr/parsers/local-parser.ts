@@ -1,5 +1,5 @@
 import type { ChunkData } from '@/core/tcp-client'
-import { STTParserBase } from '@/core/stt/stt-parser-base'
+import { ASRParserBase } from '@/core/asr/asr-parser-base'
 import { LogHelper } from '@/helpers/log-helper'
 import { BRAIN, SOCKET_SERVER } from '@/core'
 
@@ -56,8 +56,8 @@ const EVENT_HANDLERS: EventHandler = {
   }
 }
 
-export default class LocalParser extends STTParserBase {
-  protected readonly name = 'Local STT Parser'
+export default class LocalParser extends ASRParserBase {
+  protected readonly name = 'Local ASR Parser'
 
   constructor() {
     super()

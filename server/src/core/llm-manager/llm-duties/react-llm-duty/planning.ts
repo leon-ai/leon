@@ -39,7 +39,13 @@ import {
 import { buildPhaseSystemPrompt } from './phase-policy'
 
 function getLLMProviderName(): LLMProviders {
-  return CONFIG_STATE.getModelState().getAgentProvider()
+  const provider = CONFIG_STATE.getModelState().getAgentProvider()
+
+  if (!provider) {
+    throw new Error('The agent LLM provider is disabled.')
+  }
+
+  return provider
 }
 
 function buildPlanningPromptSections(params: {

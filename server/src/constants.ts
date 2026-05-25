@@ -10,8 +10,10 @@ import {
   LEON_PROFILE_NAME,
   LEON_PROFILES_PATH,
   LEON_PROFILE_PATH,
+  PROFILE_CONFIG_PATH,
   PROFILE_DOT_ENV_PATH
 } from '@/leon-roots'
+import { CONFIG_MANAGER } from '@/config'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import {
@@ -27,6 +29,7 @@ export {
   LEON_PROFILE_NAME,
   LEON_PROFILES_PATH,
   LEON_PROFILE_PATH,
+  PROFILE_CONFIG_PATH,
   PROFILE_DOT_ENV_PATH
 }
 
@@ -62,6 +65,7 @@ export const PROFILE_LOGS_PATH = path.join(LEON_PROFILE_PATH, 'logs')
 export const PROFILE_SKILLS_PATH = path.join(LEON_PROFILE_PATH, 'skills')
 export const PROFILE_TOOLS_PATH = path.join(LEON_PROFILE_PATH, 'tools')
 export const PROFILE_DISABLED_PATH = path.join(LEON_PROFILE_PATH, 'disabled.json')
+export const PROFILE_ALLOWED_PATH = path.join(LEON_PROFILE_PATH, 'allowed.json')
 export const PROFILE_CONVERSATION_LOG_PATH = path.join(
   LEON_PROFILE_PATH,
   'conversation_log.json'
@@ -449,37 +453,39 @@ export const PYTHON_TCP_SERVER_RUNTIME_BIN_PATH =
   RuntimeHelper.resolveProjectPythonBinPath(PYTHON_TCP_SERVER_SRC_PATH)
 
 export const LEON_VERSION = process.env['npm_package_version']
+const PROFILE_CONFIG = CONFIG_MANAGER.getConfig()
 
 /**
  * Leon environment preferences
  */
-export const LANG = process.env['LEON_LANG'] as LongLanguageCode
+export const LANG = PROFILE_CONFIG.language as LongLanguageCode
 
-export const HOST = process.env['LEON_HOST']
-export const PORT = Number(process.env['LEON_PORT'])
+export const HOST = PROFILE_CONFIG.server.host
+export const PORT = PROFILE_CONFIG.server.port
 
-export const TIME_ZONE = process.env['LEON_TIME_ZONE']
+export const TIME_ZONE = PROFILE_CONFIG.time_zone ?? undefined
 
-export const HAS_AFTER_SPEECH = process.env['LEON_AFTER_SPEECH'] === 'true'
+export const HAS_AFTER_SPEECH = PROFILE_CONFIG.after_speech_enabled
 
-export const HAS_STT = process.env['LEON_STT'] === 'true'
-export const STT_PROVIDER = process.env['LEON_STT_PROVIDER']
-export const HAS_TTS = process.env['LEON_TTS'] === 'true'
-export const TTS_PROVIDER = process.env['LEON_TTS_PROVIDER']
+export const HAS_ASR = PROFILE_CONFIG.voice.asr.enabled
+export const ASR_PROVIDER = PROFILE_CONFIG.voice.asr.provider
+export const HAS_TTS = PROFILE_CONFIG.voice.tts.enabled
+export const TTS_PROVIDER = PROFILE_CONFIG.voice.tts.provider
+export const HAS_WAKE_WORD = PROFILE_CONFIG.voice.wake_word_enabled
 
-export const HAS_OVER_HTTP = process.env['LEON_OVER_HTTP'] === 'true'
-export const HTTP_API_KEY = process.env['LEON_HTTP_API_KEY']
-export const HTTP_API_LANG = process.env['LEON_HTTP_API_LANG']
-
-export const PYTHON_TCP_SERVER_HOST = process.env['LEON_PY_TCP_SERVER_HOST']
-export const PYTHON_TCP_SERVER_PORT = Number(
-  process.env['LEON_PY_TCP_SERVER_PORT']
+export const HAS_OVER_HTTP = PROFILE_CONFIG.http.enabled
+export const HTTP_API_KEY = CONFIG_MANAGER.resolveSecretReference(
+  PROFILE_CONFIG.http.api_key
 )
+export const HTTP_API_LANG = PROFILE_CONFIG.http.lang
 
-export const IS_TELEMETRY_ENABLED = process.env['LEON_TELEMETRY'] === 'true'
+export const PYTHON_TCP_SERVER_HOST = PROFILE_CONFIG.python_tcp_server.host
+export const PYTHON_TCP_SERVER_PORT = PROFILE_CONFIG.python_tcp_server.port
+
+export const IS_TELEMETRY_ENABLED = PROFILE_CONFIG.telemetry_enabled
 
 export const LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH = path.join(
-  MODELS_PATH,
+  LEON_PROFILE_PATH,
   'leon-skill-list.nlp'
 )
 
@@ -488,14 +494,16 @@ export const LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH = path.join(
  * @see k-quants comparison: https://github.com/ggerganov/llama.cpp/pull/1684
  */
 export const HAS_LLM = true
-export const LEON_ROUTING_MODE = process.env['LEON_ROUTING_MODE'] || 'smart'
-export const LEON_MOOD = process.env['LEON_MOOD'] || 'auto'
-export const LEON_PULSE_ENABLED = true
+export const LEON_ROUTING_MODE = PROFILE_CONFIG.routing.mode
+export const LEON_MOOD = PROFILE_CONFIG.mood.mode
+export const LEON_PULSE_ENABLED = PROFILE_CONFIG.runtime.pulse_enabled
+export const LEON_PRIVATE_DIARY_ENABLED =
+  PROFILE_CONFIG.runtime.private_diary_enabled
 // Every 30 minutes
 export const LEON_PULSE_INTERVAL_MS = 30 * 60 * 1_000
-export const SHOULD_START_PYTHON_TCP_SERVER = HAS_STT || HAS_TTS
-export const LEON_DISABLED_CONTEXT_FILES =
-  process.env['LEON_DISABLED_CONTEXT_FILES'] || ''
+export const SHOULD_START_PYTHON_TCP_SERVER = HAS_ASR || HAS_TTS
+export const LEON_CONTEXT_DISABLED_FILES =
+  PROFILE_CONFIG.context.disabled_files
 export const LLM_DIR_PATH = path.join(MODELS_PATH, 'llm')
 export const LLM_MANIFEST_PATH = path.join(LLM_DIR_PATH, 'manifest.json')
 const {
@@ -504,9 +512,9 @@ const {
   installedLLMVersion
 } = getInstalledLLMMetadata(LLM_MANIFEST_PATH)
 export const DEFAULT_INSTALLED_LLM_PATH = defaultInstalledLLMPath
-export const LEON_LLM = process.env['LEON_LLM'] || ''
-export const LEON_WORKFLOW_LLM = process.env['LEON_WORKFLOW_LLM'] || ''
-export const LEON_AGENT_LLM = process.env['LEON_AGENT_LLM'] || ''
+export const LEON_LLM = PROFILE_CONFIG.llm.default ?? ''
+export const LEON_WORKFLOW_LLM = PROFILE_CONFIG.llm.workflow ?? ''
+export const LEON_AGENT_LLM = PROFILE_CONFIG.llm.agent ?? ''
 export const WORKFLOW_LLM_TARGET = resolveConfiguredLLMTarget(
   LEON_WORKFLOW_LLM.trim() || LEON_LLM.trim(),
   {

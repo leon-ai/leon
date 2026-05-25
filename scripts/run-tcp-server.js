@@ -15,7 +15,14 @@ import {
   NVIDIA_LIBS_PATH,
   PYTHON_TCP_SERVER_ENTRY_PATH,
   PYTHON_TCP_SERVER_RUNTIME_BIN_PATH,
-  PYTORCH_TORCH_PATH
+  PYTORCH_TORCH_PATH,
+  HAS_ASR,
+  HAS_TTS,
+  HAS_WAKE_WORD,
+  ASR_PROVIDER,
+  TTS_PROVIDER,
+  PYTHON_TCP_SERVER_HOST,
+  PYTHON_TCP_SERVER_PORT
 } from '@/constants'
 
 /**
@@ -33,6 +40,13 @@ import {
     NVIDIA_LIBS_PATH
   ]
   const env = { ...process.env }
+  env['LEON_ASR'] = HAS_ASR ? 'true' : 'false'
+  env['LEON_ASR_PROVIDER'] = ASR_PROVIDER || ''
+  env['LEON_TTS'] = HAS_TTS ? 'true' : 'false'
+  env['LEON_TTS_PROVIDER'] = TTS_PROVIDER || ''
+  env['LEON_WAKE_WORD'] = HAS_WAKE_WORD ? 'true' : 'false'
+  env['LEON_PY_TCP_SERVER_HOST'] = PYTHON_TCP_SERVER_HOST
+  env['LEON_PY_TCP_SERVER_PORT'] = String(PYTHON_TCP_SERVER_PORT)
 
   if (SystemHelper.isLinux()) {
     const torchLibPath = `${PYTORCH_TORCH_PATH}/lib`

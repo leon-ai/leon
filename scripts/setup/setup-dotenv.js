@@ -64,30 +64,6 @@ async function mergeMissingEnvVariables() {
 }
 
 /**
- * Read selected variables from `.env` without mutating process.env.
- */
-export async function readDotEnvVariables(variableNames) {
-  if (!fs.existsSync(DOT_ENV_PATH)) {
-    return {}
-  }
-
-  const dotEnvContent = await fs.promises.readFile(DOT_ENV_PATH, 'utf8')
-  const values = {}
-
-  for (const line of splitEnvLines(dotEnvContent)) {
-    const variableName = getEnvVariableName(line)
-
-    if (!variableName || !variableNames.includes(variableName)) {
-      continue
-    }
-
-    values[variableName] = line.slice(line.indexOf('=') + 1).replace(/\r$/, '')
-  }
-
-  return values
-}
-
-/**
  * Upsert a single variable inside `.env`.
  */
 export async function updateDotEnvVariable(variableName, value) {

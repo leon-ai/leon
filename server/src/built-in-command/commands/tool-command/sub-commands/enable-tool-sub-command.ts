@@ -12,6 +12,7 @@ import {
   getToolSubcommandUsage,
   matchesRequestedTool,
   resolveToolEntry,
+  TOOL_ALLOW_ONLY_COMMAND_FORMAT,
   TOOL_ENABLE_SUBCOMMAND,
   TOOL_ROOT_COMMAND_FORMAT,
   toToolSuggestion
@@ -99,6 +100,25 @@ export class EnableToolSubCommand implements ToolSubCommand {
           items: [
             {
               label: `The tool "${context.rawToolName.trim()}" is not available for this operation.`,
+              tone: 'error'
+            }
+          ]
+        })
+      }
+    }
+
+    if (
+      ProfileHelper.hasToolAllowlist() &&
+      !ProfileHelper.isToolAllowed(toolEntry.toolId, toolEntry.toolkitId)
+    ) {
+      return {
+        status: 'error',
+        result: createListResult({
+          title: 'Tool Outside Allow-Only List',
+          tone: 'error',
+          items: [
+            {
+              label: `Use ${TOOL_ALLOW_ONLY_COMMAND_FORMAT} to make "${toolEntry.qualifiedName}" available.`,
               tone: 'error'
             }
           ]

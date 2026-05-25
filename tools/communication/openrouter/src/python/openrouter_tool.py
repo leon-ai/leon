@@ -27,7 +27,7 @@ class OpenRouterTool(BaseTool):
             self.TOOLKIT, self.tool_name, DEFAULT_SETTINGS
         )
         self.settings = tool_settings
-        self.required_settings = REQUIRED_SETTINGS
+        self.required_settings = [] if api_key else REQUIRED_SETTINGS
         self._check_required_settings(self.tool_name)
 
         # Priority: skill-provided api_key > toolkit settings > hardcoded default

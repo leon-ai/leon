@@ -5,7 +5,7 @@ import ffmpegStatic from 'ffmpeg-static'
 import ffmpeg from 'fluent-ffmpeg'
 
 import { TMP_PATH } from '@/constants'
-import { STT } from '@/core'
+import { ASR_ENGINE } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 
 export default class ASR {
@@ -27,7 +27,7 @@ export default class ASR {
 
   /**
    * Encode audio blob to WAVE file
-   * and forward the WAVE file to the STT parser
+   * and forward the WAVE file to the ASR parser.
    */
   public encode(blob: Buffer): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -57,10 +57,10 @@ export default class ASR {
             .on('end', () => {
               LogHelper.success('Encoding done')
 
-              if (!STT.isParserReady) {
+              if (!ASR_ENGINE.isParserReady) {
                 reject(new Error('The speech recognition is not ready yet'))
               } else {
-                STT.transcribe(this.audioPaths.wav)
+                ASR_ENGINE.transcribe(this.audioPaths.wav)
                 resolve()
               }
             })

@@ -108,7 +108,7 @@ export class ModelCommand extends BuiltInCommand {
             },
             {
               label: 'Workflow provider',
-              value: modelState.getWorkflowTarget().provider
+              value: modelState.getWorkflowTarget().provider || 'disabled'
             },
             {
               label: 'Workflow model',
@@ -116,7 +116,7 @@ export class ModelCommand extends BuiltInCommand {
             },
             {
               label: 'Agent provider',
-              value: modelState.getAgentTarget().provider
+              value: modelState.getAgentTarget().provider || 'disabled'
             },
             {
               label: 'Agent model',

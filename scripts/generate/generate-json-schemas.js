@@ -19,6 +19,7 @@ import {
   googleCloudVoiceConfiguration,
   watsonVoiceConfiguration
 } from '@/schemas/voice-config-schemas'
+import { configSchemaObject } from '@/schemas/core-schemas'
 
 import { createSetupStatus } from '../setup/setup-status'
 
@@ -53,6 +54,10 @@ export default async () => {
   const status = createSetupStatus('Generating JSON schemas...').start()
 
   await Promise.all([
+    generateSchemas(
+      'core-schemas',
+      new Map([['config', configSchemaObject]])
+    ),
     generateSchemas(
       'global-data',
       new Map([

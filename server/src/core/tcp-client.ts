@@ -1,12 +1,12 @@
 import Net from 'node:net'
 import { EventEmitter } from 'node:events'
 
-import { IS_PRODUCTION_ENV, STT_PROVIDER } from '@/constants'
-import { STT } from '@/core'
+import { ASR_PROVIDER, IS_PRODUCTION_ENV } from '@/constants'
+import { ASR_ENGINE } from '@/core'
 import { OSTypes } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
-import { STTProviders } from '@/core/stt/types'
+import { ASRProviders } from '@/core/asr/types'
 
 // Time interval between each try (in ms)
 const INTERVAL = IS_PRODUCTION_ENV ? 3000 : 500
@@ -65,11 +65,11 @@ export default class TCPClient {
 
       /**
        * If the topic is related to ASR, then parse the data manually
-       * in the local STT parser
+       * in the local ASR parser
        */
       if (strChunk.includes('"topic": "asr-')) {
-        if (STT_PROVIDER === STTProviders.Local) {
-          STT.parser?.parse(strChunk)
+        if (ASR_PROVIDER === ASRProviders.Local) {
+          ASR_ENGINE.parser?.parse(strChunk)
         }
       } else {
         try {

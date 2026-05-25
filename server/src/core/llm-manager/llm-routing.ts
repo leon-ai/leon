@@ -4,7 +4,7 @@ import path from 'node:path'
 import { LLMProviders } from '@/core/llm-manager/types'
 
 export interface ResolvedLLMTarget {
-  provider: LLMProviders
+  provider: LLMProviders | null
   model: string
   label: string
   isLocal: boolean
@@ -92,7 +92,7 @@ function createResolvedLLMTarget(
 
 function createDisabledLLMTarget(): ResolvedLLMTarget {
   return {
-    provider: LLMProviders.None,
+    provider: null,
     model: '',
     label: 'disabled',
     isLocal: false,
@@ -125,23 +125,8 @@ export function resolveConfiguredLLMTarget(
 ): ResolvedLLMTarget {
   const normalizedValue = rawValue.trim()
 
-  if (normalizedValue === LLMProviders.None) {
-    return createDisabledLLMTarget()
-  }
-
   if (!normalizedValue) {
-    if (!options.defaultInstalledLLMPath) {
-      return createUnresolvedLocalLLMTarget(
-        LLMProviders.LlamaCPP,
-        'No LLM is configured and no default installed local LLM was found.'
-      )
-    }
-
-    return createResolvedLLMTarget(
-      LLMProviders.LlamaCPP,
-      options.defaultInstalledLLMPath,
-      true
-    )
+    return createDisabledLLMTarget()
   }
 
   if (path.isAbsolute(normalizedValue)) {
@@ -156,10 +141,6 @@ export function resolveConfiguredLLMTarget(
 
   if (separatorIndex === -1) {
     const provider = normalizeProvider(normalizedValue)
-
-    if (provider === LLMProviders.None) {
-      return createDisabledLLMTarget()
-    }
 
     if (!LOCAL_PROVIDERS.has(provider)) {
       throw new Error(

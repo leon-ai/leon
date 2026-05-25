@@ -79,11 +79,10 @@ class Settings:
         :param value: The value to set
         """
         try:
-            settings = self.get()
-
             if isinstance(key_or_settings, dict):
                 new_settings = key_or_settings
             else:
+                settings = self.get()
                 new_settings = {**settings, key_or_settings: value}
 
             os.makedirs(path.dirname(self.settings_path), exist_ok=True)

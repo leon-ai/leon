@@ -10,7 +10,7 @@ import {
 import TCPClient from '@/core/tcp-client'
 import HTTPServer from '@/core/http-server/http-server'
 import SocketServer from '@/core/socket-server'
-import SpeechToText from '@/core/stt/stt'
+import ASRProvider from '@/core/asr/asr-provider'
 import TextToSpeech from '@/core/tts/tts'
 import AutomaticSpeechRecognition from '@/core/asr/asr'
 import NaturalLanguageUnderstanding from '@/core/nlp/nlu/nlu'
@@ -77,7 +77,7 @@ export const SELF_MODEL_MANAGER = new SelfModelManager()
 export const PULSE_MANAGER = new PulseManager()
 export const POST_TURN_MAINTENANCE_QUEUE = new PostTurnMaintenanceQueue()
 
-export const STT = new SpeechToText()
+export const ASR_ENGINE = new ASRProvider()
 
 export const TTS = new TextToSpeech()
 

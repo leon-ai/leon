@@ -43,7 +43,13 @@ import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 
 function getLLMProviderName(): LLMProviders {
-  return CONFIG_STATE.getModelState().getAgentProvider()
+  const provider = CONFIG_STATE.getModelState().getAgentProvider()
+
+  if (!provider) {
+    throw new Error('The agent LLM provider is disabled.')
+  }
+
+  return provider
 }
 
 const RECOVERY_FAILURE_OBSERVATION_MAX_CHARS = 360
