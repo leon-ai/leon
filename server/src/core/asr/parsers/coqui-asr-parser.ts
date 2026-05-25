@@ -5,12 +5,12 @@ import fs from 'node:fs'
 import wav from 'node-wav'
 import { Model } from 'stt'
 
-import { STTParserBase } from '@/core/stt/stt-parser-base'
+import { ASRParserBase } from '@/core/asr/asr-parser-base'
 import { BIN_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export default class CoquiSTTParser extends STTParserBase {
-  protected readonly name = 'Coqui STT Parser'
+export default class CoquiASRParser extends ASRParserBase {
+  protected readonly name = 'Coqui ASR Parser'
   private readonly model: Model | undefined = undefined
   private readonly desiredSampleRate: number = 16_000
 
@@ -27,13 +27,13 @@ export default class CoquiSTTParser extends STTParserBase {
 
     if (!fs.existsSync(modelPath)) {
       LogHelper.error(
-        `Cannot find ${modelPath}. You can set up the offline STT by running: "npm run setup:offline-stt"`
+        `Cannot find ${modelPath}. You can set up the offline ASR by running: "npm run setup:offline-asr"`
       )
     }
 
     if (!fs.existsSync(scorerPath)) {
       LogHelper.error(
-        `Cannot find ${scorerPath}. You can setup the offline STT by running: "npm run setup:offline-stt"`
+        `Cannot find ${scorerPath}. You can setup the offline ASR by running: "npm run setup:offline-asr"`
       )
     }
 

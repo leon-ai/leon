@@ -4,60 +4,82 @@ import path from 'node:path'
 import { AggregateAjvError } from '@segment/ajv-human-errors'
 
 import { ajv } from '@/ajv'
-import {
-  amazonVoiceConfiguration,
-  googleCloudVoiceConfiguration,
-  watsonVoiceConfiguration,
-  VoiceConfigurationSchema
-} from '@/schemas/voice-config-schemas'
-import {
-  globalAnswersSchemaObject,
-  GlobalAnswersSchema
-} from '@/schemas/global-data-schemas'
-import {
-  skillSchemaObject,
-  skillLocaleConfigObject,
-  SkillSchema,
-  SkillLocaleConfigSchema
-} from '@/schemas/skill-schemas'
-import { LogHelper } from '@/helpers/log-helper'
-import { LangHelper } from '@/helpers/lang-helper'
-import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
-import {
-  MINIMUM_REQUIRED_RAM,
-  VOICE_CONFIG_PATH,
-  GLOBAL_DATA_PATH
-} from '@/constants'
+import { PROFILE_CONFIG_PATH } from '@/leon-roots'
+import { configSchemaObject } from '@/schemas/core-schemas'
 import { SystemHelper } from '@/helpers/system-helper'
 
 interface ObjectUnknown {
   [key: string]: unknown
 }
 
+interface SchemaValidationOptions {
+  requireSchemaKey?: boolean
+}
+
+let LogHelper: typeof import('@/helpers/log-helper').LogHelper | null = null
+
+function logError(value: string): void {
+  if (LogHelper) {
+    LogHelper.error(value)
+    return
+  }
+
+  console.error(`🚨 ${value}`)
+}
+
 const validateSchema = (
   schemaName: string,
   schema: ObjectUnknown,
   contentToValidate: ObjectUnknown,
-  customErrorMessage: string
+  customErrorMessage: string,
+  options: SchemaValidationOptions = {}
 ): void => {
   const schemaFile = `${schemaName}.json`
+  const shouldRequireSchemaKey = options.requireSchemaKey ?? true
   const validate = ajv.compile(schema)
   const isValidSchemaKey =
-    typeof contentToValidate['$schema'] === 'string' &&
-    contentToValidate['$schema'].endsWith(schemaFile)
+    !shouldRequireSchemaKey ||
+    (
+      typeof contentToValidate['$schema'] === 'string' &&
+      contentToValidate['$schema'].endsWith(schemaFile)
+    )
   const isValid = validate(contentToValidate) && isValidSchemaKey
-  if (!isValid) {
-    LogHelper.error(customErrorMessage)
-    if (!isValidSchemaKey) {
-      LogHelper.error(
-        `The schema key "$schema" is not valid. Expected "${schemaName}", but got "${contentToValidate['$schema']}".`
-      )
-    }
-    LogHelper.error(customErrorMessage)
-    const errors = new AggregateAjvError(validate.errors ?? [])
-    for (const error of errors) {
-      LogHelper.error(error.message)
-    }
+
+  if (isValid) {
+    return
+  }
+
+  logError(customErrorMessage)
+  if (!isValidSchemaKey) {
+    logError(
+      `The schema key "$schema" is not valid. Expected "${schemaName}", but got "${contentToValidate['$schema']}".`
+    )
+  }
+
+  const errors = new AggregateAjvError(validate.errors ?? [])
+  for (const error of errors) {
+    logError(error.message)
+  }
+  process.exit(1)
+}
+
+async function validateProfileConfigSchema(): Promise<void> {
+  try {
+    const { CONFIG_MANAGER } = await import('@/config')
+
+    validateSchema(
+      'core-schemas/config',
+      configSchemaObject as ObjectUnknown,
+      CONFIG_MANAGER.getConfig() as unknown as ObjectUnknown,
+      `The profile configuration schema "${PROFILE_CONFIG_PATH}" is not valid:`,
+      {
+        requireSchemaKey: false
+      }
+    )
+  } catch (error) {
+    logError(
+      `The profile configuration "${PROFILE_CONFIG_PATH}" could not be loaded: ${String(error)}`
+    )
     process.exit(1)
   }
 }
@@ -65,22 +87,45 @@ const validateSchema = (
 /**
  * Pre-checking
  *
+ * - Ensure the profile configuration is valid
  * - Ensure the system requirements are met
  * - Ensure JSON files are correctly formatted
  */
-
-const VOICE_CONFIG_SCHEMAS = {
-  amazon: amazonVoiceConfiguration,
-  'google-cloud': googleCloudVoiceConfiguration,
-  'watson-stt': watsonVoiceConfiguration,
-  'watson-tts': watsonVoiceConfiguration
-}
-const GLOBAL_DATA_SCHEMAS = {
-  answers: globalAnswersSchemaObject
-}
-
 ;(async (): Promise<void> => {
+  await validateProfileConfigSchema()
+
+  ;({ LogHelper } = await import('@/helpers/log-helper'))
+
+  const { LangHelper } = await import('@/helpers/lang-helper')
+  const { SkillDomainHelper } = await import('@/helpers/skill-domain-helper')
+  const {
+    MINIMUM_REQUIRED_RAM,
+    VOICE_CONFIG_PATH,
+    GLOBAL_DATA_PATH
+  } = await import('@/constants')
+  const {
+    amazonVoiceConfiguration,
+    googleCloudVoiceConfiguration,
+    watsonVoiceConfiguration
+  } = await import('@/schemas/voice-config-schemas')
+  const {
+    globalAnswersSchemaObject
+  } = await import('@/schemas/global-data-schemas')
+  const {
+    skillSchemaObject,
+    skillLocaleConfigObject
+  } = await import('@/schemas/skill-schemas')
+
+  const voiceConfigSchemas: Record<string, ObjectUnknown> = {
+    amazon: amazonVoiceConfiguration as ObjectUnknown,
+    'google-cloud': googleCloudVoiceConfiguration as ObjectUnknown,
+    'watson-stt': watsonVoiceConfiguration as ObjectUnknown,
+    'watson-tts': watsonVoiceConfiguration as ObjectUnknown
+  }
+
   LogHelper.title('Pre-checking')
+  LogHelper.info('Checking profile configuration schema...')
+  LogHelper.success('Profile configuration schema checked')
 
   /**
    * System requirements checking
@@ -116,13 +161,20 @@ const GLOBAL_DATA_SCHEMAS = {
 
   for (const file of voiceConfigFiles) {
     const voiceConfigPath = path.join(VOICE_CONFIG_PATH, file)
-    const config: VoiceConfigurationSchema = JSON.parse(
+    const config = JSON.parse(
       await fs.promises.readFile(voiceConfigPath, 'utf8')
-    )
-    const [configName] = file.split('.') as [keyof typeof VOICE_CONFIG_SCHEMAS]
+    ) as ObjectUnknown
+    const [configName = ''] = file.split('.')
+    const voiceSchema = voiceConfigSchemas[configName]
+
+    if (!voiceSchema) {
+      LogHelper.error(`The voice configuration schema "${configName}" is unknown.`)
+      process.exit(1)
+    }
+
     validateSchema(
       `voice-config-schemas/${configName}`,
-      VOICE_CONFIG_SCHEMAS[configName],
+      voiceSchema,
       config,
       `The voice configuration schema "${voiceConfigPath}" is not valid:`
     )
@@ -140,12 +192,13 @@ const GLOBAL_DATA_SCHEMAS = {
      * Global answers checking
      */
     const globalAnswersPath = path.join(GLOBAL_DATA_PATH, lang, 'answers.json')
-    const answers: GlobalAnswersSchema = JSON.parse(
+    const answers = JSON.parse(
       await fs.promises.readFile(globalAnswersPath, 'utf8')
-    )
+    ) as ObjectUnknown
+
     validateSchema(
       'global-data/global-answers',
-      GLOBAL_DATA_SCHEMAS.answers,
+      globalAnswersSchemaObject as ObjectUnknown,
       answers,
       `The global answers schema "${globalAnswersPath}" is not valid:`
     )
@@ -167,12 +220,13 @@ const GLOBAL_DATA_SCHEMAS = {
     }
 
     const pathToSkill = path.join(skillPath, 'skill.json')
-    const skillObject: SkillSchema = JSON.parse(
+    const skillObject = JSON.parse(
       await fs.promises.readFile(pathToSkill, 'utf8')
-    )
+    ) as ObjectUnknown
+
     validateSchema(
       'skill-schemas/skill',
-      skillSchemaObject,
+      skillSchemaObject as ObjectUnknown,
       skillObject,
       `The skill schema "${pathToSkill}" is not valid:`
     )
@@ -188,12 +242,13 @@ const GLOBAL_DATA_SCHEMAS = {
 
     for (const file of localeFiles) {
       const localePath = path.join(localesPath, file)
-      const localeConfig: SkillLocaleConfigSchema = JSON.parse(
+      const localeConfig = JSON.parse(
         await fs.promises.readFile(localePath, 'utf8')
-      )
+      ) as ObjectUnknown
+
       validateSchema(
         'skill-schemas/skill-locale-config',
-        skillLocaleConfigObject,
+        skillLocaleConfigObject as ObjectUnknown,
         localeConfig,
         `The skill locale schema "${localePath}" is not valid:`
       )

@@ -16,33 +16,19 @@ interface SkillRouterLLMDutyParams extends LLMDutyParams {
 export const SYSTEM_PROMPT = `You are a skill routing AI. Your task is to analyze the User Query and select the single most appropriate skill from the list below based on the user's intent.
 
 Respond using these rules:
-- Output ONLY the exact skill name as listed below (e.g., "timer_skill", "todo_list_skill").
-- If no skill matches the user's intent, output ONLY: "None"
+- The Available Skills list is the only source of truth.
+- Output ONLY an exact skill name copied from the Available Skills list.
+- Never output a skill that is not explicitly present in the Available Skills list.
+- If the Available Skills list is empty, output ONLY: "None"
+- If no listed skill matches the user's intent, output ONLY: "None"
 - Do not include any explanations, punctuation, markdown, or extra text.
 
 Available Skills:
 {{ SKILL_LIST }}
 
 Carefully evaluate the user's true intent. Prioritize:
-- Direct functional match (e.g., rock paper scissors -> rochambeau_skill)
-- Actionability (can this skill fulfill the request?)
-- Avoid keyword traps (e.g., "add" could be timer, todo, calendar, but only todo_list_skill handles lists)
-
---- Examples ---
-
-User Query: "Play rock paper scissors with me."
-Response: rochambeau_skill
-
-User Query: "Summarize this video for me."
-Response: video_summarizer_skill
-
-User Query: "Add 'Dentist Appointment' to my todo list."
-Response: todo_list_skill
-
-User Query: "Just a test message, nothing to do."
-Response: None
-
---- End Examples ---`
+- Direct functional match with a listed skill
+- Actionability (can this skill fulfill the request?)`
 
 export class SkillRouterLLMDuty extends LLMDuty {
   private static instance: SkillRouterLLMDuty

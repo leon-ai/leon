@@ -9,6 +9,7 @@ import { createGroq } from '@ai-sdk/groq'
 import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
+import { CONFIG_MANAGER } from '@/config'
 import type {
   CompletionParams,
   LLMReasoningMode,
@@ -73,9 +74,13 @@ export default class AISDKRemoteLLMProvider {
   constructor(
     config: AISDKRemoteProviderConfig
   ) {
+    const configuredAPIKeyEnv =
+      CONFIG_MANAGER.getProviderAPIKeyEnv(config.providerName) ||
+      config.apiKeyEnv
+
     this.config = config
     this.name = config.name
-    this.apiKey = process.env[config.apiKeyEnv]
+    this.apiKey = process.env[configuredAPIKeyEnv]
     this.model = config.model
 
     LogHelper.title(this.name)

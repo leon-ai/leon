@@ -17,3 +17,6 @@ That's where people will help shape the ecosystem and build what comes next.`
     'Leon is built independently in spare time. If you want to help accelerate development, you can support the project here: http://sponsor.getleon.ai/'
   ]
 ]
+
+export const ASR_DISABLED_MESSAGE =
+  'Voice mode is not enabled yet. Run /voice setup from the chat, wait for the resources to install, then restart Leon by using /restart.'

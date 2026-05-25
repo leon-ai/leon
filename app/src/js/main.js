@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       'freeVRAM',
       'usedVRAM',
       'llm',
-      'stt',
+      'asr',
       'tts',
       'mood',
       'version'

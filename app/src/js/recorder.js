@@ -16,8 +16,8 @@ export default class Recorder {
   }
 
   start(playSound = true) {
-    if (this.info.stt.enabled === false) {
-      console.warn('Speech-to-text disabled')
+    if (this.info.asr.enabled === false) {
+      console.warn('ASR disabled')
     } else {
       this.playSound = playSound
       this.recorder.start(playSound)
@@ -25,8 +25,8 @@ export default class Recorder {
   }
 
   stop(playSound = true) {
-    if (this.info.stt.enabled === false) {
-      console.warn('Speech-to-text disabled')
+    if (this.info.asr.enabled === false) {
+      console.warn('ASR disabled')
     } else {
       this.playSound = playSound
       this.recorder.stop(playSound)

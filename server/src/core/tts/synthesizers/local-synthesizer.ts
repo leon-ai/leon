@@ -2,7 +2,7 @@ import fs from 'node:fs'
 
 import type { LongLanguageCode } from '@/types'
 import type { SynthesizeResult } from '@/core/tts/types'
-import { HAS_STT, LANG } from '@/constants'
+import { HAS_ASR, LANG } from '@/constants'
 import { PYTHON_TCP_CLIENT, SOCKET_SERVER, TTS } from '@/core'
 import { TTSSynthesizerBase } from '@/core/tts/tts-synthesizer-base'
 import { LogHelper } from '@/helpers/log-helper'
@@ -64,7 +64,7 @@ export default class LocalSynthesizer extends TTSSynthesizerBase {
              * Emit an event to the Python TCP server to indicate that the audio has ended.
              * Useful for ASR to start listening again after the audio has ended
              */
-            if (HAS_STT) {
+            if (HAS_ASR) {
               PYTHON_TCP_CLIENT.emit(
                 'leon-speech-audio-ended',
                 duration / 1_000 || 500

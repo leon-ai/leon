@@ -31,7 +31,7 @@ async function runLeonStartCommand() {
     const child = spawn(startCommand.command, startCommand.args, {
       cwd: process.cwd(),
       env: {
-        ...RuntimeHelper.getManagedNodeEnvironment(),
+        ...RuntimeHelper.getManagedNodeEnvironment(process.env),
         LEON_OPEN_BROWSER: 'true'
       },
       stdio: 'inherit',

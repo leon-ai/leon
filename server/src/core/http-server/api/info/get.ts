@@ -4,9 +4,9 @@ import type { APIOptions } from '@/core/http-server/http-server'
 import {
   LEON_VERSION,
   HAS_AFTER_SPEECH,
-  HAS_STT,
+  HAS_ASR,
   HAS_TTS,
-  STT_PROVIDER,
+  ASR_PROVIDER,
   TTS_PROVIDER,
   IS_TELEMETRY_ENABLED,
   SHOULD_START_PYTHON_TCP_SERVER
@@ -91,9 +91,9 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
           agentModel: modelState.getAgentModelName(),
           localModel: modelState.getLocalModelName()
         },
-        stt: {
-          enabled: HAS_STT,
-          provider: STT_PROVIDER
+        asr: {
+          enabled: HAS_ASR,
+          provider: ASR_PROVIDER
         },
         tts: {
           enabled: HAS_TTS,
