@@ -9,6 +9,7 @@ import kill from 'tree-kill'
 
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
+import { CONFIG_MANAGER } from '@/config'
 import type {
   CompletionParams,
   PromptOrChatHistory
@@ -28,7 +29,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 
 const DEFAULT_LLAMACPP_BASE_URL =
-  process.env['LEON_LLAMACPP_BASE_URL'] || 'http://127.0.0.1:8080/v1'
+  CONFIG_MANAGER.getProviderBaseURL('llamacpp') || 'http://127.0.0.1:8080/v1'
 const LLAMACPP_READY_TIMEOUT_MS = 120_000
 const LLAMACPP_READY_POLL_INTERVAL_MS = 250
 const LLAMA_SERVER_LOG_RESET_INTERVAL_MS = 12 * 60 * 60 * 1_000
@@ -253,7 +254,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
     if (!this.model.trim()) {
       throw new Error(
-        'llama.cpp model path is not defined. Please configure LEON_LLM or install a default local LLM.'
+        'llama.cpp model path is not defined. Please configure llm.default in config.yml or install a default local LLM.'
       )
     }
 
@@ -391,7 +392,9 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     return {
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env['LEON_LLAMACPP_API_KEY'] || 'Bearer no-key'}`
+        Authorization: `Bearer ${
+          CONFIG_MANAGER.getProviderAPIKey('llamacpp') || 'Bearer no-key'
+        }`
       },
       ...(typeof completionParams.timeout === 'number'
         ? { timeout: completionParams.timeout }

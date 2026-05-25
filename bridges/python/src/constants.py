@@ -43,6 +43,7 @@ PROFILE_NATIVE_SKILLS_PATH = os.path.join(PROFILE_SKILLS_PATH, "native")
 PROFILE_AGENT_SKILLS_PATH = os.path.join(PROFILE_SKILLS_PATH, "agent")
 PROFILE_TOOLS_PATH = os.path.join(LEON_PROFILE_PATH, "tools")
 PROFILE_DISABLED_PATH = os.path.join(LEON_PROFILE_PATH, "disabled.json")
+PROFILE_ALLOWED_PATH = os.path.join(LEON_PROFILE_PATH, "allowed.json")
 
 SKILLS_ROOT_PATH = os.path.join(CODEBASE_PATH, "skills")
 NATIVE_SKILLS_PATH = os.path.join(SKILLS_ROOT_PATH, "native")

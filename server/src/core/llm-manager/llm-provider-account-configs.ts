@@ -1,4 +1,5 @@
 import { LLMProviders } from '@/core/llm-manager/types'
+import { CONFIG_MANAGER } from '@/config'
 
 export interface LLMProviderAccountConfig {
   label: string
@@ -70,7 +71,18 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
 export function getLLMProviderAccountConfig(
   providerValue: string
 ): LLMProviderAccountConfig | undefined {
-  return LLM_PROVIDER_ACCOUNT_CONFIGS.find(
+  const providerConfig = LLM_PROVIDER_ACCOUNT_CONFIGS.find(
     (providerConfig) => providerConfig.value === providerValue
   )
+
+  if (!providerConfig) {
+    return undefined
+  }
+
+  return {
+    ...providerConfig,
+    apiKeyEnv:
+      CONFIG_MANAGER.getProviderAPIKeyEnv(providerValue) ||
+      providerConfig.apiKeyEnv
+  }
 }

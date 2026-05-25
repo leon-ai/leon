@@ -2,7 +2,7 @@ import { io } from 'socket.io-client'
 
 import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
-import { INIT_MESSAGES } from './constants'
+import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
 
 export default class Client {
@@ -132,8 +132,8 @@ export default class Client {
   }
 
   asrStartRecording() {
-    if (!window.leonConfigInfo.stt.enabled) {
-      console.warn('ASR is not enabled')
+    if (!window.leonConfigInfo.asr.enabled) {
+      alert(ASR_DISABLED_MESSAGE)
       return
     }
 
@@ -472,7 +472,7 @@ export default class Client {
     this.socket.on('tts-end-of-speech', async () => {
       this.voiceEnergy.status = 'listening'
 
-      if (window.leonConfigInfo?.stt?.enabled) {
+      if (window.leonConfigInfo?.asr?.enabled) {
         this.socket.emit('asr-start-record')
       }
     })

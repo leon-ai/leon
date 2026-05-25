@@ -11,31 +11,21 @@ import {
   PYTHON_TCP_SERVER_ASR_MODEL_HF_PREFIX_DOWNLOAD_URL,
   PYTHON_TCP_SERVER_TTS_BERT_BASE_MODEL_HF_PREFIX_DOWNLOAD_URL
 } from '@/constants'
+import {
+  ASR_MODEL_FILES,
+  TTS_BERT_BASE_MODEL_FILES
+} from '@/core/voice/voice-resource-state'
 import { FileHelper } from '@/helpers/file-helper'
 import { NetworkHelper } from '@/helpers/network-helper'
 
 import { createSetupStatus } from './setup-status'
 
-const ASR_MODEL_FILES = [
-  'model.bin',
-  'config.json',
-  'preprocessor_config.json',
-  'tokenizer.json',
-  'vocabulary.json'
-]
 /*const TTS_BERT_FRENCH_MODEL_FILES = [
   'pytorch_model.bin', // Not needed? Compare with HF auto download in ~/.cache/huggingface/hub...
   'config.json',
   'vocab.txt',
   'tokenizer_config.json'
 ]*/
-const TTS_BERT_BASE_MODEL_FILES = [
-  'pytorch_model.bin',
-  'config.json',
-  'vocab.txt',
-  'tokenizer_config.json',
-  'tokenizer.json'
-]
 
 async function installTTSModel() {
   const destPath = PYTHON_TCP_SERVER_TTS_MODEL_PATH

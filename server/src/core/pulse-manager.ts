@@ -264,12 +264,22 @@ export default class PulseManager {
       LogHelper.success('New instance')
 
       PulseManager.instance = this
+      if (!LEON_PULSE_ENABLED) {
+        return
+      }
+
       this.ensureLoaded()
       this.persist()
     }
   }
 
   public start(): void {
+    if (!LEON_PULSE_ENABLED) {
+      LogHelper.title('Pulse Manager')
+      LogHelper.info('Pulse is disabled')
+      return
+    }
+
     const state = this.ensureLoaded()
     state.enabled = LEON_PULSE_ENABLED
     state.intervalMs = LEON_PULSE_INTERVAL_MS
@@ -278,13 +288,6 @@ export default class PulseManager {
     if (this.intervalId || this.initialTimerId) {
       return
     }
-
-    if (!LEON_PULSE_ENABLED) {
-      LogHelper.title('Pulse Manager')
-      LogHelper.info('Pulse is disabled')
-      return
-    }
-
     const initialDelayMs = Math.min(
       LEON_PULSE_INTERVAL_MS,
       PULSE_INITIAL_DELAY_MS
@@ -312,6 +315,10 @@ export default class PulseManager {
   }
 
   public async observeOwnerUtterance(utterance: string): Promise<void> {
+    if (!LEON_PULSE_ENABLED) {
+      return
+    }
+
     const ownerMessage = normalizeText(utterance)
     if (!ownerMessage) {
       return
@@ -332,6 +339,10 @@ export default class PulseManager {
   }
 
   public async tick(reason: 'initial' | 'scheduled' | 'manual'): Promise<void> {
+    if (!LEON_PULSE_ENABLED) {
+      return
+    }
+
     if (this.isTickPending) {
       return
     }
@@ -1522,6 +1533,10 @@ export default class PulseManager {
   }
 
   private persist(): void {
+    if (!LEON_PULSE_ENABLED) {
+      return
+    }
+
     const state = this.ensureLoaded()
 
     try {
