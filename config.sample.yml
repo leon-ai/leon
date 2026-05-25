@@ -1,0 +1,122 @@
+# yaml-language-server: $schema=./schemas/core-schemas/config.json
+# Leon profile configuration.
+# This file stores non-secret profile settings. Keep actual secret values in
+# your profile .env file, then reference them here with an `env` property.
+
+language: en-US
+
+server:
+  host: http://localhost
+  port: 5366
+
+routing:
+  # Routing mode: smart | controlled | agent
+  mode: smart
+
+llm:
+  # Use null to leave the global LLM target unset.
+  # Set to "<provider>/<model>" to use a provider/model pair.
+  # Examples:
+  # default: openai/gpt-5.5
+  # default: openrouter/z-ai/glm-5-turbo
+  # default: llamacpp/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+  # default: sglang/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+  # default: /absolute/path/model.gguf
+  default: null
+  # Optional per-mode overrides. Null values fall back to llm.default.
+  workflow: null
+  agent: null
+  providers:
+    llamacpp:
+      base_url: http://127.0.0.1:8080/v1
+      api_key:
+        # The value is read from LEON_LLAMACPP_API_KEY in your profile .env file.
+        env: LEON_LLAMACPP_API_KEY
+    sglang:
+      base_url: http://127.0.0.1:30000/v1
+      api_key:
+        # The value is read from LEON_SGLANG_API_KEY in your profile .env file.
+        env: LEON_SGLANG_API_KEY
+    openrouter:
+      api_key:
+        # The value is read from LEON_OPENROUTER_API_KEY in your profile .env file.
+        env: LEON_OPENROUTER_API_KEY
+    zai:
+      api_key:
+        # The value is read from LEON_ZAI_API_KEY in your profile .env file.
+        env: LEON_ZAI_API_KEY
+    openai:
+      api_key:
+        # The value is read from LEON_OPENAI_API_KEY in your profile .env file.
+        env: LEON_OPENAI_API_KEY
+    anthropic:
+      api_key:
+        # The value is read from LEON_ANTHROPIC_API_KEY in your profile .env file.
+        env: LEON_ANTHROPIC_API_KEY
+    moonshotai:
+      api_key:
+        # The value is read from LEON_MOONSHOTAI_API_KEY in your profile .env file.
+        env: LEON_MOONSHOTAI_API_KEY
+    huggingface:
+      api_key:
+        # The value is read from LEON_HUGGINGFACE_API_KEY in your profile .env file.
+        env: LEON_HUGGINGFACE_API_KEY
+    cerebras:
+      api_key:
+        # The value is read from LEON_CEREBRAS_API_KEY in your profile .env file.
+        env: LEON_CEREBRAS_API_KEY
+    groq:
+      api_key:
+        # The value is read from LEON_GROQ_API_KEY in your profile .env file.
+        env: LEON_GROQ_API_KEY
+
+mood:
+  # Mood mode: auto | default | tired | cocky | sad | angry
+  mode: auto
+
+runtime:
+  # Enable Leon's autonomous pulse mechanism.
+  pulse_enabled: true
+  # Enable Leon's private diary/self-model mechanism.
+  private_diary_enabled: true
+
+context:
+  # Context files to disable. Use ["*"] to disable all context files, including
+  # context files added by future Leon versions.
+  disabled_files: []
+
+availability:
+  skills:
+    # When this list contains at least one skill, only these skills are enabled.
+    allowed: []
+    # Used only when allowed is empty.
+    disabled: []
+  tools:
+    # When this list contains at least one tool, only these tools are enabled.
+    allowed: []
+    # Used only when allowed is empty.
+    disabled: []
+
+python_tcp_server:
+  host: 127.0.0.1
+  port: 5367
+
+voice:
+  wake_word_enabled: false
+  asr:
+    enabled: false
+    provider: local
+  tts:
+    enabled: false
+    provider: local
+
+time_zone: null
+after_speech_enabled: false
+telemetry_enabled: true
+
+http:
+  enabled: true
+  lang: en-US
+  api_key:
+    # The value is read from LEON_HTTP_API_KEY in your profile .env file.
+    env: LEON_HTTP_API_KEY

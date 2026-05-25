@@ -13,6 +13,7 @@ import {
   matchesRequestedTool,
   resolveToolEntry,
   TOOL_DISABLE_SUBCOMMAND,
+  TOOL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT,
   TOOL_ROOT_COMMAND_FORMAT,
   toToolSuggestion
 } from '../tool-command-helpers'
@@ -93,6 +94,25 @@ export class DisableToolSubCommand implements ToolSubCommand {
           items: [
             {
               label: `The tool "${context.rawToolName.trim()}" is not available for this operation.`,
+              tone: 'error'
+            }
+          ]
+        })
+      }
+    }
+
+    if (
+      ProfileHelper.hasToolAllowlist() &&
+      ProfileHelper.isToolAllowed(toolEntry.toolId, toolEntry.toolkitId)
+    ) {
+      return {
+        status: 'error',
+        result: createListResult({
+          title: 'Tool In Allow-Only List',
+          tone: 'error',
+          items: [
+            {
+              label: `Use ${TOOL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT} to make "${toolEntry.qualifiedName}" unavailable.`,
               tone: 'error'
             }
           ]

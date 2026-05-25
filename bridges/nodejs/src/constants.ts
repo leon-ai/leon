@@ -63,6 +63,7 @@ const NODEJS_BRIDGE_VERSION_FILE_PATH = path.join(
 
 export const TOOLS_PATH = path.join(CODEBASE_PATH, 'tools')
 export const PROFILE_DISABLED_PATH = path.join(LEON_PROFILE_PATH, 'disabled.json')
+export const PROFILE_ALLOWED_PATH = path.join(LEON_PROFILE_PATH, 'allowed.json')
 
 export const [, NODEJS_BRIDGE_VERSION] = fs
   .readFileSync(NODEJS_BRIDGE_VERSION_FILE_PATH, 'utf8')

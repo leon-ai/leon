@@ -142,9 +142,12 @@ export default class LLMProvider {
   }
 
   public get localLLMName(): string {
-    const workflowProviderName = this.getProviderNameForDuty(null)
-    const agentProviderName = this.getProviderNameForDuty(LLMDuties.ReAct)
+    const modelState = CONFIG_STATE.getModelState()
+    const workflowProviderName = modelState.getWorkflowProvider()
+    const agentProviderName = modelState.getAgentProvider()
+
     if (
+      workflowProviderName &&
       LOCAL_SERVER_PROVIDERS.has(workflowProviderName) &&
       this.workflowLLMProvider?.modelName
     ) {
@@ -152,6 +155,7 @@ export default class LLMProvider {
     }
 
     if (
+      agentProviderName &&
       LOCAL_SERVER_PROVIDERS.has(agentProviderName) &&
       this.agentLLMProvider?.modelName
     ) {
@@ -236,10 +240,11 @@ export default class LLMProvider {
       return false
     }
 
-    const configuredProviders = new Set<LLMProviders>([
-      ...(workflowTarget.isEnabled ? [workflowTarget.provider] : []),
-      ...(agentTarget.isEnabled ? [agentTarget.provider] : [])
-    ])
+    const configuredProviders = new Set<LLMProviders>(
+      [workflowTarget, agentTarget]
+        .filter((target) => target.isEnabled && target.provider)
+        .map((target) => target.provider as LLMProviders)
+    )
 
     for (const providerName of configuredProviders) {
       if (!Object.values(LLMProviders).includes(providerName)) {
@@ -308,6 +313,11 @@ export default class LLMProvider {
 
   private async createProvider(target: ResolvedLLMTarget): Promise<Provider> {
     const providerName = target.provider
+
+    if (!providerName) {
+      throw new Error('Cannot create an LLM provider for a disabled target.')
+    }
+
     const providerFileName =
       LLM_PROVIDERS_MAP[providerName as keyof typeof LLM_PROVIDERS_MAP]
 
@@ -356,10 +366,15 @@ export default class LLMProvider {
 
   private getProviderNameForDuty(dutyType: LLMDuties | null): LLMProviders {
     const modelState = CONFIG_STATE.getModelState()
-
-    return dutyType === LLMDuties.ReAct
+    const providerName = dutyType === LLMDuties.ReAct
       ? modelState.getAgentProvider()
       : modelState.getWorkflowProvider()
+
+    if (!providerName) {
+      throw new Error(LLM_PROVIDER_NOT_READY_MESSAGE)
+    }
+
+    return providerName
   }
 
   private getTargetForDuty(dutyType: LLMDuties | null): ResolvedLLMTarget {
@@ -440,8 +455,12 @@ export default class LLMProvider {
     workflowTarget: ResolvedLLMTarget,
     agentTarget: ResolvedLLMTarget
   ): boolean {
-    const workflowIsLocal = LOCAL_SERVER_PROVIDERS.has(workflowTarget.provider)
-    const agentIsLocal = LOCAL_SERVER_PROVIDERS.has(agentTarget.provider)
+    const workflowIsLocal = workflowTarget.provider
+      ? LOCAL_SERVER_PROVIDERS.has(workflowTarget.provider)
+      : false
+    const agentIsLocal = agentTarget.provider
+      ? LOCAL_SERVER_PROVIDERS.has(agentTarget.provider)
+      : false
 
     if (!workflowIsLocal || !agentIsLocal) {
       return false

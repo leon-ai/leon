@@ -7,12 +7,12 @@ import Stt from 'ibm-watson/speech-to-text/v1'
 import { IamAuthenticator } from 'ibm-watson/auth'
 
 import type { WatsonVoiceConfigurationSchema } from '@/schemas/voice-config-schemas'
-import { STTParserBase } from '@/core/stt/stt-parser-base'
+import { ASRParserBase } from '@/core/asr/asr-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export default class WatsonSTTParser extends STTParserBase {
-  protected readonly name = 'Watson STT Parser'
+export default class WatsonASRParser extends ASRParserBase {
+  protected readonly name = 'Watson ASR Parser'
   private readonly client: Stt | undefined = undefined
 
   constructor() {

@@ -75,7 +75,7 @@ export default class OpenRouterTool extends Tool {
       DEFAULT_SETTINGS
     )
     this.settings = toolSettings
-    this.requiredSettings = REQUIRED_SETTINGS
+    this.requiredSettings = apiKey ? [] : REQUIRED_SETTINGS
     this.checkRequiredSettings(this.toolName)
 
     // Priority: skill-provided apiKey > toolkit settings > hardcoded default

@@ -4,7 +4,7 @@ import axios from 'axios'
 
 import {
   LANG,
-  HAS_STT,
+  HAS_ASR,
   HAS_TTS,
   SHOULD_START_PYTHON_TCP_SERVER,
   IS_DEVELOPMENT_ENV,
@@ -15,7 +15,7 @@ import {
   HTTP_SERVER,
   PYTHON_TCP_CLIENT,
   ASR,
-  STT,
+  ASR_ENGINE,
   TTS,
   NLU,
   BRAIN,
@@ -351,13 +351,13 @@ export default class SocketServer {
         })
       : new SocketIOServer(HTTP_SERVER.httpServer)
 
-    let sttState = 'disabled'
+    let asrState = 'disabled'
     let ttsState = 'disabled'
 
-    if (HAS_STT) {
-      sttState = 'enabled'
+    if (HAS_ASR) {
+      asrState = 'enabled'
 
-      await STT.init()
+      await ASR_ENGINE.init()
     }
     if (HAS_TTS) {
       ttsState = 'enabled'
@@ -366,7 +366,7 @@ export default class SocketServer {
     }
 
     LogHelper.title('Initialization')
-    LogHelper.success(`STT ${sttState}`)
+    LogHelper.success(`ASR ${asrState}`)
     LogHelper.success(`TTS ${ttsState}`)
 
     io.on('connection', (socket) => {

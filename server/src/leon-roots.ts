@@ -37,3 +37,4 @@ export const LEON_PROFILE_PATH = path.join(
   LEON_PROFILE_NAME
 )
 export const PROFILE_DOT_ENV_PATH = path.join(LEON_PROFILE_PATH, '.env')
+export const PROFILE_CONFIG_PATH = path.join(LEON_PROFILE_PATH, 'config.yml')

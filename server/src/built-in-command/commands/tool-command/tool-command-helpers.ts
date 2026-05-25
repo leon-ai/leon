@@ -19,9 +19,15 @@ export const TOOL_ROOT_COMMAND_ALIAS_FORMAT = '/t'
 export const TOOL_LIST_SUBCOMMAND = 'list'
 export const TOOL_ENABLE_SUBCOMMAND = 'enable'
 export const TOOL_DISABLE_SUBCOMMAND = 'disable'
+export const TOOL_ALLOW_ONLY_SUBCOMMAND = 'allow-only'
+export const TOOL_REMOVE_ALLOW_ONLY_SUBCOMMAND = 'remove-allow-only'
 export const TOOL_LIST_COMMAND_FORMAT = '/tool list'
 export const TOOL_ENABLE_COMMAND_FORMAT = '/tool enable <toolkit>.<tool_name>'
 export const TOOL_DISABLE_COMMAND_FORMAT = '/tool disable <toolkit>.<tool_name>'
+export const TOOL_ALLOW_ONLY_COMMAND_FORMAT =
+  '/tool allow-only <toolkit>.<tool_name>'
+export const TOOL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT =
+  '/tool remove-allow-only <toolkit>.<tool_name>'
 export const TOOL_COMMAND_FORMAT = '/tool <toolkit>.<tool_name> <query>'
 export const TOOL_COMMAND_PREFIXES = new Set([
   `/${TOOL_COMMAND_NAME}`,
@@ -283,6 +289,28 @@ export function createToolToggleSuccessResult(
       items: [
         {
           label: `The tool "${entry.qualifiedName}" is now ${action}.`,
+          tone: 'success'
+        }
+      ]
+    })
+  }
+}
+
+export function createToolAllowOnlySuccessResult(
+  action: 'allowed' | 'removed',
+  entry: ToolAutocompleteEntry
+): BuiltInCommandExecutionResult {
+  return {
+    status: 'completed',
+    result: createListResult({
+      title: action === 'allowed' ? 'Tool Allow-Only Added' : 'Tool Allow-Only Removed',
+      tone: 'success',
+      items: [
+        {
+          label:
+            action === 'allowed'
+              ? `The tool "${entry.qualifiedName}" is now in the allow-only list.`
+              : `The tool "${entry.qualifiedName}" was removed from the allow-only list.`,
           tone: 'success'
         }
       ]

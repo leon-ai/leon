@@ -1,7 +1,8 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import url from 'node:url'
-import { execFileSync } from 'node:child_process'
+import { execFile, execFileSync } from 'node:child_process'
 
 import {
   NetworkHelper,
@@ -142,6 +143,85 @@ export class FileHelper {
    */
   public static isExistingPath(filePath: string): boolean {
     return fs.existsSync(filePath)
+  }
+
+  /**
+   * Expand a path that starts with the current user's home alias.
+   * @param inputPath The path to expand
+   * @returns The expanded path
+   */
+  public static expandHomeAlias(inputPath: string): string {
+    if (inputPath === '~') {
+      return os.homedir()
+    }
+
+    if (inputPath.startsWith('~/') || inputPath.startsWith('~\\')) {
+      return path.join(os.homedir(), inputPath.slice(2))
+    }
+
+    return inputPath
+  }
+
+  /**
+   * Open a file or directory with the default operating system application.
+   * @param targetPath The file or directory path to open
+   * @returns The resolved path that was opened
+   */
+  public static async openPath(targetPath: string): Promise<string> {
+    const expandedPath = FileHelper.expandHomeAlias(targetPath)
+    const resolvedPath = path.resolve(expandedPath)
+
+    if (!fs.existsSync(resolvedPath)) {
+      throw new Error('Path does not exist')
+    }
+
+    const targetStats = await fs.promises.stat(resolvedPath)
+
+    if (!targetStats.isDirectory() && !targetStats.isFile()) {
+      throw new Error('Unsupported path type')
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      if (SystemHelper.isWindows()) {
+        execFile('cmd.exe', ['/c', 'start', '', resolvedPath], (error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+
+          resolve()
+        })
+        return
+      }
+
+      if (SystemHelper.isMacOS()) {
+        execFile('open', [resolvedPath], (error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+
+          resolve()
+        })
+        return
+      }
+
+      if (SystemHelper.isLinux()) {
+        execFile('xdg-open', [resolvedPath], (error) => {
+          if (error) {
+            reject(error)
+            return
+          }
+
+          resolve()
+        })
+        return
+      }
+
+      reject(new Error('Unsupported operating system'))
+    })
+
+    return resolvedPath
   }
 
   /**

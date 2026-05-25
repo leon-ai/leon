@@ -15,10 +15,15 @@ export const SKILL_LIST_SUBCOMMAND = 'list'
 export const SKILL_REMOVE_SUBCOMMAND = 'remove'
 export const SKILL_ENABLE_SUBCOMMAND = 'enable'
 export const SKILL_DISABLE_SUBCOMMAND = 'disable'
+export const SKILL_ALLOW_ONLY_SUBCOMMAND = 'allow-only'
+export const SKILL_REMOVE_ALLOW_ONLY_SUBCOMMAND = 'remove-allow-only'
 export const SKILL_LIST_COMMAND_FORMAT = '/skill list'
 export const SKILL_REMOVE_COMMAND_FORMAT = '/skill remove <skill_name>'
 export const SKILL_ENABLE_COMMAND_FORMAT = '/skill enable <skill_name>'
 export const SKILL_DISABLE_COMMAND_FORMAT = '/skill disable <skill_name>'
+export const SKILL_ALLOW_ONLY_COMMAND_FORMAT = '/skill allow-only <skill_name>'
+export const SKILL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT =
+  '/skill remove-allow-only <skill_name>'
 export const SKILL_COMMAND_FORMAT = '/skill <skill_name> <query>'
 export const SKILL_COMMAND_PREFIXES = new Set([
   `/${SKILL_COMMAND_NAME}`,
@@ -221,6 +226,28 @@ export function createSkillToggleSuccessResult(
       items: [
         {
           label: `The skill "${entry.commandName}" is now ${action}.`,
+          tone: 'success'
+        }
+      ]
+    })
+  }
+}
+
+export function createSkillAllowOnlySuccessResult(
+  action: 'allowed' | 'removed',
+  entry: SkillAutocompleteEntry
+): BuiltInCommandExecutionResult {
+  return {
+    status: 'completed',
+    result: createListResult({
+      title: action === 'allowed' ? 'Skill Allow-Only Added' : 'Skill Allow-Only Removed',
+      tone: 'success',
+      items: [
+        {
+          label:
+            action === 'allowed'
+              ? `The skill "${entry.commandName}" is now in the allow-only list.`
+              : `The skill "${entry.commandName}" was removed from the allow-only list.`,
           tone: 'success'
         }
       ]

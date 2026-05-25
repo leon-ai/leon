@@ -20,9 +20,11 @@ import {
   TOOL_COMMAND_FORMAT,
   TOOL_COMMAND_NAME,
   TOOL_COMMAND_PREFIXES,
+  TOOL_ALLOW_ONLY_COMMAND_FORMAT,
   TOOL_DISABLE_COMMAND_FORMAT,
   TOOL_ENABLE_COMMAND_FORMAT,
   TOOL_LIST_COMMAND_FORMAT,
+  TOOL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT,
   TOOL_ROOT_COMMAND_ALIAS_FORMAT,
   TOOL_ROOT_COMMAND_FORMAT,
   toToolSuggestion,
@@ -31,6 +33,8 @@ import {
 import { DisableToolSubCommand } from './sub-commands/disable-tool-sub-command'
 import { EnableToolSubCommand } from './sub-commands/enable-tool-sub-command'
 import { ListToolSubCommand } from './sub-commands/list-tool-sub-command'
+import { AllowOnlyToolSubCommand } from './sub-commands/allow-only-tool-sub-command'
+import { RemoveAllowOnlyToolSubCommand } from './sub-commands/remove-allow-only-tool-sub-command'
 import type { ToolSubCommand } from './sub-commands/tool-sub-command'
 
 export class ToolCommand extends BuiltInCommand {
@@ -47,7 +51,9 @@ export class ToolCommand extends BuiltInCommand {
   private readonly subCommands: ToolSubCommand[] = [
     new ListToolSubCommand(),
     new EnableToolSubCommand(),
-    new DisableToolSubCommand()
+    new DisableToolSubCommand(),
+    new AllowOnlyToolSubCommand(),
+    new RemoveAllowOnlyToolSubCommand()
   ]
 
   public constructor() {
@@ -351,6 +357,14 @@ export class ToolCommand extends BuiltInCommand {
       {
         label: TOOL_DISABLE_COMMAND_FORMAT,
         description: 'Disable an enabled tool.'
+      },
+      {
+        label: TOOL_ALLOW_ONLY_COMMAND_FORMAT,
+        description: 'Add a tool to the allow-only list.'
+      },
+      {
+        label: TOOL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT,
+        description: 'Remove a tool from the allow-only list.'
       },
       {
         label: TOOL_COMMAND_FORMAT,

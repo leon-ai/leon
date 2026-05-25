@@ -220,6 +220,23 @@ export default class NLU {
     LogHelper.info('Choosing skill...')
 
     try {
+      // Force skill selection when only one is available
+      const nativeSkillDescriptors = SkillDomainHelper.listSkillDescriptorsSync()
+        .filter((descriptor) => descriptor.format === SkillFormat.LeonNative)
+
+      if (nativeSkillDescriptors.length === 1) {
+        const [skillDescriptor] = nativeSkillDescriptors
+
+        if (skillDescriptor) {
+          LogHelper.title('NLU')
+          LogHelper.info(
+            `Only one native skill is enabled; selecting "${skillDescriptor.id}".`
+          )
+
+          return skillDescriptor.id as NLPSkill
+        }
+      }
+
       const skillRouterHistory = await CONVERSATION_LOGGER.load({
         nbOfLogsToLoad: 6
       })
@@ -236,9 +253,22 @@ export default class NLU {
         return null
       }
 
-      const skillResult = skillRouterResult?.output as unknown as string
+      const skillResult = String(skillRouterResult?.output || '').trim()
 
       if (skillResult && skillResult !== 'None') {
+        const skillDescriptor = SkillDomainHelper.getSkillDescriptorSync(
+          skillResult
+        )
+
+        if (!skillDescriptor) {
+          LogHelper.title('NLU')
+          LogHelper.warning(
+            `Skill router selected unavailable skill "${skillResult}"; ignoring it.`
+          )
+
+          return null
+        }
+
         return skillResult as NLPSkill
       }
 

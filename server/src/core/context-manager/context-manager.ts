@@ -8,7 +8,7 @@ import { promisify } from 'node:util'
 import {
   CODEBASE_CONTEXT_PATH,
   CODEBASE_PATH,
-  LEON_DISABLED_CONTEXT_FILES,
+  LEON_CONTEXT_DISABLED_FILES,
   NODE_RUNTIME_BIN_PATH,
   PROFILE_CONTEXT_PATH,
   TSX_CLI_PATH
@@ -66,6 +66,7 @@ const CONTEXT_REFRESH_WORKER_DIST_PATH = path.join(
   'context-refresh-worker.js'
 )
 const CONTEXT_REFRESH_WORKER_MAX_BUFFER = 1024 * 1024 * 8
+const DISABLE_ALL_CONTEXT_FILES_VALUE = '*'
 const RETIRED_CONTEXT_FILES = [
   'LOCAL_ECOSYSTEM.md',
   'NETWORK.md',
@@ -101,11 +102,15 @@ export default class ContextManager {
       getLocalLLMName: () => LLM_PROVIDER.localLLMName
     }
   )
-  private readonly disabledContextFiles = this.parseContextFileList(
-    LEON_DISABLED_CONTEXT_FILES
-  )
+  private readonly hasDisabledAllContextFiles =
+    this.hasDisableAllContextFilesValue(LEON_CONTEXT_DISABLED_FILES)
+  private readonly disabledContextFiles = this.hasDisabledAllContextFiles
+    ? new Set(this.allContextFiles.map((definition) => definition.filename))
+    : this.parseContextFileList(LEON_CONTEXT_DISABLED_FILES)
   private readonly contextFiles: ContextFile[] = this.allContextFiles.filter(
-    (definition) => !this.disabledContextFiles.has(definition.filename)
+    (definition) =>
+      !this.hasDisabledAllContextFiles &&
+      !this.disabledContextFiles.has(definition.filename)
   )
 
   public constructor() {
@@ -736,12 +741,17 @@ export default class ContextManager {
     }
   }
 
-  private parseContextFileList(rawFileList: string): Set<string> {
+  private parseContextFileList(rawFileList: string[]): Set<string> {
     return new Set(
       rawFileList
-        .split(/[,;\n]/)
         .map((value) => this.normalizeFilename(value))
         .filter((value) => value.length > 0)
+    )
+  }
+
+  private hasDisableAllContextFilesValue(rawFileList: string[]): boolean {
+    return rawFileList.some(
+      (value) => value.trim() === DISABLE_ALL_CONTEXT_FILES_VALUE
     )
   }
 

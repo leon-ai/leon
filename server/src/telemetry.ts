@@ -21,7 +21,7 @@ import {
   LEON_VERSION,
   NODEJS_BRIDGE_VERSION,
   PYTHON_BRIDGE_VERSION,
-  STT_PROVIDER,
+  ASR_PROVIDER,
   PYTHON_TCP_SERVER_VERSION,
   TTS_PROVIDER
 } from '@/constants'
@@ -70,7 +70,7 @@ export class Telemetry {
           isProduction: IS_PRODUCTION_ENV,
           isGitpod: IS_GITPOD,
           language: LANG,
-          sttProvider: STT_PROVIDER,
+          asrProvider: ASR_PROVIDER,
           ttsProvider: TTS_PROVIDER,
           coreVersion: LEON_VERSION,
           nodeJSBridgeVersion: NODEJS_BRIDGE_VERSION,

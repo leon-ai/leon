@@ -1,13 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { PROFILE_DISABLED_PATH } from '@/constants'
+import { CONFIG_MANAGER } from '@/config'
 import { PROFILE_DOT_ENV_PATH } from '@/leon-roots'
-
-interface ProfileDisabledConfig {
-  skills?: string[]
-  tools?: string[]
-}
 
 const ENV_LINE_SEPARATOR_PATTERN = /\r?\n/
 const ENV_VARIABLE_NAME_PATTERN = /^[A-Z0-9_]+$/
@@ -32,32 +27,7 @@ function getEnvVariableName(line: string): string | null {
   return ENV_VARIABLE_NAME_PATTERN.test(variableName) ? variableName : null
 }
 
-function readDisabledConfig(): ProfileDisabledConfig {
-  if (!fs.existsSync(PROFILE_DISABLED_PATH)) {
-    return {}
-  }
-
-  try {
-    return JSON.parse(
-      fs.readFileSync(PROFILE_DISABLED_PATH, 'utf8')
-    ) as ProfileDisabledConfig
-  } catch {
-    return {}
-  }
-}
-
-async function writeDisabledConfig(config: ProfileDisabledConfig): Promise<void> {
-  await fs.promises.mkdir(path.dirname(PROFILE_DISABLED_PATH), {
-    recursive: true
-  })
-
-  await fs.promises.writeFile(
-    PROFILE_DISABLED_PATH,
-    `${JSON.stringify(config, null, 2)}\n`
-  )
-}
-
-function normalizeDisabledIds(ids: unknown): Set<string> {
+function normalizeAccessIds(ids: unknown): Set<string> {
   if (!Array.isArray(ids)) {
     return new Set()
   }
@@ -70,8 +40,20 @@ function normalizeDisabledIds(ids: unknown): Set<string> {
   )
 }
 
-function serializeDisabledIds(ids: Set<string>): string[] {
-  return [...ids].sort((firstId, secondId) => firstId.localeCompare(secondId))
+function hasAccessList(ids: Set<string>): boolean {
+  return ids.size > 0
+}
+
+function hasQualifiedOrBareToolId(
+  toolIds: Set<string>,
+  toolId: string,
+  toolkitId?: string
+): boolean {
+  if (toolIds.has(toolId)) {
+    return true
+  }
+
+  return toolkitId ? toolIds.has(`${toolkitId}.${toolId}`) : false
 }
 
 export class ProfileHelper {
@@ -79,14 +61,94 @@ export class ProfileHelper {
    * Get disabled skill ids from the active profile.
    */
   public static getDisabledSkills(): Set<string> {
-    return normalizeDisabledIds(readDisabledConfig().skills)
+    return normalizeAccessIds(
+      CONFIG_MANAGER.getConfig().availability.skills.disabled
+    )
   }
 
   /**
    * Get disabled tool ids from the active profile.
    */
   public static getDisabledTools(): Set<string> {
-    return normalizeDisabledIds(readDisabledConfig().tools)
+    return normalizeAccessIds(
+      CONFIG_MANAGER.getConfig().availability.tools.disabled
+    )
+  }
+
+  /**
+   * Get allowed skill ids from the active profile.
+   */
+  public static getAllowedSkills(): Set<string> {
+    return normalizeAccessIds(
+      CONFIG_MANAGER.getConfig().availability.skills.allowed
+    )
+  }
+
+  /**
+   * Get allowed tool ids from the active profile.
+   */
+  public static getAllowedTools(): Set<string> {
+    return normalizeAccessIds(
+      CONFIG_MANAGER.getConfig().availability.tools.allowed
+    )
+  }
+
+  /**
+   * Check whether the active profile restricts skill access with an allowlist.
+   */
+  public static hasSkillAllowlist(): boolean {
+    return hasAccessList(this.getAllowedSkills())
+  }
+
+  /**
+   * Check whether the active profile restricts tool access with an allowlist.
+   */
+  public static hasToolAllowlist(): boolean {
+    return hasAccessList(this.getAllowedTools())
+  }
+
+  /**
+   * Check whether a skill is allowed by the active profile allowlist.
+   * @param skillName The skill id
+   */
+  public static isSkillAllowed(skillName: string): boolean {
+    const allowedSkills = this.getAllowedSkills()
+
+    return !hasAccessList(allowedSkills) || allowedSkills.has(skillName)
+  }
+
+  /**
+   * Check whether a tool is allowed by the active profile allowlist.
+   * @param toolId The tool id
+   * @param toolkitId The optional toolkit id
+   */
+  public static isToolAllowed(toolId: string, toolkitId?: string): boolean {
+    const allowedTools = this.getAllowedTools()
+
+    return (
+      !hasAccessList(allowedTools) ||
+      hasQualifiedOrBareToolId(allowedTools, toolId, toolkitId)
+    )
+  }
+
+  /**
+   * Check whether a skill is explicitly disabled in the active profile.
+   * @param skillName The skill id
+   */
+  public static isSkillExplicitlyDisabled(skillName: string): boolean {
+    return this.getDisabledSkills().has(skillName)
+  }
+
+  /**
+   * Check whether a tool is explicitly disabled in the active profile.
+   * @param toolId The tool id
+   * @param toolkitId The optional toolkit id
+   */
+  public static isToolExplicitlyDisabled(
+    toolId: string,
+    toolkitId?: string
+  ): boolean {
+    return hasQualifiedOrBareToolId(this.getDisabledTools(), toolId, toolkitId)
   }
 
   /**
@@ -94,7 +156,9 @@ export class ProfileHelper {
    * @param skillName The skill id
    */
   public static isSkillDisabled(skillName: string): boolean {
-    return this.getDisabledSkills().has(skillName)
+    return this.hasSkillAllowlist()
+      ? !this.isSkillAllowed(skillName)
+      : this.isSkillExplicitlyDisabled(skillName)
   }
 
   /**
@@ -102,16 +166,14 @@ export class ProfileHelper {
    * @param skillName The skill id
    */
   public static async disableSkill(skillName: string): Promise<void> {
-    const disabledConfig = readDisabledConfig()
-    const disabledSkills = normalizeDisabledIds(disabledConfig.skills)
+    const disabledSkills = this.getDisabledSkills()
 
     disabledSkills.add(skillName)
 
-    await writeDisabledConfig({
-      ...disabledConfig,
-      skills: serializeDisabledIds(disabledSkills),
-      tools: serializeDisabledIds(normalizeDisabledIds(disabledConfig.tools))
-    })
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'skills', 'disabled'],
+      disabledSkills
+    )
   }
 
   /**
@@ -119,16 +181,44 @@ export class ProfileHelper {
    * @param skillName The skill id
    */
   public static async enableSkill(skillName: string): Promise<void> {
-    const disabledConfig = readDisabledConfig()
-    const disabledSkills = normalizeDisabledIds(disabledConfig.skills)
+    const disabledSkills = this.getDisabledSkills()
 
     disabledSkills.delete(skillName)
 
-    await writeDisabledConfig({
-      ...disabledConfig,
-      skills: serializeDisabledIds(disabledSkills),
-      tools: serializeDisabledIds(normalizeDisabledIds(disabledConfig.tools))
-    })
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'skills', 'disabled'],
+      disabledSkills
+    )
+  }
+
+  /**
+   * Add a skill id to the active profile allow-only skill list.
+   * @param skillName The skill id
+   */
+  public static async allowOnlySkill(skillName: string): Promise<void> {
+    const allowedSkills = this.getAllowedSkills()
+
+    allowedSkills.add(skillName)
+
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'skills', 'allowed'],
+      allowedSkills
+    )
+  }
+
+  /**
+   * Remove a skill id from the active profile allow-only skill list.
+   * @param skillName The skill id
+   */
+  public static async removeAllowOnlySkill(skillName: string): Promise<void> {
+    const allowedSkills = this.getAllowedSkills()
+
+    allowedSkills.delete(skillName)
+
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'skills', 'allowed'],
+      allowedSkills
+    )
   }
 
   /**
@@ -137,13 +227,9 @@ export class ProfileHelper {
    * @param toolkitId The optional toolkit id
    */
   public static isToolDisabled(toolId: string, toolkitId?: string): boolean {
-    const disabledTools = this.getDisabledTools()
-
-    if (disabledTools.has(toolId)) {
-      return true
-    }
-
-    return toolkitId ? disabledTools.has(`${toolkitId}.${toolId}`) : false
+    return this.hasToolAllowlist()
+      ? !this.isToolAllowed(toolId, toolkitId)
+      : this.isToolExplicitlyDisabled(toolId, toolkitId)
   }
 
   /**
@@ -151,16 +237,14 @@ export class ProfileHelper {
    * @param toolId The qualified tool id
    */
   public static async disableTool(toolId: string): Promise<void> {
-    const disabledConfig = readDisabledConfig()
-    const disabledTools = normalizeDisabledIds(disabledConfig.tools)
+    const disabledTools = this.getDisabledTools()
 
     disabledTools.add(toolId)
 
-    await writeDisabledConfig({
-      ...disabledConfig,
-      skills: serializeDisabledIds(normalizeDisabledIds(disabledConfig.skills)),
-      tools: serializeDisabledIds(disabledTools)
-    })
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'tools', 'disabled'],
+      disabledTools
+    )
   }
 
   /**
@@ -168,16 +252,44 @@ export class ProfileHelper {
    * @param toolId The qualified tool id
    */
   public static async enableTool(toolId: string): Promise<void> {
-    const disabledConfig = readDisabledConfig()
-    const disabledTools = normalizeDisabledIds(disabledConfig.tools)
+    const disabledTools = this.getDisabledTools()
 
     disabledTools.delete(toolId)
 
-    await writeDisabledConfig({
-      ...disabledConfig,
-      skills: serializeDisabledIds(normalizeDisabledIds(disabledConfig.skills)),
-      tools: serializeDisabledIds(disabledTools)
-    })
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'tools', 'disabled'],
+      disabledTools
+    )
+  }
+
+  /**
+   * Add a tool id to the active profile allow-only tool list.
+   * @param toolId The qualified tool id
+   */
+  public static async allowOnlyTool(toolId: string): Promise<void> {
+    const allowedTools = this.getAllowedTools()
+
+    allowedTools.add(toolId)
+
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'tools', 'allowed'],
+      allowedTools
+    )
+  }
+
+  /**
+   * Remove a tool id from the active profile allow-only tool list.
+   * @param toolId The qualified tool id
+   */
+  public static async removeAllowOnlyTool(toolId: string): Promise<void> {
+    const allowedTools = this.getAllowedTools()
+
+    allowedTools.delete(toolId)
+
+    await CONFIG_MANAGER.setStringList(
+      ['availability', 'tools', 'allowed'],
+      allowedTools
+    )
   }
 
   /**

@@ -2,9 +2,9 @@ import path from 'node:path'
 
 import {
   DEFAULT_INSTALLED_LLM_PATH,
-  LEON_LLM,
   LLM_DIR_PATH
 } from '@/constants'
+import { CONFIG_MANAGER } from '@/config'
 import {
   type ResolvedLLMTarget,
   resolveConfiguredLLMTarget
@@ -15,11 +15,8 @@ import {
   CONFIG_STATE_EVENT_EMITTER,
   MODEL_CONFIGURATION_UPDATED_EVENT
 } from '@/core/config-states/config-state-event-emitter'
-import { ProfileHelper } from '@/helpers/profile-helper'
 import { FileHelper } from '@/helpers/file-helper'
 import { getActiveConversationSessionModelTarget } from '@/core/session-manager/session-context'
-
-const GLOBAL_LLM_ENV_KEY = 'LEON_LLM'
 
 const LOCAL_MODEL_PROVIDERS = new Set<LLMProviders>([
   LLMProviders.LlamaCPP,
@@ -27,11 +24,15 @@ const LOCAL_MODEL_PROVIDERS = new Set<LLMProviders>([
 ])
 
 function getInitialWorkflowTargetValue(): string {
-  return LEON_LLM.trim()
+  const config = CONFIG_MANAGER.getConfig().llm
+
+  return (config.workflow ?? config.default ?? '').trim()
 }
 
 function getInitialAgentTargetValue(): string {
-  return LEON_LLM.trim()
+  const config = CONFIG_MANAGER.getConfig().llm
+
+  return (config.agent ?? config.default ?? '').trim()
 }
 
 function resolveTarget(rawTarget: string): ResolvedLLMTarget {
@@ -42,7 +43,7 @@ function resolveTarget(rawTarget: string): ResolvedLLMTarget {
 }
 
 function getTargetModelName(target: ResolvedLLMTarget): string {
-  if (!target.isEnabled) {
+  if (!target.isEnabled || !target.provider) {
     return 'disabled'
   }
 
@@ -57,8 +58,7 @@ function getTargetModelName(target: ResolvedLLMTarget): string {
 
 function getSupportedModelProviders(): LLMProviders[] {
   return Object.values(LLMProviders).filter(
-    (provider) =>
-      provider !== LLMProviders.None && provider !== LLMProviders.Local
+    (provider) => provider !== LLMProviders.Local
   )
 }
 
@@ -110,11 +110,11 @@ export class ModelState {
     return this.workflowTarget.isEnabled || this.agentTarget.isEnabled
   }
 
-  public getWorkflowProvider(): LLMProviders {
+  public getWorkflowProvider(): LLMProviders | null {
     return this.workflowTarget.provider
   }
 
-  public getAgentProvider(): LLMProviders {
+  public getAgentProvider(): LLMProviders | null {
     return this.agentTarget.provider
   }
 
@@ -127,11 +127,17 @@ export class ModelState {
   }
 
   public getLocalModelName(): string {
-    if (LOCAL_MODEL_PROVIDERS.has(this.workflowTarget.provider)) {
+    if (
+      this.workflowTarget.provider &&
+      LOCAL_MODEL_PROVIDERS.has(this.workflowTarget.provider)
+    ) {
       return this.getWorkflowModelName()
     }
 
-    if (LOCAL_MODEL_PROVIDERS.has(this.agentTarget.provider)) {
+    if (
+      this.agentTarget.provider &&
+      LOCAL_MODEL_PROVIDERS.has(this.agentTarget.provider)
+    ) {
       return this.getAgentModelName()
     }
 
@@ -150,8 +156,8 @@ export class ModelState {
     return this.getSupportedProviders().includes(provider as LLMProviders)
   }
 
-  public isLocalProvider(provider: LLMProviders): boolean {
-    return LOCAL_MODEL_PROVIDERS.has(provider)
+  public isLocalProvider(provider: LLMProviders | null): boolean {
+    return provider ? LOCAL_MODEL_PROVIDERS.has(provider) : false
   }
 
   public getProviderAPIKeyEnv(provider: LLMProviders): string | null {
@@ -227,12 +233,12 @@ export class ModelState {
     this.workflowTarget = resolveTarget(normalizedRawTarget)
     this.agentTarget = resolveTarget(normalizedRawTarget)
 
-    process.env[GLOBAL_LLM_ENV_KEY] = normalizedRawTarget
-
-    await ProfileHelper.updateDotEnvVariable(
-      GLOBAL_LLM_ENV_KEY,
+    await CONFIG_MANAGER.setValue(
+      ['llm', 'default'],
       normalizedRawTarget
     )
+    await CONFIG_MANAGER.setValue(['llm', 'workflow'], null)
+    await CONFIG_MANAGER.setValue(['llm', 'agent'], null)
 
     CONFIG_STATE_EVENT_EMITTER.emit(MODEL_CONFIGURATION_UPDATED_EVENT, {
       workflowTarget: this.workflowTarget,

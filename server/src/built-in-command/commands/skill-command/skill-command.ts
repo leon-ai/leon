@@ -20,10 +20,12 @@ import {
   SKILL_COMMAND_FORMAT,
   SKILL_COMMAND_NAME,
   SKILL_COMMAND_PREFIXES,
+  SKILL_ALLOW_ONLY_COMMAND_FORMAT,
   SKILL_DISABLE_COMMAND_FORMAT,
   SKILL_ENABLE_COMMAND_FORMAT,
   SKILL_LIST_COMMAND_FORMAT,
   SKILL_REMOVE_COMMAND_FORMAT,
+  SKILL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT,
   SKILL_ROOT_COMMAND_ALIAS_FORMAT,
   SKILL_ROOT_COMMAND_FORMAT,
   toSkillSuggestion,
@@ -33,6 +35,8 @@ import { DisableSkillSubCommand } from './sub-commands/disable-skill-sub-command
 import { EnableSkillSubCommand } from './sub-commands/enable-skill-sub-command'
 import { ListSkillSubCommand } from './sub-commands/list-skill-sub-command'
 import { RemoveSkillSubCommand } from './sub-commands/remove-skill-sub-command'
+import { AllowOnlySkillSubCommand } from './sub-commands/allow-only-skill-sub-command'
+import { RemoveAllowOnlySkillSubCommand } from './sub-commands/remove-allow-only-skill-sub-command'
 import type { SkillSubCommand } from './sub-commands/skill-sub-command'
 
 export class SkillCommand extends BuiltInCommand {
@@ -50,7 +54,9 @@ export class SkillCommand extends BuiltInCommand {
     new ListSkillSubCommand(),
     new RemoveSkillSubCommand(),
     new EnableSkillSubCommand(),
-    new DisableSkillSubCommand()
+    new DisableSkillSubCommand(),
+    new AllowOnlySkillSubCommand(),
+    new RemoveAllowOnlySkillSubCommand()
   ]
 
   public constructor() {
@@ -363,6 +369,14 @@ export class SkillCommand extends BuiltInCommand {
       {
         label: SKILL_DISABLE_COMMAND_FORMAT,
         description: 'Disable an enabled skill.'
+      },
+      {
+        label: SKILL_ALLOW_ONLY_COMMAND_FORMAT,
+        description: 'Add a skill to the allow-only list.'
+      },
+      {
+        label: SKILL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT,
+        description: 'Remove a skill from the allow-only list.'
       },
       {
         label: SKILL_COMMAND_FORMAT,

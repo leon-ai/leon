@@ -3,14 +3,17 @@ import { execFileSync } from 'node:child_process'
 
 import {
   API_VERSION,
+  CODEBASE_PATH,
   GITHUB_URL,
-  HAS_STT,
+  HAS_ASR,
   HAS_TTS,
   INSTANCE_ID,
   IS_TELEMETRY_ENABLED,
+  LEON_HOME_PATH,
+  LEON_PROFILE_PATH,
   LEON_FILE_PATH,
   LEON_VERSION,
-  STT_PROVIDER,
+  ASR_PROVIDER,
   TTS_PROVIDER
 } from '@/constants'
 import {
@@ -125,6 +128,18 @@ export class StatusCommand extends BuiltInCommand {
         value: `${LEON_VERSION || 'unknown'} (${getShortCommitHash()})`
       },
       {
+        label: 'Leon home path',
+        value: LEON_HOME_PATH
+      },
+      {
+        label: 'Profile path',
+        value: LEON_PROFILE_PATH
+      },
+      {
+        label: 'Codebase path',
+        value: CODEBASE_PATH
+      },
+      {
         label: 'Routing mode',
         value: routingMode
       },
@@ -167,8 +182,8 @@ export class StatusCommand extends BuiltInCommand {
         value: modelState.getLocalModelName()
       },
       {
-        label: 'STT',
-        value: `${formatBooleanStatus(HAS_STT)} (${STT_PROVIDER || 'none'})`
+        label: 'ASR',
+        value: `${formatBooleanStatus(HAS_ASR)} (${ASR_PROVIDER || 'none'})`
       },
       {
         label: 'TTS',
