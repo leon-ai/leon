@@ -569,7 +569,7 @@ export default class ToolkitRegistry {
       return 'active agent LLM target is not resolved'
     }
 
-    if (this.supportsHostedSearch(target.provider)) {
+    if (target.provider && this.supportsHostedSearch(target.provider)) {
       return null
     }
 

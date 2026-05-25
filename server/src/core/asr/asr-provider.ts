@@ -1,36 +1,35 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { ASRAudioFormat } from '@/core/asr/types'
-import type { STTParser } from '@/core/stt/types'
-import { SERVER_CORE_PATH, STT_PROVIDER } from '@/constants'
+import type { ASRAudioFormat, ASRParser } from '@/core/asr/types'
+import { SERVER_CORE_PATH, ASR_PROVIDER } from '@/constants'
 import { SOCKET_SERVER, ASR } from '@/core'
-import { STTParserNames, STTProviders } from '@/core/stt/types'
+import { ASRParserNames, ASRProviders } from '@/core/asr/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { FileHelper } from '@/helpers/file-helper'
 
 const PROVIDERS_MAP = {
-  [STTProviders.Local]: STTParserNames.Local
- //  [STTProviders.GoogleCloudSTT]: STTParserNames.GoogleCloudSTT,
-  // [STTProviders.WatsonSTT]: STTParserNames.WatsonSTT,
-  // [STTProviders.CoquiSTT]: STTParserNames.CoquiSTT
+  [ASRProviders.Local]: ASRParserNames.Local
+ //  [ASRProviders.GoogleCloudASR]: ASRParserNames.GoogleCloudASR,
+  // [ASRProviders.WatsonASR]: ASRParserNames.WatsonASR,
+  // [ASRProviders.CoquiASR]: ASRParserNames.CoquiASR
 }
 
-export default class STT {
-  private static instance: STT
+export default class ASRProvider {
+  private static instance: ASRProvider
 
-  private _parser: STTParser = undefined
+  private _parser: ASRParser = undefined
 
   constructor() {
-    if (!STT.instance) {
-      LogHelper.title('STT')
+    if (!ASRProvider.instance) {
+      LogHelper.title('ASR')
       LogHelper.success('New instance')
 
-      STT.instance = this
+      ASRProvider.instance = this
     }
   }
 
-  public get parser(): STTParser {
+  public get parser(): ASRParser {
     return this._parser
   }
 
@@ -39,22 +38,22 @@ export default class STT {
   }
 
   /**
-   * Initialize the STT provider
+   * Initialize the ASR provider.
    */
   public async init(): Promise<boolean> {
-    LogHelper.title('STT')
-    LogHelper.info('Initializing STT...')
+    LogHelper.title('ASR')
+    LogHelper.info('Initializing ASR...')
 
-    if (!Object.values(STTProviders).includes(STT_PROVIDER as STTProviders)) {
+    if (!Object.values(ASRProviders).includes(ASR_PROVIDER as ASRProviders)) {
       LogHelper.error(
-        `The STT provider "${STT_PROVIDER}" does not exist or is not yet supported`
+        `The ASR provider "${ASR_PROVIDER}" does not exist or is not yet supported`
       )
 
       return false
     }
 
     /*if (
-      STT_PROVIDER === STTProviders.GoogleCloudSTT &&
+      ASR_PROVIDER === ASRProviders.GoogleCloudASR &&
       typeof process.env['GOOGLE_APPLICATION_CREDENTIALS'] === 'undefined'
     ) {
       process.env['GOOGLE_APPLICATION_CREDENTIALS'] = path.join(
@@ -77,19 +76,19 @@ export default class STT {
       const { default: parser } = await FileHelper.dynamicImportFromFile(
         path.join(
           SERVER_CORE_PATH,
-          'stt',
+          'asr',
           'parsers',
-          `${PROVIDERS_MAP[STT_PROVIDER as STTProviders]}.js`
+          `${PROVIDERS_MAP[ASR_PROVIDER as ASRProviders]}.js`
         )
       )
-      this._parser = new parser() as STTParser
+      this._parser = new parser() as ASRParser
 
-      LogHelper.title('STT')
-      LogHelper.success('STT initialized')
+      LogHelper.title('ASR')
+      LogHelper.success('ASR initialized')
 
       return true
     } catch (e) {
-      LogHelper.error(`The STT provider failed to initialize: ${e}`)
+      LogHelper.error(`The ASR provider failed to initialize: ${e}`)
       process.exit(1)
     }
   }

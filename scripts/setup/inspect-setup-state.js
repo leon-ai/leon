@@ -8,21 +8,10 @@ import {
   PYTHON_TCP_SERVER_TTS_BERT_BASE_DIR_PATH,
   PYTHON_TCP_SERVER_TTS_MODEL_PATH
 } from '@/constants'
-
-const ASR_MODEL_FILES = [
-  'model.bin',
-  'config.json',
-  'preprocessor_config.json',
-  'tokenizer.json',
-  'vocabulary.json'
-]
-const TTS_BERT_BASE_MODEL_FILES = [
-  'pytorch_model.bin',
-  'config.json',
-  'vocab.txt',
-  'tokenizer_config.json',
-  'tokenizer.json'
-]
+import {
+  ASR_MODEL_FILES,
+  TTS_BERT_BASE_MODEL_FILES
+} from '@/core/voice/voice-resource-state'
 
 function readManifest(manifestPath) {
   if (!fs.existsSync(manifestPath)) {

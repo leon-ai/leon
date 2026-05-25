@@ -20,7 +20,14 @@ import {
   PYTORCH_TORCH_PATH,
   PYTHON_TCP_SERVER_ENTRY_PATH,
   PYTHON_TCP_SERVER_RUNTIME_BIN_PATH,
-  SHOULD_START_PYTHON_TCP_SERVER
+  SHOULD_START_PYTHON_TCP_SERVER,
+  HAS_ASR,
+  HAS_TTS,
+  HAS_WAKE_WORD,
+  ASR_PROVIDER,
+  TTS_PROVIDER,
+  PYTHON_TCP_SERVER_HOST,
+  PYTHON_TCP_SERVER_PORT
 } from '@/constants'
 import {
   PYTHON_TCP_CLIENT,
@@ -35,6 +42,7 @@ import {
 import { shouldIgnoreTCPServerError } from '@/utilities'
 import { Updater } from '@/updater'
 import { Telemetry } from '@/telemetry'
+import { setShutdownHandler } from '@/core/server-lifecycle'
 import { LangHelper } from '@/helpers/lang-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
@@ -86,6 +94,13 @@ async function bootstrap(): Promise<void> {
     LogHelper.info(`Running command: ${tcpServerCmd}`)
 
     const tcpServerEnv = { ...process.env }
+    tcpServerEnv['LEON_ASR'] = HAS_ASR ? 'true' : 'false'
+    tcpServerEnv['LEON_ASR_PROVIDER'] = ASR_PROVIDER || ''
+    tcpServerEnv['LEON_TTS'] = HAS_TTS ? 'true' : 'false'
+    tcpServerEnv['LEON_TTS_PROVIDER'] = TTS_PROVIDER || ''
+    tcpServerEnv['LEON_WAKE_WORD'] = HAS_WAKE_WORD ? 'true' : 'false'
+    tcpServerEnv['LEON_PY_TCP_SERVER_HOST'] = PYTHON_TCP_SERVER_HOST
+    tcpServerEnv['LEON_PY_TCP_SERVER_PORT'] = String(PYTHON_TCP_SERVER_PORT)
 
     if (SystemHelper.isLinux()) {
       const torchLibPath = `${PYTORCH_TORCH_PATH}/lib`
@@ -139,7 +154,7 @@ async function bootstrap(): Promise<void> {
   } else {
     LogHelper.title('Python TCP Server')
     LogHelper.info(
-      'Skipped startup because routing mode is "agent" and ASR/STT + TTS are disabled'
+      'Skipped startup because routing mode is "agent" and ASR + TTS are disabled'
     )
   }
 
@@ -226,7 +241,13 @@ async function bootstrap(): Promise<void> {
       1_000 * 3_600 * 6
     )
   }
+  let isShuttingDown = false
   const shutdown = (exitCode = 0): void => {
+    if (isShuttingDown) {
+      return
+    }
+
+    isShuttingDown = true
     LLM_PROVIDER.dispose()
 
     if (global.pythonTCPServerProcess?.pid) {
@@ -242,7 +263,9 @@ async function bootstrap(): Promise<void> {
     }, 1_000)
   }
 
-  ;['exit', 'SIGINT', 'SIGUSR1', 'SIGUSR2', 'SIGTERM', 'SIGHUP'].forEach(
+  setShutdownHandler(shutdown)
+
+  ;['SIGINT', 'SIGUSR1', 'SIGUSR2', 'SIGTERM', 'SIGHUP'].forEach(
     (eventType) => {
       process.on(eventType, () => {
         shutdown(0)

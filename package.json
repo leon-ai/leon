@@ -107,7 +107,8 @@
     "remixicon": "4.9.1",
     "socket.io": "4.7.5",
     "socket.io-client": "4.7.5",
-    "tree-kill": "1.2.2"
+    "tree-kill": "1.2.2",
+    "yaml": "2.8.3"
   },
   "devDependencies": {
     "@eslint/compat": "1.2.3",

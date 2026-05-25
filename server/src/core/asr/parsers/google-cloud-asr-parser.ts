@@ -4,12 +4,12 @@ import path from 'node:path'
 import type { SpeechClient } from '@google-cloud/speech'
 import stt from '@google-cloud/speech'
 
-import { STTParserBase } from '@/core/stt/stt-parser-base'
+import { ASRParserBase } from '@/core/asr/asr-parser-base'
 import { LANG, VOICE_CONFIG_PATH } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 
-export default class GoogleCloudSTTParser extends STTParserBase {
-  protected readonly name = 'Google Cloud STT Parser'
+export default class GoogleCloudASRParser extends ASRParserBase {
+  protected readonly name = 'Google Cloud ASR Parser'
   private readonly client: SpeechClient | undefined = undefined
 
   constructor() {
@@ -19,7 +19,7 @@ export default class GoogleCloudSTTParser extends STTParserBase {
     LogHelper.success('New instance')
 
     /!**
-     * Initialize Google Cloud Speech-to-Text based on the credentials in the JSON file
+     * Initialize Google Cloud ASR based on the credentials in the JSON file
      * the env variable "GOOGLE_APPLICATION_CREDENTIALS" provides the JSON file path
      *!/
 

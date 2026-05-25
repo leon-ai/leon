@@ -105,11 +105,13 @@ export class Settings<T extends Record<string, unknown>> {
     value?: T[Key]
   ): Promise<T> {
     try {
-      const settings = await this.get()
       const newSettings =
         typeof keyOrSettings === 'object'
           ? keyOrSettings
-          : { ...settings, [keyOrSettings]: value }
+          : {
+            ...(await this.get()),
+            [keyOrSettings]: value
+          }
 
       await fs.promises.mkdir(path.dirname(this.settingsPath), {
         recursive: true

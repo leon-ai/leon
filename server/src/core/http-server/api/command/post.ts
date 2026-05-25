@@ -11,9 +11,13 @@ const COMMAND_INPUT_SEPARATOR_PATTERN = /\s+/
 const SKILL_COMMAND_NAME = 'skill'
 const SKILL_ENABLE_SUBCOMMAND = 'enable'
 const SKILL_DISABLE_SUBCOMMAND = 'disable'
+const SKILL_ALLOW_ONLY_SUBCOMMAND = 'allow-only'
+const SKILL_REMOVE_ALLOW_ONLY_SUBCOMMAND = 'remove-allow-only'
 const TOOL_COMMAND_NAME = 'tool'
 const TOOL_ENABLE_SUBCOMMAND = 'enable'
 const TOOL_DISABLE_SUBCOMMAND = 'disable'
+const TOOL_ALLOW_ONLY_SUBCOMMAND = 'allow-only'
+const TOOL_REMOVE_ALLOW_ONLY_SUBCOMMAND = 'remove-allow-only'
 
 const postCommandSchema = {
   body: Type.Object({
@@ -54,7 +58,9 @@ function isSkillToggleCommand(rawInput: string): boolean {
 
   return (
     subcommand === SKILL_ENABLE_SUBCOMMAND ||
-    subcommand === SKILL_DISABLE_SUBCOMMAND
+    subcommand === SKILL_DISABLE_SUBCOMMAND ||
+    subcommand === SKILL_ALLOW_ONLY_SUBCOMMAND ||
+    subcommand === SKILL_REMOVE_ALLOW_ONLY_SUBCOMMAND
   )
 }
 
@@ -63,7 +69,9 @@ function isToolToggleCommand(rawInput: string): boolean {
 
   return (
     subcommand === TOOL_ENABLE_SUBCOMMAND ||
-    subcommand === TOOL_DISABLE_SUBCOMMAND
+    subcommand === TOOL_DISABLE_SUBCOMMAND ||
+    subcommand === TOOL_ALLOW_ONLY_SUBCOMMAND ||
+    subcommand === TOOL_REMOVE_ALLOW_ONLY_SUBCOMMAND
   )
 }
 

@@ -4,6 +4,7 @@ import {
   type BuiltInCommandExecutionResult
 } from '@/built-in-command/built-in-command'
 import { createListResult } from '@/built-in-command/built-in-command-renderer'
+import { requestShutdown } from '@/core/server-lifecycle'
 
 export class StopCommand extends BuiltInCommand {
   protected override description = 'Stop the current Leon server.'
@@ -22,7 +23,7 @@ export class StopCommand extends BuiltInCommand {
 
     // Give the response a brief moment to reach the client first.
     setTimeout(() => {
-      process.kill(process.pid, 'SIGTERM')
+      requestShutdown(0)
     }, 250)
 
     return {

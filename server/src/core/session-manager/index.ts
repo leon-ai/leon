@@ -399,6 +399,10 @@ export class ConversationSessionManager {
     const { CONFIG_STATE } = await import('@/core/config-states/config-state')
     const workflowProvider = CONFIG_STATE.getModelState().getWorkflowTarget().provider
 
+    if (!workflowProvider) {
+      return
+    }
+
     LogHelper.title('Session Manager')
     LogHelper.debug(`Generating title for session ${sessionId}`)
 

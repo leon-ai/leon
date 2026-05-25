@@ -12,6 +12,7 @@ import {
   getSortedSkillAutocompleteEntries,
   matchesRequestedSkill,
   resolveSkillEntry,
+  SKILL_ALLOW_ONLY_COMMAND_FORMAT,
   SKILL_ENABLE_SUBCOMMAND,
   SKILL_ROOT_COMMAND_FORMAT,
   toSkillSuggestion
@@ -101,6 +102,25 @@ export class EnableSkillSubCommand implements SkillSubCommand {
           items: [
             {
               label: `The skill "${context.rawSkillName.trim()}" is not available for this operation.`,
+              tone: 'error'
+            }
+          ]
+        })
+      }
+    }
+
+    if (
+      ProfileHelper.hasSkillAllowlist() &&
+      !ProfileHelper.isSkillAllowed(skillEntry.skillName)
+    ) {
+      return {
+        status: 'error',
+        result: createListResult({
+          title: 'Skill Outside Allow-Only List',
+          tone: 'error',
+          items: [
+            {
+              label: `Use ${SKILL_ALLOW_ONLY_COMMAND_FORMAT} to make "${skillEntry.commandName}" available.`,
               tone: 'error'
             }
           ]

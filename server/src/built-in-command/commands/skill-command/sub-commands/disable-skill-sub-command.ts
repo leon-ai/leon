@@ -13,6 +13,7 @@ import {
   matchesRequestedSkill,
   resolveSkillEntry,
   SKILL_DISABLE_SUBCOMMAND,
+  SKILL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT,
   SKILL_ROOT_COMMAND_FORMAT,
   toSkillSuggestion
 } from '../skill-command-helpers'
@@ -95,6 +96,25 @@ export class DisableSkillSubCommand implements SkillSubCommand {
           items: [
             {
               label: `The skill "${context.rawSkillName.trim()}" is not available for this operation.`,
+              tone: 'error'
+            }
+          ]
+        })
+      }
+    }
+
+    if (
+      ProfileHelper.hasSkillAllowlist() &&
+      ProfileHelper.isSkillAllowed(skillEntry.skillName)
+    ) {
+      return {
+        status: 'error',
+        result: createListResult({
+          title: 'Skill In Allow-Only List',
+          tone: 'error',
+          items: [
+            {
+              label: `Use ${SKILL_REMOVE_ALLOW_ONLY_COMMAND_FORMAT} to make "${skillEntry.commandName}" unavailable.`,
               tone: 'error'
             }
           ]
