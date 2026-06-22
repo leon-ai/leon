@@ -28,6 +28,10 @@ const providerToggle = strictObject({
   enabled: Type.Boolean(),
   provider: Type.String({ minLength: 1 })
 })
+const httpPluginDefinition = strictObject({
+  enabled: Type.Boolean(),
+  root_routes: Type.Boolean()
+})
 const llmProvider = strictObject({
   api_key: secretReference
 })
@@ -47,6 +51,12 @@ export const configSchemaObject = strictObject({
       uniqueItems: true
     }),
     auth: clientInterfaceAuth
+  }),
+  http_plugins: strictObject({
+    enabled: Type.Boolean(),
+    allow_root_routes: Type.Boolean(),
+    auth: clientInterfaceAuth,
+    plugins: Type.Record(Type.String({ minLength: 1 }), httpPluginDefinition)
   }),
   routing: strictObject({
     mode: Type.Union([

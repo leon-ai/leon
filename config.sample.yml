@@ -9,21 +9,6 @@ server:
   host: http://localhost
   port: 5366
 
-client_interface:
-  # Extra origins allowed to connect to Leon from browser-like clients.
-  # Same-origin clients and the built-in web app dev server are allowed automatically.
-  # Examples:
-  # - http://localhost:1420 # Tauri dev server
-  # - http://localhost:5173 # Vite/Electron dev server
-  # - https://desktop.example.com # Remote browser-like client
-  allowed_origins: []
-  auth:
-    # Enable this when exposing Leon to clients outside your local machine.
-    enabled: false
-    token:
-      # The value is read from LEON_CLIENT_INTERFACE_TOKEN in your profile .env file.
-      env: LEON_CLIENT_INTERFACE_TOKEN
-
 routing:
   # Routing mode: smart | controlled | agent
   mode: smart
@@ -128,3 +113,38 @@ voice:
 time_zone: null
 after_speech_enabled: false
 telemetry_enabled: true
+
+client_interface:
+  # Extra origins allowed to connect to Leon from browser-like clients.
+  # Same-origin clients and the built-in web app dev server are allowed automatically.
+  # Examples:
+  # - http://localhost:1420 # Tauri dev server
+  # - http://localhost:5173 # Vite/Electron dev server
+  # - https://desktop.example.com # Remote browser-like client
+  allowed_origins: []
+  auth:
+    # Enable this when exposing Leon to clients outside your local machine.
+    enabled: false
+    token:
+      # The value is read from LEON_CLIENT_INTERFACE_TOKEN in your profile .env file.
+      env: LEON_CLIENT_INTERFACE_TOKEN
+
+http_plugins:
+  # Enable this to let HTTP plugins expose integration-specific routes.
+  enabled: false
+  # Root routes are disabled unless both this global
+  # flag and the individual plugin root_routes flag are true.
+  allow_root_routes: false
+  auth:
+    # Enable this when exposing HTTP plugins beyond trusted local development.
+    enabled: false
+    token:
+      # The value is read from LEON_HTTP_PLUGIN_TOKEN in your profile .env file.
+      env: LEON_HTTP_PLUGIN_TOKEN
+  plugins:
+  # External plugins are discovered from:
+  # ~/.leon/http-plugins/<plugin-id>/
+  # ~/.leon/profiles/<profile-id>/http-plugins/<plugin-id>/
+  # example_my_plugin:
+  #   enabled: false
+  #   root_routes: false

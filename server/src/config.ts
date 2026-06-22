@@ -30,6 +30,17 @@ const DEFAULT_CONFIG: LeonConfig = {
       }
     }
   },
+  http_plugins: {
+    enabled: false,
+    allow_root_routes: false,
+    auth: {
+      enabled: false,
+      token: {
+        env: 'LEON_HTTP_PLUGIN_TOKEN'
+      }
+    },
+    plugins: {}
+  },
   routing: {
     mode: 'smart'
   },
