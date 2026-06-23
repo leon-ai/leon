@@ -18,6 +18,7 @@ import {
 import { Logo } from './logo'
 import { Menu } from './menu'
 import { SessionList } from './session-list'
+import { SidebarFooter } from './sidebar-footer'
 
 const DARK_THEME_LOGO_SRC = '/img/logo-for-dark-bg-text.svg'
 const LIGHT_THEME_LOGO_SRC = '/img/logo-for-light-bg-text.svg'
@@ -205,9 +206,7 @@ export function Sidebar() {
         aria-label="Open sidebar"
         onClick={() => updateSidebarExpanded(true)}
       />
-      <footer className="sidebar-footer-slot">
-
-      </footer>
+      <SidebarFooter />
       <Dialog
         hideHeader
         open={searchSessionsDialogOpen}

@@ -1,40 +1,109 @@
 .sidebar-footer
-  display: grid
-  gap: var(--space-xl)
-  margin: 0 calc(var(--space-lg) * -1) calc(var(--space-lg) * -1)
+  display: flex
+  flex-direction: column
+  width: 100%
+  overflow: hidden
   border-top: 1px solid var(--color-border)
 
   .sidebar-footer-link
-    display: inline-flex
+    display: flex
+    flex: 1 1 auto
     align-items: center
-    justify-self: center
+    justify-content: center
     gap: var(--space-sm)
-    padding-top: var(--space-xl)
-    color: var(--color-text-secondary)
+    min-height: 0
+    color: var(--color-text)
     font-size: var(--font-size-md)
     line-height: var(--line-height-md)
     text-decoration: none
+    white-space: nowrap
+    transition: color var(--transition-duration-main) var(--transition-timing-main), background-color var(--transition-duration-main) var(--transition-timing-main)
+
+    &:hover
+      background-color: var(--color-surface-hover)
+      color: var(--color-text)
+
+    &:active
+      background-color: var(--color-surface-active)
+      color: var(--color-text)
 
     .sidebar-footer-link-icon
+      flex: 0 0 auto
       color: var(--color-text)
-      font-size: 24px
+      font-size: 22px
+      font-weight: var(--font-weight-regular)
+      line-height: 1
+
+  .sidebar-footer-link-label
+    max-width: 160px
+    opacity: 1
+    overflow: hidden
+    transition: max-width var(--transition-duration-sidebar) var(--transition-timing-sidebar), opacity var(--transition-duration-main) var(--transition-timing-main)
 
   .sidebar-footer-status
-    display: grid
-    grid-template-columns: 1fr 72px
+    display: flex
+    flex: 0 0 44px
     min-height: 44px
     border-top: 1px solid var(--color-border)
 
   .sidebar-footer-status-label
-    align-self: center
+    display: flex
+    flex: 1 1 auto
+    align-items: center
+    min-width: 0
     padding-left: var(--space-lg)
     color: var(--color-text-tertiary)
     font-size: var(--font-size-sm)
     line-height: var(--line-height-sm)
+    white-space: nowrap
+    opacity: 1
+    overflow: hidden
+    transition: opacity var(--transition-duration-main) var(--transition-timing-main), padding var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
-  .sidebar-footer-status-button
-    display: grid
-    place-items: center
+  .sidebar-footer-mood
+    display: flex
+    flex: 0 0 var(--sidebar-collapsed-width)
+    align-items: center
+    justify-content: center
     border-left: 1px solid var(--color-border)
-    color: var(--color-text)
-    font-size: 22px
+
+    .tooltip
+      width: 100%
+      height: 100%
+
+  .sidebar-footer-mood-trigger
+    display: flex
+    align-items: center
+    justify-content: center
+    width: 100%
+    height: 100%
+    color: var(--color-text-tertiary)
+    outline: none
+
+  .sidebar-footer-mood-icon
+    display: block
+    width: 20px
+    height: 20px
+    background-color: currentColor
+    -webkit-mask-image: var(--sidebar-footer-mood-icon)
+    -webkit-mask-position: center
+    -webkit-mask-repeat: no-repeat
+    -webkit-mask-size: contain
+    mask-image: var(--sidebar-footer-mood-icon)
+    mask-position: center
+    mask-repeat: no-repeat
+    mask-size: contain
+
+.sidebar.sidebar-collapsed
+  .sidebar-footer-link-label
+    max-width: 0
+    opacity: 0
+
+  .sidebar-footer-status-label
+    padding-left: 0
+    opacity: 0
+
+@media (prefers-reduced-motion: reduce)
+  .sidebar-footer-link-label,
+  .sidebar-footer-status-label
+    transition: none
