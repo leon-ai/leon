@@ -19,7 +19,7 @@
     line-height: var(--line-height-md)
     text-decoration: none
     white-space: nowrap
-    transition: color var(--transition-duration-main) var(--transition-timing-main), background-color var(--transition-duration-main) var(--transition-timing-main)
+    transition: color var(--transition-duration-main) var(--transition-timing-main), background-color var(--transition-duration-main) var(--transition-timing-main), gap var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
     &:hover
       background-color: var(--color-surface-hover)
@@ -63,11 +63,18 @@
     transition: opacity var(--transition-duration-main) var(--transition-timing-main), padding var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
   .sidebar-footer-mood
+    position: relative
     display: flex
     flex: 0 0 var(--sidebar-collapsed-width)
     align-items: center
     justify-content: center
-    border-left: 1px solid var(--color-border-secondary)
+
+    &::before
+      position: absolute
+      inset: 0 auto 0 0
+      width: 1px
+      background-color: var(--color-border-secondary)
+      content: ''
 
     .tooltip
       width: 100%
@@ -97,6 +104,9 @@
     mask-size: contain
 
 .sidebar.sidebar-collapsed
+  .sidebar-footer-link
+    gap: 0
+
   .sidebar-footer-link-label
     max-width: 0
     opacity: 0
