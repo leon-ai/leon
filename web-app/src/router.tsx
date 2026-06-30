@@ -1,26 +1,27 @@
 import {
   createRootRoute,
   createRoute,
-  createRouter,
-  Outlet
+  createRouter
 } from '@tanstack/react-router'
 
-import { HomeRoute } from './routes/home-route'
+import { AppLayout } from './layout/app-layout'
+import { NewSessionPage } from './pages/new-session-page'
+import { SessionPage } from './pages/session-page'
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />
+  component: AppLayout
 })
 
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: HomeRoute
+  component: NewSessionPage
 })
 
 const sessionRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/session/$sessionId',
-  component: HomeRoute
+  component: SessionPage
 })
 
 const routeTree = rootRoute.addChildren([indexRoute, sessionRoute])

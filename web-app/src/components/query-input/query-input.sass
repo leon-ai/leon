@@ -1,13 +1,12 @@
 .query-input
-  position: fixed
-  right: max(var(--space-xl), calc((100vw - var(--sidebar-width) - var(--content-width)) / 2))
-  bottom: var(--space-xl)
+  position: relative
   z-index: 3
   display: grid
   grid-template-columns: 40px 1fr 40px 48px
   align-items: center
   gap: var(--space-sm)
-  width: min(var(--content-width), calc(100vw - var(--sidebar-width) - (var(--space-xl) * 2)))
+  box-sizing: border-box
+  width: 100%
   min-height: var(--query-input-height)
   padding: 8px 10px 8px 20px
   border: 1px solid var(--color-query-border)
@@ -45,9 +44,3 @@
     height: 48px
     border: 1px solid var(--color-border-strong)
     border-radius: var(--border-radius-pill)
-
-@media (max-width: 960px)
-  .query-input
-    right: var(--space-lg)
-    left: var(--space-lg)
-    width: auto
