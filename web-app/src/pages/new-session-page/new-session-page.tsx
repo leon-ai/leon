@@ -5,7 +5,9 @@ import './new-session-page.sass'
 export function NewSessionPage() {
   return (
     <div className="new-session-page">
-      <QueryInput />
+      <div className="new-session-page-composer">
+        <QueryInput />
+      </div>
     </div>
   )
 }

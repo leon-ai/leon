@@ -1,46 +1,41 @@
 .query-input
   position: relative
   z-index: 3
-  display: grid
-  grid-template-columns: 40px 1fr 40px 48px
+  display: flex
   align-items: center
   gap: var(--space-sm)
   box-sizing: border-box
   width: 100%
   min-height: var(--query-input-height)
   padding: 8px 10px 8px 20px
-  border: 1px solid var(--color-query-border)
+  border: 1px solid transparent
   border-radius: var(--border-radius-xl)
   background: linear-gradient(var(--color-query-background), var(--color-query-background)) padding-box, var(--gradient-query) border-box
   box-shadow: 0 22px 80px rgba(28, 117, 219, .12)
   backdrop-filter: blur(18px)
 
-  input
-    border: 0
-    background: transparent
-    padding: 0
-    color: var(--color-text)
-    font-size: var(--font-size-md)
-    line-height: var(--line-height-md)
+  .query-input-field
+    flex: 1 1 auto
+    min-width: 0
 
-    &:hover,
-    &:focus,
-    &:active
-      border: 0
+    .input-field
+      color: var(--color-text)
+      font-size: var(--font-size-md)
+      line-height: var(--line-height-md)
 
-  button
-    display: grid
-    place-items: center
-    color: var(--color-text-secondary)
-    font-size: 28px
-
-  .add,
-  .voice
+  .query-input-add,
+  .query-input-microphone
+    flex: 0 0 auto
     width: 40px
     height: 40px
+    padding: var(--space-sm)
+    font-size: 24px
 
-  .send
+  .query-input-submit
+    flex: 0 0 auto
     width: 48px
     height: 48px
+    padding: var(--space-sm)
     border: 1px solid var(--color-border-strong)
     border-radius: var(--border-radius-pill)
+    font-size: 28px

@@ -10,6 +10,7 @@ import './input.sass'
 
 type InputIconType = 'line' | 'fill'
 type InputSize = 'medium' | 'large'
+type InputVariant = 'default' | 'embedded'
 
 interface InputSharedProps {
   ariaLabel: string
@@ -18,6 +19,7 @@ interface InputSharedProps {
   iconName?: string
   iconType?: InputIconType
   size?: InputSize
+  variant?: InputVariant
 }
 
 type NativeInputProps = InputSharedProps &
@@ -40,13 +42,20 @@ export function Input({
   iconType = 'line',
   multiline = false,
   size = 'medium',
+  variant = 'default',
   ...fieldProps
 }: InputProps) {
   const generatedId = useId()
   const inputId = fieldProps.id ?? generatedId
-  const inputClassName = clsx('input', `input-${size}`, className, {
+  const inputClassName = clsx(
+    'input',
+    `input-${size}`,
+    `input-${variant}`,
+    className,
+    {
     'input-with-icon': iconName !== undefined
-  })
+    }
+  )
 
   return (
     <span className={inputClassName}>

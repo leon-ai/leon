@@ -15,6 +15,7 @@ export type ButtonVariant = 'ghost' | 'secondary' | 'primary' | 'danger'
 
 interface ButtonBaseProps {
   children?: ReactNode
+  className?: string
   iconName?: string
   iconType?: ButtonIconType
   iconPosition?: ButtonIconPosition
@@ -55,6 +56,7 @@ type ButtonProps = ButtonBaseProps & (
 
 export function Button({
   children,
+  className,
   type = 'button',
   to,
   href,
@@ -77,7 +79,7 @@ export function Button({
   const isIconOnly = children === undefined
   const accessibleLabel = ariaLabel ?? tooltipMessage
   const iconClassName = `ri-${iconName}-${iconType}`
-  const className = clsx('button', `button-${variant}`, `button-${size}`, {
+  const buttonClassName = clsx('button', `button-${variant}`, `button-${size}`, className, {
     'button-icon-only': isIconOnly
   })
   const content = (
@@ -94,7 +96,7 @@ export function Button({
   const button = to !== undefined ? (
     <Link
       to={to}
-      className={className}
+      className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-busy={loading}
       aria-disabled={isDisabled}
@@ -113,7 +115,7 @@ export function Button({
   ) : href === undefined ? (
     <button
       type={type}
-      className={className}
+      className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-busy={loading}
       disabled={isDisabled}
@@ -125,7 +127,7 @@ export function Button({
   ) : (
     <a
       href={href}
-      className={className}
+      className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-busy={loading}
       aria-disabled={isDisabled}
