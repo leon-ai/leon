@@ -10,16 +10,16 @@
 
   &::before
     position: absolute
-    bottom: calc(100% + 52px)
+    bottom: 25%
     left: 50%
     width: min(40%, 304px)
     aspect-ratio: 44 / 46
     background: url('/img/logo-for-dark-bg.svg') center / contain no-repeat
-    opacity: .08
+    opacity: .075
     pointer-events: none
     transform: translateX(-50%)
-    -webkit-mask-image: linear-gradient(to bottom, #000 42%, transparent 100%)
-    mask-image: linear-gradient(to bottom, #000 42%, transparent 100%)
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, .075) 76%, transparent 100%)
+    mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, .075) 76%, transparent 100%)
     content: ''
 
   .query-input
@@ -31,5 +31,4 @@
 
 @media (max-height: 720px)
   .new-session-page-composer::before
-    bottom: calc(100% + var(--space-xl))
     width: min(32%, 240px)
