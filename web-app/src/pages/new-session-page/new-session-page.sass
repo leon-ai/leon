@@ -2,15 +2,16 @@
   display: flex
   align-items: center
   width: 100%
-  min-height: 100vh
+  min-height: 85vh
 
 .new-session-page-composer
   position: relative
   width: 100%
+  height: var(--query-input-height)
 
   &::before
     position: absolute
-    bottom: 25%
+    bottom: 33%
     left: 50%
     width: min(40%, 304px)
     aspect-ratio: 44 / 46
@@ -23,7 +24,10 @@
     content: ''
 
   .query-input
-    position: relative
+    position: absolute
+    top: 0
+    right: 0
+    left: 0
 
 [data-theme='light']
   .new-session-page-composer::before
