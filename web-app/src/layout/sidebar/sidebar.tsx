@@ -158,6 +158,7 @@ export function Sidebar() {
           <div className="sidebar-logo-open-button">
             <Button
               iconName="sidebar-unfold"
+              tone="muted"
               tooltipMessage="Open sidebar"
               tooltipPosition="right"
               onClick={() => updateSidebarExpanded(true)}
@@ -167,16 +168,19 @@ export function Sidebar() {
         <div className="sidebar-controls">
           <Button
             iconName={soundsEnabled ? 'volume-up' : 'volume-mute'}
+            tone="muted"
             tooltipMessage={soundsEnabled ? 'Mute sounds' : 'Unmute sounds'}
             onClick={() => updateSoundsEnabled(!soundsEnabled)}
           />
           <Button
             iconName={theme === 'dark' ? 'moon' : 'sun'}
+            tone="muted"
             tooltipMessage={theme === 'dark' ? 'Apply light theme' : 'Apply dark theme'}
             onClick={toggleTheme}
           />
           <Button
             iconName={sidebarExpanded ? 'sidebar-fold' : 'sidebar-unfold'}
+            tone="muted"
             tooltipMessage={sidebarExpanded ? 'Close sidebar' : 'Open sidebar'}
             onClick={() => updateSidebarExpanded(!sidebarExpanded)}
           />

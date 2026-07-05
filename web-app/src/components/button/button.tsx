@@ -11,6 +11,7 @@ type AppRouteTo = '/'
 type ButtonIconType = 'line' | 'fill'
 type ButtonIconPosition = 'left' | 'right'
 type ButtonSize = 'sm' | 'md'
+type ButtonTone = 'default' | 'muted'
 export type ButtonVariant = 'ghost' | 'secondary' | 'primary' | 'danger'
 
 interface ButtonBaseProps {
@@ -22,6 +23,7 @@ interface ButtonBaseProps {
   tooltipMessage?: string
   tooltipPosition?: TooltipPosition
   ariaLabel?: string
+  tone?: ButtonTone
   variant?: ButtonVariant
   size?: ButtonSize
   cursorStyle?: CSSProperties['cursor']
@@ -68,6 +70,7 @@ export function Button({
   tooltipMessage,
   tooltipPosition = 'bottom',
   ariaLabel,
+  tone = 'default',
   variant = 'ghost',
   size = 'md',
   cursorStyle = 'pointer',
@@ -79,7 +82,7 @@ export function Button({
   const isIconOnly = children === undefined
   const accessibleLabel = ariaLabel ?? tooltipMessage
   const iconClassName = `ri-${iconName}-${iconType}`
-  const buttonClassName = clsx('button', `button-${variant}`, `button-${size}`, className, {
+  const buttonClassName = clsx('button', `button-${variant}`, `button-${size}`, `button-tone-${tone}`, className, {
     'button-icon-only': isIconOnly
   })
   const content = (

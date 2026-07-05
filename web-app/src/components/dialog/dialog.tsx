@@ -110,6 +110,7 @@ export function Dialog({
             </h2>
             <Button
               iconName="close"
+              tone="muted"
               ariaLabel="Close dialog"
               onClick={onClose}
             />
