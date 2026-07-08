@@ -32,6 +32,11 @@ export const PROVIDER_MATRIX = [
     provider: 'zai',
     requiredEnv: 'LEON_ZAI_API_KEY',
     llmTarget: 'zai/glm-5-turbo'
+  },
+  {
+    provider: 'minimax',
+    requiredEnv: 'LEON_MINIMAX_API_KEY',
+    llmTarget: 'minimax/MiniMax-M3'
   }
 ] as const
 

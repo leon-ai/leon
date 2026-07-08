@@ -64,6 +64,7 @@ export const configSchemaObject = strictObject({
       sglang: llmProviderWithBaseURL,
       openrouter: llmProvider,
       zai: llmProvider,
+      minimax: llmProvider,
       openai: llmProvider,
       anthropic: llmProvider,
       moonshotai: llmProvider,

@@ -125,6 +125,11 @@ describe('ConfigManager', () => {
               env: 'LEON_ZAI_API_KEY'
             }
           },
+          minimax: {
+            api_key: {
+              env: 'LEON_MINIMAX_API_KEY'
+            }
+          },
           openai: {
             api_key: {
               env: 'LEON_OPENAI_API_KEY'
