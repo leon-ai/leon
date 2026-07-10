@@ -8,9 +8,16 @@ const REMOTE_LLM_PROVIDERS = [
   {
     ...getRequiredProviderAccountConfig('openrouter'),
     models: [
-      { label: 'openai/gpt-5.5 (Recommended)', value: 'openai/gpt-5.5' },
+      { label: 'openai/gpt-5.6-sol (Recommended)', value: 'openai/gpt-5.6-sol' },
+      { label: 'openai/gpt-5.6-terra', value: 'openai/gpt-5.6-terra' },
+      { label: 'openai/gpt-5.6-luna', value: 'openai/gpt-5.6-luna' },
+      { label: 'openai/gpt-5.5', value: 'openai/gpt-5.5' },
       { label: 'openai/gpt-5.4', value: 'openai/gpt-5.4' },
       { label: 'openai/gpt-5.4-mini', value: 'openai/gpt-5.4-mini' },
+      {
+        label: 'anthropic/claude-fable-5',
+        value: 'anthropic/claude-fable-5'
+      },
       {
         label: 'anthropic/claude-opus-4.8',
         value: 'anthropic/claude-opus-4.8'
@@ -32,13 +39,16 @@ const REMOTE_LLM_PROVIDERS = [
       { label: 'z-ai/glm-5.1', value: 'z-ai/glm-5.1' },
       { label: 'z-ai/glm-5-turbo', value: 'z-ai/glm-5-turbo' },
       { label: 'moonshotai/kimi-k2.6', value: 'moonshotai/kimi-k2.6' },
-      { label: 'minimax/minimax-m2.7', value: 'minimax/minimax-m2.7' }
+      { label: 'minimax/minimax-m3', value: 'minimax/minimax-m3' }
     ]
   },
   {
     ...getRequiredProviderAccountConfig('openai'),
     models: [
-      { label: 'GPT-5.5 (Recommended)', value: 'gpt-5.5' },
+      { label: 'GPT-5.6 Sol (Recommended)', value: 'gpt-5.6-sol' },
+      { label: 'GPT-5.6 Terra', value: 'gpt-5.6-terra' },
+      { label: 'GPT-5.6 Luna', value: 'gpt-5.6-luna' },
+      { label: 'GPT-5.5', value: 'gpt-5.5' },
       { label: 'GPT-5.4', value: 'gpt-5.4' },
       { label: 'GPT-5.4 mini', value: 'gpt-5.4-mini' },
       { label: 'GPT-5.4 nano', value: 'gpt-5.4-nano' }
@@ -48,6 +58,7 @@ const REMOTE_LLM_PROVIDERS = [
     ...getRequiredProviderAccountConfig('anthropic'),
     models: [
       { label: 'Claude Opus 4.8 (Recommended)', value: 'claude-opus-4-8' },
+      { label: 'Claude Fable 5', value: 'claude-fable-5' },
       { label: 'Claude Opus 4.7', value: 'claude-opus-4-7' },
       { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
       { label: 'Claude Sonnet 4.6', value: 'claude-sonnet-4-6' },
