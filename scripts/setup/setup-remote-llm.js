@@ -75,6 +75,13 @@ const REMOTE_LLM_PROVIDERS = [
     ]
   },
   {
+    ...getRequiredProviderAccountConfig('minimax'),
+    models: [
+      { label: 'MiniMax-M3 (Recommended)', value: 'MiniMax-M3' },
+      { label: 'MiniMax-M2.7', value: 'MiniMax-M2.7' }
+    ]
+  },
+  {
     ...getRequiredProviderAccountConfig('moonshotai'),
     models: [
       { label: 'Kimi K2.6', value: 'kimi-k2.6' },

@@ -40,6 +40,12 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: 'https://z.ai/manage-apikey/apikey-list'
     },
     {
+      label: 'MiniMax',
+      value: LLMProviders.MiniMax,
+      apiKeyEnv: 'LEON_MINIMAX_API_KEY',
+      apiKeyURL: 'https://platform.minimax.io/user-center/basic-information/interface-key'
+    },
+    {
       label: 'Moonshot AI',
       value: LLMProviders.MoonshotAI,
       apiKeyEnv: 'LEON_MOONSHOTAI_API_KEY',

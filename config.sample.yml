@@ -45,6 +45,10 @@ llm:
       api_key:
         # The value is read from LEON_ZAI_API_KEY in your profile .env file.
         env: LEON_ZAI_API_KEY
+    minimax:
+      api_key:
+        # The value is read from LEON_MINIMAX_API_KEY in your profile .env file.
+        env: LEON_MINIMAX_API_KEY
     openai:
       api_key:
         # The value is read from LEON_OPENAI_API_KEY in your profile .env file.
