@@ -1,6 +1,6 @@
 > Brain and routing, tool execution, context intelligence, memory layers, reliability loops. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-05-27T21:21:31+08:00
+- Generated at: 2026-06-23T23:22:03+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs a ReAct loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -11,6 +11,8 @@
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
 - HTTP APIs remain request/response support surfaces; live owner utterances should use the Socket.IO client interface.
+- External HTTP plugins can extend Leon's HTTP contract without patching the core API for each integration.
+- Custom clients can read profile-owned extension JSON files through a generic redacted HTTP endpoint, covering skill memory, skill settings, and tool settings without exposing secrets.
 ## ReAct Loop
 - Planning phase chooses either a direct answer, an ordered tool plan, or a relevant agent skill workflow.
 - Tool state is separated: installed tools exist in the registry, enabled tools are not disabled by the owner, and available tools have the required settings to run.

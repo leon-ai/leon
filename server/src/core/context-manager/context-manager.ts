@@ -384,8 +384,8 @@ export default class ContextManager {
   private resolveContextSourcePath(definition: ContextFile): string | null {
     const sourceBasename = this.getContextSourceBasename(definition.filename)
     const sourceDirectories = [
-      CONTEXT_FILES_SOURCE_DIR,
-      CONTEXT_FILES_RUNTIME_DIR
+      CONTEXT_FILES_RUNTIME_DIR,
+      CONTEXT_FILES_SOURCE_DIR
     ]
 
     for (const sourceDirectory of sourceDirectories) {
