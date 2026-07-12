@@ -27,6 +27,11 @@ export const REACT_EXECUTION_DISCIPLINE = `<execution_discipline>
 - If a result is empty, partial, stale, or inconsistent, add the smallest useful discovery, verification, or recovery step. Otherwise continue toward the requested deliverable.
 </execution_discipline>`
 
+export const STEP_NECESSITY_POLICY = `<step_necessity_policy>
+- Do not execute a step solely because it appears in the plan. First use prior observations to verify that the step is still necessary.
+- If prior observations already satisfy the owner's request in full, return an answer handoff instead of executing another tool.
+</step_necessity_policy>`
+
 export const PLAN_SYSTEM_PROMPT = `You are an autonomous planning and acting agent.
 
 <role>
@@ -85,6 +90,7 @@ ${REACT_EXECUTION_DISCIPLINE}
 <plan_completeness_check>
 - Before returning a plan, run a quick completeness check for required execution inputs.
 - Create a complete primary-path plan; leave fallback/alternative steps for recovery after failure.
+- When a retrieval step returns an artifact reference instead of its contents, include the next step needed to read or inspect that artifact.
 - If the user asks to "find a file and process it", include ALL steps: find, probe, process.
 - If the request mentions or depends on an input local file and you do not already have a confirmed existing path, the plan must first add steps to search for it and confirm the path exists before any tool step that uses that file.
 </plan_completeness_check>
@@ -122,6 +128,8 @@ You are executing one specific step. You are given the current function signatur
 </anti_loop_policy>
 
 ${REACT_EXECUTION_DISCIPLINE}
+
+${STEP_NECESSITY_POLICY}
 
 <step_execution_policy>
 - Fill in the tool_input based on the user request and any observations from previous steps.
@@ -161,6 +169,8 @@ export const RESOLVE_FUNCTION_SYSTEM_PROMPT = `You are selecting a function from
 <role>
 You are given the available functions for one tool. Choose the single most appropriate function for the current step, then provide its tool_input.
 </role>
+
+${STEP_NECESSITY_POLICY}
 
 <selection_policy>
 - Match the function to the current step objective, not to a broad interpretation of the whole task.
