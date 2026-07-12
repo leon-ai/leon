@@ -10,6 +10,7 @@ const DOWNLOAD_DESTINATION_PATTERN = /Destination:\s+(.+)$/
 const ALREADY_DOWNLOADED_PATTERN =
   /\[download\]\s+(.+)\s+has already been downloaded/
 const MERGED_FILE_PATTERN = /\[Merger\]\s+Merging formats into\s+"(.+)"$/
+const MOVED_FILE_PATTERN = /\[MoveFiles\]\s+Moving file\s+".+"\s+to\s+"(.+)"$/
 const SUBTITLE_DESTINATION_PATTERN =
   /Writing (?:video subtitles|video automatic captions) to:\s+(.+)$/
 const DOWNLOAD_PROGRESS_PATTERN =
@@ -198,6 +199,7 @@ export default class YtdlpTool extends Tool {
         line.match(DOWNLOAD_DESTINATION_PATTERN) ||
         line.match(ALREADY_DOWNLOADED_PATTERN) ||
         line.match(MERGED_FILE_PATTERN) ||
+        line.match(MOVED_FILE_PATTERN) ||
         line.match(SUBTITLE_DESTINATION_PATTERN)
 
       if (match?.[1]) {
@@ -274,10 +276,24 @@ export default class YtdlpTool extends Tool {
     const requested = requestedLanguageCode?.trim()
 
     if (requested) {
-      return (
+      const matchingLanguageCode =
         this.selectMatchingLanguage(requested, subtitleLanguageCodes) ||
-        this.selectMatchingLanguage(requested, automaticCaptionLanguageCodes) ||
-        requested
+        this.selectMatchingLanguage(requested, automaticCaptionLanguageCodes)
+
+      if (matchingLanguageCode) {
+        return matchingLanguageCode
+      }
+
+      const availableLanguageCodes = [
+        ...new Set([
+          ...subtitleLanguageCodes,
+          ...automaticCaptionLanguageCodes
+        ])
+      ]
+
+      throw new Error(
+        `Requested subtitle language "${requested}" is not available. ` +
+          `Available languages: ${availableLanguageCodes.join(', ') || 'none'}.`
       )
     }
 
@@ -309,7 +325,8 @@ export default class YtdlpTool extends Tool {
    */
   private static findNewestOutputFile(
     directoryPath: string,
-    startedAtMs?: number
+    startedAtMs?: number,
+    fileNameSuffix?: string
   ): string | null {
     if (!existsSync(directoryPath) || !statSync(directoryPath).isDirectory()) {
       return null
@@ -321,6 +338,10 @@ export default class YtdlpTool extends Tool {
 
     for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
       if (!entry.isFile()) {
+        continue
+      }
+
+      if (fileNameSuffix && !entry.name.endsWith(fileNameSuffix)) {
         continue
       }
 
@@ -383,7 +404,9 @@ export default class YtdlpTool extends Tool {
    */
   private static resolveDownloadedSubtitlePath(
     output: string,
-    target: OutputTarget
+    target: OutputTarget,
+    languageCode: string,
+    startedAtMs: number
   ): string {
     const parsedPath = this.parseOutputFilePath(output)
 
@@ -391,6 +414,18 @@ export default class YtdlpTool extends Tool {
       if (candidate && existsSync(candidate) && statSync(candidate).isFile()) {
         return candidate
       }
+    }
+
+    // Directory output templates do not provide a deterministic filename.
+    const subtitleFileSuffix = `.${this.getPrimaryLanguageCode(languageCode)}.${SUBTITLE_CONVERT_FORMAT}`
+    const newestSubtitleFile = this.findNewestOutputFile(
+      target.directoryPath,
+      startedAtMs,
+      subtitleFileSuffix
+    )
+
+    if (newestSubtitleFile) {
+      return newestSubtitleFile
     }
 
     throw new Error('yt-dlp completed but no subtitle file was created')
@@ -631,6 +666,7 @@ export default class YtdlpTool extends Tool {
         resolvedLanguageCode
       )
       mkdirSync(target.directoryPath, { recursive: true })
+      const commandStartedAtMs = Date.now()
 
       const result = await this.executeCommand({
         binaryName: 'yt-dlp',
@@ -655,7 +691,12 @@ export default class YtdlpTool extends Tool {
         options: { sync: true }
       })
 
-      return YtdlpTool.resolveDownloadedSubtitlePath(result, target)
+      return YtdlpTool.resolveDownloadedSubtitlePath(
+        result,
+        target,
+        resolvedLanguageCode,
+        commandStartedAtMs
+      )
     } catch (error: unknown) {
       throw new Error(`Subtitle download failed: ${(error as Error).message}`)
     }

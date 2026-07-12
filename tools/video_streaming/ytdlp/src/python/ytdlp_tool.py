@@ -18,6 +18,9 @@ ALREADY_DOWNLOADED_PATTERN = re.compile(
     r"\[download\]\s+(.+)\s+has already been downloaded"
 )
 MERGED_FILE_PATTERN = re.compile(r'\[Merger\]\s+Merging formats into\s+"(.+)"$')
+MOVED_FILE_PATTERN = re.compile(
+    r'\[MoveFiles\]\s+Moving file\s+".+"\s+to\s+"(.+)"$'
+)
 SUBTITLE_DESTINATION_PATTERN = re.compile(
     r"Writing (?:video subtitles|video automatic captions) to:\s+(.+)$"
 )
@@ -220,6 +223,7 @@ class YtdlpTool(BaseTool):
                 DOWNLOAD_DESTINATION_PATTERN.search(line)
                 or ALREADY_DOWNLOADED_PATTERN.search(line)
                 or MERGED_FILE_PATTERN.search(line)
+                or MOVED_FILE_PATTERN.search(line)
                 or SUBTITLE_DESTINATION_PATTERN.search(line)
             )
             if match and match.group(1):
@@ -295,12 +299,25 @@ class YtdlpTool(BaseTool):
         requested = requested_language_code.strip() if requested_language_code else ""
 
         if requested:
-            return (
+            matching_language_code = (
                 cls._select_matching_language(requested, subtitle_language_codes)
                 or cls._select_matching_language(
                     requested, automatic_caption_language_codes
                 )
-                or requested
+            )
+
+            if matching_language_code:
+                return matching_language_code
+
+            available_language_codes = list(
+                dict.fromkeys(
+                    subtitle_language_codes + automatic_caption_language_codes
+                )
+            )
+            available_languages = ", ".join(available_language_codes) or "none"
+            raise Exception(
+                f'Requested subtitle language "{requested}" is not available. '
+                f"Available languages: {available_languages}."
             )
 
         for language_code in cls._get_video_language_candidates(metadata):
@@ -323,7 +340,9 @@ class YtdlpTool(BaseTool):
 
     @staticmethod
     def _find_newest_output_file(
-        directory_path: str, started_at_ms: Optional[float] = None
+        directory_path: str,
+        started_at_ms: Optional[float] = None,
+        file_name_suffix: Optional[str] = None,
     ) -> Optional[str]:
         """
         Find the newest file created or updated in the output directory.
@@ -336,6 +355,9 @@ class YtdlpTool(BaseTool):
         newest_modified_time = 0.0
 
         for entry_name in os.listdir(directory_path):
+            if file_name_suffix and not entry_name.endswith(file_name_suffix):
+                continue
+
             candidate_path = os.path.join(directory_path, entry_name)
             if not os.path.isfile(candidate_path):
                 continue
@@ -383,7 +405,11 @@ class YtdlpTool(BaseTool):
 
     @classmethod
     def _resolve_downloaded_subtitle_path(
-        cls, output: str, target: OutputTarget
+        cls,
+        output: str,
+        target: OutputTarget,
+        language_code: str,
+        started_at_ms: float,
     ) -> str:
         """
         Resolve a subtitle path and ensure a subtitle file was created.
@@ -393,6 +419,17 @@ class YtdlpTool(BaseTool):
         for candidate in [target.get("predicted_file_path"), parsed_path]:
             if candidate and os.path.isfile(candidate):
                 return candidate
+
+        # Directory output templates do not provide a deterministic filename.
+        subtitle_file_suffix = (
+            f".{cls._get_primary_language_code(language_code)}."
+            f"{SUBTITLE_CONVERT_FORMAT}"
+        )
+        newest_subtitle_file = cls._find_newest_output_file(
+            target["directory_path"], started_at_ms, subtitle_file_suffix
+        )
+        if newest_subtitle_file:
+            return newest_subtitle_file
 
         raise Exception("yt-dlp completed but no subtitle file was created")
 
@@ -631,6 +668,7 @@ class YtdlpTool(BaseTool):
                 output_path, resolved_language_code
             )
             os.makedirs(target["directory_path"], exist_ok=True)
+            command_started_at_ms = time.time() * 1000
 
             args = self._get_config_args() + [
                 video_url,
@@ -655,7 +693,12 @@ class YtdlpTool(BaseTool):
                 )
             )
 
-            return self._resolve_downloaded_subtitle_path(result, target)
+            return self._resolve_downloaded_subtitle_path(
+                result,
+                target,
+                resolved_language_code,
+                command_started_at_ms,
+            )
 
         except Exception as e:
             raise Exception(f"Subtitle download failed: {str(e)}")
