@@ -42,6 +42,7 @@ const TITLE_REASONING_MODE_OFF_PROVIDERS = [
   LLMProviders.OpenAI,
   LLMProviders.OpenRouter,
   LLMProviders.ZAI,
+  LLMProviders.MiniMax,
   LLMProviders.Anthropic,
   LLMProviders.MoonshotAI,
   LLMProviders.HuggingFace,

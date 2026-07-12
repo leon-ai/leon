@@ -66,7 +66,8 @@ const REMOTE_LLM_PROVIDERS = [
   {
     ...getRequiredProviderAccountConfig('minimax'),
     models: [
-      { label: 'MiniMax-M3', value: 'MiniMax-M3' }
+      { label: 'MiniMax-M3', value: 'MiniMax-M3' },
+      { label: 'MiniMax-M2.7', value: 'MiniMax-M2.7' }
     ]
   },
   {
