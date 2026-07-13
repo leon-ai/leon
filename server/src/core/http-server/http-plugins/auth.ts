@@ -10,6 +10,7 @@ function readBearerToken(value: string | undefined): string {
   return match?.[1]?.trim() || ''
 }
 
+/** Checks the supported authentication headers for a dynamically loaded HTTP plugin. */
 export function isHTTPPluginRequestAuthorized(
   request: HTTPPluginRequest,
   token: string
@@ -22,6 +23,7 @@ export function isHTTPPluginRequestAuthorized(
   return authorizationToken === token || headerToken === token
 }
 
+/** Sends the standard unauthorized response from a dynamically loaded HTTP plugin. */
 export function rejectUnauthorizedHTTPPluginRequest(
   reply: HTTPPluginReply
 ): HTTPPluginReply {

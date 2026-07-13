@@ -13,6 +13,7 @@ import { CONFIG_MANAGER } from '@/config'
 import type {
   CompletionParams,
   LLMReasoningMode,
+  AgentToolTranscriptMessage,
   OpenAITool,
   OpenAIToolCall,
   OpenAIToolChoice,
@@ -67,6 +68,7 @@ interface CallState {
   toolCallOrder: string[]
   usedInputTokens: number
   usedOutputTokens: number
+  finishReason?: string
 }
 
 const STRUCTURED_OUTPUT_JSON_INSTRUCTION =
@@ -288,6 +290,11 @@ export default class AISDKRemoteLLMProvider {
       })
     }
 
+    if (this.isAgentToolTranscript(prompt)) {
+      messages.push(...this.toAgentToolMessages(prompt))
+      return messages
+    }
+
     if (completionParams.history) {
       for (const message of completionParams.history) {
         messages.push({
@@ -328,6 +335,95 @@ export default class AISDKRemoteLLMProvider {
     }
 
     return messages
+  }
+
+  private isAgentToolTranscript(
+    prompt: PromptOrChatHistory
+  ): prompt is AgentToolTranscriptMessage[] {
+    return (
+      Array.isArray(prompt) &&
+      prompt.length > 0 &&
+      prompt.every((message) => {
+        if (!message || typeof message !== 'object' || !('role' in message)) {
+          return false
+        }
+
+        const candidate = message as Record<string, unknown>
+        return (
+          (candidate['role'] === 'user' ||
+            candidate['role'] === 'assistant' ||
+            candidate['role'] === 'tool') &&
+          typeof candidate['content'] === 'string'
+        )
+      })
+    )
+  }
+
+  /**
+   * Converts Leon's canonical transcript into the AI SDK provider protocol.
+   * Keeping this conversion at the provider boundary lets the agent loop retain
+   * exact tool-call IDs without coupling orchestration to one API flavor.
+   */
+  private toAgentToolMessages(
+    transcript: AgentToolTranscriptMessage[]
+  ): Array<Record<string, unknown>> {
+    return transcript.map((message) => {
+      if (message.role === 'user') {
+        return {
+          role: 'user',
+          content: [{ type: 'text', text: message.content }]
+        }
+      }
+
+      if (message.role === 'tool') {
+        return {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: message.toolCallId,
+              toolName: message.toolName,
+              output: {
+                type: 'text',
+                value: message.content
+              }
+            }
+          ]
+        }
+      }
+
+      const content: Array<Record<string, unknown>> = []
+      if (message.content.trim()) {
+        content.push({ type: 'text', text: message.content })
+      }
+      for (const toolCall of message.toolCalls || []) {
+        content.push({
+          type: 'tool-call',
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          input: this.parseAgentToolInput(toolCall.function.arguments)
+        })
+      }
+
+      return {
+        role: 'assistant',
+        content
+      }
+    })
+  }
+
+  private parseAgentToolInput(input: string): unknown {
+    try {
+      return JSON.parse(input)
+    } catch {
+      // Some local chat templates require tool arguments to be objects. Keep
+      // the raw model output available without making the recovery turn fail
+      // before it can observe and correct the matching tool validation error.
+      return {
+        invalid_tool_arguments: true,
+        raw_arguments: input
+      }
+    }
   }
 
   private normalizeSchema(
@@ -876,6 +972,9 @@ export default class AISDKRemoteLLMProvider {
     return {
       choices: [
         {
+          ...(state.finishReason
+            ? { finish_reason: state.finishReason }
+            : {}),
           message: {
             content: state.text,
             ...(state.reasoning.trim().length > 0
@@ -943,6 +1042,10 @@ export default class AISDKRemoteLLMProvider {
 
     this.appendUsageFromUnknown(state, result['usage'])
     this.appendProviderMetadataUsageFromUnknown(state, result['providerMetadata'])
+    const finishReason = result['finishReason'] ?? result['rawFinishReason']
+    if (typeof finishReason === 'string' && finishReason) {
+      state.finishReason = finishReason
+    }
 
     return this.buildOpenAICompatiblePayload(state)
   }
@@ -1103,6 +1206,13 @@ export default class AISDKRemoteLLMProvider {
           state,
           part['providerMetadata']
         )
+        const finishReason = readString(
+          part['finishReason'],
+          part['rawFinishReason']
+        )
+        if (finishReason) {
+          state.finishReason = finishReason
+        }
         continue
       }
 

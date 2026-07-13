@@ -1,13 +1,13 @@
 import { LLMProviders } from '@/core/llm-manager/types'
 
-import type { ReactPhase } from './types'
+import type { AgentPhase } from './types'
 
 export interface RawPhaseMetric {
   outputTokens: number
   durationMs: number
 }
 
-export type RawPhaseMetrics = Record<ReactPhase, RawPhaseMetric>
+export type RawPhaseMetrics = Record<AgentPhase, RawPhaseMetric>
 
 export interface VisibleOutputParams {
   output?: unknown | undefined
@@ -46,7 +46,7 @@ export interface PhaseMetricSnapshot extends RawPhaseMetric {
   tokensPerSecond: number
 }
 
-export type PhaseMetricSnapshots = Record<ReactPhase, PhaseMetricSnapshot>
+export type PhaseMetricSnapshots = Record<AgentPhase, PhaseMetricSnapshot>
 
 export interface DerivedLLMMetrics {
   inputTokens: number
@@ -97,7 +97,7 @@ interface DeriveLLMMetricsOptions extends MeasureVisibleOutputOptions {
 }
 
 export interface RecordCompletionMetricsParams {
-  phase: ReactPhase
+  phase: AgentPhase
   usedInputTokens?: number | undefined
   usedOutputTokens?: number | undefined
   visibleOutputTokens?: number | undefined
@@ -110,7 +110,7 @@ export interface ObserveCompletionMetricsOptions
   extends MeasureVisibleOutputOptions {
   providerName: LLMProviders
   accumulator: AccumulatedLLMMetricsState
-  phase: ReactPhase
+  phase: AgentPhase
   completionStartedAt: number
   completedAt: number
   output?: unknown | undefined
@@ -319,28 +319,12 @@ function createPhaseMetricSnapshots(
   phaseMetrics: RawPhaseMetrics
 ): PhaseMetricSnapshots {
   return {
-    planning: {
-      outputTokens: phaseMetrics.planning.outputTokens,
-      durationMs: phaseMetrics.planning.durationMs,
+    agent: {
+      outputTokens: phaseMetrics.agent.outputTokens,
+      durationMs: phaseMetrics.agent.durationMs,
       tokensPerSecond: perSecond(
-        phaseMetrics.planning.outputTokens,
-        phaseMetrics.planning.durationMs
-      )
-    },
-    execution: {
-      outputTokens: phaseMetrics.execution.outputTokens,
-      durationMs: phaseMetrics.execution.durationMs,
-      tokensPerSecond: perSecond(
-        phaseMetrics.execution.outputTokens,
-        phaseMetrics.execution.durationMs
-      )
-    },
-    recovery: {
-      outputTokens: phaseMetrics.recovery.outputTokens,
-      durationMs: phaseMetrics.recovery.durationMs,
-      tokensPerSecond: perSecond(
-        phaseMetrics.recovery.outputTokens,
-        phaseMetrics.recovery.durationMs
+        phaseMetrics.agent.outputTokens,
+        phaseMetrics.agent.durationMs
       )
     },
     final_answer: {
@@ -395,10 +379,6 @@ function resolveFinalAnswerOutputTokens(
 
   if (providerOutputTokens > 0) {
     return providerOutputTokens
-  }
-
-  if (providerName === LLMProviders.Local && options.tokenizeLocally) {
-    return options.tokenizeLocally(normalizedOutput)
   }
 
   return options.estimateTokensFromText(normalizedOutput)

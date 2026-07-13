@@ -876,17 +876,7 @@ export default class NLU {
                 typeof llmMetrics['phaseMetrics'] === 'object'
                   ? {
                       phaseMetrics: llmMetrics['phaseMetrics'] as {
-                        planning: {
-                          outputTokens: number
-                          durationMs: number
-                          tokensPerSecond: number
-                        }
-                        execution: {
-                          outputTokens: number
-                          durationMs: number
-                          tokensPerSecond: number
-                        }
-                        recovery: {
+                        agent: {
                           outputTokens: number
                           durationMs: number
                           tokensPerSecond: number

@@ -1,9 +1,5 @@
 import type {
-  LlamaChatSession,
-  LlamaChat,
-  Token,
-  ChatSessionModelFunctions,
-  ChatHistoryItem
+  Token
 } from 'node-llama-cpp'
 
 import type { MessageLog } from '@/types'
@@ -24,7 +20,6 @@ export enum LLMDuties {
 }
 
 export enum LLMProviders {
-  Local = 'local',
   LlamaCPP = 'llamacpp',
   SGLang = 'sglang',
   Groq = 'groq',
@@ -48,11 +43,32 @@ export enum SlotFillingStatus {
   NotFound = 'not_found'
 }
 
-export type PromptOrChatHistory = string | ChatHistoryItem[]
+/**
+ * Canonical message format used by the agent loop. Tool calls and results
+ * stay in their protocol roles instead of being rewritten into
+ * a phase prompt before every inference.
+ */
+export type AgentToolTranscriptMessage =
+  | {
+      role: 'user'
+      content: string
+    }
+  | {
+      role: 'assistant'
+      content: string
+      toolCalls?: OpenAIToolCall[]
+    }
+  | {
+      role: 'tool'
+      toolCallId: string
+      toolName: string
+      content: string
+    }
+
+export type PromptOrChatHistory = string | AgentToolTranscriptMessage[]
 
 /**
- * OpenAI-compatible tool definition for remote providers that support
- * native tool/function calling (e.g. OpenRouter).
+ * OpenAI-compatible tool definition for providers that support tool calling.
  */
 export interface OpenAIToolFunction {
   name: string
@@ -75,7 +91,7 @@ export type OpenAIToolChoice =
     }
 
 /**
- * Represents a tool call returned by the model when using native tool calling.
+ * Represents a tool call returned by the model's tool-calling protocol.
  */
 export interface OpenAIToolCall {
   id: string
@@ -95,7 +111,7 @@ export type LLMServiceTier = 'auto' | 'flex' | 'priority' | 'default'
 export interface LLMPromptAbortReason {
   shouldRetry: boolean
   retryStrategy: 'timeout'
-  source: 'react_tool_call_diagnosis'
+  source: 'agent_tool_call_diagnosis'
   delayMs: number
 }
 
@@ -104,13 +120,10 @@ export interface CompletionParams {
   systemPrompt: string
   maxTokens?: number | undefined
   thoughtTokensBudget?: number | undefined
-  grammar?: string
   temperature?: number | undefined
   timeout?: number
   signal?: AbortSignal
   maxRetries?: number
-  session?: LlamaChatSession | LlamaChat | null
-  functions?: ChatSessionModelFunctions | undefined
   data?: Record<string, unknown> | null
   history?: MessageLog[]
   onToken?: (tokens: Token[] | string) => void
@@ -149,8 +162,8 @@ export interface CompletionParams {
    */
   remoteProviderErrorRetries?: number
   /**
-   * OpenAI-compatible tools for remote providers that support native
-   * tool/function calling. When set, the provider sends these as `tools`
+   * OpenAI-compatible tools for providers that support tool calling. When set,
+   * the provider sends these as `tools`
    * in the API request instead of (or in addition to) JSON mode.
    */
   tools?: OpenAITool[]

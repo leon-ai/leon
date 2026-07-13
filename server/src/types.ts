@@ -99,9 +99,7 @@ export interface LLMAnswerMetrics {
   outputCharsPerSecond?: number
   averagedPhaseTokensPerSecond?: number
   phaseMetrics?: {
-    planning: { outputTokens: number, durationMs: number, tokensPerSecond: number }
-    execution: { outputTokens: number, durationMs: number, tokensPerSecond: number }
-    recovery: { outputTokens: number, durationMs: number, tokensPerSecond: number }
+    agent: { outputTokens: number, durationMs: number, tokensPerSecond: number }
     final_answer: { outputTokens: number, durationMs: number, tokensPerSecond: number }
   }
   turnInputTokens?: number

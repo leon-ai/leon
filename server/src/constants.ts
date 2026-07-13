@@ -15,7 +15,6 @@ import {
 } from '@/leon-roots'
 import { CONFIG_MANAGER } from '@/config'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
-import { SystemHelper } from '@/helpers/system-helper'
 import {
   getInstalledLLMMetadata,
   resolveConfiguredLLMTarget
@@ -35,7 +34,6 @@ export {
 
 const PRODUCTION_ENV = 'production'
 const DEVELOPMENT_ENV = 'development'
-const TESTING_ENV = 'testing'
 
 export const GITHUB_URL = 'https://github.com/leon-ai/leon'
 export const API_VERSION = 'v1'
@@ -52,7 +50,6 @@ export const { default: LANG_CONFIGS } = await import('@@/core/langs.json', {
 export const LEON_NODE_ENV = process.env['LEON_NODE_ENV'] || PRODUCTION_ENV
 export const IS_PRODUCTION_ENV = LEON_NODE_ENV === PRODUCTION_ENV
 export const IS_DEVELOPMENT_ENV = LEON_NODE_ENV === DEVELOPMENT_ENV
-export const IS_TESTING_ENV = LEON_NODE_ENV === TESTING_ENV
 
 /**
  * Paths
@@ -65,7 +62,6 @@ export const PROFILE_LOGS_PATH = path.join(LEON_PROFILE_PATH, 'logs')
 export const PROFILE_SKILLS_PATH = path.join(LEON_PROFILE_PATH, 'skills')
 export const PROFILE_TOOLS_PATH = path.join(LEON_PROFILE_PATH, 'tools')
 export const PROFILE_DISABLED_PATH = path.join(LEON_PROFILE_PATH, 'disabled.json')
-export const PROFILE_ALLOWED_PATH = path.join(LEON_PROFILE_PATH, 'allowed.json')
 export const PROFILE_CONVERSATION_LOG_PATH = path.join(
   LEON_PROFILE_PATH,
   'conversation_log.json'
@@ -340,7 +336,6 @@ export const PYTORCH_VERSION = PYTORCH_VERSIONS.torch
 /**
  * Binaries / distribution
  */
-export const BINARIES_FOLDER_NAME = SystemHelper.getBinariesFolderName()
 export const BRIDGES_PATH = path.join(CODEBASE_PATH, 'bridges')
 export const NODEJS_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'nodejs')
 export const PYTHON_BRIDGE_ROOT_PATH = path.join(BRIDGES_PATH, 'python')
@@ -494,7 +489,6 @@ export const LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH = path.join(
  * LLMs
  * @see k-quants comparison: https://github.com/ggerganov/llama.cpp/pull/1684
  */
-export const HAS_LLM = true
 export const LEON_ROUTING_MODE = PROFILE_CONFIG.routing.mode
 export const LEON_MOOD = PROFILE_CONFIG.mood.mode
 export const LEON_PULSE_ENABLED = PROFILE_CONFIG.runtime.pulse_enabled
@@ -507,11 +501,7 @@ export const LEON_CONTEXT_DISABLED_FILES =
   PROFILE_CONFIG.context.disabled_files
 export const LLM_DIR_PATH = path.join(MODELS_PATH, 'llm')
 export const LLM_MANIFEST_PATH = path.join(LLM_DIR_PATH, 'manifest.json')
-const {
-  defaultInstalledLLMPath,
-  installedLLMName,
-  installedLLMVersion
-} = getInstalledLLMMetadata(LLM_MANIFEST_PATH)
+const { defaultInstalledLLMPath } = getInstalledLLMMetadata(LLM_MANIFEST_PATH)
 export const DEFAULT_INSTALLED_LLM_PATH = defaultInstalledLLMPath
 export const LEON_LLM = PROFILE_CONFIG.llm.default ?? ''
 export const LEON_WORKFLOW_LLM = PROFILE_CONFIG.llm.workflow ?? ''
@@ -530,22 +520,8 @@ export const AGENT_LLM_TARGET = resolveConfiguredLLMTarget(
     llmDirPath: LLM_DIR_PATH
   }
 )
-export const WORKFLOW_LLM_PROVIDER = WORKFLOW_LLM_TARGET.provider
-export const AGENT_LLM_PROVIDER = AGENT_LLM_TARGET.provider
-export const LLM_NAME = installedLLMName
-export const LLM_VERSION = installedLLMVersion
-export const LLM_FILE_NAME = DEFAULT_INSTALLED_LLM_PATH
-  ? path.basename(DEFAULT_INSTALLED_LLM_PATH)
-  : ''
-export const LLM_NAME_WITH_VERSION = `${LLM_NAME} (${LLM_VERSION})`
-export const LLM_PATH = DEFAULT_INSTALLED_LLM_PATH
-  ? path.isAbsolute(DEFAULT_INSTALLED_LLM_PATH)
-    ? DEFAULT_INSTALLED_LLM_PATH
-    : path.resolve(CODEBASE_PATH, DEFAULT_INSTALLED_LLM_PATH)
-  : ''
 export const LLM_MINIMUM_TOTAL_VRAM = 6
 export const LLM_HIGH_TIER_MINIMUM_TOTAL_VRAM = 18
-export const LLM_MINIMUM_FREE_VRAM = 6
 /*export const LLM_HF_DOWNLOAD_URL =
   'https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q5_K_S.gguf?download=true'
 */

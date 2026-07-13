@@ -24,7 +24,6 @@ export interface LLMDutyInitParams {
   force?: boolean
 }
 export interface LLMDutyExecuteParams {
-  isWarmingUp?: boolean
   shouldEmitOnToken?: boolean
 }
 export interface LLMDutyParams {
@@ -47,10 +46,6 @@ interface LLMFunctionParameter {
 export const DEFAULT_INIT_PARAMS: LLMDutyInitParams = {
   useLoopHistory: true,
   force: false
-}
-export const DEFAULT_EXECUTE_PARAMS: LLMDutyExecuteParams = {
-  isWarmingUp: false,
-  shouldEmitOnToken: true
 }
 const PARAMETER_TYPE_DESCRIPTIONS = {
   boolean: {

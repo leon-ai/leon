@@ -16,12 +16,12 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'openai',
     requiredEnv: 'LEON_OPENAI_API_KEY',
-    llmTarget: 'openai/gpt-5.4'
+    llmTarget: 'openai/gpt-5.6-terra'
   },
   {
     provider: 'anthropic',
     requiredEnv: 'LEON_ANTHROPIC_API_KEY',
-    llmTarget: 'anthropic/claude-sonnet-4-20250514'
+    llmTarget: 'anthropic/claude-haiku-4-5'
   },
   {
     provider: 'moonshotai',

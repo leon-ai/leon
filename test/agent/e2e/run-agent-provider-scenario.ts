@@ -2,21 +2,28 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 
+import YAML from 'yaml'
+
 import type { MessageLog } from '../../../server/src/types'
 import type { AgentProvider } from './provider-matrix'
 import { PROVIDER_MATRIX, PROVIDER_REQUIRED_ENV } from './provider-matrix'
+import {
+  getProviderScenario,
+  type ProviderScenarioId
+} from './provider-scenarios'
 
 const RESULT_PREFIX = '__AGENT_RESULT__'
 const PROGRESS_PREFIX = '__AGENT_PROGRESS__'
 const TEST_HOME_PREFIX = 'leon-agent-e2e'
 const TEST_PROFILE_PREFIX = 'agent-e2e'
+const SOURCE_CONFIG_PATH_ENV = 'LEON_AGENT_E2E_SOURCE_CONFIG_PATH'
 const EMPTY_PROFILE_DISABLED_CONFIG = {
   skills: [],
   tools: []
 }
-const REACT_CONTINUATION_STATE_FILENAME =
-  '.react-execution-continuation-state.json'
-const REACT_HISTORY_COMPACTION_STATE_FILENAME =
+const AGENT_CONTINUATION_STATE_FILENAME =
+  '.agent-loop-continuation-state.json'
+const LEGACY_AGENT_HISTORY_COMPACTION_STATE_FILENAME =
   '.react-history-compaction-state.json'
 const PROVIDER_UNAVAILABLE_PATTERNS = [
   /cannot find llama\.cpp model/i,
@@ -64,10 +71,11 @@ interface AgentTurnResult {
 
 interface AgentRunnerResult {
   provider: AgentProvider
+  scenarioId: ProviderScenarioId
   skipped: boolean
   reason?: string
   assetPath?: string
-  turns?: AgentTurnResult[]
+  turn?: AgentTurnResult
 }
 
 type ConversationLoggerRecord = Omit<MessageLog, 'sentAt'>
@@ -159,13 +167,51 @@ async function prepareTestProfilePath(
   )
 }
 
+/** Seeds an isolated profile from the active profile configuration. */
+async function prepareTestProfileConfig(
+  sourceConfigPath: string,
+  targetConfigPath: string,
+  llmTarget: string
+): Promise<void> {
+  if (!sourceConfigPath || !await fs.stat(sourceConfigPath).then(
+    (stat) => stat.isFile(),
+    () => false
+  )) {
+    throw new Error(
+      `The source profile configuration does not exist: ${sourceConfigPath || '(missing path)'}`
+    )
+  }
+
+  const sourceConfig = await fs.readFile(sourceConfigPath, 'utf8')
+  const document = YAML.parseDocument(sourceConfig)
+
+  if (document.errors.length > 0) {
+    throw new Error(
+      `The source profile configuration is invalid: ${document.errors.join('; ')}`
+    )
+  }
+
+  // Keep real provider settings while making the matrix target authoritative.
+  document.setIn(['llm', 'default'], llmTarget)
+  document.setIn(['llm', 'workflow'], null)
+  document.setIn(['llm', 'agent'], null)
+
+  await fs.mkdir(path.dirname(targetConfigPath), { recursive: true })
+  await fs.writeFile(targetConfigPath, String(document), 'utf8')
+}
+
 async function main(): Promise<void> {
   const providerArg = process.argv[2] as AgentProvider | undefined
-  if (!providerArg || !(providerArg in PROVIDER_REQUIRED_ENV)) {
+  const scenarioArg = process.argv[3]
+  const scenario = getProviderScenario(scenarioArg)
+  const resultScenarioId = (scenarioArg || 'direct_answer') as ProviderScenarioId
+
+  if (!providerArg || !(providerArg in PROVIDER_REQUIRED_ENV) || !scenario) {
     printResult({
       provider: (providerArg || 'openai') as AgentProvider,
+      scenarioId: resultScenarioId,
       skipped: true,
-      reason: 'invalid_provider'
+      reason: !scenario ? 'invalid_scenario' : 'invalid_provider'
     })
     return
   }
@@ -174,16 +220,24 @@ async function main(): Promise<void> {
   const providerConfig = PROVIDER_MATRIX.find(
     (item) => item.provider === provider
   )
+  const llmTarget = providerConfig?.llmTarget || provider
   const requiredEnv = PROVIDER_REQUIRED_ENV[provider]
-  const testRunId = `${provider}-${process.pid}-${Date.now()}`
+  const testRunId = `${provider}-${scenario.id}-${process.pid}-${Date.now()}`
   const testProfileName = `${TEST_PROFILE_PREFIX}-${testRunId}`
   const testHomePath = path.join(
     os.tmpdir(),
     `${TEST_HOME_PREFIX}-${testRunId}`
   )
+  const testProfilePath = path.join(
+    testHomePath,
+    'profiles',
+    testProfileName
+  )
+  const testConfigPath = path.join(testProfilePath, 'config.yml')
   if (!process.env[requiredEnv]) {
     printResult({
       provider,
+      scenarioId: scenario.id,
       skipped: true,
       reason: `missing_${requiredEnv.toLowerCase()}`
     })
@@ -191,13 +245,19 @@ async function main(): Promise<void> {
   }
 
   process.env['LEON_NODE_ENV'] = 'testing'
-  process.env['LEON_LLM'] = providerConfig?.llmTarget || provider
+  process.env['LEON_LLM'] = llmTarget
   process.env['LEON_HOME'] = testHomePath
   process.env['LEON_PROFILE'] = testProfileName
 
+  await prepareTestProfileConfig(
+    String(process.env[SOURCE_CONFIG_PATH_ENV] || '').trim(),
+    testConfigPath,
+    llmTarget
+  )
+
   const tempAssetPath = path.join(
     os.tmpdir(),
-    `leon-agent-${provider}-${Date.now()}.txt`
+    `leon-agent-${provider}-${scenario.id}-${Date.now()}.txt`
   )
 
   const {
@@ -240,11 +300,11 @@ async function main(): Promise<void> {
 
   const continuationStatePath = path.join(
     PROFILE_CONTEXT_PATH,
-    REACT_CONTINUATION_STATE_FILENAME
+    AGENT_CONTINUATION_STATE_FILENAME
   )
   const historyCompactionStatePath = path.join(
     PROFILE_CONTEXT_PATH,
-    REACT_HISTORY_COMPACTION_STATE_FILENAME
+    LEGACY_AGENT_HISTORY_COMPACTION_STATE_FILENAME
   )
 
   await fs.writeFile(
@@ -259,17 +319,11 @@ async function main(): Promise<void> {
   const { CONVERSATION_LOGGER, TOOL_EXECUTOR, LLM_PROVIDER } = await import(
     '../../../server/src/core/index'
   )
+  const { CONFIG_STATE } = await import(
+    '../../../server/src/core/config-states/config-state'
+  )
 
-  const turns: string[] = [
-    // Return final answer directly
-    'Hi Leon, just doing a quick check since I switched your LLM provider. What do you reply if I tell you "ping"?',
-    // Create simple plan
-    'What\'s the weather like today in Shenzhen?',
-    // Create plan with dynamic replanning (inject new step)
-    `There is a file waiting for you in ${tempAssetPath}, do what it asks you to do.`
-  ]
-
-  const turnResults: AgentTurnResult[] = []
+  const input = scenario.buildInput(tempAssetPath)
   const toolCalls: AgentTurnResult['toolCalls'] = []
   type ExecuteTool = typeof TOOL_EXECUTOR.executeTool
   type ToolExecutionInput = Parameters<ExecuteTool>[0]
@@ -281,7 +335,7 @@ async function main(): Promise<void> {
 
   /**
    * Wrap tool execution so the parent spec can assert on real tool usage
-   * without changing the production ReAct path.
+   * without changing the production agent path.
    */
   TOOL_EXECUTOR.executeTool = async (
     input: ToolExecutionInput
@@ -330,9 +384,16 @@ async function main(): Promise<void> {
   try {
     /**
      * The e2e subprocess bypasses the normal server bootstrap, so initialize
-     * the selected provider explicitly before the first ReAct turn.
+     * the selected provider explicitly before the first agent turn.
      */
-    await LLM_PROVIDER.init()
+    const isProviderInitialized = await LLM_PROVIDER.init()
+    if (!isProviderInitialized) {
+      const target = CONFIG_STATE.getModelState().getAgentTarget()
+      throw new Error(
+        target.resolutionError ||
+          `Could not initialize provider "${provider}" with target "${llmTarget}".`
+      )
+    }
     printProgress({
       provider,
       stage: 'bootstrap',
@@ -345,106 +406,90 @@ async function main(): Promise<void> {
     await fs.rm(continuationStatePath, { force: true })
     await fs.rm(historyCompactionStatePath, { force: true })
 
-    let recordedToolCalls = 0
-    for (let index = 0; index < turns.length; index += 1) {
-      const input = turns[index]!
-      const turnNumber = index + 1
+    printProgress({
+      provider,
+      stage: 'turn_start',
+      turn: 1,
+      message: `Starting ${scenario.id}`,
+      data: { input }
+    })
 
-      printProgress({
-        provider,
-        stage: 'turn_start',
-        turn: turnNumber,
-        message: `Starting turn ${turnNumber}`,
-        data: {
-          input
-        }
-      })
+    await CONVERSATION_LOGGER.push(
+      createConversationLoggerRecord('owner', input)
+    )
 
-      /**
-       * Push each owner/Leon turn through the shared conversation logger so the
-       * next ReAct invocation sees real multi-turn history.
-       */
-      await CONVERSATION_LOGGER.push(
-        createConversationLoggerRecord('owner', input)
+    const duty = new ReActLLMDuty({ input })
+    await duty.init({ force: true })
+    const result = await duty.execute()
+
+    if (!result) {
+      throw new Error(
+        `Agent scenario "${scenario.id}" returned no result for provider "${provider}".`
       )
+    }
 
-      const duty = new ReActLLMDuty({ input })
-      await duty.init({ force: index === 0 })
-      const result = await duty.execute()
-
-      const output =
-        result && typeof result.output === 'string' ? result.output : ''
-      const finalIntent =
-        result &&
+    const output = typeof result.output === 'string' ? result.output : ''
+    const finalIntent =
+      result.data &&
+      typeof result.data === 'object' &&
+      'finalIntent' in result.data &&
+      typeof result.data['finalIntent'] === 'string'
+        ? result.data['finalIntent']
+        : null
+    const turn: AgentTurnResult = {
+      input,
+      output,
+      finalIntent,
+      executionHistory:
         result.data &&
         typeof result.data === 'object' &&
-        'finalIntent' in result.data &&
-        typeof result.data['finalIntent'] === 'string'
-          ? result.data['finalIntent']
-          : null
-
-      if (finalIntent === 'error') {
-        const providerUnavailableReason = getProviderUnavailableReason(output)
-
-        if (providerUnavailableReason) {
-          printResult({
-            provider,
-            skipped: true,
-            reason: providerUnavailableReason,
-            assetPath: tempAssetPath,
-            turns: turnResults
-          })
-          return
-        }
-      }
-
-      if (output) {
-        await CONVERSATION_LOGGER.push(
-          createConversationLoggerRecord('leon', output)
-        )
-      }
-
-      printProgress({
-        provider,
-        stage: 'turn_result',
-        turn: turnNumber,
-        message: `Completed turn ${turnNumber}`,
-        data: {
-          finalIntent,
-          output: summarizeValue(output),
-          toolCalls: toolCalls.length - recordedToolCalls
-        }
-      })
-
-      turnResults.push({
-        input,
-        output,
-        finalIntent,
-        executionHistory:
-          result &&
-          result.data &&
-          typeof result.data === 'object' &&
-          Array.isArray(result.data['executionHistory'])
-            ? (result.data['executionHistory'] as AgentTurnResult['executionHistory'])
-            : [],
-        toolCalls: toolCalls.slice(recordedToolCalls)
-      })
-
-      recordedToolCalls = toolCalls.length
+        Array.isArray(result.data['executionHistory'])
+          ? (result.data['executionHistory'] as AgentTurnResult['executionHistory'])
+          : [],
+      toolCalls
     }
+
+    if (finalIntent === 'error') {
+      const providerUnavailableReason = getProviderUnavailableReason(output)
+
+      if (providerUnavailableReason) {
+        printResult({
+          provider,
+          scenarioId: scenario.id,
+          skipped: true,
+          reason: providerUnavailableReason,
+          assetPath: tempAssetPath,
+          turn
+        })
+        return
+      }
+    }
+
+    printProgress({
+      provider,
+      stage: 'turn_result',
+      turn: 1,
+      message: `Completed ${scenario.id}`,
+      data: {
+        finalIntent,
+        output: summarizeValue(output),
+        toolCalls: toolCalls.length
+      }
+    })
 
     printResult({
       provider,
+      scenarioId: scenario.id,
       skipped: false,
       assetPath: tempAssetPath,
-      turns: turnResults
+      turn
     })
     printProgress({
       provider,
       stage: 'scenario_complete',
-      message: `Completed ${turnResults.length} turns`,
+      message: `Completed ${scenario.id}`,
       data: {
-        turns: turnResults.length
+        scenarioId: scenario.id
       }
     })
   } finally {
@@ -467,10 +512,12 @@ void main()
   })
   .catch((error) => {
     const provider = (process.argv[2] || 'openai') as AgentProvider
+    const scenarioId = (process.argv[3] || 'direct_answer') as ProviderScenarioId
     const providerUnavailableReason = getProviderUnavailableReason(error)
 
     printResult({
       provider,
+      scenarioId,
       skipped: Boolean(providerUnavailableReason),
       reason: providerUnavailableReason || String(error)
     })

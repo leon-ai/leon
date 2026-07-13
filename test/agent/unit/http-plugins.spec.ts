@@ -3,6 +3,15 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 
+import {
+  isHTTPPluginRequestAuthorized,
+  rejectUnauthorizedHTTPPluginRequest
+} from '@/core/http-server/http-plugins/auth'
+import type {
+  HTTPPluginReply,
+  HTTPPluginRequest
+} from '@/core/http-server/http-plugins/types'
+
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: {
     title: vi.fn(),
@@ -95,5 +104,37 @@ describe('External HTTP plugin loader', () => {
     })
 
     await fs.rm(tempRoot, { recursive: true, force: true })
+  })
+})
+
+describe('External HTTP plugin authentication', () => {
+  it('accepts both supported token headers', () => {
+    const bearerRequest = {
+      headers: { authorization: 'Bearer secret-token' }
+    } as HTTPPluginRequest
+    const pluginHeaderRequest = {
+      headers: { 'x-leon-http-plugin-token': 'secret-token' }
+    } as HTTPPluginRequest
+
+    expect(
+      isHTTPPluginRequestAuthorized(bearerRequest, 'secret-token')
+    ).toBe(true)
+    expect(
+      isHTTPPluginRequestAuthorized(pluginHeaderRequest, 'secret-token')
+    ).toBe(true)
+  })
+
+  it('returns the standard unauthorized response', () => {
+    const send = vi.fn().mockReturnValue({ sent: true })
+    const reply = { statusCode: 200, send } as unknown as HTTPPluginReply
+
+    expect(rejectUnauthorizedHTTPPluginRequest(reply)).toEqual({ sent: true })
+    expect(reply.statusCode).toBe(401)
+    expect(send).toHaveBeenCalledWith({
+      success: false,
+      status: 401,
+      code: 'http_plugin_unauthorized',
+      message: 'HTTP plugin token is missing or invalid.'
+    })
   })
 })

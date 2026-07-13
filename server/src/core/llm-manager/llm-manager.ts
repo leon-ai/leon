@@ -3,7 +3,6 @@ import fs from 'node:fs'
 import {
   LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH
 } from '@/constants'
-import { ConversationLogger } from '@/conversation-logger'
 import { LLMDuties } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
@@ -83,31 +82,8 @@ async function buildSkillListContent(): Promise<string> {
 export default class LLMManager {
   private static instance: LLMManager
   private _isLLMEnabled = false
-  // These placeholders remain for compatibility with code paths that still
-  // compile against the old local-session surface, even though Local is disabled.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _llama: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _localModel: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _context: any = null
   private _skillListContent: SkillListContent = null
   private _coreLLMDuties = cloneCoreDutyConfig()
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get llama(): any {
-    return this._llama
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get model(): any {
-    return this._localModel
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get context(): any {
-    return this._context
-  }
 
   get skillListContent(): SkillListContent {
     return this._skillListContent
@@ -181,36 +157,4 @@ export default class LLMManager {
     LogHelper.success('Skill router skill list has been refreshed in memory')
   }
 
-  public async loadHistory(
-    conversationLogger: ConversationLogger,
-    session: { getChatHistory?: () => unknown[] },
-    options?: { nbOfLogsToLoad?: number }
-  ): Promise<unknown[]> {
-    const [systemMessage] = session.getChatHistory?.() ?? []
-    const conversationLogs = options
-      ? await conversationLogger.load(options)
-      : await conversationLogger.load()
-
-    if (!conversationLogs) {
-      return systemMessage ? [systemMessage] : []
-    }
-
-    const history = conversationLogs.map((messageRecord) => {
-      const message = messageRecord?.message || ''
-
-      if (messageRecord?.who === 'owner') {
-        return {
-          type: 'user',
-          text: message
-        }
-      }
-
-      return {
-        type: 'model',
-        response: [message]
-      }
-    })
-
-    return systemMessage ? [systemMessage, ...history] : history
-  }
 }

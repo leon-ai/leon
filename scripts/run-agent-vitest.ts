@@ -68,7 +68,7 @@ const childProcess = spawn(
       LEON_NODE_ENV: process.env['LEON_NODE_ENV'] || 'testing',
       ...(suite === 'e2e' && testNamePattern
         ? {
-            LEON_AGENT_PROVIDER_PATTERN: testNamePattern
+            LEON_AGENT_PROVIDER_FILTER: testNamePattern
           }
         : {})
     },

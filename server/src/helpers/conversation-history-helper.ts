@@ -17,6 +17,31 @@ export class ConversationHistoryHelper {
     return value
   }
 
+  private static normalizePhaseMetric(
+    value: unknown
+  ): NonNullable<LLMAnswerMetrics['phaseMetrics']>['agent'] | null {
+    if (!value || typeof value !== 'object') {
+      return null
+    }
+
+    const record = value as Record<string, unknown>
+    const outputTokens = this.normalizeMetricNumber(record['outputTokens'])
+    const durationMs = this.normalizeMetricNumber(record['durationMs'])
+    const tokensPerSecond = this.normalizeMetricNumber(
+      record['tokensPerSecond']
+    )
+
+    if (
+      outputTokens === null ||
+      durationMs === null ||
+      tokensPerSecond === null
+    ) {
+      return null
+    }
+
+    return { outputTokens, durationMs, tokensPerSecond }
+  }
+
   private static normalizeLLMAnswerMetrics(
     metrics: unknown
   ): LLMAnswerMetrics | null {
@@ -71,48 +96,39 @@ export class ConversationHistoryHelper {
 
     if (record['phaseMetrics'] && typeof record['phaseMetrics'] === 'object') {
       const phaseMetricsRecord = record['phaseMetrics'] as Record<string, unknown>
-      const phaseNames = ['planning', 'execution', 'recovery', 'final_answer'] as const
-      const normalizedPhaseMetrics = {} as NonNullable<
-        LLMAnswerMetrics['phaseMetrics']
-      >
-      let hasAllPhaseMetrics = true
+      const finalAnswer = this.normalizePhaseMetric(
+        phaseMetricsRecord['final_answer']
+      )
+      let agent = this.normalizePhaseMetric(phaseMetricsRecord['agent'])
 
-      for (const phaseName of phaseNames) {
-        const phaseValue = phaseMetricsRecord[phaseName]
-        if (!phaseValue || typeof phaseValue !== 'object') {
-          hasAllPhaseMetrics = false
-          break
-        }
-
-        const phaseRecord = phaseValue as Record<string, unknown>
-        const phaseOutputTokens = this.normalizeMetricNumber(
-          phaseRecord['outputTokens']
+      if (!agent) {
+        // Fold stored metrics from the former multi-phase loop into the
+        // single agent phase so existing conversation logs remain readable.
+        const legacyMetrics = ['planning', 'execution', 'recovery'].map(
+          (phase) => this.normalizePhaseMetric(phaseMetricsRecord[phase])
         )
-        const phaseDurationMs = this.normalizeMetricNumber(
-          phaseRecord['durationMs']
-        )
-        const phaseTokensPerSecond = this.normalizeMetricNumber(
-          phaseRecord['tokensPerSecond']
-        )
-
-        if (
-          phaseOutputTokens === null ||
-          phaseDurationMs === null ||
-          phaseTokensPerSecond === null
-        ) {
-          hasAllPhaseMetrics = false
-          break
-        }
-
-        normalizedPhaseMetrics[phaseName] = {
-          outputTokens: phaseOutputTokens,
-          durationMs: phaseDurationMs,
-          tokensPerSecond: phaseTokensPerSecond
+        if (legacyMetrics.every((metric) => metric !== null)) {
+          const outputTokens = legacyMetrics.reduce(
+            (total, metric) => total + metric!.outputTokens,
+            0
+          )
+          const durationMs = legacyMetrics.reduce(
+            (total, metric) => total + metric!.durationMs,
+            0
+          )
+          agent = {
+            outputTokens,
+            durationMs,
+            tokensPerSecond:
+              durationMs > 0
+                ? Number(((outputTokens / durationMs) * 1_000).toFixed(2))
+                : 0
+          }
         }
       }
 
-      if (hasAllPhaseMetrics) {
-        normalizedMetrics.phaseMetrics = normalizedPhaseMetrics
+      if (agent && finalAnswer) {
+        normalizedMetrics.phaseMetrics = { agent, final_answer: finalAnswer }
       }
     }
 

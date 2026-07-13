@@ -27,6 +27,7 @@ import {
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
+import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
 
 const DEFAULT_LLAMACPP_BASE_URL =
   CONFIG_MANAGER.getProviderBaseURL('llamacpp') || 'http://127.0.0.1:8080/v1'
@@ -413,6 +414,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     let completionTokens = 0
     let predictedPerSecond = 0
     let predictedMs = 0
+    let finishReason = ''
     let buffer = ''
     let firstStreamBlockAt: number | null = null
     let lastStreamBlockAt: number | null = null
@@ -457,6 +459,12 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       const firstChoice = choices[0]
       if (!firstChoice || typeof firstChoice !== 'object') {
         return
+      }
+
+      const chunkFinishReason =
+        firstChoice['finish_reason'] ?? firstChoice['finishReason']
+      if (typeof chunkFinishReason === 'string' && chunkFinishReason) {
+        finishReason = chunkFinishReason
       }
 
       const delta =
@@ -561,7 +569,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
               message: {
                 content: text,
                 ...(reasoning.trim() ? { reasoning: reasoning.trim() } : {})
-              }
+              },
+              ...(finishReason ? { finish_reason: finishReason } : {})
             }
           ],
           usage: {
@@ -783,7 +792,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         '--port',
         String(getURLPort(runtimeServerURL)),
         '--ctx-size',
-        '16384',
+        String(LOCAL_LLM_CONTEXT_WINDOW_TOKENS),
         '--flash-attn',
         'on',
         '--cache-type-k',

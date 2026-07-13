@@ -57,9 +57,7 @@ function getTargetModelName(target: ResolvedLLMTarget): string {
 }
 
 function getSupportedModelProviders(): LLMProviders[] {
-  return Object.values(LLMProviders).filter(
-    (provider) => provider !== LLMProviders.Local
-  )
+  return Object.values(LLMProviders)
 }
 
 function resolveLocalModelCandidatePath(model: string): string {

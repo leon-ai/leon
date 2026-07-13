@@ -8,7 +8,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 
-interface ToolCallLogEntry {
+export interface ToolCallLogEntry {
   toolName: string
   params: Record<string, unknown> | null
   status?: string
@@ -17,7 +17,7 @@ interface ToolCallLogEntry {
   outputPreview?: string
 }
 
-interface OwnerQueryToolCallRecord {
+export interface OwnerQueryToolCallRecord {
   ownerQuery: string
   sessionId?: string | null
   createdAt?: number
@@ -45,6 +45,108 @@ const TOOL_OUTPUT_LOGS_DIR = path.join(PROFILE_LOGS_PATH, 'tool-outputs')
 const TOOL_OUTPUT_LOG_RETENTION_MS = 12 * 60 * 60 * 1_000
 const TOOL_OUTPUT_PREVIEW_MAX_LENGTH = 700
 const RECENT_ARTIFACT_RECORDS_LIMIT = 4
+export const RECENT_ARTIFACT_MANIFEST_MAX_CHARS = 6_000
+const RECENT_ARTIFACT_MANIFEST_TOOL_CALLS_LIMIT = 16
+const RECENT_ARTIFACT_MANIFEST_PREVIEW_MAX_CHARS = 160
+const ARTIFACT_MANIFEST_OMISSION_NOTICE =
+  '- Additional earlier artifacts were omitted. Use the known artifact paths or ask for a narrower earlier result if needed.'
+
+function clipManifestText(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, Math.max(maxLength - 3, 0)).trimEnd()}...`
+}
+
+/** Builds a newest-first artifact manifest with one global input-size bound. */
+export function buildRecentArtifactManifest(
+  records: OwnerQueryToolCallRecord[],
+  maxChars = RECENT_ARTIFACT_MANIFEST_MAX_CHARS
+): string {
+  const availableToolCallCount = records.reduce(
+    (total, record) =>
+      total +
+      record.toolCalls.filter((toolCall) => toolCall.outputLogPath).length,
+    0
+  )
+  let manifest = ''
+  let includedToolCallCount = 0
+
+  const append = (value: string): boolean => {
+    const separator = manifest ? '\n' : ''
+    if (manifest.length + separator.length + value.length > maxChars) {
+      return false
+    }
+
+    manifest += `${separator}${value}`
+    return true
+  }
+  const appendOmissionNotice = (): void => {
+    if (includedToolCallCount >= availableToolCallCount) {
+      return
+    }
+
+    if (append(ARTIFACT_MANIFEST_OMISSION_NOTICE)) {
+      return
+    }
+
+    const manifestLines = manifest.split('\n')
+    while (manifestLines.length > 0) {
+      manifestLines.pop()
+      manifest = manifestLines.join('\n')
+      if (append(ARTIFACT_MANIFEST_OMISSION_NOTICE)) {
+        return
+      }
+    }
+  }
+
+  for (const record of [...records].reverse()) {
+    const artifactCalls = record.toolCalls
+      .filter((toolCall) => toolCall.outputLogPath)
+      .reverse()
+    if (artifactCalls.length === 0) {
+      continue
+    }
+
+    const createdAt = record.createdAt
+      ? new Date(record.createdAt).toISOString()
+      : 'unknown'
+    const header = `ownerQuery="${clipManifestText(record.ownerQuery, 160)}" createdAt=${createdAt}`
+    let hasAppendedRecordHeader = false
+
+    for (const toolCall of artifactCalls) {
+      if (
+        includedToolCallCount >=
+        RECENT_ARTIFACT_MANIFEST_TOOL_CALLS_LIMIT
+      ) {
+        appendOmissionNotice()
+        return manifest
+      }
+
+      const queryParam = toolCall.params?.['query']
+      const query =
+        typeof queryParam === 'string'
+          ? ` query="${clipManifestText(queryParam, 120)}"`
+          : ''
+      const preview = toolCall.outputPreview
+        ? ` preview="${clipManifestText(toolCall.outputPreview, RECENT_ARTIFACT_MANIFEST_PREVIEW_MAX_CHARS)}"`
+        : ''
+      const line = `  - ${toolCall.toolName} status=${toolCall.status || 'unknown'}${query} outputLogPath=${toolCall.outputLogPath}${preview}`
+      const entry = hasAppendedRecordHeader ? line : `${header}\n${line}`
+      if (!append(entry)) {
+        appendOmissionNotice()
+        return manifest
+      }
+
+      hasAppendedRecordHeader = true
+      includedToolCallCount += 1
+    }
+  }
+
+  return manifest
+}
 
 export class ToolCallLogger {
   private readonly settings: ToolCallLoggerSettings
@@ -183,13 +285,7 @@ export class ToolCallLogger {
   }
 
   private clipText(value: string, maxLength: number): string {
-    const normalized = value.replace(/\s+/g, ' ').trim()
-
-    if (normalized.length <= maxLength) {
-      return normalized
-    }
-
-    return `${normalized.slice(0, maxLength - 3).trimEnd()}...`
+    return clipManifestText(value, maxLength)
   }
 
   private buildOutputPreview(output: Record<string, unknown>): string {
@@ -383,30 +479,7 @@ export class ToolCallLogger {
       return ''
     }
 
-    return matchingRecords
-      .map((record, recordIndex) => {
-        const ownerQuery = this.clipText(record.ownerQuery, 160)
-        const createdAt = record.createdAt
-          ? new Date(record.createdAt).toISOString()
-          : 'unknown'
-        const toolCalls = record.toolCalls
-          .filter((toolCall) => toolCall.outputLogPath)
-          .map((toolCall) => {
-            const queryParam = toolCall.params?.['query']
-            const query = typeof queryParam === 'string'
-              ? ` query="${this.clipText(queryParam, 120)}"`
-              : ''
-            const preview = toolCall.outputPreview
-              ? ` preview="${this.clipText(toolCall.outputPreview, 240)}"`
-              : ''
-
-            return `  - ${toolCall.toolName} status=${toolCall.status || 'unknown'}${query} outputLogPath=${toolCall.outputLogPath}${preview}`
-          })
-          .join('\n')
-
-        return `${recordIndex + 1}. ownerQuery="${ownerQuery}" createdAt=${createdAt}\n${toolCalls}`
-      })
-      .join('\n')
+    return buildRecentArtifactManifest(matchingRecords)
   }
 
   public async cleanupToolOutputLogs(): Promise<void> {

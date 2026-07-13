@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
-import type { CompletionParams } from '@/core/llm-manager/types'
+import type {
+  CompletionParams,
+  PromptOrChatHistory
+} from '@/core/llm-manager/types'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
 
@@ -45,9 +48,13 @@ vi.mock('@/helpers/log-helper', () => ({
 
 interface ProviderWithPrivateCallOptions {
   buildCallOptions(
-    prompt: string,
+    prompt: PromptOrChatHistory,
     completionParams: CompletionParams
   ): Record<string, unknown>
+  runChatCompletion(
+    prompt: PromptOrChatHistory,
+    completionParams: CompletionParams
+  ): Promise<{ data: Record<string, unknown> }>
 }
 
 function createOpenRouterProvider(): ProviderWithPrivateCallOptions {
@@ -75,6 +82,7 @@ function createCompletionParams(
 
 describe('AISDKRemoteLLMProvider', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.stubEnv('LEON_OPENROUTER_API_KEY', 'test-openrouter-key')
   })
 
@@ -120,5 +128,139 @@ describe('AISDKRemoteLLMProvider', () => {
 
     expect(systemMessage['content']).toBe('Plan the next step.')
     expect(options['responseFormat']).toBeUndefined()
+  })
+
+  it('preserves assistant tool calls and matching tool results', () => {
+    const provider = createOpenRouterProvider()
+    const options = provider.buildCallOptions(
+      [
+        { role: 'user', content: 'Look up the current value.' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'test__lookup__run',
+                arguments: JSON.stringify({ query: 'current value' })
+              }
+            }
+          ]
+        },
+        {
+          role: 'tool',
+          toolCallId: 'call_1',
+          toolName: 'test__lookup__run',
+          content: 'The value is 42.'
+        }
+      ],
+      createCompletionParams(null)
+    )
+
+    expect(options['prompt']).toEqual([
+      { role: 'system', content: 'Plan the next step.' },
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'Look up the current value.' }]
+      },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool-call',
+            toolCallId: 'call_1',
+            toolName: 'test__lookup__run',
+            input: { query: 'current value' }
+          }
+        ]
+      },
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call_1',
+            toolName: 'test__lookup__run',
+            output: {
+              type: 'text',
+              value: 'The value is 42.'
+            }
+          }
+        ]
+      }
+    ])
+  })
+
+  it('makes malformed historical tool arguments safe for recovery turns', () => {
+    const provider = createOpenRouterProvider()
+    const malformedArguments = '{"query":"truncated'
+    const options = provider.buildCallOptions(
+      [
+        { role: 'user', content: 'Look up the current value.' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: {
+                name: 'test__lookup__run',
+                arguments: malformedArguments
+              }
+            }
+          ]
+        },
+        {
+          role: 'tool',
+          toolCallId: 'call_1',
+          toolName: 'test__lookup__run',
+          content: 'Tool input rejected: tool_input must be valid JSON.'
+        }
+      ],
+      createCompletionParams(null)
+    )
+    const messages = options['prompt'] as Array<Record<string, unknown>>
+    const assistantMessage = messages[2] as Record<string, unknown>
+
+    expect(assistantMessage['content']).toEqual([
+      {
+        type: 'tool-call',
+        toolCallId: 'call_1',
+        toolName: 'test__lookup__run',
+        input: {
+          invalid_tool_arguments: true,
+          raw_arguments: malformedArguments
+        }
+      }
+    ])
+  })
+
+  it('preserves streaming length finishes for agent recovery', async () => {
+    openRouterMocks.languageModel.doStream.mockResolvedValue({
+      stream: (async function* (): AsyncGenerator<Record<string, unknown>> {
+        yield {
+          type: 'finish',
+          finishReason: 'length',
+          usage: {
+            inputTokens: { total: 100 },
+            outputTokens: { total: 1_024 }
+          }
+        }
+      })()
+    })
+    const provider = createOpenRouterProvider()
+    const response = await provider.runChatCompletion(
+      'Continue.',
+      {
+        ...createCompletionParams(null),
+        shouldStream: true
+      }
+    )
+    const choices = response.data['choices'] as Array<Record<string, unknown>>
+
+    expect(choices[0]?.['finish_reason']).toBe('length')
   })
 })
