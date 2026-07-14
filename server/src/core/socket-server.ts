@@ -44,6 +44,7 @@ import {
   type LeonClientInterfaceInitPayload,
   type LeonClientInterfaceProtocol,
   type LeonClientInterfaceSuggestionsPayload,
+  type LeonClientInterfaceToolProgressPayload,
   type LeonClientInterfaceTokenPayload,
   type LeonClientInterfaceTypingPayload,
   type LeonClientInterfaceUtterancePayload
@@ -367,6 +368,14 @@ export default class SocketServer {
       chatClient.socket.emit(
         LEON_CLIENT_INTERFACE_EVENTS.suggest,
         suggestionsPayload
+      )
+      return
+    }
+
+    if (eventName === 'tool-progress') {
+      chatClient.socket.emit(
+        LEON_CLIENT_INTERFACE_EVENTS.toolProgress,
+        payload as LeonClientInterfaceToolProgressPayload
       )
       return
     }

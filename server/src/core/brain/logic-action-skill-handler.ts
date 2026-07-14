@@ -28,6 +28,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import {
   getActiveProfileName,
   runWithProfileContext
@@ -60,6 +61,8 @@ export class LogicActionSkillHandler {
 
     BRAIN.skillFriendlyName = skillFriendlyName
     const profileName = getActiveProfileName()
+    const conversationSessionId =
+      CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
     const skillProcess = BRAIN.skillProcess
 
     if (!skillProcess) {
@@ -105,7 +108,11 @@ export class LogicActionSkillHandler {
             // Check if this is a tool log first
             if (chunk.startsWith(SKILL_TOOL_REQUEST_PREFIX)) {
               void runWithProfileContext({ profileName }, () =>
-                this.handleSkillToolRequest(chunk, skillProcess)
+                this.handleSkillToolRequest(
+                  chunk,
+                  skillProcess,
+                  conversationSessionId
+                )
               )
             } else if (chunk.includes('[LEON_TOOL_LOG]')) {
               // Extract and log the tool message without treating it as skill response
@@ -179,7 +186,8 @@ export class LogicActionSkillHandler {
 
   private static async handleSkillToolRequest(
     line: string,
-    skillProcess: ChildProcessWithoutNullStreams | undefined
+    skillProcess: ChildProcessWithoutNullStreams | undefined,
+    conversationSessionId: string
   ): Promise<void> {
     const request = parseSkillToolBridgeMessage<SkillToolRequest>(
       line,
@@ -190,7 +198,22 @@ export class LogicActionSkillHandler {
       return
     }
 
-    const result = await TOOL_EXECUTOR.executeTool(request.input).catch(
+    const result = await TOOL_EXECUTOR.executeTool({
+      ...request.input,
+      onProgress: (progress) => {
+        SOCKET_SERVER.emitToChatClients(
+          'tool-progress',
+          {
+            requestId: request.requestId,
+            toolkitId: request.input.toolkitId || null,
+            toolId: request.input.toolId,
+            functionName: request.input.functionName || null,
+            progress
+          },
+          { sessionId: conversationSessionId }
+        )
+      }
+    }).catch(
       (error: unknown) => ({
         status: 'error' as const,
         message: error instanceof Error ? error.message : String(error),
