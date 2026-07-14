@@ -1217,11 +1217,15 @@ export default class SocketServer {
           runWithProfileContext(
             { profileName: satelliteClient.profileName },
             () => {
-              TOOLKIT_REGISTRY.removeSatelliteTools(satelliteClient.deviceId)
-              SATELLITE_REGISTRY.unregister(
+              const didUnregister = SATELLITE_REGISTRY.unregister(
                 satelliteClient.profileName,
-                satelliteClient.deviceId
+                satelliteClient.deviceId,
+                socket
               )
+
+              if (didUnregister) {
+                TOOLKIT_REGISTRY.removeSatelliteTools(satelliteClient.deviceId)
+              }
             }
           )
           this.satelliteClients.delete(socket.id)

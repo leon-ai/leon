@@ -47,8 +47,23 @@ class SatelliteRegistry {
     )
   }
 
-  public unregister(profileName: string, deviceId: string): void {
-    this.connections.delete(this.getConnectionKey(profileName, deviceId))
+  public unregister(
+    profileName: string,
+    deviceId: string,
+    transport?: SatelliteTransport
+  ): boolean {
+    const connectionKey = this.getConnectionKey(profileName, deviceId)
+    const connection = this.connections.get(connectionKey)
+
+    // A reconnect replaces the transport for the same device. Ignore a later
+    // disconnect from the superseded socket so it cannot remove the new one.
+    if (transport && connection?.transport !== transport) {
+      return false
+    }
+
+    if (!this.connections.delete(connectionKey)) {
+      return false
+    }
 
     for (const [invocationId, pending] of this.pendingInvocations.entries()) {
       if (pending.profileName !== profileName || pending.deviceId !== deviceId) {
@@ -59,6 +74,8 @@ class SatelliteRegistry {
       pending.reject(new Error(`Satellite "${deviceId}" disconnected.`))
       this.pendingInvocations.delete(invocationId)
     }
+
+    return true
   }
 
   public getConnection(

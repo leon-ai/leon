@@ -88,4 +88,53 @@ describe('SatelliteRegistry', () => {
       `Satellite "${DEVICE_ID}" disconnected.`
     )
   })
+
+  it('keeps a replacement connection when the old transport disconnects', async () => {
+    const oldTransport = { emit: vi.fn() }
+    const replacementEmit = vi.fn()
+
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME,
+      device: {
+        id: DEVICE_ID,
+        name: 'Old Satellite',
+        platform: 'linux'
+      },
+      toolkits: [],
+      transport: oldTransport
+    })
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME,
+      device: {
+        id: DEVICE_ID,
+        name: 'Replacement Satellite',
+        platform: 'linux'
+      },
+      toolkits: [],
+      transport: { emit: replacementEmit }
+    })
+
+    expect(
+      SATELLITE_REGISTRY.unregister(
+        PROFILE_NAME,
+        DEVICE_ID,
+        oldTransport
+      )
+    ).toBe(false)
+
+    const executionPromise = SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME,
+      deviceId: DEVICE_ID,
+      toolInput: TOOL_INPUT
+    })
+    const invocation = replacementEmit.mock.calls[0]?.[1] as SatelliteToolInvocation
+
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, {
+      invocationId: invocation.invocationId,
+      result: TOOL_RESULT
+    })
+
+    expect(oldTransport.emit).not.toHaveBeenCalled()
+    await expect(executionPromise).resolves.toEqual(TOOL_RESULT)
+  })
 })
