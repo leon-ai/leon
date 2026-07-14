@@ -16,6 +16,7 @@ import {
 } from './setup-python-project-env'
 
 const PACKAGE_JSON_FILE_NAME = 'package.json'
+const PNPM_WORKSPACE_FILE_NAME = 'pnpm-workspace.yaml'
 const PYPROJECT_FILE_NAME = 'pyproject.toml'
 const SYNC_STAMP_FILE_NAME = '.last-source-deps-sync'
 const NODE_MODULES_DIR_NAME = 'node_modules'
@@ -70,14 +71,21 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
 
   await fs.promises.rm(nodeModulesPath, { recursive: true, force: true })
 
-  await execa(PNPM_RUNTIME_BIN_PATH, [
-      'install',
-      '--ignore-workspace',
-      '--lockfile=false'
-    ], {
-      cwd: sourcePath,
-      env: RuntimeHelper.getManagedNodeEnvironment()
-    })
+  const hasSourceWorkspaceConfig = fs.existsSync(
+    path.join(sourcePath, PNPM_WORKSPACE_FILE_NAME)
+  )
+  const installArgs = [
+    'install',
+    // A source-local workspace config both isolates the install and carries
+    // explicit native dependency build approvals such as node-pty.
+    ...(hasSourceWorkspaceConfig ? [] : ['--ignore-workspace']),
+    '--lockfile=false'
+  ]
+
+  await execa(PNPM_RUNTIME_BIN_PATH, installArgs, {
+    cwd: sourcePath,
+    env: RuntimeHelper.getManagedNodeEnvironment()
+  })
 
   await markSourceDependenciesAsSynced(sourcePath)
 }
