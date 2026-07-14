@@ -52,9 +52,6 @@ export async function authenticateProfileHTTPRequest(
     cookie: request.headers.cookie,
     'x-leon-profile-token': String(
       request.headers['x-leon-profile-token'] || ''
-    ),
-    'x-leon-client-token': String(
-      request.headers['x-leon-client-token'] || ''
     )
   })
 
@@ -92,9 +89,6 @@ export const profileAuthRoutes: FastifyPluginAsync<APIOptions> = async (
       cookie: request.headers.cookie,
       'x-leon-profile-token': String(
         request.headers['x-leon-profile-token'] || ''
-      ),
-      'x-leon-client-token': String(
-        request.headers['x-leon-client-token'] || ''
       )
     })
     const credential = authenticateProfileCredential(credentialValue)

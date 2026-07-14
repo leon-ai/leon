@@ -10,11 +10,9 @@ import {
 } from '@/core/profile-runtime/profile-paths'
 
 export const PROFILE_TOKEN_ENV_NAME = 'LEON_PROFILE_TOKEN'
-export const LEGACY_PROFILE_TOKEN_ENV_NAME = 'LEON_CLIENT_INTERFACE_TOKEN'
 export const PROFILE_AUTH_COOKIE_NAME = 'leon_profile_token'
 export const PROFILE_AUTHORIZATION_HEADER_NAME = 'authorization'
 export const PROFILE_TOKEN_HEADER_NAME = 'x-leon-profile-token'
-export const LEGACY_PROFILE_TOKEN_HEADER_NAME = 'x-leon-client-token'
 
 export interface ProfileCredential {
   profileName: string
@@ -100,11 +98,7 @@ export function readStoredProfileToken(profileName: string): string {
 
   const values = dotenv.parse(fs.readFileSync(dotEnvPath, 'utf8'))
 
-  return String(
-    values[PROFILE_TOKEN_ENV_NAME] ||
-      values[LEGACY_PROFILE_TOKEN_ENV_NAME] ||
-      ''
-  ).trim()
+  return String(values[PROFILE_TOKEN_ENV_NAME] || '').trim()
 }
 
 /** Validate a profile credential and return its profile only when it matches. */
@@ -129,12 +123,10 @@ export function readProfileCredentialFromHeaders(headers: {
   authorization?: string | undefined
   cookie?: string | undefined
   [PROFILE_TOKEN_HEADER_NAME]?: string | undefined
-  [LEGACY_PROFILE_TOKEN_HEADER_NAME]?: string | undefined
 }): string {
   return (
     readBearerToken(headers[PROFILE_AUTHORIZATION_HEADER_NAME]) ||
     String(headers[PROFILE_TOKEN_HEADER_NAME] || '').trim() ||
-    String(headers[LEGACY_PROFILE_TOKEN_HEADER_NAME] || '').trim() ||
     readCookie(headers.cookie, PROFILE_AUTH_COOKIE_NAME)
   )
 }

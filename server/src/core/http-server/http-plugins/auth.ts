@@ -7,20 +7,13 @@ import { enterProfileContext } from '@/core/profile-runtime/profile-context'
 
 /** Checks the supported authentication headers for a dynamically loaded HTTP plugin. */
 export function isHTTPPluginRequestAuthorized(
-  request: HTTPPluginRequest,
-  legacyToken?: string
+  request: HTTPPluginRequest
 ): boolean {
-  // Kept in the signature so existing plugins compile while authentication is
-  // now always resolved from the profile credential carried by the request.
-  void legacyToken
   const credential = readProfileCredentialFromHeaders({
     authorization: request.headers.authorization,
     cookie: request.headers.cookie,
     'x-leon-profile-token': String(
       request.headers['x-leon-profile-token'] || ''
-    ),
-    'x-leon-client-token': String(
-      request.headers['x-leon-client-token'] || ''
     )
   })
 

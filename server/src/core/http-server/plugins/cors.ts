@@ -7,7 +7,6 @@ import {
   WEB_APP_DEV_SERVER_PORT
 } from '@/constants'
 import {
-  LEGACY_PROFILE_TOKEN_HEADER_NAME,
   PROFILE_AUTHORIZATION_HEADER_NAME,
   PROFILE_TOKEN_HEADER_NAME
 } from '@/core/profile-auth'
@@ -18,8 +17,7 @@ const ALLOWED_REQUEST_HEADERS = [
   'Content-Type',
   'Accept',
   PROFILE_AUTHORIZATION_HEADER_NAME,
-  PROFILE_TOKEN_HEADER_NAME,
-  LEGACY_PROFILE_TOKEN_HEADER_NAME
+  PROFILE_TOKEN_HEADER_NAME
 ].join(', ')
 
 function getAllowedOrigins(): string[] {

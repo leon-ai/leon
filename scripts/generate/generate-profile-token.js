@@ -33,12 +33,7 @@ const generateProfileToken = () =>
 export default () =>
   new Promise(async (resolve, reject) => {
     try {
-      if (
-        (!process.env.LEON_PROFILE_TOKEN ||
-          process.env.LEON_PROFILE_TOKEN === '') &&
-        (!process.env.LEON_CLIENT_INTERFACE_TOKEN ||
-          process.env.LEON_CLIENT_INTERFACE_TOKEN === '')
-      ) {
+      if (!process.env.LEON_PROFILE_TOKEN) {
         await generateProfileToken()
       }
 

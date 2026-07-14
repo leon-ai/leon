@@ -297,7 +297,6 @@ export default class SocketServer {
     initData?: { token?: string }
   ): string {
     const handshakeAuthToken = socket.handshake.auth?.['token']
-    const headerToken = socket.handshake.headers['x-leon-client-token']
 
     if (typeof initData?.token === 'string') {
       return initData.token
@@ -305,10 +304,6 @@ export default class SocketServer {
 
     if (typeof handshakeAuthToken === 'string') {
       return handshakeAuthToken
-    }
-
-    if (typeof headerToken === 'string') {
-      return headerToken
     }
 
     return ''
@@ -324,9 +319,6 @@ export default class SocketServer {
       cookie: socket.handshake.headers.cookie,
       'x-leon-profile-token': String(
         socket.handshake.headers['x-leon-profile-token'] || ''
-      ),
-      'x-leon-client-token': String(
-        socket.handshake.headers['x-leon-client-token'] || ''
       )
     })
     const token = initToken || headerToken
@@ -335,16 +327,7 @@ export default class SocketServer {
       return LEON_PROFILE_NAME
     }
 
-    const credential = authenticateProfileCredential(token)
-
-    if (credential) {
-      return credential.profileName
-    }
-
-    // Accept the former unprefixed token for the startup profile during migration.
-    const legacyDefaultToken = readStoredProfileToken(LEON_PROFILE_NAME)
-
-    return token && token === legacyDefaultToken ? LEON_PROFILE_NAME : null
+    return authenticateProfileCredential(token)?.profileName || null
   }
 
   private emitSocketEvent(
