@@ -1,30 +1,30 @@
 import { randomUUID } from 'node:crypto'
 
 import type {
-  CompanionDescriptor,
-  CompanionToolkitDefinition,
-  CompanionToolInvocation,
-  CompanionToolProgressPayload,
-  CompanionToolResultPayload
-} from '@/core/companion/types'
-import { COMPANION_EVENTS } from '@/core/companion/types'
+  LinkDescriptor,
+  LinkToolkitDefinition,
+  LinkToolInvocation,
+  LinkToolProgressPayload,
+  LinkToolResultPayload
+} from '@/core/link/types'
+import { LINK_EVENTS } from '@/core/link/types'
 import type {
   ToolExecutionInput,
   ToolExecutionResult,
   ToolRuntimeProgress
 } from '@/core/tool-executor'
 
-const COMPANION_TOOL_TIMEOUT_MS = 15 * 60 * 1_000
+const LINK_TOOL_TIMEOUT_MS = 15 * 60 * 1_000
 
-export interface CompanionTransport {
+export interface LinkTransport {
   emit: (eventName: string, payload: unknown) => void
 }
 
-export interface CompanionConnection {
+export interface LinkConnection {
   profileName: string
-  device: CompanionDescriptor
-  toolkits: CompanionToolkitDefinition[]
-  transport: CompanionTransport
+  device: LinkDescriptor
+  toolkits: LinkToolkitDefinition[]
+  transport: LinkTransport
 }
 
 interface PendingInvocation {
@@ -36,11 +36,11 @@ interface PendingInvocation {
   timeout: NodeJS.Timeout
 }
 
-class CompanionRegistry {
-  private readonly connections = new Map<string, CompanionConnection>()
+class LinkRegistry {
+  private readonly connections = new Map<string, LinkConnection>()
   private readonly pendingInvocations = new Map<string, PendingInvocation>()
 
-  public register(input: CompanionConnection): void {
+  public register(input: LinkConnection): void {
     this.connections.set(
       this.getConnectionKey(input.profileName, input.device.id),
       input
@@ -56,7 +56,7 @@ class CompanionRegistry {
       }
 
       clearTimeout(pending.timeout)
-      pending.reject(new Error(`Companion "${deviceId}" disconnected.`))
+      pending.reject(new Error(`Link "${deviceId}" disconnected.`))
       this.pendingInvocations.delete(invocationId)
     }
   }
@@ -64,7 +64,7 @@ class CompanionRegistry {
   public getConnection(
     profileName: string,
     deviceId: string
-  ): CompanionConnection | null {
+  ): LinkConnection | null {
     return (
       this.connections.get(this.getConnectionKey(profileName, deviceId)) ||
       null
@@ -80,11 +80,11 @@ class CompanionRegistry {
     const connection = this.getConnection(input.profileName, input.deviceId)
 
     if (!connection) {
-      throw new Error(`Companion "${input.deviceId}" is offline.`)
+      throw new Error(`Link "${input.deviceId}" is offline.`)
     }
 
     const invocationId = randomUUID()
-    const invocation: CompanionToolInvocation = {
+    const invocation: LinkToolInvocation = {
       invocationId,
       input: input.toolInput
     }
@@ -92,8 +92,8 @@ class CompanionRegistry {
     return new Promise<ToolExecutionResult>((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pendingInvocations.delete(invocationId)
-        reject(new Error(`Companion tool call timed out on "${input.deviceId}".`))
-      }, COMPANION_TOOL_TIMEOUT_MS)
+        reject(new Error(`Link tool call timed out on "${input.deviceId}".`))
+      }, LINK_TOOL_TIMEOUT_MS)
 
       timeout.unref?.()
       this.pendingInvocations.set(invocationId, {
@@ -104,14 +104,14 @@ class CompanionRegistry {
         ...(input.onProgress ? { onProgress: input.onProgress } : {}),
         timeout
       })
-      connection.transport.emit(COMPANION_EVENTS.invokeTool, invocation)
+      connection.transport.emit(LINK_EVENTS.invokeTool, invocation)
     })
   }
 
   public handleProgress(
     profileName: string,
     deviceId: string,
-    payload: CompanionToolProgressPayload
+    payload: LinkToolProgressPayload
   ): void {
     const pending = this.pendingInvocations.get(payload.invocationId)
 
@@ -129,7 +129,7 @@ class CompanionRegistry {
   public handleResult(
     profileName: string,
     deviceId: string,
-    payload: CompanionToolResultPayload
+    payload: LinkToolResultPayload
   ): void {
     const pending = this.pendingInvocations.get(payload.invocationId)
 
@@ -151,4 +151,4 @@ class CompanionRegistry {
   }
 }
 
-export const COMPANION_REGISTRY = new CompanionRegistry()
+export const LINK_REGISTRY = new LinkRegistry()

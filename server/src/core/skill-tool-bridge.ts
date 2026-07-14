@@ -8,7 +8,7 @@ export interface SkillToolExecutionInput {
   functionName: string
   toolInput?: string
   parsedInput?: Record<string, unknown>
-  executionTarget?: 'any' | 'companion'
+  executionTarget?: 'any' | 'link'
 }
 
 export interface SkillToolExecutionResult<

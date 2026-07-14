@@ -21,7 +21,7 @@ import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_MANAGER } from '@/config'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
-import { COMPANION_REGISTRY } from '@/core/companion/companion-registry'
+import { LINK_REGISTRY } from '@/core/link/link-registry'
 import type { LongLanguageCode } from '@/types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
@@ -35,7 +35,7 @@ export interface ToolExecutionInput {
   functionName?: string
   toolInput?: string
   parsedInput?: Record<string, unknown>
-  executionTarget?: 'any' | 'companion'
+  executionTarget?: 'any' | 'link'
   onProgress?: (progress: ToolRuntimeProgress) => void
 }
 
@@ -281,15 +281,15 @@ export default class ToolExecutor {
       })
     }
 
-    const companionDeviceId = TOOLKIT_REGISTRY.getToolCompanionDevice(
+    const linkDeviceId = TOOLKIT_REGISTRY.getToolLinkDevice(
       resolvedTool.toolkitId,
       resolvedTool.toolId
     )
 
-    if (input.executionTarget === 'companion' && !companionDeviceId) {
+    if (input.executionTarget === 'link' && !linkDeviceId) {
       return this.buildResult({
         status: 'not_available',
-        message: 'No Companion is connected for this tool.',
+        message: 'No Link is connected for this tool.',
         input: input.toolInput ?? null,
         resolvedTool,
         functionName: functionName ?? null,
@@ -298,13 +298,13 @@ export default class ToolExecutor {
       })
     }
 
-    if (companionDeviceId) {
+    if (linkDeviceId) {
       try {
         const { onProgress, ...serializableInput } = input
 
-        return await COMPANION_REGISTRY.invokeTool({
+        return await LINK_REGISTRY.invokeTool({
           profileName: getActiveProfileName(),
-          deviceId: companionDeviceId,
+          deviceId: linkDeviceId,
           toolInput: {
             ...serializableInput,
             executionTarget: 'any'

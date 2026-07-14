@@ -4,18 +4,18 @@ import type {
   ToolRuntimeProgress
 } from '@/core/tool-executor'
 
-export const COMPANION_PROTOCOL_VERSION = 1
+export const LINK_PROTOCOL_VERSION = 1
 
-export const COMPANION_EVENTS = {
-  init: 'leon:companion:init',
-  ready: 'leon:companion:ready',
-  invokeTool: 'leon:companion:invoke-tool',
-  toolProgress: 'leon:companion:tool-progress',
-  toolResult: 'leon:companion:tool-result',
-  error: 'leon:companion:error'
+export const LINK_EVENTS = {
+  init: 'leon:link:init',
+  ready: 'leon:link:ready',
+  invokeTool: 'leon:link:invoke-tool',
+  toolProgress: 'leon:link:tool-progress',
+  toolResult: 'leon:link:tool-result',
+  error: 'leon:link:error'
 } as const
 
-export interface CompanionToolDefinition {
+export interface LinkToolDefinition {
   tool_id: string
   toolkit_id: string
   name: string
@@ -31,45 +31,45 @@ export interface CompanionToolDefinition {
   >
 }
 
-export interface CompanionToolkitDefinition {
+export interface LinkToolkitDefinition {
   id: string
   name: string
   description: string
   icon_name: string
   context_files?: string[]
-  tools: Record<string, CompanionToolDefinition>
+  tools: Record<string, LinkToolDefinition>
 }
 
-export interface CompanionDescriptor {
+export interface LinkDescriptor {
   id: string
   name: string
   platform: string
   version?: string
 }
 
-export interface CompanionInitPayload {
+export interface LinkInitPayload {
   protocolVersion: number
   token?: string
-  device: CompanionDescriptor
-  toolkits: CompanionToolkitDefinition[]
+  device: LinkDescriptor
+  toolkits: LinkToolkitDefinition[]
 }
 
-export interface CompanionToolInvocation {
+export interface LinkToolInvocation {
   invocationId: string
   input: ToolExecutionInput
 }
 
-export interface CompanionToolProgressPayload {
+export interface LinkToolProgressPayload {
   invocationId: string
   progress: ToolRuntimeProgress
 }
 
-export interface CompanionToolResultPayload {
+export interface LinkToolResultPayload {
   invocationId: string
   result: ToolExecutionResult
 }
 
-export interface CompanionErrorPayload {
+export interface LinkErrorPayload {
   code: string
   message: string
 }

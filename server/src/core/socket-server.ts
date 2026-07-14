@@ -60,13 +60,13 @@ import {
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import {
-  COMPANION_EVENTS,
-  COMPANION_PROTOCOL_VERSION,
-  type CompanionInitPayload,
-  type CompanionToolProgressPayload,
-  type CompanionToolResultPayload
-} from '@/core/companion/types'
-import { COMPANION_REGISTRY } from '@/core/companion/companion-registry'
+  LINK_EVENTS,
+  LINK_PROTOCOL_VERSION,
+  type LinkInitPayload,
+  type LinkToolProgressPayload,
+  type LinkToolResultPayload
+} from '@/core/link/types'
+import { LINK_REGISTRY } from '@/core/link/link-registry'
 
 const DEFAULT_CLIENT_CAPABILITIES = {
   supportsWidgets: true,
@@ -130,7 +130,7 @@ interface ConnectedChatClient {
 export default class SocketServer {
   private static instance: SocketServer
   private readonly chatClients = new Map<string, ConnectedChatClient>()
-  private readonly companionClients = new Map<
+  private readonly linkClients = new Map<
     string,
     { profileName: string, deviceId: string }
   >()
@@ -940,19 +940,19 @@ export default class SocketServer {
       this.setActiveSocket(socket)
 
       socket.on(
-        COMPANION_EVENTS.init,
-        async (data: CompanionInitPayload) => {
+        LINK_EVENTS.init,
+        async (data: LinkInitPayload) => {
           const profileName = this.isLeonClientInterfaceAuthorized(socket, data)
 
           if (
             !profileName ||
-            data?.protocolVersion !== COMPANION_PROTOCOL_VERSION ||
+            data?.protocolVersion !== LINK_PROTOCOL_VERSION ||
             !data.device?.id?.trim() ||
             !Array.isArray(data.toolkits)
           ) {
-            socket.emit(COMPANION_EVENTS.error, {
-              code: 'companion_init_rejected',
-              message: 'Companion authentication or protocol is invalid.'
+            socket.emit(LINK_EVENTS.error, {
+              code: 'link_init_rejected',
+              message: 'Link authentication or protocol is invalid.'
             })
             socket.disconnect(true)
             return
@@ -961,11 +961,11 @@ export default class SocketServer {
           await runWithProfileContext({ profileName }, async () => {
             await ensureActiveProfileRuntime()
             await TOOLKIT_REGISTRY.load()
-            TOOLKIT_REGISTRY.registerCompanionTools(
+            TOOLKIT_REGISTRY.registerLinkTools(
               data.device.id,
               data.toolkits
             )
-            COMPANION_REGISTRY.register({
+            LINK_REGISTRY.register({
               profileName,
               device: data.device,
               toolkits: data.toolkits,
@@ -973,14 +973,14 @@ export default class SocketServer {
             })
           })
 
-          this.companionClients.set(socket.id, {
+          this.linkClients.set(socket.id, {
             profileName,
             deviceId: data.device.id
           })
           socket.on(
-            COMPANION_EVENTS.toolProgress,
-            (payload: CompanionToolProgressPayload) => {
-              COMPANION_REGISTRY.handleProgress(
+            LINK_EVENTS.toolProgress,
+            (payload: LinkToolProgressPayload) => {
+              LINK_REGISTRY.handleProgress(
                 profileName,
                 data.device.id,
                 payload
@@ -988,17 +988,17 @@ export default class SocketServer {
             }
           )
           socket.on(
-            COMPANION_EVENTS.toolResult,
-            (payload: CompanionToolResultPayload) => {
-              COMPANION_REGISTRY.handleResult(
+            LINK_EVENTS.toolResult,
+            (payload: LinkToolResultPayload) => {
+              LINK_REGISTRY.handleResult(
                 profileName,
                 data.device.id,
                 payload
               )
             }
           )
-          socket.emit(COMPANION_EVENTS.ready, {
-            protocolVersion: COMPANION_PROTOCOL_VERSION,
+          socket.emit(LINK_EVENTS.ready, {
+            protocolVersion: LINK_PROTOCOL_VERSION,
             profileName,
             deviceId: data.device.id
           })
@@ -1228,20 +1228,20 @@ export default class SocketServer {
 
       socket.once('disconnect', () => {
         this.unregisterChatClient(socket.id)
-        const companionClient = this.companionClients.get(socket.id)
+        const linkClient = this.linkClients.get(socket.id)
 
-        if (companionClient) {
+        if (linkClient) {
           runWithProfileContext(
-            { profileName: companionClient.profileName },
+            { profileName: linkClient.profileName },
             () => {
-              TOOLKIT_REGISTRY.removeCompanionTools(companionClient.deviceId)
-              COMPANION_REGISTRY.unregister(
-                companionClient.profileName,
-                companionClient.deviceId
+              TOOLKIT_REGISTRY.removeLinkTools(linkClient.deviceId)
+              LINK_REGISTRY.unregister(
+                linkClient.profileName,
+                linkClient.deviceId
               )
             }
           )
-          this.companionClients.delete(socket.id)
+          this.linkClients.delete(socket.id)
         }
         // TODO
         // deleteProvider(this.socket.id)

@@ -8,9 +8,9 @@ import { LogHelper } from '@/helpers/log-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type {
-  CompanionToolkitDefinition,
-  CompanionToolDefinition
-} from '@/core/companion/types'
+  LinkToolkitDefinition,
+  LinkToolDefinition
+} from '@/core/link/types'
 
 const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
 const HOSTED_SEARCH_TOOL_ID = 'hosted'
@@ -100,11 +100,11 @@ export default class ToolkitRegistry {
   private _localToolkits: ToolkitDefinition[] = []
   private _toolAvailability = new Map<string, ToolAvailability>()
   private _localToolAvailability = new Map<string, ToolAvailability>()
-  private readonly companionToolkits = new Map<
+  private readonly linkToolkits = new Map<
     string,
-    CompanionToolkitDefinition[]
+    LinkToolkitDefinition[]
   >()
-  private readonly companionToolTargets = new Map<string, string>()
+  private readonly linkToolTargets = new Map<string, string>()
   private _isLoaded = false
 
   constructor() {
@@ -343,8 +343,8 @@ export default class ToolkitRegistry {
     return toolkit?.contextFiles || []
   }
 
-  /** Export enabled local tools so Companion mode can advertise them remotely. */
-  public getCompanionManifest(): CompanionToolkitDefinition[] {
+  /** Export enabled local tools so Link can advertise them remotely. */
+  public getLinkManifest(): LinkToolkitDefinition[] {
     return this._localToolkits.map((toolkit) => ({
       id: toolkit.id,
       name: toolkit.name,
@@ -359,26 +359,26 @@ export default class ToolkitRegistry {
     }))
   }
 
-  /** Add the tool inventory advertised by one connected Companion. */
-  public registerCompanionTools(
+  /** Add the tool inventory advertised by one connected Link. */
+  public registerLinkTools(
     deviceId: string,
-    toolkits: CompanionToolkitDefinition[]
+    toolkits: LinkToolkitDefinition[]
   ): void {
-    this.companionToolkits.set(deviceId, toolkits)
+    this.linkToolkits.set(deviceId, toolkits)
     this.refreshCombinedToolkits()
   }
 
-  public removeCompanionTools(deviceId: string): void {
-    this.companionToolkits.delete(deviceId)
+  public removeLinkTools(deviceId: string): void {
+    this.linkToolkits.delete(deviceId)
     this.refreshCombinedToolkits()
   }
 
-  public getToolCompanionDevice(
+  public getToolLinkDevice(
     toolkitId: string,
     toolId: string
   ): string | null {
     return (
-      this.companionToolTargets.get(this.getQualifiedToolId(toolkitId, toolId)) ||
+      this.linkToolTargets.get(this.getQualifiedToolId(toolkitId, toolId)) ||
       null
     )
   }
@@ -455,7 +455,7 @@ export default class ToolkitRegistry {
   private refreshCombinedToolkits(): void {
     const toolkitsById = new Map<string, ToolkitDefinition>()
 
-    this.companionToolTargets.clear()
+    this.linkToolTargets.clear()
     this._toolAvailability = new Map(this._localToolAvailability)
 
     for (const toolkit of this._localToolkits) {
@@ -466,36 +466,36 @@ export default class ToolkitRegistry {
       })
     }
 
-    for (const [deviceId, companionToolkits] of this.companionToolkits) {
-      for (const companionToolkit of companionToolkits) {
-        const toolkit = toolkitsById.get(companionToolkit.id) || {
-          id: companionToolkit.id,
-          name: companionToolkit.name,
-          description: companionToolkit.description,
-          iconName: companionToolkit.icon_name,
-          contextFiles: [...(companionToolkit.context_files || [])],
+    for (const [deviceId, linkToolkits] of this.linkToolkits) {
+      for (const linkToolkit of linkToolkits) {
+        const toolkit = toolkitsById.get(linkToolkit.id) || {
+          id: linkToolkit.id,
+          name: linkToolkit.name,
+          description: linkToolkit.description,
+          iconName: linkToolkit.icon_name,
+          contextFiles: [...(linkToolkit.context_files || [])],
           tools: {}
         }
 
-        for (const [toolId, tool] of Object.entries(companionToolkit.tools)) {
-          if (ProfileHelper.isToolDisabled(toolId, companionToolkit.id)) {
+        for (const [toolId, tool] of Object.entries(linkToolkit.tools)) {
+          if (ProfileHelper.isToolDisabled(toolId, linkToolkit.id)) {
             continue
           }
 
           toolkit.tools = {
             ...(toolkit.tools || {}),
             [toolId]: this.toToolkitToolDefinition(
-              companionToolkit.id,
+              linkToolkit.id,
               toolId,
               tool
             )
           }
           const qualifiedToolId = this.getQualifiedToolId(
-            companionToolkit.id,
+            linkToolkit.id,
             toolId
           )
 
-          this.companionToolTargets.set(qualifiedToolId, deviceId)
+          this.linkToolTargets.set(qualifiedToolId, deviceId)
           this._toolAvailability.set(qualifiedToolId, {
             available: true,
             requiredSettings: [],
@@ -504,7 +504,7 @@ export default class ToolkitRegistry {
           })
         }
 
-        toolkitsById.set(companionToolkit.id, toolkit)
+        toolkitsById.set(linkToolkit.id, toolkit)
       }
     }
 
@@ -514,7 +514,7 @@ export default class ToolkitRegistry {
   private toToolkitToolDefinition(
     toolkitId: string,
     toolId: string,
-    tool: CompanionToolDefinition
+    tool: LinkToolDefinition
   ): ToolkitToolDefinition {
     return {
       ...tool,
