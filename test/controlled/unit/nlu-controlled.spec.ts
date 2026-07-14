@@ -699,6 +699,41 @@ describe('Controlled NLU', () => {
     })
   })
 
+  it('discards an undeclared pending action parameter', async () => {
+    const nlu = testState.currentNlu as InstanceType<typeof NLUClass>
+
+    nlu.nluProcessResult = {
+      ...cloneDefaultProcessResult(),
+      skillName: 'coding_agent_maestro_skill',
+      actionName: 'dispatch-task',
+      actionConfig: {
+        type: 'logic',
+        description: 'Dispatch a coding task.'
+      }
+    }
+    nlu.conversation.setActiveState({
+      startingUtterance: 'Change the text color to pink',
+      pendingAction: 'coding_agent_maestro_skill:dispatch-task',
+      missingParameters: ['task'],
+      collectedParameters: {
+        task: 'Change the text color to pink'
+      }
+    })
+
+    const shouldContinue = await (nlu as unknown as {
+      preProcessRoute: () => Promise<boolean>
+    }).preProcessRoute()
+
+    expect(shouldContinue).toBe(true)
+    expect(nlu.conversation.activeState).toEqual({
+      startingUtterance: null,
+      pendingAction: null,
+      missingParameters: [],
+      collectedParameters: {}
+    })
+    expect(dutyMocks.slotFillingExecute).not.toHaveBeenCalled()
+  })
+
   it('offers fallback, code generation, or cancel when controlled mode cannot find a skill', async () => {
     const nlu = testState.currentNlu as InstanceType<typeof NLUClass>
 

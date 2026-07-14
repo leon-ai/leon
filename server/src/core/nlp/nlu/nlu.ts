@@ -1220,6 +1220,18 @@ export default class NLU {
       const [slotName] = this.conversation.activeState.missingParameters
       const actionConfig = this._nluProcessResult.actionConfig
       const param = actionConfig?.parameters?.[slotName as string]
+
+      if (!slotName || !param) {
+        // Provider output can be malformed or stale. Resume normal action
+        // selection instead of attempting to fill an undeclared parameter.
+        LogHelper.title('NLU')
+        LogHelper.warning(
+          `Discarding invalid pending action parameter: ${slotName || '(empty)'}`
+        )
+        this.conversation.cleanActiveState()
+        return true
+      }
+
       const paramDescription = param.description || ''
       const slotFillingDuty = new SlotFillingLLMDuty({
         // Only one slot at a time
