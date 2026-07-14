@@ -25,7 +25,11 @@ export default class Client {
     this._input = input
     this.voiceSpeechElement = document.querySelector('#voice-speech')
     this.serverUrl = serverUrl
-    this.socket = io(this.serverUrl, { withCredentials: true })
+    // Attach every lifecycle listener before opening fast same-origin sockets.
+    this.socket = io(this.serverUrl, {
+      withCredentials: true,
+      autoConnect: false
+    })
     this.activeSessionId = options.activeSessionId || null
     this.history = localStorage.getItem('history')
     this.parsedHistory = []
@@ -37,6 +41,7 @@ export default class Client {
     this._activeStreamGenerationId = null
     this._ttsAudioContext = null
     this._isLeonGeneratingAnswer = false
+    this._isRuntimeReady = false
     this._isVoiceModeEnabled = false
     this._hasSentInitMessages = false
     this._chatbotInitPromise = null
@@ -185,6 +190,13 @@ export default class Client {
       })
     })
 
+    this.socket.on('connect_error', (error) => {
+      console.error('Leon client connection error:', error)
+      if (!this._isRuntimeReady) {
+        this.setInitStatus('clientCoreServerHandshake', 'error')
+      }
+    })
+
     /**
      * Init status listeners
      */
@@ -193,6 +205,7 @@ export default class Client {
     })
 
     this.socket.on(LEON_EVENTS.ready, () => {
+      this._isRuntimeReady = true
       this.setInitStatus('clientCoreServerHandshake', 'success')
       this.setInitStatus('tcpServerBoot', 'success')
 
@@ -542,11 +555,16 @@ export default class Client {
 
     this.socket.on(LEON_EVENTS.error, (data) => {
       console.error('Leon client interface error:', data)
+      if (!this._isRuntimeReady) {
+        this.setInitStatus('clientCoreServerHandshake', 'error')
+      }
     })
 
     if (this.history !== null) {
       this.parsedHistory = JSON.parse(this.history)
     }
+
+    this.socket.connect()
   }
 
   send(keyword) {

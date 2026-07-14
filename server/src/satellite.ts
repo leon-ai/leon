@@ -18,6 +18,7 @@ import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { LogHelper } from '@/helpers/log-helper'
 import type { ToolExecutionResult } from '@/core/tool-executor'
+import { buildSatelliteProcessTitle } from '@/core/satellite/satellite-process-title'
 
 const REMOTE_URL_ARGUMENT = '--url'
 const PROFILE_TOKEN_ARGUMENT = '--token'
@@ -86,6 +87,11 @@ async function startSatellite(): Promise<void> {
     getArgumentValue(DEVICE_ID_ARGUMENT) ||
     String(process.env['LEON_SATELLITE_DEVICE_ID'] || '').trim() ||
     os.hostname()
+
+  process.title = buildSatelliteProcessTitle(
+    credential.profileName,
+    deviceId
+  )
 
   await runWithProfileContext(
     { profileName: credential.profileName },
