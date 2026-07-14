@@ -1430,7 +1430,7 @@ export default class NLU {
                 }
 
                 await this.handleSkillOrActionNotFound()
-                return
+                return resolve(null)
               }
 
               const resolvedSkill = chosenSkill as string
@@ -1460,7 +1460,7 @@ export default class NLU {
                   }
                 }
 
-                return
+                return resolve({})
               }
             }
 
@@ -1482,6 +1482,10 @@ export default class NLU {
           } catch (e) {
             LogHelper.title('NLU')
             LogHelper.error(`Failed to process the utterance: ${e}`)
+
+            return reject(
+              e instanceof Error ? e : new Error(String(e))
+            )
           }
         })
     )
