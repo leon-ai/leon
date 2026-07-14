@@ -142,6 +142,7 @@ export default class ToolManager {
     }
 
     this.isListeningForToolResults = true
+    process.stdin.ref()
     process.stdin.on('data', this.handleToolResultData)
     process.stdin.resume()
   }
@@ -153,6 +154,9 @@ export default class ToolManager {
 
     process.stdin.off('data', this.handleToolResultData)
     process.stdin.pause()
+    // A child-process stdin pipe remains referenced after resume/pause. Release
+    // it once all replies arrive so the completed skill process can exit.
+    process.stdin.unref()
     this.stdinBuffer = ''
     this.isListeningForToolResults = false
   }
