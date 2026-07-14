@@ -13,6 +13,7 @@ import type {
   ToolExecutionResult,
   ToolRuntimeProgress
 } from '@/core/tool-executor'
+import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 
 const SATELLITE_TOOL_TIMEOUT_MS = 15 * 60 * 1_000
 
@@ -142,7 +143,11 @@ class SatelliteRegistry {
       return
     }
 
-    pending.onProgress?.(payload.progress)
+    // Socket events run outside the invocation's request scope. Restore the
+    // profile so downstream progress stays isolated to the correct owner.
+    runWithProfileContext({ profileName: pending.profileName }, () => {
+      pending.onProgress?.(payload.progress)
+    })
   }
 
   public handleResult(
