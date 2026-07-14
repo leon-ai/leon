@@ -1,6 +1,8 @@
 import axios from 'axios'
 import '@aurora/style.css'
 
+window.leonInitStatusEvent = new EventTarget()
+
 import './init'
 import Client from './client'
 import { BuiltInCommands } from './built-in-commands'

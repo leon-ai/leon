@@ -11,8 +11,6 @@ import {
   Loader
 } from '@aurora'
 
-import { getInitStatuses, subscribeInitStatuses } from './init-status'
-
 const container = document.querySelector('#init')
 const root = createRoot(container)
 const LLAMA_SERVER_BOOT_STATUS = 'llamaServerBoot'
@@ -115,8 +113,7 @@ function Init() {
       window.leonConfigInfo?.llm?.workflowProvider === 'llamacpp' ||
       window.leonConfigInfo?.llm?.agentProvider === 'llamacpp'
         ? 'loading'
-        : 'success',
-    ...getInitStatuses()
+        : 'success'
   })
   const hasInitError = Object.values(statusMap).some(
     (status) => status === INIT_ERROR_STATUS
@@ -129,15 +126,25 @@ function Init() {
       }
     }, 250)
 
-    const unsubscribe = subscribeInitStatuses((statuses) => {
-      if (Object.values(statuses).includes(INIT_ERROR_STATUS)) {
+    function handleStatusChange(event) {
+      const { statusName, statusType } = event.detail
+
+      if (statusType === INIT_ERROR_STATUS) {
         setAreInitErrorsDismissed(false)
       }
 
-      setStatusMap((prev) => ({ ...prev, ...statuses }))
-    })
+      setStatusMap((prev) => ({ ...prev, [statusName]: statusType }))
+    }
 
-    return unsubscribe
+    window.leonInitStatusEvent.addEventListener(
+      'initStatusChange',
+      handleStatusChange
+    )
+    return () =>
+      window.leonInitStatusEvent.removeEventListener(
+        'initStatusChange',
+        handleStatusChange
+      )
   }, [])
 
   useEffect(() => {
