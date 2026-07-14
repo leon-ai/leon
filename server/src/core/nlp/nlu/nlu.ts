@@ -42,7 +42,7 @@ import { SkillRouterLLMDuty } from '@/core/llm-manager/llm-duties/skill-router-l
 import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calling-llm-duty'
 import { SlotFillingLLMDuty } from '@/core/llm-manager/llm-duties/slot-filling-llm-duty'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
-import { RoutingMode, SkillFormat } from '@/types'
+import { RoutingMode, SkillFormat, type MessageLog } from '@/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { WorkflowProgressWidget } from '@/core/nlp/nlu/workflow-progress-widget'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
@@ -72,10 +72,12 @@ type RoutingRoute = 'controlled' | 'react'
 const NO_LLM_ENABLED_MESSAGE =
   'I need an AI engine before I can answer. Enable local AI or configure an online provider. Use the built-in command "/model <provider> <model name>" to configure a model. Just press "/" to open built-in commands.'
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
+const PERSISTED_CONTEXT_LOG_LIMIT = 12
+const PERSISTED_CONTEXT_UTTERANCE_LIMIT = 4
 
 export default class NLU {
-  // Used to store the current single-turn NLU process result
-  private _nluProcessResult = DEFAULT_NLU_PROCESS_RESULT
+  private readonly nluProcessResults = new Map<string, NLUProcessResult>()
+  private readonly restoredConversationContextIds = new Set<string>()
   private _nluResult: NLUResult = DEFAULT_NLU_RESULT
   // Used to store the conversation state (across multiple turns)
   private readonly conversations = new Map<string, Conversation>()
@@ -89,6 +91,33 @@ export default class NLU {
   private readonly routingRoutes: Record<RoutingRoute, RoutingRoute> = {
     controlled: 'controlled',
     react: 'react'
+  }
+
+  private get conversationSessionId(): string {
+    return getActiveConversationSessionId() || 'conv0'
+  }
+
+  // NLU state must follow the active conversation, not the profile-wide
+  // singleton, because different sessions can execute concurrently.
+  private get _nluProcessResult(): NLUProcessResult {
+    const sessionId = this.conversationSessionId
+    const existingResult = this.nluProcessResults.get(sessionId)
+
+    if (existingResult) {
+      return existingResult
+    }
+
+    const result = structuredClone(DEFAULT_NLU_PROCESS_RESULT)
+
+    this.nluProcessResults.set(sessionId, result)
+    return result
+  }
+
+  private set _nluProcessResult(newResult: NLUProcessResult) {
+    this.nluProcessResults.set(
+      this.conversationSessionId,
+      structuredClone(newResult)
+    )
   }
 
   public get conversation(): Conversation {
@@ -155,6 +184,53 @@ export default class NLU {
   constructor() {
     LogHelper.title('NLU')
     LogHelper.success('New profile runtime instance')
+  }
+
+  private async loadPersistedOwnerUtterances(
+    currentUtterance: NLPUtterance
+  ): Promise<NLPUtterance[] | null> {
+    const sessionId = this.conversationSessionId
+
+    if (this.restoredConversationContextIds.has(sessionId)) {
+      return null
+    }
+
+    this.restoredConversationContextIds.add(sessionId)
+    const logs = await CONVERSATION_LOGGER.load({
+      nbOfLogsToLoad: PERSISTED_CONTEXT_LOG_LIMIT
+    })
+
+    const utterances = logs
+      .filter(
+        (log: MessageLog) =>
+          log.who === 'owner' &&
+          log.isAddedToHistory &&
+          Boolean(log.message.trim())
+      )
+      .map((log: MessageLog) => log.message.trim())
+      .slice(-PERSISTED_CONTEXT_UTTERANCE_LIMIT)
+
+    if (utterances.length > 0) {
+      utterances[utterances.length - 1] = currentUtterance.trim()
+    }
+
+    return utterances
+  }
+
+  private restorePersistedOwnerUtterances(
+    utterances: NLPUtterance[] | null
+  ): void {
+    if (!utterances?.length) {
+      return
+    }
+
+    this._nluProcessResult = {
+      ...this._nluProcessResult,
+      context: {
+        ...this._nluProcessResult.context,
+        utterances
+      }
+    }
   }
 
   private async handleProviderFailure(message?: string): Promise<boolean> {
@@ -1358,6 +1434,12 @@ export default class NLU {
             const routingDecision = this.getRoutingDecision(
               options?.forcedRoutingMode
             )
+            const persistedOwnerUtterances =
+              routingDecision.route === this.routingRoutes.controlled
+                ? await this.loadPersistedOwnerUtterances(workflowUtterance)
+                : null
+
+            this.restorePersistedOwnerUtterances(persistedOwnerUtterances)
             LogHelper.title('NLU')
             LogHelper.info(
               `Routing decision: mode=${routingDecision.mode} route=${routingDecision.route} reason=${routingDecision.reason}`
@@ -1438,6 +1520,9 @@ export default class NLU {
               await NLUProcessResultUpdater.update({
                 skillName: resolvedSkill
               })
+              // A newly selected skill resets its transient context. Reapply
+              // the session history restored for this first post-start turn.
+              this.restorePersistedOwnerUtterances(persistedOwnerUtterances)
               this.workflowProgress.showPickingAction()
 
               const parsedActionCallingOutputs = await this.chooseSkillAction(

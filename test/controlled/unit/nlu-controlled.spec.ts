@@ -36,6 +36,7 @@ const defaultProcessResult = {
 
 const testState = vi.hoisted(() => ({
   currentNlu: null as unknown,
+  sessionId: 'session-1',
   skillConfigs: {} as Record<string, Record<string, unknown>>,
   localeConfigs: {} as Record<string, Record<string, unknown>>
 }))
@@ -104,6 +105,7 @@ const skillHelperMocks = vi.hoisted(() => ({
         }
       : null
   }),
+  getSkillCommandName: vi.fn((skillName: string) => skillName),
   getNewSkillConfig: vi.fn(async (skillName: string) => {
     return testState.skillConfigs[skillName] || null
   }),
@@ -299,6 +301,17 @@ vi.mock('@/core/config-states/config-state', () => ({
   }
 }))
 
+vi.mock('@/core/session-manager', () => ({
+  CONVERSATION_SESSION_MANAGER: {
+    getCurrentSessionId: vi.fn(() => testState.sessionId),
+    maybeSetFallbackTitle: vi.fn()
+  }
+}))
+
+vi.mock('@/core/session-manager/session-context', () => ({
+  getActiveConversationSessionId: vi.fn(() => testState.sessionId)
+}))
+
 vi.mock('@/helpers/skill-domain-helper', () => ({
   SkillDomainHelper: skillHelperMocks
 }))
@@ -370,6 +383,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  testState.sessionId = 'session-1'
   testState.skillConfigs = {}
   testState.localeConfigs = {}
 
@@ -379,6 +393,104 @@ beforeEach(() => {
 })
 
 describe('Controlled NLU', () => {
+  it('keeps NLU context isolated between conversation sessions', () => {
+    const nlu = testState.currentNlu as InstanceType<typeof NLUClass>
+
+    nlu.nluProcessResult = {
+      ...cloneDefaultProcessResult(),
+      context: {
+        ...cloneDefaultProcessResult().context,
+        utterances: ['Session one request']
+      }
+    }
+    testState.sessionId = 'session-2'
+
+    expect(nlu.nluProcessResult.context.utterances).toEqual([])
+
+    nlu.nluProcessResult = {
+      ...cloneDefaultProcessResult(),
+      context: {
+        ...cloneDefaultProcessResult().context,
+        utterances: ['Session two request']
+      }
+    }
+    testState.sessionId = 'session-1'
+
+    expect(nlu.nluProcessResult.context.utterances).toEqual([
+      'Session one request'
+    ])
+  })
+
+  it('restores persisted owner context on the first turn after startup', async () => {
+    const nlu = testState.currentNlu as InstanceType<typeof NLUClass>
+
+    testState.skillConfigs['demo_context_skill'] = {
+      name: 'Demo Context',
+      bridge: 'nodejs',
+      version: '1.0.0',
+      workflow: [],
+      actions: {
+        run: {
+          type: 'logic',
+          description: 'Run with conversation context.'
+        }
+      }
+    }
+    testState.localeConfigs['demo_context_skill'] = {
+      variables: {},
+      widget_contents: {},
+      actions: {
+        run: {}
+      }
+    }
+    coreMocks.conversationLogger.load.mockResolvedValue([
+      {
+        who: 'owner',
+        sentAt: 1,
+        message: 'Work in my fruit picker project',
+        isAddedToHistory: true
+      },
+      {
+        who: 'leon',
+        sentAt: 2,
+        message: 'Ready.',
+        isAddedToHistory: true
+      },
+      {
+        who: 'owner',
+        sentAt: 3,
+        message: 'Now use a grey background with black text',
+        isAddedToHistory: true
+      }
+    ])
+    dutyMocks.actionCallingExecute.mockResolvedValue({
+      output: JSON.stringify([
+        {
+          status: 'success',
+          name: 'run',
+          arguments: {}
+        }
+      ])
+    })
+    coreMocks.brain.runSkillAction.mockResolvedValue({ core: {} })
+
+    await nlu.process('Now use a grey background with black text', {
+      forcedRoutingMode: 'controlled',
+      forcedSkillName: 'demo_context_skill'
+    })
+
+    expect(coreMocks.brain.runSkillAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: expect.objectContaining({
+          utterances: [
+            'Work in my fruit picker project',
+            'Now use a grey background with black text'
+          ]
+        })
+      })
+    )
+  })
+
   it('selects the only enabled native skill without calling the skill router', async () => {
     const nlu = testState.currentNlu as InstanceType<typeof NLUClass>
 
