@@ -181,7 +181,7 @@ body {
 .profile-auth {
   position: fixed;
   inset: 0;
-  z-index: 10_000;
+  z-index: 10000;
   display: grid;
   place-items: center;
   padding: 24px;
@@ -264,7 +264,7 @@ body {
 body > * {
   transition: opacity 0.5s;
 }
-body.settingup > *:not(#init) {
+body.settingup > *:not(#init):not(.profile-auth) {
   opacity: 0;
 }
 #init .not-initialized {
