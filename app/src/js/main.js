@@ -8,6 +8,7 @@ import Client from './client'
 import { BuiltInCommands } from './built-in-commands'
 import FileSystemAutocomplete from './file-system-autocomplete'
 import SessionsPanel from './sessions'
+import { ensureProfileAuthentication } from './profile-auth'
 // import Recorder from './recorder'
 // import listener from './listener'
 import { onkeydownstartrecording, onkeydowninput } from './onkeydown'
@@ -26,6 +27,8 @@ const serverUrl =
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
+    await ensureProfileAuthentication(serverUrl)
+
     const [response, sessionsResponse] = await Promise.all([
       axios.get(`${serverUrl}/api/v1/info`),
       axios.get(`${serverUrl}/api/v1/sessions`)

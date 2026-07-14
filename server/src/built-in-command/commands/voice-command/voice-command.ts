@@ -21,7 +21,8 @@ import {
   getVoiceResourceState,
   type VoiceResourceState
 } from '@/core/voice/voice-resource-state'
-import { CODEBASE_PATH, PROFILE_CONFIG_PATH } from '@/leon-roots'
+import { CODEBASE_PATH } from '@/leon-roots'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const VOICE_SETUP_SUB_COMMAND = 'setup'
 const VOICE_STATUS_SUB_COMMAND = 'status'
@@ -255,7 +256,7 @@ export class VoiceCommand extends BuiltInCommand {
           ...this.createResourceStatusItems(resourceState),
           {
             label: 'Profile config',
-            value: PROFILE_CONFIG_PATH
+            value: getProfilePaths().config
           }
         ]
       })

@@ -2,11 +2,11 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { PROFILE_LOGS_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 export interface ToolCallLogEntry {
   toolName: string
@@ -41,7 +41,6 @@ interface ToolOutputLogInput {
   output: Record<string, unknown>
 }
 
-const TOOL_OUTPUT_LOGS_DIR = path.join(PROFILE_LOGS_PATH, 'tool-outputs')
 const TOOL_OUTPUT_LOG_RETENTION_MS = 12 * 60 * 60 * 1_000
 const TOOL_OUTPUT_PREVIEW_MAX_LENGTH = 700
 const RECENT_ARTIFACT_RECORDS_LIMIT = 4
@@ -151,6 +150,7 @@ export function buildRecentArtifactManifest(
 export class ToolCallLogger {
   private readonly settings: ToolCallLoggerSettings
   private readonly toolCallLogPath: string
+  private readonly toolOutputLogsDir: string
   private readonly activeQueryStore = new AsyncLocalStorage<string>()
   private readonly pendingRecords = new Map<string, OwnerQueryToolCallRecord>()
   private writeQueue: Promise<void> = Promise.resolve()
@@ -160,11 +160,14 @@ export class ToolCallLogger {
     LogHelper.success('New instance')
 
     this.settings = settings
+    const profileLogsPath = getProfilePaths().logs
+
     this.toolCallLogPath = path.join(
-      PROFILE_LOGS_PATH,
+      profileLogsPath,
       this.settings.fileName
     )
-    fs.mkdirSync(TOOL_OUTPUT_LOGS_DIR, { recursive: true })
+    this.toolOutputLogsDir = path.join(profileLogsPath, 'tool-outputs')
+    fs.mkdirSync(this.toolOutputLogsDir, { recursive: true })
     void this.cleanupToolOutputLogs()
 
     const cleanupInterval = setInterval(() => {
@@ -270,12 +273,12 @@ export class ToolCallLogger {
     const toolId = this.sanitizeFilenamePart(params.toolId)
     const functionName = this.sanitizeFilenamePart(params.functionName)
     const baseFilename = `${prefix}_${toolId}_${functionName}`
-    let candidatePath = path.join(TOOL_OUTPUT_LOGS_DIR, `${baseFilename}.log`)
+    let candidatePath = path.join(this.toolOutputLogsDir, `${baseFilename}.log`)
     let counter = 1
 
     while (fs.existsSync(candidatePath)) {
       candidatePath = path.join(
-        TOOL_OUTPUT_LOGS_DIR,
+        this.toolOutputLogsDir,
         `${baseFilename}_${counter}.log`
       )
       counter += 1
@@ -484,7 +487,7 @@ export class ToolCallLogger {
 
   public async cleanupToolOutputLogs(): Promise<void> {
     try {
-      const entries = await fs.promises.readdir(TOOL_OUTPUT_LOGS_DIR, {
+      const entries = await fs.promises.readdir(this.toolOutputLogsDir, {
         withFileTypes: true
       })
       const now = Date.now()
@@ -494,7 +497,7 @@ export class ToolCallLogger {
           continue
         }
 
-        const filePath = path.join(TOOL_OUTPUT_LOGS_DIR, entry.name)
+        const filePath = path.join(this.toolOutputLogsDir, entry.name)
         const stats = await fs.promises.stat(filePath)
         if (now - stats.mtimeMs < TOOL_OUTPUT_LOG_RETENTION_MS) {
           continue

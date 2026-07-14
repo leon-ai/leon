@@ -28,6 +28,10 @@ import { sessionsPlugin } from '@/core/http-server/api/sessions'
 import { openPathPlugin } from '@/core/http-server/api/open-path'
 import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
 import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
+import {
+  authenticateProfileHTTPRequest,
+  profileAuthRoutes
+} from '@/core/http-server/profile-auth-routes'
 import { registerHTTPPlugins } from '@/core/http-server/http-plugins/manager'
 import { PERSONA } from '@/core'
 import { SystemHelper } from '@/helpers/system-helper'
@@ -170,6 +174,18 @@ export default class HTTPServer {
     })
     this.fastify.get('/', (_request, reply) => {
       reply.sendFile('index.html')
+    })
+
+    this.fastify.register(profileAuthRoutes, { apiVersion: API_VERSION })
+    this.fastify.addHook('onRequest', async (request, reply) => {
+      const requestPath = request.url.split('?')[0] || ''
+      const authPath = `/api/${API_VERSION}/profile-auth`
+
+      if (!requestPath.startsWith(`/api/${API_VERSION}/`) || requestPath === authPath) {
+        return
+      }
+
+      await authenticateProfileHTTPRequest(request, reply)
     })
 
     this.fastify.register(runActionPlugin, { apiVersion: API_VERSION })

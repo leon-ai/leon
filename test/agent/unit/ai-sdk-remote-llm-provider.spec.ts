@@ -31,7 +31,8 @@ vi.mock('@openrouter/ai-sdk-provider', () => ({
 
 vi.mock('@/config', () => ({
   CONFIG_MANAGER: {
-    getProviderAPIKeyEnv: vi.fn(() => null)
+    getProviderAPIKeyEnv: vi.fn(() => null),
+    getProviderAPIKey: vi.fn(() => 'test-openrouter-key')
   }
 }))
 

@@ -88,13 +88,9 @@ export default class AISDKRemoteLLMProvider {
   constructor(
     config: AISDKRemoteProviderConfig
   ) {
-    const configuredAPIKeyEnv =
-      CONFIG_MANAGER.getProviderAPIKeyEnv(config.providerName) ||
-      config.apiKeyEnv
-
     this.config = config
     this.name = config.name
-    this.apiKey = process.env[configuredAPIKeyEnv]
+    this.apiKey = CONFIG_MANAGER.getProviderAPIKey(config.providerName)
     this.model = config.model
 
     LogHelper.title(this.name)

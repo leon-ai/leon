@@ -7,7 +7,8 @@ import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 
 vi.mock('@/config', () => ({
   CONFIG_MANAGER: {
-    getProviderAPIKeyEnv: vi.fn(() => null)
+    getProviderAPIKeyEnv: vi.fn(() => null),
+    getProviderAPIKey: vi.fn(() => 'test-minimax-key')
   }
 }))
 

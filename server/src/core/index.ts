@@ -3,7 +3,6 @@ import { EventEmitter } from 'node:events'
 import {
   HOST,
   PORT,
-  PROFILE_CONVERSATION_LOG_PATH,
   PYTHON_TCP_SERVER_HOST,
   PYTHON_TCP_SERVER_PORT
 } from '@/constants'
@@ -27,6 +26,8 @@ import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
 import ToolExecutor from '@/core/tool-executor'
 import { ConversationLogger } from '@/conversation-logger'
 import { ToolCallLogger } from '@/tool-call-logger'
+import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 
 /**
  * Register core nodes
@@ -44,38 +45,75 @@ export const EVENT_EMITTER = new EventEmitter()
  * Register core singletons
  */
 
-export const LLM_PROVIDER = new LLMProvider()
+export const LLM_PROVIDER = createProfileServiceProxy(
+  'llm-provider',
+  () => new LLMProvider()
+)
 
-export const LLM_MANAGER = new LLMManager()
+export const LLM_MANAGER = createProfileServiceProxy(
+  'llm-manager',
+  () => new LLMManager()
+)
 
-export const CONVERSATION_LOGGER = new ConversationLogger({
-  loggerName: 'Conversation Logger',
-  fileName: 'conversation_log.json',
-  filePath: PROFILE_CONVERSATION_LOG_PATH,
-  nbOfLogsToKeep: 1_024,
-  nbOfLogsToLoad: 256
-})
-export const TOOL_CALL_LOGGER = new ToolCallLogger({
-  loggerName: 'Tool Call Logger',
-  fileName: 'tool-calls.json',
-  nbOfLogsToKeep: 8
-})
+export const CONVERSATION_LOGGER = createProfileServiceProxy(
+  'conversation-logger',
+  () =>
+    new ConversationLogger({
+      loggerName: 'Conversation Logger',
+      fileName: 'conversation_log.json',
+      nbOfLogsToKeep: 1_024,
+      nbOfLogsToLoad: 256
+    })
+)
+export const TOOL_CALL_LOGGER = createProfileServiceProxy(
+  'tool-call-logger',
+  () =>
+    new ToolCallLogger({
+      loggerName: 'Tool Call Logger',
+      fileName: 'tool-calls.json',
+      nbOfLogsToKeep: 8
+    })
+)
 
 export const HTTP_SERVER = new HTTPServer(String(HOST), PORT)
 
 export const SOCKET_SERVER = new SocketServer()
 
-export const TOOLKIT_REGISTRY = new ToolkitRegistry()
+export const TOOLKIT_REGISTRY = createProfileServiceProxy(
+  'toolkit-registry',
+  () => new ToolkitRegistry()
+)
 
-export const TOOL_EXECUTOR = new ToolExecutor()
+export const TOOL_EXECUTOR = createProfileServiceProxy(
+  'tool-executor',
+  () => new ToolExecutor()
+)
 
-export const PERSONA = new Persona()
+export const PERSONA = createProfileServiceProxy(
+  'persona',
+  () => new Persona()
+)
 
-export const CONTEXT_MANAGER = new ContextManager()
-export const MEMORY_MANAGER = new MemoryManager()
-export const SELF_MODEL_MANAGER = new SelfModelManager()
-export const PULSE_MANAGER = new PulseManager()
-export const POST_TURN_MAINTENANCE_QUEUE = new PostTurnMaintenanceQueue()
+export const CONTEXT_MANAGER = createProfileServiceProxy(
+  'context-manager',
+  () => new ContextManager()
+)
+export const MEMORY_MANAGER = createProfileServiceProxy(
+  'memory-manager',
+  () => new MemoryManager()
+)
+export const SELF_MODEL_MANAGER = createProfileServiceProxy(
+  'self-model-manager',
+  () => new SelfModelManager()
+)
+export const PULSE_MANAGER = createProfileServiceProxy(
+  'pulse-manager',
+  () => new PulseManager()
+)
+export const POST_TURN_MAINTENANCE_QUEUE = createProfileServiceProxy(
+  'post-turn-maintenance-queue',
+  () => new PostTurnMaintenanceQueue()
+)
 
 export const ASR_ENGINE = new ASRProvider()
 
@@ -83,6 +121,14 @@ export const TTS = new TextToSpeech()
 
 export const ASR = new AutomaticSpeechRecognition()
 
-export const NLU = new NaturalLanguageUnderstanding()
+export const NLU = createProfileServiceProxy(
+  'nlu',
+  () => new NaturalLanguageUnderstanding(),
+  getActiveConversationSessionId
+)
 
-export const BRAIN = new Brain()
+export const BRAIN = createProfileServiceProxy(
+  'brain',
+  () => new Brain(),
+  getActiveConversationSessionId
+)

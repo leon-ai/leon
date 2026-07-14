@@ -10,7 +10,6 @@ import { LogHelper } from '@/helpers/log-helper'
 import {
   CODEBASE_PATH,
   GLOBAL_DATA_PATH,
-  LANG,
   NODE_RUNTIME_BIN_PATH,
   NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
   NODEJS_BRIDGE_ROOT_PATH,
@@ -20,22 +19,27 @@ import { LangHelper } from '@/helpers/lang-helper'
 import { TOOLKIT_REGISTRY, TOOL_CALL_LOGGER } from '@/core'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import { StringHelper } from '@/helpers/string-helper'
+import { CONFIG_MANAGER } from '@/config'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { COMPANION_REGISTRY } from '@/core/companion/companion-registry'
+import type { LongLanguageCode } from '@/types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
 const TOOL_RUNTIME_LOG_PREFIX = '[LEON_TOOL_LOG]'
 const TOOL_RUNTIME_REPORT_PREFIX = '[LEON_TOOL_REPORT]'
 
-interface ToolExecutionInput {
+export interface ToolExecutionInput {
   toolId: string
   toolkitId?: string
   functionName?: string
   toolInput?: string
   parsedInput?: Record<string, unknown>
+  executionTarget?: 'any' | 'companion'
   onProgress?: (progress: ToolRuntimeProgress) => void
 }
 
-interface ToolExecutionResult {
+export interface ToolExecutionResult {
   status: 'success' | 'error' | 'not_available' | 'invalid_input'
   message: string
   data: {
@@ -50,7 +54,7 @@ interface ToolExecutionResult {
   toolLabel?: string | undefined
 }
 
-interface ToolRuntimeProgress {
+export interface ToolRuntimeProgress {
   source: 'log' | 'report'
   message: string
   key?: string
@@ -58,7 +62,6 @@ interface ToolRuntimeProgress {
 }
 
 export default class ToolExecutor {
-  private static instance: ToolExecutor
   private readonly globalAnswersCache = new Map<
     string,
     GlobalAnswersSchema['answers']
@@ -191,7 +194,10 @@ export default class ToolExecutor {
 
   private getCurrentGlobalAnswers(): GlobalAnswersSchema['answers'] {
     try {
-      const lang = LANG ? LangHelper.getShortCode(LANG) : 'en'
+      const configuredLanguage = CONFIG_MANAGER.getConfig().language
+      const lang = configuredLanguage
+        ? LangHelper.getShortCode(configuredLanguage as LongLanguageCode)
+        : 'en'
       return this.getGlobalAnswers(lang)
     } catch {
       return this.getGlobalAnswers('en')
@@ -214,12 +220,8 @@ export default class ToolExecutor {
   }
 
   constructor() {
-    if (!ToolExecutor.instance) {
-      LogHelper.title('Tool Executor')
-      LogHelper.success('New instance')
-
-      ToolExecutor.instance = this
-    }
+    LogHelper.title('Tool Executor')
+    LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
   }
 
   public async executeTool(
@@ -277,6 +279,49 @@ export default class ToolExecutor {
         resolvedTool,
         functionName: null
       })
+    }
+
+    const companionDeviceId = TOOLKIT_REGISTRY.getToolCompanionDevice(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
+
+    if (input.executionTarget === 'companion' && !companionDeviceId) {
+      return this.buildResult({
+        status: 'not_available',
+        message: 'No Companion is connected for this tool.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        parsedInput: input.parsedInput ?? null,
+        output: {}
+      })
+    }
+
+    if (companionDeviceId) {
+      try {
+        const { onProgress, ...serializableInput } = input
+
+        return await COMPANION_REGISTRY.invokeTool({
+          profileName: getActiveProfileName(),
+          deviceId: companionDeviceId,
+          toolInput: {
+            ...serializableInput,
+            executionTarget: 'any'
+          },
+          ...(onProgress ? { onProgress } : {})
+        })
+      } catch (error) {
+        return this.buildResult({
+          status: 'error',
+          message: error instanceof Error ? error.message : String(error),
+          input: input.toolInput ?? null,
+          resolvedTool,
+          functionName: functionName ?? null,
+          parsedInput: input.parsedInput ?? null,
+          output: {}
+        })
+      }
     }
 
     const functions = TOOLKIT_REGISTRY.getToolFunctions(
@@ -860,7 +905,8 @@ export default class ToolExecutor {
         cwd: NODEJS_BRIDGE_ROOT_PATH,
         env: {
           ...process.env,
-          LEON_CODEBASE_PATH: CODEBASE_PATH
+          LEON_CODEBASE_PATH: CODEBASE_PATH,
+          LEON_PROFILE: getActiveProfileName()
         },
         windowsHide: true
       })

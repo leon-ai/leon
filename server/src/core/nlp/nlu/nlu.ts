@@ -42,7 +42,6 @@ import { SkillRouterLLMDuty } from '@/core/llm-manager/llm-duties/skill-router-l
 import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calling-llm-duty'
 import { SlotFillingLLMDuty } from '@/core/llm-manager/llm-duties/slot-filling-llm-duty'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
-import { LEON_ROUTING_MODE } from '@/constants'
 import { RoutingMode, SkillFormat } from '@/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { WorkflowProgressWidget } from '@/core/nlp/nlu/workflow-progress-widget'
@@ -75,7 +74,6 @@ const NO_LLM_ENABLED_MESSAGE =
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
 
 export default class NLU {
-  private static instance: NLU
   // Used to store the current single-turn NLU process result
   private _nluProcessResult = DEFAULT_NLU_PROCESS_RESULT
   private _nluResult: NLUResult = DEFAULT_NLU_RESULT
@@ -155,12 +153,8 @@ export default class NLU {
   }
 
   constructor() {
-    if (!NLU.instance) {
-      LogHelper.title('NLU')
-      LogHelper.success('New instance')
-
-      NLU.instance = this
-    }
+    LogHelper.title('NLU')
+    LogHelper.success('New profile runtime instance')
   }
 
   private async handleProviderFailure(message?: string): Promise<boolean> {
@@ -691,7 +685,7 @@ export default class NLU {
 
     LogHelper.title('NLU')
     LogHelper.warning(
-      `Unknown LEON_ROUTING_MODE "${runtimeRoutingMode || LEON_ROUTING_MODE}", defaulting to smart`
+      `Unknown routing mode "${runtimeRoutingMode}", defaulting to smart`
     )
 
     return RoutingMode.Smart

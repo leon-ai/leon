@@ -5,7 +5,8 @@ import { pathToFileURL } from 'node:url'
 import YAML from 'yaml'
 
 import { LogHelper } from '@/helpers/log-helper'
-import { LEON_HOME_PATH, LEON_PROFILE_PATH } from '@/leon-roots'
+import { LEON_HOME_PATH } from '@/leon-roots'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 import type {
   DiscoveredHTTPPluginDefinition,
@@ -150,7 +151,7 @@ export function getDefaultHTTPPluginSearchRoots(): HTTPPluginSearchRoot[] {
     },
     {
       scope: 'profile',
-      directory: path.join(LEON_PROFILE_PATH, HTTP_PLUGINS_DIRECTORY_NAME)
+      directory: path.join(getProfilePaths().root, HTTP_PLUGINS_DIRECTORY_NAME)
     }
   ]
 }

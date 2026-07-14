@@ -17,6 +17,10 @@ import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
 import { Moods } from '@/types'
+import {
+  getActiveProfileName,
+  runWithProfileContext
+} from '@/core/profile-runtime/profile-context'
 
 /**
  * @see https://llama.meta.com/docs/how-to-guides/prompting/
@@ -165,7 +169,6 @@ const EMPTY_WEATHER_CACHE_STATE: WeatherCacheState = {
 }
 
 export default class Persona {
-  private static instance: Persona
   private _mood: Mood = DEFAULT_MOOD
   private contextInfo = CONTEXT_INFO
   private ownerName: string | null = null
@@ -184,31 +187,37 @@ export default class Persona {
   }
 
   constructor() {
-    if (!Persona.instance) {
-      LogHelper.title('Persona')
-      LogHelper.success('New instance')
+    const profileName = getActiveProfileName()
 
-      Persona.instance = this
+    LogHelper.title('Persona')
+    LogHelper.success(`New instance for profile ${profileName}`)
 
+    runWithProfileContext({ profileName }, () => {
       this.setMood()
       CONFIG_STATE_EVENT_EMITTER.on(MOOD_CONFIGURATION_UPDATED_EVENT, () => {
-        this.setMood()
-        EVENT_EMITTER.emit('persona_new-mood-set')
+        runWithProfileContext({ profileName }, () => {
+          this.setMood()
+          EVENT_EMITTER.emit('persona_new-mood-set')
+        })
       })
       setInterval(() => {
-        void this.syncWeatherMoodAndContext()
-      }, WEATHER_REFRESH_INTERVAL_MS)
+        void runWithProfileContext({ profileName }, () =>
+          this.syncWeatherMoodAndContext()
+        )
+      }, WEATHER_REFRESH_INTERVAL_MS).unref()
 
       this.setContextInfo()
       this.setOwnerInfo()
       setInterval(() => {
-        this.setContextInfo()
-        this.setOwnerInfo()
-        EVENT_EMITTER.emit('persona_new-info-set')
-      }, 60_000 * 5)
+        runWithProfileContext({ profileName }, () => {
+          this.setContextInfo()
+          this.setOwnerInfo()
+          EVENT_EMITTER.emit('persona_new-info-set')
+        })
+      }, 60_000 * 5).unref()
 
       void this.syncWeatherMoodAndContext()
-    }
+    })
   }
 
   /**

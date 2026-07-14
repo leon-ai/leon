@@ -2,8 +2,11 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import YAML from 'yaml'
+import dotenv from 'dotenv'
 
-import { PROFILE_CONFIG_PATH } from '@/leon-roots'
+import { LEON_PROFILE_NAME } from '@/leon-roots'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type {
   LLMProviderConfigSchema,
   LeonConfigSchema,
@@ -26,7 +29,7 @@ const DEFAULT_CONFIG: LeonConfig = {
     auth: {
       enabled: false,
       token: {
-        env: 'LEON_CLIENT_INTERFACE_TOKEN'
+        env: 'LEON_PROFILE_TOKEN'
       }
     }
   },
@@ -36,7 +39,7 @@ const DEFAULT_CONFIG: LeonConfig = {
     auth: {
       enabled: false,
       token: {
-        env: 'LEON_HTTP_PLUGIN_TOKEN'
+        env: 'LEON_PROFILE_TOKEN'
       }
     },
     plugins: {}
@@ -193,11 +196,14 @@ function toEnvString(value: OptionalStringConfigValue): string {
 class ConfigManager {
   private static instance: ConfigManager
 
-  private config: LeonConfig
+  private readonly configs = new Map<string, LeonConfig>()
+  private readonly profileEnvValues = new Map<string, Record<string, string>>()
 
   private constructor() {
-    this.config = this.load()
-    this.syncProcessEnv()
+    const config = this.load(LEON_PROFILE_NAME)
+
+    this.configs.set(LEON_PROFILE_NAME, config)
+    this.syncProcessEnv(config)
   }
 
   public static getInstance(): ConfigManager {
@@ -208,23 +214,53 @@ class ConfigManager {
     return ConfigManager.instance
   }
 
-  public getConfig(): LeonConfig {
-    return this.config
+  public getConfig(profileName = getActiveProfileName()): LeonConfig {
+    const cachedConfig = this.configs.get(profileName)
+
+    if (cachedConfig) {
+      return cachedConfig
+    }
+
+    const config = this.load(profileName)
+
+    this.configs.set(profileName, config)
+
+    return config
   }
 
-  public reload(): LeonConfig {
-    this.config = this.load()
-    this.syncProcessEnv()
+  public reload(profileName = getActiveProfileName()): LeonConfig {
+    this.profileEnvValues.delete(profileName)
+    const config = this.load(profileName)
 
-    return this.config
+    this.configs.set(profileName, config)
+
+    // Legacy child processes still read the startup profile from process.env.
+    if (profileName === LEON_PROFILE_NAME) {
+      this.syncProcessEnv(config)
+    }
+
+    return config
   }
 
-  public resolveSecretReference(reference: SecretReference): string {
-    return process.env[reference.env] || ''
+  public resolveSecretReference(
+    reference: SecretReference,
+    profileName = getActiveProfileName()
+  ): string {
+    const profileValue = this.getProfileEnvValues(profileName)[reference.env]
+
+    if (profileValue) {
+      return profileValue
+    }
+
+    // Only the startup profile may inherit process-level secrets. Otherwise a
+    // missing tenant secret could accidentally fall back to another profile.
+    return profileName === LEON_PROFILE_NAME
+      ? process.env[reference.env] || ''
+      : ''
   }
 
   public getProviderConfig(provider: string): LLMProviderConfig | null {
-    const providers = this.config.llm.providers as Record<
+    const providers = this.getConfig().llm.providers as Record<
       string,
       LLMProviderConfig
     >
@@ -237,9 +273,11 @@ class ConfigManager {
   }
 
   public getProviderAPIKey(provider: string): string {
-    const envName = this.getProviderAPIKeyEnv(provider)
+    const providerConfig = this.getProviderConfig(provider)
 
-    return envName ? process.env[envName] || '' : ''
+    return providerConfig
+      ? this.resolveSecretReference(providerConfig.api_key)
+      : ''
   }
 
   public getProviderBaseURL(provider: string): string {
@@ -247,11 +285,12 @@ class ConfigManager {
   }
 
   public async setValue(keyPath: string[], value: unknown): Promise<void> {
-    const document = this.readDocument()
+    const profileName = getActiveProfileName()
+    const document = this.readDocument(profileName)
 
     document.setIn(keyPath, value)
-    await this.writeDocument(document)
-    this.reload()
+    await this.writeDocument(document, profileName)
+    this.reload(profileName)
   }
 
   public async setStringList(
@@ -261,8 +300,8 @@ class ConfigManager {
     await this.setValue(keyPath, normalizeStringList(values))
   }
 
-  private load(): LeonConfig {
-    const parsedConfig = this.readRawConfig()
+  private load(profileName: string): LeonConfig {
+    const parsedConfig = this.readRawConfig(profileName)
     const mergedConfig = mergeDefaults(
       cloneConfig(DEFAULT_CONFIG),
       parsedConfig
@@ -271,13 +310,15 @@ class ConfigManager {
     return mergedConfig
   }
 
-  private readRawConfig(): Record<string, unknown> {
-    if (!fs.existsSync(PROFILE_CONFIG_PATH)) {
+  private readRawConfig(profileName: string): Record<string, unknown> {
+    const configPath = getProfilePaths(profileName).config
+
+    if (!fs.existsSync(configPath)) {
       return {}
     }
 
     try {
-      const rawConfig = fs.readFileSync(PROFILE_CONFIG_PATH, 'utf8')
+      const rawConfig = fs.readFileSync(configPath, 'utf8')
       const parsedConfig = YAML.parse(rawConfig)
 
       if (!isPlainObject(parsedConfig)) {
@@ -287,63 +328,86 @@ class ConfigManager {
       return parsedConfig
     } catch (error) {
       throw new Error(
-        `Failed to read profile config at "${PROFILE_CONFIG_PATH}": ${String(error)}`
+        `Failed to read profile config at "${configPath}": ${String(error)}`
       )
     }
   }
 
-  private readDocument(): YAML.Document.Parsed {
-    const rawConfig = fs.existsSync(PROFILE_CONFIG_PATH)
-      ? fs.readFileSync(PROFILE_CONFIG_PATH, 'utf8')
+  private readDocument(profileName: string): YAML.Document.Parsed {
+    const configPath = getProfilePaths(profileName).config
+    const rawConfig = fs.existsSync(configPath)
+      ? fs.readFileSync(configPath, 'utf8')
       : YAML.stringify(DEFAULT_CONFIG)
 
     return YAML.parseDocument(rawConfig)
   }
 
-  private async writeDocument(document: YAML.Document.Parsed): Promise<void> {
+  private async writeDocument(
+    document: YAML.Document.Parsed,
+    profileName: string
+  ): Promise<void> {
     const rawValue = document.toJSON()
 
     if (!isPlainObject(rawValue)) {
       throw new Error('Cannot save a profile config without a YAML object root.')
     }
 
-    await fs.promises.mkdir(path.dirname(PROFILE_CONFIG_PATH), {
+    const configPath = getProfilePaths(profileName).config
+
+    await fs.promises.mkdir(path.dirname(configPath), {
       recursive: true
     })
-    await fs.promises.writeFile(PROFILE_CONFIG_PATH, String(document))
+    await fs.promises.writeFile(configPath, String(document))
   }
 
-  private syncProcessEnv(): void {
-    process.env['LEON_LANG'] = this.config.language
-    process.env['LEON_HOST'] = this.config.server.host
-    process.env['LEON_PORT'] = String(this.config.server.port)
-    process.env['LEON_ROUTING_MODE'] = this.config.routing.mode
-    process.env['LEON_MOOD'] = this.config.mood.mode
-    process.env['LEON_LLM'] = toEnvString(this.config.llm.default)
-    process.env['LEON_WORKFLOW_LLM'] = toEnvString(this.config.llm.workflow)
-    process.env['LEON_AGENT_LLM'] = toEnvString(this.config.llm.agent)
-    process.env['LEON_WAKE_WORD'] = this.config.voice.wake_word_enabled
+  private getProfileEnvValues(profileName: string): Record<string, string> {
+    const cachedValues = this.profileEnvValues.get(profileName)
+
+    if (cachedValues) {
+      return cachedValues
+    }
+
+    const dotEnvPath = getProfilePaths(profileName).dotEnv
+    const values = fs.existsSync(dotEnvPath)
+      ? dotenv.parse(fs.readFileSync(dotEnvPath, 'utf8'))
+      : {}
+
+    this.profileEnvValues.set(profileName, values)
+
+    return values
+  }
+
+  private syncProcessEnv(config: LeonConfig): void {
+    process.env['LEON_LANG'] = config.language
+    process.env['LEON_HOST'] = config.server.host
+    process.env['LEON_PORT'] = String(config.server.port)
+    process.env['LEON_ROUTING_MODE'] = config.routing.mode
+    process.env['LEON_MOOD'] = config.mood.mode
+    process.env['LEON_LLM'] = toEnvString(config.llm.default)
+    process.env['LEON_WORKFLOW_LLM'] = toEnvString(config.llm.workflow)
+    process.env['LEON_AGENT_LLM'] = toEnvString(config.llm.agent)
+    process.env['LEON_WAKE_WORD'] = config.voice.wake_word_enabled
       ? 'true'
       : 'false'
-    process.env['LEON_ASR'] = this.config.voice.asr.enabled ? 'true' : 'false'
-    process.env['LEON_ASR_PROVIDER'] = this.config.voice.asr.provider
-    process.env['LEON_TTS'] = this.config.voice.tts.enabled ? 'true' : 'false'
-    process.env['LEON_TTS_PROVIDER'] = this.config.voice.tts.provider
-    process.env['LEON_TIME_ZONE'] = toEnvString(this.config.time_zone)
-    process.env['LEON_AFTER_SPEECH'] = this.config.after_speech_enabled
+    process.env['LEON_ASR'] = config.voice.asr.enabled ? 'true' : 'false'
+    process.env['LEON_ASR_PROVIDER'] = config.voice.asr.provider
+    process.env['LEON_TTS'] = config.voice.tts.enabled ? 'true' : 'false'
+    process.env['LEON_TTS_PROVIDER'] = config.voice.tts.provider
+    process.env['LEON_TIME_ZONE'] = toEnvString(config.time_zone)
+    process.env['LEON_AFTER_SPEECH'] = config.after_speech_enabled
       ? 'true'
       : 'false'
-    process.env['LEON_TELEMETRY'] = this.config.telemetry_enabled
+    process.env['LEON_TELEMETRY'] = config.telemetry_enabled
       ? 'true'
       : 'false'
-    process.env['LEON_PY_TCP_SERVER_HOST'] = this.config.python_tcp_server.host
+    process.env['LEON_PY_TCP_SERVER_HOST'] = config.python_tcp_server.host
     process.env['LEON_PY_TCP_SERVER_PORT'] = String(
-      this.config.python_tcp_server.port
+      config.python_tcp_server.port
     )
     process.env['LEON_LLAMACPP_BASE_URL'] =
-      this.config.llm.providers['llamacpp']?.base_url || ''
+      config.llm.providers['llamacpp']?.base_url || ''
     process.env['LEON_SGLANG_BASE_URL'] =
-      this.config.llm.providers['sglang']?.base_url || ''
+      config.llm.providers['sglang']?.base_url || ''
   }
 }
 
