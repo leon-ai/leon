@@ -113,25 +113,6 @@ pnpm run check
 
 By default, Leon runs locally and the app is available on `http://localhost:5366`.
 
-### Run Leon Remotely
-
-A remote Leon server still serves the built-in app. Enable
-`client_interface.auth.enabled` in the profile config, open the remote URL, and
-sign in with `<profile-name>:<LEON_PROFILE_TOKEN>` (for example,
-`just-me:505984bf...`). Each authenticated profile gets isolated config,
-secrets, sessions, memory, skills, tools, and background work in the same Leon
-process.
-
-If Leon also needs tools from your computer, run the optional Companion there:
-
-```sh
-pnpm dev:companion -- --url https://leon.example.com --token just-me:505984bf...
-```
-
-The Companion advertises the profile's enabled local tools automatically. The
-existing skill and tool availability settings remain the only allow/disable
-controls.
-
 ## 🏗️ Architecture Snapshot
 
 At a high level, Leon currently consists of:

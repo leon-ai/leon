@@ -12,7 +12,7 @@ dotenv.config({ path: PROFILE_DOT_ENV_PATH })
  * Generate the active Leon profile token
  * save it in the .env file
  */
-const generateClientInterfaceToken = () =>
+const generateProfileToken = () =>
   new Promise(async (resolve, reject) => {
     LogHelper.info('Generating my profile token...')
 
@@ -39,7 +39,7 @@ export default () =>
         (!process.env.LEON_CLIENT_INTERFACE_TOKEN ||
           process.env.LEON_CLIENT_INTERFACE_TOKEN === '')
       ) {
-        await generateClientInterfaceToken()
+        await generateProfileToken()
       }
 
       resolve()
