@@ -8,9 +8,9 @@ import { LogHelper } from '@/helpers/log-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type {
-  LinkToolkitDefinition,
-  LinkToolDefinition
-} from '@/core/link/types'
+  SatelliteToolkitDefinition,
+  SatelliteToolDefinition
+} from '@/core/satellite/types'
 
 const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
 const HOSTED_SEARCH_TOOL_ID = 'hosted'
@@ -100,11 +100,11 @@ export default class ToolkitRegistry {
   private _localToolkits: ToolkitDefinition[] = []
   private _toolAvailability = new Map<string, ToolAvailability>()
   private _localToolAvailability = new Map<string, ToolAvailability>()
-  private readonly linkToolkits = new Map<
+  private readonly satelliteToolkits = new Map<
     string,
-    LinkToolkitDefinition[]
+    SatelliteToolkitDefinition[]
   >()
-  private readonly linkToolTargets = new Map<string, string>()
+  private readonly satelliteToolTargets = new Map<string, string>()
   private _isLoaded = false
 
   constructor() {
@@ -343,8 +343,8 @@ export default class ToolkitRegistry {
     return toolkit?.contextFiles || []
   }
 
-  /** Export enabled local tools so Link can advertise them remotely. */
-  public getLinkManifest(): LinkToolkitDefinition[] {
+  /** Export enabled local tools so Satellite can advertise them remotely. */
+  public getSatelliteManifest(): SatelliteToolkitDefinition[] {
     return this._localToolkits.map((toolkit) => ({
       id: toolkit.id,
       name: toolkit.name,
@@ -359,26 +359,28 @@ export default class ToolkitRegistry {
     }))
   }
 
-  /** Add the tool inventory advertised by one connected Link. */
-  public registerLinkTools(
+  /** Add the tool inventory advertised by one connected Satellite. */
+  public registerSatelliteTools(
     deviceId: string,
-    toolkits: LinkToolkitDefinition[]
+    toolkits: SatelliteToolkitDefinition[]
   ): void {
-    this.linkToolkits.set(deviceId, toolkits)
+    this.satelliteToolkits.set(deviceId, toolkits)
     this.refreshCombinedToolkits()
   }
 
-  public removeLinkTools(deviceId: string): void {
-    this.linkToolkits.delete(deviceId)
+  public removeSatelliteTools(deviceId: string): void {
+    this.satelliteToolkits.delete(deviceId)
     this.refreshCombinedToolkits()
   }
 
-  public getToolLinkDevice(
+  public getToolSatelliteDevice(
     toolkitId: string,
     toolId: string
   ): string | null {
     return (
-      this.linkToolTargets.get(this.getQualifiedToolId(toolkitId, toolId)) ||
+      this.satelliteToolTargets.get(
+        this.getQualifiedToolId(toolkitId, toolId)
+      ) ||
       null
     )
   }
@@ -455,7 +457,7 @@ export default class ToolkitRegistry {
   private refreshCombinedToolkits(): void {
     const toolkitsById = new Map<string, ToolkitDefinition>()
 
-    this.linkToolTargets.clear()
+    this.satelliteToolTargets.clear()
     this._toolAvailability = new Map(this._localToolAvailability)
 
     for (const toolkit of this._localToolkits) {
@@ -466,36 +468,36 @@ export default class ToolkitRegistry {
       })
     }
 
-    for (const [deviceId, linkToolkits] of this.linkToolkits) {
-      for (const linkToolkit of linkToolkits) {
-        const toolkit = toolkitsById.get(linkToolkit.id) || {
-          id: linkToolkit.id,
-          name: linkToolkit.name,
-          description: linkToolkit.description,
-          iconName: linkToolkit.icon_name,
-          contextFiles: [...(linkToolkit.context_files || [])],
+    for (const [deviceId, satelliteToolkits] of this.satelliteToolkits) {
+      for (const satelliteToolkit of satelliteToolkits) {
+        const toolkit = toolkitsById.get(satelliteToolkit.id) || {
+          id: satelliteToolkit.id,
+          name: satelliteToolkit.name,
+          description: satelliteToolkit.description,
+          iconName: satelliteToolkit.icon_name,
+          contextFiles: [...(satelliteToolkit.context_files || [])],
           tools: {}
         }
 
-        for (const [toolId, tool] of Object.entries(linkToolkit.tools)) {
-          if (ProfileHelper.isToolDisabled(toolId, linkToolkit.id)) {
+        for (const [toolId, tool] of Object.entries(satelliteToolkit.tools)) {
+          if (ProfileHelper.isToolDisabled(toolId, satelliteToolkit.id)) {
             continue
           }
 
           toolkit.tools = {
             ...(toolkit.tools || {}),
             [toolId]: this.toToolkitToolDefinition(
-              linkToolkit.id,
+              satelliteToolkit.id,
               toolId,
               tool
             )
           }
           const qualifiedToolId = this.getQualifiedToolId(
-            linkToolkit.id,
+            satelliteToolkit.id,
             toolId
           )
 
-          this.linkToolTargets.set(qualifiedToolId, deviceId)
+          this.satelliteToolTargets.set(qualifiedToolId, deviceId)
           this._toolAvailability.set(qualifiedToolId, {
             available: true,
             requiredSettings: [],
@@ -504,7 +506,7 @@ export default class ToolkitRegistry {
           })
         }
 
-        toolkitsById.set(linkToolkit.id, toolkit)
+        toolkitsById.set(satelliteToolkit.id, toolkit)
       }
     }
 
@@ -514,7 +516,7 @@ export default class ToolkitRegistry {
   private toToolkitToolDefinition(
     toolkitId: string,
     toolId: string,
-    tool: LinkToolDefinition
+    tool: SatelliteToolDefinition
   ): ToolkitToolDefinition {
     return {
       ...tool,

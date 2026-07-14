@@ -76,7 +76,7 @@ export default class ToolManager {
     return tool
   }
 
-  /** Ask Leon Core to run a profile tool, including tools hosted by Link. */
+  /** Ask Leon Core to run a profile tool, including Satellite-hosted tools. */
   static async executeTool<
     TOutput extends Record<string, unknown> = Record<string, unknown>
   >(

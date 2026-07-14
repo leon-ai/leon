@@ -21,7 +21,7 @@ import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_MANAGER } from '@/config'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
-import { LINK_REGISTRY } from '@/core/link/link-registry'
+import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import type { LongLanguageCode } from '@/types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
@@ -35,7 +35,7 @@ export interface ToolExecutionInput {
   functionName?: string
   toolInput?: string
   parsedInput?: Record<string, unknown>
-  executionTarget?: 'any' | 'link'
+  executionTarget?: 'any' | 'satellite'
   onProgress?: (progress: ToolRuntimeProgress) => void
 }
 
@@ -281,15 +281,15 @@ export default class ToolExecutor {
       })
     }
 
-    const linkDeviceId = TOOLKIT_REGISTRY.getToolLinkDevice(
+    const satelliteDeviceId = TOOLKIT_REGISTRY.getToolSatelliteDevice(
       resolvedTool.toolkitId,
       resolvedTool.toolId
     )
 
-    if (input.executionTarget === 'link' && !linkDeviceId) {
+    if (input.executionTarget === 'satellite' && !satelliteDeviceId) {
       return this.buildResult({
         status: 'not_available',
-        message: 'No Link is connected for this tool.',
+        message: 'No Satellite is connected for this tool.',
         input: input.toolInput ?? null,
         resolvedTool,
         functionName: functionName ?? null,
@@ -298,13 +298,13 @@ export default class ToolExecutor {
       })
     }
 
-    if (linkDeviceId) {
+    if (satelliteDeviceId) {
       try {
         const { onProgress, ...serializableInput } = input
 
-        return await LINK_REGISTRY.invokeTool({
+        return await SATELLITE_REGISTRY.invokeTool({
           profileName: getActiveProfileName(),
-          deviceId: linkDeviceId,
+          deviceId: satelliteDeviceId,
           toolInput: {
             ...serializableInput,
             executionTarget: 'any'

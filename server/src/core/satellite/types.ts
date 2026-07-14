@@ -4,18 +4,18 @@ import type {
   ToolRuntimeProgress
 } from '@/core/tool-executor'
 
-export const LINK_PROTOCOL_VERSION = 1
+export const SATELLITE_PROTOCOL_VERSION = 1
 
-export const LINK_EVENTS = {
-  init: 'leon:link:init',
-  ready: 'leon:link:ready',
-  invokeTool: 'leon:link:invoke-tool',
-  toolProgress: 'leon:link:tool-progress',
-  toolResult: 'leon:link:tool-result',
-  error: 'leon:link:error'
+export const SATELLITE_EVENTS = {
+  init: 'leon:satellite:init',
+  ready: 'leon:satellite:ready',
+  invokeTool: 'leon:satellite:invoke-tool',
+  toolProgress: 'leon:satellite:tool-progress',
+  toolResult: 'leon:satellite:tool-result',
+  error: 'leon:satellite:error'
 } as const
 
-export interface LinkToolDefinition {
+export interface SatelliteToolDefinition {
   tool_id: string
   toolkit_id: string
   name: string
@@ -31,45 +31,45 @@ export interface LinkToolDefinition {
   >
 }
 
-export interface LinkToolkitDefinition {
+export interface SatelliteToolkitDefinition {
   id: string
   name: string
   description: string
   icon_name: string
   context_files?: string[]
-  tools: Record<string, LinkToolDefinition>
+  tools: Record<string, SatelliteToolDefinition>
 }
 
-export interface LinkDescriptor {
+export interface SatelliteDescriptor {
   id: string
   name: string
   platform: string
   version?: string
 }
 
-export interface LinkInitPayload {
+export interface SatelliteInitPayload {
   protocolVersion: number
   token?: string
-  device: LinkDescriptor
-  toolkits: LinkToolkitDefinition[]
+  device: SatelliteDescriptor
+  toolkits: SatelliteToolkitDefinition[]
 }
 
-export interface LinkToolInvocation {
+export interface SatelliteToolInvocation {
   invocationId: string
   input: ToolExecutionInput
 }
 
-export interface LinkToolProgressPayload {
+export interface SatelliteToolProgressPayload {
   invocationId: string
   progress: ToolRuntimeProgress
 }
 
-export interface LinkToolResultPayload {
+export interface SatelliteToolResultPayload {
   invocationId: string
   result: ToolExecutionResult
 }
 
-export interface LinkErrorPayload {
+export interface SatelliteErrorPayload {
   code: string
   message: string
 }

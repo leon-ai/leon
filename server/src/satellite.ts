@@ -4,12 +4,12 @@ import { io } from 'socket.io-client'
 
 import { TOOLKIT_REGISTRY, TOOL_EXECUTOR } from '@/core'
 import {
-  LINK_EVENTS,
-  LINK_PROTOCOL_VERSION,
-  type LinkErrorPayload,
-  type LinkToolInvocation,
-  type LinkToolResultPayload
-} from '@/core/link/types'
+  SATELLITE_EVENTS,
+  SATELLITE_PROTOCOL_VERSION,
+  type SatelliteErrorPayload,
+  type SatelliteToolInvocation,
+  type SatelliteToolResultPayload
+} from '@/core/satellite/types'
 import {
   parseProfileCredential,
   readStoredProfileToken
@@ -22,10 +22,10 @@ import type { ToolExecutionResult } from '@/core/tool-executor'
 const REMOTE_URL_ARGUMENT = '--url'
 const PROFILE_TOKEN_ARGUMENT = '--token'
 const DEVICE_ID_ARGUMENT = '--device-id'
-const DEFAULT_LINK_NAME = 'Leon Link'
+const DEFAULT_SATELLITE_NAME = 'Leon Satellite'
 
-function buildLinkToolError(
-  invocation: LinkToolInvocation,
+function buildSatelliteToolError(
+  invocation: SatelliteToolInvocation,
   error: unknown
 ): ToolExecutionResult {
   return {
@@ -53,7 +53,7 @@ function getArgumentValue(argumentName: string): string {
 function getProfileCredential(): string {
   const explicitCredential =
     getArgumentValue(PROFILE_TOKEN_ARGUMENT) ||
-    String(process.env['LEON_LINK_PROFILE_TOKEN'] || '').trim()
+    String(process.env['LEON_SATELLITE_PROFILE_TOKEN'] || '').trim()
 
   if (explicitCredential) {
     return explicitCredential
@@ -64,27 +64,27 @@ function getProfileCredential(): string {
   return localToken ? `${LEON_PROFILE_NAME}:${localToken}` : ''
 }
 
-async function startLink(): Promise<void> {
+async function startSatellite(): Promise<void> {
   const remoteURL =
     getArgumentValue(REMOTE_URL_ARGUMENT) ||
-    String(process.env['LEON_LINK_REMOTE_URL'] || '').trim()
+    String(process.env['LEON_SATELLITE_REMOTE_URL'] || '').trim()
   const credentialValue = getProfileCredential()
   const credential = parseProfileCredential(credentialValue)
 
   if (!remoteURL) {
     throw new Error(
-      `A remote Leon URL is required through ${REMOTE_URL_ARGUMENT} or LEON_LINK_REMOTE_URL.`
+      `A remote Leon URL is required through ${REMOTE_URL_ARGUMENT} or LEON_SATELLITE_REMOTE_URL.`
     )
   }
   if (!credential) {
     throw new Error(
-      `A profile token is required through ${PROFILE_TOKEN_ARGUMENT}, LEON_LINK_PROFILE_TOKEN, or the active local profile.`
+      `A profile token is required through ${PROFILE_TOKEN_ARGUMENT}, LEON_SATELLITE_PROFILE_TOKEN, or the active local profile.`
     )
   }
 
   const deviceId =
     getArgumentValue(DEVICE_ID_ARGUMENT) ||
-    String(process.env['LEON_LINK_DEVICE_ID'] || '').trim() ||
+    String(process.env['LEON_SATELLITE_DEVICE_ID'] || '').trim() ||
     os.hostname()
 
   await runWithProfileContext(
@@ -105,30 +105,30 @@ async function startLink(): Promise<void> {
     void runWithProfileContext(
       { profileName: credential.profileName },
       async () => {
-        socket.emit(LINK_EVENTS.init, {
-          protocolVersion: LINK_PROTOCOL_VERSION,
+        socket.emit(SATELLITE_EVENTS.init, {
+          protocolVersion: SATELLITE_PROTOCOL_VERSION,
           token: credential.value,
           device: {
             id: deviceId,
-            name: DEFAULT_LINK_NAME,
+            name: DEFAULT_SATELLITE_NAME,
             platform: process.platform
           },
-          toolkits: TOOLKIT_REGISTRY.getLinkManifest()
+          toolkits: TOOLKIT_REGISTRY.getSatelliteManifest()
         })
       }
     )
   })
 
-  socket.on(LINK_EVENTS.ready, () => {
-    LogHelper.title('Link')
+  socket.on(SATELLITE_EVENTS.ready, () => {
+    LogHelper.title('Satellite')
     LogHelper.success(
       `Connected device ${deviceId} to profile ${credential.profileName}`
     )
   })
 
   socket.on(
-    LINK_EVENTS.invokeTool,
-    async (invocation: LinkToolInvocation) => {
+    SATELLITE_EVENTS.invokeTool,
+    async (invocation: SatelliteToolInvocation) => {
       let result: ToolExecutionResult
 
       try {
@@ -138,7 +138,7 @@ async function startLink(): Promise<void> {
             TOOL_EXECUTOR.executeTool({
               ...invocation.input,
               onProgress: (progress) => {
-                socket.emit(LINK_EVENTS.toolProgress, {
+                socket.emit(SATELLITE_EVENTS.toolProgress, {
                   invocationId: invocation.invocationId,
                   progress
                 })
@@ -146,33 +146,33 @@ async function startLink(): Promise<void> {
             })
         )
       } catch (error) {
-        result = buildLinkToolError(invocation, error)
+        result = buildSatelliteToolError(invocation, error)
       }
 
-      const payload: LinkToolResultPayload = {
+      const payload: SatelliteToolResultPayload = {
         invocationId: invocation.invocationId,
         result
       }
 
-      socket.emit(LINK_EVENTS.toolResult, payload)
+      socket.emit(SATELLITE_EVENTS.toolResult, payload)
     }
   )
 
-  socket.on(LINK_EVENTS.error, (error: LinkErrorPayload) => {
-    LogHelper.title('Link')
+  socket.on(SATELLITE_EVENTS.error, (error: SatelliteErrorPayload) => {
+    LogHelper.title('Satellite')
     LogHelper.error(error.message)
   })
 
   socket.on('connect_error', (error) => {
-    LogHelper.title('Link')
+    LogHelper.title('Satellite')
     LogHelper.error(`Connection failed: ${error.message}`)
   })
 }
 
-process.title = 'leon-link'
+process.title = 'leon-satellite'
 
-void startLink().catch((error: unknown) => {
-  LogHelper.title('Link')
+void startSatellite().catch((error: unknown) => {
+  LogHelper.title('Satellite')
   LogHelper.error(error instanceof Error ? error.message : String(error))
   process.exitCode = 1
 })

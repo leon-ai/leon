@@ -60,13 +60,13 @@ import {
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import {
-  LINK_EVENTS,
-  LINK_PROTOCOL_VERSION,
-  type LinkInitPayload,
-  type LinkToolProgressPayload,
-  type LinkToolResultPayload
-} from '@/core/link/types'
-import { LINK_REGISTRY } from '@/core/link/link-registry'
+  SATELLITE_EVENTS,
+  SATELLITE_PROTOCOL_VERSION,
+  type SatelliteInitPayload,
+  type SatelliteToolProgressPayload,
+  type SatelliteToolResultPayload
+} from '@/core/satellite/types'
+import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 
 const DEFAULT_CLIENT_CAPABILITIES = {
   supportsWidgets: true,
@@ -130,7 +130,7 @@ interface ConnectedChatClient {
 export default class SocketServer {
   private static instance: SocketServer
   private readonly chatClients = new Map<string, ConnectedChatClient>()
-  private readonly linkClients = new Map<
+  private readonly satelliteClients = new Map<
     string,
     { profileName: string, deviceId: string }
   >()
@@ -940,19 +940,19 @@ export default class SocketServer {
       this.setActiveSocket(socket)
 
       socket.on(
-        LINK_EVENTS.init,
-        async (data: LinkInitPayload) => {
+        SATELLITE_EVENTS.init,
+        async (data: SatelliteInitPayload) => {
           const profileName = this.isLeonClientInterfaceAuthorized(socket, data)
 
           if (
             !profileName ||
-            data?.protocolVersion !== LINK_PROTOCOL_VERSION ||
+            data?.protocolVersion !== SATELLITE_PROTOCOL_VERSION ||
             !data.device?.id?.trim() ||
             !Array.isArray(data.toolkits)
           ) {
-            socket.emit(LINK_EVENTS.error, {
-              code: 'link_init_rejected',
-              message: 'Link authentication or protocol is invalid.'
+            socket.emit(SATELLITE_EVENTS.error, {
+              code: 'satellite_init_rejected',
+              message: 'Satellite authentication or protocol is invalid.'
             })
             socket.disconnect(true)
             return
@@ -961,11 +961,11 @@ export default class SocketServer {
           await runWithProfileContext({ profileName }, async () => {
             await ensureActiveProfileRuntime()
             await TOOLKIT_REGISTRY.load()
-            TOOLKIT_REGISTRY.registerLinkTools(
+            TOOLKIT_REGISTRY.registerSatelliteTools(
               data.device.id,
               data.toolkits
             )
-            LINK_REGISTRY.register({
+            SATELLITE_REGISTRY.register({
               profileName,
               device: data.device,
               toolkits: data.toolkits,
@@ -973,14 +973,14 @@ export default class SocketServer {
             })
           })
 
-          this.linkClients.set(socket.id, {
+          this.satelliteClients.set(socket.id, {
             profileName,
             deviceId: data.device.id
           })
           socket.on(
-            LINK_EVENTS.toolProgress,
-            (payload: LinkToolProgressPayload) => {
-              LINK_REGISTRY.handleProgress(
+            SATELLITE_EVENTS.toolProgress,
+            (payload: SatelliteToolProgressPayload) => {
+              SATELLITE_REGISTRY.handleProgress(
                 profileName,
                 data.device.id,
                 payload
@@ -988,17 +988,17 @@ export default class SocketServer {
             }
           )
           socket.on(
-            LINK_EVENTS.toolResult,
-            (payload: LinkToolResultPayload) => {
-              LINK_REGISTRY.handleResult(
+            SATELLITE_EVENTS.toolResult,
+            (payload: SatelliteToolResultPayload) => {
+              SATELLITE_REGISTRY.handleResult(
                 profileName,
                 data.device.id,
                 payload
               )
             }
           )
-          socket.emit(LINK_EVENTS.ready, {
-            protocolVersion: LINK_PROTOCOL_VERSION,
+          socket.emit(SATELLITE_EVENTS.ready, {
+            protocolVersion: SATELLITE_PROTOCOL_VERSION,
             profileName,
             deviceId: data.device.id
           })
@@ -1228,20 +1228,20 @@ export default class SocketServer {
 
       socket.once('disconnect', () => {
         this.unregisterChatClient(socket.id)
-        const linkClient = this.linkClients.get(socket.id)
+        const satelliteClient = this.satelliteClients.get(socket.id)
 
-        if (linkClient) {
+        if (satelliteClient) {
           runWithProfileContext(
-            { profileName: linkClient.profileName },
+            { profileName: satelliteClient.profileName },
             () => {
-              TOOLKIT_REGISTRY.removeLinkTools(linkClient.deviceId)
-              LINK_REGISTRY.unregister(
-                linkClient.profileName,
-                linkClient.deviceId
+              TOOLKIT_REGISTRY.removeSatelliteTools(satelliteClient.deviceId)
+              SATELLITE_REGISTRY.unregister(
+                satelliteClient.profileName,
+                satelliteClient.deviceId
               )
             }
           )
-          this.linkClients.delete(socket.id)
+          this.satelliteClients.delete(socket.id)
         }
         // TODO
         // deleteProvider(this.socket.id)
