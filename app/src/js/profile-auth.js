@@ -66,14 +66,9 @@ function requestProfileToken(serverUrl) {
 /** Ensure the browser has a profile cookie before initializing the Leon app. */
 export async function ensureProfileAuthentication(serverUrl) {
   axios.defaults.withCredentials = true
+  const response = await axios.get(`${serverUrl}${PROFILE_AUTH_API_PATH}`)
 
-  try {
-    await axios.get(`${serverUrl}${PROFILE_AUTH_API_PATH}`)
-  } catch (error) {
-    if (error.response?.status !== 401) {
-      throw error
-    }
-
+  if (!response.data.authenticated) {
     await requestProfileToken(serverUrl)
   }
 }

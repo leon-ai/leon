@@ -98,20 +98,20 @@ export const profileAuthRoutes: FastifyPluginAsync<APIOptions> = async (
       )
     })
     const credential = authenticateProfileCredential(credentialValue)
+    const authenticated =
+      Boolean(credential) || !IS_CLIENT_INTERFACE_AUTH_ENABLED
 
-    if (!credential && IS_CLIENT_INTERFACE_AUTH_ENABLED) {
-      rejectProfileAuthentication(reply)
-      return
+    if (authenticated) {
+      enterProfileContext({
+        profileName: credential?.profileName || LEON_PROFILE_NAME
+      })
     }
 
-    const profileName = credential?.profileName || LEON_PROFILE_NAME
-
-    enterProfileContext({ profileName })
     reply.send({
       success: true,
       status: 200,
-      authenticated: Boolean(credential) || !IS_CLIENT_INTERFACE_AUTH_ENABLED,
-      profile_name: getActiveProfileName()
+      authenticated,
+      profile_name: authenticated ? getActiveProfileName() : null
     })
   })
 
