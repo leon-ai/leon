@@ -4,6 +4,7 @@ import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
+import { setInitStatus as updateInitStatus } from './init-status'
 
 const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
 const LEON_EVENTS = {
@@ -112,14 +113,7 @@ export default class Client {
   }
 
   setInitStatus(statusName, statusType) {
-    window.leonInitStatusEvent.dispatchEvent(
-      new CustomEvent('initStatusChange', {
-        detail: {
-          statusName,
-          statusType
-        }
-      })
-    )
+    updateInitStatus(statusName, statusType)
   }
 
   waitForInitUICompletion() {

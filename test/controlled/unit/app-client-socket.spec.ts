@@ -52,9 +52,6 @@ describe('web app client socket', () => {
     vi.stubGlobal('window', {
       leonConfigInfo: {
         tcpServer: { enabled: true }
-      },
-      leonInitStatusEvent: {
-        dispatchEvent: vi.fn()
       }
     })
   })
