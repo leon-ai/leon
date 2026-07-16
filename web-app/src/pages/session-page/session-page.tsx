@@ -7,7 +7,7 @@ export function SessionPage() {
   return (
     <div className="session-page">
       <Feed />
-      <QueryInput />
+      <QueryInput autoFocus />
     </div>
   )
 }

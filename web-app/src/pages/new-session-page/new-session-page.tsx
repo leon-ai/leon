@@ -6,7 +6,7 @@ export function NewSessionPage() {
   return (
     <div className="new-session-page">
       <div className="new-session-page-composer">
-        <QueryInput />
+        <QueryInput autoFocus />
       </div>
     </div>
   )
