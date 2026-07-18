@@ -10,14 +10,14 @@ export default function renderAuroraComponent(
   supportedEvents
 ) {
   if (component) {
-    // `import/namespace` cannot statically validate dynamic component lookups.
-    // eslint-disable-next-line import/namespace
+    // `import-x/namespace` cannot statically validate dynamic component lookups.
+    // eslint-disable-next-line import-x/namespace
     let reactComponent = auroraComponents[component.component]
     /**
      * Find custom component if a former component is not found
      */
     if (!reactComponent) {
-      // eslint-disable-next-line import/namespace
+      // eslint-disable-next-line import-x/namespace
       reactComponent = customAuroraComponents[component.component]
     }
 

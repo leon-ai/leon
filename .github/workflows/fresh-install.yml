@@ -1,0 +1,60 @@
+name: Fresh installation
+
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fresh-install-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fresh-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      # Scheduled workflows are loaded from the default branch, but Leon's
+      # integration work lands on develop before it reaches a release branch.
+      - name: Check out Leon
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
+
+      - name: Read runtime versions
+        id: versions
+        shell: bash
+        run: |
+          echo "node=$(jq -r '.node' bin/node/versions.json)" >> "$GITHUB_OUTPUT"
+          echo "pnpm=$(jq -r '.pnpm' bin/pnpm/versions.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Use Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ steps.versions.outputs.node }}
+          package-manager-cache: false
+
+      - name: Install fresh pnpm
+        shell: bash
+        run: |
+          corepack enable
+          corepack install --global "pnpm@${{ steps.versions.outputs.pnpm }}"
+
+      - name: Test the interactive installation
+        env:
+          LEON_FRESH_INSTALL_API_KEY: xxx
+          LEON_FRESH_INSTALL_LOG_PATH: /tmp/leon-fresh-install.log
+        run: node scripts/ci/test-fresh-install.js
+
+      - name: Upload installer log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-install-log
+          path: /tmp/leon-fresh-install.log
+          if-no-files-found: ignore
+          retention-days: 7

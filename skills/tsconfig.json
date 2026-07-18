@@ -3,9 +3,8 @@
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ES2022",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "module": "ESNext",
-    "baseUrl": ".",
     "paths": {
       "@@/*": ["../*"],
       "@/*": ["../server/src/*"],

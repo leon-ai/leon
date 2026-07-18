@@ -1,4 +1,3 @@
-import type { DefaultEventsMap } from 'socket.io/dist/typed-events'
 import { Server as SocketIOServer, Socket } from 'socket.io'
 import axios from 'axios'
 
@@ -125,7 +124,7 @@ interface ConnectedChatClient {
   protocol: LeonClientInterfaceProtocol
   profileName: string
   sessionId: string
-  socket: Socket<DefaultEventsMap, DefaultEventsMap>
+  socket: Socket
 }
 
 export default class SocketServer {
@@ -136,8 +135,7 @@ export default class SocketServer {
     { profileName: string, deviceId: string }
   >()
 
-  public socket: Socket<DefaultEventsMap, DefaultEventsMap> | undefined =
-    undefined
+  public socket: Socket | undefined = undefined
 
   constructor() {
     if (!SocketServer.instance) {
@@ -149,7 +147,7 @@ export default class SocketServer {
   }
 
   private setActiveSocket(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>
+    socket: Socket
   ): void {
     this.socket = socket
   }
@@ -198,7 +196,7 @@ export default class SocketServer {
   }
 
   private registerChatClient(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     initData: InitDataEvent,
     profileName: string,
     protocol: LeonClientInterfaceProtocol = 'legacy'
@@ -226,7 +224,7 @@ export default class SocketServer {
   }
 
   private registerLeonClient(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     initData: LeonClientInterfaceInitPayload,
     profileName: string
   ): ConnectedChatClient {
@@ -294,7 +292,7 @@ export default class SocketServer {
   }
 
   private getSocketAuthToken(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     initData?: { token?: string }
   ): string {
     const handshakeAuthToken = socket.handshake.auth?.['token']
@@ -311,7 +309,7 @@ export default class SocketServer {
   }
 
   private isLeonClientInterfaceAuthorized(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     initData?: { token?: string }
   ): string | null {
     const initToken = this.getSocketAuthToken(socket, initData)
@@ -332,7 +330,7 @@ export default class SocketServer {
   }
 
   private emitSocketEvent(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     eventName: string,
     payload?: unknown
   ): void {
@@ -625,7 +623,7 @@ export default class SocketServer {
   }
 
   private monitorLLMInitialization(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     options: {
       profileName: string
       usesLlamaCPP: boolean
@@ -666,7 +664,7 @@ export default class SocketServer {
   }
 
   private emitLeonClientReady(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     sessionId: string
   ): void {
     socket.emit(LEON_CLIENT_INTERFACE_EVENTS.ready, {
@@ -676,7 +674,7 @@ export default class SocketServer {
   }
 
   private emitLeonClientError(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     payload: LeonClientInterfaceErrorPayload
   ): void {
     socket.emit(LEON_CLIENT_INTERFACE_EVENTS.error, payload)
@@ -718,7 +716,7 @@ export default class SocketServer {
   }
 
   private async handleOwnerMessage(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     utteranceData: UtteranceDataEvent
   ): Promise<void> {
     const profileName =
@@ -730,7 +728,7 @@ export default class SocketServer {
   }
 
   private async processOwnerMessage(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     utteranceData: UtteranceDataEvent
   ): Promise<void> {
     this.setActiveSocket(socket)
@@ -834,7 +832,7 @@ export default class SocketServer {
   }
 
   private async handleWidgetEvent(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     event: WidgetDataEvent
   ): Promise<void> {
     const profileName =

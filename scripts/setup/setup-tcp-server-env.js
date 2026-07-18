@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { setTimeout as sleep } from 'node:timers/promises'
 
 import execa from 'execa'
 
@@ -13,6 +14,8 @@ import { createSetupStatus } from './setup-status'
 
 const NLTK_DATA_DIR_NAME = 'nltk_data'
 const NLTK_VENV_DIR_NAME = '.venv'
+const NLTK_DOWNLOAD_MAXIMUM_ATTEMPTS = 3
+const NLTK_DOWNLOAD_RETRY_DELAY = 2_000
 const PYTHON_TCP_SERVER_VENV_BIN_PATH = getProjectVenvPythonPath(
   PYTHON_TCP_SERVER_SRC_PATH
 )
@@ -45,6 +48,41 @@ async function isNLTKDatasetInstalled(resourcePath) {
   }
 }
 
+// Retry in a new Python process because NLTK keeps its downloaded index in
+// memory, including a truncated response from a transient network failure.
+async function runNLTKDownloader(datasetIDs, status) {
+  let lastError = null
+
+  for (
+    let attempt = 1;
+    attempt <= NLTK_DOWNLOAD_MAXIMUM_ATTEMPTS;
+    attempt += 1
+  ) {
+    try {
+      await execa(PYTHON_TCP_SERVER_VENV_BIN_PATH, [
+        '-m',
+        'nltk.downloader',
+        '-d',
+        NLTK_DATA_PATH,
+        ...datasetIDs
+      ])
+
+      return
+    } catch (error) {
+      lastError = error
+
+      if (attempt === NLTK_DOWNLOAD_MAXIMUM_ATTEMPTS) {
+        break
+      }
+
+      status.text = `NLTK data download failed, retrying (${attempt}/${NLTK_DOWNLOAD_MAXIMUM_ATTEMPTS})...`
+      await sleep(NLTK_DOWNLOAD_RETRY_DELAY)
+    }
+  }
+
+  throw lastError
+}
+
 /**
  * NLTK data are used by g2p-en during TTS text normalization.
  *
@@ -75,16 +113,9 @@ async function downloadNLTKData() {
       .map(({ id }) => id)
       .join(', ')}`
 
-    await execa(
-      PYTHON_TCP_SERVER_VENV_BIN_PATH,
-      [
-        '-m',
-        'nltk.downloader',
-        '-d',
-        NLTK_DATA_PATH,
-        ...missingDatasets.map(({ id }) => id)
-      ],
-      { stdio: 'ignore' }
+    await runNLTKDownloader(
+      missingDatasets.map(({ id }) => id),
+      status
     )
 
     for (const dataset of missingDatasets) {

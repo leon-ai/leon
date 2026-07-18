@@ -9,6 +9,18 @@ import { createSetupStatus } from './setup-status'
 
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
 const QMD_MODELS_DIR_PATH = path.join(homedir(), '.cache', 'qmd', 'models')
+const QMD_DOWNLOAD_RETRY_OPTIONS = {
+  retries: 5,
+  factor: 1.5,
+  minTimeout: 1_000,
+  maxTimeout: 10_000
+}
+const QMD_DOWNLOAD_INFO_RETRY_OPTIONS = {
+  retries: 3,
+  factor: 1.5,
+  minTimeout: 1_000,
+  maxTimeout: 5_000
+}
 
 const QMD_MODELS = [
   {
@@ -73,7 +85,12 @@ async function downloadModel(model) {
 
   const resolvedURL = await NetworkHelper.setHuggingFaceURL(model.url)
 
-  await FileHelper.downloadFile(resolvedURL, destinationPath)
+  // Model files are large enough that transient CDN failures are common.
+  // Keep resumable downloads alive longer than the general file default.
+  await FileHelper.downloadFile(resolvedURL, destinationPath, {
+    retry: QMD_DOWNLOAD_RETRY_OPTIONS,
+    retryFetchDownloadInfo: QMD_DOWNLOAD_INFO_RETRY_OPTIONS
+  })
 
   return 'downloaded'
 }

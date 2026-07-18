@@ -405,12 +405,23 @@ export default class NLU {
   /**
    * Compute required parameters for an action by excluding optional_parameters
    */
-  private getRequiredParamsForAction(
-    actionConfig: NLUProcessResult['actionConfig']
-  ): string[] {
-    const allParams = Object.keys(actionConfig?.parameters || {})
-    const optionalParams: string[] = (actionConfig?.optional_parameters ||
-      []) as string[]
+  private getRequiredParamsForAction(actionConfig: unknown): string[] {
+    if (!actionConfig || typeof actionConfig !== 'object') {
+      return []
+    }
+
+    // Only expand the fields needed here; the complete generated schema is
+    // recursive and considerably more expensive for the compiler to infer.
+    const config = actionConfig as Record<string, unknown>
+    const parameters =
+      config['parameters'] && typeof config['parameters'] === 'object'
+        ? config['parameters']
+        : {}
+    const optionalParams = Array.isArray(config['optional_parameters'])
+      ? (config['optional_parameters'] as string[])
+      : []
+    const allParams = Object.keys(parameters)
+
     return allParams.filter((p) => !optionalParams.includes(p))
   }
 
@@ -1218,7 +1229,13 @@ export default class NLU {
     if (hasPendingAction) {
       this.workflowProgress.showResolvingParameters()
       const [slotName] = this.conversation.activeState.missingParameters
-      const actionConfig = this._nluProcessResult.actionConfig
+      // Limit inference to the parameter fields consumed by slot filling.
+      const actionConfig = this._nluProcessResult.actionConfig as {
+        parameters?: Record<
+          string,
+          { description?: string, type?: string } | undefined
+        >
+      } | null
       const param = actionConfig?.parameters?.[slotName as string]
 
       if (!slotName || !param) {

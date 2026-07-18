@@ -3,7 +3,6 @@
     "lib": ["DOM", "DOM.Iterable", "ESNext"],
     "rootDir": "./src",
     "outDir": "./dist",
-    "baseUrl": ".",
     "moduleResolution": "Bundler",
     "module": "ESNext",
     "target": "ESNext",
