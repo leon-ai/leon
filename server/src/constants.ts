@@ -461,7 +461,7 @@ export const CLIENT_INTERFACE_ALLOWED_ORIGINS =
   PROFILE_CONFIG.client_interface.allowed_origins
 export const IS_CLIENT_INTERFACE_AUTH_ENABLED =
   PROFILE_CONFIG.client_interface.auth.enabled
-export const CLIENT_INTERFACE_TOKEN = CONFIG_MANAGER.resolveSecretReference(
+export const PROFILE_TOKEN = CONFIG_MANAGER.resolveSecretReference(
   PROFILE_CONFIG.client_interface.auth.token
 )
 

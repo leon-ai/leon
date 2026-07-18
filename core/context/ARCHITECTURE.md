@@ -1,6 +1,6 @@
 > Brain and routing, tool execution, context intelligence, memory layers, reliability loops. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-07-13T21:45:01+08:00
+- Generated at: 2026-07-11T17:35:46+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -10,9 +10,17 @@
 - Auditable steps: I keep plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
-- HTTP APIs remain request/response support surfaces; live owner utterances should use the Socket.IO client interface.
+- HTTP APIs remain request/response support surfaces; live profile-scoped utterances should use the Socket.IO client interface.
 - External HTTP plugins can extend Leon's HTTP contract without patching the core API for each integration.
 - Custom clients can read profile-owned extension JSON files through a generic redacted HTTP endpoint, covering skill memory, skill settings, and tool settings without exposing secrets.
+## Profile Runtimes
+- One Leon server can serve multiple profiles concurrently, with each request and agent turn bound to one profile for its full asynchronous lifetime.
+- Runtime services are created lazily per profile, while config, secrets, sessions, memory, context, skills, tools, settings, and logs remain isolated in profile-owned paths.
+- A `<profile>:<token>` credential selects and authenticates the profile across Socket.IO clients, HTTP integrations, and Leon Satellite.
+## Leon Satellite
+- Leon Satellite is an optional process on a user device that connects its enabled and available profile tools to a remote Leon server.
+- Eligible tool calls are routed through Satellite and executed on that device; those tools become unavailable when Satellite disconnects.
+- Satellite provides generic transport only. Device-, application-, and company-specific behavior stays in tools and skills instead of Leon Core.
 ## Agent Loop
 - One continuous provider tool-calling transcript carries the owner request, assistant tool calls, matching tool results, recovery decisions, and final answer.
 - Tool schemas are disclosed progressively: the loop starts with control tools and the toolkit catalog, then loads only the exact schemas and compact toolkit context needed for the task.

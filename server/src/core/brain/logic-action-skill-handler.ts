@@ -1,6 +1,6 @@
 import path from 'node:path'
 import fs from 'node:fs'
-import { spawn } from 'node:child_process'
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 
 import type { NLUProcessResult } from '@/core/nlp/types'
 import type {
@@ -17,11 +17,29 @@ import {
   PYTHON_BRIDGE_RUNTIME_BIN_PATH,
   TSX_CLI_PATH
 } from '@/constants'
-import { BRAIN, SOCKET_SERVER, NLU, CONVERSATION_LOGGER } from '@/core'
+import {
+  BRAIN,
+  SOCKET_SERVER,
+  NLU,
+  CONVERSATION_LOGGER,
+  TOOL_EXECUTOR
+} from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import {
+  getActiveProfileName,
+  runWithProfileContext
+} from '@/core/profile-runtime/profile-context'
+import {
+  parseSkillToolBridgeMessage,
+  SKILL_TOOL_REQUEST_PREFIX,
+  SKILL_TOOL_RESULT_PREFIX,
+  type SkillToolRequest,
+  type SkillToolResponse
+} from '@/core/skill-tool-bridge'
 
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
 
@@ -30,20 +48,28 @@ export class LogicActionSkillHandler {
     nluProcessResult: NLUProcessResult,
     utteranceId: string
   ): Promise<Partial<BrainProcessResult>> {
-    return new Promise(async (resolve) => {
-      const intentObjectPath = path.join(TMP_PATH, `${utteranceId}.json`)
-      const {
-        skillConfig: { name: skillFriendlyName }
-      } = nluProcessResult
+    const intentObjectPath = path.join(TMP_PATH, `${utteranceId}.json`)
+    const {
+      skillConfig: { name: skillFriendlyName }
+    } = nluProcessResult
 
-      await this.executeLogicActionSkill(
-        nluProcessResult,
-        utteranceId,
-        intentObjectPath
-      )
+    await this.executeLogicActionSkill(
+      nluProcessResult,
+      utteranceId,
+      intentObjectPath
+    )
 
-      BRAIN.skillFriendlyName = skillFriendlyName
+    BRAIN.skillFriendlyName = skillFriendlyName
+    const profileName = getActiveProfileName()
+    const conversationSessionId =
+      CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    const skillProcess = BRAIN.skillProcess
 
+    if (!skillProcess) {
+      throw new Error(`Failed to start the "${skillFriendlyName}" skill.`)
+    }
+
+    return new Promise((resolve) => {
       let buffer = ''
       let stderrBuffer = ''
       let lastSkillResult: SkillResult | undefined = undefined
@@ -67,7 +93,7 @@ export class LogicActionSkillHandler {
       }
 
       // Read skill output
-      BRAIN.skillProcess?.stdout.on('data', (data: Buffer) => {
+      skillProcess.stdout.on('data', (data: Buffer) => {
         SOCKET_SERVER.emitToChatClients('is-typing', true)
         buffer += data.toString()
 
@@ -80,7 +106,15 @@ export class LogicActionSkillHandler {
 
           if (chunk) {
             // Check if this is a tool log first
-            if (chunk.includes('[LEON_TOOL_LOG]')) {
+            if (chunk.startsWith(SKILL_TOOL_REQUEST_PREFIX)) {
+              void runWithProfileContext({ profileName }, () =>
+                this.handleSkillToolRequest(
+                  chunk,
+                  skillProcess,
+                  conversationSessionId
+                )
+              )
+            } else if (chunk.includes('[LEON_TOOL_LOG]')) {
               // Extract and log the tool message without treating it as skill response
               const cleanedMessage = chunk.replace('[LEON_TOOL_LOG]', '').trim()
               if (cleanedMessage) {
@@ -106,18 +140,18 @@ export class LogicActionSkillHandler {
 
       // stderr can contain regular progress logs from underlying tools, so do not
       // surface it as a broken skill until the process has actually failed.
-      BRAIN.skillProcess?.stderr.on('data', (data: Buffer) => {
+      skillProcess.stderr.on('data', (data: Buffer) => {
         const chunk = data.toString()
         stderrBuffer += chunk
         this.handleLogicActionSkillProcessError(chunk)
       })
 
-      BRAIN.skillProcess?.on('error', (error: Error) => {
+      skillProcess.on('error', (error: Error) => {
         stderrBuffer += `${stderrBuffer ? '\n' : ''}${error.message}`
       })
 
       // Catch the end of the skill execution
-      BRAIN.skillProcess?.on('close', (code: number | null) => {
+      skillProcess.on('close', (code: number | null) => {
         LogHelper.title(`${BRAIN.skillFriendlyName} skill (on close)`)
         flushBufferedOutput()
         this.deleteIntentObjFile(intentObjectPath)
@@ -148,6 +182,59 @@ export class LogicActionSkillHandler {
         BRAIN.skillProcess = undefined
       })
     })
+  }
+
+  private static async handleSkillToolRequest(
+    line: string,
+    skillProcess: ChildProcessWithoutNullStreams | undefined,
+    conversationSessionId: string
+  ): Promise<void> {
+    const request = parseSkillToolBridgeMessage<SkillToolRequest>(
+      line,
+      SKILL_TOOL_REQUEST_PREFIX
+    )
+
+    if (!request || !skillProcess?.stdin.writable) {
+      return
+    }
+
+    const result = await TOOL_EXECUTOR.executeTool({
+      ...request.input,
+      onProgress: (progress) => {
+        SOCKET_SERVER.emitToChatClients(
+          'tool-progress',
+          {
+            requestId: request.requestId,
+            toolkitId: request.input.toolkitId || null,
+            toolId: request.input.toolId,
+            functionName: request.input.functionName || null,
+            progress
+          },
+          { sessionId: conversationSessionId }
+        )
+      }
+    }).catch(
+      (error: unknown) => ({
+        status: 'error' as const,
+        message: error instanceof Error ? error.message : String(error),
+        data: {
+          tool_id: request.input.toolId,
+          toolkit_id: request.input.toolkitId || null,
+          function_name: request.input.functionName,
+          input: request.input.toolInput || null,
+          parsed_input: request.input.parsedInput || null,
+          output: {}
+        }
+      })
+    )
+    const response: SkillToolResponse = {
+      requestId: request.requestId,
+      result
+    }
+
+    skillProcess.stdin.write(
+      `${SKILL_TOOL_RESULT_PREFIX} ${JSON.stringify(response)}\n`
+    )
   }
 
   /**
@@ -369,6 +456,10 @@ export class LogicActionSkillHandler {
             PYTHON_BRIDGE_RUNTIME_BIN_PATH,
             pythonBridgeCommandArgs,
             {
+              env: {
+                ...process.env,
+                LEON_PROFILE: getActiveProfileName()
+              },
               windowsHide: true
             }
           )
@@ -391,6 +482,10 @@ export class LogicActionSkillHandler {
             NODE_RUNTIME_BIN_PATH,
             nodejsBridgeCommandArgs,
             {
+              env: {
+                ...process.env,
+                LEON_PROFILE: getActiveProfileName()
+              },
               windowsHide: true
             }
           )
@@ -399,6 +494,7 @@ export class LogicActionSkillHandler {
         }
       } catch (e) {
         LogHelper.error(`Failed to save intent object: ${e}`)
+        throw e
       }
     }
   }

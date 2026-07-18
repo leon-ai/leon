@@ -178,6 +178,62 @@ body {
   font-weight: 400;
 }
 
+.profile-auth {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--black-color);
+}
+
+.profile-auth__form {
+  display: grid;
+  width: min(100%, 380px);
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--grey-color);
+  border-radius: 12px;
+  background: var(--light-black-color);
+
+  h1 {
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  p {
+    color: #b9bdbf;
+  }
+
+  input,
+  button {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--grey-color);
+    border-radius: 8px;
+    color: var(--white-color);
+    background: var(--black-color);
+  }
+
+  button {
+    border-color: var(--blue-color);
+    background: var(--blue-color);
+    cursor: pointer;
+  }
+
+  button:disabled {
+    cursor: wait;
+    opacity: 0.6;
+  }
+
+  .profile-auth__error {
+    min-height: 20px;
+    color: var(--pink-color);
+  }
+}
+
 
 @keyframes plan-tool-status-cozy-shine {
   0% {
@@ -208,7 +264,7 @@ body {
 body > * {
   transition: opacity 0.5s;
 }
-body.settingup > *:not(#init) {
+body.settingup > *:not(#init):not(.profile-auth) {
   opacity: 0;
 }
 #init .not-initialized {

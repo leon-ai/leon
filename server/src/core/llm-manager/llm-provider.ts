@@ -22,6 +22,7 @@ import {
   type ResolvedLLMTarget,
   getRoutingModeLLMDisplay
 } from '@/core/llm-manager/llm-routing'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 
 interface CompletionResult {
   dutyType: LLMDuties
@@ -106,8 +107,6 @@ const NO_LLM_ENABLED_MESSAGE =
 const LLM_PROVIDER_NOT_READY_MESSAGE =
   'The LLM provider is not ready yet. Use the built-in command "/model <provider> <model name>" to configure a model. Just press "/" to open built-in commands.'
 export default class LLMProvider {
-  private static instance: LLMProvider
-
   private workflowLLMProvider: Provider | undefined = undefined
   private agentLLMProvider: Provider | undefined = undefined
   private workflowLLMProviderTargetLabel: string | null = null
@@ -126,12 +125,8 @@ export default class LLMProvider {
   }
 
   constructor() {
-    if (!LLMProvider.instance) {
-      LogHelper.title('LLM Provider')
-      LogHelper.success('New instance')
-
-      LLMProvider.instance = this
-    }
+    LogHelper.title('LLM Provider')
+    LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
   }
 
   public get isLLMProviderReady(): boolean {

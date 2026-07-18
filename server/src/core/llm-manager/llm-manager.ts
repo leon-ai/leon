@@ -1,13 +1,13 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
-import {
-  LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH
-} from '@/constants'
 import { LLMDuties } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 
 interface CoreLLMDutyConfig {
   maxTokens?: number
@@ -80,7 +80,6 @@ async function buildSkillListContent(): Promise<string> {
 }
 
 export default class LLMManager {
-  private static instance: LLMManager
   private _isLLMEnabled = false
   private _skillListContent: SkillListContent = null
   private _coreLLMDuties = cloneCoreDutyConfig()
@@ -98,12 +97,8 @@ export default class LLMManager {
   }
 
   constructor() {
-    if (!LLMManager.instance) {
-      LogHelper.title('LLM Manager')
-      LogHelper.success('New instance')
-
-      LLMManager.instance = this
-    }
+    LogHelper.title('LLM Manager')
+    LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
   }
 
   /**
@@ -112,7 +107,7 @@ export default class LLMManager {
   private async singleLoad(): Promise<void> {
     try {
       this._skillListContent = await fs.promises.readFile(
-        LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH,
+        path.join(getProfilePaths().root, 'leon-skill-list.nlp'),
         'utf-8'
       )
 
@@ -133,7 +128,7 @@ export default class LLMManager {
       LogHelper.title('LLM Manager')
       LogHelper.error(`LLM Manager failed to single load: ${e}`)
 
-      process.exit(1)
+      this._skillListContent = await buildSkillListContent()
     }
 
     LogHelper.title('LLM Manager')

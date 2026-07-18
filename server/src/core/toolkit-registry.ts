@@ -1,14 +1,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import {
-  PROFILE_TOOLS_PATH,
-  TOOLS_PATH
-} from '@/constants'
+import { TOOLS_PATH } from '@/constants'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import type {
+  SatelliteToolkitDefinition,
+  SatelliteToolDefinition
+} from '@/core/satellite/types'
 
 const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
 const HOSTED_SEARCH_TOOL_ID = 'hosted'
@@ -93,18 +95,21 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 export default class ToolkitRegistry {
-  private static instance: ToolkitRegistry
+  private readonly profilePaths = getProfilePaths()
   private _toolkits: ToolkitDefinition[] = []
+  private _localToolkits: ToolkitDefinition[] = []
   private _toolAvailability = new Map<string, ToolAvailability>()
+  private _localToolAvailability = new Map<string, ToolAvailability>()
+  private readonly satelliteToolkits = new Map<
+    string,
+    SatelliteToolkitDefinition[]
+  >()
+  private readonly satelliteToolTargets = new Map<string, string>()
   private _isLoaded = false
 
   constructor() {
-    if (!ToolkitRegistry.instance) {
-      LogHelper.title('Toolkit Registry')
-      LogHelper.success('New instance')
-
-      ToolkitRegistry.instance = this
-    }
+    LogHelper.title('Toolkit Registry')
+    LogHelper.success(`New instance for profile ${this.profilePaths.name}`)
   }
 
   public get toolkits(): ToolkitDefinition[] {
@@ -338,6 +343,48 @@ export default class ToolkitRegistry {
     return toolkit?.contextFiles || []
   }
 
+  /** Export enabled local tools so Satellite can advertise them remotely. */
+  public getSatelliteManifest(): SatelliteToolkitDefinition[] {
+    return this._localToolkits.map((toolkit) => ({
+      id: toolkit.id,
+      name: toolkit.name,
+      description: toolkit.description,
+      icon_name: toolkit.iconName,
+      ...(toolkit.contextFiles ? { context_files: [...toolkit.contextFiles] } : {}),
+      tools: Object.fromEntries(
+        Object.entries(toolkit.tools || {})
+          .filter(([toolId]) => this.isToolAvailable(toolkit.id, toolId))
+          .map(([toolId, tool]) => [toolId, { ...tool }])
+      )
+    }))
+  }
+
+  /** Add the tool inventory advertised by one connected Satellite. */
+  public registerSatelliteTools(
+    deviceId: string,
+    toolkits: SatelliteToolkitDefinition[]
+  ): void {
+    this.satelliteToolkits.set(deviceId, toolkits)
+    this.refreshCombinedToolkits()
+  }
+
+  public removeSatelliteTools(deviceId: string): void {
+    this.satelliteToolkits.delete(deviceId)
+    this.refreshCombinedToolkits()
+  }
+
+  public getToolSatelliteDevice(
+    toolkitId: string,
+    toolId: string
+  ): string | null {
+    return (
+      this.satelliteToolTargets.get(
+        this.getQualifiedToolId(toolkitId, toolId)
+      ) ||
+      null
+    )
+  }
+
   public setFunctionParameterEnum(
     toolkitId: string,
     toolId: string,
@@ -384,7 +431,9 @@ export default class ToolkitRegistry {
         (toolkit) => toolkit.tools && Object.keys(toolkit.tools).length > 0
       )
 
-      this._toolkits = toolkits
+      this._localToolkits = toolkits
+      this._localToolAvailability = new Map(this._toolAvailability)
+      this.refreshCombinedToolkits()
       this._isLoaded = true
 
       LogHelper.title('Toolkit Registry')
@@ -397,16 +446,89 @@ export default class ToolkitRegistry {
 
   public async reload(): Promise<void> {
     this._toolkits = []
+    this._localToolkits = []
     this._toolAvailability.clear()
+    this._localToolAvailability.clear()
     this._isLoaded = false
 
     await this.load()
   }
 
+  private refreshCombinedToolkits(): void {
+    const toolkitsById = new Map<string, ToolkitDefinition>()
+
+    this.satelliteToolTargets.clear()
+    this._toolAvailability = new Map(this._localToolAvailability)
+
+    for (const toolkit of this._localToolkits) {
+      toolkitsById.set(toolkit.id, {
+        ...toolkit,
+        contextFiles: [...(toolkit.contextFiles || [])],
+        tools: { ...(toolkit.tools || {}) }
+      })
+    }
+
+    for (const [deviceId, satelliteToolkits] of this.satelliteToolkits) {
+      for (const satelliteToolkit of satelliteToolkits) {
+        const toolkit = toolkitsById.get(satelliteToolkit.id) || {
+          id: satelliteToolkit.id,
+          name: satelliteToolkit.name,
+          description: satelliteToolkit.description,
+          iconName: satelliteToolkit.icon_name,
+          contextFiles: [...(satelliteToolkit.context_files || [])],
+          tools: {}
+        }
+
+        for (const [toolId, tool] of Object.entries(satelliteToolkit.tools)) {
+          if (ProfileHelper.isToolDisabled(toolId, satelliteToolkit.id)) {
+            continue
+          }
+
+          toolkit.tools = {
+            ...(toolkit.tools || {}),
+            [toolId]: this.toToolkitToolDefinition(
+              satelliteToolkit.id,
+              toolId,
+              tool
+            )
+          }
+          const qualifiedToolId = this.getQualifiedToolId(
+            satelliteToolkit.id,
+            toolId
+          )
+
+          this.satelliteToolTargets.set(qualifiedToolId, deviceId)
+          this._toolAvailability.set(qualifiedToolId, {
+            available: true,
+            requiredSettings: [],
+            missingSettings: [],
+            settingsPath: null
+          })
+        }
+
+        toolkitsById.set(satelliteToolkit.id, toolkit)
+      }
+    }
+
+    this._toolkits = [...toolkitsById.values()]
+  }
+
+  private toToolkitToolDefinition(
+    toolkitId: string,
+    toolId: string,
+    tool: SatelliteToolDefinition
+  ): ToolkitToolDefinition {
+    return {
+      ...tool,
+      toolkit_id: toolkitId,
+      tool_id: toolId
+    }
+  }
+
   private async loadBuiltInToolkits(
     toolkitsById: Map<string, ToolkitDefinition>
   ): Promise<void> {
-    for (const toolsPath of [TOOLS_PATH, PROFILE_TOOLS_PATH]) {
+    for (const toolsPath of [TOOLS_PATH, this.profilePaths.tools]) {
       if (!fs.existsSync(toolsPath)) {
         continue
       }
@@ -586,7 +708,7 @@ export default class ToolkitRegistry {
     toolConfigPath: string
   ): Promise<ToolAvailability> {
     const settingsPath = path.join(
-      PROFILE_TOOLS_PATH,
+      this.profilePaths.tools,
       toolkitId,
       toolId,
       'settings.json'

@@ -8,11 +8,7 @@ import jq from 'node-jq'
 import type { Json as NodeJQJson } from 'node-jq/lib/options'
 
 import type { APIOptions } from '@/core/http-server/http-server'
-import {
-  PROFILE_AGENT_SKILLS_PATH,
-  PROFILE_NATIVE_SKILLS_PATH,
-  PROFILE_TOOLS_PATH
-} from '@/constants'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { JsonRedactionHelper } from '@/helpers/json-redaction-helper'
 
 const SETTINGS_FILE_NAME = 'settings.json'
@@ -76,13 +72,18 @@ function resolveProfileJsonPath(
       return null
     }
 
-    return path.join(PROFILE_TOOLS_PATH, ...ownerSegments, SETTINGS_FILE_NAME)
+    return path.join(
+      getProfilePaths().tools,
+      ...ownerSegments,
+      SETTINGS_FILE_NAME
+    )
   }
 
+  const profilePaths = getProfilePaths()
   const skillBasePath =
     body.skill_type === 'agent'
-      ? PROFILE_AGENT_SKILLS_PATH
-      : PROFILE_NATIVE_SKILLS_PATH
+      ? profilePaths.agentSkills
+      : profilePaths.nativeSkills
   const skillPath = path.join(skillBasePath, ...ownerSegments)
 
   if (body.file_type === 'settings') {

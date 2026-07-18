@@ -2,11 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
 
-import {
-  LEON_PRIVATE_DIARY_ENABLED,
-  PROFILE_CONTEXT_PATH
-} from '@/constants'
+import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -109,15 +107,8 @@ interface ReflectionPatch {
   }>
 }
 
-const PRIVATE_CONTEXT_DIR = path.join(PROFILE_CONTEXT_PATH, 'private')
-const PRIVATE_DIARY_PATH = path.join(
-  PRIVATE_CONTEXT_DIR,
-  'LEON_PRIVATE_DIARY.md'
-)
-const PRIVATE_STATE_PATH = path.join(
-  PRIVATE_CONTEXT_DIR,
-  '.leon-private-self-model.json'
-)
+const PRIVATE_DIARY_FILENAME = 'LEON_PRIVATE_DIARY.md'
+const PRIVATE_STATE_FILENAME = '.leon-private-self-model.json'
 const MAX_RECENT_TURNS = 10
 const MAX_RETROSPECTIONS = 6
 const MAX_BEHAVIORAL_PRINCIPLES = 6
@@ -220,28 +211,21 @@ function defaultState(): SelfModelState {
 }
 
 export default class SelfModelManager {
-  private static instance: SelfModelManager
-
   private state: SelfModelState | null = null
   private queue: Promise<void> = Promise.resolve()
 
   public constructor() {
-    if (!SelfModelManager.instance) {
-      LogHelper.title('Self Model Manager')
-      LogHelper.success('New instance')
+    LogHelper.title('Self Model Manager')
+    LogHelper.success('New instance')
 
-      SelfModelManager.instance = this
-      if (!LEON_PRIVATE_DIARY_ENABLED) {
-        return
-      }
-
+    if (this.isEnabled()) {
       this.ensureLoaded()
       this.persist()
     }
   }
 
   public getSnapshot(): string {
-    if (!LEON_PRIVATE_DIARY_ENABLED) {
+    if (!this.isEnabled()) {
       return ''
     }
 
@@ -280,15 +264,15 @@ export default class SelfModelManager {
   }
 
   public getDiaryPath(): string {
-    if (LEON_PRIVATE_DIARY_ENABLED) {
+    if (this.isEnabled()) {
       this.ensureLoaded()
     }
 
-    return PRIVATE_DIARY_PATH
+    return this.getPrivateDiaryPath()
   }
 
   public async observeTurn(input: SelfModelObservationInput): Promise<void> {
-    if (!LEON_PRIVATE_DIARY_ENABLED) {
+    if (!this.isEnabled()) {
       return
     }
 
@@ -310,7 +294,7 @@ export default class SelfModelManager {
     text: string,
     confidence = 0.88
   ): Promise<void> {
-    if (!LEON_PRIVATE_DIARY_ENABLED) {
+    if (!this.isEnabled()) {
       return
     }
 
@@ -354,8 +338,10 @@ export default class SelfModelManager {
     }
 
     try {
-      if (fs.existsSync(PRIVATE_STATE_PATH)) {
-        const raw = fs.readFileSync(PRIVATE_STATE_PATH, 'utf8')
+      const privateStatePath = this.getPrivateStatePath()
+
+      if (fs.existsSync(privateStatePath)) {
+        const raw = fs.readFileSync(privateStatePath, 'utf8')
         const parsed = JSON.parse(raw) as Partial<SelfModelState>
         this.state = {
           ...defaultState(),
@@ -935,22 +921,47 @@ export default class SelfModelManager {
   }
 
   private persist(): void {
-    if (!LEON_PRIVATE_DIARY_ENABLED) {
+    if (!this.isEnabled()) {
       return
     }
 
     const state = this.ensureLoaded()
+    const privateContextPath = this.getPrivateContextPath()
 
     try {
-      fs.mkdirSync(PRIVATE_CONTEXT_DIR, { recursive: true })
-      fs.writeFileSync(PRIVATE_STATE_PATH, JSON.stringify(state, null, 2), 'utf8')
-      fs.writeFileSync(PRIVATE_DIARY_PATH, this.renderDiary(state), 'utf8')
+      fs.mkdirSync(privateContextPath, { recursive: true })
+      fs.writeFileSync(
+        this.getPrivateStatePath(),
+        JSON.stringify(state, null, 2),
+        'utf8'
+      )
+      fs.writeFileSync(
+        this.getPrivateDiaryPath(),
+        this.renderDiary(state),
+        'utf8'
+      )
     } catch (error) {
       LogHelper.title('Self Model Manager')
       LogHelper.warning(
         `Failed to persist self model: ${String(error)}`
       )
     }
+  }
+
+  private isEnabled(): boolean {
+    return CONFIG_MANAGER.getConfig().runtime.private_diary_enabled
+  }
+
+  private getPrivateContextPath(): string {
+    return path.join(getProfilePaths().context, 'private')
+  }
+
+  private getPrivateDiaryPath(): string {
+    return path.join(this.getPrivateContextPath(), PRIVATE_DIARY_FILENAME)
+  }
+
+  private getPrivateStatePath(): string {
+    return path.join(this.getPrivateContextPath(), PRIVATE_STATE_FILENAME)
   }
 
   private getRuntimeBehavioralPrinciples(

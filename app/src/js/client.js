@@ -25,7 +25,7 @@ export default class Client {
     this._input = input
     this.voiceSpeechElement = document.querySelector('#voice-speech')
     this.serverUrl = serverUrl
-    this.socket = io(this.serverUrl)
+    this.socket = io(this.serverUrl, { withCredentials: true })
     this.activeSessionId = options.activeSessionId || null
     this.history = localStorage.getItem('history')
     this.parsedHistory = []

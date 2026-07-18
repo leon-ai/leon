@@ -53,40 +53,38 @@ export const fetchWidget: FastifyPluginAsync<APIOptions> = async (
           })
         }
 
-        // Do not return any speech and new widget
-        BRAIN.isMuted = true
-
-        await NLUProcessResultUpdater.update({
-          skillName: skill
-        })
-        await NLUProcessResultUpdater.update({
-          actionName: action
-        })
-        await NLUProcessResultUpdater.update({
-          new: {
-            entities: [
-              {
-                start: 0,
-                end: widgetId.length - 1,
-                len: widgetId.length,
-                levenshtein: 0,
-                accuracy: 1,
-                entity: 'widgetid',
-                type: 'enum',
-                option: widgetId,
-                sourceText: widgetId,
-                utteranceText: widgetId,
-                resolution: {
-                  value: widgetId
-                }
-              }
-            ]
-          }
-        })
-
         const processedData = await CONVERSATION_SESSION_MANAGER.runWithSession(
           sessionId || CONVERSATION_SESSION_MANAGER.getActiveSessionId(),
-          () => BRAIN.runSkillAction(NLU.nluProcessResult)
+          async () => {
+            // Do not return any speech and new widget.
+            BRAIN.isMuted = true
+
+            await NLUProcessResultUpdater.update({ skillName: skill })
+            await NLUProcessResultUpdater.update({ actionName: action })
+            await NLUProcessResultUpdater.update({
+              new: {
+                entities: [
+                  {
+                    start: 0,
+                    end: widgetId.length - 1,
+                    len: widgetId.length,
+                    levenshtein: 0,
+                    accuracy: 1,
+                    entity: 'widgetid',
+                    type: 'enum',
+                    option: widgetId,
+                    sourceText: widgetId,
+                    utteranceText: widgetId,
+                    resolution: {
+                      value: widgetId
+                    }
+                  }
+                ]
+              }
+            })
+
+            return BRAIN.runSkillAction(NLU.nluProcessResult)
+          }
         )
 
         console.log('processedData', processedData)

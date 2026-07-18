@@ -12,6 +12,21 @@ import type {
   HTTPPluginRequest
 } from '@/core/http-server/http-plugins/types'
 
+vi.mock('@/core/profile-auth', () => ({
+  authenticateProfileCredential: (
+    value: string
+  ): { profileName: string, secret: string } | null =>
+    value === 'louis:secret-token'
+      ? { profileName: 'louis', secret: 'secret-token' }
+      : null,
+  readProfileCredentialFromHeaders: (
+    headers: Record<string, string>
+  ): string =>
+    headers.authorization?.replace(/^Bearer\s+/i, '') ||
+    headers['x-leon-profile-token'] ||
+    ''
+}))
+
 vi.mock('@/helpers/log-helper', () => ({
   LogHelper: {
     title: vi.fn(),
@@ -110,18 +125,14 @@ describe('External HTTP plugin loader', () => {
 describe('External HTTP plugin authentication', () => {
   it('accepts both supported token headers', () => {
     const bearerRequest = {
-      headers: { authorization: 'Bearer secret-token' }
+      headers: { authorization: 'Bearer louis:secret-token' }
     } as HTTPPluginRequest
     const pluginHeaderRequest = {
-      headers: { 'x-leon-http-plugin-token': 'secret-token' }
+      headers: { 'x-leon-profile-token': 'louis:secret-token' }
     } as HTTPPluginRequest
 
-    expect(
-      isHTTPPluginRequestAuthorized(bearerRequest, 'secret-token')
-    ).toBe(true)
-    expect(
-      isHTTPPluginRequestAuthorized(pluginHeaderRequest, 'secret-token')
-    ).toBe(true)
+    expect(isHTTPPluginRequestAuthorized(bearerRequest)).toBe(true)
+    expect(isHTTPPluginRequestAuthorized(pluginHeaderRequest)).toBe(true)
   })
 
   it('returns the standard unauthorized response', () => {
@@ -133,8 +144,8 @@ describe('External HTTP plugin authentication', () => {
     expect(send).toHaveBeenCalledWith({
       success: false,
       status: 401,
-      code: 'http_plugin_unauthorized',
-      message: 'HTTP plugin token is missing or invalid.'
+      code: 'profile_unauthorized',
+      message: 'Leon profile token is missing or invalid.'
     })
   })
 })

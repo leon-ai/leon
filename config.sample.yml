@@ -135,8 +135,8 @@ client_interface:
     # Enable this when exposing Leon to clients outside your local machine.
     enabled: false
     token:
-      # The value is read from LEON_CLIENT_INTERFACE_TOKEN in your profile .env file.
-      env: LEON_CLIENT_INTERFACE_TOKEN
+      # The value is read from LEON_PROFILE_TOKEN in your profile .env file.
+      env: LEON_PROFILE_TOKEN
 
 http_plugins:
   # Enable this to let HTTP plugins expose integration-specific routes.
@@ -148,8 +148,8 @@ http_plugins:
     # Enable this when exposing HTTP plugins beyond trusted local development.
     enabled: false
     token:
-      # The value is read from LEON_HTTP_PLUGIN_TOKEN in your profile .env file.
-      env: LEON_HTTP_PLUGIN_TOKEN
+      # Profile-owned HTTP plugins use the same profile token as other clients.
+      env: LEON_PROFILE_TOKEN
   plugins:
   # External plugins are discovered from:
   # ~/.leon/http-plugins/<plugin-id>/

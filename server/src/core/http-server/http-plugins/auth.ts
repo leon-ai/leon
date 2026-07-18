@@ -1,26 +1,31 @@
 import type { HTTPPluginReply, HTTPPluginRequest } from './types'
-
-function readBearerToken(value: string | undefined): string {
-  if (!value) {
-    return ''
-  }
-
-  const match = value.match(/^Bearer\s+(.+)$/i)
-
-  return match?.[1]?.trim() || ''
-}
+import {
+  authenticateProfileCredential,
+  readProfileCredentialFromHeaders
+} from '@/core/profile-auth'
+import { enterProfileContext } from '@/core/profile-runtime/profile-context'
 
 /** Checks the supported authentication headers for a dynamically loaded HTTP plugin. */
 export function isHTTPPluginRequestAuthorized(
-  request: HTTPPluginRequest,
-  token: string
+  request: HTTPPluginRequest
 ): boolean {
-  const authorizationToken = readBearerToken(request.headers.authorization)
-  const headerToken = String(
-    request.headers['x-leon-http-plugin-token'] || ''
-  ).trim()
+  const credential = readProfileCredentialFromHeaders({
+    authorization: request.headers.authorization,
+    cookie: request.headers.cookie,
+    'x-leon-profile-token': String(
+      request.headers['x-leon-profile-token'] || ''
+    )
+  })
 
-  return authorizationToken === token || headerToken === token
+  const authenticatedCredential = authenticateProfileCredential(credential)
+
+  if (!authenticatedCredential) {
+    return false
+  }
+
+  enterProfileContext({ profileName: authenticatedCredential.profileName })
+
+  return true
 }
 
 /** Sends the standard unauthorized response from a dynamically loaded HTTP plugin. */
@@ -32,7 +37,7 @@ export function rejectUnauthorizedHTTPPluginRequest(
   return reply.send({
     success: false,
     status: 401,
-    code: 'http_plugin_unauthorized',
-    message: 'HTTP plugin token is missing or invalid.'
+    code: 'profile_unauthorized',
+    message: 'Leon profile token is missing or invalid.'
   })
 }

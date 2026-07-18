@@ -2,7 +2,6 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import { PROFILE_CONTEXT_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
@@ -10,6 +9,7 @@ import {
   ContextProbeHelper,
   RunningProcessEntry
 } from '@/core/context-manager/context-probe-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 interface AppActivityAggregate {
   appName: string
@@ -523,7 +523,7 @@ export class ActivityContextFile extends ContextFile {
     const stateFilePath = this.getStateFilePath()
 
     try {
-      fs.mkdirSync(PROFILE_CONTEXT_PATH, { recursive: true })
+      fs.mkdirSync(getProfilePaths().context, { recursive: true })
       fs.writeFileSync(stateFilePath, JSON.stringify(state, null, 2), 'utf8')
     } catch {
       // Ignore state persistence errors.
@@ -563,6 +563,6 @@ export class ActivityContextFile extends ContextFile {
   }
 
   private getStateFilePath(): string {
-    return path.join(PROFILE_CONTEXT_PATH, ACTIVITY_STATE_FILENAME)
+    return path.join(getProfilePaths().context, ACTIVITY_STATE_FILENAME)
   }
 }

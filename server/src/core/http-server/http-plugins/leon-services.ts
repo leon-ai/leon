@@ -1,7 +1,9 @@
 import { LLM_MANAGER } from '@/core'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
-import { LEON_PROFILE_NAME } from '@/leon-roots'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
 import type {
   HTTPPluginLeonServices,
@@ -58,12 +60,23 @@ function normalizeToolCalls(result: LLMDutyResult | null): HTTPPluginToolCall[] 
 async function runAgent(
   input: HTTPPluginRunAgentInput
 ): Promise<HTTPPluginRunAgentResult> {
-  const duty = new ReActLLMDuty({
-    input: input.query.trim()
-  })
+  await ensureActiveProfileRuntime()
+  const requestedSession = input.session_id
+    ? CONVERSATION_SESSION_MANAGER.getSession(input.session_id)
+    : null
+  const sessionId = requestedSession?.id ||
+    CONVERSATION_SESSION_MANAGER.getActiveSessionId()
+  const result = await CONVERSATION_SESSION_MANAGER.runWithSession(
+    sessionId,
+    async () => {
+      const duty = new ReActLLMDuty({
+        input: input.query.trim()
+      })
 
-  await duty.init()
-  const result = await duty.execute()
+      await duty.init()
+      return duty.execute()
+    }
+  )
   const data = result?.data || {}
   const output = result?.output as unknown
 
@@ -71,8 +84,8 @@ async function runAgent(
     answer: typeof output === 'string' ? output : '',
     tier: 'leon-react',
     tool_calls: normalizeToolCalls(result),
-    profile_id: LEON_PROFILE_NAME,
-    session_id: input.session_id || null,
+    profile_id: getActiveProfileName(),
+    session_id: sessionId,
     request_id: input.request_id || null,
     final_intent:
       typeof data['finalIntent'] === 'string' ? data['finalIntent'] : null,
@@ -82,7 +95,9 @@ async function runAgent(
 
 export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
   return {
-    profileId: LEON_PROFILE_NAME,
+    get profileId(): string {
+      return getActiveProfileName()
+    },
     isLLMEnabled: () => LLM_MANAGER.isLLMEnabled,
     runAgent
   }

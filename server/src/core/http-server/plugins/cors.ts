@@ -6,6 +6,19 @@ import {
   IS_PRODUCTION_ENV,
   WEB_APP_DEV_SERVER_PORT
 } from '@/constants'
+import {
+  PROFILE_AUTHORIZATION_HEADER_NAME,
+  PROFILE_TOKEN_HEADER_NAME
+} from '@/core/profile-auth'
+
+const ALLOWED_REQUEST_HEADERS = [
+  'Origin',
+  'X-Requested-With',
+  'Content-Type',
+  'Accept',
+  PROFILE_AUTHORIZATION_HEADER_NAME,
+  PROFILE_TOKEN_HEADER_NAME
+].join(', ')
 
 function getAllowedOrigins(): string[] {
   const origins = new Set(CLIENT_INTERFACE_ALLOWED_ORIGINS)
@@ -33,7 +46,7 @@ export const corsMidd: onRequestHookHandler = async (request, reply) => {
   // Allow several headers for our requests
   reply.header(
     'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, X-Leon-Client-Token'
+    ALLOWED_REQUEST_HEADERS
   )
 
   reply.header('Access-Control-Allow-Credentials', true)

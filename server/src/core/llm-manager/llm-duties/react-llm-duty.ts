@@ -31,12 +31,13 @@ import {
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
-import { PROFILE_LOGS_PATH } from '@/constants'
 import type { MessageLog } from '@/types'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
 
 function getLLMProviderName(): LLMProviders {
@@ -131,7 +132,6 @@ const AGENT_CONTINUATION_STATE_FILENAME = '.agent-loop-continuation-state.json'
 const AGENT_HISTORY_COMPACTION_STATE_FILENAME =
   '.react-history-compaction-state.json'
 const AGENT_SESSION_STATE_FILENAME_SEPARATOR = '--'
-const AGENT_PROMPTS_LOG_DIR = path.join(PROFILE_LOGS_PATH, 'prompts')
 
 type AgentHistoryCompactionScope = 'local' | 'remote'
 
@@ -518,7 +518,8 @@ export class ReActLLMDuty extends LLMDuty {
 
   private getContinuationStateStore(): ContextStateStore<AgentLoopContinuationState | null> {
     const filename = this.getSessionStateFilename(AGENT_CONTINUATION_STATE_FILENAME)
-    const existingStore = ReActLLMDuty.continuationStateStores.get(filename)
+    const storeKey = `${getActiveProfileName()}:${filename}`
+    const existingStore = ReActLLMDuty.continuationStateStores.get(storeKey)
 
     if (existingStore) {
       return existingStore
@@ -529,7 +530,7 @@ export class ReActLLMDuty extends LLMDuty {
       null
     )
 
-    ReActLLMDuty.continuationStateStores.set(filename, store)
+    ReActLLMDuty.continuationStateStores.set(storeKey, store)
 
     return store
   }
@@ -538,7 +539,8 @@ export class ReActLLMDuty extends LLMDuty {
     const filename = this.getSessionStateFilename(
       AGENT_HISTORY_COMPACTION_STATE_FILENAME
     )
-    const existingStore = ReActLLMDuty.historyCompactionStateStores.get(filename)
+    const storeKey = `${getActiveProfileName()}:${filename}`
+    const existingStore = ReActLLMDuty.historyCompactionStateStores.get(storeKey)
 
     if (existingStore) {
       return existingStore
@@ -549,7 +551,7 @@ export class ReActLLMDuty extends LLMDuty {
       AGENT_HISTORY_COMPACTION_STATE_FALLBACK
     )
 
-    ReActLLMDuty.historyCompactionStateStores.set(filename, store)
+    ReActLLMDuty.historyCompactionStateStores.set(storeKey, store)
 
     return store
   }
@@ -1531,10 +1533,12 @@ export class ReActLLMDuty extends LLMDuty {
     shouldStream?: boolean
   }): void {
     try {
-      fs.mkdirSync(AGENT_PROMPTS_LOG_DIR, { recursive: true })
+      const agentPromptsLogPath = path.join(getProfilePaths().logs, 'prompts')
+
+      fs.mkdirSync(agentPromptsLogPath, { recursive: true })
 
       const promptLogFilePath = path.join(
-        AGENT_PROMPTS_LOG_DIR,
+        agentPromptsLogPath,
         'agent.log'
       )
       const headerLines = [

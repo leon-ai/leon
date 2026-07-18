@@ -11,6 +11,7 @@ export const LEON_CLIENT_INTERFACE_EVENTS = {
   suggest: 'leon:suggest',
   llmToken: 'leon:llm-token',
   llmReasoningToken: 'leon:llm-reasoning-token',
+  toolProgress: 'leon:tool-progress',
   ownerUtterance: 'leon:owner-utterance',
   error: 'leon:error'
 } as const
@@ -64,6 +65,19 @@ export interface LeonClientInterfaceTokenPayload {
   token: string
   generationId: string
   phase?: string
+}
+
+export interface LeonClientInterfaceToolProgressPayload {
+  requestId: string
+  toolkitId: string | null
+  toolId: string
+  functionName: string | null
+  progress: {
+    source: 'log' | 'report'
+    message: string
+    key?: string
+    data?: Record<string, unknown>
+  }
 }
 
 export interface LeonClientInterfaceErrorPayload {

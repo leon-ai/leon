@@ -3,10 +3,10 @@ import path from 'node:path'
 
 import {
   buildOwnerDocument,
+  getOwnerContextPath,
+  getOwnerProfilePath,
   getOwnerProfileLineCount,
   normalizeOwnerProfile,
-  OWNER_CONTEXT_PATH,
-  OWNER_PROFILE_PATH,
   parseOwnerDocument,
   readOwnerDocumentSync,
   readOwnerProfileSync,
@@ -625,8 +625,8 @@ async function writeOwnerArtifacts(
     nextProfile
   )
   const contextChanged =
-    !documentProfilesEqual || !fs.existsSync(OWNER_CONTEXT_PATH)
-  const profileChanged = !profilesEqual || !fs.existsSync(OWNER_PROFILE_PATH)
+    !documentProfilesEqual || !fs.existsSync(getOwnerContextPath())
+  const profileChanged = !profilesEqual || !fs.existsSync(getOwnerProfilePath())
 
   if (!profileChanged && !contextChanged) {
     return {
@@ -636,8 +636,10 @@ async function writeOwnerArtifacts(
   }
 
   if (contextChanged) {
-    await fs.promises.mkdir(path.dirname(OWNER_CONTEXT_PATH), { recursive: true })
-    await fs.promises.writeFile(OWNER_CONTEXT_PATH, `${nextDocument}\n`, 'utf8')
+    const ownerContextPath = getOwnerContextPath()
+
+    await fs.promises.mkdir(path.dirname(ownerContextPath), { recursive: true })
+    await fs.promises.writeFile(ownerContextPath, `${nextDocument}\n`, 'utf8')
   }
   await writeOwnerProfile(nextProfile)
 

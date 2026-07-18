@@ -1,11 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import {
-  PROFILE_CONTEXT_PATH,
-  PROFILE_MEMORY_PATH
-} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import {
   type QMDCollectionDefinition,
   type QMDStoreRow,
@@ -42,7 +39,7 @@ import type {
   RecallRetrievalMode
 } from './types'
 
-const QMD_INDEX_NAME = 'leon-memory'
+const QMD_INDEX_PREFIX = 'leon-memory'
 const QMD_UPDATE_MIN_INTERVAL_MS = 5_000
 const QMD_EMBED_MIN_INTERVAL_MS = 30_000
 const BRIDGE_SOURCE_CONTENT_CAP = 96_000
@@ -66,35 +63,34 @@ interface QMDQueryInput {
 
 type QMDSearchMode = 'query' | 'search'
 
-const QMD_COLLECTIONS: Record<KnowledgeNamespace, { name: string, dir: string }> = {
-  context: {
-    name: 'context',
-    dir: PROFILE_CONTEXT_PATH
-  },
-  memory_persistent: {
-    name: 'memory-persistent',
-    dir: path.join(PROFILE_MEMORY_PATH, 'persistent')
-  },
-  memory_daily: {
-    name: 'memory-daily',
-    dir: path.join(PROFILE_MEMORY_PATH, 'daily')
-  },
-  memory_discussion: {
-    name: 'memory-discussion',
-    dir: path.join(PROFILE_MEMORY_PATH, 'discussion')
-  },
-  conversation_daily: {
-    name: 'memory-daily',
-    dir: path.join(PROFILE_MEMORY_PATH, 'daily')
+function createQMDCollections(
+  profileName: string
+): Record<KnowledgeNamespace, { name: string, dir: string }> {
+  const profilePaths = getProfilePaths(profileName)
+
+  return {
+    context: {
+      name: 'context',
+      dir: profilePaths.context
+    },
+    memory_persistent: {
+      name: 'memory-persistent',
+      dir: path.join(profilePaths.memory, 'persistent')
+    },
+    memory_daily: {
+      name: 'memory-daily',
+      dir: path.join(profilePaths.memory, 'daily')
+    },
+    memory_discussion: {
+      name: 'memory-discussion',
+      dir: path.join(profilePaths.memory, 'discussion')
+    },
+    conversation_daily: {
+      name: 'memory-daily',
+      dir: path.join(profilePaths.memory, 'daily')
+    }
   }
 }
-
-const SDK_COLLECTIONS: QMDCollectionDefinition[] = [
-  QMD_COLLECTIONS.context,
-  QMD_COLLECTIONS.memory_persistent,
-  QMD_COLLECTIONS.memory_daily,
-  QMD_COLLECTIONS.memory_discussion
-]
 
 function isContextFilenameAllowed(
   allowedFilenames: Set<string>,
@@ -112,12 +108,29 @@ function isContextFilenameAllowed(
 }
 
 export default class QMDBackend {
+  private readonly indexName: string
+  private readonly collections: Record<
+    KnowledgeNamespace,
+    { name: string, dir: string }
+  >
+  private readonly sdkCollections: QMDCollectionDefinition[]
   private loaded = false
   private lastUpdateAt = 0
   private lastEmbedAt = 0
   private hybridRetrievalEnabled = false
   private embeddingRefreshPromise: Promise<void> | null = null
   private readonly dirtyNamespaces = new Set<KnowledgeNamespace>()
+
+  public constructor(profileName: string) {
+    this.indexName = `${QMD_INDEX_PREFIX}-${profileName}`
+    this.collections = createQMDCollections(profileName)
+    this.sdkCollections = [
+      this.collections.context,
+      this.collections.memory_persistent,
+      this.collections.memory_daily,
+      this.collections.memory_discussion
+    ]
+  }
 
   public markDirty(namespace: KnowledgeNamespace): void {
     this.dirtyNamespaces.add(namespace)
@@ -132,7 +145,7 @@ export default class QMDBackend {
     this.loaded = true
 
     LogHelper.title('Memory Manager')
-    LogHelper.success(`QMD backend loaded (index=${QMD_INDEX_NAME})`)
+    LogHelper.success(`QMD backend loaded (index=${this.indexName})`)
   }
 
   public enableHybridRetrieval(): void {
@@ -159,11 +172,11 @@ export default class QMDBackend {
 
     try {
       await updateQMDStore({
-        indexName: QMD_INDEX_NAME,
-        collections: SDK_COLLECTIONS,
+        indexName: this.indexName,
+        collections: this.sdkCollections,
         collectionNames: [...new Set(
           [...this.dirtyNamespaces]
-            .map((namespace) => QMD_COLLECTIONS[namespace]?.name)
+            .map((namespace) => this.collections[namespace]?.name)
             .filter((name): name is string => Boolean(name))
         )]
       })
@@ -204,7 +217,7 @@ export default class QMDBackend {
     const collectionNames = [
       ...new Set(
         uniqueNamespaces
-          .map((namespace) => QMD_COLLECTIONS[namespace]?.name)
+          .map((namespace) => this.collections[namespace]?.name)
           .filter((name): name is string => Boolean(name))
       )
     ]
@@ -221,14 +234,14 @@ export default class QMDBackend {
     const namespaceByCollection = new Map<string, KnowledgeNamespace[]>(
       collectionNames.map((collectionName) => {
         const mappedNamespaces = uniqueNamespaces.filter(
-          (namespace) => QMD_COLLECTIONS[namespace]?.name === collectionName
+          (namespace) => this.collections[namespace]?.name === collectionName
         )
         return [collectionName, mappedNamespaces]
       })
     )
     const collectionPathByName = new Map<string, string>(
       collectionNames.map((collectionName) => {
-        const definition = Object.values(QMD_COLLECTIONS).find(
+        const definition = Object.values(this.collections).find(
           (entry) => entry.name === collectionName
         )
         return [collectionName, definition?.dir || '']
@@ -369,7 +382,7 @@ export default class QMDBackend {
       return rankRetrievedHits(
         hitsInput,
         queryTokens,
-        QMD_COLLECTIONS,
+        this.collections,
         namespaceWeights,
         BRIDGE_SOURCE_CONTENT_CAP
       )
@@ -455,7 +468,7 @@ export default class QMDBackend {
         (namespace) => !hits.some((hit) => hit.namespace === namespace)
       )
       for (const missingNamespace of missingNamespaces) {
-        const collectionName = QMD_COLLECTIONS[missingNamespace]?.name
+        const collectionName = this.collections[missingNamespace]?.name
         if (!collectionName) {
           continue
         }
@@ -487,7 +500,7 @@ export default class QMDBackend {
         input.query,
         queryTokens,
         rankedHits.map((rankedHit) => rankedHit.hit),
-        QMD_COLLECTIONS,
+        this.collections,
         BRIDGE_SOURCE_CONTENT_CAP
       )
 
@@ -512,7 +525,7 @@ export default class QMDBackend {
             (namespace) => !hits.some((hit) => hit.namespace === namespace)
           )
           for (const missingNamespace of stillMissingNamespaces) {
-            const collectionName = QMD_COLLECTIONS[missingNamespace]?.name
+            const collectionName = this.collections[missingNamespace]?.name
             if (!collectionName) {
               continue
             }
@@ -549,7 +562,7 @@ export default class QMDBackend {
     const rescueBridgeTokens = buildHydratedRescueBridgeTokens(
       queryTokens,
       rankedHits,
-      QMD_COLLECTIONS,
+      this.collections,
       BRIDGE_SOURCE_CONTENT_CAP
     ).filter((token) => !secondPassSupportTokens.includes(token))
 
@@ -576,7 +589,7 @@ export default class QMDBackend {
           (namespace) => !hits.some((hit) => hit.namespace === namespace)
         )
         for (const missingNamespace of stillMissingNamespaces) {
-          const collectionName = QMD_COLLECTIONS[missingNamespace]?.name
+          const collectionName = this.collections[missingNamespace]?.name
           if (!collectionName) {
             continue
           }
@@ -611,7 +624,7 @@ export default class QMDBackend {
     const backtrackCandidates = buildHydratedBacktrackCandidates(
       queryTokens,
       rankedHits,
-      QMD_COLLECTIONS,
+      this.collections,
       namespaceWeights,
       BRIDGE_SOURCE_CONTENT_CAP
     )
@@ -636,14 +649,14 @@ export default class QMDBackend {
     const excerptQueryTokens = buildAdaptiveQueryTokenSet(
       queryTokens,
       rankedHits.map((rankedHit) => rankedHit.hit),
-      QMD_COLLECTIONS,
+      this.collections,
       BRIDGE_SOURCE_CONTENT_CAP
     )
 
     const supportTokens = buildFinalSupportTokens(
       excerptQueryTokens,
       rankedHits,
-      QMD_COLLECTIONS,
+      this.collections,
       BRIDGE_SOURCE_CONTENT_CAP,
       [...secondPassSupportTokens, ...rescueSupportTokens]
     )
@@ -655,7 +668,7 @@ export default class QMDBackend {
         rankedHit.hit,
         excerptQueryTokens,
         supportTokens,
-        QMD_COLLECTIONS,
+        this.collections,
         BRIDGE_SOURCE_CONTENT_CAP
       )
     }))
@@ -683,11 +696,11 @@ export default class QMDBackend {
 
   private async ensureCollections(): Promise<void> {
     await Promise.all(
-      SDK_COLLECTIONS.map((collection) =>
+      this.sdkCollections.map((collection) =>
         fs.promises.mkdir(collection.dir, { recursive: true })
       )
     )
-    await getQMDStore(QMD_INDEX_NAME, SDK_COLLECTIONS)
+    await getQMDStore(this.indexName, this.sdkCollections)
 
     this.markDirty('context')
     this.markDirty('memory_persistent')
@@ -709,8 +722,8 @@ export default class QMDBackend {
     this.embeddingRefreshPromise = (async (): Promise<void> => {
       try {
         const status = await getQMDStoreStatus({
-          indexName: QMD_INDEX_NAME,
-          collections: SDK_COLLECTIONS
+          indexName: this.indexName,
+          collections: this.sdkCollections
         })
         const pendingEmbeddingCount = status.needsEmbedding
 
@@ -724,8 +737,8 @@ export default class QMDBackend {
           `QMD embeddings pending: ${pendingEmbeddingCount}. Running embed refresh...`
         )
         await embedQMDStore({
-          indexName: QMD_INDEX_NAME,
-          collections: SDK_COLLECTIONS
+          indexName: this.indexName,
+          collections: this.sdkCollections
         })
         this.lastEmbedAt = Date.now()
 
@@ -755,8 +768,8 @@ export default class QMDBackend {
     )
 
     return runQMDStoreSearch({
-      indexName: QMD_INDEX_NAME,
-      collections: SDK_COLLECTIONS,
+      indexName: this.indexName,
+      collections: this.sdkCollections,
       mode,
       query,
       collectionNames,

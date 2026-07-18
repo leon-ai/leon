@@ -51,7 +51,6 @@ const ESTIMATED_CHARS_PER_TOKEN = 4
 const MAX_PARAPHRASE_INPUT_TOKENS = 1_024
 
 export default class Brain {
-  private static instance: Brain
   private _lang: ShortLanguageCode = 'en'
   private _isTalkingWithVoice = false
   private answerQueue = new AnswerQueue<QueuedOutput>()
@@ -68,26 +67,22 @@ export default class Brain {
   public isMuted = false // Close Leon mouth if true; e.g. over HTTP
 
   constructor() {
-    if (!Brain.instance) {
-      LogHelper.title('Brain')
-      LogHelper.success('New instance')
+    LogHelper.title('Brain')
+    LogHelper.success('New profile runtime instance')
 
-      Brain.instance = this
-
-      /**
-       * Clean up the answer queue every 2 hours
-       * to avoid memory leaks
-       */
-      setInterval(
-        () => {
-          if (this.answerQueueProcessTimerId) {
-            this.cleanUpAnswerQueueTimer()
-            this.answerQueue.clear()
-          }
-        },
-        60_000 * 60 * 2
-      )
-    }
+    /**
+     * Clean up the answer queue every 2 hours
+     * to avoid memory leaks
+     */
+    setInterval(
+      () => {
+        if (this.answerQueueProcessTimerId) {
+          this.cleanUpAnswerQueueTimer()
+          this.answerQueue.clear()
+        }
+      },
+      60_000 * 60 * 2
+    ).unref()
   }
 
   public get skillFriendlyName(): string {
@@ -127,7 +122,7 @@ export default class Brain {
         options.shouldInterrupt
       ) {
         // Tell client to interrupt the current speech
-        SOCKET_SERVER.socket?.emit('tts-interruption')
+        SOCKET_SERVER.emitToChatClients('tts-interruption')
         // Cancel all the future speeches
         TTS.speeches = []
         LogHelper.info('Leon got interrupted')

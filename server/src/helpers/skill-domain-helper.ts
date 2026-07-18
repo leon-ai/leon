@@ -14,12 +14,11 @@ import {
   AGENT_SKILLS_PATH,
   GLOBAL_DATA_PATH,
   NATIVE_SKILLS_PATH,
-  PROFILE_AGENT_SKILLS_PATH,
-  PROFILE_NATIVE_SKILLS_PATH,
   SKILLS_PATH
 } from '@/constants'
 import { FileHelper } from '@/helpers/file-helper'
 import { ProfileHelper } from '@/helpers/profile-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 interface SkillDomain {
   domainId: string
@@ -106,15 +105,15 @@ export class SkillDomainHelper {
   }
 
   private static getNativeSkillRootPaths(): string[] {
-    return [NATIVE_SKILLS_PATH, PROFILE_NATIVE_SKILLS_PATH]
+    return [NATIVE_SKILLS_PATH, getProfilePaths().nativeSkills]
   }
 
   private static getProfileFirstNativeSkillRootPaths(): string[] {
-    return [PROFILE_NATIVE_SKILLS_PATH, NATIVE_SKILLS_PATH]
+    return [getProfilePaths().nativeSkills, NATIVE_SKILLS_PATH]
   }
 
   private static getAgentSkillRootPaths(): string[] {
-    return [AGENT_SKILLS_PATH, PROFILE_AGENT_SKILLS_PATH]
+    return [AGENT_SKILLS_PATH, getProfilePaths().agentSkills]
   }
 
   private static normalizeAgentSkillFrontmatterValue(value: string): string {
@@ -327,9 +326,9 @@ export class SkillDomainHelper {
   public static listProfileSkillDescriptorsSync(): SkillDescriptor[] {
     const descriptors = new Map<string, SkillDescriptor>()
 
-    if (fs.existsSync(PROFILE_NATIVE_SKILLS_PATH)) {
-      for (const folder of fs.readdirSync(PROFILE_NATIVE_SKILLS_PATH)) {
-        const skillPath = path.join(PROFILE_NATIVE_SKILLS_PATH, folder)
+    if (fs.existsSync(getProfilePaths().nativeSkills)) {
+      for (const folder of fs.readdirSync(getProfilePaths().nativeSkills)) {
+        const skillPath = path.join(getProfilePaths().nativeSkills, folder)
 
         if (!fs.statSync(skillPath).isDirectory()) {
           continue
@@ -361,9 +360,9 @@ export class SkillDomainHelper {
       }
     }
 
-    if (fs.existsSync(PROFILE_AGENT_SKILLS_PATH)) {
-      for (const folder of fs.readdirSync(PROFILE_AGENT_SKILLS_PATH)) {
-        const skillPath = path.join(PROFILE_AGENT_SKILLS_PATH, folder)
+    if (fs.existsSync(getProfilePaths().agentSkills)) {
+      for (const folder of fs.readdirSync(getProfilePaths().agentSkills)) {
+        const skillPath = path.join(getProfilePaths().agentSkills, folder)
 
         if (!fs.statSync(skillPath).isDirectory()) {
           continue
@@ -410,8 +409,8 @@ export class SkillDomainHelper {
 
     const profileSkillRootPath =
       descriptor.format === SkillFormat.LeonNative
-        ? PROFILE_NATIVE_SKILLS_PATH
-        : PROFILE_AGENT_SKILLS_PATH
+        ? getProfilePaths().nativeSkills
+        : getProfilePaths().agentSkills
 
     if (!this.isSafeProfileSkillPath(descriptor.path, profileSkillRootPath)) {
       throw new Error(
@@ -835,7 +834,7 @@ export class SkillDomainHelper {
     const normalizedSkillName = this.normalizeSkillName(skill)
     const skillMemoryCandidates = [
       path.join(
-        PROFILE_NATIVE_SKILLS_PATH,
+        getProfilePaths().nativeSkills,
         normalizedSkillName,
         'memory',
         `${memory}.json`

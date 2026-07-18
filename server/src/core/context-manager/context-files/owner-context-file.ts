@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import { ContextFile } from '@/core/context-manager/context-file'
 import {
   buildOwnerDocument,
-  OWNER_CONTEXT_PATH,
+  getOwnerContextPath,
   readOwnerProfileSync
 } from '@/core/context-manager/owner-profile'
 
@@ -19,9 +19,11 @@ export class OwnerContextFile extends ContextFile {
   }
 
   public generate(): string {
-    if (fs.existsSync(OWNER_CONTEXT_PATH)) {
+    const ownerContextPath = getOwnerContextPath()
+
+    if (fs.existsSync(ownerContextPath)) {
       try {
-        return fs.readFileSync(OWNER_CONTEXT_PATH, 'utf8').trimEnd()
+        return fs.readFileSync(ownerContextPath, 'utf8').trimEnd()
       } catch {
         // Fall back to the derived skeleton below.
       }

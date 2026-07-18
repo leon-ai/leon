@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { CONFIG_MANAGER } from '@/config'
-import { PROFILE_DOT_ENV_PATH } from '@/leon-roots'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const ENV_LINE_SEPARATOR_PATTERN = /\r?\n/
 const ENV_VARIABLE_NAME_PATTERN = /^[A-Z0-9_]+$/
@@ -301,8 +301,9 @@ export class ProfileHelper {
     variableName: string,
     value: string
   ): Promise<void> {
-    const dotEnvContent = fs.existsSync(PROFILE_DOT_ENV_PATH)
-      ? await fs.promises.readFile(PROFILE_DOT_ENV_PATH, 'utf8')
+    const dotEnvPath = getProfilePaths().dotEnv
+    const dotEnvContent = fs.existsSync(dotEnvPath)
+      ? await fs.promises.readFile(dotEnvPath, 'utf8')
       : ''
     const dotEnvLines = dotEnvContent === '' ? [] : splitEnvLines(dotEnvContent)
     const nextLine = `${variableName}=${value}`
@@ -326,13 +327,14 @@ export class ProfileHelper {
       (line, index, lines) => !(index === lines.length - 1 && line === '')
     )
 
-    await fs.promises.mkdir(path.dirname(PROFILE_DOT_ENV_PATH), {
+    await fs.promises.mkdir(path.dirname(dotEnvPath), {
       recursive: true
     })
 
     await fs.promises.writeFile(
-      PROFILE_DOT_ENV_PATH,
+      dotEnvPath,
       `${normalizedLines.join('\n')}\n`
     )
+    CONFIG_MANAGER.reload()
   }
 }
