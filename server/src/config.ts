@@ -110,6 +110,7 @@ const DEFAULT_CONFIG: LeonConfig = {
         }
       },
       minimax: {
+        base_url: 'https://api.minimax.io/v1',
         api_key: {
           env: 'LEON_MINIMAX_API_KEY'
         }

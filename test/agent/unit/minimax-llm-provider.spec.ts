@@ -7,7 +7,10 @@ import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 
 vi.mock('@/config', () => ({
   CONFIG_MANAGER: {
-    getProviderAPIKeyEnv: vi.fn(() => null)
+    getProviderAPIKeyEnv: vi.fn(() => null),
+    getProviderBaseURL: vi.fn(
+      () => process.env['TEST_MINIMAX_BASE_URL'] || ''
+    )
   }
 }))
 
@@ -57,9 +60,11 @@ function createCompletionParams(
 describe('MiniMaxLLMProvider', () => {
   beforeEach(() => {
     vi.stubEnv('LEON_MINIMAX_API_KEY', 'test-minimax-key')
+    vi.stubEnv('TEST_MINIMAX_BASE_URL', '')
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.unstubAllGlobals()
   })
 
@@ -107,33 +112,97 @@ describe('MiniMaxLLMProvider', () => {
     })
   })
 
-  it('sends the documented request fields to the OpenAI-compatible endpoint', async () => {
+  it('keeps MiniMax-M2.7 thinking enabled with Anthropic compatibility', () => {
+    vi.stubEnv(
+      'TEST_MINIMAX_BASE_URL',
+      'https://api.minimax.io/anthropic'
+    )
+    const provider = createProvider('MiniMax-M2.7')
+    const options = provider.buildCallOptions(
+      'Answer directly.',
+      createCompletionParams({ reasoningMode: 'off' })
+    )
+
+    expect(options['providerOptions']).toEqual({
+      anthropic: {
+        sendReasoning: true
+      }
+    })
+  })
+
+  it.each([
+    {
+      name: 'global OpenAI-compatible',
+      baseURL: 'https://api.minimax.io/v1',
+      expectedRequestURL: 'https://api.minimax.io/v1/chat/completions',
+      flavor: 'openai-compatible'
+    },
+    {
+      name: 'China OpenAI-compatible',
+      baseURL: 'https://api.minimaxi.com/v1',
+      expectedRequestURL: 'https://api.minimaxi.com/v1/chat/completions',
+      flavor: 'openai-compatible'
+    },
+    {
+      name: 'global Anthropic-compatible',
+      baseURL: 'https://api.minimax.io/anthropic',
+      expectedRequestURL: 'https://api.minimax.io/anthropic/v1/messages',
+      flavor: 'anthropic'
+    },
+    {
+      name: 'China Anthropic-compatible',
+      baseURL: 'https://api.minimaxi.com/anthropic',
+      expectedRequestURL: 'https://api.minimaxi.com/anthropic/v1/messages',
+      flavor: 'anthropic'
+    }
+  ])('sends a valid request to the $name endpoint', async ({
+    baseURL,
+    expectedRequestURL,
+    flavor
+  }) => {
+    vi.stubEnv('TEST_MINIMAX_BASE_URL', baseURL)
     const fetchMock = vi.fn(
       async (input: string | URL | Request, init?: RequestInit) => {
         void input
         void init
 
         return new Response(
-          JSON.stringify({
-            id: 'chatcmpl-test',
-            created: 0,
-            model: 'MiniMax-M3',
-            choices: [
-              {
-                index: 0,
-                message: {
+          JSON.stringify(
+            flavor === 'anthropic'
+              ? {
+                  id: 'msg-test',
+                  type: 'message',
                   role: 'assistant',
-                  content: 'Done.'
-                },
-                finish_reason: 'stop'
-              }
-            ],
-            usage: {
-              prompt_tokens: 1,
-              completion_tokens: 1,
-              total_tokens: 2
-            }
-          }),
+                  model: 'MiniMax-M3',
+                  content: [{ type: 'text', text: 'Done.' }],
+                  stop_reason: 'end_turn',
+                  stop_sequence: null,
+                  usage: {
+                    input_tokens: 1,
+                    output_tokens: 1
+                  }
+                }
+              : {
+                  id: 'chatcmpl-test',
+                  created: 0,
+                  model: 'MiniMax-M3',
+                  choices: [
+                    {
+                      index: 0,
+                      message: {
+                        role: 'assistant',
+                        content: 'Done.'
+                      },
+                      finish_reason: 'stop'
+                    }
+                  ],
+                  usage: {
+                    prompt_tokens: 1,
+                    completion_tokens: 1,
+                    total_tokens: 2
+                  }
+                }
+          ),
           {
             status: 200,
             headers: { 'Content-Type': 'application/json' }
@@ -146,7 +215,9 @@ describe('MiniMaxLLMProvider', () => {
 
     await provider.runChatCompletion(
       'Answer directly.',
-      createCompletionParams({ reasoningMode: 'off' })
+      createCompletionParams({
+        reasoningMode: flavor === 'anthropic' ? 'on' : 'off'
+      })
     )
 
     const [requestURL, requestInit] = fetchMock.mock.calls[0]!
@@ -155,11 +226,13 @@ describe('MiniMaxLLMProvider', () => {
       unknown
     >
 
-    expect(String(requestURL)).toBe(
-      'https://api.minimax.io/v1/chat/completions'
+    expect(String(requestURL)).toBe(expectedRequestURL)
+    expect(requestBody['thinking']).toEqual({
+      type: flavor === 'anthropic' ? 'adaptive' : 'disabled'
+    })
+    expect(requestBody['reasoning_split']).toBe(
+      flavor === 'openai-compatible' ? true : undefined
     )
-    expect(requestBody['thinking']).toEqual({ type: 'disabled' })
-    expect(requestBody['reasoning_split']).toBe(true)
     expect(requestBody['reasoning_effort']).toBeUndefined()
   })
 })
