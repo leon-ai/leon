@@ -38,6 +38,7 @@ const REMOTE_LLM_PROVIDERS = [
       { label: 'z-ai/glm-5.2', value: 'z-ai/glm-5.2' },
       { label: 'z-ai/glm-5.1', value: 'z-ai/glm-5.1' },
       { label: 'z-ai/glm-5-turbo', value: 'z-ai/glm-5-turbo' },
+      { label: 'moonshotai/kimi-k3', value: 'moonshotai/kimi-k3' },
       { label: 'moonshotai/kimi-k2.6', value: 'moonshotai/kimi-k2.6' },
       { label: 'minimax/minimax-m3', value: 'minimax/minimax-m3' }
     ]
@@ -84,6 +85,7 @@ const REMOTE_LLM_PROVIDERS = [
   {
     ...getRequiredProviderAccountConfig('moonshotai'),
     models: [
+      { label: 'Kimi K3 (Recommended)', value: 'kimi-k3' },
       { label: 'Kimi K2.6', value: 'kimi-k2.6' },
       { label: 'Kimi K2.5', value: 'kimi-k2.5' }
     ]
