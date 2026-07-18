@@ -46,6 +46,11 @@ llm:
         # The value is read from LEON_ZAI_API_KEY in your profile .env file.
         env: LEON_ZAI_API_KEY
     minimax:
+      # Global OpenAI-compatible: https://api.minimax.io/v1
+      # China OpenAI-compatible: https://api.minimaxi.com/v1
+      # Global Anthropic-compatible: https://api.minimax.io/anthropic
+      # China Anthropic-compatible: https://api.minimaxi.com/anthropic
+      base_url: https://api.minimax.io/v1
       api_key:
         # The value is read from LEON_MINIMAX_API_KEY in your profile .env file.
         env: LEON_MINIMAX_API_KEY

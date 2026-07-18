@@ -143,6 +143,7 @@ describe('ConfigManager', () => {
             }
           },
           minimax: {
+            base_url: 'https://api.minimaxi.com/anthropic',
             api_key: {
               env: 'LEON_MINIMAX_API_KEY'
             }
@@ -243,6 +244,9 @@ describe('ConfigManager', () => {
     expect(configManager.getProviderAPIKey('openai')).toBe('openai-secret')
     expect(configManager.getProviderBaseURL('llamacpp')).toBe(
       'http://127.0.0.1:8081/v1'
+    )
+    expect(configManager.getProviderBaseURL('minimax')).toBe(
+      'https://api.minimaxi.com/anthropic'
     )
   })
 })
