@@ -244,7 +244,10 @@ describe('AISDKRemoteLLMProvider', () => {
       stream: (async function* (): AsyncGenerator<Record<string, unknown>> {
         yield {
           type: 'finish',
-          finishReason: 'length',
+          finishReason: {
+            unified: 'length',
+            raw: 'max_tokens'
+          },
           usage: {
             inputTokens: { total: 100 },
             outputTokens: { total: 1_024 }
