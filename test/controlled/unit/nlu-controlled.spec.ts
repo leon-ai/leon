@@ -704,7 +704,7 @@ describe('Controlled NLU', () => {
 
     nlu.nluProcessResult = {
       ...cloneDefaultProcessResult(),
-      skillName: 'coding_agent_maestro_skill',
+      skillName: 'example_skill',
       actionName: 'dispatch-task',
       actionConfig: {
         type: 'logic',
@@ -713,7 +713,7 @@ describe('Controlled NLU', () => {
     }
     nlu.conversation.setActiveState({
       startingUtterance: 'Change the text color to pink',
-      pendingAction: 'coding_agent_maestro_skill:dispatch-task',
+      pendingAction: 'example_skill:dispatch-task',
       missingParameters: ['task'],
       collectedParameters: {
         task: 'Change the text color to pink'

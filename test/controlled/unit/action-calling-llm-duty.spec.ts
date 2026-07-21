@@ -148,7 +148,7 @@ describe('ActionCallingLLMDuty', () => {
 
     const duty = new ActionCallingLLMDuty({
       input: 'Change the text color to pink',
-      skillName: 'coding_agent_maestro_skill'
+      skillName: 'example_skill'
     })
 
     await duty.init()
