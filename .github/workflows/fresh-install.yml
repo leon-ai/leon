@@ -16,6 +16,12 @@ jobs:
   fresh-install:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        pnpm-version:
+          - latest-10
+          - latest
 
     steps:
       # Scheduled workflows are loaded from the default branch, but Leon's
@@ -25,12 +31,11 @@ jobs:
         with:
           ref: ${{ github.event_name == 'schedule' && 'develop' || github.ref }}
 
-      - name: Read runtime versions
+      - name: Read Node.js version
         id: versions
         shell: bash
         run: |
           echo "node=$(jq -r '.node' bin/node/versions.json)" >> "$GITHUB_OUTPUT"
-          echo "pnpm=$(jq -r '.pnpm' bin/pnpm/versions.json)" >> "$GITHUB_OUTPUT"
 
       - name: Use Node.js
         uses: actions/setup-node@v6
@@ -38,11 +43,9 @@ jobs:
           node-version: ${{ steps.versions.outputs.node }}
           package-manager-cache: false
 
-      - name: Install fresh pnpm
+      - name: Install pnpm ${{ matrix.pnpm-version }}
         shell: bash
-        run: |
-          corepack enable
-          corepack install --global "pnpm@${{ steps.versions.outputs.pnpm }}"
+        run: npm install --global "pnpm@${{ matrix.pnpm-version }}"
 
       - name: Test the interactive installation
         env:
@@ -54,7 +57,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fresh-install-log
+          name: fresh-install-log-pnpm-${{ matrix.pnpm-version }}
           path: /tmp/leon-fresh-install.log
           if-no-files-found: ignore
           retention-days: 7
