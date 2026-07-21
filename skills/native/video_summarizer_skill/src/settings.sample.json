@@ -1,5 +1,5 @@
 {
-  "openrouter_model": "google/gemini-3.1-flash-lite",
+  "openrouter_model": "google/gemini-3.5-flash-lite",
   "summary_temperature": 0.3,
   "summary_max_tokens": 900,
   "summary_key_points_limit": 6,

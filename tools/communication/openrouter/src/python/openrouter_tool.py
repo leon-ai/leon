@@ -6,7 +6,7 @@ from bridges.python.src.sdk.network import Network, NetworkError
 
 # Hardcoded default settings for OpenRouter tool
 OPENROUTER_API_KEY = None
-OPENROUTER_MODEL = "google/gemini-3.1-flash-lite"
+OPENROUTER_MODEL = "google/gemini-3.5-flash-lite"
 DEFAULT_SETTINGS = {
     "OPENROUTER_API_KEY": OPENROUTER_API_KEY,
     "OPENROUTER_MODEL": OPENROUTER_MODEL,
@@ -71,7 +71,7 @@ class OpenRouterTool(BaseTool):
 
         Args:
             messages: List of message dictionaries with 'role' and 'content'
-            model: Model ID (full OpenRouter model ID, e.g. 'google/gemini-3.1-flash-lite')
+            model: Model ID (full OpenRouter model ID, e.g. 'google/gemini-3.5-flash-lite')
             temperature: Sampling temperature (0-2)
             max_tokens: Maximum tokens to generate
             system_prompt: System prompt to prepend

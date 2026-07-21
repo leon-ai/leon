@@ -54,7 +54,7 @@ export const run: ActionFunction = async function (
   const settings = new Settings<PodcastSettings>()
   const scriptModel =
     ((await settings.get('script_model')) as string) ||
-    'google/gemini-3.1-flash-lite'
+    'google/gemini-3.5-flash-lite'
   const hostVoice =
     ((await settings.get('host_voice')) as string) || 'default_female'
   const guestVoice =

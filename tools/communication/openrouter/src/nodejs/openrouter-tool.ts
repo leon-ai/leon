@@ -4,7 +4,7 @@ import { Network, NetworkError } from '@sdk/network'
 
 // Hardcoded default settings for OpenRouter tool
 const OPENROUTER_API_KEY: string | null = null
-const OPENROUTER_MODEL = 'google/gemini-3.1-flash-lite'
+const OPENROUTER_MODEL = 'google/gemini-3.5-flash-lite'
 const DEFAULT_SETTINGS: Record<string, unknown> = {
   OPENROUTER_API_KEY,
   OPENROUTER_MODEL

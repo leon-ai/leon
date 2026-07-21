@@ -1892,7 +1892,7 @@ export default class OpenCodeTool extends Tool {
     context += '// src/settings.sample.json and src/settings.json\n'
     context += '{\n'
     context += '  "translation_openrouter_api_key": "",\n'
-    context += '  "translation_openrouter_model": "google/gemini-3.1-flash-lite",\n'
+    context += '  "translation_openrouter_model": "google/gemini-3.5-flash-lite",\n'
     context += '  "translation_max_tokens_per_request": 2000,\n'
     context += '  "translation_segments_per_batch": 10,\n'
     context += '  "speech_synthesis_provider": "chatterbox_onnx"\n'
