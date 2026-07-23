@@ -1,3 +1,27 @@
+.query-input-container
+  position: relative
+  z-index: 3
+  isolation: isolate
+  width: 100%
+
+  &::before
+    position: absolute
+    top: 0
+    bottom: 0
+    left: 50%
+    z-index: -1
+    width: 85%
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 66%, transparent), color-mix(in srgb, var(--color-accent-pink) 66%, transparent))
+    filter: blur(66px)
+    opacity: .66
+    pointer-events: none
+    transform: translateX(-50%)
+    transition: opacity .75s var(--transition-timing-main)
+    content: ''
+
+  &:focus-within::before
+    opacity: .9
+
 .query-input
   --query-input-action-gap: var(--space-sm)
   --query-input-border-width: 1px
@@ -13,7 +37,6 @@
   border: var(--query-input-border-width) solid transparent
   border-radius: 30px
   background: linear-gradient(var(--color-query-background), var(--color-query-background)) padding-box, var(--gradient-border) border-box
-  box-shadow: 0 22px 80px rgba(28, 117, 219, .12)
   backdrop-filter: blur(18px)
   overflow: hidden
   transition: height var(--transition-duration-main) var(--transition-timing-main)

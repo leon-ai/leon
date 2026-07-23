@@ -207,68 +207,70 @@ export function QueryInput({
   }
 
   return (
-    <form
-      ref={formRef}
-      className={clsx('query-input', {
-        'query-input-expanded': isExpanded
-      })}
-      aria-label="Send a message to Leon"
-      style={formHeight === undefined ? undefined : {
-        height: `${formHeight}px`
-      }}
-      onSubmit={handleSubmit}
-    >
-      <div ref={leadingActionRef} className="query-input-leading-action">
-        <Button
-          className="query-input-add"
-          iconName="add-large"
-          tooltipMessage="Add attachment"
-          tooltipPosition="top"
-          disabled={disabled || loading}
-          {...(onAddAttachment === undefined ? {} : {
-            onClick: onAddAttachment
-          })}
-        />
-      </div>
-      <Input
-        ariaLabel="Message Leon"
-        className={clsx('query-input-field', {
-          'query-input-field-scrollable': isScrollable
+    <div className="query-input-container">
+      <form
+        ref={formRef}
+        className={clsx('query-input', {
+          'query-input-expanded': isExpanded
         })}
-        fieldRef={textareaRef}
-        variant="embedded"
-        multiline
-        rows={1}
-        name="query"
-        placeholder={placeholder}
-        value={query}
-        autoComplete="off"
-        autoFocus={autoFocus}
-        disabled={disabled || loading}
-        onChange={(event) => setQuery(event.target.value)}
-        onKeyDown={handleKeyDown}
-      />
-      <textarea
-        ref={measurementTextareaRef}
-        className="query-input-measurement"
-        aria-hidden="true"
-        tabIndex={-1}
-        rows={1}
-        value={query}
-        readOnly
-      />
-      <div ref={actionsRef} className="query-input-actions">
-        <Button
-          className="query-input-submit"
-          type="submit"
-          variant="secondary"
-          iconName="send-ins"
-          tooltipMessage="Send message"
-          tooltipPosition="top"
-          disabled={submitDisabled}
-          loading={loading}
+        aria-label="Send a message to Leon"
+        style={formHeight === undefined ? undefined : {
+          height: `${formHeight}px`
+        }}
+        onSubmit={handleSubmit}
+      >
+        <div ref={leadingActionRef} className="query-input-leading-action">
+          <Button
+            className="query-input-add"
+            iconName="add-large"
+            tooltipMessage="Add attachment"
+            tooltipPosition="top"
+            disabled={disabled || loading}
+            {...(onAddAttachment === undefined ? {} : {
+              onClick: onAddAttachment
+            })}
+          />
+        </div>
+        <Input
+          ariaLabel="Message Leon"
+          className={clsx('query-input-field', {
+            'query-input-field-scrollable': isScrollable
+          })}
+          fieldRef={textareaRef}
+          variant="embedded"
+          multiline
+          rows={1}
+          name="query"
+          placeholder={placeholder}
+          value={query}
+          autoComplete="off"
+          autoFocus={autoFocus}
+          disabled={disabled || loading}
+          onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={handleKeyDown}
         />
-      </div>
-    </form>
+        <textarea
+          ref={measurementTextareaRef}
+          className="query-input-measurement"
+          aria-hidden="true"
+          tabIndex={-1}
+          rows={1}
+          value={query}
+          readOnly
+        />
+        <div ref={actionsRef} className="query-input-actions">
+          <Button
+            className="query-input-submit"
+            type="submit"
+            variant="secondary"
+            iconName="send-ins"
+            tooltipMessage="Send message"
+            tooltipPosition="top"
+            disabled={submitDisabled}
+            loading={loading}
+          />
+        </div>
+      </form>
+    </div>
   )
 }
