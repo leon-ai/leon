@@ -1,5 +1,3 @@
-import type { ChatHistoryItem } from 'node-llama-cpp'
-
 import type { MessageLog } from '@/types'
 
 const SUMMARY_MAX_CHARS = 900
@@ -125,25 +123,6 @@ export function formatHistoryForCompaction(
 
 export function buildCompactedHistoryMessage(summary: string): string {
   return `Earlier conversation summary:\n${summary.trim()}`
-}
-
-export function toChatHistoryItems(logs: MessageLog[]): ChatHistoryItem[] {
-  return logs.map((messageRecord) => {
-    const message =
-      typeof messageRecord.message === 'string' ? messageRecord.message : ''
-
-    if (messageRecord.who === 'owner') {
-      return {
-        type: 'user',
-        text: message
-      }
-    }
-
-    return {
-      type: 'model',
-      response: [message]
-    }
-  })
 }
 
 function isSameMessageLog(left: MessageLog, right: MessageLog): boolean {

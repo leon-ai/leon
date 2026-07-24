@@ -26,7 +26,7 @@ const syncedEnvKeys = [
   'LEON_PY_TCP_SERVER_PORT',
   'LEON_LLAMACPP_BASE_URL',
   'LEON_SGLANG_BASE_URL',
-  'LEON_CLIENT_INTERFACE_TOKEN',
+  'LEON_PROFILE_TOKEN',
   'LEON_OPENAI_API_KEY'
 ]
 
@@ -38,7 +38,13 @@ async function loadConfigManager(): Promise<
   typeof import('@/config').CONFIG_MANAGER
 > {
   vi.doMock('@/leon-roots', () => ({
-    PROFILE_CONFIG_PATH: profilePaths.configPath
+    LEON_PROFILE_NAME: 'test-profile'
+  }))
+  vi.doMock('@/core/profile-runtime/profile-paths', () => ({
+    getProfilePaths: (): { config: string, dotEnv: string } => ({
+      config: profilePaths.configPath,
+      dotEnv: path.join(path.dirname(profilePaths.configPath), '.env')
+    })
   }))
 
   const module = await import('@/config')
@@ -77,7 +83,7 @@ describe('ConfigManager', () => {
   })
 
   it('returns profile config values and syncs runtime env mappings', async () => {
-    process.env['LEON_CLIENT_INTERFACE_TOKEN'] = 'client-secret'
+    process.env['LEON_PROFILE_TOKEN'] = 'client-secret'
     process.env['LEON_OPENAI_API_KEY'] = 'openai-secret'
 
     const profileConfig = {
@@ -91,9 +97,20 @@ describe('ConfigManager', () => {
         auth: {
           enabled: true,
           token: {
-            env: 'LEON_CLIENT_INTERFACE_TOKEN'
+            env: 'LEON_PROFILE_TOKEN'
           }
         }
+      },
+      http_plugins: {
+        enabled: false,
+        allow_root_routes: false,
+        auth: {
+          enabled: false,
+          token: {
+            env: 'LEON_PROFILE_TOKEN'
+          }
+        },
+        plugins: {}
       },
       routing: {
         mode: 'controlled'
@@ -123,6 +140,12 @@ describe('ConfigManager', () => {
           zai: {
             api_key: {
               env: 'LEON_ZAI_API_KEY'
+            }
+          },
+          minimax: {
+            base_url: 'https://api.minimaxi.com/anthropic',
+            api_key: {
+              env: 'LEON_MINIMAX_API_KEY'
             }
           },
           openai: {
@@ -221,6 +244,9 @@ describe('ConfigManager', () => {
     expect(configManager.getProviderAPIKey('openai')).toBe('openai-secret')
     expect(configManager.getProviderBaseURL('llamacpp')).toBe(
       'http://127.0.0.1:8081/v1'
+    )
+    expect(configManager.getProviderBaseURL('minimax')).toBe(
+      'https://api.minimaxi.com/anthropic'
     )
   })
 })

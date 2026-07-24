@@ -1,4 +1,3 @@
-import type { DefaultEventsMap } from 'socket.io/dist/typed-events'
 import { Server as SocketIOServer, Socket } from 'socket.io'
 import axios from 'axios'
 
@@ -11,7 +10,6 @@ import {
   IS_CLIENT_INTERFACE_AUTH_ENABLED,
   API_VERSION,
   CLIENT_INTERFACE_ALLOWED_ORIGINS,
-  CLIENT_INTERFACE_TOKEN,
   WEB_APP_DEV_SERVER_PORT
 } from '@/constants'
 import {
@@ -23,7 +21,8 @@ import {
   NLU,
   BRAIN,
   LLM_PROVIDER,
-  CONVERSATION_LOGGER
+  CONVERSATION_LOGGER,
+  TOOLKIT_REGISTRY
 } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -44,10 +43,30 @@ import {
   type LeonClientInterfaceInitPayload,
   type LeonClientInterfaceProtocol,
   type LeonClientInterfaceSuggestionsPayload,
+  type LeonClientInterfaceToolProgressPayload,
   type LeonClientInterfaceTokenPayload,
   type LeonClientInterfaceTypingPayload,
   type LeonClientInterfaceUtterancePayload
 } from '@/core/leon-interface/types'
+import {
+  authenticateProfileCredential,
+  readProfileCredentialFromHeaders,
+  readStoredProfileToken
+} from '@/core/profile-auth'
+import {
+  getActiveProfileName,
+  runWithProfileContext
+} from '@/core/profile-runtime/profile-context'
+import { LEON_PROFILE_NAME } from '@/leon-roots'
+import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
+import {
+  SATELLITE_EVENTS,
+  SATELLITE_PROTOCOL_VERSION,
+  type SatelliteInitPayload,
+  type SatelliteToolProgressPayload,
+  type SatelliteToolResultPayload
+} from '@/core/satellite/types'
+import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 
 const DEFAULT_CLIENT_CAPABILITIES = {
   supportsWidgets: true,
@@ -103,16 +122,20 @@ interface ConnectedChatClient {
   clientType: string
   capabilities: LeonClientCapabilities
   protocol: LeonClientInterfaceProtocol
+  profileName: string
   sessionId: string
-  socket: Socket<DefaultEventsMap, DefaultEventsMap>
+  socket: Socket
 }
 
 export default class SocketServer {
   private static instance: SocketServer
   private readonly chatClients = new Map<string, ConnectedChatClient>()
+  private readonly satelliteClients = new Map<
+    string,
+    { profileName: string, deviceId: string }
+  >()
 
-  public socket: Socket<DefaultEventsMap, DefaultEventsMap> | undefined =
-    undefined
+  public socket: Socket | undefined = undefined
 
   constructor() {
     if (!SocketServer.instance) {
@@ -124,7 +147,7 @@ export default class SocketServer {
   }
 
   private setActiveSocket(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>
+    socket: Socket
   ): void {
     this.socket = socket
   }
@@ -173,8 +196,9 @@ export default class SocketServer {
   }
 
   private registerChatClient(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     initData: InitDataEvent,
+    profileName: string,
     protocol: LeonClientInterfaceProtocol = 'legacy'
   ): ConnectedChatClient {
     const chatClient = {
@@ -186,6 +210,7 @@ export default class SocketServer {
         ...(initData.capabilities || {})
       },
       protocol,
+      profileName,
       sessionId:
         initData.sessionId || CONVERSATION_SESSION_MANAGER.getActiveSessionId(),
       socket
@@ -199,8 +224,9 @@ export default class SocketServer {
   }
 
   private registerLeonClient(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
-    initData: LeonClientInterfaceInitPayload
+    socket: Socket,
+    initData: LeonClientInterfaceInitPayload,
+    profileName: string
   ): ConnectedChatClient {
     const client = this.normalizeLeonClientDescriptor(initData.client)
     const chatClient = {
@@ -212,6 +238,7 @@ export default class SocketServer {
         ...(initData.capabilities || {})
       },
       protocol: 'leon_client' as const,
+      profileName,
       sessionId:
         initData.sessionId || CONVERSATION_SESSION_MANAGER.getActiveSessionId(),
       socket
@@ -265,11 +292,10 @@ export default class SocketServer {
   }
 
   private getSocketAuthToken(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
-    initData?: LeonClientInterfaceInitPayload
+    socket: Socket,
+    initData?: { token?: string }
   ): string {
     const handshakeAuthToken = socket.handshake.auth?.['token']
-    const headerToken = socket.handshake.headers['x-leon-client-token']
 
     if (typeof initData?.token === 'string') {
       return initData.token
@@ -279,29 +305,32 @@ export default class SocketServer {
       return handshakeAuthToken
     }
 
-    if (typeof headerToken === 'string') {
-      return headerToken
-    }
-
     return ''
   }
 
   private isLeonClientInterfaceAuthorized(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
-    initData?: LeonClientInterfaceInitPayload
-  ): boolean {
-    if (!IS_CLIENT_INTERFACE_AUTH_ENABLED) {
-      return true
+    socket: Socket,
+    initData?: { token?: string }
+  ): string | null {
+    const initToken = this.getSocketAuthToken(socket, initData)
+    const headerToken = readProfileCredentialFromHeaders({
+      authorization: socket.handshake.headers.authorization,
+      cookie: socket.handshake.headers.cookie,
+      'x-leon-profile-token': String(
+        socket.handshake.headers['x-leon-profile-token'] || ''
+      )
+    })
+    const token = initToken || headerToken
+
+    if (!token && !IS_CLIENT_INTERFACE_AUTH_ENABLED) {
+      return LEON_PROFILE_NAME
     }
 
-    return (
-      CLIENT_INTERFACE_TOKEN.length > 0 &&
-      this.getSocketAuthToken(socket, initData) === CLIENT_INTERFACE_TOKEN
-    )
+    return authenticateProfileCredential(token)?.profileName || null
   }
 
   private emitSocketEvent(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     eventName: string,
     payload?: unknown
   ): void {
@@ -337,6 +366,14 @@ export default class SocketServer {
       chatClient.socket.emit(
         LEON_CLIENT_INTERFACE_EVENTS.suggest,
         suggestionsPayload
+      )
+      return
+    }
+
+    if (eventName === 'tool-progress') {
+      chatClient.socket.emit(
+        LEON_CLIENT_INTERFACE_EVENTS.toolProgress,
+        payload as LeonClientInterfaceToolProgressPayload
       )
       return
     }
@@ -408,6 +445,10 @@ export default class SocketServer {
     options?: { sessionId?: string | null }
   ): void {
     for (const chatClient of this.chatClients.values()) {
+      if (chatClient.profileName !== getActiveProfileName()) {
+        continue
+      }
+
       if (options?.sessionId && chatClient.sessionId !== options.sessionId) {
         continue
       }
@@ -434,6 +475,10 @@ export default class SocketServer {
   ): void {
     for (const [socketId, chatClient] of this.chatClients.entries()) {
       if (socketId === sourceSocketId) {
+        continue
+      }
+
+      if (chatClient.profileName !== getActiveProfileName()) {
         continue
       }
 
@@ -545,6 +590,10 @@ export default class SocketServer {
     }
 
     for (const chatClient of this.chatClients.values()) {
+      if (chatClient.profileName !== getActiveProfileName()) {
+        continue
+      }
+
       if (sessionId && chatClient.sessionId !== sessionId) {
         continue
       }
@@ -574,8 +623,9 @@ export default class SocketServer {
   }
 
   private monitorLLMInitialization(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     options: {
+      profileName: string
       usesLlamaCPP: boolean
     }
   ): void {
@@ -595,16 +645,18 @@ export default class SocketServer {
           return
         }
 
-        const llamaServerBootStatus = LLM_PROVIDER.llamaCPPServerBootStatus
+        runWithProfileContext({ profileName: options.profileName }, () => {
+          const llamaServerBootStatus = LLM_PROVIDER.llamaCPPServerBootStatus
 
-        if (
-          llamaServerBootStatus === 'success' ||
-          llamaServerBootStatus === 'error'
-        ) {
-          socket.emit('init-llama-server-boot', llamaServerBootStatus)
-          clearInterval(llamaServerInterval as NodeJS.Timeout)
-          llamaServerInterval = null
-        }
+          if (
+            llamaServerBootStatus === 'success' ||
+            llamaServerBootStatus === 'error'
+          ) {
+            socket.emit('init-llama-server-boot', llamaServerBootStatus)
+            clearInterval(llamaServerInterval as NodeJS.Timeout)
+            llamaServerInterval = null
+          }
+        })
       }, 500)
     }
 
@@ -612,7 +664,7 @@ export default class SocketServer {
   }
 
   private emitLeonClientReady(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     sessionId: string
   ): void {
     socket.emit(LEON_CLIENT_INTERFACE_EVENTS.ready, {
@@ -622,7 +674,7 @@ export default class SocketServer {
   }
 
   private emitLeonClientError(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
     payload: LeonClientInterfaceErrorPayload
   ): void {
     socket.emit(LEON_CLIENT_INTERFACE_EVENTS.error, payload)
@@ -664,7 +716,19 @@ export default class SocketServer {
   }
 
   private async handleOwnerMessage(
-    socket: Socket<DefaultEventsMap, DefaultEventsMap>,
+    socket: Socket,
+    utteranceData: UtteranceDataEvent
+  ): Promise<void> {
+    const profileName =
+      this.chatClients.get(socket.id)?.profileName || LEON_PROFILE_NAME
+
+    await runWithProfileContext({ profileName }, async () => {
+      await this.processOwnerMessage(socket, utteranceData)
+    })
+  }
+
+  private async processOwnerMessage(
+    socket: Socket,
     utteranceData: UtteranceDataEvent
   ): Promise<void> {
     this.setActiveSocket(socket)
@@ -767,6 +831,70 @@ export default class SocketServer {
     }
   }
 
+  private async handleWidgetEvent(
+    socket: Socket,
+    event: WidgetDataEvent
+  ): Promise<void> {
+    const profileName =
+      this.chatClients.get(socket.id)?.profileName || LEON_PROFILE_NAME
+
+    await runWithProfileContext({ profileName }, async () => {
+      this.setActiveSocket(socket)
+      const sessionId =
+        this.chatClients.get(socket.id)?.sessionId ||
+        CONVERSATION_SESSION_MANAGER.getActiveSessionId()
+
+      LogHelper.title('Socket')
+      LogHelper.info(`Widget event: ${JSON.stringify(event)}`)
+      this.emitToChatClients('is-typing', true, { sessionId })
+
+      try {
+        await CONVERSATION_SESSION_MANAGER.runWithSession(
+          sessionId,
+          async () => {
+            const { method } = event
+
+            if (method.methodName === 'send_utterance') {
+              const utterance = method.methodParams['utterance']
+
+              if (method.methodParams['from'] === 'leon') {
+                await BRAIN.talk(utterance as string, true)
+              } else {
+                socket.emit('widget-send-utterance', utterance)
+              }
+              return
+            }
+
+            if (method.methodName === 'run_skill_action') {
+              const { actionName, params } = method.methodParams
+              const profileSecret = readStoredProfileToken(profileName)
+
+              await axios.post(
+                `${HTTP_SERVER.host}:${HTTP_SERVER.port}/api/${API_VERSION}/run-action`,
+                {
+                  skill_action: actionName,
+                  action_params: params,
+                  session_id: sessionId
+                },
+                {
+                  headers: profileSecret
+                    ? {
+                        'x-leon-profile-token': `${profileName}:${profileSecret}`
+                      }
+                    : {}
+                }
+              )
+            }
+          }
+        )
+      } catch (error) {
+        LogHelper.error(`Failed to handle widget event: ${String(error)}`)
+      } finally {
+        this.emitToChatClients('is-typing', false, { sessionId })
+      }
+    })
+  }
+
   public async init(): Promise<void> {
     const io = new SocketIOServer(HTTP_SERVER.httpServer, {
       cors: {
@@ -802,11 +930,79 @@ export default class SocketServer {
       this.setActiveSocket(socket)
 
       socket.on(
+        SATELLITE_EVENTS.init,
+        async (data: SatelliteInitPayload) => {
+          const profileName = this.isLeonClientInterfaceAuthorized(socket, data)
+
+          if (
+            !profileName ||
+            data?.protocolVersion !== SATELLITE_PROTOCOL_VERSION ||
+            !data.device?.id?.trim() ||
+            !Array.isArray(data.toolkits)
+          ) {
+            socket.emit(SATELLITE_EVENTS.error, {
+              code: 'satellite_init_rejected',
+              message: 'Satellite authentication or protocol is invalid.'
+            })
+            socket.disconnect(true)
+            return
+          }
+
+          await runWithProfileContext({ profileName }, async () => {
+            await ensureActiveProfileRuntime()
+            await TOOLKIT_REGISTRY.load()
+            TOOLKIT_REGISTRY.registerSatelliteTools(
+              data.device.id,
+              data.toolkits
+            )
+            SATELLITE_REGISTRY.register({
+              profileName,
+              device: data.device,
+              toolkits: data.toolkits,
+              transport: socket
+            })
+          })
+
+          this.satelliteClients.set(socket.id, {
+            profileName,
+            deviceId: data.device.id
+          })
+          socket.on(
+            SATELLITE_EVENTS.toolProgress,
+            (payload: SatelliteToolProgressPayload) => {
+              SATELLITE_REGISTRY.handleProgress(
+                profileName,
+                data.device.id,
+                payload
+              )
+            }
+          )
+          socket.on(
+            SATELLITE_EVENTS.toolResult,
+            (payload: SatelliteToolResultPayload) => {
+              SATELLITE_REGISTRY.handleResult(
+                profileName,
+                data.device.id,
+                payload
+              )
+            }
+          )
+          socket.emit(SATELLITE_EVENTS.ready, {
+            protocolVersion: SATELLITE_PROTOCOL_VERSION,
+            profileName,
+            deviceId: data.device.id
+          })
+        }
+      )
+
+      socket.on(
         LEON_CLIENT_INTERFACE_EVENTS.init,
         async (data: LeonClientInterfaceInitPayload) => {
           this.setActiveSocket(socket)
 
-          if (!this.isLeonClientInterfaceAuthorized(socket, data)) {
+          const profileName = this.isLeonClientInterfaceAuthorized(socket, data)
+
+          if (!profileName) {
             this.emitLeonClientError(socket, {
               code: LEON_CLIENT_INTERFACE_UNAUTHORIZED_ERROR,
               message: 'Unauthorized Leon client interface connection.'
@@ -826,7 +1022,13 @@ export default class SocketServer {
             return
           }
 
-          const chatClient = this.registerLeonClient(socket, data)
+          const chatClient = await runWithProfileContext(
+            { profileName },
+            async () => {
+              await ensureActiveProfileRuntime()
+              return this.registerLeonClient(socket, data, profileName)
+            }
+          )
 
           LogHelper.info(`Type: ${chatClient.clientType}`)
           LogHelper.info(`Client ID: ${chatClient.id}`)
@@ -834,16 +1036,22 @@ export default class SocketServer {
 
           this.emitClientRuntimeReadyWhenAvailable(chatClient)
 
-          const usesLlamaCPP = this.shouldMonitorLlamaCPPInitialization()
+          const usesLlamaCPP = runWithProfileContext(
+            { profileName },
+            () => this.shouldMonitorLlamaCPPInitialization()
+          )
 
           if (usesLlamaCPP) {
-            socket.emit(
-              'init-llama-server-boot',
-              LLM_PROVIDER.llamaCPPServerBootStatus
-            )
+            runWithProfileContext({ profileName }, () => {
+              socket.emit(
+                'init-llama-server-boot',
+                LLM_PROVIDER.llamaCPPServerBootStatus
+              )
+            })
           }
 
           this.monitorLLMInitialization(socket, {
+            profileName,
             usesLlamaCPP
           })
 
@@ -869,12 +1077,14 @@ export default class SocketServer {
           )
 
           socket.on('session-change', (sessionId: string) => {
-            this.setActiveSocket(socket)
-            const session = CONVERSATION_SESSION_MANAGER.setActiveSession(
-              sessionId
-            )
+            runWithProfileContext({ profileName }, () => {
+              this.setActiveSocket(socket)
+              const session = CONVERSATION_SESSION_MANAGER.setActiveSession(
+                sessionId
+              )
 
-            this.setChatClientSession(socket.id, session.id)
+              this.setChatClientSession(socket.id, session.id)
+            })
           })
 
           // Handle new local ASR engine recording
@@ -898,51 +1108,7 @@ export default class SocketServer {
 
           // Listen for widget events
           socket.on('widget-event', async (event: WidgetDataEvent) => {
-            this.setActiveSocket(socket)
-            const sessionId =
-              this.chatClients.get(socket.id)?.sessionId ||
-              CONVERSATION_SESSION_MANAGER.getActiveSessionId()
-
-            LogHelper.title('Socket')
-            LogHelper.info(`Widget event: ${JSON.stringify(event)}`)
-
-            this.emitToChatClients('is-typing', true, { sessionId })
-
-            try {
-              await CONVERSATION_SESSION_MANAGER.runWithSession(
-                sessionId,
-                async () => {
-                  const { method } = event
-
-                  if (method.methodName === 'send_utterance') {
-                    const utterance = method.methodParams['utterance']
-
-                    if (method.methodParams['from'] === 'leon') {
-                      await BRAIN.talk(utterance as string, true)
-                    } else {
-                      socket.emit('widget-send-utterance', utterance)
-                    }
-                  } else if (method.methodName === 'run_skill_action') {
-                    const { actionName, params } = method.methodParams
-
-                    await axios.post(
-                      `${HTTP_SERVER.host}:${HTTP_SERVER.port}/api/${API_VERSION}/run-action`,
-                      {
-                        skill_action: actionName,
-                        action_params: params,
-                        session_id: sessionId
-                      }
-                    )
-                  }
-                }
-              )
-            } catch (e) {
-              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-              // @ts-expect-error
-              LogHelper.error(`Failed to handle widget event: ${e.errors || e}`)
-            } finally {
-              this.emitToChatClients('is-typing', false, { sessionId })
-            }
+            await this.handleWidgetEvent(socket, event)
           })
         }
       )
@@ -952,8 +1118,21 @@ export default class SocketServer {
         this.setActiveSocket(socket)
 
         const initData = this.normalizeInitData(data)
+        const profileName = this.isLeonClientInterfaceAuthorized(socket)
 
-        const chatClient = this.registerChatClient(socket, initData)
+        if (!profileName) {
+          socket.emit('unauthorized')
+          socket.disconnect(true)
+          return
+        }
+
+        const chatClient = await runWithProfileContext(
+          { profileName },
+          async () => {
+            await ensureActiveProfileRuntime()
+            return this.registerChatClient(socket, initData, profileName)
+          }
+        )
 
         LogHelper.info(`Type: ${initData.client}`)
         LogHelper.info(`Socket ID: ${socket.id}`)
@@ -965,16 +1144,22 @@ export default class SocketServer {
 
         this.emitClientRuntimeReadyWhenAvailable(chatClient)
 
-        const usesLlamaCPP = this.shouldMonitorLlamaCPPInitialization()
+        const usesLlamaCPP = runWithProfileContext(
+          { profileName },
+          () => this.shouldMonitorLlamaCPPInitialization()
+        )
 
         if (usesLlamaCPP) {
-          socket.emit(
-            'init-llama-server-boot',
-            LLM_PROVIDER.llamaCPPServerBootStatus
-          )
+          runWithProfileContext({ profileName }, () => {
+            socket.emit(
+              'init-llama-server-boot',
+              LLM_PROVIDER.llamaCPPServerBootStatus
+            )
+          })
         }
 
         this.monitorLLMInitialization(socket, {
+          profileName,
           usesLlamaCPP
         })
 
@@ -990,12 +1175,14 @@ export default class SocketServer {
           })
         } else {
           socket.on('session-change', (sessionId: string) => {
-            this.setActiveSocket(socket)
-            const session = CONVERSATION_SESSION_MANAGER.setActiveSession(
-              sessionId
-            )
+            runWithProfileContext({ profileName }, () => {
+              this.setActiveSocket(socket)
+              const session = CONVERSATION_SESSION_MANAGER.setActiveSession(
+                sessionId
+              )
 
-            this.setChatClientSession(socket.id, session.id)
+              this.setChatClientSession(socket.id, session.id)
+            })
           })
 
           // Listen for new utterance
@@ -1024,57 +1211,32 @@ export default class SocketServer {
 
           // Listen for widget events
           socket.on('widget-event', async (event: WidgetDataEvent) => {
-            this.setActiveSocket(socket)
-            const sessionId =
-              this.chatClients.get(socket.id)?.sessionId ||
-              CONVERSATION_SESSION_MANAGER.getActiveSessionId()
-
-            LogHelper.title('Socket')
-            LogHelper.info(`Widget event: ${JSON.stringify(event)}`)
-
-            this.emitToChatClients('is-typing', true, { sessionId })
-
-            try {
-              await CONVERSATION_SESSION_MANAGER.runWithSession(
-                sessionId,
-                async () => {
-                  const { method } = event
-
-                  if (method.methodName === 'send_utterance') {
-                    const utterance = method.methodParams['utterance']
-
-                    if (method.methodParams['from'] === 'leon') {
-                      await BRAIN.talk(utterance as string, true)
-                    } else {
-                      socket.emit('widget-send-utterance', utterance)
-                    }
-                  } else if (method.methodName === 'run_skill_action') {
-                    const { actionName, params } = method.methodParams
-
-                    await axios.post(
-                      `${HTTP_SERVER.host}:${HTTP_SERVER.port}/api/${API_VERSION}/run-action`,
-                      {
-                        skill_action: actionName,
-                        action_params: params,
-                        session_id: sessionId
-                      }
-                    )
-                  }
-                }
-              )
-            } catch (e) {
-              // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-              // @ts-expect-error
-              LogHelper.error(`Failed to handle widget event: ${e.errors || e}`)
-            } finally {
-              this.emitToChatClients('is-typing', false, { sessionId })
-            }
+            await this.handleWidgetEvent(socket, event)
           })
         }
       })
 
       socket.once('disconnect', () => {
         this.unregisterChatClient(socket.id)
+        const satelliteClient = this.satelliteClients.get(socket.id)
+
+        if (satelliteClient) {
+          runWithProfileContext(
+            { profileName: satelliteClient.profileName },
+            () => {
+              const didUnregister = SATELLITE_REGISTRY.unregister(
+                satelliteClient.profileName,
+                satelliteClient.deviceId,
+                socket
+              )
+
+              if (didUnregister) {
+                TOOLKIT_REGISTRY.removeSatelliteTools(satelliteClient.deviceId)
+              }
+            }
+          )
+          this.satelliteClients.delete(socket.id)
+        }
         // TODO
         // deleteProvider(this.socket.id)
       })

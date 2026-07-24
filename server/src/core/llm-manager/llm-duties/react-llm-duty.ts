@@ -1,8 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { ChatHistoryItem, LlamaContext, LlamaChatSession } from 'node-llama-cpp'
-
 import {
   DEFAULT_INIT_PARAMS,
   LLMDuty,
@@ -13,7 +11,6 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import {
-  LLM_MANAGER,
   LLM_PROVIDER,
   PERSONA,
   TOOLKIT_REGISTRY,
@@ -28,19 +25,20 @@ import {
 import {
   LLMDuties,
   LLMProviders,
-  type LLMReasoningMode,
   type LLMPromptAbortReason,
+  type AgentToolTranscriptMessage,
   type OpenAITool,
-  type OpenAIToolCall,
-  type OpenAIToolChoice
+  type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
-import { PROFILE_LOGS_PATH } from '@/constants'
 import type { MessageLog } from '@/types'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentProvider()
@@ -52,83 +50,55 @@ function getLLMProviderName(): LLMProviders {
   return provider
 }
 
-const RECOVERY_FAILURE_OBSERVATION_MAX_CHARS = 360
-
-function clipObservationForUser(value: string): string {
-  const normalized = value.replace(/\s+/g, ' ').trim()
-  if (normalized.length <= RECOVERY_FAILURE_OBSERVATION_MAX_CHARS) {
-    return normalized
-  }
-
-  return `${normalized.slice(0, RECOVERY_FAILURE_OBSERVATION_MAX_CHARS - 3).trimEnd()}...`
-}
-
-function buildExecutionFailureDraft(execution: ExecutionRecord): string {
-  const observation = StringHelper.redactSecrets(
-    clipObservationForUser(execution.observation)
-  )
-  const statusText = execution.status === 'error'
-    ? `${execution.function} failed`
-    : `${execution.function} stopped making progress`
-
-  return `I couldn't complete the task because ${statusText}. Latest observation: ${observation || 'No detailed observation was returned.'}`
-}
-
 import {
-  PLAN_SYSTEM_PROMPT,
-  REACT_TEMPERATURE,
-  REACT_INFERENCE_TIMEOUT_MS,
-  REACT_TIMEOUT_MAX_RETRIES,
-  REACT_PLANNING_MAX_TOKENS,
-  REACT_EXECUTION_MAX_TOKENS,
-  REACT_RECOVERY_MAX_TOKENS,
+  AGENT_TEMPERATURE,
+  AGENT_INFERENCE_TIMEOUT_MS,
+  AGENT_TIMEOUT_MAX_RETRIES,
   CHARS_PER_TOKEN,
-  TOOL_CALL_WAIT_NOTICE_DELAY_MS,
-  TOOL_CALL_DIAGNOSIS_DELAY_MS,
-  TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS,
-  REACT_HISTORY_COMPACTION_MAX_TOKENS,
-  REACT_HISTORY_COMPACTION_RETRY_MAX_TOKENS,
-  REACT_HISTORY_COMPACTION_SYSTEM_PROMPT,
-  REACT_LOCAL_PROVIDER_HISTORY_LOGS,
-  REACT_LOCAL_PROVIDER_HISTORY_COMPACTION_POINT,
-  REACT_REMOTE_PROVIDER_HISTORY_LOGS,
-  REACT_REMOTE_PROVIDER_HISTORY_COMPACTION_POINT,
-  MAX_EXECUTIONS,
-  MAX_REPLANS
+  AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
+  AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
+  AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS,
+  AGENT_HISTORY_COMPACTION_MAX_TOKENS,
+  AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS,
+  AGENT_HISTORY_COMPACTION_SYSTEM_PROMPT,
+  AGENT_LOCAL_PROVIDER_HISTORY_LOGS,
+  AGENT_LOCAL_PROVIDER_HISTORY_COMPACTION_POINT,
+  AGENT_REMOTE_PROVIDER_HISTORY_LOGS,
+  AGENT_REMOTE_PROVIDER_HISTORY_COMPACTION_POINT,
+  AGENT_MAX_ITERATIONS
 } from './react-llm-duty/constants'
 import type {
   ReactLLMDutyParams,
   ExecutionRecord,
-  PlanStep,
   TrackedPlanStep,
   PlanStepStatus,
   LLMCaller,
-  PromptLogSection,
-  LLMCallOptions,
   FinalResponseSignal,
-  ReactPhase,
+  AgentPhase,
   AgentSkillContext
 } from './react-llm-duty/types'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
 import {
-  getPhasePolicy,
-  formatEffectivePhasePolicyForLog
-} from './react-llm-duty/phase-policy'
+  getAgentInferencePolicy,
+  formatAgentInferencePolicyForLog
+} from './react-llm-duty/agent-policy'
+import { runToolExecution } from './react-llm-duty/tool-execution'
 import {
-  buildCatalog,
-  runPlanningPhase,
-  runRecoveryPlanningPhase,
-  runExecutionSelfObservationPhase,
-  runExecutionStep,
-  runFinalAnswerPhase
-} from './react-llm-duty/phases'
+  AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
+  AGENT_SYSTEM_PROMPT,
+  AgentModelProviderError,
+  buildAgentConvergenceSystemPrompt,
+  buildAgentToolCatalog,
+  buildAgentTranscriptHistory,
+  runAgentLoop
+} from './react-llm-duty/agent-loop'
+import { buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import {
   buildCompactedHistoryMessage,
   findMessageSequenceStart,
   formatHistoryForCompaction,
   hasHistoryCompactionContent,
-  normalizeHistoryCompactionSummary,
-  toChatHistoryItems
+  normalizeHistoryCompactionSummary
 } from './react-llm-duty/history-compaction'
 import {
   type AccumulatedLLMMetricsState,
@@ -138,108 +108,42 @@ import {
   observeCompletionMetrics
 } from './react-llm-duty/metrics'
 import {
-  buildPausedTrackedSteps,
-  buildResumedExecutionInput,
-  createExecutionContinuationState,
-  createIntermediateAnswerExecutionRecord,
-  isExecutionContinuationStateValid,
-  shouldContinueAfterIntermediateAnswerHandoff,
-  type ReactExecutionContinuationPayload,
-  type ReactExecutionContinuationState
-} from './react-llm-duty/human-in-the-loop'
+  createAgentLoopContinuationState,
+  isAgentLoopContinuationStateValid,
+  type AgentLoopContinuationState
+} from './react-llm-duty/agent-loop-continuation'
+import {
+  prepareAgentModelContext,
+  resolveAgentContextCompactionTriggerTokens,
+  resolveAgentContextRecoveryTriggerTokens,
+  resolveAgentMaxOutputTokens
+} from './react-llm-duty/agent-context-budget'
 
-function getDefaultMaxTokensForPhase(phase: ReactPhase): number | undefined {
-  const providerName = getLLMProviderName()
-  const isLocalProvider =
-    providerName === LLMProviders.Local || providerName === LLMProviders.LlamaCPP
+const AGENT_PROMPT_CACHE_KEY = 'leon-agent'
+const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
+  'length',
+  'max_tokens',
+  'max_output_tokens',
+  'incomplete'
+])
 
-  if (!isLocalProvider) {
-    return undefined
-  }
-
-  if (phase === 'planning') {
-    return REACT_PLANNING_MAX_TOKENS
-  }
-
-  if (phase === 'execution') {
-    return REACT_EXECUTION_MAX_TOKENS
-  }
-
-  if (phase === 'recovery') {
-    return REACT_RECOVERY_MAX_TOKENS
-  }
-
-  return undefined
-}
-
-const REACT_PROMPT_CACHE_KEY_PREFIX = 'leon-react'
-
-function getPromptCacheKeyForPhase(phase: ReactPhase): string {
-  return `${REACT_PROMPT_CACHE_KEY_PREFIX}-${phase}`
-}
-
-function shouldUseOpenAIResponseTuning(phase: ReactPhase): boolean {
-  return phase !== 'final_answer'
-}
-
-const REACT_CONTINUATION_STATE_FILENAME = '.react-execution-continuation-state.json'
-const REACT_HISTORY_COMPACTION_STATE_FILENAME =
+const AGENT_CONTINUATION_STATE_FILENAME = '.agent-loop-continuation-state.json'
+// Preserve existing rolling summaries across the loop migration.
+const AGENT_HISTORY_COMPACTION_STATE_FILENAME =
   '.react-history-compaction-state.json'
-const REACT_SESSION_STATE_FILENAME_SEPARATOR = '--'
-const REACT_PROMPTS_LOG_DIR = path.join(PROFILE_LOGS_PATH, 'prompts')
-const REPEATED_EXECUTION_LOOP_THRESHOLD = 2
+const AGENT_SESSION_STATE_FILENAME_SEPARATOR = '--'
 
-function isLocalAgentProvider(): boolean {
-  return [LLMProviders.Local, LLMProviders.LlamaCPP].includes(
-    getLLMProviderName()
-  )
-}
+type AgentHistoryCompactionScope = 'local' | 'remote'
 
-function getEffectiveReasoningMode(
-  _phase: ReactPhase,
-  requestedMode: LLMReasoningMode
-): LLMReasoningMode {
-  return requestedMode
-}
-
-function getExecutionLoopSignature(execution: ExecutionRecord): string {
-  return JSON.stringify({
-    function: execution.function,
-    status: execution.status,
-    requestedToolInput: execution.requestedToolInput || '',
-    observation: String(execution.observation || '').slice(0, 1_000)
-  })
-}
-
-function countRecentRepeatedExecutions(
-  executionHistory: ExecutionRecord[],
-  execution: ExecutionRecord
-): number {
-  const signature = getExecutionLoopSignature(execution)
-  let count = 0
-
-  for (const historyItem of [...executionHistory].reverse()) {
-    if (getExecutionLoopSignature(historyItem) !== signature) {
-      break
-    }
-    count += 1
-  }
-
-  return count
-}
-
-type ReactHistoryCompactionScope = 'local' | 'remote'
-
-interface PreparedReactHistory {
+interface PreparedAgentHistory {
   messageLogs: MessageLog[]
-  localChatHistory?: ChatHistoryItem[]
 }
 
 function emitAgentSkillActivityToWebApp(
   agentSkillContext: AgentSkillContext
 ): void {
   const skillGroupId =
-    `react_agent_skill_${agentSkillContext.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
+    `agent_skill_${agentSkillContext.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 
   SOCKET_SERVER.emitAnswerToChatClients({
     answer: `Using Agent Skill: ${agentSkillContext.name}\nFollowing: ${agentSkillContext.skillPath}`,
@@ -259,41 +163,25 @@ function emitAgentSkillActivityToWebApp(
   })
 }
 
-interface ReactHistoryCompactionProviderState {
+interface AgentHistoryCompactionProviderState {
   summary: string | null
   summarySentAt: number | null
   tail: MessageLog[]
   newMessagesSinceCompaction: number
 }
 
-interface ReactHistoryCompactionState {
+interface AgentHistoryCompactionState {
   version: 1
-  local: ReactHistoryCompactionProviderState
-  remote: ReactHistoryCompactionProviderState
+  local: AgentHistoryCompactionProviderState
+  remote: AgentHistoryCompactionProviderState
 }
 
-function buildProgressMessageFromSteps(steps: PlanStep[]): string | null {
-  const normalizedLabels = steps
-    .map((step) => step.label.trim())
-    .filter((label) => label.length > 0)
-
-  if (normalizedLabels.length === 0) {
-    return null
-  }
-
-  if (normalizedLabels.length === 1) {
-    return `${normalizedLabels[0]}...`
-  }
-
-  return `${normalizedLabels[0]} and ${normalizedLabels[1]}...`
-}
-
-interface ReactHistoryCompactionConfig {
+interface AgentHistoryCompactionConfig {
   historyLimit: number
   compactionBatchSize: number
 }
 
-function createEmptyHistoryCompactionProviderState(): ReactHistoryCompactionProviderState {
+function createEmptyHistoryCompactionProviderState(): AgentHistoryCompactionProviderState {
   return {
     summary: null,
     summarySentAt: null,
@@ -302,7 +190,7 @@ function createEmptyHistoryCompactionProviderState(): ReactHistoryCompactionProv
   }
 }
 
-const REACT_HISTORY_COMPACTION_STATE_FALLBACK: ReactHistoryCompactionState = {
+const AGENT_HISTORY_COMPACTION_STATE_FALLBACK: AgentHistoryCompactionState = {
   version: 1,
   local: createEmptyHistoryCompactionProviderState(),
   remote: createEmptyHistoryCompactionProviderState()
@@ -310,15 +198,12 @@ const REACT_HISTORY_COMPACTION_STATE_FALLBACK: ReactHistoryCompactionState = {
 
 export class ReActLLMDuty extends LLMDuty {
   private static instance: ReActLLMDuty
-  private static context: LlamaContext = null as unknown as LlamaContext
-  private static session: LlamaChatSession =
-    null as unknown as LlamaChatSession
   private static readonly continuationStateStores =
-    new Map<string, ContextStateStore<ReactExecutionContinuationState | null>>()
+    new Map<string, ContextStateStore<AgentLoopContinuationState | null>>()
   private static readonly historyCompactionStateStores =
-    new Map<string, ContextStateStore<ReactHistoryCompactionState>>()
+    new Map<string, ContextStateStore<AgentHistoryCompactionState>>()
   protected systemPrompt: LLMDutyParams['systemPrompt'] = null
-  protected readonly name = 'ReAct LLM Duty'
+  protected readonly name = 'Agent LLM Duty'
   protected input: LLMDutyParams['input'] = null
   private totalInputTokens = 0
   private totalOutputTokens = 0
@@ -326,18 +211,15 @@ export class ReActLLMDuty extends LLMDuty {
   private totalOutputChars = 0
   private totalGenerationDurationMs = 0
   private phaseMetrics: RawPhaseMetrics = {
-    planning: { outputTokens: 0, durationMs: 0 },
-    execution: { outputTokens: 0, durationMs: 0 },
-    recovery: { outputTokens: 0, durationMs: 0 },
+    agent: { outputTokens: 0, durationMs: 0 },
     final_answer: { outputTokens: 0, durationMs: 0 }
   }
   private finalAnswerMetrics: FinalAnswerMetricsSnapshot | null = null
 
   private executionStartedAt = 0
-  private hasStreamedTokenEmission = false
   private hasExplicitMemoryWrite = false
   private reasoningGenerationId: string | null = null
-  private finalAnswerPhaseCompleted = false
+  private hasFinalizedAnswer = false
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
   private activeAgentSkillContext: AgentSkillContext | null
@@ -356,7 +238,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.input = params.input
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
-    this.systemPrompt = PERSONA.getCompactDutySystemPrompt(PLAN_SYSTEM_PROMPT, {
+    this.systemPrompt = PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
       includePersonality: false,
       includeMood: false
     })
@@ -372,42 +254,6 @@ export class ReActLLMDuty extends LLMDuty {
     if (!CONTEXT_MANAGER.isLoaded || params.force) {
       await CONTEXT_MANAGER.load()
     }
-
-    if (getLLMProviderName() === LLMProviders.Local) {
-      if (!ReActLLMDuty.session || params.force) {
-        LogHelper.title(this.name)
-        LogHelper.info('Initializing...')
-
-        try {
-          if (params.force) {
-            if (ReActLLMDuty.context) {
-              await ReActLLMDuty.context.dispose()
-            }
-            if (ReActLLMDuty.session) {
-              ReActLLMDuty.session.dispose({ disposeSequence: true })
-              LogHelper.info('Session disposed')
-            }
-          }
-
-          ReActLLMDuty.context = await LLM_MANAGER.model.createContext()
-
-          const { LlamaChatSession } = await Function(
-            'return import("node-llama-cpp")'
-          )()
-
-          ReActLLMDuty.session = new LlamaChatSession({
-            contextSequence: ReActLLMDuty.context.getSequence(),
-            autoDisposeSequence: true,
-            systemPrompt: this.systemPrompt as string
-          })
-
-          LogHelper.success('Initialized')
-        } catch (e) {
-          LogHelper.title(this.name)
-          LogHelper.error(`Failed to initialize: ${e}`)
-        }
-      }
-    }
   }
 
   public async execute(): Promise<LLMDutyResult | null> {
@@ -421,56 +267,30 @@ export class ReActLLMDuty extends LLMDuty {
     this.totalOutputChars = 0
     this.totalGenerationDurationMs = 0
     this.phaseMetrics = {
-      planning: { outputTokens: 0, durationMs: 0 },
-      execution: { outputTokens: 0, durationMs: 0 },
-      recovery: { outputTokens: 0, durationMs: 0 },
+      agent: { outputTokens: 0, durationMs: 0 },
       final_answer: { outputTokens: 0, durationMs: 0 }
     }
     this.finalAnswerMetrics = null
-    this.hasStreamedTokenEmission = false
     this.hasExplicitMemoryWrite = false
     this.reasoningGenerationId = StringHelper.random(6, { onlyLetters: true })
-    this.finalAnswerPhaseCompleted = false
+    this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
 
     try {
-      const { messageLogs: history, localChatHistory } =
-        await this.loadPreparedHistory()
+      const { messageLogs: history } = await this.loadPreparedHistory()
 
-      if (getLLMProviderName() === LLMProviders.Local && localChatHistory) {
-        ReActLLMDuty.session.setChatHistory(localChatHistory)
-      }
-
-      const ownerInputText = this.getInputAsText(this.input)
-      const continuation = this.consumeExecutionContinuation(ownerInputText)
-      const effectiveInput = continuation
-        ? continuation.resumedInput
-        : this.input
-
-      // --- Build adaptive catalog ---
-      const catalog = buildCatalog()
-
-      LogHelper.title(this.name)
-      LogHelper.debug(`Catalog mode: ${catalog.mode} | Catalog length: ${catalog.text.length} chars (~${Math.ceil(catalog.text.length / 4)} tokens) | Input: "${this.input}"`)
-      LogHelper.debug(`Native tools supported: ${this.supportsNativeTools} (provider: ${getLLMProviderName()})`)
-      if (continuation) {
-        LogHelper.debug(
-          `Resuming paused execution from clarification: "${continuation.state.clarificationQuestion}"`
-        )
-      }
-
-      const planWidgetIdValue = continuation?.state.planWidgetId || widgetId('plan')
-      let hasPlanningWidget = false
+      const ownerInput = this.getInputAsText(this.input)
+      const continuation = this.consumeAgentLoopContinuation()
+      const originalInput = continuation?.originalInput || ownerInput
+      const planWidgetIdValue =
+        continuation?.planWidgetId || widgetId('plan')
+      let trackedSteps =
+        continuation?.trackedSteps.map((step) => ({ ...step })) || []
+      let hasPlanningWidget = trackedSteps.length > 0
       const executionHistory: ExecutionRecord[] = []
-      let replanCount = 0
-      let executionCount = 0
-      let pendingSteps: PlanStep[] = []
-      let trackedSteps: TrackedPlanStep[] = []
-      let currentStepIndex = 0
-      let currentExecutingFunction: string | null = null
       let emittedAgentSkillActivityId: string | null = null
-      const caller = this.createLLMCaller(history, effectiveInput)
+      const caller = this.createLLMCaller()
       const emitActiveAgentSkillActivity = (): void => {
         const activeAgentSkillContext = caller.agentSkillContext
 
@@ -484,917 +304,164 @@ export class ReActLLMDuty extends LLMDuty {
         emitAgentSkillActivityToWebApp(activeAgentSkillContext)
         emittedAgentSkillActivityId = activeAgentSkillContext.id
       }
-      const finalizeWithPostAnswerMaintenance = async (
-        finalAnswer: string,
-        finalIntent: FinalResponseSignal['intent'] = 'answer'
-      ): Promise<LLMDutyResult> => {
-        this.finalAnswerPhaseCompleted = true
-        this.finalResponseIntent = finalIntent
+      const finalize = (
+        answer: string,
+        intent: FinalResponseSignal['intent']
+      ): LLMDutyResult => {
+        this.hasFinalizedAnswer = true
+        this.finalResponseIntent = intent
         this.lastExecutionHistory = executionHistory.map((item) => ({
           ...item
         }))
-        const dutyResult = this.makeDutyResult(finalAnswer)
+
+        const dutyResult = this.makeDutyResult(answer)
         POST_TURN_MAINTENANCE_QUEUE.enqueue(
-          'react history compaction',
+          'agent history compaction',
           () => this.maybeCompactHistoryAfterAnswer(
             planWidgetIdValue,
             trackedSteps
           )
         )
+
         return dutyResult
       }
-      const finalizeFromSignal = async (
-        signal: FinalResponseSignal
-      ): Promise<LLMDutyResult> => {
-        const finalAnswer = await runFinalAnswerPhase(
-          caller,
-          executionHistory,
-          signal
+
+      const catalog = buildAgentToolCatalog(
+        this.activeForcedToolName,
+        continuation?.loadedToolkitIds
+      )
+      if (catalog.tools.length === 0) {
+        return finalize(
+          `The tool "${this.activeForcedToolName}" is not available.`,
+          'error'
         )
-        return finalizeWithPostAnswerMaintenance(finalAnswer, signal.intent)
       }
 
+      const agentSystemPrompt = PERSONA.getCompactDutySystemPrompt(
+        AGENT_SYSTEM_PROMPT,
+        {
+          includePersonality: true,
+          includeMood: true
+        }
+      )
+      this.systemPrompt = agentSystemPrompt
+
+      const transcript = continuation
+        ? structuredClone(continuation.transcript)
+        : buildAgentTranscriptHistory(history, ownerInput)
       if (continuation) {
-        pendingSteps = continuation.state.pendingSteps.map((step) => ({
-          function: step.function,
-          label: step.label,
-          ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
-        }))
-        executionHistory.push(
-          ...continuation.state.executionHistory.map((item) => ({ ...item }))
-        )
-        replanCount = continuation.state.replanCount
-        executionCount = continuation.state.executionCount
-        trackedSteps = continuation.state.trackedSteps.map((step) => ({
-          label: step.label,
-          status: step.status
-        }))
-
-        if (trackedSteps.length === 0) {
-          trackedSteps = pendingSteps.map((step, index) => ({
-            label: step.label,
-            status: index === 0 ? 'in_progress' : 'pending'
-          }))
-          currentStepIndex = 0
-        } else {
-          currentStepIndex = Math.min(
-            Math.max(continuation.state.currentStepIndex, 0),
-            Math.max(trackedSteps.length - 1, 0)
-          )
-          trackedSteps = buildPausedTrackedSteps(
-            trackedSteps,
-            currentStepIndex
-          )
-        }
-
-        emitPlanWidget(trackedSteps, null, planWidgetIdValue, true)
-        hasPlanningWidget = true
-      } else if (this.activeForcedToolName) {
-        const forcedToolStep = this.getForcedToolPlanStep()
-
-        if (!forcedToolStep) {
-          const unsupportedToolSignal: FinalResponseSignal = {
-            intent: 'error',
-            draft: `The tool "${this.activeForcedToolName}" is not available.`,
-            source: 'system'
-          }
-
-          return await finalizeFromSignal(unsupportedToolSignal)
-        }
-
-        pendingSteps = [forcedToolStep]
-        trackedSteps = [
-          {
-            label: forcedToolStep.label,
-            status: 'in_progress' as PlanStepStatus
-          }
-        ]
-
-        emitPlanWidget(trackedSteps, null, planWidgetIdValue, false)
-        hasPlanningWidget = true
+        transcript.push({
+          role: 'user',
+          content: [
+            '<clarification_response>',
+            ownerInput,
+            '</clarification_response>'
+          ].join('\n')
+        })
       } else {
-        // --- Phase 1: Planning ---
-        this.logTitle('planning')
-        LogHelper.debug('Phase 1: Planning...')
-
-        let planningUiSteps: TrackedPlanStep[] = [
-          { label: 'Thinking...', status: 'in_progress' }
-        ]
-        emitPlanWidget(
-          planningUiSteps,
-          null,
-          planWidgetIdValue,
-          false
-        )
-        hasPlanningWidget = true
-
-        const updatePlanningStage = (): void => {
-          planningUiSteps = [
-            { label: 'Thinking...', status: 'in_progress' }
-          ]
-          if (hasPlanningWidget) {
-            emitPlanWidget(
-              planningUiSteps,
-              null,
-              planWidgetIdValue,
-              true
-            )
-          }
-        }
-
-        const planResult = await runPlanningPhase(
-          caller,
-          catalog,
-          history,
-          updatePlanningStage
-        )
-        emitActiveAgentSkillActivity()
-
-        if (planResult.type === 'handoff') {
-          if (hasPlanningWidget) {
-            emitPlanWidget(
-              planningUiSteps.map((step) => ({ ...step, status: 'completed' })),
-              null,
-              planWidgetIdValue,
-              true
-            )
-          }
-          this.logTitle('planning')
-          LogHelper.debug(
-            `Planning returned handoff signal: intent="${planResult.signal.intent}"`
-          )
-          return await finalizeFromSignal(planResult.signal)
-        }
-
-        this.logTitle('planning')
-        LogHelper.debug(
-          `Plan created with ${planResult.steps.length} step(s): ${planResult.steps.map((s) => s.function).join(' -> ')}`
-        )
-        if (planResult.summary) {
-          LogHelper.debug(`Plan summary: "${planResult.summary}"`)
-        }
-
-        pendingSteps = [...planResult.steps]
-
-        // --- Plan widget state ---
-        trackedSteps = pendingSteps.map((s) => ({
-          label: s.label,
-          status: 'pending' as PlanStepStatus
-        }))
-
-        // Mark first step as in_progress and emit initial widget
-        if (trackedSteps.length > 0) {
-          trackedSteps[0]!.status = 'in_progress'
-        }
-
-        // Emit plan summary as text, then show the widget
-        const planningProgressMessage =
-          planResult.summary ||
-          buildProgressMessageFromSteps(planResult.steps)
-        if (planningProgressMessage) {
-          await this.emitProgress(
-            this.toProgressiveMessage(planningProgressMessage)
-          )
-        }
-        emitPlanWidget(
-          trackedSteps,
-          null,
-          planWidgetIdValue,
-          hasPlanningWidget
-        )
-        hasPlanningWidget = true
+        transcript.push({
+          role: 'user',
+          content: await this.buildAgentRequest(caller, originalInput)
+        })
       }
 
-      // --- Phase 2: Execution loop ---
-      this.logTitle('execution')
-      LogHelper.debug('Phase 2: Execution loop...')
-
-      let focusedRecoveryAfterReplanLimitUsed = false
-
-      while (pendingSteps.length > 0 && executionCount < MAX_EXECUTIONS) {
-        const currentStep = pendingSteps.shift()!
-        executionCount += 1
-        currentExecutingFunction = currentStep.function
-
-        emitPlanWidget(
-          trackedSteps,
-          null,
-          planWidgetIdValue,
-          true,
-          currentExecutingFunction
-        )
-
-        LogHelper.title(this.name)
-        LogHelper.debug(
-          `Execution ${executionCount}/${MAX_EXECUTIONS}: ${currentStep.function} | label="${currentStep.label}" | ${pendingSteps.length} step(s) remaining`
-        )
-
-        const stepResult = await runExecutionStep(
-          caller,
-          currentStep,
-          executionHistory,
-          catalog
-        )
-
-        if (stepResult.type === 'handoff') {
-          LogHelper.title(this.name)
-          LogHelper.debug(
-            `Execution returned handoff signal: intent="${stepResult.signal.intent}"`
-          )
-
-          if (stepResult.signal.intent === 'clarification') {
-            const pausedTrackedSteps = buildPausedTrackedSteps(
-              trackedSteps,
-              currentStepIndex
-            )
-            this.pauseExecutionForClarification({
-              planWidgetId: planWidgetIdValue,
-              originalInput:
-                continuation?.state.originalInput || ownerInputText,
-              clarificationQuestion: stepResult.signal.draft,
-              currentStep,
-              pendingSteps,
-              executionHistory,
-              trackedSteps: pausedTrackedSteps,
-              currentStepIndex,
-              replanCount,
-              executionCount
-            })
-            currentExecutingFunction = null
-            emitPlanWidget(
-              pausedTrackedSteps,
-              null,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-
-            LogHelper.debug(
-              `Execution paused for clarification at step "${currentStep.label}"`
-            )
-            return await finalizeFromSignal(stepResult.signal)
-          }
-
-          if (
-            shouldContinueAfterIntermediateAnswerHandoff(
-              stepResult.signal,
-              pendingSteps
-            )
-          ) {
-            LogHelper.debug(
-              `Continuing after intermediate answer handoff; ${pendingSteps.length} pending step(s) remain`
-            )
-            executionHistory.push(
-              createIntermediateAnswerExecutionRecord(
-                currentStep,
-                stepResult.signal
-              )
-            )
-
-            if (currentStepIndex < trackedSteps.length) {
-              trackedSteps[currentStepIndex]!.status = 'completed'
-            }
-            const nextTrackedIndex = currentStepIndex + 1
-            if (nextTrackedIndex < trackedSteps.length) {
-              trackedSteps[nextTrackedIndex]!.status = 'in_progress'
-            }
-            currentExecutingFunction = null
-            emitPlanWidget(
-              trackedSteps,
-              currentStepIndex,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-            currentStepIndex = nextTrackedIndex
-            continue
-          }
-
-          // Mark all remaining steps as completed in the widget
-          for (const ts of trackedSteps) {
-            ts.status = 'completed'
-          }
-          currentExecutingFunction = null
-          emitPlanWidget(
-            trackedSteps,
-            null,
-            planWidgetIdValue,
-            true,
-            currentExecutingFunction
-          )
-
-          return await finalizeFromSignal(stepResult.signal)
-        }
-
-        if (stepResult.type === 'replan') {
-          replanCount += 1
-          LogHelper.title(this.name)
-          LogHelper.debug(
-            `Re-plan ${replanCount}/${MAX_REPLANS}: reason="${stepResult.reason}" | new steps: ${stepResult.steps.map((step) => step.function).join(' -> ')}`
-          )
-
-          if (replanCount > MAX_REPLANS) {
-            LogHelper.title(this.name)
-            LogHelper.warning('Max re-plans reached, synthesizing answer')
-            break
-          }
-
-          pendingSteps = stepResult.steps.map((step) => ({
-            function: step.function,
-            label: step.label,
-            ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
-          }))
-
-          // Rebuild tracked steps: keep completed ones, replace remaining
-          const completedSteps = trackedSteps.filter(
-            (s) => s.status === 'completed'
-          )
-          const newSteps: TrackedPlanStep[] = pendingSteps.map((s) => ({
-            label: s.label,
-            status: 'pending' as PlanStepStatus
-          }))
-          if (newSteps.length > 0) {
-            newSteps[0]!.status = 'in_progress'
-          }
-          trackedSteps = [...completedSteps, ...newSteps]
-          currentStepIndex = completedSteps.length
-
-          currentExecutingFunction = null
-          emitPlanWidget(
-            trackedSteps,
-            null,
-            planWidgetIdValue,
-            true,
-            currentExecutingFunction
-          )
-          continue
-        }
-
-        // Record execution
-        const repeatedExecutionCount = countRecentRepeatedExecutions(
-          executionHistory,
-          stepResult.execution
-        )
-        executionHistory.push(stepResult.execution)
-
-        if (repeatedExecutionCount >= REPEATED_EXECUTION_LOOP_THRESHOLD) {
-          LogHelper.title(this.name)
-          LogHelper.warning(
-            `Execution loop detected after ${repeatedExecutionCount + 1} repeated "${stepResult.execution.function}" result(s)`
-          )
-          if (currentStepIndex < trackedSteps.length) {
-            trackedSteps[currentStepIndex]!.status =
-              stepResult.execution.status === 'error' ? 'error' : 'completed'
-          }
-          currentExecutingFunction = null
-          emitPlanWidget(
-            trackedSteps,
-            null,
-            planWidgetIdValue,
-            true,
-            currentExecutingFunction
-          )
-
-          return await finalizeFromSignal({
-            intent:
-              stepResult.execution.status === 'error' ? 'error' : 'blocked',
-            draft: `${buildExecutionFailureDraft(stepResult.execution)} Execution stopped because the same tool result repeated without new progress.`,
-            source: 'execution'
-          })
-        }
-
-        if (
-          stepResult.execution.status === 'success' &&
-          stepResult.execution.function ===
-            'structured_knowledge.memory.write'
-        ) {
-          this.hasExplicitMemoryWrite = true
-        }
-
-        LogHelper.title(this.name)
-        LogHelper.debug(
-          `Execution result: ${stepResult.execution.function} [${stepResult.execution.status}]`
-        )
-        LogHelper.debug(`Observation: ${stepResult.execution.observation}`)
-
-        // Check for short-circuit handoff from tool result
-        if (stepResult.handoffSignal) {
-          LogHelper.title(this.name)
-          LogHelper.debug(
-            `Tool returned handoff signal: intent="${stepResult.handoffSignal.intent}"`
-          )
-
-          if (stepResult.handoffSignal.intent === 'clarification') {
-            const pausedTrackedSteps = buildPausedTrackedSteps(
-              trackedSteps,
-              currentStepIndex
-            )
-            this.pauseExecutionForClarification({
-              planWidgetId: planWidgetIdValue,
-              originalInput:
-                continuation?.state.originalInput || ownerInputText,
-              clarificationQuestion: stepResult.handoffSignal.draft,
-              currentStep,
-              pendingSteps,
-              executionHistory,
-              trackedSteps: pausedTrackedSteps,
-              currentStepIndex,
-              replanCount,
-              executionCount
-            })
-            currentExecutingFunction = null
-            emitPlanWidget(
-              pausedTrackedSteps,
-              null,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-
-            LogHelper.debug(
-              `Execution paused for clarification at step "${currentStep.label}"`
-            )
-            return await finalizeFromSignal(stepResult.handoffSignal)
-          }
-
-          if (
-            shouldContinueAfterIntermediateAnswerHandoff(
-              stepResult.handoffSignal,
-              pendingSteps
-            )
-          ) {
-            LogHelper.debug(
-              `Continuing after intermediate tool answer handoff; ${pendingSteps.length} pending step(s) remain`
-            )
-          } else {
-            if (
-              stepResult.execution.status === 'error' &&
-              currentStepIndex < trackedSteps.length
-            ) {
-              trackedSteps[currentStepIndex]!.status = 'error'
-            } else {
-              // Mark all remaining as completed
-              for (const ts of trackedSteps) {
-                ts.status = 'completed'
-              }
-            }
-            currentExecutingFunction = null
-            emitPlanWidget(
-              trackedSteps,
-              null,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-
-            return await finalizeFromSignal(stepResult.handoffSignal)
-          }
-        }
-
-        if (
-          stepResult.execution.status === 'observed' &&
-          pendingSteps.length === 0
-        ) {
-          const selfObservationResult = await runExecutionSelfObservationPhase(
-            caller,
-            executionHistory
-          )
-
-          if (selfObservationResult?.type === 'handoff') {
-            if (currentStepIndex < trackedSteps.length) {
-              trackedSteps[currentStepIndex]!.status = 'completed'
-            }
-            currentExecutingFunction = null
-            emitPlanWidget(
-              trackedSteps,
-              currentStepIndex,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-
-            return await finalizeFromSignal(selfObservationResult.signal)
-          }
-
-          if (
-            selfObservationResult?.type === 'replan' &&
-            selfObservationResult.steps.length > 0
-          ) {
-            if (replanCount >= MAX_REPLANS) {
-              LogHelper.title(this.name)
-              LogHelper.warning(
-                'Observed-output replanning skipped: max re-plans reached'
-              )
-              stepResult.execution.status = 'error'
-            } else {
-              replanCount += 1
-              stepResult.execution.status = 'error'
-              pendingSteps = selfObservationResult.steps.map((step) => ({
-                function: step.function,
-                label: step.label,
-                ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
-              }))
-
-              LogHelper.title(this.name)
-              LogHelper.debug(
-                `Observed-output re-plan ${replanCount}/${MAX_REPLANS}: ${pendingSteps.map((s) => s.function).join(' -> ')}`
-              )
-              if (selfObservationResult.reason) {
-                LogHelper.debug(
-                  `Observed-output reason: "${selfObservationResult.reason}"`
-                )
-                const normalizedReason = selfObservationResult.reason
-                  .trim()
-                  .replace(/[.?!]+$/g, '')
-                await this.emitProgress(
-                  normalizedReason ? `${normalizedReason}...` : 'Working...'
-                )
-              }
-
-              if (currentStepIndex < trackedSteps.length) {
-                trackedSteps[currentStepIndex]!.status = 'error'
-              }
-              const appendedSteps: TrackedPlanStep[] = pendingSteps.map((s) => ({
-                label: s.label,
-                status: 'pending' as PlanStepStatus
-              }))
-              if (appendedSteps.length > 0) {
-                appendedSteps[0]!.status = 'in_progress'
-              }
-              trackedSteps = [
-                ...trackedSteps.slice(0, currentStepIndex + 1),
-                ...appendedSteps
-              ]
-              currentStepIndex += 1
-
-              currentExecutingFunction = null
-              emitPlanWidget(
-                trackedSteps,
-                null,
-                planWidgetIdValue,
-                true,
-                currentExecutingFunction
-              )
-              continue
-            }
-          } else {
-            stepResult.execution.status = 'error'
-          }
-        }
-
-        if (stepResult.execution.status === 'error') {
-          const shouldUseFocusedRecovery =
-            replanCount >= MAX_REPLANS &&
-            !focusedRecoveryAfterReplanLimitUsed
-          if (replanCount >= MAX_REPLANS && !shouldUseFocusedRecovery) {
-            LogHelper.title(this.name)
-            LogHelper.warning(
-              'Recovery replanning skipped: max re-plans reached'
-            )
-            if (currentStepIndex < trackedSteps.length) {
-              trackedSteps[currentStepIndex]!.status = 'error'
-            }
-            currentExecutingFunction = null
-            emitPlanWidget(
-              trackedSteps,
-              null,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-
-            return await finalizeFromSignal({
-              intent: 'error',
-              draft: `${buildExecutionFailureDraft(stepResult.execution)} Recovery attempts were exhausted.`,
-              source: 'recovery'
-            })
-          }
-
-          let recoveryPlanResult = null
-          try {
-            if (shouldUseFocusedRecovery) {
-              focusedRecoveryAfterReplanLimitUsed = true
-              LogHelper.title(this.name)
-              LogHelper.debug(
-                'Max re-plans reached; trying focused recovery before stopping'
-              )
-            }
-            recoveryPlanResult = await runRecoveryPlanningPhase(
-              caller,
-              catalog,
-              history,
-              executionHistory,
-              currentStep,
-              pendingSteps,
-              { focusedOnly: shouldUseFocusedRecovery }
-            )
-          } catch (error) {
-            LogHelper.title(this.name)
-            LogHelper.error(`Recovery planning failed: ${error}`)
-            if (currentStepIndex < trackedSteps.length) {
-              trackedSteps[currentStepIndex]!.status = 'error'
-            }
-            currentExecutingFunction = null
-            emitPlanWidget(
-              trackedSteps,
-              null,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-
-            return await finalizeFromSignal({
-              intent: 'error',
-              draft: `Recovery planning failed after the tool error: ${
-                (error as Error).message || String(error)
-              }`,
-              source: 'recovery'
-            })
-          }
-
-          if (recoveryPlanResult?.type === 'handoff') {
-            LogHelper.title(this.name)
-            LogHelper.debug(
-              `Recovery planning returned handoff signal: intent="${recoveryPlanResult.signal.intent}"`
-            )
-
-            if (recoveryPlanResult.signal.intent === 'clarification') {
-              const retryStepIndex = currentStepIndex
-              const pausedTrackedSteps =
-                trackedSteps.length > 0
-                  ? buildPausedTrackedSteps(trackedSteps, retryStepIndex)
-                  : [
-                      {
-                        label: currentStep.label,
-                        status: 'in_progress' as PlanStepStatus
-                      }
-                    ]
-              const pendingWithCurrent: PlanStep[] = [currentStep, ...pendingSteps]
-
-              this.saveExecutionContinuation({
-                version: 1,
-                phase: 'execution',
-                planWidgetId: planWidgetIdValue,
-                originalInput:
-                  continuation?.state.originalInput || ownerInputText,
-                clarificationQuestion: recoveryPlanResult.signal.draft,
-                pendingSteps: pendingWithCurrent,
-                executionHistory,
-                trackedSteps: pausedTrackedSteps,
-                currentStepIndex:
-                  pausedTrackedSteps.length > 0
-                    ? Math.min(retryStepIndex, pausedTrackedSteps.length - 1)
-                    : 0,
-                replanCount,
-                executionCount,
-                createdAt: Date.now()
-              })
-              currentExecutingFunction = null
-              emitPlanWidget(
-                pausedTrackedSteps,
-                null,
-                planWidgetIdValue,
-                true,
-                currentExecutingFunction
-              )
-
-              LogHelper.debug(
-                `Recovery execution paused for clarification at step "${currentStep.label}"`
-              )
-              return await finalizeFromSignal(recoveryPlanResult.signal)
-            }
-
-            return await finalizeFromSignal(recoveryPlanResult.signal)
-          }
-
-          if (
-            recoveryPlanResult?.type === 'plan' &&
-            recoveryPlanResult.steps.length > 0
-          ) {
-            replanCount += 1
-            pendingSteps = [...recoveryPlanResult.steps]
-
-            LogHelper.title(this.name)
-            LogHelper.debug(
-              `Recovery re-plan ${replanCount}/${MAX_REPLANS}: ${pendingSteps.map((s) => s.function).join(' -> ')}`
-            )
-            const recoveryProgressMessage =
-              recoveryPlanResult.summary ||
-              buildProgressMessageFromSteps(recoveryPlanResult.steps)
-            if (recoveryProgressMessage) {
-              if (recoveryPlanResult.summary) {
-                LogHelper.debug(
-                  `Recovery plan summary: "${recoveryPlanResult.summary}"`
-                )
-              }
-              await this.emitProgress(
-                this.toProgressiveMessage(recoveryProgressMessage)
-              )
-            }
-
-            const completedSteps = trackedSteps
-              .slice(0, currentStepIndex)
-              .filter((s) => s.status === 'completed')
-            const newSteps: TrackedPlanStep[] = pendingSteps.map((s) => ({
-              label: s.label,
-              status: 'pending' as PlanStepStatus
-            }))
-            if (newSteps.length > 0) {
-              newSteps[0]!.status = 'in_progress'
-            }
-            trackedSteps = [...completedSteps, ...newSteps]
-            currentStepIndex = completedSteps.length
-
-            currentExecutingFunction = null
-            emitPlanWidget(
-              trackedSteps,
-              null,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-            continue
-          }
-
-          if (currentStepIndex < trackedSteps.length) {
-            trackedSteps[currentStepIndex]!.status = 'error'
-          }
-          currentExecutingFunction = null
-          emitPlanWidget(
-            trackedSteps,
-            null,
-            planWidgetIdValue,
-            true,
-            currentExecutingFunction
-          )
-
-          return await finalizeFromSignal({
-            intent: 'error',
-            draft: `${buildExecutionFailureDraft(stepResult.execution)} Recovery could not find another executable path.`,
-            source: 'recovery'
-          })
-        }
-
-        // Update plan widget after a successful step: mark current step as completed,
-        // then move the next step to in_progress.
-        if (currentStepIndex < trackedSteps.length) {
-          trackedSteps[currentStepIndex]!.status = 'completed'
-        }
-        const nextTrackedIndex = currentStepIndex + 1
-        if (nextTrackedIndex < trackedSteps.length) {
-          trackedSteps[nextTrackedIndex]!.status = 'in_progress'
-        }
-        currentExecutingFunction = null
-        emitPlanWidget(
-          trackedSteps,
-          currentStepIndex,
-          planWidgetIdValue,
-          true,
-          currentExecutingFunction
-        )
-        currentStepIndex = nextTrackedIndex
-
-        if (
-          stepResult.execution.status === 'success' &&
-          pendingSteps.length === 0
-        ) {
-          if (replanCount >= MAX_REPLANS) {
-            LogHelper.title(this.name)
-            LogHelper.warning(
-              'Execution self-observation replanning skipped: max re-plans reached'
-            )
-            continue
-          }
-
-          const selfObservationResult = await runExecutionSelfObservationPhase(
-            caller,
-            executionHistory
-          )
-
-          if (selfObservationResult?.type === 'handoff') {
-            LogHelper.title(this.name)
-            LogHelper.debug(
-              `Execution self-observation returned handoff signal: intent="${selfObservationResult.signal.intent}"`
-            )
-
-            return await finalizeFromSignal(selfObservationResult.signal)
-          }
-
-          if (
-            selfObservationResult?.type === 'replan' &&
-            selfObservationResult.steps.length > 0
-          ) {
-            replanCount += 1
-            pendingSteps = selfObservationResult.steps.map((step) => ({
-              function: step.function,
-              label: step.label,
-              ...(step.agentSkillId ? { agentSkillId: step.agentSkillId } : {})
-            }))
-
-            LogHelper.title(this.name)
-            LogHelper.debug(
-              `Execution self-observation re-plan ${replanCount}/${MAX_REPLANS}: ${pendingSteps.map((s) => s.function).join(' -> ')}`
-            )
-            if (selfObservationResult.reason) {
-              LogHelper.debug(
-                `Execution self-observation reason: "${selfObservationResult.reason}"`
-              )
-              const normalizedReason = selfObservationResult.reason
-                .trim()
-                .replace(/[.?!]+$/g, '')
-              await this.emitProgress(
-                normalizedReason ? `${normalizedReason}...` : 'Working...'
-              )
-            }
-
-            const appendStartIndex = trackedSteps.length
-            const appendedSteps: TrackedPlanStep[] = pendingSteps.map((s) => ({
-              label: s.label,
-              status: 'pending' as PlanStepStatus
-            }))
-            if (appendedSteps.length > 0) {
-              appendedSteps[0]!.status = 'in_progress'
-            }
-            trackedSteps = [...trackedSteps, ...appendedSteps]
-            currentStepIndex = appendStartIndex
-
-            currentExecutingFunction = null
-            emitPlanWidget(
-              trackedSteps,
-              null,
-              planWidgetIdValue,
-              true,
-              currentExecutingFunction
-            )
-            continue
-          }
-        }
-      }
-
-      // --- Phase 3: Final answer synthesis ---
-      this.logTitle('final_answer')
-      LogHelper.debug(`Phase 3: Final answer synthesis (${executionHistory.length} execution(s) completed)`)
-
-      // Mark all steps as completed in the widget
-      for (const ts of trackedSteps) {
-        ts.status = 'completed'
-      }
-      currentExecutingFunction = null
-      emitPlanWidget(
-        trackedSteps,
-        null,
-        planWidgetIdValue,
-        true,
-        currentExecutingFunction
+      LogHelper.title(this.name)
+      LogHelper.debug(
+        'Using continuous agent loop with ' +
+          catalog.tools.length +
+          ' initial tool schema(s) for provider ' +
+          getLLMProviderName()
       )
 
-      if (executionHistory.length === 0) {
-        LogHelper.debug('No executions completed, handing off to final phase')
-        const providerError = LLM_PROVIDER.consumeLastProviderErrorMessage()
-        const noExecutionSignal: FinalResponseSignal = providerError
+      const result = await runAgentLoop({
+        transcript,
+        catalog,
+        maxIterations: AGENT_MAX_ITERATIONS,
+        ...(continuation
           ? {
-              intent: 'error',
-              draft: providerError,
-              source: 'system'
+              initialExecutionHistory: continuation.executionHistory,
+              initialTrackedSteps: continuation.trackedSteps
             }
-          : {
-              intent: 'error',
-              draft: 'I was unable to find the right tools to help with your request.',
-              source: 'system'
-            }
-        return await finalizeFromSignal(noExecutionSignal)
+          : {}),
+        allowDirectAnswerHandoff: Boolean(this.activeForcedToolName),
+        callModel: async (messages, tools, options) => {
+          // Intermediate text is buffered until a final text-only response.
+          return this.callAgentModel(
+            messages,
+            agentSystemPrompt,
+            tools,
+            options
+          )
+        },
+        executeFunction: async (callable, toolInput) => {
+          const toolResult = await runToolExecution(
+            callable.toolkitId,
+            callable.toolId,
+            callable.functionName,
+            toolInput,
+            undefined,
+            callable.qualifiedName
+          )
+
+          return {
+            execution: toolResult.execution,
+            ...(toolResult.handoffSignal
+              ? { handoffSignal: toolResult.handoffSignal }
+              : {})
+          }
+        },
+        loadToolkitContext: (toolkitId) =>
+          buildToolkitContextSection(caller, toolkitId),
+        loadAgentSkill:
+          SkillDomainHelper.getAgentSkillExecutionContext.bind(
+            SkillDomainHelper
+          ),
+        onAgentSkillLoaded: (context) => {
+          caller.setAgentSkillContext(context)
+          emitActiveAgentSkillActivity()
+        },
+        onPlanUpdated: (steps) => {
+          trackedSteps = steps.map((step) => ({ ...step }))
+          emitPlanWidget(
+            trackedSteps,
+            null,
+            planWidgetIdValue,
+            hasPlanningWidget
+          )
+          hasPlanningWidget = true
+        }
+      })
+
+      executionHistory.push(...result.executionHistory)
+      trackedSteps = result.trackedSteps.map((step) => ({ ...step }))
+      this.hasExplicitMemoryWrite = executionHistory.some(
+        (execution) =>
+          execution.status === 'success' &&
+          execution.function === 'structured_knowledge.memory.write'
+      )
+
+      if (result.intent === 'clarification') {
+        this.saveAgentLoopContinuation(
+          createAgentLoopContinuationState({
+            originalInput,
+            clarificationQuestion: result.answer,
+            planWidgetId: planWidgetIdValue,
+            trackedSteps,
+            executionHistory,
+            loadedToolkitIds: catalog.loadedToolkitIds
+          })
+        )
       }
 
-      const finalAnswer = await runFinalAnswerPhase(caller, executionHistory)
-      return await finalizeWithPostAnswerMaintenance(finalAnswer, 'answer')
-    } catch (e) {
+      return finalize(result.answer, result.intent)
+    } catch (error) {
       LogHelper.title(this.name)
-      LogHelper.error(`Failed to execute: ${e}`)
-    }
-
-    return null
-  }
-
-  private getForcedToolPlanStep(): PlanStep | null {
-    if (!this.activeForcedToolName) {
+      LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
-    }
-
-    const resolvedTool = TOOLKIT_REGISTRY.resolveToolById(
-      this.activeForcedToolName
-    )
-
-    if (!resolvedTool) {
-      return null
-    }
-
-    return {
-      function: `${resolvedTool.toolkitId}.${resolvedTool.toolId}`,
-      label: `Use ${resolvedTool.toolName}`
     }
   }
 
-  private async loadPreparedHistory(): Promise<PreparedReactHistory> {
+  private async loadPreparedHistory(): Promise<PreparedAgentHistory> {
     const historyConfig = this.getHistoryCompactionConfig()
     const historyScope = this.getHistoryCompactionScope()
     const conversationLogs = this.getHistoryEligibleConversationLogs(
@@ -1419,21 +486,23 @@ export class ReActLLMDuty extends LLMDuty {
     )
   }
 
-  private getHistoryCompactionScope(): ReactHistoryCompactionScope {
-    return getLLMProviderName() === LLMProviders.Local ? 'local' : 'remote'
+  private getHistoryCompactionScope(): AgentHistoryCompactionScope {
+    return isLocalLLMProvider(getLLMProviderName())
+      ? 'local'
+      : 'remote'
   }
 
-  private getHistoryCompactionConfig(): ReactHistoryCompactionConfig {
-    if (getLLMProviderName() === LLMProviders.Local) {
+  private getHistoryCompactionConfig(): AgentHistoryCompactionConfig {
+    if (isLocalLLMProvider(getLLMProviderName())) {
       return {
-        historyLimit: REACT_LOCAL_PROVIDER_HISTORY_LOGS,
-        compactionBatchSize: REACT_LOCAL_PROVIDER_HISTORY_COMPACTION_POINT
+        historyLimit: AGENT_LOCAL_PROVIDER_HISTORY_LOGS,
+        compactionBatchSize: AGENT_LOCAL_PROVIDER_HISTORY_COMPACTION_POINT
       }
     }
 
     return {
-      historyLimit: REACT_REMOTE_PROVIDER_HISTORY_LOGS,
-      compactionBatchSize: REACT_REMOTE_PROVIDER_HISTORY_COMPACTION_POINT
+      historyLimit: AGENT_REMOTE_PROVIDER_HISTORY_LOGS,
+      compactionBatchSize: AGENT_REMOTE_PROVIDER_HISTORY_COMPACTION_POINT
     }
   }
 
@@ -1444,43 +513,45 @@ export class ReActLLMDuty extends LLMDuty {
       return filename
     }
 
-    return `${filename}${REACT_SESSION_STATE_FILENAME_SEPARATOR}${sessionId}`
+    return `${filename}${AGENT_SESSION_STATE_FILENAME_SEPARATOR}${sessionId}`
   }
 
-  private getContinuationStateStore(): ContextStateStore<ReactExecutionContinuationState | null> {
-    const filename = this.getSessionStateFilename(REACT_CONTINUATION_STATE_FILENAME)
-    const existingStore = ReActLLMDuty.continuationStateStores.get(filename)
+  private getContinuationStateStore(): ContextStateStore<AgentLoopContinuationState | null> {
+    const filename = this.getSessionStateFilename(AGENT_CONTINUATION_STATE_FILENAME)
+    const storeKey = `${getActiveProfileName()}:${filename}`
+    const existingStore = ReActLLMDuty.continuationStateStores.get(storeKey)
 
     if (existingStore) {
       return existingStore
     }
 
-    const store = new ContextStateStore<ReactExecutionContinuationState | null>(
+    const store = new ContextStateStore<AgentLoopContinuationState | null>(
       filename,
       null
     )
 
-    ReActLLMDuty.continuationStateStores.set(filename, store)
+    ReActLLMDuty.continuationStateStores.set(storeKey, store)
 
     return store
   }
 
-  private getHistoryCompactionStateStore(): ContextStateStore<ReactHistoryCompactionState> {
+  private getHistoryCompactionStateStore(): ContextStateStore<AgentHistoryCompactionState> {
     const filename = this.getSessionStateFilename(
-      REACT_HISTORY_COMPACTION_STATE_FILENAME
+      AGENT_HISTORY_COMPACTION_STATE_FILENAME
     )
-    const existingStore = ReActLLMDuty.historyCompactionStateStores.get(filename)
+    const storeKey = `${getActiveProfileName()}:${filename}`
+    const existingStore = ReActLLMDuty.historyCompactionStateStores.get(storeKey)
 
     if (existingStore) {
       return existingStore
     }
 
-    const store = new ContextStateStore<ReactHistoryCompactionState>(
+    const store = new ContextStateStore<AgentHistoryCompactionState>(
       filename,
-      REACT_HISTORY_COMPACTION_STATE_FALLBACK
+      AGENT_HISTORY_COMPACTION_STATE_FALLBACK
     )
 
-    ReActLLMDuty.historyCompactionStateStores.set(filename, store)
+    ReActLLMDuty.historyCompactionStateStores.set(storeKey, store)
 
     return store
   }
@@ -1494,15 +565,15 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private loadHistoryCompactionProviderState(
-    scope: ReactHistoryCompactionScope
-  ): ReactHistoryCompactionProviderState {
+    scope: AgentHistoryCompactionScope
+  ): AgentHistoryCompactionProviderState {
     const persistedState = this.getHistoryCompactionStateStore().load()
     return this.normalizeHistoryCompactionProviderState(persistedState?.[scope])
   }
 
   private normalizeHistoryCompactionProviderState(
     value: unknown
-  ): ReactHistoryCompactionProviderState {
+  ): AgentHistoryCompactionProviderState {
     const record =
       value && typeof value === 'object'
         ? (value as Record<string, unknown>)
@@ -1525,11 +596,11 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private saveHistoryCompactionProviderState(
-    scope: ReactHistoryCompactionScope,
-    providerState: ReactHistoryCompactionProviderState
+    scope: AgentHistoryCompactionScope,
+    providerState: AgentHistoryCompactionProviderState
   ): void {
     const persistedState = this.getHistoryCompactionStateStore().load()
-    const nextState: ReactHistoryCompactionState = {
+    const nextState: AgentHistoryCompactionState = {
       version: 1,
       local:
         scope === 'local'
@@ -1579,7 +650,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private hasStoredHistoryCompactionState(
-    state: ReactHistoryCompactionProviderState
+    state: AgentHistoryCompactionProviderState
   ): boolean {
     return Boolean(
       hasHistoryCompactionContent(state.summary) ||
@@ -1607,8 +678,8 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private areHistoryCompactionStatesEqual(
-    left: ReactHistoryCompactionProviderState,
-    right: ReactHistoryCompactionProviderState
+    left: AgentHistoryCompactionProviderState,
+    right: AgentHistoryCompactionProviderState
   ): boolean {
     return (
       left.summary === right.summary &&
@@ -1620,8 +691,8 @@ export class ReActLLMDuty extends LLMDuty {
 
   private rebuildHistoryCompactionStateFromBoundary(
     conversationLogs: MessageLog[],
-    currentState: ReactHistoryCompactionProviderState
-  ): ReactHistoryCompactionProviderState {
+    currentState: AgentHistoryCompactionProviderState
+  ): AgentHistoryCompactionProviderState {
     if (
       !hasHistoryCompactionContent(currentState.summary) ||
       currentState.summarySentAt === null
@@ -1643,9 +714,9 @@ export class ReActLLMDuty extends LLMDuty {
 
   private synchronizeHistoryCompactionState(
     conversationLogs: MessageLog[],
-    currentState: ReactHistoryCompactionProviderState
+    currentState: AgentHistoryCompactionProviderState
   ): {
-    state: ReactHistoryCompactionProviderState
+    state: AgentHistoryCompactionProviderState
     shouldPersist: boolean
   } {
     const emptyState = createEmptyHistoryCompactionProviderState()
@@ -1695,7 +766,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
 
-    const synchronizedState: ReactHistoryCompactionProviderState = {
+    const synchronizedState: AgentHistoryCompactionProviderState = {
       summary: currentState.summary,
       summarySentAt: currentState.summarySentAt,
       tail: conversationLogs.slice(tailStartIndex),
@@ -1715,8 +786,8 @@ export class ReActLLMDuty extends LLMDuty {
 
   private buildHistoryForCurrentTurn(
     conversationLogs: MessageLog[],
-    state: ReactHistoryCompactionProviderState,
-    config: ReactHistoryCompactionConfig
+    state: AgentHistoryCompactionProviderState,
+    config: AgentHistoryCompactionConfig
   ): MessageLog[] {
     if (hasHistoryCompactionContent(state.summary)) {
       return this.buildHistoryFromCompactionState({
@@ -1730,8 +801,8 @@ export class ReActLLMDuty extends LLMDuty {
 
   private getStateForPostAnswerCompaction(
     conversationLogs: MessageLog[],
-    synchronizedState: ReactHistoryCompactionProviderState
-  ): ReactHistoryCompactionProviderState {
+    synchronizedState: AgentHistoryCompactionProviderState
+  ): AgentHistoryCompactionProviderState {
     if (hasHistoryCompactionContent(synchronizedState.summary)) {
       return synchronizedState
     }
@@ -1745,9 +816,9 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private async rollHistoryCompactionState(
-    state: ReactHistoryCompactionProviderState,
-    config: ReactHistoryCompactionConfig
-  ): Promise<ReactHistoryCompactionProviderState | null> {
+    state: AgentHistoryCompactionProviderState,
+    config: AgentHistoryCompactionConfig
+  ): Promise<AgentHistoryCompactionProviderState | null> {
     const hadCompactedSummary = hasHistoryCompactionContent(state.summary)
     let nextSummary = state.summary
     let nextSummarySentAt = state.summarySentAt
@@ -1868,7 +939,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private buildHistoryFromCompactionState(
-    state: ReactHistoryCompactionProviderState
+    state: AgentHistoryCompactionProviderState
   ): MessageLog[] {
     if (!state.summary || !hasHistoryCompactionContent(state.summary)) {
       return [...state.tail]
@@ -1884,22 +955,9 @@ export class ReActLLMDuty extends LLMDuty {
     return [summaryMessage, ...state.tail]
   }
 
-  private buildPreparedHistory(history: MessageLog[]): PreparedReactHistory {
-    if (getLLMProviderName() !== LLMProviders.Local) {
-      return {
-        messageLogs: history
-      }
-    }
-
-    const [existingSystemMessage] = ReActLLMDuty.session.getChatHistory()
-    const systemMessage: ChatHistoryItem = existingSystemMessage || {
-      type: 'system',
-      text: this.systemPrompt as string
-    }
-
+  private buildPreparedHistory(history: MessageLog[]): PreparedAgentHistory {
     return {
-      messageLogs: history,
-      localChatHistory: [systemMessage, ...toChatHistoryItems(history)]
+      messageLogs: history
     }
   }
 
@@ -1914,48 +972,23 @@ export class ReActLLMDuty extends LLMDuty {
     const prompt = formatHistoryForCompaction(previousSummary, logsToCompact)
     const baseCompletionParams = {
       dutyType: LLMDuties.ReAct,
-      systemPrompt: REACT_HISTORY_COMPACTION_SYSTEM_PROMPT,
+      systemPrompt: AGENT_HISTORY_COMPACTION_SYSTEM_PROMPT,
       temperature: 0,
       disableThinking: true,
       trackProviderErrors: false
     }
 
     const maxTokenBudgets = [
-      REACT_HISTORY_COMPACTION_MAX_TOKENS,
-      REACT_HISTORY_COMPACTION_RETRY_MAX_TOKENS
+      AGENT_HISTORY_COMPACTION_MAX_TOKENS,
+      AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS
     ]
 
     for (const maxTokens of maxTokenBudgets) {
       try {
-        let result = null
-
-        if (getLLMProviderName() === LLMProviders.Local) {
-          const tempContext = await LLM_MANAGER.model.createContext()
-          const { LlamaChatSession } = await Function(
-            'return import("node-llama-cpp")'
-          )()
-          const tempSession = new LlamaChatSession({
-            contextSequence: tempContext.getSequence(),
-            autoDisposeSequence: true,
-            systemPrompt: REACT_HISTORY_COMPACTION_SYSTEM_PROMPT
-          })
-
-          try {
-            result = await LLM_PROVIDER.prompt(prompt, {
-              ...baseCompletionParams,
-              session: tempSession,
-              maxTokens: Math.min(maxTokens, tempContext.contextSize)
-            })
-          } finally {
-            tempSession.dispose({ disposeSequence: true })
-            await tempContext.dispose()
-          }
-        } else {
-          result = await LLM_PROVIDER.prompt(prompt, {
-            ...baseCompletionParams,
-            maxTokens
-          })
-        }
+        const result = await LLM_PROVIDER.prompt(prompt, {
+          ...baseCompletionParams,
+          maxTokens
+        })
 
         const normalized = normalizeHistoryCompactionSummary(result?.output)
         if (normalized && hasHistoryCompactionContent(normalized)) {
@@ -1965,7 +998,7 @@ export class ReActLLMDuty extends LLMDuty {
         if (maxTokens !== maxTokenBudgets[maxTokenBudgets.length - 1]) {
           LogHelper.title(this.name)
           LogHelper.warning(
-            `History compaction returned invalid structured output; retrying with maxTokens=${REACT_HISTORY_COMPACTION_RETRY_MAX_TOKENS}`
+            `History compaction returned invalid structured output; retrying with maxTokens=${AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS}`
           )
         }
       } catch (error) {
@@ -1979,7 +1012,7 @@ export class ReActLLMDuty extends LLMDuty {
 
         LogHelper.title(this.name)
         LogHelper.warning(
-          `History compaction attempt failed; retrying with maxTokens=${REACT_HISTORY_COMPACTION_RETRY_MAX_TOKENS}: ${String(error)}`
+          `History compaction attempt failed; retrying with maxTokens=${AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS}: ${String(error)}`
         )
       }
     }
@@ -1999,13 +1032,80 @@ export class ReActLLMDuty extends LLMDuty {
     return this.safeJSONStringify(input)
   }
 
-  private loadValidExecutionContinuationState(): ReactExecutionContinuationState | null {
+  /**
+   * Adds stable turn-level grounding to the first user message. Subsequent
+   * agent calls reuse this message and append tool protocol messages only.
+   */
+  private async buildAgentRequest(
+    caller: LLMCaller,
+    input: string
+  ): Promise<string> {
+    const sections = [
+      '<user_request>',
+      input,
+      '</user_request>',
+      '',
+      '<context_manifest>',
+      caller.getContextManifest(),
+      '</context_manifest>',
+      '',
+      '<self_model>',
+      caller.getSelfModelSnapshot(),
+      '</self_model>'
+    ]
+
+    if (caller.agentSkillCatalog.trim()) {
+      sections.push(
+        '',
+        '<available_agent_skills>',
+        caller.agentSkillCatalog,
+        '</available_agent_skills>'
+      )
+    }
+
+    if (caller.agentSkillContext) {
+      sections.push(
+        '',
+        '<active_agent_skill>',
+        `Name: ${caller.agentSkillContext.name}`,
+        `Path: ${caller.agentSkillContext.skillPath}`,
+        '',
+        caller.agentSkillContext.instructions,
+        '</active_agent_skill>'
+      )
+    }
+
+    if (caller.getPreviousToolArtifacts) {
+      try {
+        const previousToolArtifacts =
+          await caller.getPreviousToolArtifacts()
+        if (previousToolArtifacts.trim()) {
+          sections.push(
+            '',
+            '<previous_tool_artifacts>',
+            'These artifacts come from earlier turns, not the current agent transcript.',
+            previousToolArtifacts,
+            '</previous_tool_artifacts>'
+          )
+        }
+      } catch (error) {
+        LogHelper.title(this.name)
+        LogHelper.warning(
+          `Failed to load previous tool artifacts: ${String(error)}`
+        )
+      }
+    }
+
+    return sections.join('\n')
+  }
+
+  private loadValidAgentLoopContinuation(): AgentLoopContinuationState | null {
     const state = this.getContinuationStateStore().load()
     if (!state) {
       return null
     }
 
-    if (!isExecutionContinuationStateValid(state)) {
+    if (!isAgentLoopContinuationStateValid(state)) {
       this.getContinuationStateStore().save(null)
       return null
     }
@@ -2013,77 +1113,26 @@ export class ReActLLMDuty extends LLMDuty {
     return state
   }
 
-  private loadExecutionContinuation(): ReactExecutionContinuationState | null {
-    return this.loadValidExecutionContinuationState()
-  }
-
-  private saveExecutionContinuation(state: ReactExecutionContinuationState): void {
+  private saveAgentLoopContinuation(state: AgentLoopContinuationState): void {
     this.getContinuationStateStore().save(state)
   }
 
-  private clearExecutionContinuation(): void {
-    this.getContinuationStateStore().save(null)
-  }
-
-  private consumeExecutionContinuation(
-    ownerReply: string
-  ): ReactExecutionContinuationPayload | null {
-    const state = this.loadExecutionContinuation()
+  private consumeAgentLoopContinuation(): AgentLoopContinuationState | null {
+    const state = this.loadValidAgentLoopContinuation()
     if (!state) {
       return null
     }
 
-    this.clearExecutionContinuation()
-
-    const resumedInput = buildResumedExecutionInput(
-      state.originalInput,
-      state.clarificationQuestion,
-      ownerReply
-    )
-
-    return { state, resumedInput }
-  }
-
-  private pauseExecutionForClarification(params: {
-    planWidgetId: string
-    originalInput: string
-    clarificationQuestion: string
-    currentStep: PlanStep
-    pendingSteps: PlanStep[]
-    executionHistory: ExecutionRecord[]
-    trackedSteps: TrackedPlanStep[]
-    currentStepIndex: number
-    replanCount: number
-    executionCount: number
-  }): void {
-    this.saveExecutionContinuation(createExecutionContinuationState(params))
+    this.getContinuationStateStore().save(null)
+    return state
   }
 
   // ---------------------------------------------------------------------------
   // LLM calling helpers
   // ---------------------------------------------------------------------------
 
-  /**
-   * Whether the current LLM provider supports native OpenAI-style tool calling.
-   * Local OpenAI-compatible servers can expose the tools API but still perform
-   * better on the grammar-based JSON path.
-   */
-  private get supportsNativeTools(): boolean {
-    return ![
-      LLMProviders.Local,
-      LLMProviders.LlamaCPP,
-      LLMProviders.SGLang
-    ].includes(getLLMProviderName())
-  }
-
-  /**
-   * Creates an LLMCaller interface that phase functions use to call the LLM
-   * without needing a direct reference to this class instance.
-   */
-  private createLLMCaller(
-    history: MessageLog[],
-    inputOverride?: string | object | null
-  ): LLMCaller {
+  /** Provides the stable context and skill callbacks used by the agent loop. */
+  private createLLMCaller(): LLMCaller {
     const getActiveAgentSkillContext = (): AgentSkillContext | null =>
       this.activeAgentSkillContext
     const setActiveAgentSkillContext = (context: AgentSkillContext): void => {
@@ -2091,20 +1140,11 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     return {
-      callLLM: this.callLLM.bind(this),
-      callLLMText: this.callLLMText.bind(this),
-      callLLMWithTools: this.callLLMWithTools.bind(this),
-      supportsNativeTools: this.supportsNativeTools,
-      isLocalProvider: isLocalAgentProvider(),
-      input: inputOverride ?? this.input,
-      history,
       get agentSkillContext(): AgentSkillContext | null {
         return getActiveAgentSkillContext()
       },
       agentSkillCatalog: SkillDomainHelper.getAgentSkillCatalogContentSync(),
       setAgentSkillContext: setActiveAgentSkillContext,
-      getAgentSkillContext:
-        SkillDomainHelper.getAgentSkillExecutionContext.bind(SkillDomainHelper),
       getContextFileContent: CONTEXT_MANAGER.getContextFileContent.bind(
         CONTEXT_MANAGER
       ),
@@ -2112,453 +1152,95 @@ export class ReActLLMDuty extends LLMDuty {
       getSelfModelSnapshot:
         SELF_MODEL_MANAGER.getSnapshot.bind(SELF_MODEL_MANAGER),
       getPreviousToolArtifacts:
-        TOOL_CALL_LOGGER.getRecentArtifactManifest.bind(TOOL_CALL_LOGGER),
-      consumeProviderErrorMessage:
-        LLM_PROVIDER.consumeLastProviderErrorMessage.bind(LLM_PROVIDER)
+        TOOL_CALL_LOGGER.getRecentArtifactManifest.bind(TOOL_CALL_LOGGER)
     }
   }
 
-  private async withLocalPromptSession<T>(
-    history: MessageLog[] | undefined,
-    runner: (session: LlamaChatSession) => Promise<T>
-  ): Promise<T> {
-    if (Array.isArray(history) && history.length > 0) {
-      return runner(ReActLLMDuty.session)
-    }
-
-    const tempContext = await LLM_MANAGER.model.createContext()
-    const { LlamaChatSession } = await Function(
-      'return import("node-llama-cpp")'
-    )()
-    const tempSession = new LlamaChatSession({
-      contextSequence: tempContext.getSequence(),
-      autoDisposeSequence: true,
-      systemPrompt: this.systemPrompt as string
-    })
-
-    try {
-      return await runner(tempSession)
-    } finally {
-      tempSession.dispose({ disposeSequence: true })
-      await tempContext.dispose()
-    }
-  }
-
-  private async callLLM(
-    prompt: string,
-    systemPrompt: string,
-    schema: Record<string, unknown>,
-    history?: MessageLog[],
-    promptSections?: PromptLogSection[],
-    options?: LLMCallOptions
-  ): Promise<{
-    output: unknown
-    usedInputTokens?: number
-    usedOutputTokens?: number
-    generationDurationMs?: number
-    providerDecodeDurationMs?: number
-    providerTokensPerSecond?: number
-    reasoning?: string
-  } | null> {
-    const phase = options?.phase ?? 'execution'
-    const completionStartedAt = Date.now()
-    const phasePolicy = getPhasePolicy(phase)
-    const requestedReasoningMode =
-      options?.disableThinking === true
-        ? 'off'
-        : (options?.reasoningMode ?? phasePolicy.reasoningMode)
-    const reasoningMode = getEffectiveReasoningMode(
-      phase,
-      requestedReasoningMode
-    )
-    const disableThinking = reasoningMode === 'off'
-    const shouldEmitReasoning =
-      reasoningMode === 'off'
-        ? false
-        : (options?.emitReasoning ?? phasePolicy.emitReasoning)
-    const shouldStream =
-      options?.streamToProvider ?? phasePolicy.streamToProvider
-    const shouldUseResponseTuning = shouldUseOpenAIResponseTuning(phase)
-    const reasoningGenerationId = shouldEmitReasoning
-      ? this.getReasoningGenerationId(
-          phase,
-          StringHelper.random(6, { onlyLetters: true })
-        )
-      : null
-
-    this.logPromptDispatch({
-      phase,
-      channel: 'json',
-      prompt,
-      systemPrompt,
-      phasePolicySummary: formatEffectivePhasePolicyForLog(phase, phasePolicy, {
-        reasoningMode,
-        streamToProvider: shouldStream,
-        emitReasoning: shouldEmitReasoning
-      }),
-      shouldStream,
-      schema,
-      ...(promptSections ? { promptSections } : {}),
-      ...(history ? { history } : {})
-    })
-
-    const completionParams = {
-      dutyType: LLMDuties.ReAct,
-      systemPrompt,
-      data: schema,
-      temperature: REACT_TEMPERATURE,
-      timeout: REACT_INFERENCE_TIMEOUT_MS,
-      maxRetries: REACT_TIMEOUT_MAX_RETRIES,
-      maxTokens: options?.maxTokens ?? getDefaultMaxTokensForPhase(phase),
-      shouldStream,
-      ...(shouldUseResponseTuning
-        ? { promptCacheKey: getPromptCacheKeyForPhase(phase) }
-        : {}),
-      ...(shouldUseResponseTuning && phasePolicy.textVerbosity
-        ? { textVerbosity: phasePolicy.textVerbosity }
-        : {}),
-      ...(shouldUseResponseTuning && shouldEmitReasoning && phasePolicy.reasoningSummary
-        ? { reasoningSummary: phasePolicy.reasoningSummary }
-        : {}),
-      ...(shouldEmitReasoning && reasoningGenerationId
-        ? {
-            onReasoningToken: (reasoningChunk: string): void => {
-              this.emitReasoningToken(
-                reasoningChunk,
-                reasoningGenerationId,
-                phase
-              )
-            }
-          }
-        : {}),
-      reasoningMode,
-      ...(disableThinking ? { disableThinking: true } : {}),
-      ...(history ? { history } : {})
-    }
-
-    let result
-    if (getLLMProviderName() === LLMProviders.Local) {
-      result = await this.withLocalPromptSession(history, (session) =>
-        LLM_PROVIDER.prompt(prompt, {
-          ...completionParams,
-          session
-        })
-      )
-    } else {
-      result = await LLM_PROVIDER.prompt(prompt, completionParams)
-    }
-
-    if (
-      result &&
-      isLocalAgentProvider() &&
-      shouldStream &&
-      shouldEmitReasoning &&
-      typeof result.output === 'string'
-    ) {
-      this.logTitle(phase)
-      LogHelper.debug(
-        'Retrying local structured completion with thinking disabled after non-JSON streamed output.'
-      )
-      const retryCompletionParams = {
-        ...completionParams
-      }
-      delete retryCompletionParams.onReasoningToken
-
-      result = await LLM_PROVIDER.prompt(prompt, {
-        ...retryCompletionParams,
-        shouldStream: false,
-        reasoningMode: 'off',
-        disableThinking: true
-      })
-    }
-
-    if (result) {
-      const completionEndedAt = Date.now()
-      this.observeCompletionMetrics({
-        phase,
-        channel: 'json',
-        completionStartedAt,
-        completedAt: completionEndedAt,
-        output: result.output,
-        reasoning: result.reasoning,
-        usedInputTokens: result.usedInputTokens,
-        usedOutputTokens: result.usedOutputTokens,
-        providerDecodeDurationMs: result.providerDecodeDurationMs,
-        providerTokensPerSecond: result.providerTokensPerSecond,
-        generationDurationMs: result.generationDurationMs
-      })
-    }
-
-    return result
-  }
-
-  private async callLLMText(
-    prompt: string,
-    systemPrompt: string,
-    history?: MessageLog[],
-    shouldStream?: boolean,
-    promptSections?: PromptLogSection[],
-    options?: LLMCallOptions
-  ): Promise<{
-    output: string
-    usedInputTokens?: number
-    usedOutputTokens?: number
-    generationDurationMs?: number
-    providerDecodeDurationMs?: number
-    providerTokensPerSecond?: number
-    reasoning?: string
-  } | null> {
-    const phase = options?.phase ?? 'execution'
-    const completionStartedAt = Date.now()
-    let firstVisibleTokenAt: number | null = null
-    const phasePolicy = getPhasePolicy(phase)
-    const requestedReasoningMode =
-      options?.disableThinking === true
-        ? 'off'
-        : (options?.reasoningMode ?? phasePolicy.reasoningMode)
-    const reasoningMode = getEffectiveReasoningMode(
-      phase,
-      requestedReasoningMode
-    )
-    const disableThinking = reasoningMode === 'off'
-    const shouldEmitReasoning =
-      reasoningMode === 'off'
-        ? false
-        : (options?.emitReasoning ?? phasePolicy.emitReasoning)
-    const shouldStreamToUser =
-      options?.streamToUser ?? shouldStream ?? phasePolicy.streamToUser
-    const shouldStreamEffective =
-      options?.streamToProvider ?? phasePolicy.streamToProvider
-    const shouldUseResponseTuning = shouldUseOpenAIResponseTuning(phase)
-    const reasoningGenerationId = shouldEmitReasoning
-      ? this.getReasoningGenerationId(
-          phase,
-          StringHelper.random(6, { onlyLetters: true })
-        )
-      : null
-
-    this.logPromptDispatch({
-      phase,
-      channel: 'text',
-      prompt,
-      systemPrompt,
-      phasePolicySummary: formatEffectivePhasePolicyForLog(phase, phasePolicy, {
-        reasoningMode,
-        streamToProvider: shouldStreamEffective,
-        streamToUser: shouldStreamToUser,
-        emitReasoning: shouldEmitReasoning
-      }),
-      shouldStream: shouldStreamEffective,
-      ...(promptSections ? { promptSections } : {}),
-      ...(history ? { history } : {})
-    })
-
-    const generationId = shouldStreamToUser
-      ? StringHelper.random(6, { onlyLetters: true })
-      : null
-
-    const completionParams = {
-      dutyType: LLMDuties.ReAct,
-      systemPrompt,
-      temperature: REACT_TEMPERATURE,
-      timeout: REACT_INFERENCE_TIMEOUT_MS,
-      maxRetries: REACT_TIMEOUT_MAX_RETRIES,
-      maxTokens: options?.maxTokens ?? getDefaultMaxTokensForPhase(phase),
-      shouldStream: shouldStreamEffective,
-      ...(shouldUseResponseTuning
-        ? { promptCacheKey: getPromptCacheKeyForPhase(phase) }
-        : {}),
-      ...(shouldUseResponseTuning && phasePolicy.textVerbosity
-        ? { textVerbosity: phasePolicy.textVerbosity }
-        : {}),
-      ...(shouldUseResponseTuning && shouldEmitReasoning && phasePolicy.reasoningSummary
-        ? { reasoningSummary: phasePolicy.reasoningSummary }
-        : {}),
-      ...(shouldEmitReasoning && reasoningGenerationId
-        ? {
-            onReasoningToken: (reasoningChunk: string): void => {
-              this.emitReasoningToken(
-                reasoningChunk,
-                reasoningGenerationId,
-                phase
-              )
-            }
-          }
-        : {}),
-      reasoningMode,
-      ...(disableThinking ? { disableThinking: true } : {}),
-      ...(shouldStreamToUser
-        ? {
-            onToken: (chunk: unknown): void => {
-              const token = StringHelper.normalizeUserFacingText(
-                typeof chunk === 'string'
-                  ? chunk
-                  : LLM_PROVIDER.cleanUpResult(
-                      LLM_MANAGER.model.detokenize(
-                        chunk as Parameters<
-                          typeof LLM_MANAGER.model.detokenize
-                        >[0]
-                      )
-                    )
-              )
-
-              if (phase === 'final_answer' && token.trim()) {
-                if (firstVisibleTokenAt === null) {
-                  firstVisibleTokenAt = Date.now()
-                }
-              }
-
-              if (!token || !generationId) {
-                return
-              }
-
-              this.hasStreamedTokenEmission = true
-              SOCKET_SERVER.emitToChatClients('llm-token', {
-                token,
-                generationId
-              })
-            }
-          }
-        : {}),
-      ...(history ? { history } : {})
-    }
-
-    let result
-    if (getLLMProviderName() === LLMProviders.Local) {
-      result = await this.withLocalPromptSession(history, (session) =>
-        LLM_PROVIDER.prompt(prompt, {
-          ...completionParams,
-          session
-        })
-      )
-    } else {
-      result = await LLM_PROVIDER.prompt(prompt, completionParams)
-    }
-
-    if (!result) {
-      return null
-    }
-
-    const completionEndedAt = Date.now()
-    this.observeCompletionMetrics({
-      phase,
-      channel: 'text',
-      completionStartedAt,
-      completedAt: completionEndedAt,
-      output: result.output,
-      reasoning: result.reasoning,
-      usedInputTokens: result.usedInputTokens,
-      usedOutputTokens: result.usedOutputTokens,
-      providerDecodeDurationMs: result.providerDecodeDurationMs,
-      providerTokensPerSecond: result.providerTokensPerSecond,
-      generationDurationMs: result.generationDurationMs,
-      ...(firstVisibleTokenAt ? { firstTokenAt: firstVisibleTokenAt } : {})
-    })
-
-    return {
-      output:
-        typeof result.output === 'string'
-          ? result.output
-          : this.safeJSONStringify(result.output),
-      usedInputTokens: result.usedInputTokens,
-      usedOutputTokens: result.usedOutputTokens,
-      generationDurationMs: result.generationDurationMs,
-      ...(result.providerTokensPerSecond
-        ? { providerTokensPerSecond: result.providerTokensPerSecond }
-        : {}),
-      ...(result.providerDecodeDurationMs
-        ? { providerDecodeDurationMs: result.providerDecodeDurationMs }
-        : {}),
-      ...(result.reasoning ? { reasoning: result.reasoning } : {})
-    }
-  }
-
-  /**
-   * Calls the LLM using native tool calling (OpenAI-compatible `tools` API).
-   * Returns parsed tool call if successful, or null if the model responded
-   * with text content instead.
-   */
-  private async callLLMWithTools(
-    prompt: string,
+  private async callAgentModel(
+    transcript: AgentToolTranscriptMessage[],
     systemPrompt: string,
     tools: OpenAITool[],
-    toolChoice?: OpenAIToolChoice,
-    history?: MessageLog[],
-    shouldStreamToUser?: boolean,
-    promptSections?: PromptLogSection[],
-    options?: LLMCallOptions
+    options: {
+      isRecoveryAttempt: boolean
+      isFinalizationAttempt?: boolean
+      isContextRecoveryAttempt?: boolean
+      remainingIterations?: number
+    }
   ): Promise<{
-    toolCall?: { functionName: string, arguments: string }
-    unexpectedToolCall?: { functionName: string, arguments: string }
+    toolCalls?: OpenAIToolCall[]
     textContent?: string
-    usedInputTokens?: number
-    usedOutputTokens?: number
-    generationDurationMs?: number
-    providerDecodeDurationMs?: number
-    providerTokensPerSecond?: number
-    reasoning?: string
+    isTruncated?: boolean
   } | null> {
-    const phase = options?.phase ?? 'execution'
+    const phase: AgentPhase = options.isFinalizationAttempt
+      ? 'final_answer'
+      : 'agent'
+    const activeSystemPrompt = [
+      systemPrompt,
+      ...(options.remainingIterations !== undefined
+        ? [buildAgentConvergenceSystemPrompt(options.remainingIterations)]
+        : []),
+      ...(options.isFinalizationAttempt
+        ? [AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT]
+        : [])
+    ].join('\n\n')
+    const providerName = getLLMProviderName()
+    const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
+      ? resolveAgentContextRecoveryTriggerTokens(providerName)
+      : resolveAgentContextCompactionTriggerTokens(providerName)
+    const preparedContext = prepareAgentModelContext({
+      transcript,
+      systemPrompt: activeSystemPrompt,
+      tools,
+      compactionTriggerTokens: contextCompactionTriggerTokens,
+      forceCompaction:
+        options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
+    })
+    if (
+      preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
+    ) {
+      throw new AgentModelProviderError(
+        `Agent context remains above its ${contextCompactionTriggerTokens}-token target after compaction.`,
+        !options.isContextRecoveryAttempt
+      )
+    }
+    const preparedTranscript = preparedContext.transcript
+    const preparedTools = preparedContext.tools
+    const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
-    const phasePolicy = getPhasePolicy(phase)
-    const effectiveToolChoice: OpenAIToolChoice | undefined =
-      tools.length === 0 ? undefined : (toolChoice ?? 'auto')
-    const requestedReasoningMode =
-      options?.disableThinking === true
-        ? 'off'
-        : (options?.reasoningMode ?? phasePolicy.reasoningMode)
-    const reasoningMode = getEffectiveReasoningMode(
-      phase,
-      requestedReasoningMode
-    )
+    const inferencePolicy = getAgentInferencePolicy()
+    const reasoningMode =
+      options.isRecoveryAttempt || options.isFinalizationAttempt
+      ? 'off'
+      : inferencePolicy.reasoningMode
     const disableThinking = reasoningMode === 'off'
     const shouldEmitReasoning =
-      reasoningMode === 'off'
-        ? false
-        : (options?.emitReasoning ?? phasePolicy.emitReasoning)
-    const shouldStreamToUserEffective =
-      options?.streamToUser ?? shouldStreamToUser ?? phasePolicy.streamToUser
-    const shouldStreamEffective =
-      options?.streamToProvider ?? phasePolicy.streamToProvider
-    const shouldUseResponseTuning = shouldUseOpenAIResponseTuning(phase)
+      reasoningMode !== 'off' && inferencePolicy.emitReasoning
 
-    const toolNames = tools.map((t) => t.function.name).join(', ')
-    const choiceLabel =
-      effectiveToolChoice === undefined
-        ? 'omitted'
-        : effectiveToolChoice
-    const generationId = shouldStreamToUserEffective
-      ? StringHelper.random(6, { onlyLetters: true })
-      : null
+    const toolNames = preparedTools.map((t) => t.function.name).join(', ')
     const reasoningGenerationId = shouldEmitReasoning
       ? this.getReasoningGenerationId(
           phase,
-          generationId || StringHelper.random(6, { onlyLetters: true })
+          StringHelper.random(6, { onlyLetters: true })
         )
       : null
 
     this.logTitle(phase)
-    LogHelper.debug(
-      `callLLMWithTools: tools=[${toolNames}] | choice=${choiceLabel}`
-    )
-    this.logPromptDispatch({
-      phase,
-      channel: 'tools',
-      prompt,
-      systemPrompt,
-      tools,
-      ...(effectiveToolChoice !== undefined
-        ? { toolChoice: effectiveToolChoice }
-        : {}),
-      phasePolicySummary: formatEffectivePhasePolicyForLog(phase, phasePolicy, {
+    LogHelper.debug(`callAgentModel: tools=[${toolNames}] | choice=auto`)
+    if (preparedContext.wasCompacted) {
+      LogHelper.debug(
+        `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokens} | exchanges=${preparedContext.compactedToolExchangeCount} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
+      )
+    }
+    this.logAgentPromptDispatch({
+      prompt: promptForLog,
+      systemPrompt: activeSystemPrompt,
+      tools: preparedTools,
+      phasePolicySummary: formatAgentInferencePolicyForLog({
+        ...inferencePolicy,
         reasoningMode,
-        streamToProvider: shouldStreamEffective,
-        streamToUser: shouldStreamToUserEffective,
         emitReasoning: shouldEmitReasoning
       }),
-      shouldStream: shouldStreamEffective,
-      ...(promptSections ? { promptSections } : {}),
-      ...(history ? { history } : {})
+      shouldStream: inferencePolicy.streamToProvider
     })
 
     let completionResult: Awaited<ReturnType<typeof LLM_PROVIDER.prompt>>
@@ -2569,10 +1251,9 @@ export class ReActLLMDuty extends LLMDuty {
     const toolCallAbortController = new AbortController()
 
     const delayReason = this.buildLongToolCallReason(
-      prompt,
-      systemPrompt,
-      tools,
-      history
+      promptForLog,
+      activeSystemPrompt,
+      preparedTools
     )
 
     waitNoticeTimer = setTimeout(() => {
@@ -2581,14 +1262,14 @@ export class ReActLLMDuty extends LLMDuty {
       }
       this.logTitle(phase)
       LogHelper.warning(
-        `callLLMWithTools: pending > ${TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
+        `callAgentModel: pending > ${AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
       )
       void this.emitProgress(
         BRAIN.wernicke('react.tool_call.waiting', '', {
           '{{ reason }}': delayReason
         })
       )
-    }, TOOL_CALL_WAIT_NOTICE_DELAY_MS)
+    }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
 
     diagnosisTimer = setTimeout(() => {
       if (completed) {
@@ -2596,11 +1277,9 @@ export class ReActLLMDuty extends LLMDuty {
       }
 
       void this.runLongToolCallDiagnosis(
-        prompt,
-        systemPrompt,
-        tools,
-        effectiveToolChoice,
-        history
+        promptForLog,
+        activeSystemPrompt,
+        preparedTools
       )
 
       diagnosisRetryTimer = setTimeout(() => {
@@ -2611,36 +1290,37 @@ export class ReActLLMDuty extends LLMDuty {
         const abortReason: LLMPromptAbortReason = {
           shouldRetry: true,
           retryStrategy: 'timeout',
-          source: 'react_tool_call_diagnosis',
-          delayMs: TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS
+          source: 'agent_tool_call_diagnosis',
+          delayMs: AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS
         }
 
         this.logTitle(phase)
         LogHelper.warning(
-          `callLLMWithTools: diagnosis grace period exceeded (${TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS}ms); canceling in-flight request and retrying`
+          `callAgentModel: diagnosis grace period exceeded (${AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS}ms); canceling in-flight request and retrying`
         )
 
         toolCallAbortController.abort(abortReason)
-      }, TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS)
-    }, TOOL_CALL_DIAGNOSIS_DELAY_MS)
+      }, AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS)
+    }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
 
     try {
-      completionResult = await LLM_PROVIDER.prompt(prompt, {
+      completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
-        systemPrompt,
-        temperature: REACT_TEMPERATURE,
-        timeout: REACT_INFERENCE_TIMEOUT_MS,
-        maxRetries: REACT_TIMEOUT_MAX_RETRIES,
-        maxTokens: options?.maxTokens ?? getDefaultMaxTokensForPhase(phase),
-        shouldStream: shouldStreamEffective,
-        ...(shouldUseResponseTuning
-          ? { promptCacheKey: getPromptCacheKeyForPhase(phase) }
+        systemPrompt: activeSystemPrompt,
+        temperature: AGENT_TEMPERATURE,
+        timeout: AGENT_INFERENCE_TIMEOUT_MS,
+        maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
+        maxTokens: resolveAgentMaxOutputTokens(
+          providerName,
+          preparedContext.estimatedInputTokens
+        ),
+        shouldStream: inferencePolicy.streamToProvider,
+        promptCacheKey: AGENT_PROMPT_CACHE_KEY,
+        ...(inferencePolicy.textVerbosity
+          ? { textVerbosity: inferencePolicy.textVerbosity }
           : {}),
-        ...(shouldUseResponseTuning && phasePolicy.textVerbosity
-          ? { textVerbosity: phasePolicy.textVerbosity }
-          : {}),
-        ...(shouldUseResponseTuning && shouldEmitReasoning && phasePolicy.reasoningSummary
-          ? { reasoningSummary: phasePolicy.reasoningSummary }
+        ...(shouldEmitReasoning && inferencePolicy.reasoningSummary
+          ? { reasoningSummary: inferencePolicy.reasoningSummary }
           : {}),
         ...(shouldEmitReasoning && reasoningGenerationId
           ? {
@@ -2655,39 +1335,9 @@ export class ReActLLMDuty extends LLMDuty {
           : {}),
         reasoningMode,
         ...(disableThinking ? { disableThinking: true } : {}),
-        ...(shouldStreamToUserEffective
-          ? {
-              onToken: (chunk: unknown): void => {
-                const token = StringHelper.normalizeUserFacingText(
-                  typeof chunk === 'string'
-                    ? chunk
-                    : LLM_PROVIDER.cleanUpResult(
-                        LLM_MANAGER.model.detokenize(
-                          chunk as Parameters<
-                            typeof LLM_MANAGER.model.detokenize
-                          >[0]
-                        )
-                      )
-                )
-
-                if (!token || !generationId) {
-                  return
-                }
-
-                this.hasStreamedTokenEmission = true
-                SOCKET_SERVER.emitToChatClients('llm-token', {
-                  token,
-                  generationId
-                })
-              }
-            }
-          : {}),
-        tools,
-        ...(effectiveToolChoice !== undefined
-          ? { toolChoice: effectiveToolChoice }
-          : {}),
-        signal: toolCallAbortController.signal,
-        ...(history ? { history } : {})
+        tools: preparedTools,
+        toolChoice: 'auto',
+        signal: toolCallAbortController.signal
       })
     } finally {
       completed = true
@@ -2703,7 +1353,16 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     if (!completionResult) {
-      LogHelper.debug('callLLMWithTools: no completion result returned')
+      LogHelper.debug('callAgentModel: no completion result returned')
+      const providerError = LLM_PROVIDER.consumeLastProviderErrorMessage()
+      if (providerError) {
+        throw new AgentModelProviderError(
+          providerError,
+          !options.isContextRecoveryAttempt &&
+            preparedContext.estimatedInputTokens >=
+              resolveAgentContextRecoveryTriggerTokens(providerName)
+        )
+      }
       return null
     }
 
@@ -2711,9 +1370,10 @@ export class ReActLLMDuty extends LLMDuty {
     const toolCalls = (
       completionResult as unknown as { toolCalls?: OpenAIToolCall[] }
     ).toolCalls
+    const observedPhase: AgentPhase =
+      !toolCalls || toolCalls.length === 0 ? 'final_answer' : phase
     this.observeCompletionMetrics({
-      phase,
-      channel: 'tools',
+      phase: observedPhase,
       completionStartedAt,
       completedAt: completionEndedAt,
       output: completionResult.output,
@@ -2725,96 +1385,65 @@ export class ReActLLMDuty extends LLMDuty {
       generationDurationMs: completionResult.generationDurationMs
     })
 
-    // Check if the model responded with tool calls
     if (toolCalls && toolCalls.length > 0) {
-      const firstCall = toolCalls[0]!
-      const allowedToolNames = new Set(tools.map((t) => t.function.name))
-      const resolvedToolName = this.resolveAllowedToolCallName(
-        firstCall.function.name,
-        allowedToolNames
+      const allowedToolNames = new Set(
+        preparedTools.map((t) => t.function.name)
       )
-      if (!resolvedToolName) {
-        this.logTitle(phase)
-        LogHelper.warning(
-          `callLLMWithTools: unexpected tool call "${firstCall.function.name}" (allowed: ${[...allowedToolNames].join(', ') || 'none'})`
+      const normalizedToolCalls = toolCalls.map((toolCall) => {
+        const normalizedName = this.resolveAllowedToolCallName(
+          toolCall.function.name,
+          allowedToolNames
         )
 
-        const textContentFallback =
-          typeof completionResult.output === 'string'
-            ? completionResult.output
-            : ''
-        return {
-          unexpectedToolCall: {
-            functionName: firstCall.function.name,
-            arguments: firstCall.function.arguments
-          },
-          textContent: textContentFallback,
-          usedInputTokens: completionResult.usedInputTokens,
-          usedOutputTokens: completionResult.usedOutputTokens,
-          generationDurationMs: completionResult.generationDurationMs,
-          ...(completionResult.providerTokensPerSecond
-            ? { providerTokensPerSecond: completionResult.providerTokensPerSecond }
-            : {}),
-          ...(completionResult.providerDecodeDurationMs
-            ? { providerDecodeDurationMs: completionResult.providerDecodeDurationMs }
-            : {}),
-          ...(completionResult.reasoning
-            ? { reasoning: completionResult.reasoning }
-            : {})
+        if (!normalizedName || normalizedName === toolCall.function.name) {
+          return toolCall
         }
-      }
-      if (resolvedToolName !== firstCall.function.name) {
-        this.logTitle(phase)
-        LogHelper.debug(
-          `callLLMWithTools: normalized tool call "${firstCall.function.name}" -> "${resolvedToolName}"`
-        )
-      }
+
+        return {
+          ...toolCall,
+          function: {
+            ...toolCall.function,
+            name: normalizedName
+          }
+        }
+      })
       this.logTitle(phase)
       LogHelper.debug(
-        `callLLMWithTools: tool call received — ${resolvedToolName}(${firstCall.function.arguments})`
+        `callAgentModel: ${normalizedToolCalls.length} tool call(s) received`
       )
+      const textContent =
+        typeof completionResult.output === 'string'
+          ? completionResult.output
+          : ''
       return {
-        toolCall: {
-          functionName: resolvedToolName,
-          arguments: firstCall.function.arguments
-        },
-        usedInputTokens: completionResult.usedInputTokens,
-        usedOutputTokens: completionResult.usedOutputTokens,
-        generationDurationMs: completionResult.generationDurationMs,
-        ...(completionResult.providerTokensPerSecond
-          ? { providerTokensPerSecond: completionResult.providerTokensPerSecond }
-          : {}),
-        ...(completionResult.providerDecodeDurationMs
-          ? { providerDecodeDurationMs: completionResult.providerDecodeDurationMs }
-          : {}),
-        ...(completionResult.reasoning
-          ? { reasoning: completionResult.reasoning }
+        toolCalls: normalizedToolCalls,
+        textContent,
+        ...(completionResult.finishReason !== undefined
+          ? {
+              isTruncated: this.isTruncatedFinishReason(
+                completionResult.finishReason
+              )
+            }
           : {})
       }
     }
 
-    // Model responded with text content (no tool call)
     const textContent =
       typeof completionResult.output === 'string'
         ? completionResult.output
         : ''
     this.logTitle(phase)
     LogHelper.debug(
-      `callLLMWithTools: no tool call, text response: "${textContent}"`
+      `callAgentModel: final text response received (${textContent.length} chars)`
     )
     return {
       textContent,
-      usedInputTokens: completionResult.usedInputTokens,
-      usedOutputTokens: completionResult.usedOutputTokens,
-      generationDurationMs: completionResult.generationDurationMs,
-      ...(completionResult.providerTokensPerSecond
-        ? { providerTokensPerSecond: completionResult.providerTokensPerSecond }
-        : {}),
-      ...(completionResult.providerDecodeDurationMs
-        ? { providerDecodeDurationMs: completionResult.providerDecodeDurationMs }
-        : {}),
-      ...(completionResult.reasoning
-        ? { reasoning: completionResult.reasoning }
+      ...(completionResult.finishReason !== undefined
+        ? {
+            isTruncated: this.isTruncatedFinishReason(
+              completionResult.finishReason
+            )
+          }
         : {})
     }
   }
@@ -2829,6 +1458,12 @@ export class ReActLLMDuty extends LLMDuty {
     } catch {
       return String(value)
     }
+  }
+
+  private isTruncatedFinishReason(finishReason: string): boolean {
+    return TRUNCATED_COMPLETION_FINISH_REASONS.has(
+      finishReason.toLowerCase()
+    )
   }
 
   private resolveAllowedToolCallName(
@@ -2882,33 +1517,6 @@ export class ReActLLMDuty extends LLMDuty {
     return Math.ceil(text.length / CHARS_PER_TOKEN)
   }
 
-  private estimateHistoryTokens(history?: MessageLog[]): number {
-    if (!history || history.length === 0) {
-      return 0
-    }
-
-    const historyChars = history.reduce((total, log) => {
-      return total + (log?.message?.length || 0)
-    }, 0)
-
-    return Math.ceil(historyChars / CHARS_PER_TOKEN)
-  }
-
-  private formatHistoryForPromptLog(history?: MessageLog[]): string {
-    if (!history || history.length === 0) {
-      return ''
-    }
-
-    return StringHelper.redactSecrets(JSON.stringify(
-      history.map((log) => ({
-        who: log.who,
-        message: log.message
-      })),
-      null,
-      2
-    ))
-  }
-
   private buildLogTitle(context?: string): string {
     return context ? `${this.name} / ${context}` : this.name
   }
@@ -2917,70 +1525,44 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.title(this.buildLogTitle(context))
   }
 
-  private writePhasePromptLog(params: {
-    phase: ReactPhase
-    channel: 'json' | 'text' | 'tools'
+  private writeAgentPromptLog(params: {
     systemPrompt: string
     prompt: string
-    history?: MessageLog[]
-    schema?: Record<string, unknown>
-    tools?: OpenAITool[]
+    tools: OpenAITool[]
     phasePolicySummary?: string
     shouldStream?: boolean
-    toolChoice?: OpenAIToolChoice
   }): void {
     try {
-      fs.mkdirSync(REACT_PROMPTS_LOG_DIR, { recursive: true })
+      const agentPromptsLogPath = path.join(getProfilePaths().logs, 'prompts')
+
+      fs.mkdirSync(agentPromptsLogPath, { recursive: true })
 
       const promptLogFilePath = path.join(
-        REACT_PROMPTS_LOG_DIR,
-        `${params.phase}.log`
+        agentPromptsLogPath,
+        'agent.log'
       )
       const headerLines = [
         `=== ${new Date().toISOString()} ===`,
-        `phase=${params.phase}`,
-        `channel=${params.channel}`,
+        'phase=agent',
+        'channel=tools',
         `stream=${params.shouldStream === true ? 'true' : 'false'}`,
         ...(params.phasePolicySummary
           ? [`policy=${params.phasePolicySummary}`]
           : []),
-        ...(params.tools
-          ? [
-              `tool_count=${params.tools.length}`,
-              `tool_choice=${
-                params.toolChoice === undefined
-                  ? 'omitted'
-                  : typeof params.toolChoice === 'string'
-                    ? params.toolChoice
-                    : params.toolChoice.function.name
-              }`
-            ]
-          : []),
+        `tool_count=${params.tools.length}`,
+        'tool_choice=auto',
         ''
       ]
       const sectionLines = [
         '--- SYSTEM_PROMPT ---',
         StringHelper.redactSecrets(params.systemPrompt),
         '',
-        '--- PHASE_INPUT ---',
+        '--- AGENT_TRANSCRIPT ---',
         StringHelper.redactSecrets(params.prompt),
         ''
       ]
 
-      const formattedHistory = this.formatHistoryForPromptLog(params.history)
-      if (formattedHistory) {
-        sectionLines.push('--- HISTORY ---', formattedHistory, '')
-      }
-
-      if (params.schema) {
-        sectionLines.push(
-          '--- JSON_SCHEMA ---',
-          this.safeJSONStringify(params.schema),
-          ''
-        )
-      }
-
-      if (params.tools && params.tools.length > 0) {
+      if (params.tools.length > 0) {
         sectionLines.push(
           '--- TOOLS_SCHEMA ---',
           this.safeJSONStringify(params.tools),
@@ -2994,167 +1576,61 @@ export class ReActLLMDuty extends LLMDuty {
         'utf8'
       )
     } catch (error) {
-      this.logTitle(params.phase)
+      this.logTitle('agent')
       LogHelper.warning(
         `Failed to write prompt log file: ${String(error)}`
       )
     }
   }
 
-  private logPromptDispatch(params: {
-    phase: ReactPhase
-    channel: 'json' | 'text' | 'tools'
+  private logAgentPromptDispatch(params: {
     prompt: string
     systemPrompt: string
     phasePolicySummary?: string
-    history?: MessageLog[]
-    schema?: Record<string, unknown>
-    tools?: OpenAITool[]
-    toolChoice?: OpenAIToolChoice
+    tools: OpenAITool[]
     shouldStream?: boolean
-    promptSections?: PromptLogSection[]
   }): void {
     const promptTokens = this.estimateTokensFromText(params.prompt)
     const systemTokens = this.estimateTokensFromText(params.systemPrompt)
-    const historyTokens = this.estimateHistoryTokens(params.history)
-    const schemaTokens = params.schema
-      ? this.estimateTokensFromText(this.safeJSONStringify(params.schema))
-      : 0
-    const toolsTokens = params.tools
-      ? this.estimateTokensFromText(this.safeJSONStringify(params.tools))
-      : 0
-    const totalEstimated =
-      promptTokens + systemTokens + historyTokens + schemaTokens + toolsTokens
+    const toolsTokens = this.estimateTokensFromText(
+      this.safeJSONStringify(params.tools)
+    )
+    const totalEstimated = promptTokens + systemTokens + toolsTokens
 
-    this.logTitle(params.phase)
+    this.logTitle('agent')
     LogHelper.debug(
-      `Prompt dispatch [${params.channel}] est_tokens=${totalEstimated} (prompt=${promptTokens}, system=${systemTokens}, history=${historyTokens}${schemaTokens > 0 ? `, schema=${schemaTokens}` : ''}${toolsTokens > 0 ? `, tools=${toolsTokens}` : ''})${
+      `Prompt dispatch [tools] est_tokens=${totalEstimated} (transcript=${promptTokens}, system=${systemTokens}, tools=${toolsTokens})${
         params.shouldStream === true ? ' | stream=true' : ''
       }${
         params.phasePolicySummary ? ` | ${params.phasePolicySummary}` : ''
-      }${
-        params.tools
-          ? ` | tools=${params.tools.length} | tool_choice=${
-              params.toolChoice === undefined
-                ? 'omitted'
-                : typeof params.toolChoice === 'string'
-                  ? params.toolChoice
-                  : params.toolChoice.function.name
-            }`
-          : ''
-      }`
+      } | tools=${params.tools.length} | tool_choice=auto`
     )
-    const sections =
-      params.promptSections && params.promptSections.length > 0
-        ? params.promptSections
-        : this.buildDefaultPromptSections(params)
-    this.writePhasePromptLog({
-      phase: params.phase,
-      channel: params.channel,
+    this.writeAgentPromptLog({
       systemPrompt: params.systemPrompt,
       prompt: params.prompt,
-      ...(params.history ? { history: params.history } : {}),
-      ...(params.schema ? { schema: params.schema } : {}),
-      ...(params.tools ? { tools: params.tools } : {}),
+      tools: params.tools,
       ...(params.phasePolicySummary !== undefined
         ? { phasePolicySummary: params.phasePolicySummary }
         : {}),
       ...(params.shouldStream !== undefined
         ? { shouldStream: params.shouldStream }
-        : {}),
-      ...(params.toolChoice !== undefined
-        ? { toolChoice: params.toolChoice }
         : {})
     })
-
-    if (sections.length > 0) {
-      LogHelper.debug(
-        `Prompt sections [${params.channel}]:\n${sections
-          .map((section) => {
-            const sectionTokens = this.estimateTokensFromText(
-              section.content ?? ''
-            )
-            return `- ${section.name} (${this.compactSectionSourcePath(
-              section.source
-            )}) | est_tokens=${sectionTokens}`
-          })
-          .join('\n')}`
-      )
-    }
-  }
-
-  private compactSectionSourcePath(source: string): string {
-    const normalized = String(source || '').replace(/\\/g, '/')
-    const parts = normalized.split('/').filter((part) => part.length > 0)
-    if (parts.length <= 2) {
-      return parts.join('/')
-    }
-
-    return `${parts[parts.length - 2]}/${parts[parts.length - 1]}`
-  }
-
-  private buildDefaultPromptSections(params: {
-    prompt: string
-    systemPrompt: string
-    schema?: Record<string, unknown>
-    tools?: OpenAITool[]
-    history?: MessageLog[]
-  }): PromptLogSection[] {
-    const sections: PromptLogSection[] = [
-      {
-        name: 'SYSTEM_PROMPT',
-        source: 'server/src/core/llm-manager/persona.ts',
-        content: params.systemPrompt
-      },
-      {
-        name: 'PHASE_PROMPT',
-        source: 'server/src/core/llm-manager/llm-duties/react-llm-duty/*.ts',
-        content: params.prompt
-      }
-    ]
-
-    if (params.schema) {
-      sections.push({
-        name: 'JSON_SCHEMA',
-        source: 'server/src/core/llm-manager/llm-duties/react-llm-duty/*.ts',
-        content: this.safeJSONStringify(params.schema)
-      })
-    }
-
-    if (params.tools && params.tools.length > 0) {
-      sections.push({
-        name: 'TOOLS_SCHEMA',
-        source: 'server/src/core/llm-manager/llm-duties/react-llm-duty/*.ts',
-        content: this.safeJSONStringify(params.tools)
-      })
-    }
-
-    if (params.history && params.history.length > 0) {
-      sections.push({
-        name: 'HISTORY',
-        source: 'core/conversation_logger',
-        content: params.history.map((entry) => entry.message || '').join('\n')
-      })
-    }
-
-    return sections
   }
 
   private logPromptUsage(
-    phase: ReactPhase,
-    channel: 'json' | 'text' | 'tools',
+    phase: AgentPhase,
     usedInputTokens: number,
     usedOutputTokens: number
   ): void {
     this.logTitle(phase)
     LogHelper.debug(
-      `Prompt usage [${channel}] input=${usedInputTokens} output=${usedOutputTokens} | total=${this.totalInputTokens}+${this.totalOutputTokens}=${this.totalInputTokens + this.totalOutputTokens}`
+      `Prompt usage [tools] input=${usedInputTokens} output=${usedOutputTokens} | total=${this.totalInputTokens}+${this.totalOutputTokens}=${this.totalInputTokens + this.totalOutputTokens}`
     )
   }
 
   private observeCompletionMetrics(params: {
-    phase: ReactPhase
-    channel: 'json' | 'text' | 'tools'
+    phase: AgentPhase
     completionStartedAt: number
     completedAt: number
     output?: unknown | undefined
@@ -3188,13 +1664,7 @@ export class ReActLLMDuty extends LLMDuty {
       providerDecodeDurationMs: params.providerDecodeDurationMs,
       providerTokensPerSecond: params.providerTokensPerSecond,
       ...(params.firstTokenAt ? { firstTokenAt: params.firstTokenAt } : {}),
-      estimateTokensFromText: this.estimateTokensFromText.bind(this),
-      ...(getLLMProviderName() === LLMProviders.Local && LLM_MANAGER.model
-        ? {
-            tokenizeLocally: (text: string): number =>
-              LLM_MANAGER.model.tokenize(text).length
-          }
-        : {})
+      estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
     this.totalInputTokens = observedMetrics.accumulator.totalInputTokens
     this.totalOutputTokens = observedMetrics.accumulator.totalOutputTokens
@@ -3208,38 +1678,34 @@ export class ReActLLMDuty extends LLMDuty {
 
     this.logPromptUsage(
       params.phase,
-      params.channel,
       params.usedInputTokens ?? 0,
       params.usedOutputTokens ?? 0
     )
-    this.logPromptReasoning(params.phase, params.channel, params.reasoning)
+    this.logPromptReasoning(params.phase, params.reasoning)
   }
 
   private logPromptReasoning(
-    phase: ReactPhase,
-    channel: 'json' | 'text' | 'tools',
+    phase: AgentPhase,
     reasoning?: string
   ): void {
     this.logTitle(phase)
     if (reasoning && reasoning.trim()) {
-      LogHelper.debug(`Prompt reasoning [${channel}]:\n${reasoning.trim()}`)
+      LogHelper.debug(`Prompt reasoning [tools]:\n${reasoning.trim()}`)
       return
     }
 
-    LogHelper.debug(`Prompt reasoning [${channel}]: none`)
+    LogHelper.debug('Prompt reasoning [tools]: none')
   }
 
   private buildLongToolCallReason(
     prompt: string,
     systemPrompt: string,
-    tools: OpenAITool[],
-    history?: MessageLog[]
+    tools: OpenAITool[]
   ): string {
     const estimatedPromptTokens =
       this.estimateTokensFromText(prompt) +
       this.estimateTokensFromText(systemPrompt) +
-      this.estimateTokensFromText(JSON.stringify(tools)) +
-      this.estimateHistoryTokens(history)
+      this.estimateTokensFromText(JSON.stringify(tools))
 
     if (estimatedPromptTokens > 4_500) {
       return BRAIN.wernicke('react.tool_call.reason.large_prompt', '', {
@@ -3259,37 +1725,27 @@ export class ReActLLMDuty extends LLMDuty {
   private async runLongToolCallDiagnosis(
     prompt: string,
     systemPrompt: string,
-    tools: OpenAITool[],
-    toolChoice: OpenAIToolChoice | undefined,
-    history?: MessageLog[]
+    tools: OpenAITool[]
   ): Promise<void> {
     const promptTokens =
       this.estimateTokensFromText(prompt) +
       this.estimateTokensFromText(systemPrompt)
     const toolSchemaTokens = this.estimateTokensFromText(JSON.stringify(tools))
-    const historyTokens = this.estimateHistoryTokens(history)
-    const totalEstimatedTokens =
-      promptTokens + toolSchemaTokens + historyTokens
-    const forcedChoice =
-      toolChoice === undefined
-        ? 'omitted'
-        : typeof toolChoice === 'string'
-          ? toolChoice
-          : `forced:${toolChoice.function.name}`
+    const totalEstimatedTokens = promptTokens + toolSchemaTokens
 
     const diagnosisMessage = BRAIN.wernicke('react.tool_call.diagnosis', '', {
       '{{ provider }}': getLLMProviderName(),
-      '{{ tool_choice }}': forcedChoice,
+      '{{ tool_choice }}': 'auto',
       '{{ tool_count }}': String(tools.length),
       '{{ total_tokens }}': String(totalEstimatedTokens),
       '{{ prompt_tokens }}': String(promptTokens),
       '{{ tool_tokens }}': String(toolSchemaTokens),
-      '{{ history_tokens }}': String(historyTokens)
+      '{{ history_tokens }}': '0'
     })
 
     this.logTitle('execution')
     LogHelper.warning(
-      `Long tool-call diagnosis (> ${TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): ${diagnosisMessage}`
+      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): ${diagnosisMessage}`
     )
 
     await this.emitProgress(diagnosisMessage)
@@ -3302,7 +1758,7 @@ export class ReActLLMDuty extends LLMDuty {
 
     try {
       SOCKET_SERVER.emitAnswerToChatClients({
-        id: `react-progress-${StringHelper.random(8, { onlyLetters: true })}`,
+        id: `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`,
         answer: message,
         fallbackText: message,
         historyMode: 'system_widget'
@@ -3315,31 +1771,16 @@ export class ReActLLMDuty extends LLMDuty {
     }
   }
 
-  private toProgressiveMessage(message: string): string {
-    const normalized = String(message || '')
-      .replace(/\s+/g, ' ')
-      .trim()
-    if (!normalized) {
-      return 'Working...'
-    }
-
-    const withEllipsis = normalized.endsWith('...')
-      ? normalized
-      : `${normalized.replace(/[.?!]+$/g, '')}...`
-
-    return withEllipsis
-  }
-
   private makeDutyResult(output: string): LLMDutyResult {
-    if (!this.finalAnswerPhaseCompleted) {
+    if (!this.hasFinalizedAnswer) {
       throw new Error(
-        'ReAct invariant violation: user-facing output must be produced by final_answer phase.'
+        'Agent invariant violation: user-facing output must be finalized before creating a duty result.'
       )
     }
 
     const normalizedOutput = StringHelper.normalizeUserFacingText(output)
 
-    if (!this.hasStreamedTokenEmission && normalizedOutput?.trim()) {
+    if (normalizedOutput?.trim()) {
       this.emitSyntheticTokenStream(normalizedOutput)
     }
 
@@ -3361,13 +1802,7 @@ export class ReActLLMDuty extends LLMDuty {
       turnDurationMs: Math.max(Date.now() - this.executionStartedAt, 0),
       phaseMetrics: this.phaseMetrics,
       finalAnswerMetrics: this.finalAnswerMetrics,
-      estimateTokensFromText: this.estimateTokensFromText.bind(this),
-      ...(getLLMProviderName() === LLMProviders.Local && LLM_MANAGER.model
-        ? {
-            tokenizeLocally: (text: string): number =>
-              LLM_MANAGER.model.tokenize(text).length
-          }
-        : {})
+      estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
 
     return {
@@ -3391,7 +1826,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private getReasoningGenerationId(
-    phase: ReactPhase,
+    phase: AgentPhase,
     fallbackGenerationId?: string | null
   ): string | null {
     const baseGenerationId =
@@ -3407,7 +1842,7 @@ export class ReActLLMDuty extends LLMDuty {
   private emitReasoningToken(
     token: string,
     generationId: string,
-    phase: ReactPhase
+    phase: AgentPhase
   ): void {
     if (!token || !generationId) {
       return
@@ -3426,8 +1861,6 @@ export class ReActLLMDuty extends LLMDuty {
   private emitSyntheticTokenStream(output: string): void {
     const generationId = StringHelper.random(6, { onlyLetters: true })
     const chunks = output.match(/(\s+|[^\s]+)/g) || [output]
-
-    this.hasStreamedTokenEmission = chunks.length > 0
 
     for (const token of chunks) {
       SOCKET_SERVER.emitToChatClients('llm-token', {

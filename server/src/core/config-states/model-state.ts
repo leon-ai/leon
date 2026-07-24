@@ -57,9 +57,7 @@ function getTargetModelName(target: ResolvedLLMTarget): string {
 }
 
 function getSupportedModelProviders(): LLMProviders[] {
-  return Object.values(LLMProviders).filter(
-    (provider) => provider !== LLMProviders.Local
-  )
+  return Object.values(LLMProviders)
 }
 
 function resolveLocalModelCandidatePath(model: string): string {
@@ -177,13 +175,11 @@ export class ModelState {
   }
 
   public hasProviderAPIKey(provider: LLMProviders): boolean {
-    const apiKeyEnv = this.getProviderAPIKeyEnv(provider)
-
-    if (!apiKeyEnv) {
+    if (!this.getProviderAPIKeyEnv(provider)) {
       return true
     }
 
-    return String(process.env[apiKeyEnv] || '').trim() !== ''
+    return CONFIG_MANAGER.getProviderAPIKey(provider).trim() !== ''
   }
 
   public createConfiguredTargetValue(

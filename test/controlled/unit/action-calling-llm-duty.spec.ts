@@ -115,6 +115,55 @@ describe('ActionCallingLLMDuty', () => {
     ])
   })
 
+  it('validates manually parsed parameters against the action schema', async () => {
+    skillHelperMocks.getNewSkillConfig.mockResolvedValue({
+      actions: {
+        'dispatch-task': {
+          type: 'logic',
+          description: 'Dispatch a coding task.',
+          parameters: {
+            preferred_coding_agent_tool: {
+              type: 'string',
+              description: 'Preferred coding agent.'
+            }
+          },
+          optional_parameters: ['preferred_coding_agent_tool']
+        }
+      },
+      workflow: []
+    })
+
+    coreMocks.llmProvider.prompt.mockResolvedValue({
+      output: JSON.stringify({
+        status: 'missing_params',
+        required_params: ['task'],
+        name: 'dispatch-task',
+        arguments: {
+          task: 'Change the text color to pink.'
+        }
+      }),
+      usedInputTokens: 10,
+      usedOutputTokens: 4
+    })
+
+    const duty = new ActionCallingLLMDuty({
+      input: 'Change the text color to pink',
+      skillName: 'example_skill'
+    })
+
+    await duty.init()
+    const result = await duty.execute()
+    const parsedOutput = JSON.parse(String(result?.output))
+
+    expect(parsedOutput).toEqual([
+      {
+        status: 'success',
+        name: 'dispatch-task',
+        arguments: {}
+      }
+    ])
+  })
+
   it('short-circuits when the skill workflow starts with a parameterless action', async () => {
     skillHelperMocks.getNewSkillConfig.mockResolvedValue({
       actions: {

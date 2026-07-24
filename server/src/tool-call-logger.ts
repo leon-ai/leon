@@ -2,13 +2,13 @@ import { AsyncLocalStorage } from 'node:async_hooks'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { PROFILE_LOGS_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
-interface ToolCallLogEntry {
+export interface ToolCallLogEntry {
   toolName: string
   params: Record<string, unknown> | null
   status?: string
@@ -17,7 +17,7 @@ interface ToolCallLogEntry {
   outputPreview?: string
 }
 
-interface OwnerQueryToolCallRecord {
+export interface OwnerQueryToolCallRecord {
   ownerQuery: string
   sessionId?: string | null
   createdAt?: number
@@ -41,14 +41,116 @@ interface ToolOutputLogInput {
   output: Record<string, unknown>
 }
 
-const TOOL_OUTPUT_LOGS_DIR = path.join(PROFILE_LOGS_PATH, 'tool-outputs')
 const TOOL_OUTPUT_LOG_RETENTION_MS = 12 * 60 * 60 * 1_000
 const TOOL_OUTPUT_PREVIEW_MAX_LENGTH = 700
 const RECENT_ARTIFACT_RECORDS_LIMIT = 4
+export const RECENT_ARTIFACT_MANIFEST_MAX_CHARS = 6_000
+const RECENT_ARTIFACT_MANIFEST_TOOL_CALLS_LIMIT = 16
+const RECENT_ARTIFACT_MANIFEST_PREVIEW_MAX_CHARS = 160
+const ARTIFACT_MANIFEST_OMISSION_NOTICE =
+  '- Additional earlier artifacts were omitted. Use the known artifact paths or ask for a narrower earlier result if needed.'
+
+function clipManifestText(value: string, maxLength: number): string {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (normalized.length <= maxLength) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, Math.max(maxLength - 3, 0)).trimEnd()}...`
+}
+
+/** Builds a newest-first artifact manifest with one global input-size bound. */
+export function buildRecentArtifactManifest(
+  records: OwnerQueryToolCallRecord[],
+  maxChars = RECENT_ARTIFACT_MANIFEST_MAX_CHARS
+): string {
+  const availableToolCallCount = records.reduce(
+    (total, record) =>
+      total +
+      record.toolCalls.filter((toolCall) => toolCall.outputLogPath).length,
+    0
+  )
+  let manifest = ''
+  let includedToolCallCount = 0
+
+  const append = (value: string): boolean => {
+    const separator = manifest ? '\n' : ''
+    if (manifest.length + separator.length + value.length > maxChars) {
+      return false
+    }
+
+    manifest += `${separator}${value}`
+    return true
+  }
+  const appendOmissionNotice = (): void => {
+    if (includedToolCallCount >= availableToolCallCount) {
+      return
+    }
+
+    if (append(ARTIFACT_MANIFEST_OMISSION_NOTICE)) {
+      return
+    }
+
+    const manifestLines = manifest.split('\n')
+    while (manifestLines.length > 0) {
+      manifestLines.pop()
+      manifest = manifestLines.join('\n')
+      if (append(ARTIFACT_MANIFEST_OMISSION_NOTICE)) {
+        return
+      }
+    }
+  }
+
+  for (const record of [...records].reverse()) {
+    const artifactCalls = record.toolCalls
+      .filter((toolCall) => toolCall.outputLogPath)
+      .reverse()
+    if (artifactCalls.length === 0) {
+      continue
+    }
+
+    const createdAt = record.createdAt
+      ? new Date(record.createdAt).toISOString()
+      : 'unknown'
+    const header = `ownerQuery="${clipManifestText(record.ownerQuery, 160)}" createdAt=${createdAt}`
+    let hasAppendedRecordHeader = false
+
+    for (const toolCall of artifactCalls) {
+      if (
+        includedToolCallCount >=
+        RECENT_ARTIFACT_MANIFEST_TOOL_CALLS_LIMIT
+      ) {
+        appendOmissionNotice()
+        return manifest
+      }
+
+      const queryParam = toolCall.params?.['query']
+      const query =
+        typeof queryParam === 'string'
+          ? ` query="${clipManifestText(queryParam, 120)}"`
+          : ''
+      const preview = toolCall.outputPreview
+        ? ` preview="${clipManifestText(toolCall.outputPreview, RECENT_ARTIFACT_MANIFEST_PREVIEW_MAX_CHARS)}"`
+        : ''
+      const line = `  - ${toolCall.toolName} status=${toolCall.status || 'unknown'}${query} outputLogPath=${toolCall.outputLogPath}${preview}`
+      const entry = hasAppendedRecordHeader ? line : `${header}\n${line}`
+      if (!append(entry)) {
+        appendOmissionNotice()
+        return manifest
+      }
+
+      hasAppendedRecordHeader = true
+      includedToolCallCount += 1
+    }
+  }
+
+  return manifest
+}
 
 export class ToolCallLogger {
   private readonly settings: ToolCallLoggerSettings
   private readonly toolCallLogPath: string
+  private readonly toolOutputLogsDir: string
   private readonly activeQueryStore = new AsyncLocalStorage<string>()
   private readonly pendingRecords = new Map<string, OwnerQueryToolCallRecord>()
   private writeQueue: Promise<void> = Promise.resolve()
@@ -58,11 +160,14 @@ export class ToolCallLogger {
     LogHelper.success('New instance')
 
     this.settings = settings
+    const profileLogsPath = getProfilePaths().logs
+
     this.toolCallLogPath = path.join(
-      PROFILE_LOGS_PATH,
+      profileLogsPath,
       this.settings.fileName
     )
-    fs.mkdirSync(TOOL_OUTPUT_LOGS_DIR, { recursive: true })
+    this.toolOutputLogsDir = path.join(profileLogsPath, 'tool-outputs')
+    fs.mkdirSync(this.toolOutputLogsDir, { recursive: true })
     void this.cleanupToolOutputLogs()
 
     const cleanupInterval = setInterval(() => {
@@ -168,12 +273,12 @@ export class ToolCallLogger {
     const toolId = this.sanitizeFilenamePart(params.toolId)
     const functionName = this.sanitizeFilenamePart(params.functionName)
     const baseFilename = `${prefix}_${toolId}_${functionName}`
-    let candidatePath = path.join(TOOL_OUTPUT_LOGS_DIR, `${baseFilename}.log`)
+    let candidatePath = path.join(this.toolOutputLogsDir, `${baseFilename}.log`)
     let counter = 1
 
     while (fs.existsSync(candidatePath)) {
       candidatePath = path.join(
-        TOOL_OUTPUT_LOGS_DIR,
+        this.toolOutputLogsDir,
         `${baseFilename}_${counter}.log`
       )
       counter += 1
@@ -183,13 +288,7 @@ export class ToolCallLogger {
   }
 
   private clipText(value: string, maxLength: number): string {
-    const normalized = value.replace(/\s+/g, ' ').trim()
-
-    if (normalized.length <= maxLength) {
-      return normalized
-    }
-
-    return `${normalized.slice(0, maxLength - 3).trimEnd()}...`
+    return clipManifestText(value, maxLength)
   }
 
   private buildOutputPreview(output: Record<string, unknown>): string {
@@ -383,35 +482,12 @@ export class ToolCallLogger {
       return ''
     }
 
-    return matchingRecords
-      .map((record, recordIndex) => {
-        const ownerQuery = this.clipText(record.ownerQuery, 160)
-        const createdAt = record.createdAt
-          ? new Date(record.createdAt).toISOString()
-          : 'unknown'
-        const toolCalls = record.toolCalls
-          .filter((toolCall) => toolCall.outputLogPath)
-          .map((toolCall) => {
-            const queryParam = toolCall.params?.['query']
-            const query = typeof queryParam === 'string'
-              ? ` query="${this.clipText(queryParam, 120)}"`
-              : ''
-            const preview = toolCall.outputPreview
-              ? ` preview="${this.clipText(toolCall.outputPreview, 240)}"`
-              : ''
-
-            return `  - ${toolCall.toolName} status=${toolCall.status || 'unknown'}${query} outputLogPath=${toolCall.outputLogPath}${preview}`
-          })
-          .join('\n')
-
-        return `${recordIndex + 1}. ownerQuery="${ownerQuery}" createdAt=${createdAt}\n${toolCalls}`
-      })
-      .join('\n')
+    return buildRecentArtifactManifest(matchingRecords)
   }
 
   public async cleanupToolOutputLogs(): Promise<void> {
     try {
-      const entries = await fs.promises.readdir(TOOL_OUTPUT_LOGS_DIR, {
+      const entries = await fs.promises.readdir(this.toolOutputLogsDir, {
         withFileTypes: true
       })
       const now = Date.now()
@@ -421,7 +497,7 @@ export class ToolCallLogger {
           continue
         }
 
-        const filePath = path.join(TOOL_OUTPUT_LOGS_DIR, entry.name)
+        const filePath = path.join(this.toolOutputLogsDir, entry.name)
         const stats = await fs.promises.stat(filePath)
         if (now - stats.mtimeMs < TOOL_OUTPUT_LOG_RETENTION_MS) {
           continue

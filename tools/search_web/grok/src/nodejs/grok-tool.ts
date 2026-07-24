@@ -9,7 +9,7 @@ import { ToolkitConfig } from '@sdk/toolkit-config'
 
 // Hardcoded default settings for Grok tool
 const GROK_API_KEY: string | null = null
-const GROK_MODEL = 'grok-4-fast-reasoning-latest'
+const GROK_MODEL = 'grok-4.3'
 const DEFAULT_SETTINGS: Record<string, unknown> = {
   GROK_API_KEY,
   GROK_MODEL

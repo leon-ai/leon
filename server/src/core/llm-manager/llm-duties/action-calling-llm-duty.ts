@@ -351,6 +351,34 @@ Rules:
         }
   }
 
+  /** Normalize provider output against the declared action parameter schema. */
+  private normalizeActionOutput(
+    functionName: string,
+    rawParams: unknown,
+    actions: SkillSchema['actions']
+  ): ActionCallingOutput {
+    const actionConfig = actions[functionName]
+
+    if (!actionConfig) {
+      return { status: ActionCallingStatus.NotFound }
+    }
+
+    const providedParams =
+      rawParams && typeof rawParams === 'object' && !Array.isArray(rawParams)
+        ? (rawParams as Record<string, unknown>)
+        : {}
+    const declaredParamNames = new Set(
+      Object.keys(actionConfig.parameters || {})
+    )
+    const params = Object.fromEntries(
+      Object.entries(providedParams).filter(([paramName]) =>
+        declaredParamNames.has(paramName)
+      )
+    )
+
+    return this.toMissingParamsOutput(functionName, params, actionConfig)
+  }
+
   public async init(): Promise<void> {
     return Promise.resolve()
   }
@@ -418,7 +446,6 @@ Rules:
       if (toolCalls && toolCalls.length > 0) {
         for (const call of toolCalls) {
           const functionName = call.function.name
-          const actionConfig = filteredActions[functionName]
           let params: Record<string, unknown> = {}
 
           try {
@@ -427,9 +454,11 @@ Rules:
             params = {}
           }
 
-          const actionOutput: ActionCallingOutput = !actionConfig
-            ? { status: ActionCallingStatus.NotFound }
-            : this.toMissingParamsOutput(functionName, params, actionConfig)
+          const actionOutput = this.normalizeActionOutput(
+            functionName,
+            params,
+            filteredActions
+          )
 
           dutyOutput.push(
             this.parseOptionalParameters(skillConfig, actionOutput)
@@ -446,24 +475,23 @@ Rules:
             typeof completionResult.output === 'string'
               ? completionResult.output
               : JSON.stringify(completionResult.output)
-          const tmpResponse = JSON.parse(rawOutput)
+          const parsedResponse = JSON.parse(rawOutput)
+          const tmpResponse = Array.isArray(parsedResponse)
+            ? parsedResponse[0]
+            : parsedResponse
           let parsedOutput: ActionCallingOutput = {
             status: ActionCallingStatus.NotFound
           }
 
-          if (tmpResponse.status === ActionCallingStatus.MissingParams) {
-            parsedOutput = {
-              status: ActionCallingStatus.MissingParams,
-              required_params: tmpResponse.required_params || [],
-              name: tmpResponse.name || '',
-              arguments: tmpResponse.arguments || {}
-            }
-          } else if (tmpResponse.name) {
-            parsedOutput = {
-              status: ActionCallingStatus.Success,
-              name: tmpResponse.name,
-              arguments: tmpResponse.arguments || {}
-            }
+          if (
+            tmpResponse?.status !== ActionCallingStatus.NotFound &&
+            tmpResponse?.name
+          ) {
+            parsedOutput = this.normalizeActionOutput(
+              tmpResponse.name,
+              tmpResponse.arguments,
+              filteredActions
+            )
           }
 
           dutyOutput.push(

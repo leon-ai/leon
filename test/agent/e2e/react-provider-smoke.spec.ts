@@ -4,7 +4,14 @@ import { fileURLToPath } from 'node:url'
 import execa from 'execa'
 import { describe, expect, it } from 'vitest'
 
+import { PROFILE_CONFIG_PATH } from '@/leon-roots'
+
 import { PROVIDER_MATRIX } from './provider-matrix'
+import {
+  PROVIDER_SCENARIOS,
+  type ProviderScenario,
+  type ProviderScenarioId
+} from './provider-scenarios'
 
 const CURRENT_DIR = fileURLToPath(new URL('.', import.meta.url))
 const ROOT_DIR = path.resolve(CURRENT_DIR, '..', '..', '..')
@@ -26,10 +33,11 @@ interface ProviderProgressEvent {
 
 interface ProviderScenarioResult {
   provider: string
+  scenarioId: ProviderScenarioId
   skipped: boolean
   reason?: string
   assetPath?: string
-  turns?: Array<{
+  turn?: {
     input: string
     output: string
     finalIntent: string | null
@@ -48,68 +56,36 @@ interface ProviderScenarioResult {
       parsedInput?: Record<string, unknown>
       toolOutput?: string
     }>
-  }>
-}
-
-function extractTestNamePattern(argv: string[]): string | null {
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index]
-
-    if (!arg) {
-      continue
-    }
-
-    if (arg === '-t' || arg === '--testNamePattern' || arg === '--test-name-pattern') {
-      return argv[index + 1] || null
-    }
-
-    if (arg.startsWith('-t=')) {
-      return arg.slice(3) || null
-    }
-
-    if (arg.startsWith('--testNamePattern=')) {
-      return arg.slice('--testNamePattern='.length) || null
-    }
-
-    if (arg.startsWith('--test-name-pattern=')) {
-      return arg.slice('--test-name-pattern='.length) || null
-    }
   }
-
-  return null
 }
 
 function resolveProviderMatrix(
-  pattern: string | null
+  providerFilter: string | null
 ): typeof PROVIDER_MATRIX {
-  if (!pattern) {
+  if (!providerFilter) {
     return PROVIDER_MATRIX
   }
 
-  const matchesPattern = (provider: string): boolean => {
-    const testName = `runs the 3-turn scenario on ${provider}`
-
-    try {
-      return new RegExp(pattern, 'i').test(testName)
-    } catch {
-      return testName.toLowerCase().includes(pattern.toLowerCase())
-    }
-  }
-
+  const normalizedFilter = providerFilter.trim().toLowerCase()
   const filteredProviders = PROVIDER_MATRIX.filter(({ provider }) =>
-    matchesPattern(provider)
+    provider.toLowerCase() === normalizedFilter
   )
 
-  return filteredProviders.length > 0 ? filteredProviders : PROVIDER_MATRIX
+  if (filteredProviders.length === 0) {
+    throw new Error(
+      `Unknown agent E2E provider "${providerFilter}". Expected one of: ${PROVIDER_MATRIX.map(({ provider }) => provider).join(', ')}.`
+    )
+  }
+
+  return filteredProviders
 }
 
 const ACTIVE_PROVIDER_MATRIX = resolveProviderMatrix(
-  process.env['LEON_AGENT_PROVIDER_PATTERN'] ||
-    extractTestNamePattern(process.argv)
+  process.env['LEON_AGENT_PROVIDER_FILTER'] || null
 )
 
 function collectTurnTrace(
-  turn: NonNullable<ProviderScenarioResult['turns']>[number]
+  turn: NonNullable<ProviderScenarioResult['turn']>
 ): string {
   return [
     turn.output,
@@ -137,30 +113,32 @@ function summarizeScenarioResult(result: ProviderScenarioResult): string {
   return JSON.stringify(
     {
       provider: result.provider,
+      scenarioId: result.scenarioId,
       skipped: result.skipped,
       reason: result.reason,
       assetPath: result.assetPath,
-      turns: result.turns?.map((turn, index) => ({
-        turn: index + 1,
-        input: turn.input,
-        output: summarizeText(turn.output),
-        finalIntent: turn.finalIntent,
-        executionHistory: turn.executionHistory.map((item) => ({
-          function: item.function,
-          status: item.status,
-          stepLabel: item.stepLabel,
-          observation: summarizeText(item.observation),
-          requestedToolInput: summarizeText(item.requestedToolInput)
-        })),
-        toolCalls: turn.toolCalls.map((item) => ({
-          toolkitId: item.toolkitId,
-          toolId: item.toolId,
-          functionName: item.functionName,
-          toolInput: summarizeText(item.toolInput),
-          parsedInput: item.parsedInput,
-          toolOutput: summarizeText(item.toolOutput)
-        }))
-      }))
+      turn: result.turn
+        ? {
+            input: result.turn.input,
+            output: summarizeText(result.turn.output),
+            finalIntent: result.turn.finalIntent,
+            executionHistory: result.turn.executionHistory.map((item) => ({
+              function: item.function,
+              status: item.status,
+              stepLabel: item.stepLabel,
+              observation: summarizeText(item.observation),
+              requestedToolInput: summarizeText(item.requestedToolInput)
+            })),
+            toolCalls: result.turn.toolCalls.map((item) => ({
+              toolkitId: item.toolkitId,
+              toolId: item.toolId,
+              functionName: item.functionName,
+              toolInput: summarizeText(item.toolInput),
+              parsedInput: item.parsedInput,
+              toolOutput: summarizeText(item.toolOutput)
+            }))
+          }
+        : undefined
     },
     null,
     2
@@ -190,7 +168,8 @@ function formatProgressEvent(event: ProviderProgressEvent): string {
 }
 
 async function runProviderScenario(
-  provider: string
+  provider: string,
+  scenarioId: ProviderScenarioId
 ): Promise<ProviderScenarioResult> {
   /**
    * Provider choice is read at module-load time, so each provider run needs a
@@ -202,7 +181,8 @@ async function runProviderScenario(
       '--import',
       'tsx',
       'test/agent/e2e/run-agent-provider-scenario.ts',
-      provider
+      provider,
+      scenarioId
     ],
     {
       cwd: ROOT_DIR,
@@ -211,7 +191,8 @@ async function runProviderScenario(
         LEON_NODE_ENV: 'testing',
         LEON_LLM:
           PROVIDER_MATRIX.find((item) => item.provider === provider)?.llmTarget ||
-          provider
+          provider,
+        LEON_AGENT_E2E_SOURCE_CONFIG_PATH: PROFILE_CONFIG_PATH
       },
       all: true,
       reject: false,
@@ -272,86 +253,101 @@ async function runProviderScenario(
   return result
 }
 
+function expectDirectAnswerScenario(result: ProviderScenarioResult): void {
+  const turn = result.turn!
+
+  expect(turn.output.trim().length).toBeGreaterThan(0)
+  expect(turn.output).toMatch(/ping|pong/i)
+  expect(turn.finalIntent).toBe('answer')
+  expect(turn.executionHistory).toHaveLength(0)
+}
+
+function expectWeatherScenario(result: ProviderScenarioResult): void {
+  const turn = result.turn!
+  const trace = collectTurnTrace(turn)
+
+  expect(turn.output.trim().length).toBeGreaterThan(0)
+  expect(turn.finalIntent).toBe('answer')
+  expect(
+    turn.executionHistory.some(
+      (item) => item.function === 'weather.openmeteo.getCurrentConditions'
+    )
+  ).toBe(true)
+  expect(trace).toMatch(/shenzhen/i)
+  expect(trace).toMatch(
+    /clear|rain|cloud|temperature|feels|humidity|wind|weather|°c|°f/i
+  )
+}
+
+function expectFileInstructionsScenario(result: ProviderScenarioResult): void {
+  const turn = result.turn!
+  const trace = collectTurnTrace(turn)
+  const fileReadIndex = turn.executionHistory.findIndex(
+    (item) => item.function === 'operating_system_control.file.read'
+  )
+  const shellIndex = turn.executionHistory.findIndex(
+    (item) =>
+      item.function === 'operating_system_control.shell.executeCommand'
+  )
+
+  expect(turn.output.trim().length).toBeGreaterThan(0)
+  expect(turn.finalIntent).toBe('answer')
+  expect(fileReadIndex).toBeGreaterThanOrEqual(0)
+  expect(shellIndex).toBeGreaterThan(fileReadIndex)
+  expect(trace).toContain(result.assetPath!)
+  expect(trace).toMatch(/project root/i)
+}
+
+function expectProviderScenarioResult(
+  scenario: ProviderScenario,
+  result: ProviderScenarioResult
+): void {
+  if (scenario.id === 'direct_answer') {
+    expectDirectAnswerScenario(result)
+    return
+  }
+
+  if (scenario.id === 'weather') {
+    expectWeatherScenario(result)
+    return
+  }
+
+  expectFileInstructionsScenario(result)
+}
+
 describe('agent e2e', () => {
   for (const { provider, requiredEnv } of ACTIVE_PROVIDER_MATRIX) {
-    /**
-     * Missing credentials should skip that provider cleanly rather than fail
-     * the whole matrix.
-     */
-    it.skipIf(!process.env[requiredEnv])(
-      `runs the 3-turn scenario on ${provider}`,
-      async () => {
-        const result = await runProviderScenario(provider)
+    for (const scenario of PROVIDER_SCENARIOS) {
+      /** Missing credentials skip each independently reported scenario. */
+      it.skipIf(!process.env[requiredEnv])(
+        `${scenario.testName} on ${provider}`,
+        async () => {
+          const result = await runProviderScenario(provider, scenario.id)
 
-        console.info(
-          `[agent:e2e:${provider}] validating turn outputs and tool usage`
-        )
-
-        try {
-          if (result.skipped) {
-            console.info(
-              `[agent:e2e:${provider}] skipped at runtime: ${result.reason || 'provider unavailable'}`
-            )
-            return
-          }
-
-          expect(result.turns).toHaveLength(3)
-
-          const [turn1, turn2, turn3] = result.turns!
-          const turn2Trace = collectTurnTrace(turn2!)
-          const turn3Trace = collectTurnTrace(turn3!)
-
-          expect(turn1!.output.trim().length).toBeGreaterThan(0)
-          expect(turn1!.output).toMatch(/ping|pong/i)
-          expect(turn1!.finalIntent).toBe('answer')
-
-          expect(turn2!.output.trim().length).toBeGreaterThan(0)
-          expect(turn2!.finalIntent).toBe('answer')
-          expect(
-            turn2!.executionHistory.some(
-              (item) =>
-                item.function === 'weather.openmeteo.getCurrentConditions'
-            ) ||
-              turn2!.toolCalls.some(
-                (item) =>
-                  item.toolkitId === 'weather' &&
-                  item.toolId === 'openmeteo' &&
-                  item.functionName === 'getCurrentConditions'
-              )
-          ).toBe(true)
-          expect(turn2Trace).toMatch(/shenzhen/i)
-          expect(turn2Trace).toMatch(
-            /clear|rain|cloud|temperature|feels|humidity|wind|weather|°c|°f/i
-          )
-
-          /**
-           * The third turn is intentionally structural: we care that Leon read
-           * the injected file and listed the project root, not about exact prose.
-           */
-          expect(turn3!.output.trim().length).toBeGreaterThan(0)
-          expect(turn3!.finalIntent).toBe('answer')
-          expect(
-            turn3!.executionHistory.some(
-              (item) =>
-                item.function ===
-                'operating_system_control.shell.executeCommand'
-            ) ||
-              turn3!.toolCalls.some(
-                (item) =>
-                  item.toolkitId === 'operating_system_control' &&
-                  item.toolId === 'shell'
-              )
-          ).toBe(true)
-          expect(turn3Trace).toContain(result.assetPath!)
-          expect(turn3Trace).toMatch(/project root/i)
-        } catch (error) {
           console.info(
-            `[agent:e2e:${provider}] scenario result on assertion failure:\n${summarizeScenarioResult(result)}`
+            `[agent:e2e:${provider}:${scenario.id}] validating output and tool usage`
           )
-          throw error
-        }
-      },
-      330_000
-    )
+
+          try {
+            if (result.skipped) {
+              console.info(
+                `[agent:e2e:${provider}:${scenario.id}] skipped at runtime: ${result.reason || 'provider unavailable'}`
+              )
+              return
+            }
+
+            expect(result.scenarioId).toBe(scenario.id)
+            expect(result.turn).toBeDefined()
+            expectProviderScenarioResult(scenario, result)
+          } catch (error) {
+            console.info(
+              `[agent:e2e:${provider}:${scenario.id}] result on assertion failure:\n${summarizeScenarioResult(result)}`
+            )
+            throw error
+          }
+        },
+        330_000
+      )
+    }
   }
 })

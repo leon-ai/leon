@@ -13,7 +13,7 @@ from bridges.python.src.sdk.toolkit_config import ToolkitConfig
 
 # Hardcoded default settings for Grok tool
 GROK_API_KEY = None
-GROK_MODEL = "grok-4-fast-reasoning-latest"
+GROK_MODEL = "grok-4.3"
 DEFAULT_SETTINGS = {
     "GROK_API_KEY": GROK_API_KEY,
     "GROK_MODEL": GROK_MODEL,

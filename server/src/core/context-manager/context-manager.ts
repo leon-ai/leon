@@ -8,9 +8,7 @@ import { promisify } from 'node:util'
 import {
   CODEBASE_CONTEXT_PATH,
   CODEBASE_PATH,
-  LEON_CONTEXT_DISABLED_FILES,
   NODE_RUNTIME_BIN_PATH,
-  PROFILE_CONTEXT_PATH,
   TSX_CLI_PATH
 } from '@/constants'
 import { TOOLKIT_REGISTRY, LLM_PROVIDER } from '@/core'
@@ -21,6 +19,8 @@ import {
   DEFAULT_CONTEXT_REFRESH_TTL_MS
 } from '@/core/context-manager/context-file-factory'
 import { ContextProbeHelper } from '@/core/context-manager/context-probe-helper'
+import { CONFIG_MANAGER } from '@/config'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 interface ContextFileMetadata {
   lastGeneratedAt: number
@@ -82,8 +82,7 @@ function clamp(value: number, min: number, max: number): number {
 const execFileAsync = promisify(execFile)
 
 export default class ContextManager {
-  private static instance: ContextManager
-
+  private readonly profilePaths = getProfilePaths()
   private _isLoaded = false
   private manifest = ''
   private refreshIntervalId: NodeJS.Timeout | null = null
@@ -103,10 +102,14 @@ export default class ContextManager {
     }
   )
   private readonly hasDisabledAllContextFiles =
-    this.hasDisableAllContextFilesValue(LEON_CONTEXT_DISABLED_FILES)
+    this.hasDisableAllContextFilesValue(
+      CONFIG_MANAGER.getConfig().context.disabled_files
+    )
   private readonly disabledContextFiles = this.hasDisabledAllContextFiles
     ? new Set(this.allContextFiles.map((definition) => definition.filename))
-    : this.parseContextFileList(LEON_CONTEXT_DISABLED_FILES)
+    : this.parseContextFileList(
+        CONFIG_MANAGER.getConfig().context.disabled_files
+      )
   private readonly contextFiles: ContextFile[] = this.allContextFiles.filter(
     (definition) =>
       !this.hasDisabledAllContextFiles &&
@@ -114,12 +117,8 @@ export default class ContextManager {
   )
 
   public constructor() {
-    if (!ContextManager.instance) {
-      LogHelper.title('Context Manager')
-      LogHelper.success('New instance')
-
-      ContextManager.instance = this
-    }
+    LogHelper.title('Context Manager')
+    LogHelper.success(`New instance for profile ${this.profilePaths.name}`)
   }
 
   public get isLoaded(): boolean {
@@ -132,7 +131,7 @@ export default class ContextManager {
     }
 
     try {
-      await fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true })
+      await fs.promises.mkdir(this.profilePaths.context, { recursive: true })
       await fs.promises.mkdir(CODEBASE_CONTEXT_PATH, { recursive: true })
       this.cleanupDisabledContextFiles()
       this.cleanupRetiredContextFiles()
@@ -294,11 +293,11 @@ export default class ContextManager {
       return path.join(CODEBASE_CONTEXT_PATH, filename)
     }
 
-    return path.join(PROFILE_CONTEXT_PATH, filename)
+    return path.join(this.profilePaths.context, filename)
   }
 
   private getProfileContextFilePath(filename: string): string {
-    return path.join(PROFILE_CONTEXT_PATH, filename)
+    return path.join(this.profilePaths.context, filename)
   }
 
   private normalizeFilename(filename: string): string {
@@ -384,8 +383,8 @@ export default class ContextManager {
   private resolveContextSourcePath(definition: ContextFile): string | null {
     const sourceBasename = this.getContextSourceBasename(definition.filename)
     const sourceDirectories = [
-      CONTEXT_FILES_SOURCE_DIR,
-      CONTEXT_FILES_RUNTIME_DIR
+      CONTEXT_FILES_RUNTIME_DIR,
+      CONTEXT_FILES_SOURCE_DIR
     ]
 
     for (const sourceDirectory of sourceDirectories) {
@@ -484,6 +483,10 @@ export default class ContextManager {
     try {
       const { stdout } = await execFileAsync(NODE_RUNTIME_BIN_PATH, workerArgs, {
         cwd: CODEBASE_PATH,
+        env: {
+          ...process.env,
+          LEON_PROFILE: this.profilePaths.name
+        },
         maxBuffer: CONTEXT_REFRESH_WORKER_MAX_BUFFER,
         windowsHide: true
       })

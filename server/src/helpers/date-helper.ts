@@ -2,7 +2,7 @@ import dayjs from 'dayjs'
 import utc from 'dayjs/plugin/utc.js'
 import timezone from 'dayjs/plugin/timezone.js'
 
-import { TIME_ZONE } from '@/constants'
+import { CONFIG_MANAGER } from '@/config'
 import { LogHelper } from '@/helpers/log-helper'
 
 dayjs.extend(utc)
@@ -40,15 +40,16 @@ export class DateHelper {
    */
   public static getTimeZone(): string {
     let { timeZone } = Intl.DateTimeFormat().resolvedOptions()
+    const configuredTimeZone = CONFIG_MANAGER.getConfig().time_zone
 
-    if (TIME_ZONE) {
+    if (configuredTimeZone) {
       // Verify if the time zone is valid
       try {
-        Intl.DateTimeFormat(undefined, { timeZone: TIME_ZONE })
-        timeZone = TIME_ZONE
+        Intl.DateTimeFormat(undefined, { timeZone: configuredTimeZone })
+        timeZone = configuredTimeZone
       } catch (e) {
         LogHelper.warning(
-          `The time zone "${TIME_ZONE}" is not valid. Falling back to "${timeZone}". Details: ${e}`
+          `The time zone "${configuredTimeZone}" is not valid. Falling back to "${timeZone}". Details: ${e}`
         )
       }
     }

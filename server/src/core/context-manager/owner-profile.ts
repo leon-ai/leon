@@ -1,19 +1,16 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { PROFILE_CONTEXT_PATH, SKILLS_PATH } from '@/constants'
+import { SKILLS_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
-export const OWNER_CONTEXT_PATH = path.join(PROFILE_CONTEXT_PATH, 'OWNER.md')
-export const OWNER_PROFILE_PATH = path.join(
-  PROFILE_CONTEXT_PATH,
-  '.owner-profile.json'
-)
-const LEGACY_OWNER_PROFILE_PATH = path.join(
-  PROFILE_CONTEXT_PATH,
-  'private',
-  '.owner-profile.json'
-)
+export const getOwnerContextPath = (): string =>
+  path.join(getProfilePaths().context, 'OWNER.md')
+export const getOwnerProfilePath = (): string =>
+  path.join(getProfilePaths().context, '.owner-profile.json')
+const getLegacyOwnerProfilePath = (): string =>
+  path.join(getProfilePaths().context, 'private', '.owner-profile.json')
 const LEGACY_OWNER_MEMORY_PATH = path.join(
   SKILLS_PATH,
   'leon',
@@ -105,91 +102,6 @@ export const OWNER_PROFILE_SECTIONS: Array<{
   }
 ]
 
-export const OWNER_PROFILE_SCHEMA = {
-  type: 'object',
-  properties: {
-    owner_first_name: {
-      type: ['string', 'null']
-    },
-    owner_last_name: {
-      type: ['string', 'null']
-    },
-    owner_full_name: {
-      type: ['string', 'null']
-    },
-    owner_birth_date: {
-      type: ['string', 'null']
-    },
-    owner_current_city: {
-      type: ['string', 'null']
-    },
-    owner_current_country: {
-      type: ['string', 'null']
-    },
-    owner_nationality: {
-      type: ['string', 'null']
-    },
-    owner_current_company: {
-      type: ['string', 'null']
-    },
-    owner_current_role: {
-      type: ['string', 'null']
-    },
-    identity: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    homeAndImportantPlaces: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    familyAndRelationships: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    background: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    preferences: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    workAndCareer: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    interactionPreferences: {
-      type: 'array',
-      items: { type: 'string' }
-    },
-    importantDates: {
-      type: 'array',
-      items: { type: 'string' }
-    }
-  },
-  required: [
-    'owner_first_name',
-    'owner_last_name',
-    'owner_full_name',
-    'owner_birth_date',
-    'owner_current_city',
-    'owner_current_country',
-    'owner_nationality',
-    'owner_current_company',
-    'owner_current_role',
-    'identity',
-    'homeAndImportantPlaces',
-    'familyAndRelationships',
-    'background',
-    'preferences',
-    'workAndCareer',
-    'interactionPreferences',
-    'importantDates'
-  ],
-  additionalProperties: false
-} as const
-
 export function createEmptyOwnerProfile(): OwnerProfile {
   return {
     updatedAt: null,
@@ -276,10 +188,12 @@ export function normalizeOwnerProfile(value: unknown): OwnerProfile {
 }
 
 function readOwnerProfileCacheSync(): OwnerProfile {
-  const candidatePath = fs.existsSync(OWNER_PROFILE_PATH)
-    ? OWNER_PROFILE_PATH
-    : fs.existsSync(LEGACY_OWNER_PROFILE_PATH)
-      ? LEGACY_OWNER_PROFILE_PATH
+  const ownerProfilePath = getOwnerProfilePath()
+  const legacyOwnerProfilePath = getLegacyOwnerProfilePath()
+  const candidatePath = fs.existsSync(ownerProfilePath)
+    ? ownerProfilePath
+    : fs.existsSync(legacyOwnerProfilePath)
+      ? legacyOwnerProfilePath
       : ''
 
   if (!candidatePath) {
@@ -349,9 +263,11 @@ export function parseOwnerDocument(content: string): OwnerProfile {
 }
 
 export function readOwnerDocumentSync(): string {
-  if (fs.existsSync(OWNER_CONTEXT_PATH)) {
+  const ownerContextPath = getOwnerContextPath()
+
+  if (fs.existsSync(ownerContextPath)) {
     try {
-      return fs.readFileSync(OWNER_CONTEXT_PATH, 'utf8')
+      return fs.readFileSync(ownerContextPath, 'utf8')
     } catch {
       return ''
     }
@@ -382,18 +298,21 @@ export function readOwnerProfileSync(): OwnerProfile {
 }
 
 export async function writeOwnerProfile(profile: OwnerProfile): Promise<void> {
-  await fs.promises.mkdir(path.dirname(OWNER_PROFILE_PATH), { recursive: true })
+  const ownerProfilePath = getOwnerProfilePath()
+  const legacyOwnerProfilePath = getLegacyOwnerProfilePath()
+
+  await fs.promises.mkdir(path.dirname(ownerProfilePath), { recursive: true })
   await fs.promises.writeFile(
-    OWNER_PROFILE_PATH,
+    ownerProfilePath,
     `${JSON.stringify(normalizeOwnerProfile(profile), null, 2)}\n`,
     'utf8'
   )
 
   if (
-    LEGACY_OWNER_PROFILE_PATH !== OWNER_PROFILE_PATH &&
-    fs.existsSync(LEGACY_OWNER_PROFILE_PATH)
+    legacyOwnerProfilePath !== ownerProfilePath &&
+    fs.existsSync(legacyOwnerProfilePath)
   ) {
-    await fs.promises.rm(LEGACY_OWNER_PROFILE_PATH, { force: true })
+    await fs.promises.rm(legacyOwnerProfilePath, { force: true })
   }
 }
 

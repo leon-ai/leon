@@ -172,11 +172,13 @@ class Leon {
           onFetch: answerInput.widget.onFetch ?? null,
           fallbackText,
           historyMode: answerInput.widgetHistoryMode || 'persisted',
-          componentTree: new WidgetWrapper({
-            ...answerInput.widget.wrapperProps,
-            children: [answerInput.widget.render()]
-          }),
-          supportedEvents: SUPPORTED_WIDGET_EVENTS as string[]
+          componentTree: {
+            ...new WidgetWrapper({
+              ...answerInput.widget.wrapperProps,
+              children: [answerInput.widget.render()]
+            })
+          },
+          supportedEvents: [...SUPPORTED_WIDGET_EVENTS]
         }
       }
 

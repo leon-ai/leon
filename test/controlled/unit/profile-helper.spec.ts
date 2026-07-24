@@ -14,8 +14,13 @@ async function loadProfileHelper(): Promise<
   typeof import('@/helpers/profile-helper').ProfileHelper
 > {
   vi.doMock('@/leon-roots', () => ({
-    PROFILE_CONFIG_PATH: profilePaths.configPath,
-    PROFILE_DOT_ENV_PATH: profilePaths.dotEnvPath
+    LEON_PROFILE_NAME: 'test-profile'
+  }))
+  vi.doMock('@/core/profile-runtime/profile-paths', () => ({
+    getProfilePaths: (): { config: string, dotEnv: string } => ({
+      config: profilePaths.configPath,
+      dotEnv: profilePaths.dotEnvPath
+    })
   }))
 
   const module = await import('@/helpers/profile-helper')

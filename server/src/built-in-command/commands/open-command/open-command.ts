@@ -1,9 +1,4 @@
-import {
-  LEON_HOME_PATH,
-  LEON_PROFILE_PATH,
-  PROFILE_CONFIG_PATH,
-  PROFILE_DOT_ENV_PATH
-} from '@/constants'
+import { LEON_HOME_PATH } from '@/constants'
 import {
   BuiltInCommand,
   type BuiltInCommandAutocompleteContext,
@@ -13,23 +8,24 @@ import {
 } from '@/built-in-command/built-in-command'
 import { createListResult } from '@/built-in-command/built-in-command-renderer'
 import { FileHelper } from '@/helpers/file-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const OPEN_TARGETS = {
   config: {
     label: 'Profile config',
-    path: PROFILE_CONFIG_PATH
+    getPath: () => getProfilePaths().config
   },
   secrets: {
     label: 'Profile secrets',
-    path: PROFILE_DOT_ENV_PATH
+    getPath: () => getProfilePaths().dotEnv
   },
   profile: {
     label: 'Profile folder',
-    path: LEON_PROFILE_PATH
+    getPath: () => getProfilePaths().root
   },
   home: {
     label: 'Leon home folder',
-    path: LEON_HOME_PATH
+    getPath: () => LEON_HOME_PATH
   }
 } as const
 
@@ -98,7 +94,8 @@ export class OpenCommand extends BuiltInCommand {
     }
 
     try {
-      const openedPath = await FileHelper.openPath(target.path)
+      const targetPath = target.getPath()
+      const openedPath = await FileHelper.openPath(targetPath)
 
       return {
         status: 'completed',
@@ -123,7 +120,7 @@ export class OpenCommand extends BuiltInCommand {
           items: [
             {
               label: `Failed to open ${target.label}`,
-              value: target.path,
+              value: target.getPath(),
               description: error instanceof Error ? error.message : String(error),
               tone: 'error'
             }

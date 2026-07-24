@@ -4,8 +4,7 @@
     "lib": ["ESNext"],
     "rootDir": ".",
     "outDir": "./server/dist",
-    "baseUrl": ".",
-    "moduleResolution": "Node",
+    "moduleResolution": "Bundler",
     "module": "ESNext",
     "jsx": "react",
     "paths": {
@@ -20,6 +19,7 @@
     },
     "allowJs": true,
     "checkJs": false,
+    "types": ["node"],
     "resolveJsonModule": true,
     "declaration": true
   },

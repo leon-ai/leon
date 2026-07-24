@@ -1,5 +1,5 @@
 {
-  "translation_openrouter_model": "google/gemini-3.1-flash-lite",
+  "translation_openrouter_model": "google/gemini-3.5-flash-lite",
   "translation_max_tokens_per_request": 2000,
   "translation_segments_per_batch": 10,
   "speech_synthesis_provider": "qwen3_tts"

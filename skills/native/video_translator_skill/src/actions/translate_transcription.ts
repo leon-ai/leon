@@ -42,7 +42,7 @@ export const run: ActionFunction = async function (
     const settings = new Settings<VideoTranslatorSkillSettings>()
     const openrouterModel = ((await settings.get(
       'translation_openrouter_model'
-    )) || 'google/gemini-3.1-flash-lite') as string
+    )) || 'google/gemini-3.5-flash-lite') as string
     const maxTokens = ((await settings.get(
       'translation_max_tokens_per_request'
     )) || 2_000) as number

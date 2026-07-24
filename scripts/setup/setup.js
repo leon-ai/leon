@@ -23,7 +23,7 @@ import { NetworkHelper } from '@/helpers/network-helper'
 import buildApp from '../app/build-app'
 import buildServer from '../build-server'
 import train from '../train/train'
-import generateClientInterfaceToken from '../generate/generate-client-interface-token'
+import generateProfileToken from '../generate/generate-profile-token'
 import generateJSONSchemas from '../generate/generate-json-schemas'
 
 import setupDotenv, { updateDotEnvVariable } from './setup-dotenv'
@@ -368,8 +368,8 @@ async function syncLLMSetupChoice(preferences) {
     // Finalize generated assets and instance-specific setup metadata.
     SetupUI.section('Finishing Up')
 
-    currentStep = 'generateClientInterfaceToken'
-    await generateClientInterfaceToken()
+    currentStep = 'generateProfileToken'
+    await generateProfileToken()
     currentStep = 'train'
     await train()
     currentStep = 'setFfprobePermissions'

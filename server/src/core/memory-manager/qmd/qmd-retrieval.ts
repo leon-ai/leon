@@ -242,59 +242,6 @@ export function buildLexicalSearchQuery(
     .trim()
 }
 
-export function parsePendingEmbeddingCount(statusOutput: string): number {
-  const pendingMatch = statusOutput.match(/^\s*Pending:\s+(\d+)\s+need embedding\b/im)
-  if (!pendingMatch?.[1]) {
-    return 0
-  }
-
-  const parsed = Number(pendingMatch[1])
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
-}
-
-export function parseRows(raw: string): Array<Record<string, unknown>> {
-  try {
-    const parsed = JSON.parse(raw) as unknown
-    if (Array.isArray(parsed)) {
-      return parsed.filter(
-        (item): item is Record<string, unknown> =>
-          item !== null && typeof item === 'object' && !Array.isArray(item)
-      )
-    }
-
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return []
-    }
-
-    const rows: Array<Record<string, unknown>> = []
-    const queue: unknown[] = [parsed]
-
-    while (queue.length > 0) {
-      const current = queue.shift()
-      if (!current || typeof current !== 'object') {
-        continue
-      }
-
-      const objectValue = current as Record<string, unknown>
-      for (const value of Object.values(objectValue)) {
-        if (Array.isArray(value)) {
-          for (const item of value) {
-            if (item && typeof item === 'object' && !Array.isArray(item)) {
-              rows.push(item as Record<string, unknown>)
-            }
-          }
-        } else if (value && typeof value === 'object') {
-          queue.push(value)
-        }
-      }
-    }
-
-    return rows.length > 0 ? rows : [parsed as Record<string, unknown>]
-  } catch {
-    return []
-  }
-}
-
 export function pickStringDeep(
   row: Record<string, unknown>,
   keys: string[]

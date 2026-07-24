@@ -27,6 +27,12 @@ import { systemWidgetsPlugin } from '@/core/http-server/api/system-widgets'
 import { sessionsPlugin } from '@/core/http-server/api/sessions'
 import { openPathPlugin } from '@/core/http-server/api/open-path'
 import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
+import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
+import {
+  authenticateProfileHTTPRequest,
+  profileAuthRoutes
+} from '@/core/http-server/profile-auth-routes'
+import { registerHTTPPlugins } from '@/core/http-server/http-plugins/manager'
 import { PERSONA } from '@/core'
 import { SystemHelper } from '@/helpers/system-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
@@ -170,6 +176,18 @@ export default class HTTPServer {
       reply.sendFile('index.html')
     })
 
+    this.fastify.register(profileAuthRoutes, { apiVersion: API_VERSION })
+    this.fastify.addHook('onRequest', async (request, reply) => {
+      const requestPath = request.url.split('?')[0] || ''
+      const authPath = `/api/${API_VERSION}/profile-auth`
+
+      if (!requestPath.startsWith(`/api/${API_VERSION}/`) || requestPath === authPath) {
+        return
+      }
+
+      await authenticateProfileHTTPRequest(request, reply)
+    })
+
     this.fastify.register(runActionPlugin, { apiVersion: API_VERSION })
     this.fastify.register(fetchWidgetPlugin, { apiVersion: API_VERSION })
     this.fastify.register(conversationHistoryPlugin, {
@@ -182,6 +200,8 @@ export default class HTTPServer {
     this.fastify.register(inferencePlugin, { apiVersion: API_VERSION })
     this.fastify.register(openPathPlugin, { apiVersion: API_VERSION })
     this.fastify.register(fileSystemListPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(extensionFilesPlugin, { apiVersion: API_VERSION })
+    await registerHTTPPlugins(this.fastify, { apiVersion: API_VERSION })
 
     try {
       await this.listen()

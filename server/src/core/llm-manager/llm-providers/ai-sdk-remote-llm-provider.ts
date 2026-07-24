@@ -1,4 +1,13 @@
 import type { AxiosResponse } from 'axios'
+import type {
+  JSONSchema7,
+  LanguageModelV4,
+  LanguageModelV4CallOptions,
+  LanguageModelV4FunctionTool,
+  LanguageModelV4Prompt,
+  LanguageModelV4ToolChoice,
+  SharedV4ProviderOptions
+} from '@ai-sdk/provider'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createAnthropic } from '@ai-sdk/anthropic'
@@ -13,6 +22,7 @@ import { CONFIG_MANAGER } from '@/config'
 import type {
   CompletionParams,
   LLMReasoningMode,
+  AgentToolTranscriptMessage,
   OpenAITool,
   OpenAIToolCall,
   OpenAIToolChoice,
@@ -67,6 +77,7 @@ interface CallState {
   toolCallOrder: string[]
   usedInputTokens: number
   usedOutputTokens: number
+  finishReason?: string
 }
 
 const STRUCTURED_OUTPUT_JSON_INSTRUCTION =
@@ -78,7 +89,7 @@ export default class AISDKRemoteLLMProvider {
   protected readonly model: string
 
   private readonly config: AISDKRemoteProviderConfig
-  private languageModel: unknown
+  private languageModel: LanguageModelV4
   private openAIWebSocketFetch:
     | ReturnType<typeof createWebSocketFetch>
     | undefined
@@ -86,13 +97,9 @@ export default class AISDKRemoteLLMProvider {
   constructor(
     config: AISDKRemoteProviderConfig
   ) {
-    const configuredAPIKeyEnv =
-      CONFIG_MANAGER.getProviderAPIKeyEnv(config.providerName) ||
-      config.apiKeyEnv
-
     this.config = config
     this.name = config.name
-    this.apiKey = process.env[configuredAPIKeyEnv]
+    this.apiKey = CONFIG_MANAGER.getProviderAPIKey(config.providerName)
     this.model = config.model
 
     LogHelper.title(this.name)
@@ -135,7 +142,7 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
-  private createLanguageModel(): unknown {
+  private createLanguageModel(): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
 
@@ -237,7 +244,7 @@ export default class AISDKRemoteLLMProvider {
 
     throw new Error(`Unsupported AI SDK flavor: ${this.config.flavor}`)
   }
-  private getLanguageModel(): unknown {
+  private getLanguageModel(): LanguageModelV4 {
     return this.languageModel
   }
 
@@ -270,7 +277,7 @@ export default class AISDKRemoteLLMProvider {
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams,
     requiresStructuredOutputInstruction = false
-  ): Array<Record<string, unknown>> {
+  ): LanguageModelV4Prompt {
     const normalizedSystemPrompt = [
       String(completionParams.systemPrompt ?? '').trim(),
       requiresStructuredOutputInstruction
@@ -279,13 +286,18 @@ export default class AISDKRemoteLLMProvider {
     ]
       .filter(Boolean)
       .join('\n\n')
-    const messages: Array<Record<string, unknown>> = []
+    const messages: LanguageModelV4Prompt = []
 
     if (normalizedSystemPrompt) {
       messages.push({
         role: 'system',
         content: normalizedSystemPrompt
       })
+    }
+
+    if (this.isAgentToolTranscript(prompt)) {
+      messages.push(...this.toAgentToolMessages(prompt))
+      return messages
     }
 
     if (completionParams.history) {
@@ -305,15 +317,16 @@ export default class AISDKRemoteLLMProvider {
     const promptText =
       typeof prompt === 'string' ? prompt : JSON.stringify(prompt)
     const lastMessage = messages[messages.length - 1]
-    const lastMessageText =
+    let lastMessageText = ''
+    if (
       lastMessage &&
-      Array.isArray(lastMessage['content']) &&
-      lastMessage['content'][0] &&
-      typeof lastMessage['content'][0] === 'object' &&
-      typeof (lastMessage['content'][0] as Record<string, unknown>)['text'] ===
-        'string'
-        ? ((lastMessage['content'][0] as Record<string, unknown>)['text'] as string)
-        : ''
+      (lastMessage.role === 'user' || lastMessage.role === 'assistant')
+    ) {
+      const firstContentPart = lastMessage.content[0]
+      if (firstContentPart?.type === 'text') {
+        lastMessageText = firstContentPart.text
+      }
+    }
 
     if (!lastMessage || lastMessageText !== promptText) {
       messages.push({
@@ -330,24 +343,118 @@ export default class AISDKRemoteLLMProvider {
     return messages
   }
 
+  private isAgentToolTranscript(
+    prompt: PromptOrChatHistory
+  ): prompt is AgentToolTranscriptMessage[] {
+    return (
+      Array.isArray(prompt) &&
+      prompt.length > 0 &&
+      prompt.every((message) => {
+        if (!message || typeof message !== 'object' || !('role' in message)) {
+          return false
+        }
+
+        const candidate = message as Record<string, unknown>
+        return (
+          (candidate['role'] === 'user' ||
+            candidate['role'] === 'assistant' ||
+            candidate['role'] === 'tool') &&
+          typeof candidate['content'] === 'string'
+        )
+      })
+    )
+  }
+
+  /**
+   * Converts Leon's canonical transcript into the AI SDK provider protocol.
+   * Keeping this conversion at the provider boundary lets the agent loop retain
+   * exact tool-call IDs without coupling orchestration to one API flavor.
+   */
+  private toAgentToolMessages(
+    transcript: AgentToolTranscriptMessage[]
+  ): LanguageModelV4Prompt {
+    return transcript.map((message) => {
+      if (message.role === 'user') {
+        return {
+          role: 'user',
+          content: [{ type: 'text', text: message.content }]
+        }
+      }
+
+      if (message.role === 'tool') {
+        return {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: message.toolCallId,
+              toolName: message.toolName,
+              output: {
+                type: 'text',
+                value: message.content
+              }
+            }
+          ]
+        }
+      }
+
+      const content: Extract<
+        LanguageModelV4Prompt[number],
+        { role: 'assistant' }
+      >['content'] = []
+      if (message.content.trim()) {
+        content.push({ type: 'text', text: message.content })
+      }
+      for (const toolCall of message.toolCalls || []) {
+        content.push({
+          type: 'tool-call',
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          input: this.parseAgentToolInput(toolCall.function.arguments)
+        })
+      }
+
+      return {
+        role: 'assistant',
+        content
+      }
+    })
+  }
+
+  private parseAgentToolInput(input: string): unknown {
+    try {
+      return JSON.parse(input)
+    } catch {
+      // Some local chat templates require tool arguments to be objects. Keep
+      // the raw model output available without making the recovery turn fail
+      // before it can observe and correct the matching tool validation error.
+      return {
+        invalid_tool_arguments: true,
+        raw_arguments: input
+      }
+    }
+  }
+
   private normalizeSchema(
     schema: Record<string, unknown> | null | undefined
-  ): Record<string, unknown> | undefined {
+  ): JSONSchema7 | undefined {
     if (!schema) {
       return undefined
     }
 
     if ('type' in schema || 'oneOf' in schema) {
-      return schema
+      return schema as JSONSchema7
     }
 
     return {
       type: 'object',
       properties: schema
-    }
+    } as JSONSchema7
   }
 
-  private toTools(tools: OpenAITool[] | undefined): Array<Record<string, unknown>> {
+  private toTools(
+    tools: OpenAITool[] | undefined
+  ): LanguageModelV4FunctionTool[] {
     if (!Array.isArray(tools) || tools.length === 0) {
       return []
     }
@@ -358,14 +465,14 @@ export default class AISDKRemoteLLMProvider {
       ...(tool.function.description
         ? { description: tool.function.description }
         : {}),
-      inputSchema: tool.function.parameters as Record<string, unknown>,
+      inputSchema: tool.function.parameters as JSONSchema7,
       strict: false
     }))
   }
 
   private toToolChoice(
     toolChoice: OpenAIToolChoice | undefined
-  ): Record<string, unknown> | undefined {
+  ): LanguageModelV4ToolChoice | undefined {
     if (!toolChoice) {
       return undefined
     }
@@ -573,11 +680,11 @@ export default class AISDKRemoteLLMProvider {
   private buildCallOptions(
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
-  ): Record<string, unknown> {
+  ): LanguageModelV4CallOptions {
     const shouldOmitTemperature =
       this.config.shouldOmitTemperature?.(completionParams) === true
     const normalizedSchema = this.normalizeSchema(completionParams.data)
-    const options: Record<string, unknown> = {
+    const options: LanguageModelV4CallOptions = {
       prompt: this.toTextPrompt(
         prompt,
         completionParams,
@@ -596,16 +703,16 @@ export default class AISDKRemoteLLMProvider {
 
     const tools = this.toTools(completionParams.tools)
     if (tools.length > 0) {
-      options['tools'] = tools
+      options.tools = tools
     }
 
     const toolChoice = this.toToolChoice(completionParams.toolChoice)
     if (toolChoice) {
-      options['toolChoice'] = toolChoice
+      options.toolChoice = toolChoice
     }
 
     if (normalizedSchema) {
-      options['responseFormat'] = {
+      options.responseFormat = {
         type: 'json',
         schema: normalizedSchema,
         name: 'structured_output'
@@ -709,7 +816,7 @@ export default class AISDKRemoteLLMProvider {
     }
 
     if (Object.keys(providerOptions).length > 0) {
-      options['providerOptions'] = providerOptions
+      options.providerOptions = providerOptions as SharedV4ProviderOptions
     }
 
     return options
@@ -735,6 +842,27 @@ export default class AISDKRemoteLLMProvider {
       usedInputTokens: 0,
       usedOutputTokens: 0
     }
+  }
+
+  private readFinishReason(finishReason: unknown): string | undefined {
+    if (typeof finishReason === 'string') {
+      return finishReason || undefined
+    }
+
+    if (!finishReason || typeof finishReason !== 'object') {
+      return undefined
+    }
+
+    // Language Model V4 exposes both a provider-agnostic reason and the raw
+    // provider value. Leon relies on the unified value for recovery decisions.
+    const finishReasonObject = finishReason as Record<string, unknown>
+    const unified = finishReasonObject['unified']
+    if (typeof unified === 'string' && unified) {
+      return unified
+    }
+
+    const raw = finishReasonObject['raw']
+    return typeof raw === 'string' && raw ? raw : undefined
   }
 
   private appendUsageFromUnknown(state: CallState, usage: unknown): void {
@@ -876,6 +1004,9 @@ export default class AISDKRemoteLLMProvider {
     return {
       choices: [
         {
+          ...(state.finishReason
+            ? { finish_reason: state.finishReason }
+            : {}),
           message: {
             content: state.text,
             ...(state.reasoning.trim().length > 0
@@ -899,17 +1030,8 @@ export default class AISDKRemoteLLMProvider {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
     const languageModel = this.getLanguageModel()
-    const result = await (
-      languageModel as {
-        doGenerate: (
-          options: Record<string, unknown>
-        ) => Promise<Record<string, unknown>>
-      }
-    ).doGenerate(callOptions)
-
-    const content = Array.isArray(result['content'])
-      ? (result['content'] as Array<Record<string, unknown>>)
-      : []
+    const result = await languageModel.doGenerate(callOptions)
+    const content = result.content as Array<Record<string, unknown>>
 
     for (const part of content) {
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
@@ -941,8 +1063,12 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
-    this.appendUsageFromUnknown(state, result['usage'])
-    this.appendProviderMetadataUsageFromUnknown(state, result['providerMetadata'])
+    this.appendUsageFromUnknown(state, result.usage)
+    this.appendProviderMetadataUsageFromUnknown(state, result.providerMetadata)
+    const finishReason = this.readFinishReason(result.finishReason)
+    if (finishReason) {
+      state.finishReason = finishReason
+    }
 
     return this.buildOpenAICompatiblePayload(state)
   }
@@ -954,22 +1080,14 @@ export default class AISDKRemoteLLMProvider {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
     const languageModel = this.getLanguageModel()
-    const result = await (
-      languageModel as {
-        doStream: (
-          options: Record<string, unknown>
-        ) => Promise<{
-          stream: AsyncIterable<Record<string, unknown>>
-          response?: unknown
-        }>
-      }
-    ).doStream(callOptions)
+    const result = await languageModel.doStream(callOptions)
 
     // Signal streaming as soon as we receive a stream object, even if the
     // model emits only tool-call deltas and no text tokens.
     completionParams.onToken?.('')
 
-    for await (const part of result.stream) {
+    for await (const streamPart of result.stream) {
+      const part = streamPart as unknown as Record<string, unknown>
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
 
       const readString = (...values: unknown[]): string => {
@@ -1103,6 +1221,12 @@ export default class AISDKRemoteLLMProvider {
           state,
           part['providerMetadata']
         )
+        const finishReason =
+          this.readFinishReason(part['finishReason']) ||
+          readString(part['rawFinishReason'])
+        if (finishReason) {
+          state.finishReason = finishReason
+        }
         continue
       }
 

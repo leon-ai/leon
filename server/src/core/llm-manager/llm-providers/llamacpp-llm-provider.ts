@@ -22,11 +22,12 @@ import {
   LLAMACPP_ROOT_MANIFEST_PATH,
   LLAMACPP_SOURCE_BUILD_PATH,
   LLAMACPP_SOURCE_MANIFEST_PATH,
-  LLAMACPP_SOURCE_PATH,
-  PROFILE_LOGS_PATH
+  LLAMACPP_SOURCE_PATH
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
+import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const DEFAULT_LLAMACPP_BASE_URL =
   CONFIG_MANAGER.getProviderBaseURL('llamacpp') || 'http://127.0.0.1:8080/v1'
@@ -34,10 +35,7 @@ const LLAMACPP_READY_TIMEOUT_MS = 120_000
 const LLAMACPP_READY_POLL_INTERVAL_MS = 250
 const LLAMA_SERVER_LOG_RESET_INTERVAL_MS = 12 * 60 * 60 * 1_000
 const LLAMACPP_MAX_PORT_CHECKS = 10
-const LLAMA_SERVER_LOG_PATH = path.join(
-  PROFILE_LOGS_PATH,
-  'llama-server.log'
-)
+const LLAMA_SERVER_LOG_FILENAME = 'llama-server.log'
 const LLAMACPP_DISABLE_THINKING_CHAT_TEMPLATE_KWARGS = {
   enable_thinking: false
 }
@@ -50,6 +48,10 @@ function wait(delayMs: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, delayMs)
   })
+}
+
+function getLlamaServerLogPath(): string {
+  return path.join(getProfilePaths().logs, LLAMA_SERVER_LOG_FILENAME)
 }
 
 function getURLPort(url: URL): number {
@@ -413,6 +415,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     let completionTokens = 0
     let predictedPerSecond = 0
     let predictedMs = 0
+    let finishReason = ''
     let buffer = ''
     let firstStreamBlockAt: number | null = null
     let lastStreamBlockAt: number | null = null
@@ -457,6 +460,12 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
       const firstChoice = choices[0]
       if (!firstChoice || typeof firstChoice !== 'object') {
         return
+      }
+
+      const chunkFinishReason =
+        firstChoice['finish_reason'] ?? firstChoice['finishReason']
+      if (typeof chunkFinishReason === 'string' && chunkFinishReason) {
+        finishReason = chunkFinishReason
       }
 
       const delta =
@@ -561,7 +570,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
               message: {
                 content: text,
                 ...(reasoning.trim() ? { reasoning: reasoning.trim() } : {})
-              }
+              },
+              ...(finishReason ? { finish_reason: finishReason } : {})
             }
           ],
           usage: {
@@ -783,7 +793,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         '--port',
         String(getURLPort(runtimeServerURL)),
         '--ctx-size',
-        '16384',
+        String(LOCAL_LLM_CONTEXT_WINDOW_TOKENS),
         '--flash-attn',
         'on',
         '--cache-type-k',
@@ -1004,8 +1014,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     if (!this.serverLogStream) {
       const { flags, nextResetAt } = this.getServerLogOpenState(now)
 
-      fs.mkdirSync(PROFILE_LOGS_PATH, { recursive: true })
-      this.serverLogStream = fs.createWriteStream(LLAMA_SERVER_LOG_PATH, {
+      fs.mkdirSync(getProfilePaths().logs, { recursive: true })
+      this.serverLogStream = fs.createWriteStream(getLlamaServerLogPath(), {
         flags
       })
       this.nextServerLogResetAt = nextResetAt
@@ -1015,7 +1025,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
 
     if (now >= this.nextServerLogResetAt) {
       this.serverLogStream.end()
-      this.serverLogStream = fs.createWriteStream(LLAMA_SERVER_LOG_PATH, {
+      this.serverLogStream = fs.createWriteStream(getLlamaServerLogPath(), {
         flags: 'w'
       })
       this.nextServerLogResetAt = now + LLAMA_SERVER_LOG_RESET_INTERVAL_MS
@@ -1028,14 +1038,16 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
     flags: 'a' | 'w'
     nextResetAt: number
   } {
-    if (!fs.existsSync(LLAMA_SERVER_LOG_PATH)) {
+    const llamaServerLogPath = getLlamaServerLogPath()
+
+    if (!fs.existsSync(llamaServerLogPath)) {
       return {
         flags: 'w',
         nextResetAt: now + LLAMA_SERVER_LOG_RESET_INTERVAL_MS
       }
     }
 
-    const { mtimeMs } = fs.statSync(LLAMA_SERVER_LOG_PATH)
+    const { mtimeMs } = fs.statSync(llamaServerLogPath)
 
     if (now - mtimeMs >= LLAMA_SERVER_LOG_RESET_INTERVAL_MS) {
       return {

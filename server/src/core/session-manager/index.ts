@@ -4,11 +4,6 @@ import { randomUUID } from 'node:crypto'
 import { EventEmitter } from 'node:events'
 
 import type { MessageLog } from '@/types'
-import {
-  PROFILE_CONVERSATION_LOG_PATH,
-  PROFILE_SESSIONS_INDEX_PATH,
-  PROFILE_SESSIONS_PATH
-} from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import {
   LLMDuties,
@@ -19,6 +14,8 @@ import {
   getActiveConversationSessionId,
   runWithConversationSession
 } from '@/core/session-manager/session-context'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const SESSION_CONVERSATION_LOG_FILENAME = 'conversation_log.json'
 const DEFAULT_SESSION_TITLE = 'New session'
@@ -42,6 +39,7 @@ const TITLE_REASONING_MODE_OFF_PROVIDERS = [
   LLMProviders.OpenAI,
   LLMProviders.OpenRouter,
   LLMProviders.ZAI,
+  LLMProviders.MiniMax,
   LLMProviders.Anthropic,
   LLMProviders.MoonshotAI,
   LLMProviders.HuggingFace,
@@ -182,6 +180,7 @@ function createSession(title = DEFAULT_SESSION_TITLE): ConversationSession {
 export class ConversationSessionManager {
   public readonly events = new EventEmitter()
   private index: ConversationSessionIndex | null = null
+  private readonly sessionQueues = new Map<string, Promise<void>>()
 
   public ensureReady(): ConversationSessionIndex {
     if (this.index) {
@@ -373,16 +372,48 @@ export class ConversationSessionManager {
     }
   }
 
-  public runWithSession<T>(sessionId: string, callback: () => T): T {
+  public async runWithSession<T>(
+    sessionId: string,
+    callback: () => T | Promise<T>
+  ): Promise<T> {
     const session = this.requireSession(sessionId)
 
-    return runWithConversationSession(
-      {
-        sessionId: session.id,
-        modelTarget: session.modelTarget
-      },
-      callback
+    // Nested operations already belong to the same ordered turn.
+    if (getActiveConversationSessionId() === session.id) {
+      return runWithConversationSession(
+        {
+          sessionId: session.id,
+          modelTarget: session.modelTarget
+        },
+        callback
+      )
+    }
+
+    const previousOperation = this.sessionQueues.get(session.id) ||
+      Promise.resolve()
+    const operation = previousOperation.then(() =>
+      runWithConversationSession(
+        {
+          sessionId: session.id,
+          modelTarget: session.modelTarget
+        },
+        callback
+      )
     )
+    const queueTail = operation.then(
+      () => undefined,
+      () => undefined
+    )
+
+    this.sessionQueues.set(session.id, queueTail)
+
+    try {
+      return await operation
+    } finally {
+      if (this.sessionQueues.get(session.id) === queueTail) {
+        this.sessionQueues.delete(session.id)
+      }
+    }
   }
 
   private async generateTitle(
@@ -448,10 +479,15 @@ export class ConversationSessionManager {
   }
 
   private loadOrCreateIndex(): ConversationSessionIndex {
-    if (fs.existsSync(PROFILE_SESSIONS_INDEX_PATH)) {
+    const sessionsIndexPath = path.join(
+      getProfilePaths().sessions,
+      'index.json'
+    )
+
+    if (fs.existsSync(sessionsIndexPath)) {
       try {
         const index = JSON.parse(
-          fs.readFileSync(PROFILE_SESSIONS_INDEX_PATH, 'utf-8')
+          fs.readFileSync(sessionsIndexPath, 'utf-8')
         ) as ConversationSessionIndex
 
         if (Array.isArray(index.sessions) && index.sessions.length > 0) {
@@ -528,13 +564,18 @@ export class ConversationSessionManager {
   }
 
   private readLegacyConversationLogs(): MessageLog[] {
-    if (!fs.existsSync(PROFILE_CONVERSATION_LOG_PATH)) {
+    const conversationLogPath = path.join(
+      getProfilePaths().root,
+      'conversation_log.json'
+    )
+
+    if (!fs.existsSync(conversationLogPath)) {
       return []
     }
 
     try {
       const logs = JSON.parse(
-        fs.readFileSync(PROFILE_CONVERSATION_LOG_PATH, 'utf-8')
+        fs.readFileSync(conversationLogPath, 'utf-8')
       ) as MessageLog[]
 
       return Array.isArray(logs) ? logs : []
@@ -561,7 +602,7 @@ export class ConversationSessionManager {
   }
 
   private getSessionPath(sessionId: string): string {
-    return path.join(PROFILE_SESSIONS_PATH, sessionId)
+    return path.join(getProfilePaths().sessions, sessionId)
   }
 
   private ensureSessionDirectory(sessionId: string): void {
@@ -573,9 +614,11 @@ export class ConversationSessionManager {
       return
     }
 
-    fs.mkdirSync(PROFILE_SESSIONS_PATH, { recursive: true })
+    const sessionsPath = getProfilePaths().sessions
+
+    fs.mkdirSync(sessionsPath, { recursive: true })
     fs.writeFileSync(
-      PROFILE_SESSIONS_INDEX_PATH,
+      path.join(sessionsPath, 'index.json'),
       `${JSON.stringify(this.index, null, 2)}\n`,
       'utf-8'
     )
@@ -589,4 +632,32 @@ export class ConversationSessionManager {
   }
 }
 
-export const CONVERSATION_SESSION_MANAGER = new ConversationSessionManager()
+const sessionManagers = new Map<string, ConversationSessionManager>()
+
+function getConversationSessionManager(): ConversationSessionManager {
+  const profileName = getActiveProfileName()
+  const existingManager = sessionManagers.get(profileName)
+
+  if (existingManager) {
+    return existingManager
+  }
+
+  const manager = new ConversationSessionManager()
+
+  sessionManagers.set(profileName, manager)
+
+  return manager
+}
+
+/** Keep the existing API while routing state to the active profile runtime. */
+export const CONVERSATION_SESSION_MANAGER = new Proxy(
+  {} as ConversationSessionManager,
+  {
+    get: (_target, property): unknown => {
+      const manager = getConversationSessionManager()
+      const value = Reflect.get(manager, property)
+
+      return typeof value === 'function' ? value.bind(manager) : value
+    }
+  }
+)

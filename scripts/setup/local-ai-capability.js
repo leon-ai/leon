@@ -21,19 +21,11 @@ export default async function inspectLocalAICapability() {
 
   const [hasGPU, gpuDeviceNames, graphicsComputeAPI, totalVRAM, canSupportLLM] =
     await Promise.all([
-      SystemHelper.hasGPU(llama || undefined, { allowCoreImport: false }),
-      SystemHelper.getGPUDeviceNames(llama || undefined, {
-        allowCoreImport: false
-      }),
-      SystemHelper.getGraphicsComputeAPI(llama || undefined, {
-        allowCoreImport: false
-      }),
-      SystemHelper.getTotalVRAM(llama || undefined, {
-        allowCoreImport: false
-      }),
-      SystemHelper.canSupportLocalLLM(llama || undefined, {
-        allowCoreImport: false
-      })
+      SystemHelper.hasGPU(llama || undefined),
+      SystemHelper.getGPUDeviceNames(llama || undefined),
+      SystemHelper.getGraphicsComputeAPI(llama || undefined),
+      SystemHelper.getTotalVRAM(llama || undefined),
+      SystemHelper.canSupportLocalLLM(llama || undefined)
     ])
 
   const isLinuxARM64 =

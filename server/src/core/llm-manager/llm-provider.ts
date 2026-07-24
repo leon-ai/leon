@@ -17,11 +17,12 @@ import { LogHelper } from '@/helpers/log-helper'
 import { FileHelper } from '@/helpers/file-helper'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { BRAIN, LLM_MANAGER } from '@/core'
+import { BRAIN } from '@/core'
 import {
   type ResolvedLLMTarget,
   getRoutingModeLLMDisplay
 } from '@/core/llm-manager/llm-routing'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 
 interface CompletionResult {
   dutyType: LLMDuties
@@ -29,7 +30,6 @@ interface CompletionResult {
   input: string
   output: string
   data: Record<string, unknown> | null
-  functions?: Record<string, unknown> | undefined
   maxTokens: number
   thoughtTokensBudget?: number
   usedInputTokens: number
@@ -39,8 +39,9 @@ interface CompletionResult {
   providerTokensPerSecond?: number
   temperature: number
   reasoning?: string
+  finishReason?: string
   /**
-   * When the model responds with tool calls (native tool calling),
+   * When the model responds through its tool-calling protocol,
    * this field contains the parsed tool_calls array.
    */
   toolCalls?: OpenAIToolCall[]
@@ -54,6 +55,7 @@ interface NormalizedCompletionResult {
   providerTokensPerSecond?: number
   toolCalls?: OpenAIToolCall[]
   reasoning?: string
+  finishReason?: string
 }
 interface PromptAbortError extends Error {
   promptAbortReason?: LLMPromptAbortReason
@@ -79,6 +81,7 @@ const LLM_PROVIDERS_MAP = {
   [LLMProviders.Groq]: 'groq-llm-provider',
   [LLMProviders.OpenRouter]: 'openrouter-llm-provider',
   [LLMProviders.ZAI]: 'z-ai-llm-provider',
+  [LLMProviders.MiniMax]: 'minimax-llm-provider',
   [LLMProviders.OpenAI]: 'openai-llm-provider',
   [LLMProviders.Anthropic]: 'anthropic-llm-provider',
   [LLMProviders.MoonshotAI]: 'moonshotai-llm-provider',
@@ -104,8 +107,6 @@ const NO_LLM_ENABLED_MESSAGE =
 const LLM_PROVIDER_NOT_READY_MESSAGE =
   'The LLM provider is not ready yet. Use the built-in command "/model <provider> <model name>" to configure a model. Just press "/" to open built-in commands.'
 export default class LLMProvider {
-  private static instance: LLMProvider
-
   private workflowLLMProvider: Provider | undefined = undefined
   private agentLLMProvider: Provider | undefined = undefined
   private workflowLLMProviderTargetLabel: string | null = null
@@ -124,12 +125,8 @@ export default class LLMProvider {
   }
 
   constructor() {
-    if (!LLMProvider.instance) {
-      LogHelper.title('LLM Provider')
-      LogHelper.success('New instance')
-
-      LLMProvider.instance = this
-    }
+    LogHelper.title('LLM Provider')
+    LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
   }
 
   public get isLLMProviderReady(): boolean {
@@ -492,35 +489,6 @@ export default class LLMProvider {
     }
 
     return true
-  }
-
-  private normalizeCompletionResultForLocalProvider(
-    rawResult: string,
-    completionParams: CompletionParams
-  ): NormalizedCompletionResult {
-    if (!completionParams.session) {
-      return {
-        rawResult,
-        usedInputTokens: 0,
-        usedOutputTokens: 0
-      }
-    }
-
-    const { usedInputTokens, usedOutputTokens } =
-      completionParams.session.sequence.tokenMeter.getState()
-
-    LogHelper.title('LLM Provider')
-    LogHelper.debug(
-      `Raw context tokens:\n${LLM_MANAGER.model.detokenize(
-        completionParams.session.sequence.contextTokens
-      )}`
-    )
-
-    return {
-      rawResult,
-      usedInputTokens,
-      usedOutputTokens
-    }
   }
 
   private parseProviderResponseData(rawData: unknown): Record<string, unknown> {
@@ -975,7 +943,7 @@ export default class LLMProvider {
     return (
       reason['shouldRetry'] === true &&
       reason['retryStrategy'] === 'timeout' &&
-      reason['source'] === 'react_tool_call_diagnosis' &&
+      reason['source'] === 'agent_tool_call_diagnosis' &&
       typeof reason['delayMs'] === 'number'
     )
   }
@@ -1161,6 +1129,11 @@ export default class LLMProvider {
             : typeof usage['output_tokens'] === 'number'
               ? (usage['output_tokens'] as number)
           : 0
+    }
+
+    const finishReason = firstChoice?.['finish_reason'] ?? firstChoice?.['finishReason']
+    if (typeof finishReason === 'string' && finishReason) {
+      result.finishReason = finishReason
     }
 
     const providerDecodeDurationMs =
@@ -1498,6 +1471,19 @@ export default class LLMProvider {
           : 0
     }
 
+    const responseStatus = parsedCompletionResult['status']
+    const incompleteDetails =
+      parsedCompletionResult['incomplete_details'] &&
+      typeof parsedCompletionResult['incomplete_details'] === 'object'
+        ? (parsedCompletionResult['incomplete_details'] as Record<string, unknown>)
+        : null
+    const incompleteReason = incompleteDetails?.['reason']
+    if (typeof incompleteReason === 'string' && incompleteReason) {
+      result.finishReason = incompleteReason
+    } else if (responseStatus === 'incomplete') {
+      result.finishReason = responseStatus
+    }
+
     if (toolCalls.length > 0) {
       result.toolCalls = toolCalls
     }
@@ -1556,6 +1542,7 @@ export default class LLMProvider {
     let usedOutputTokens = 0
     let providerDecodeDurationMs = 0
     let providerTokensPerSecond = 0
+    let finishReason: string | undefined
     let buffer = ''
 
     const toolCallsByIndex: Record<number, OpenAIToolCall> = {}
@@ -1722,6 +1709,11 @@ export default class LLMProvider {
       }
 
       const choiceObject = firstChoice as Record<string, unknown>
+      const chunkFinishReason =
+        choiceObject['finish_reason'] ?? choiceObject['finishReason']
+      if (typeof chunkFinishReason === 'string' && chunkFinishReason) {
+        finishReason = chunkFinishReason
+      }
       const delta = choiceObject['delta']
       if (!delta || typeof delta !== 'object') {
         return
@@ -1809,6 +1801,23 @@ export default class LLMProvider {
         typeof parsedChunk['type'] === 'string'
           ? (parsedChunk['type'] as string)
           : eventName
+      const response =
+        parsedChunk['response'] && typeof parsedChunk['response'] === 'object'
+          ? (parsedChunk['response'] as Record<string, unknown>)
+          : null
+      const responseStatus = response?.['status'] ?? parsedChunk['status']
+      if (responseStatus === 'incomplete' || type === 'response.incomplete') {
+        const incompleteDetails =
+          response?.['incomplete_details'] &&
+          typeof response['incomplete_details'] === 'object'
+            ? (response['incomplete_details'] as Record<string, unknown>)
+            : null
+        const incompleteReason = incompleteDetails?.['reason']
+        finishReason =
+          typeof incompleteReason === 'string' && incompleteReason
+            ? incompleteReason
+            : 'incomplete'
+      }
 
       for (const reasoningChunk of this.extractOpenAIResponsesReasoningFragments(
         parsedChunk,
@@ -2051,6 +2060,7 @@ export default class LLMProvider {
       ...(reasoningOutput.trim().length > 0
         ? { reasoning: reasoningOutput.trim() }
         : {}),
+      ...(finishReason ? { finishReason } : {}),
       ...(toolCalls.length > 0 ? { toolCalls } : {})
     }
   }
@@ -2113,7 +2123,6 @@ export default class LLMProvider {
     completionParams.maxRetries =
       completionParams.maxRetries ?? DEFAULT_MAX_EXECUTION_RETRIES
     completionParams.data = completionParams.data ?? null
-    completionParams.functions = completionParams.functions ?? undefined
     completionParams.systemPrompt = completionParams.systemPrompt ?? ''
     completionParams.temperature =
       completionParams.temperature ?? DEFAULT_TEMPERATURE
@@ -2554,6 +2563,7 @@ export default class LLMProvider {
     let providerTokensPerSecond: number | undefined
     let toolCalls: OpenAIToolCall[] | undefined
     let reasoning: string | undefined
+    let finishReason: string | undefined
 
     /**
      * Normalize the completion result according to the provider
@@ -2616,31 +2626,14 @@ export default class LLMProvider {
           Math.max(Date.now() - (generationStartedAt ?? completionStartedAt), 0)
         toolCalls = normalized.toolCalls
         reasoning = normalized.reasoning
-      } else if (providerName === LLMProviders.Local) {
-        if (completionParams.session) {
-          const {
-            rawResult: result,
-            usedInputTokens: inputTokens,
-            usedOutputTokens: outputTokens
-          } = this.normalizeCompletionResultForLocalProvider(
-            rawResult as string,
-            completionParams
-          )
-
-          rawResult = result
-          usedInputTokens = inputTokens
-          usedOutputTokens = outputTokens
-          generationDurationMs = Math.max(
-            Date.now() - (generationStartedAt ?? completionStartedAt),
-            0
-          )
-        }
+        finishReason = normalized.finishReason
       } else if (
         [
           LLMProviders.Groq,
           LLMProviders.LlamaCPP,
           LLMProviders.SGLang,
           LLMProviders.ZAI,
+          LLMProviders.MiniMax,
           LLMProviders.Anthropic,
           LLMProviders.MoonshotAI,
           LLMProviders.Cerebras,
@@ -2662,6 +2655,7 @@ export default class LLMProvider {
         providerTokensPerSecond = normalized.providerTokensPerSecond
         toolCalls = normalized.toolCalls
         reasoning = normalized.reasoning
+        finishReason = normalized.finishReason
       } else if (
         [LLMProviders.OpenAI, LLMProviders.OpenRouter].includes(
           providerName
@@ -2689,6 +2683,7 @@ export default class LLMProvider {
         )
         toolCalls = normalized.toolCalls
         reasoning = normalized.reasoning
+        finishReason = normalized.finishReason
       } else {
         LogHelper.error(`The LLM provider "${providerName}" is not yet supported`)
         return null
@@ -2849,7 +2844,6 @@ export default class LLMProvider {
         return rawResultString
       })(),
       data: completionParams.data,
-      functions: completionParams.functions,
       maxTokens: completionParams.maxTokens,
       ...(typeof completionParams.thoughtTokensBudget === 'number'
         ? { thoughtTokensBudget: completionParams.thoughtTokensBudget }
@@ -2861,6 +2855,7 @@ export default class LLMProvider {
       ...(providerDecodeDurationMs ? { providerDecodeDurationMs } : {}),
       ...(providerTokensPerSecond ? { providerTokensPerSecond } : {}),
       ...(reasoning ? { reasoning } : {}),
+      ...(finishReason ? { finishReason } : {}),
       ...(toolCalls ? { toolCalls } : {})
     }
   }

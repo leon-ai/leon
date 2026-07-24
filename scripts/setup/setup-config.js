@@ -241,6 +241,17 @@ async function migrateLegacyConfigValues(document, shouldOverwriteScalarValues) 
     ['LEON_LANG', ['language'], (value) => value.trim()],
     ['LEON_HOST', ['server', 'host'], (value) => value.trim()],
     ['LEON_PORT', ['server', 'port'], toPort],
+    ['LEON_HTTP_PLUGINS', ['http_plugins', 'enabled'], toBoolean],
+    [
+      'LEON_HTTP_PLUGIN_ROOT_ROUTES',
+      ['http_plugins', 'allow_root_routes'],
+      toBoolean
+    ],
+    [
+      'LEON_HTTP_PLUGIN_AUTH',
+      ['http_plugins', 'auth', 'enabled'],
+      toBoolean
+    ],
     ['LEON_ROUTING_MODE', ['routing', 'mode'], toRoutingMode],
     ['LEON_MOOD', ['mood', 'mode'], (value) => value.trim()],
     ['LEON_LLM', ['llm', 'default'], toOptionalString],

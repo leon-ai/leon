@@ -1,11 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { PROFILE_CONTEXT_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { ContextFile } from '@/core/context-manager/context-file'
 import { ContextProbeHelper } from '@/core/context-manager/context-probe-helper'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 interface MediaProfileState {
   trackingStartedAt: string
@@ -50,7 +50,7 @@ export class MediaProfileContextFile extends ContextFile {
   public generate(): string {
     const nowIso = new Date().toISOString()
     const browserHistoryPath = path.join(
-      PROFILE_CONTEXT_PATH,
+      getProfilePaths().context,
       'BROWSER_HISTORY.md'
     )
     const browserRecords = this.loadBrowserHistoryRecords(browserHistoryPath)

@@ -3,14 +3,9 @@ import type { FastifyPluginAsync } from 'fastify'
 import type { APIOptions } from '@/core/http-server/http-server'
 import {
   LEON_VERSION,
-  HAS_AFTER_SPEECH,
-  HAS_ASR,
-  HAS_TTS,
-  ASR_PROVIDER,
-  TTS_PROVIDER,
-  IS_TELEMETRY_ENABLED,
   SHOULD_START_PYTHON_TCP_SERVER
 } from '@/constants'
+import { CONFIG_MANAGER } from '@/config'
 import { PERSONA } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { DateHelper } from '@/helpers/date-helper'
@@ -47,6 +42,7 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
         SystemHelper.getUsedVRAM()
       ])
       const moodState = CONFIG_STATE.getMoodState()
+      const profileConfig = CONFIG_MANAGER.getConfig()
       const modelState = CONFIG_STATE.getModelState()
       const routingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
       const workflowTarget = modelState.getWorkflowTarget()
@@ -67,8 +63,8 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
         status: 200,
         code: 'info_pulled',
         message,
-        after_speech: HAS_AFTER_SPEECH,
-        telemetry: IS_TELEMETRY_ENABLED,
+        after_speech: profileConfig.after_speech_enabled,
+        telemetry: profileConfig.telemetry_enabled,
         timeZone: DateHelper.getTimeZone(),
         gpu: gpuDeviceNames[0],
         graphicsComputeAPI,
@@ -92,12 +88,12 @@ export const getInfo: FastifyPluginAsync<APIOptions> = async (
           localModel: modelState.getLocalModelName()
         },
         asr: {
-          enabled: HAS_ASR,
-          provider: ASR_PROVIDER
+          enabled: profileConfig.voice.asr.enabled,
+          provider: profileConfig.voice.asr.provider
         },
         tts: {
-          enabled: HAS_TTS,
-          provider: TTS_PROVIDER
+          enabled: profileConfig.voice.tts.enabled,
+          provider: profileConfig.voice.tts.provider
         },
         routingMode,
         tcpServer: {

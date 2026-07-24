@@ -4,14 +4,10 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 
-import {
-  PROFILE_CONTEXT_PATH,
-  PROFILE_MEMORY_DB_PATH,
-  PROFILE_MEMORY_PATH
-} from '@/constants'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 import MemoryRepository from './memory-repository'
 import QMDBackend from './qmd-backend'
@@ -213,28 +209,31 @@ function shouldAttemptPersistentExtraction(userMessage: string): boolean {
 }
 
 export default class MemoryManager {
-  private static instance: MemoryManager
-
   private _isLoaded = false
   private lastContextSyncAt = 0
   private lastStorageMaintenanceAt = 0
   private isStorageMaintenanceRunning = false
   private storageMaintenanceQueued = false
+  private readonly profilePaths = getProfilePaths()
+  private readonly memoryDbPath = path.join(
+    this.profilePaths.memory,
+    'index.sqlite'
+  )
   private readonly repository = new MemoryRepository()
-  private readonly qmdBackend = new QMDBackend()
+  private readonly qmdBackend = new QMDBackend(this.profilePaths.name)
   private readonly contextChecksums = new Map<string, string>()
   private readonly persistentPath = path.join(
-    PROFILE_MEMORY_PATH,
+    this.profilePaths.memory,
     'persistent'
   )
-  private readonly dailyPath = path.join(PROFILE_MEMORY_PATH, 'daily')
+  private readonly dailyPath = path.join(this.profilePaths.memory, 'daily')
   private readonly discussionPath = path.join(
-    PROFILE_MEMORY_PATH,
+    this.profilePaths.memory,
     'discussion'
   )
-  private readonly archivePath = path.join(PROFILE_MEMORY_PATH, 'archive')
+  private readonly archivePath = path.join(this.profilePaths.memory, 'archive')
   private readonly reportsPath = path.join(
-    PROFILE_MEMORY_PATH,
+    this.profilePaths.memory,
     MAINTENANCE_REPORTS_DIRNAME
   )
   private readonly discussionWarmArchivePath = path.join(
@@ -248,14 +247,14 @@ export default class MemoryManager {
     'cold'
   )
   private readonly recoveryStatePath = path.join(
-    PROFILE_MEMORY_PATH,
+    this.profilePaths.memory,
     MEMORY_RECOVERY_STATE_FILENAME
   )
   private readonly qmdIndexPath = path.join(
     process.env['XDG_CACHE_HOME']
       ? path.join(process.env['XDG_CACHE_HOME'], 'qmd')
       : path.join(os.homedir(), '.cache', 'qmd'),
-    `${QMD_INDEX_NAME}.sqlite`
+    `${QMD_INDEX_NAME}-${this.profilePaths.name}.sqlite`
   )
   private readonly dailySummaryQueue = new Map<
     string,
@@ -640,11 +639,8 @@ export default class MemoryManager {
   }
 
   public constructor() {
-    if (!MemoryManager.instance) {
-      LogHelper.title('Memory Manager')
-      LogHelper.success('New instance')
-      MemoryManager.instance = this
-    }
+    LogHelper.title('Memory Manager')
+    LogHelper.success(`New instance for profile ${this.profilePaths.name}`)
   }
 
   public get isLoaded(): boolean {
@@ -663,7 +659,7 @@ export default class MemoryManager {
         fs.promises.mkdir(this.discussionPath, { recursive: true })
       ])
 
-      await this.repository.load(PROFILE_MEMORY_DB_PATH)
+      await this.repository.load(this.memoryDbPath)
       await this.ensureMemoryMirrorIntegrity()
 
       this._isLoaded = true
@@ -1300,10 +1296,10 @@ export default class MemoryManager {
       )
     }
     try {
-      const dbStats = fs.statSync(PROFILE_MEMORY_DB_PATH)
+      const dbStats = fs.statSync(this.memoryDbPath)
       const persistentItemCount = this.repository.countActivePersistentItems()
       LogHelper.debug(
-        `Memory index file="${PROFILE_MEMORY_DB_PATH}" size_bytes=${dbStats.size} persistent_items=${persistentItemCount}`
+        `Memory index file="${this.memoryDbPath}" size_bytes=${dbStats.size} persistent_items=${persistentItemCount}`
       )
     } catch {
       // Ignore stat errors for debug stats.
@@ -1769,14 +1765,14 @@ No markdown. No explanation.`
     }
 
     try {
-      await fs.promises.mkdir(PROFILE_CONTEXT_PATH, { recursive: true })
-      const entries = await fs.promises.readdir(PROFILE_CONTEXT_PATH, {
+      await fs.promises.mkdir(this.profilePaths.context, { recursive: true })
+      const entries = await fs.promises.readdir(this.profilePaths.context, {
         withFileTypes: true
       })
 
       const markdownFiles = entries
         .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-        .map((entry) => path.join(PROFILE_CONTEXT_PATH, entry.name))
+        .map((entry) => path.join(this.profilePaths.context, entry.name))
 
       let hasChanges = force
       const livePaths = new Set<string>()
@@ -1869,7 +1865,7 @@ No markdown. No explanation.`
       discussionWarmArchiveBytes,
       discussionColdArchiveBytes
     ] = await Promise.all([
-      this.getPathSize(PROFILE_MEMORY_DB_PATH),
+      this.getPathSize(this.memoryDbPath),
       this.getPathSize(this.qmdIndexPath),
       this.getPathSize(this.persistentPath),
       this.getPathSize(this.dailyPath),

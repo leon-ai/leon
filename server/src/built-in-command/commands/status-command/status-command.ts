@@ -10,7 +10,6 @@ import {
   INSTANCE_ID,
   IS_TELEMETRY_ENABLED,
   LEON_HOME_PATH,
-  LEON_PROFILE_PATH,
   LEON_FILE_PATH,
   LEON_VERSION,
   ASR_PROVIDER,
@@ -29,6 +28,7 @@ import {
   getActiveLLMTarget,
   getRoutingModeLLMDisplay
 } from '@/core/llm-manager/llm-routing'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 interface LeonMetadata {
   birthDate?: number
@@ -133,7 +133,7 @@ export class StatusCommand extends BuiltInCommand {
       },
       {
         label: 'Profile path',
-        value: LEON_PROFILE_PATH
+        value: getProfilePaths().root
       },
       {
         label: 'Codebase path',

@@ -1,14 +1,13 @@
 import fs from 'node:fs'
+import path from 'node:path'
 
-import {
-  LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH
-} from '@/constants'
-import { ConversationLogger } from '@/conversation-logger'
 import { LLMDuties } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { getRoutingModeLLMDisplay } from '@/core/llm-manager/llm-routing'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 
 interface CoreLLMDutyConfig {
   maxTokens?: number
@@ -81,33 +80,9 @@ async function buildSkillListContent(): Promise<string> {
 }
 
 export default class LLMManager {
-  private static instance: LLMManager
   private _isLLMEnabled = false
-  // These placeholders remain for compatibility with code paths that still
-  // compile against the old local-session surface, even though Local is disabled.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _llama: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _localModel: any = null
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _context: any = null
   private _skillListContent: SkillListContent = null
   private _coreLLMDuties = cloneCoreDutyConfig()
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get llama(): any {
-    return this._llama
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get model(): any {
-    return this._localModel
-  }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  get context(): any {
-    return this._context
-  }
 
   get skillListContent(): SkillListContent {
     return this._skillListContent
@@ -122,12 +97,8 @@ export default class LLMManager {
   }
 
   constructor() {
-    if (!LLMManager.instance) {
-      LogHelper.title('LLM Manager')
-      LogHelper.success('New instance')
-
-      LLMManager.instance = this
-    }
+    LogHelper.title('LLM Manager')
+    LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
   }
 
   /**
@@ -136,7 +107,7 @@ export default class LLMManager {
   private async singleLoad(): Promise<void> {
     try {
       this._skillListContent = await fs.promises.readFile(
-        LLM_SKILL_ROUTER_DUTY_SKILL_LIST_PATH,
+        path.join(getProfilePaths().root, 'leon-skill-list.nlp'),
         'utf-8'
       )
 
@@ -157,7 +128,7 @@ export default class LLMManager {
       LogHelper.title('LLM Manager')
       LogHelper.error(`LLM Manager failed to single load: ${e}`)
 
-      process.exit(1)
+      this._skillListContent = await buildSkillListContent()
     }
 
     LogHelper.title('LLM Manager')
@@ -181,36 +152,4 @@ export default class LLMManager {
     LogHelper.success('Skill router skill list has been refreshed in memory')
   }
 
-  public async loadHistory(
-    conversationLogger: ConversationLogger,
-    session: { getChatHistory?: () => unknown[] },
-    options?: { nbOfLogsToLoad?: number }
-  ): Promise<unknown[]> {
-    const [systemMessage] = session.getChatHistory?.() ?? []
-    const conversationLogs = options
-      ? await conversationLogger.load(options)
-      : await conversationLogger.load()
-
-    if (!conversationLogs) {
-      return systemMessage ? [systemMessage] : []
-    }
-
-    const history = conversationLogs.map((messageRecord) => {
-      const message = messageRecord?.message || ''
-
-      if (messageRecord?.who === 'owner') {
-        return {
-          type: 'user',
-          text: message
-        }
-      }
-
-      return {
-        type: 'model',
-        response: [message]
-      }
-    })
-
-    return systemMessage ? [systemMessage, ...history] : history
-  }
 }

@@ -166,15 +166,22 @@ export class NLUProcessResultUpdater {
     if (newResult.actionName && newResult.actionName !== '') {
       const { skillName } = NLU.nluProcessResult
       const skillConfig = await SkillDomainHelper.getNewSkillConfig(skillName)
-      const newActionConfig =
-        skillConfig?.actions?.[newResult.actionName] || null
+      // Narrow the generated schema to the records merged below instead of
+      // making the compiler expand the complete recursive TypeBox type.
+      const skillActions = skillConfig?.actions as
+        | Record<string, Record<string, unknown> | undefined>
+        | undefined
+      const newActionConfig = skillActions?.[newResult.actionName] || null
       const newSkillLocaleConfig =
         (await SkillDomainHelper.getSkillLocaleConfig(
           BRAIN.lang,
           skillName
         )) as SkillLocaleConfigSchema
-      const newActionLocaleConfig =
-        newSkillLocaleConfig['actions'][newResult.actionName]
+      const localeActions = newSkillLocaleConfig['actions'] as Record<
+        string,
+        Record<string, unknown> | undefined
+      >
+      const newActionLocaleConfig = localeActions[newResult.actionName]
 
       if (!newActionLocaleConfig) {
         LogHelper.title('NLU')
@@ -186,12 +193,12 @@ export class NLUProcessResultUpdater {
       NLU.nluProcessResult = {
         ...NLU.nluProcessResult,
         actionName: newResult.actionName,
-        actionConfig: newActionConfig
+        actionConfig: (newActionConfig
           ? {
               ...newActionConfig,
               ...newActionLocaleConfig
             }
-          : newActionConfig
+          : newActionConfig) as NLUProcessResult['actionConfig']
       }
 
       return

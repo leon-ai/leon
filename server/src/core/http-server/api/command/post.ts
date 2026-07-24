@@ -137,13 +137,15 @@ export const postCommand: FastifyPluginAsync<APIOptions> = async (
         const activeSessionId =
           conversationSessionId ||
           CONVERSATION_SESSION_MANAGER.getActiveSessionId()
-        const data = await CONVERSATION_SESSION_MANAGER.runWithSession(
-          activeSessionId,
-          async () =>
-            mode === 'autocomplete'
-              ? BUILT_IN_COMMAND_MANAGER.autocomplete(input, sessionId)
-              : await BUILT_IN_COMMAND_MANAGER.execute(input, sessionId)
-        )
+        // Autocomplete is read-only and must stay responsive while an agent turn
+        // holds the conversation session queue. Executions remain ordered.
+        const data =
+          mode === 'autocomplete'
+            ? BUILT_IN_COMMAND_MANAGER.autocomplete(input, sessionId)
+            : await CONVERSATION_SESSION_MANAGER.runWithSession(
+                activeSessionId,
+                () => BUILT_IN_COMMAND_MANAGER.execute(input, sessionId)
+              )
 
         await refreshLLMRuntimeIfModelCommand({
           mode,

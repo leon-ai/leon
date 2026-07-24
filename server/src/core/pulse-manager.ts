@@ -4,12 +4,10 @@ import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { MessageLog } from '@/types'
-import {
-  LEON_PULSE_ENABLED,
-  LEON_PULSE_INTERVAL_MS,
-  PROFILE_CONTEXT_PATH
-} from '@/constants'
+import { LEON_PULSE_INTERVAL_MS } from '@/constants'
+import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -103,9 +101,8 @@ interface PulseOwnerReactionOutput {
   behavioral_principle?: string | null
 }
 
-const PRIVATE_CONTEXT_DIR = path.join(PROFILE_CONTEXT_PATH, 'private')
-const PULSE_MARKDOWN_PATH = path.join(PRIVATE_CONTEXT_DIR, 'PULSE.md')
-const PULSE_STATE_PATH = path.join(PRIVATE_CONTEXT_DIR, '.leon-pulse-state.json')
+const PULSE_MARKDOWN_FILENAME = 'PULSE.md'
+const PULSE_STATE_FILENAME = '.leon-pulse-state.json'
 const MAX_PENDING_MATTERS = 6
 const MAX_RECENT_OUTCOMES = 12
 const MAX_SUPPRESSION_POLICIES = 24
@@ -231,10 +228,10 @@ function firstNonEmptyLine(content: string): string {
   )
 }
 
-function defaultPulseState(): PulseState {
+function defaultPulseState(isEnabled: boolean): PulseState {
   return {
     version: 1,
-    enabled: LEON_PULSE_ENABLED,
+    enabled: isEnabled,
     intervalMs: LEON_PULSE_INTERVAL_MS,
     lastTickAt: null,
     lastGeneratedAt: null,
@@ -250,8 +247,6 @@ function defaultPulseState(): PulseState {
 }
 
 export default class PulseManager {
-  private static instance: PulseManager
-
   private state: PulseState | null = null
   private intervalId: NodeJS.Timeout | null = null
   private initialTimerId: NodeJS.Timeout | null = null
@@ -259,29 +254,24 @@ export default class PulseManager {
   private isTickPending = false
 
   public constructor() {
-    if (!PulseManager.instance) {
-      LogHelper.title('Pulse Manager')
-      LogHelper.success('New instance')
+    LogHelper.title('Pulse Manager')
+    LogHelper.success('New instance')
 
-      PulseManager.instance = this
-      if (!LEON_PULSE_ENABLED) {
-        return
-      }
-
+    if (this.isEnabled()) {
       this.ensureLoaded()
       this.persist()
     }
   }
 
   public start(): void {
-    if (!LEON_PULSE_ENABLED) {
+    if (!this.isEnabled()) {
       LogHelper.title('Pulse Manager')
       LogHelper.info('Pulse is disabled')
       return
     }
 
     const state = this.ensureLoaded()
-    state.enabled = LEON_PULSE_ENABLED
+    state.enabled = this.isEnabled()
     state.intervalMs = LEON_PULSE_INTERVAL_MS
     this.persist()
 
@@ -315,7 +305,7 @@ export default class PulseManager {
   }
 
   public async observeOwnerUtterance(utterance: string): Promise<void> {
-    if (!LEON_PULSE_ENABLED) {
+    if (!this.isEnabled()) {
       return
     }
 
@@ -339,7 +329,7 @@ export default class PulseManager {
   }
 
   public async tick(reason: 'initial' | 'scheduled' | 'manual'): Promise<void> {
-    if (!LEON_PULSE_ENABLED) {
+    if (!this.isEnabled()) {
       return
     }
 
@@ -369,11 +359,13 @@ export default class PulseManager {
     }
 
     try {
-      if (fs.existsSync(PULSE_STATE_PATH)) {
-        const raw = fs.readFileSync(PULSE_STATE_PATH, 'utf8')
+      const pulseStatePath = this.getPulseStatePath()
+
+      if (fs.existsSync(pulseStatePath)) {
+        const raw = fs.readFileSync(pulseStatePath, 'utf8')
         const parsed = JSON.parse(raw) as Partial<PulseState>
         this.state = {
-          ...defaultPulseState(),
+          ...defaultPulseState(this.isEnabled()),
           ...parsed,
           matters: this.normalizeMatters(parsed.matters || []),
           recentOutcomes: this.normalizeMatters(parsed.recentOutcomes || []),
@@ -386,10 +378,10 @@ export default class PulseManager {
           )
         }
       } else {
-        this.state = defaultPulseState()
+        this.state = defaultPulseState(this.isEnabled())
       }
     } catch {
-      this.state = defaultPulseState()
+      this.state = defaultPulseState(this.isEnabled())
     }
 
     return this.state
@@ -617,11 +609,11 @@ export default class PulseManager {
     reason: 'initial' | 'scheduled' | 'manual'
   ): Promise<void> {
     const state = this.ensureLoaded()
-    state.enabled = LEON_PULSE_ENABLED
+    state.enabled = this.isEnabled()
     state.intervalMs = LEON_PULSE_INTERVAL_MS
     state.lastTickAt = new Date().toISOString()
 
-    if (!LEON_PULSE_ENABLED) {
+    if (!this.isEnabled()) {
       this.pushTickRecord(state, 'skipped', 'Pulse is disabled')
       this.persist()
       return
@@ -821,7 +813,8 @@ export default class PulseManager {
     changedSignals: string[]
     nextStamps: Record<string, number>
   }> {
-    const entries = await fs.promises.readdir(PROFILE_CONTEXT_PATH, {
+    const profileContextPath = getProfilePaths().context
+    const entries = await fs.promises.readdir(profileContextPath, {
       withFileTypes: true
     })
     const nextStamps: Record<string, number> = {}
@@ -832,7 +825,7 @@ export default class PulseManager {
         continue
       }
 
-      const entryPath = path.join(PROFILE_CONTEXT_PATH, entry.name)
+      const entryPath = path.join(profileContextPath, entry.name)
       try {
         const stats = await fs.promises.stat(entryPath)
         nextStamps[entry.name] = stats.mtimeMs
@@ -1533,20 +1526,45 @@ export default class PulseManager {
   }
 
   private persist(): void {
-    if (!LEON_PULSE_ENABLED) {
+    if (!this.isEnabled()) {
       return
     }
 
     const state = this.ensureLoaded()
+    const privateContextPath = this.getPrivateContextPath()
 
     try {
-      fs.mkdirSync(PRIVATE_CONTEXT_DIR, { recursive: true })
-      fs.writeFileSync(PULSE_STATE_PATH, JSON.stringify(state, null, 2), 'utf8')
-      fs.writeFileSync(PULSE_MARKDOWN_PATH, this.renderMarkdown(state), 'utf8')
+      fs.mkdirSync(privateContextPath, { recursive: true })
+      fs.writeFileSync(
+        this.getPulseStatePath(),
+        JSON.stringify(state, null, 2),
+        'utf8'
+      )
+      fs.writeFileSync(
+        this.getPulseMarkdownPath(),
+        this.renderMarkdown(state),
+        'utf8'
+      )
     } catch (error) {
       LogHelper.title('Pulse Manager')
       LogHelper.warning(`Failed to persist pulse state: ${String(error)}`)
     }
+  }
+
+  private isEnabled(): boolean {
+    return CONFIG_MANAGER.getConfig().runtime.pulse_enabled
+  }
+
+  private getPrivateContextPath(): string {
+    return path.join(getProfilePaths().context, 'private')
+  }
+
+  private getPulseMarkdownPath(): string {
+    return path.join(this.getPrivateContextPath(), PULSE_MARKDOWN_FILENAME)
+  }
+
+  private getPulseStatePath(): string {
+    return path.join(this.getPrivateContextPath(), PULSE_STATE_FILENAME)
   }
 
   private renderMarkdown(state: PulseState): string {

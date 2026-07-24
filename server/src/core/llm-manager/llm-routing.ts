@@ -20,8 +20,6 @@ export interface RoutingModeLLMDisplay {
 
 interface LLMManifest {
   defaultInstalledLLMPath?: string
-  name?: string
-  version?: string
 }
 
 const LOCAL_PROVIDERS = new Set<LLMProviders>([
@@ -45,10 +43,6 @@ function normalizeProvider(rawProvider: string): LLMProviders {
   const provider = rawProvider.trim() as LLMProviders
 
   if (!Object.values(LLMProviders).includes(provider)) {
-    throw new Error(`Unsupported LLM provider "${rawProvider.trim()}".`)
-  }
-
-  if (provider === LLMProviders.Local) {
     throw new Error(`Unsupported LLM provider "${rawProvider.trim()}".`)
   }
 
@@ -184,8 +178,6 @@ export function getInstalledLLMMetadata(
   llmManifestPath: string
 ): {
   defaultInstalledLLMPath: string
-  installedLLMName: string
-  installedLLMVersion: string
 } {
   const llmManifest = readLLMManifest(llmManifestPath)
 
@@ -193,9 +185,7 @@ export function getInstalledLLMMetadata(
     defaultInstalledLLMPath:
       typeof llmManifest?.defaultInstalledLLMPath === 'string'
         ? llmManifest.defaultInstalledLLMPath
-        : '',
-    installedLLMName: llmManifest?.name || 'Local LLM',
-    installedLLMVersion: llmManifest?.version || 'unknown'
+        : ''
   }
 }
 

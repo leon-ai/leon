@@ -937,15 +937,9 @@ export default class Chatbot {
 
   openPath(filePath) {
     // Send request to server to open the file path in system file explorer
-    fetch(`${this.serverURL}/api/v1/open-path`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ path: filePath })
-    })
-      .then((response) => response.json())
-      .then((data) => {
+    axios
+      .post(`${this.serverURL}/api/v1/open-path`, { path: filePath })
+      .then(({ data }) => {
         if (!data.success) {
           console.error('Failed to open path:', data.error)
         }

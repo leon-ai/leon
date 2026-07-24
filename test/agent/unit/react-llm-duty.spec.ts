@@ -1,1328 +1,1156 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-process.env['LEON_NODE_ENV'] = 'testing'
-process.env['LEON_LLM'] = 'openai/gpt-5.4'
-
-/**
- * Hoisted mocks let the imported ReAct module capture the fake phase functions
- * and shared runtime singletons during module initialization.
- */
-const phaseMocks = vi.hoisted(() => ({
-  buildCatalog: vi.fn(() => ({
-    text: 'mock catalog',
-    mode: 'function' as const
-  })),
-  runPlanningPhase: vi.fn(),
-  runRecoveryPlanningPhase: vi.fn(),
-  runExecutionSelfObservationPhase: vi.fn(),
-  runExecutionStep: vi.fn(),
-  runFinalAnswerPhase: vi.fn()
-}))
+import type {
+  AgentCallableFunction,
+  AgentToolCatalog
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
+import {
+  AGENT_CLARIFICATION_TOOL_NAME,
+  AGENT_PLAN_TOOL_NAME,
+  AGENT_SKILL_TOOL_NAME,
+  AGENT_TOOLKIT_LOADER_NAME,
+  AgentModelProviderError,
+  buildAgentToolCatalog,
+  runAgentLoop
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
+import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
+import {
+  createAgentLoopContinuationState,
+  isAgentLoopContinuationStateValid
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
+import {
+  buildBoundedToolObservation,
+  prepareAgentModelContext
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
+import {
+  AGENT_MAX_ITERATIONS,
+  AGENT_MAX_PARALLEL_TOOL_CALLS
+} from '@/core/llm-manager/llm-duties/react-llm-duty/constants'
+import type {
+  AgentToolTranscriptMessage,
+  OpenAIToolCall
+} from '@/core/llm-manager/types'
 
 const coreMocks = vi.hoisted(() => ({
-  persona: {
-    getCompactDutySystemPrompt: vi.fn((prompt: string) => prompt)
-  },
-  toolkitRegistry: {
-    isLoaded: true,
-    load: vi.fn(),
-    getFlattenedTools: vi.fn(() => [
-      {
-        toolkitId: 'operating_system_control',
-        toolkitName: 'Operating System Control',
-        toolkitDescription: 'Control the operating system.',
-        toolkitIconName: 'terminal',
-        toolId: 'shell',
-        toolName: 'Shell',
-        toolDescription: 'Execute shell commands.',
-        toolIconName: 'terminal'
-      }
-    ]),
-    getToolFunctions: vi.fn((toolkitId: string, toolId: string) => {
-      if (toolkitId !== 'operating_system_control' || toolId !== 'shell') {
-        return null
-      }
-
-      return {
-        executeCommand: {
-          description:
-            'Execute a command in the active platform shell and return the result.',
-          parameters: {
-            type: 'object',
-            properties: {
-              command: { type: 'string' }
-            },
-            required: ['command']
-          }
-        }
-      }
-    }),
-    resolveToolById: vi.fn((toolId: string, toolkitId?: string) => {
-      if (
-        toolId !== 'shell' ||
-        (toolkitId && toolkitId !== 'operating_system_control')
-      ) {
-        return null
-      }
-
-      return {
-        toolkitId: 'operating_system_control',
-        toolkitName: 'Operating System Control',
-        toolkitIconName: 'terminal',
-        toolId: 'shell',
-        toolName: 'Shell',
-        toolDescription: 'Execute shell commands.',
-        toolIconName: 'terminal'
-      }
-    }),
-    getToolkitContextFiles: vi.fn(() => [])
-  },
-  contextManager: {
-    isLoaded: true,
-    load: vi.fn(),
-    getContextFileContent: vi.fn(() => null),
-    getManifest: vi.fn(() => '')
-  },
-  selfModelManager: {
-    getSnapshot: vi.fn(() => '')
-  },
-  conversationLogger: {
-    loadAll: vi.fn(async () => [])
-  },
-  toolCallLogger: {
-    getRecentArtifactManifest: vi.fn(() => '')
-  },
-  postTurnMaintenanceQueue: {
-    enqueue: vi.fn()
-  },
-  llmProvider: {
-    consumeLastProviderErrorMessage: vi.fn(() => null),
-    prompt: vi.fn(),
-    promptText: vi.fn(),
-    promptWithTools: vi.fn()
-  },
-  brain: {
-    talk: vi.fn(async () => undefined),
-    wernicke: vi.fn(() => ''),
-    isMuted: true
-  },
-  socket: {
-    emit: vi.fn()
-  }
-}))
-
-const widgetMocks = vi.hoisted(() => ({
-  emitPlanWidget: vi.fn(),
-  widgetId: vi.fn(() => 'plan_test_widget')
-}))
-
-/**
- * The unit suite stays on the remote-provider path, so a lightweight session
- * stub is enough to satisfy the local-provider import surface.
- */
-vi.mock('node-llama-cpp', () => ({
-  LlamaChatSession: class MockLlamaChatSession {
-    setChatHistory(): void {}
-    dispose(): void {}
-  }
-}))
-
-vi.mock('@/helpers/log-helper', () => ({
-  LogHelper: {
-    title: vi.fn(),
-    success: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-    warning: vi.fn(),
-    error: vi.fn()
-  }
+  getFlattenedTools: vi.fn(),
+  getToolFunctions: vi.fn(),
+  resolveToolById: vi.fn()
 }))
 
 vi.mock('@/core', () => ({
-  LLM_MANAGER: {
-    model: {
-      createContext: vi.fn()
-    }
-  },
-  LLM_PROVIDER: coreMocks.llmProvider,
-  PERSONA: coreMocks.persona,
-  TOOLKIT_REGISTRY: coreMocks.toolkitRegistry,
-  TOOL_EXECUTOR: {
-    execute: vi.fn()
-  },
-  CONTEXT_MANAGER: coreMocks.contextManager,
-  SELF_MODEL_MANAGER: coreMocks.selfModelManager,
-  CONVERSATION_LOGGER: coreMocks.conversationLogger,
-  TOOL_CALL_LOGGER: coreMocks.toolCallLogger,
-  BRAIN: coreMocks.brain,
-  POST_TURN_MAINTENANCE_QUEUE: coreMocks.postTurnMaintenanceQueue,
-  SOCKET_SERVER: {
-    socket: coreMocks.socket,
-    emitToChatClients: coreMocks.socket.emit,
-    emitAnswerToChatClients: coreMocks.socket.emit,
-    clearLiveWidgets: vi.fn()
+  TOOLKIT_REGISTRY: {
+    getFlattenedTools: coreMocks.getFlattenedTools,
+    getToolFunctions: coreMocks.getToolFunctions,
+    resolveToolById: coreMocks.resolveToolById
   }
 }))
 
-vi.mock('@/core/llm-manager/llm-duties/react-llm-duty/phases', () => ({
-  buildCatalog: phaseMocks.buildCatalog,
-  runPlanningPhase: phaseMocks.runPlanningPhase,
-  runRecoveryPlanningPhase: phaseMocks.runRecoveryPlanningPhase,
-  runExecutionSelfObservationPhase: phaseMocks.runExecutionSelfObservationPhase,
-  runExecutionStep: phaseMocks.runExecutionStep,
-  runFinalAnswerPhase: phaseMocks.runFinalAnswerPhase
-}))
+const CALLABLE_TOOL_NAME = 'test__lookup__run'
 
-vi.mock('@/core/llm-manager/llm-duties/react-llm-duty/plan-widget', () => ({
-  emitPlanWidget: widgetMocks.emitPlanWidget,
-  widgetId: widgetMocks.widgetId
-}))
+const callable: AgentCallableFunction = {
+  qualifiedName: 'test.lookup.run',
+  toolkitId: 'test',
+  toolId: 'lookup',
+  functionName: 'run',
+  functionConfig: {
+    description: 'Run a lookup.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: { type: 'string' }
+      },
+      required: ['query'],
+      additionalProperties: false
+    }
+  }
+}
 
-let ReActLLMDuty: typeof import('@/core/llm-manager/llm-duties/react-llm-duty').ReActLLMDuty
-let runFinalAnswerPhase: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/final-answer').runFinalAnswerPhase
-let runPlanningPhaseDirect: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/planning').runPlanningPhase
-let runExecutionStepDirect: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/execution').runExecutionStep
-let runExecutionSelfObservationPhaseDirect: typeof import('@/core/llm-manager/llm-duties/react-llm-duty/execution').runExecutionSelfObservationPhase
-
-function createMessageLog(
-  who: 'owner' | 'leon',
-  message: string,
-  sentAt: number
-): {
-  who: 'owner' | 'leon'
-  message: string
-  sentAt: number
-  isAddedToHistory: true
-} {
+function createCatalog(): AgentToolCatalog {
   return {
-    who,
-    message,
-    sentAt,
-    isAddedToHistory: true
+    tools: [
+      {
+        type: 'function',
+        function: {
+          name: CALLABLE_TOOL_NAME,
+          description: callable.functionConfig.description,
+          parameters: callable.functionConfig.parameters
+        }
+      }
+    ],
+    functionsByToolName: new Map([[CALLABLE_TOOL_NAME, callable]]),
+    availableToolkitsById: new Map(),
+    loadedToolkitIds: new Set(['test'])
   }
 }
 
-function createCompactionState(
-  overrides: Partial<{
-    summary: string | null
-    summarySentAt: number | null
-    tail: ReturnType<typeof createMessageLog>[]
-    newMessagesSinceCompaction: number
-  }> = {}
-): {
-  summary: string | null
-  summarySentAt: number | null
-  tail: ReturnType<typeof createMessageLog>[]
-  newMessagesSinceCompaction: number
-} {
+function toolCall(
+  id: string,
+  name: string,
+  args: Record<string, unknown>
+): OpenAIToolCall {
   return {
-    summary: '- Previous topic',
-    summarySentAt: 1,
-    tail: [],
-    newMessagesSinceCompaction: 0,
-    ...overrides
+    id,
+    type: 'function',
+    function: {
+      name,
+      arguments: JSON.stringify(args)
+    }
   }
 }
 
-function logUnitProgress(message: string, data?: Record<string, unknown>): void {
-  const serializedData = data ? ` ${JSON.stringify(data)}` : ''
-  console.info(`[agent:unit] ${message}${serializedData}`)
-}
-
-async function createDuty(input: string): Promise<InstanceType<typeof ReActLLMDuty>> {
-  const duty = new ReActLLMDuty({ input })
-
-  /**
-   * The suite focuses on loop orchestration, so history loading and post-answer
-   * compaction are stubbed out to keep each case deterministic.
-   */
-  vi.spyOn(duty as never, 'loadPreparedHistory' as never).mockResolvedValue({
-    messageLogs: [],
-    localChatHistory: undefined
+describe('continuous agent loop', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    coreMocks.getFlattenedTools.mockReturnValue([])
+    coreMocks.resolveToolById.mockReturnValue(null)
+    coreMocks.getToolFunctions.mockReturnValue(null)
   })
-  vi.spyOn(
-    duty as never,
-    'maybeCompactHistoryAfterAnswer' as never
-  ).mockResolvedValue(undefined)
 
-  await duty.init({ force: true })
-  return duty
-}
-
-beforeAll(async () => {
-  ;({ ReActLLMDuty } = await import('@/core/llm-manager/llm-duties/react-llm-duty'))
-  ;({ runFinalAnswerPhase } = await import(
-    '@/core/llm-manager/llm-duties/react-llm-duty/final-answer'
-  ))
-  ;({ runPlanningPhase: runPlanningPhaseDirect } = await import(
-    '@/core/llm-manager/llm-duties/react-llm-duty/planning'
-  ))
-  ;({
-    runExecutionStep: runExecutionStepDirect,
-    runExecutionSelfObservationPhase: runExecutionSelfObservationPhaseDirect
-  } = await import('@/core/llm-manager/llm-duties/react-llm-duty/execution'))
-})
-
-beforeEach(() => {
-  vi.clearAllMocks()
-  phaseMocks.buildCatalog.mockReturnValue({
-    text: 'mock catalog',
-    mode: 'function'
+  it('uses a 32-iteration operational budget', () => {
+    expect(AGENT_MAX_ITERATIONS).toBe(32)
   })
-  phaseMocks.runRecoveryPlanningPhase.mockResolvedValue(null)
-  phaseMocks.runExecutionSelfObservationPhase.mockResolvedValue(null)
-  coreMocks.persona.getCompactDutySystemPrompt.mockImplementation(
-    (prompt: string) => prompt
-  )
-  coreMocks.contextManager.getContextFileContent.mockReturnValue(null)
-  coreMocks.contextManager.getManifest.mockReturnValue('')
-  coreMocks.selfModelManager.getSnapshot.mockReturnValue('')
-  coreMocks.toolCallLogger.getRecentArtifactManifest.mockReturnValue('')
-  coreMocks.llmProvider.consumeLastProviderErrorMessage.mockReturnValue(null)
-})
 
-describe('ReActLLMDuty agent loop', () => {
-  it('passes conversation history into execution tool argument selection', async () => {
-    const history = [
-      createMessageLog(
-        'leon',
-        'Install a local Obsidian smooth cursor plugin named leon-smooth-cursor across the detected vaults.',
-        1
-      ),
-      createMessageLog('owner', 'Then do it', 2)
+  it('keeps tool calls and results in one transcript until the final answer', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Find the answer.' }
     ]
-    const callLLMWithTools = vi.fn(async () => ({
-      textContent: JSON.stringify({
-        type: 'handoff',
-        intent: 'answer',
-        draft: 'Execution context retained.'
-      })
-    }))
-    const caller = {
-      callLLM: vi.fn(),
-      callLLMText: vi.fn(),
-      callLLMWithTools,
-      supportsNativeTools: true,
-      isLocalProvider: false,
-      input: 'Then do it',
-      history,
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
+    let modelTurn = 0
 
-    const result = await runExecutionStepDirect(
-      caller,
-      {
-        function: 'functions.executeCommand',
-        label: 'Install smooth cursor plugin'
-      },
-      [],
-      {
-        text: 'mock catalog',
-        mode: 'function'
-      }
-    )
-
-    expect(result).toEqual({
-      type: 'handoff',
-      signal: {
-        intent: 'answer',
-        draft: 'Execution context retained.',
-        source: 'execution'
-      }
-    })
-    expect(callLLMWithTools).toHaveBeenCalledOnce()
-    expect(callLLMWithTools.mock.calls[0]?.[4]).toBe(history)
-  })
-
-  it('passes conversation history into execution self-observation', async () => {
-    const history = [
-      createMessageLog('leon', 'The next step is to write plugin files.', 1),
-      createMessageLog('owner', 'Then do it', 2)
-    ]
-    const callLLM = vi.fn(async () => ({
-      output: {
-        type: 'handoff',
-        intent: 'answer',
-        draft: 'No more steps needed.',
-        functions: null,
-        steps: null,
-        reason: null
-      }
-    }))
-    const caller = {
-      callLLM,
-      callLLMText: vi.fn(),
-      callLLMWithTools: vi.fn(),
-      supportsNativeTools: true,
-      isLocalProvider: false,
-      input: 'Then do it',
-      history,
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runExecutionSelfObservationPhaseDirect(caller, [])
-
-    expect(result).toEqual({
-      type: 'handoff',
-      signal: {
-        intent: 'answer',
-        draft: 'No more steps needed.',
-        source: 'self_observation'
-      }
-    })
-    expect(callLLM).toHaveBeenCalledOnce()
-    expect(callLLM.mock.calls[0]?.[3]).toBe(history)
-    expect(callLLM.mock.calls[0]?.[5]).toMatchObject({
-      reasoningMode: 'off',
-      streamToProvider: false
-    })
-  })
-
-  it('lets final answer synthesis continue when self-observation fails', async () => {
-    const consumeProviderErrorMessage = vi.fn(
-      () => 'Provider timed out during self-observation.'
-    )
-    const caller = {
-      callLLM: vi.fn(async () => null),
-      callLLMText: vi.fn(),
-      callLLMWithTools: vi.fn(),
-      supportsNativeTools: true,
-      isLocalProvider: false,
-      input: 'Summarize the transcript',
-      history: [],
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage
-    }
-
-    const result = await runExecutionSelfObservationPhaseDirect(caller, [
-      {
-        function: 'operating_system_control.file.read',
-        status: 'success',
-        observation: 'Transcript content was read.',
-        stepLabel: 'Read transcript'
-      }
-    ])
-
-    expect(result).toBeNull()
-    expect(consumeProviderErrorMessage).toHaveBeenCalledOnce()
-  })
-
-  it('skips Agent Skill selection when no name or metadata match is present', async () => {
-    const callLLMWithTools = vi.fn(async () => ({
-      toolCall: {
-        functionName: 'create_plan',
-        arguments: JSON.stringify({
-          type: 'final',
-          answer: 'Acknowledge the thanks.',
-          intent: 'answer'
-        })
-      }
-    }))
-    const caller = {
-      callLLM: vi.fn(),
-      callLLMText: vi.fn(),
-      callLLMWithTools,
-      supportsNativeTools: true,
-      isLocalProvider: false,
-      input: 'Awesome, thanks',
-      history: [],
-      agentSkillCatalog:
-        '1. tiny-web-crawler: Crawl from starting web pages, fetch readable content, search within pages, and follow relevant links.',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runPlanningPhaseDirect(
-      caller,
-      {
-        text: 'mock catalog',
-        mode: 'function'
-      },
-      []
-    )
-
-    expect(callLLMWithTools).toHaveBeenCalledOnce()
-    expect(callLLMWithTools.mock.calls[0]?.[2]?.[0]?.function.name).toBe(
-      'create_plan'
-    )
-    expect(result).toEqual({
-      type: 'handoff',
-      signal: {
-        intent: 'answer',
-        draft: 'Acknowledge the thanks.',
-        source: 'planning'
-      }
-    })
-  })
-
-  it('routes local plain-text planning output to final answer handoff', async () => {
-    const callLLM = vi.fn(async () => ({
-      output: 'Good morning. I am here and ready.'
-    }))
-    const caller = {
-      callLLM,
-      callLLMText: vi.fn(),
-      callLLMWithTools: vi.fn(),
-      supportsNativeTools: false,
-      isLocalProvider: true,
-      input: 'Good morning Leon',
-      history: [],
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runPlanningPhaseDirect(
-      caller,
-      {
-        text: 'mock catalog',
-        mode: 'function'
-      },
-      []
-    )
-
-    expect(callLLM).toHaveBeenCalledOnce()
-    expect(result).toEqual({
-      type: 'handoff',
-      signal: {
-        intent: 'answer',
-        draft: 'Good morning. I am here and ready.',
-        source: 'planning'
-      }
-    })
-  })
-
-  it('routes remote no-tool planning text to final answer handoff', async () => {
-    const callLLMWithTools = vi.fn(async () => ({
-      textContent: 'Hey. I am here. What do you need?'
-    }))
-    const caller = {
-      callLLM: vi.fn(),
-      callLLMText: vi.fn(),
-      callLLMWithTools,
-      supportsNativeTools: true,
-      isLocalProvider: false,
-      input: 'Hi there',
-      history: [],
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runPlanningPhaseDirect(
-      caller,
-      {
-        text: 'mock catalog',
-        mode: 'function'
-      },
-      []
-    )
-
-    expect(caller.callLLM).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      type: 'handoff',
-      signal: {
-        intent: 'answer',
-        draft: 'Hey. I am here. What do you need?',
-        source: 'planning'
-      }
-    })
-  })
-
-  it('recovers a local plan step that uses function_name', async () => {
-    const callLLM = vi.fn(async () => ({
-      output: {
-        type: 'plan',
-        steps: [
-          {
-            function_name: 'operating_system_control.shell.executeCommand',
-            label: 'Run shell command'
+    const result = await runAgentLoop({
+      transcript,
+      catalog: createCatalog(),
+      callModel: async (messages) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('call-1', CALLABLE_TOOL_NAME, { query: 'Leon' })
+            ]
           }
-        ],
-        summary: 'Running the shell command...',
-        answer: null,
-        intent: null
-      }
-    }))
-    const caller = {
-      callLLM,
-      callLLMText: vi.fn(),
-      callLLMWithTools: vi.fn(),
-      supportsNativeTools: false,
-      isLocalProvider: true,
-      input: 'Run a command',
-      history: [],
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runPlanningPhaseDirect(
-      caller,
-      {
-        text: '- operating_system_control.shell.executeCommand (command): Execute a command.',
-        mode: 'function'
-      },
-      []
-    )
-
-    expect(result).toEqual({
-      type: 'plan',
-      steps: [
-        {
-          function: 'operating_system_control.shell.executeCommand',
-          label: 'Run shell command'
         }
-      ],
-      summary: 'Running the shell command...'
-    })
-  })
 
-  it('recovers exact catalog function names from local planning text', async () => {
-    const callLLM = vi.fn(async () => ({
-      output:
-        'I will use search_web.grok.search first, then operating_system_control.shell.executeCommand.'
-    }))
-    const caller = {
-      callLLM,
-      callLLMText: vi.fn(),
-      callLLMWithTools: vi.fn(),
-      supportsNativeTools: false,
-      isLocalProvider: true,
-      input: 'Search and run a command',
-      history: [],
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runPlanningPhaseDirect(
-      caller,
-      {
-        text: [
-          '- search_web.grok.search (query): Search both web and X.',
-          '- operating_system_control.shell.executeCommand (command): Execute a command.'
-        ].join('\n'),
-        mode: 'function'
-      },
-      []
-    )
-
-    expect(result).toEqual({
-      type: 'plan',
-      steps: [
-        {
-          function: 'search_web.grok.search',
-          label: 'Run search'
-        },
-        {
-          function: 'operating_system_control.shell.executeCommand',
-          label: 'Run executeCommand'
-        }
-      ],
-      summary: 'Running the recovered tool plan...'
-    })
-  })
-
-  it('preserves an Agent Skill id selected in a plan step', async () => {
-    const agentSkillContext = {
-      id: 'tiny-web-crawler',
-      name: 'tiny-web-crawler',
-      description: 'Crawl from starting web pages.',
-      rootPath: '/tmp/tiny-web-crawler',
-      skillPath: '/tmp/tiny-web-crawler/SKILL.md',
-      instructions: '# Tiny Web Crawler'
-    }
-    const callLLMWithTools = vi.fn().mockResolvedValueOnce({
-      toolCall: {
-        functionName: 'create_plan',
-        arguments: JSON.stringify({
-          type: 'plan',
-          steps: [
+        expect(messages.at(-2)).toMatchObject({
+          role: 'assistant',
+          toolCalls: [
             {
-              function: 'operating_system_control.shell.executeCommand',
-              label: 'Fetch target page',
-              agent_skill_id: 'tiny-web-crawler'
+              id: 'call-1',
+              function: { name: CALLABLE_TOOL_NAME }
             }
-          ],
-          summary: 'Fetching the target page...',
-          answer: null,
-          intent: null
+          ]
         })
-      }
-    })
-    const caller = {
-      callLLM: vi.fn(),
-      callLLMText: vi.fn(),
-      callLLMWithTools,
-      supportsNativeTools: true,
-      isLocalProvider: false,
-      input:
-        'Please crawl from https://example.com, fetch readable content, and follow relevant links to find pricing.',
-      history: [],
-      agentSkillCatalog:
-        '1. tiny-web-crawler: Crawl from starting web pages, fetch readable content, search within pages, and follow relevant links.',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(async () => agentSkillContext),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runPlanningPhaseDirect(
-      caller,
-      {
-        text: 'mock catalog',
-        mode: 'function'
+        expect(messages.at(-1)).toEqual({
+          role: 'tool',
+          toolCallId: 'call-1',
+          toolName: CALLABLE_TOOL_NAME,
+          content: 'Found Leon.'
+        })
+        return { textContent: 'Leon was found.' }
       },
-      []
-    )
-
-    expect(callLLMWithTools).toHaveBeenCalledOnce()
-    expect(callLLMWithTools.mock.calls[0]?.[2]?.[0]?.function.name).toBe(
-      'create_plan'
-    )
-    expect(caller.setAgentSkillContext).not.toHaveBeenCalled()
-    expect(result).toEqual({
-      type: 'plan',
-      steps: [
-        {
-          function: 'operating_system_control.shell.executeCommand',
-          label: 'Fetch target page',
-          agentSkillId: 'tiny-web-crawler'
-        }
-      ],
-      summary: 'Fetching the target page...'
-    })
-  })
-
-  it('uses the handoff draft when final answer synthesis fails', async () => {
-    const callLLMText = vi.fn(async () => null)
-    const callLLMWithTools = vi.fn()
-    const caller = {
-      callLLM: vi.fn(),
-      callLLMText,
-      callLLMWithTools,
-      supportsNativeTools: true,
-      isLocalProvider: false,
-      input: 'Summarize the completed research.',
-      history: [],
-      agentSkillCatalog: '',
-      setAgentSkillContext: vi.fn(),
-      getAgentSkillContext: vi.fn(),
-      getContextFileContent: vi.fn(() => null),
-      getContextManifest: vi.fn(() => ''),
-      getSelfModelSnapshot: vi.fn(() => ''),
-      consumeProviderErrorMessage: vi.fn(() => null)
-    }
-
-    const result = await runFinalAnswerPhase(
-      caller,
-      [],
-      {
-        intent: 'answer',
-        draft: 'Research complete. The useful summary is already here.',
-        source: 'execution'
-      }
-    )
-
-    expect(result).toBe(
-      'Research complete. The useful summary is already here.'
-    )
-    expect(callLLMText).toHaveBeenCalledOnce()
-    expect(callLLMWithTools).not.toHaveBeenCalled()
-  })
-
-  it('finalizes directly when planning returns a handoff', async () => {
-    logUnitProgress('planning handoff scenario', {
-      input: 'Hi there, what do you reply if I tell you "ping"?',
-      expectedIntent: 'answer'
-    })
-    phaseMocks.runPlanningPhase.mockResolvedValue({
-      type: 'handoff',
-      signal: {
-        intent: 'answer',
-        draft: 'Reply with pong.',
-        source: 'planning'
-      }
-    })
-    phaseMocks.runFinalAnswerPhase.mockResolvedValue('Pong.')
-
-    const duty = await createDuty(
-      'Hi there, what do you reply if I tell you "ping"?'
-    )
-    const result = await duty.execute()
-
-    logUnitProgress('planning handoff result', {
-      output: result?.output,
-      finalIntent: result?.data.finalIntent
-    })
-
-    expect(phaseMocks.runPlanningPhase).toHaveBeenCalledOnce()
-    expect(phaseMocks.runExecutionStep).not.toHaveBeenCalled()
-    expect(phaseMocks.runFinalAnswerPhase).toHaveBeenCalledOnce()
-    expect(result?.output).toBe('Pong.')
-    expect(result?.data.finalIntent).toBe('answer')
-    expect(result?.data.executionHistory).toEqual([])
-  })
-
-  it('executes a planned step and synthesizes the final answer', async () => {
-    logUnitProgress('planned execution scenario', {
-      input: 'What\'s the weather like today in Shenzhen?',
-      stepFunction: 'weather.openmeteo.getCurrentConditions'
-    })
-    phaseMocks.runPlanningPhase.mockResolvedValue({
-      type: 'plan',
-      steps: [
-        {
-          function: 'weather.openmeteo.getCurrentConditions',
-          label: 'Check weather'
-        }
-      ],
-      summary: 'Checking the weather...'
-    })
-    phaseMocks.runExecutionStep.mockResolvedValue({
-      type: 'executed',
-      execution: {
-        function: 'weather.openmeteo.getCurrentConditions',
-        status: 'success',
-        observation: 'Current weather is 24C and sunny.',
-        stepLabel: 'Check weather',
-        requestedToolInput: '{"location":"Shenzhen"}'
-      }
-    })
-    phaseMocks.runExecutionSelfObservationPhase.mockResolvedValue(null)
-    phaseMocks.runFinalAnswerPhase.mockResolvedValue('It is 24C and sunny in Shenzhen.')
-
-    const duty = await createDuty('What\'s the weather like today in Shenzhen?')
-    const result = await duty.execute()
-
-    logUnitProgress('planned execution result', {
-      output: result?.output,
-      executionHistory: result?.data.executionHistory
-    })
-
-    expect(coreMocks.socket.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        answer: 'Checking the weather...',
-        fallbackText: 'Checking the weather...',
-        historyMode: 'system_widget'
-      })
-    )
-    expect(phaseMocks.runExecutionStep).toHaveBeenCalledOnce()
-    expect(phaseMocks.runExecutionSelfObservationPhase).toHaveBeenCalledOnce()
-    expect(result?.output).toBe('It is 24C and sunny in Shenzhen.')
-    expect(result?.data.finalIntent).toBe('answer')
-    expect(result?.data.executionHistory).toEqual([
-      {
-        function: 'weather.openmeteo.getCurrentConditions',
-        status: 'success',
-        observation: 'Current weather is 24C and sunny.',
-        stepLabel: 'Check weather',
-        requestedToolInput: '{"location":"Shenzhen"}'
-      }
-    ])
-  })
-
-  it('finalizes an observed tool result when self-observation says it satisfies the request', async () => {
-    phaseMocks.runPlanningPhase.mockResolvedValue({
-      type: 'plan',
-      steps: [
-        {
-          function: 'operating_system_control.shell.executeCommand',
-          label: 'Run scanner'
-        }
-      ],
-      summary: 'Running the scanner...'
-    })
-    phaseMocks.runExecutionStep.mockResolvedValue({
-      type: 'executed',
-      execution: {
-        function: 'operating_system_control.shell.executeCommand',
-        status: 'observed',
-        observation: JSON.stringify({
-          status: 'observed',
-          data: {
-            output: {
-              result: {
-                success: false,
-                stdout: 'Scan completed with useful findings.',
-                returncode: 5
-              }
-            }
-          }
-        }),
-        stepLabel: 'Run scanner',
-        requestedToolInput: '{"command":"scanner --target example.test"}'
-      }
-    })
-    phaseMocks.runExecutionSelfObservationPhase.mockResolvedValue({
-      type: 'handoff',
-      signal: {
-        intent: 'answer',
-        draft: 'Report the scan findings.',
-        source: 'self_observation'
-      }
-    })
-    phaseMocks.runFinalAnswerPhase.mockResolvedValue(
-      'The scan completed and returned useful findings.'
-    )
-
-    const duty = await createDuty('Run the scanner and tell me what it finds.')
-    const result = await duty.execute()
-
-    expect(phaseMocks.runExecutionSelfObservationPhase).toHaveBeenCalledOnce()
-    expect(phaseMocks.runRecoveryPlanningPhase).not.toHaveBeenCalled()
-    expect(result?.output).toBe(
-      'The scan completed and returned useful findings.'
-    )
-    expect(result?.data.executionHistory).toEqual([
-      expect.objectContaining({
-        function: 'operating_system_control.shell.executeCommand',
-        status: 'observed',
-        stepLabel: 'Run scanner'
-      })
-    ])
-  })
-
-  it('replans from an observed tool result when self-observation says more work is needed', async () => {
-    phaseMocks.runPlanningPhase.mockResolvedValue({
-      type: 'plan',
-      steps: [
-        {
-          function: 'operating_system_control.shell.executeCommand',
-          label: 'Run invalid command'
-        }
-      ],
-      summary: 'Running the command...'
-    })
-    phaseMocks.runExecutionStep
-      .mockResolvedValueOnce({
-        type: 'executed',
+      executeFunction: async () => ({
         execution: {
-          function: 'operating_system_control.shell.executeCommand',
-          status: 'observed',
-          observation: JSON.stringify({
-            status: 'observed',
-            observed_tool_failure: {
-              success: false,
-              error: 'Invalid option'
-            }
-          }),
-          stepLabel: 'Run invalid command',
-          requestedToolInput: '{"command":"scanner --bad-option"}'
-        }
-      })
-      .mockResolvedValueOnce({
-        type: 'executed',
-        execution: {
-          function: 'operating_system_control.shell.executeCommand',
+          function: callable.qualifiedName,
           status: 'success',
-          observation: 'Command completed with corrected options.',
-          stepLabel: 'Run corrected command',
-          requestedToolInput: '{"command":"scanner --good-option"}'
+          observation: 'Found Leon.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
         }
-      })
-    phaseMocks.runExecutionSelfObservationPhase
-      .mockResolvedValueOnce({
-        type: 'replan',
-        reason: 'Correcting the command options...',
-        steps: [
-          {
-            function: 'operating_system_control.shell.executeCommand',
-            label: 'Run corrected command'
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('Leon was found.')
+    expect(result.executionHistory).toHaveLength(1)
+    expect(result.transcript).toBe(transcript)
+  })
+
+  it('returns validation failures as observations so the model can recover', async () => {
+    const executeFunction = vi.fn()
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Run it.' }],
+      catalog: createCatalog(),
+      callModel: async (messages) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('invalid', CALLABLE_TOOL_NAME, { query: 42 })
+            ]
           }
+        }
+
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          content: expect.stringContaining('does not match')
+        })
+        return { textContent: 'I could not run it with that input.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction).not.toHaveBeenCalled()
+    expect(result.intent).toBe('answer')
+  })
+
+  it('compacts context and disables reasoning for one empty-output recovery', async () => {
+    const callModel = vi
+      .fn()
+      .mockResolvedValueOnce({ textContent: '' })
+      .mockResolvedValueOnce({ textContent: 'Recovered answer.' })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      catalog: createCatalog(),
+      callModel,
+      executeFunction: async () => {
+        throw new Error('should not execute')
+      },
+      loadAgentSkill: async () => null
+    })
+
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(callModel.mock.calls[0]?.[2]).toEqual({
+      isRecoveryAttempt: false
+    })
+    expect(callModel.mock.calls[1]?.[2]).toEqual({
+      isRecoveryAttempt: true
+    })
+    expect(result.answer).toBe('Recovered answer.')
+  })
+
+  it('adds convergence guidance for the final eight operational iterations', async () => {
+    const callModel = vi
+      .fn()
+      .mockResolvedValueOnce({
+        toolCalls: [
+          toolCall('before-convergence', CALLABLE_TOOL_NAME, { query: 'Leon' })
+        ]
+      })
+      .mockResolvedValueOnce({ textContent: 'Converged answer.' })
+
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      catalog: createCatalog(),
+      maxIterations: 9,
+      callModel,
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Evidence collected.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(callModel.mock.calls[0]?.[2]).toEqual({
+      isRecoveryAttempt: false
+    })
+    expect(callModel.mock.calls[1]?.[2]).toEqual({
+      isRecoveryAttempt: false,
+      remainingIterations: 8
+    })
+  })
+
+  it('retries one provider failure under context pressure', async () => {
+    const callModel = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new AgentModelProviderError('Context pressure.', true)
+      )
+      .mockResolvedValueOnce({
+        toolCalls: [
+          toolCall('compact-context-tool', CALLABLE_TOOL_NAME, {
+            query: 'Leon'
+          })
+        ]
+      })
+      .mockResolvedValueOnce({ textContent: 'Recovered from compact context.' })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      catalog: createCatalog(),
+      callModel,
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Compact evidence.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(callModel.mock.calls[1]?.[2]).toEqual({
+      isRecoveryAttempt: true,
+      isContextRecoveryAttempt: true
+    })
+    expect(callModel.mock.calls[2]?.[2]).toEqual({
+      isRecoveryAttempt: false,
+      isContextRecoveryAttempt: true
+    })
+    expect(result.answer).toBe('Recovered from compact context.')
+  })
+
+  it('recovers before executing a truncated tool-call batch', async () => {
+    const executeFunction = vi.fn()
+    const callModel = vi
+      .fn()
+      .mockResolvedValueOnce({
+        toolCalls: [
+          toolCall('partial-call', CALLABLE_TOOL_NAME, { query: 'partial' })
+        ],
+        isTruncated: true
+      })
+      .mockResolvedValueOnce({ textContent: 'Recovered without partial work.' })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      catalog: createCatalog(),
+      callModel,
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(callModel.mock.calls[1]?.[2]).toEqual({
+      isRecoveryAttempt: true
+    })
+    expect(executeFunction).not.toHaveBeenCalled()
+    expect(result.answer).toBe('Recovered without partial work.')
+  })
+
+  it('retries a truncated completion instead of returning partial text', async () => {
+    const callModel = vi
+      .fn()
+      .mockResolvedValueOnce({
+        textContent: 'Partial answer',
+        isTruncated: true
+      })
+      .mockResolvedValueOnce({ textContent: 'Complete answer.' })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Explain it.' }],
+      catalog: createCatalog(),
+      callModel,
+      executeFunction: async () => {
+        throw new Error('should not execute')
+      },
+      loadAgentSkill: async () => null
+    })
+
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(result.answer).toBe('Complete answer.')
+    expect(result.transcript).not.toContainEqual({
+      role: 'assistant',
+      content: 'Partial answer'
+    })
+  })
+
+  it('pauses with the complete transcript when clarification is required', async () => {
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Send it.' }],
+      catalog: createCatalog(),
+      callModel: async () => ({
+        toolCalls: [
+          toolCall('clarify-1', AGENT_CLARIFICATION_TOOL_NAME, {
+            question: 'Which recipient should I use?'
+          })
+        ]
+      }),
+      executeFunction: async () => {
+        throw new Error('should not execute')
+      },
+      loadAgentSkill: async () => null
+    })
+
+    expect(result).toMatchObject({
+      intent: 'clarification',
+      answer: 'Which recipient should I use?'
+    })
+    expect(result.transcript.at(-1)).toEqual({
+      role: 'tool',
+      toolCallId: 'clarify-1',
+      toolName: AGENT_CLARIFICATION_TOOL_NAME,
+      content: 'Clarification requested. Wait for the owner response.'
+    })
+  })
+
+  it('uses a tools-restricted finalization checkpoint at the iteration limit', async () => {
+    const callModel = vi.fn(async (messages, tools, options) => {
+      if (!options.isFinalizationAttempt) {
+        return {
+          toolCalls: [
+            toolCall('lookup-before-limit', CALLABLE_TOOL_NAME, {
+              query: 'Leon'
+            })
+          ]
+        }
+      }
+
+      expect(messages.at(-1)).toMatchObject({
+        role: 'tool',
+        content: 'Found enough evidence.'
+      })
+      expect(tools.map((tool) => tool.function.name)).toEqual([
+        AGENT_CLARIFICATION_TOOL_NAME
+      ])
+      return { textContent: 'Here is the complete supported answer.' }
+    })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Find the answer.' }],
+      catalog: createCatalog(),
+      maxIterations: 1,
+      callModel,
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Found enough evidence.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(callModel).toHaveBeenCalledTimes(2)
+    expect(callModel.mock.calls[1]?.[2]).toEqual({
+      isRecoveryAttempt: false,
+      isFinalizationAttempt: true
+    })
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('Here is the complete supported answer.')
+  })
+
+  it('offers alternatives and saves a continuation when work is incomplete', async () => {
+    const callModel = vi.fn(async (_messages, _tools, options) => {
+      if (!options.isFinalizationAttempt) {
+        return {
+          toolCalls: [
+            toolCall('lookup-before-pause', CALLABLE_TOOL_NAME, {
+              query: 'Leon'
+            })
+          ]
+        }
+      }
+
+      return {
+        toolCalls: [
+          toolCall('continue-after-limit', AGENT_CLARIFICATION_TOOL_NAME, {
+            explanation: 'The remaining source could not be verified yet.',
+            alternatives: [
+              'Continue checking the remaining source.',
+              'Answer from the verified evidence only.'
+            ],
+            question: 'May I continue from the saved state?'
+          })
+        ]
+      }
+    })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Verify every source.' }],
+      catalog: createCatalog(),
+      maxIterations: 1,
+      callModel,
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'The first source is verified.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('clarification')
+    expect(result.answer).toContain(
+      'The remaining source could not be verified yet.'
+    )
+    expect(result.answer).toContain(
+      '- Continue checking the remaining source.'
+    )
+    expect(result.answer).toContain('May I continue from the saved state?')
+    expect(result.transcript.at(-1)).toMatchObject({
+      role: 'tool',
+      toolName: AGENT_CLARIFICATION_TOOL_NAME
+    })
+  })
+
+  it('falls back to a resumable continuation when finalization fails', async () => {
+    const callModel = vi
+      .fn()
+      .mockResolvedValueOnce({
+        toolCalls: [
+          toolCall('lookup-before-fallback', CALLABLE_TOOL_NAME, {
+            query: 'Leon'
+          })
         ]
       })
       .mockResolvedValueOnce(null)
-    phaseMocks.runFinalAnswerPhase.mockResolvedValue(
-      'The corrected command completed.'
-    )
 
-    const duty = await createDuty('Run the scanner.')
-    const result = await duty.execute()
-
-    expect(phaseMocks.runExecutionStep).toHaveBeenCalledTimes(2)
-    expect(phaseMocks.runExecutionSelfObservationPhase).toHaveBeenCalledTimes(2)
-    expect(result?.output).toBe('The corrected command completed.')
-    expect(result?.data.executionHistory).toEqual([
-      expect.objectContaining({
-        status: 'error',
-        stepLabel: 'Run invalid command'
-      }),
-      expect.objectContaining({
-        status: 'success',
-        stepLabel: 'Run corrected command'
-      })
-    ])
-  })
-
-  it('keeps a selected Agent Skill active during execution', async () => {
-    const agentSkillContext = {
-      id: 'tiny-web-crawler',
-      name: 'tiny-web-crawler',
-      description: 'Fetch and crawl web pages.',
-      rootPath: '/tmp/tiny-web-crawler',
-      skillPath: '/tmp/tiny-web-crawler/SKILL.md',
-      instructions: '# Tiny Web Crawler'
-    }
-
-    phaseMocks.runPlanningPhase.mockImplementation(async (caller) => {
-      caller.setAgentSkillContext(agentSkillContext)
-
-      return {
-        type: 'plan',
-        steps: [
-          {
-            function: 'operating_system_control.shell.executeCommand',
-            label: 'Fetch target page'
-          }
-        ],
-        summary: 'Fetching the target page...'
-      }
-    })
-    phaseMocks.runExecutionStep.mockImplementation(async (caller) => {
-      expect(caller.agentSkillContext).toEqual(agentSkillContext)
-
-      return {
-        type: 'executed',
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      catalog: createCatalog(),
+      maxIterations: 1,
+      callModel,
+      executeFunction: async () => ({
         execution: {
-          function: 'operating_system_control.shell.executeCommand',
+          function: callable.qualifiedName,
           status: 'success',
-          observation: 'Fetched with skill script.',
-          stepLabel: 'Fetch target page'
+          observation: 'Partial progress saved.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
         }
-      }
+      }),
+      loadAgentSkill: async () => null
     })
-    phaseMocks.runFinalAnswerPhase.mockResolvedValue('Fetched with skill script.')
 
-    const duty = await createDuty(
-      'Use the tiny-web-crawler skill to inspect a page.'
+    expect(result.intent).toBe('clarification')
+    expect(callModel).toHaveBeenCalledTimes(3)
+    expect(result.answer).toContain('Finish this request.')
+    expect(result.answer).toContain('Partial progress saved.')
+    expect(result.answer).toContain(
+      'Produce the final answer from the verified findings'
     )
-    const result = await duty.execute()
-
-    expect(phaseMocks.runExecutionStep).toHaveBeenCalledOnce()
-    expect(result?.output).toBe('Fetched with skill script.')
+    expect(result.answer).toContain('May I continue with that next step?')
   })
 
-  it('short-circuits to final synthesis when a tool returns a handoff signal', async () => {
-    // This covers the path where a tool result already contains the semantic
-    // handoff Leon should forward into the final-answer phase.
-    logUnitProgress('tool handoff scenario', {
-      input: 'There is a file waiting for you. Do what it asks you to do.',
-      stepFunction: 'operating_system_control.shell.executeCommand'
-    })
-    phaseMocks.runPlanningPhase.mockResolvedValue({
-      type: 'plan',
-      steps: [
-        {
-          function: 'operating_system_control.shell.executeCommand',
-          label: 'List project root'
-        }
-      ],
-      summary: 'Listing the project root...'
-    })
-    phaseMocks.runExecutionStep.mockResolvedValue({
-      type: 'executed',
-      execution: {
-        function: 'operating_system_control.shell.executeCommand',
-        status: 'success',
-        observation: 'package.json\nserver\nbridges',
-        stepLabel: 'List project root',
-        requestedToolInput: '{"command":"ls -1"}'
-      },
-      handoffSignal: {
-        intent: 'answer',
-        draft: 'Report the listed project root files.',
-        source: 'tool'
-      }
-    })
-    phaseMocks.runFinalAnswerPhase.mockResolvedValue(
-      'The project root contains package.json, server, and bridges.'
-    )
-
-    const duty = await createDuty(
-      'There is a file waiting for you. Do what it asks you to do.'
-    )
-    const result = await duty.execute()
-
-    logUnitProgress('tool handoff result', {
-      output: result?.output,
-      finalIntent: result?.data.finalIntent
-    })
-
-    expect(coreMocks.socket.emit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        answer: 'Listing the project root...',
-        fallbackText: 'Listing the project root...',
-        historyMode: 'system_widget'
-      })
-    )
-    expect(phaseMocks.runExecutionStep).toHaveBeenCalledOnce()
-    expect(phaseMocks.runExecutionSelfObservationPhase).not.toHaveBeenCalled()
-    expect(result?.output).toBe(
-      'The project root contains package.json, server, and bridges.'
-    )
-    expect(result?.data.executionHistory).toEqual([
-      {
-        function: 'operating_system_control.shell.executeCommand',
-        status: 'success',
-        observation: 'package.json\nserver\nbridges',
-        stepLabel: 'List project root',
-        requestedToolInput: '{"command":"ls -1"}'
-      }
-    ])
-  })
-
-  it('pauses for clarification during execution and resumes pending steps', async () => {
-    interface SavedContinuationState {
-      originalInput: string
-      clarificationQuestion: string
-      pendingSteps: Array<{ function: string, label: string }>
-    }
-
-    let savedContinuation: SavedContinuationState | null = null
-    const fileCreationStep = {
-      function: 'operating_system_control.shell.executeCommand',
-      label: 'Create file'
-    }
-
-    phaseMocks.runPlanningPhase.mockResolvedValue({
-      type: 'plan',
-      steps: [fileCreationStep],
-      summary: 'Preparing the file creation...'
-    })
-    phaseMocks.runExecutionStep
+  it('retries failed finalization from a bounded evidence-only transcript', async () => {
+    const callModel = vi
+      .fn()
       .mockResolvedValueOnce({
-        type: 'handoff',
-        signal: {
-          intent: 'clarification',
-          draft: 'What filename should I use?',
-          source: 'execution'
-        }
-      })
-      .mockImplementationOnce(async (caller, currentStep) => {
-        expect(caller.input).toContain(
-          'Previous clarification request: "What filename should I use?"'
-        )
-        expect(caller.input).toContain('Clarification reply: "test.txt"')
-        expect(currentStep).toEqual(fileCreationStep)
-
-        return {
-          type: 'executed',
-          execution: {
-            function: 'operating_system_control.shell.executeCommand',
-            status: 'success',
-            observation: 'Created /home/louis/Downloads/test.txt',
-            stepLabel: 'Create file',
-            requestedToolInput: '{"command":"touch /home/louis/Downloads/test.txt"}'
-          }
-        }
-      })
-    phaseMocks.runFinalAnswerPhase
-      .mockResolvedValueOnce('What filename should I use?')
-      .mockResolvedValueOnce(
-        'Done. I created [FILE_PATH]/home/louis/Downloads/test.txt[/FILE_PATH].'
-      )
-
-    const initialDuty = await createDuty(
-      'Create a text file in Downloads, but ask me for the filename first.'
-    )
-    vi.spyOn(
-      initialDuty as never,
-      'saveExecutionContinuation' as never
-    ).mockImplementation((state: SavedContinuationState) => {
-      savedContinuation = state
-    })
-
-    const clarificationResult = await initialDuty.execute()
-
-    expect(clarificationResult?.output).toBe('What filename should I use?')
-    expect(clarificationResult?.data.finalIntent).toBe('clarification')
-    expect(savedContinuation?.pendingSteps).toEqual([fileCreationStep])
-
-    const resumeDuty = await createDuty('test.txt')
-    vi.spyOn(
-      resumeDuty as never,
-      'loadExecutionContinuation' as never
-    ).mockReturnValue(savedContinuation)
-    vi.spyOn(
-      resumeDuty as never,
-      'clearExecutionContinuation' as never
-    ).mockImplementation(() => undefined)
-
-    const resumedResult = await resumeDuty.execute()
-
-    expect(phaseMocks.runPlanningPhase).toHaveBeenCalledOnce()
-    expect(phaseMocks.runExecutionStep).toHaveBeenCalledTimes(2)
-    expect(resumedResult?.output).toBe(
-      'Done. I created [FILE_PATH]/home/louis/Downloads/test.txt[/FILE_PATH].'
-    )
-    expect(resumedResult?.data.finalIntent).toBe('answer')
-  })
-
-  describe('history compaction', () => {
-    it('tracks only newly appended history entries when the saved tail still matches', () => {
-      const duty = new ReActLLMDuty({ input: 'Hi there' })
-      const currentState = createCompactionState({
-        tail: [
-          createMessageLog('owner', 'Earlier owner turn', 10),
-          createMessageLog('leon', 'Earlier Leon turn', 11)
+        toolCalls: [
+          toolCall('lookup-before-recovery', CALLABLE_TOOL_NAME, {
+            query: 'Leon'
+          })
         ]
       })
-      const synchronized = (
-        duty as never
-      ).synchronizeHistoryCompactionState(
+      .mockResolvedValueOnce(null)
+      .mockImplementationOnce(async (messages, tools, options) => {
+        expect(messages).toHaveLength(1)
+        expect(messages[0]?.content).toContain('<original_owner_request>')
+        expect(messages[0]?.content).toContain('Verified evidence.')
+        expect(tools.map((tool) => tool.function.name)).toEqual([
+          AGENT_CLARIFICATION_TOOL_NAME
+        ])
+        expect(options).toEqual({
+          isRecoveryAttempt: true,
+          isFinalizationAttempt: true,
+          isContextRecoveryAttempt: true
+        })
+        return { textContent: 'Recovered evidence-based answer.' }
+      })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      catalog: createCatalog(),
+      maxIterations: 1,
+      callModel,
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Verified evidence.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('Recovered evidence-based answer.')
+  })
+
+  it('rejects hallucinated operational tools during finalization', async () => {
+    const executeFunction = vi.fn().mockResolvedValue({
+      execution: {
+        function: callable.qualifiedName,
+        status: 'success',
+        observation: 'Unexpected execution.',
+        requestedToolInput: JSON.stringify({ query: 'Leon' })
+      }
+    })
+    const callModel = vi
+      .fn()
+      .mockResolvedValueOnce({
+        toolCalls: [
+          toolCall('allowed-before-checkpoint', CALLABLE_TOOL_NAME, {
+            query: 'Leon'
+          })
+        ]
+      })
+      .mockResolvedValueOnce({
+        toolCalls: [
+          toolCall('hallucinated-final-tool', CALLABLE_TOOL_NAME, {
+            query: 'Leon'
+          })
+        ]
+      })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Finish this request.' }],
+      catalog: createCatalog(),
+      maxIterations: 1,
+      callModel,
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction).toHaveBeenCalledTimes(1)
+    expect(callModel).toHaveBeenCalledTimes(3)
+    expect(result.intent).toBe('clarification')
+    expect(result.answer).toContain('Unexpected execution.')
+    expect(result.answer).toContain('May I continue with that next step?')
+  })
+
+  it('builds context-recovery failure details from the saved run state', async () => {
+    const callModel = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new AgentModelProviderError('Context pressure.', true)
+      )
+      .mockRejectedValueOnce(new Error('Provider still unavailable.'))
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Prepare the security report.' }],
+      catalog: createCatalog(),
+      initialExecutionHistory: [
+        {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'TLS configuration verified.',
+          stepLabel: 'Verify TLS'
+        }
+      ],
+      initialTrackedSteps: [
+        { label: 'Verify TLS', status: 'completed' },
+        { label: 'Review unresolved findings', status: 'in_progress' }
+      ],
+      callModel,
+      executeFunction: async () => {
+        throw new Error('should not execute')
+      },
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.intent).toBe('clarification')
+    expect(result.answer).toContain('Prepare the security report.')
+    expect(result.answer).toContain('TLS configuration verified.')
+    expect(result.answer).toContain(
+      'Review unresolved findings (in_progress)'
+    )
+    expect(result.answer).toContain(
+      'Next, I will: Review unresolved findings.'
+    )
+  })
+
+  it('honors direct tool handoffs for explicitly forced tools', async () => {
+    const callModel = vi.fn().mockResolvedValue({
+      toolCalls: [
+        toolCall('terminal-1', CALLABLE_TOOL_NAME, { query: 'Leon' })
+      ]
+    })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Run it.' }],
+      catalog: createCatalog(),
+      callModel,
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Done.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
+        },
+        handoffSignal: {
+          intent: 'answer',
+          draft: 'The tool completed the request.'
+        }
+      }),
+      loadAgentSkill: async () => null,
+      allowDirectAnswerHandoff: true
+    })
+
+    expect(callModel).toHaveBeenCalledOnce()
+    expect(result.answer).toBe('The tool completed the request.')
+    expect(result.intent).toBe('answer')
+  })
+
+  it('keeps ordinary tool answers as observations until the model finishes', async () => {
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Complete both steps.' }],
+      catalog: createCatalog(),
+      callModel: async (messages) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('answer-1', CALLABLE_TOOL_NAME, { query: 'Leon' })
+            ]
+          }
+        }
+
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          content: 'First step complete.'
+        })
+        return { textContent: 'Both steps are complete.' }
+      },
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'First step complete.',
+          requestedToolInput: JSON.stringify({ query: 'Leon' })
+        },
+        handoffSignal: {
+          intent: 'answer',
+          draft: 'First step complete.'
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(modelTurn).toBe(2)
+    expect(result.answer).toBe('Both steps are complete.')
+  })
+
+  it('limits parallel tool calls and continues without owner input', async () => {
+    const executeFunction = vi.fn(async (_callable, toolInput: string) => ({
+      execution: {
+        function: callable.qualifiedName,
+        status: 'success',
+        observation: `Completed ${toolInput}.`,
+        requestedToolInput: toolInput
+      }
+    }))
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Run every lookup.' }],
+      catalog: createCatalog(),
+      callModel: async (messages) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: Array.from(
+              { length: AGENT_MAX_PARALLEL_TOOL_CALLS + 4 },
+              (_, index) =>
+                toolCall(`lookup-${index}`, CALLABLE_TOOL_NAME, {
+                  query: `query-${index}`
+                })
+            )
+          }
+        }
+
+        const assistantCall = messages.findLast(
+          (message) => message.role === 'assistant' && message.toolCalls
+        )
+        expect(assistantCall?.toolCalls).toHaveLength(
+          AGENT_MAX_PARALLEL_TOOL_CALLS
+        )
+        expect(assistantCall?.content).toContain('deferred 4')
+        return { textContent: 'The retained batch is complete.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction).toHaveBeenCalledTimes(
+      AGENT_MAX_PARALLEL_TOOL_CALLS
+    )
+    expect(modelTurn).toBe(2)
+    expect(result.answer).toBe('The retained batch is complete.')
+  })
+
+  it('keeps optional plans and Agent Skills inside the same loop', async () => {
+    const onPlanUpdated = vi.fn()
+    const onAgentSkillLoaded = vi.fn()
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Complete the workflow.' }],
+      catalog: createCatalog(),
+      callModel: async () => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('plan-1', AGENT_PLAN_TOOL_NAME, {
+                steps: [
+                  { label: 'Inspect source', status: 'in_progress' }
+                ]
+              })
+            ]
+          }
+        }
+        if (modelTurn === 2) {
+          return {
+            toolCalls: [
+              toolCall('skill-1', AGENT_SKILL_TOOL_NAME, {
+                skill_id: 'video-inspection'
+              })
+            ]
+          }
+        }
+        return { textContent: 'Workflow complete.' }
+      },
+      executeFunction: async () => {
+        throw new Error('should not execute')
+      },
+      loadAgentSkill: async () => ({
+        id: 'video-inspection',
+        name: 'Video Inspection',
+        description: 'Inspect a source video.',
+        rootPath: '/tmp/video-inspection',
+        skillPath: '/tmp/video-inspection/SKILL.md',
+        instructions: 'Inspect the direct source first.'
+      }),
+      onPlanUpdated,
+      onAgentSkillLoaded
+    })
+
+    expect(onPlanUpdated).toHaveBeenCalledWith([
+      { label: 'Inspect source', status: 'in_progress' }
+    ])
+    expect(onAgentSkillLoaded).toHaveBeenCalledOnce()
+    expect(result.answer).toBe('Workflow complete.')
+  })
+
+  it('blocks an identical tool call and reuses its prior observation', async () => {
+    const executeFunction = vi.fn().mockResolvedValue({
+      execution: {
+        function: callable.qualifiedName,
+        status: 'success',
+        observation: 'Found once.',
+        requestedToolInput: JSON.stringify({ query: 'Leon' })
+      }
+    })
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Find Leon.' }],
+      catalog: createCatalog(),
+      callModel: async (messages) => {
+        modelTurn += 1
+        if (modelTurn <= 2) {
+          return {
+            toolCalls: [
+              toolCall(`lookup-${modelTurn}`, CALLABLE_TOOL_NAME, {
+                query: 'Leon'
+              })
+            ]
+          }
+        }
+
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          content: expect.stringContaining('Duplicate call blocked')
+        })
+        return { textContent: 'I reused the first result.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction).toHaveBeenCalledOnce()
+    expect(result.answer).toBe('I reused the first result.')
+  })
+
+  it('blocks overlapping reads of the same tool artifact', () => {
+    const previousInput = JSON.stringify({
+      outputLogPath: '/tmp/tool-output.log',
+      options: { maxChars: 3_000 }
+    })
+    const candidateInput = JSON.stringify({
+      outputLogPath: '/tmp/tool-output.log',
+      options: { maxChars: 5_000 }
+    })
+
+    expect(
+      findDuplicateToolInputMatch(
         [
-          ...currentState.tail,
-          createMessageLog('owner', 'New owner turn', 12),
-          createMessageLog('leon', 'New Leon turn', 13)
+          {
+            function: 'operating_system_control.file.readToolArtifact',
+            status: 'success',
+            observation: 'Artifact prefix read.',
+            requestedToolInput: previousInput
+          }
         ],
-        currentState
+        'operating_system_control.file.readToolArtifact',
+        'Read artifact',
+        candidateInput
       )
+    ).toMatchObject({ stepNumber: 1 })
+  })
 
-      expect(synchronized.shouldPersist).toBe(true)
-      expect(synchronized.state.summary).toBe('- Previous topic')
-      expect(synchronized.state.tail).toHaveLength(4)
-      expect(synchronized.state.newMessagesSinceCompaction).toBe(2)
+  it('restores execution and plan state after clarification', async () => {
+    const executeFunction = vi.fn()
+    const priorExecution = {
+      function: callable.qualifiedName,
+      status: 'success' as const,
+      observation: 'Found before clarification.',
+      requestedToolInput: JSON.stringify({ query: 'Leon' })
+    }
+    const initialTrackedSteps = [
+      { label: 'Confirm recipient', status: 'in_progress' as const }
+    ]
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'The recipient is Louis.' }],
+      catalog: createCatalog(),
+      initialExecutionHistory: [priorExecution],
+      initialTrackedSteps,
+      callModel: async (messages) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('resumed-lookup', CALLABLE_TOOL_NAME, {
+                query: 'Leon'
+              })
+            ]
+          }
+        }
+
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          content: expect.stringContaining('Duplicate call blocked')
+        })
+        return { textContent: 'I continued from the saved state.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
     })
 
-    it('rebuilds the tail from the saved compaction boundary when the stored tail no longer matches', () => {
-      const duty = new ReActLLMDuty({ input: 'Hi there' })
-      const conversationLogs = [
-        createMessageLog('owner', 'Before summary', 10),
-        createMessageLog('leon', 'Last compacted reply', 20),
-        createMessageLog('owner', 'Fresh owner turn', 30),
-        createMessageLog('leon', 'Fresh Leon turn', 31)
-      ]
-      const currentState = createCompactionState({
-        summarySentAt: 20,
-        tail: [createMessageLog('owner', 'Stale tail entry', 21)]
-      })
-      const synchronized = (
-        duty as never
-      ).synchronizeHistoryCompactionState(conversationLogs, currentState)
+    expect(executeFunction).not.toHaveBeenCalled()
+    expect(result.executionHistory).toEqual([priorExecution])
+    expect(result.trackedSteps).toEqual(initialTrackedSteps)
+  })
 
-      expect(synchronized.shouldPersist).toBe(true)
-      expect(synchronized.state.summary).toBe('- Previous topic')
-      expect(synchronized.state.summarySentAt).toBe(20)
-      expect(synchronized.state.tail).toEqual(conversationLogs.slice(2))
-      expect(synchronized.state.newMessagesSinceCompaction).toBe(2)
+  it('loads toolkit schemas and context progressively', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'video_streaming',
+        toolkitName: 'Video Streaming',
+        toolkitDescription: 'Inspect online video sources.',
+        toolId: 'ytdlp',
+        toolName: 'yt-dlp',
+        toolDescription: 'Download video metadata and subtitles.'
+      }
+    ])
+    coreMocks.getToolFunctions.mockReturnValue({
+      downloadSubtitles: {
+        description: 'Download subtitles from a video source.',
+        parameters: {
+          type: 'object',
+          properties: {
+            url: { type: 'string' }
+          },
+          required: ['url'],
+          additionalProperties: false
+        }
+      }
     })
 
-    it('rebuilds the tail from the saved compaction boundary when the stored tail is empty', () => {
-      const duty = new ReActLLMDuty({ input: 'Hi there' })
-      const conversationLogs = [
-        createMessageLog('owner', 'Before summary', 10),
-        createMessageLog('leon', 'Last compacted reply', 20),
-        createMessageLog('owner', 'Fresh owner turn', 30)
-      ]
-      const currentState = createCompactionState({
-        summarySentAt: 20,
-        tail: []
-      })
-      const synchronized = (
-        duty as never
-      ).synchronizeHistoryCompactionState(conversationLogs, currentState)
+    const catalog = buildAgentToolCatalog()
+    expect(catalog.tools.map((tool) => tool.function.name)).toContain(
+      AGENT_TOOLKIT_LOADER_NAME
+    )
+    let modelTurn = 0
 
-      expect(synchronized.shouldPersist).toBe(true)
-      expect(synchronized.state.summary).toBe('- Previous topic')
-      expect(synchronized.state.tail).toEqual([conversationLogs[2]])
-      expect(synchronized.state.newMessagesSinceCompaction).toBe(1)
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Understand this video.' }],
+      catalog,
+      callModel: async (messages, tools) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('load-video', AGENT_TOOLKIT_LOADER_NAME, {
+                toolkit_id: 'video_streaming'
+              })
+            ]
+          }
+        }
+
+        expect(tools.map((tool) => tool.function.name)).toContain(
+          'video_streaming__ytdlp__downloadSubtitles'
+        )
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          content: expect.stringContaining('Direct-source guidance')
+        })
+        return { textContent: 'The video toolkit is ready.' }
+      },
+      executeFunction: async () => {
+        throw new Error('should not execute')
+      },
+      loadToolkitContext: () => 'Direct-source guidance: inspect subtitles first.',
+      loadAgentSkill: async () => null
     })
 
-    it('keeps the compacted summary in prompt history while clipping the raw tail window', () => {
-      const duty = new ReActLLMDuty({ input: 'Hi there' })
-      const state = createCompactionState({
-        summarySentAt: 50,
-        tail: Array.from({ length: 60 }, (_, index) =>
-          createMessageLog(
-            index % 2 === 0 ? 'owner' : 'leon',
-            `Message ${index + 1}`,
-            100 + index
-          )
-        ),
-        newMessagesSinceCompaction: 24
-      })
-      const history = (duty as never).buildHistoryForCurrentTurn([], state, {
-        historyLimit: 48,
-        compactionBatchSize: 36
-      })
+    expect(result.intent).toBe('answer')
+    expect(catalog.loadedToolkitIds).toEqual(new Set(['video_streaming']))
+  })
 
-      expect(history).toHaveLength(48)
-      expect(history[0]?.message).toBe(
-        'Earlier conversation summary:\n- Previous topic'
+  it('bounds large observations and prunes inactive schemas near the context limit', () => {
+    const largeObservation = buildBoundedToolObservation({
+      status: 'success',
+      message: 'Subtitles loaded.',
+      output_log_path: '/tmp/tool-output.log',
+      data: { output: 'subtitle '.repeat(2_000) }
+    })
+    expect(largeObservation.length).toBeLessThanOrEqual(6_000)
+    expect(largeObservation).toContain('/tmp/tool-output.log')
+
+    const oldToolkitTool = {
+      type: 'function' as const,
+      function: {
+        name: 'video__download__run',
+        description: 'Download a video.',
+        parameters: { type: 'object' }
+      }
+    }
+    const recentToolkitTool = {
+      type: 'function' as const,
+      function: {
+        name: 'filesystem__read__run',
+        description: 'Read a file.',
+        parameters: { type: 'object' }
+      }
+    }
+    const loaderTool = {
+      type: 'function' as const,
+      function: {
+        name: AGENT_TOOLKIT_LOADER_NAME,
+        description: 'Load a toolkit.',
+        parameters: { type: 'object' }
+      }
+    }
+    const context = prepareAgentModelContext({
+      transcript: [
+        { role: 'user', content: 'Inspect the subtitles.' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [
+            toolCall('read-1', recentToolkitTool.function.name, {
+              path: '/tmp/subtitles.srt'
+            })
+          ]
+        },
+        {
+          role: 'tool',
+          toolCallId: 'read-1',
+          toolName: recentToolkitTool.function.name,
+          content: largeObservation
+        }
+      ],
+      systemPrompt: 'Use tools.',
+      tools: [loaderTool, oldToolkitTool, recentToolkitTool],
+      compactionTriggerTokens: 1,
+      forceCompaction: true
+    })
+
+    expect(context.wasCompacted).toBe(true)
+    expect(context.tools).toEqual([loaderTool, recentToolkitTool])
+    expect(context.transcript.at(-1)).toMatchObject({
+      role: 'assistant',
+      content: expect.stringContaining(
+        'earlier_completed_tool_exchange_compacted'
       )
-      expect(history[1]?.message).toBe('Message 14')
-      expect(history[47]?.message).toBe('Message 60')
+    })
+    expect(context.transcript.at(-1)?.content).toContain(
+      '/tmp/tool-output.log'
+    )
+  })
+
+  it('restores loaded toolkit schemas after clarification', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'video_streaming',
+        toolkitName: 'Video Streaming',
+        toolkitDescription: 'Inspect online video sources.',
+        toolId: 'ytdlp',
+        toolName: 'yt-dlp',
+        toolDescription: 'Download video metadata and subtitles.'
+      }
+    ])
+    coreMocks.getToolFunctions.mockReturnValue({
+      downloadSubtitles: {
+        description: 'Download subtitles from a video source.',
+        parameters: {
+          type: 'object',
+          properties: { url: { type: 'string' } },
+          required: ['url'],
+          additionalProperties: false
+        }
+      }
     })
 
-    it('does not compact again when the fresh-entry counter is still below the threshold', async () => {
-      const duty = new ReActLLMDuty({ input: 'Set a timer for 3 seconds' })
-      const state = createCompactionState({
-        summary: '- Timer discussion already compacted',
-        summarySentAt: 100,
-        tail: Array.from({ length: 38 }, (_, index) =>
-          createMessageLog(
-            index % 2 === 0 ? 'owner' : 'leon',
-            `Tail message ${index + 1}`,
-            200 + index
-          )
-        ),
-        newMessagesSinceCompaction: 2
-      })
-      const loadStateSpy = vi
-        .spyOn(duty as never, 'loadHistoryCompactionProviderState' as never)
-        .mockReturnValue(state)
-      const rollSpy = vi
-        .spyOn(duty as never, 'rollHistoryCompactionState' as never)
-        .mockResolvedValue(state)
+    const catalog = buildAgentToolCatalog(null, ['video_streaming'])
 
-      coreMocks.conversationLogger.loadAll.mockResolvedValue(state.tail)
+    expect(catalog.loadedToolkitIds).toEqual(new Set(['video_streaming']))
+    expect(catalog.tools.map((tool) => tool.function.name)).toContain(
+      'video_streaming__ytdlp__downloadSubtitles'
+    )
+  })
 
-      await (duty as never).maybeCompactHistoryAfterAnswer('plan_test_widget', [])
-
-      expect(loadStateSpy).toHaveBeenCalledOnce()
-      expect(rollSpy).not.toHaveBeenCalled()
-      expect(widgetMocks.emitPlanWidget).not.toHaveBeenCalled()
+  it('persists a resumable transcript with a bounded lifetime', () => {
+    const state = createAgentLoopContinuationState({
+      originalInput: 'Send the message.',
+      clarificationQuestion: 'Which recipient?',
+      planWidgetId: 'plan-1',
+      trackedSteps: [{ label: 'Send message', status: 'in_progress' }],
+      executionHistory: [
+        {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Recipient lookup complete.'
+        }
+      ],
+      loadedToolkitIds: ['communication']
     })
+
+    expect(isAgentLoopContinuationStateValid(state)).toBe(true)
+    expect(state.transcript).not.toBe(undefined)
+    expect(state.executionHistory).toHaveLength(1)
+    expect(state.loadedToolkitIds).toEqual(['communication'])
+    expect(state.transcript).toHaveLength(1)
+    expect(state.transcript[0]?.content).toContain(
+      'Recipient lookup complete.'
+    )
+    expect(state.transcript[0]?.content).not.toContain('Which recipient?')
+  })
+
+  it('keeps continuation checkpoints bounded after large runs', () => {
+    const executionHistory = Array.from({ length: 100 }, (_, index) => ({
+      function: callable.qualifiedName,
+      status: 'success',
+      observation: `Evidence ${index}: ${'detail '.repeat(500)}`
+    }))
+    const state = createAgentLoopContinuationState({
+      originalInput: 'Complete the investigation.',
+      clarificationQuestion: 'May I continue?',
+      planWidgetId: 'plan-1',
+      trackedSteps: [],
+      executionHistory,
+      loadedToolkitIds: ['test']
+    })
+
+    expect(state.transcript).toHaveLength(1)
+    expect(state.transcript[0]?.content.length).toBeLessThan(9_000)
+    expect(state.transcript[0]?.content).toContain('Evidence 99')
+    expect(state.transcript[0]?.content).not.toContain('Evidence 0')
   })
 })

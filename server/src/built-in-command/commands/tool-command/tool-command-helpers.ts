@@ -6,10 +6,8 @@ import type {
   BuiltInCommandExecutionResult
 } from '@/built-in-command/built-in-command'
 import { createListResult } from '@/built-in-command/built-in-command-renderer'
-import {
-  PROFILE_TOOLS_PATH,
-  TOOLS_PATH
-} from '@/constants'
+import { TOOLS_PATH } from '@/constants'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ProfileHelper } from '@/helpers/profile-helper'
 
 export const TOOL_COMMAND_NAME = 'tool'
@@ -122,7 +120,7 @@ export function getSortedToolAutocompleteEntries(
 ): ToolAutocompleteEntry[] {
   const toolsByQualifiedId = new Map<string, ToolAutocompleteEntry>()
 
-  for (const toolsPath of [TOOLS_PATH, PROFILE_TOOLS_PATH]) {
+  for (const toolsPath of [TOOLS_PATH, getProfilePaths().tools]) {
     if (!fs.existsSync(toolsPath)) {
       continue
     }

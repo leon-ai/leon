@@ -53,29 +53,27 @@ export const runAction: FastifyPluginAsync<APIOptions> = async (
           })
         }
 
-        await NLUProcessResultUpdater.update({
-          skillName: skill
-        })
-        await NLUProcessResultUpdater.update({
-          actionName: action
-        })
-        await NLUProcessResultUpdater.update({
-          new: {
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-expect-error
-            actionArguments: actionParams.action_arguments,
-            ...actionParams
-          }
-        })
-
-        // Ensure we can send response from the brain
-        BRAIN.isMuted = false
-
         const processedData = await CONVERSATION_SESSION_MANAGER.runWithSession(
           typeof sessionId === 'string'
             ? sessionId
             : CONVERSATION_SESSION_MANAGER.getActiveSessionId(),
-          () => BRAIN.runSkillAction(NLU.nluProcessResult)
+          async () => {
+            await NLUProcessResultUpdater.update({ skillName: skill })
+            await NLUProcessResultUpdater.update({ actionName: action })
+            await NLUProcessResultUpdater.update({
+              new: {
+                // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+                // @ts-expect-error
+                actionArguments: actionParams.action_arguments,
+                ...actionParams
+              }
+            })
+
+            // Ensure we can send response from the brain.
+            BRAIN.isMuted = false
+
+            return BRAIN.runSkillAction(NLU.nluProcessResult)
+          }
         )
 
         if (processedData.lastOutputFromSkill) {
