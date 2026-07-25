@@ -19,6 +19,10 @@ const REMOTE_LLM_PROVIDERS = [
         value: 'anthropic/claude-fable-5'
       },
       {
+        label: 'anthropic/claude-opus-5',
+        value: 'anthropic/claude-opus-5'
+      },
+      {
         label: 'anthropic/claude-opus-4.8',
         value: 'anthropic/claude-opus-4.8'
       },
@@ -58,7 +62,8 @@ const REMOTE_LLM_PROVIDERS = [
   {
     ...getRequiredProviderAccountConfig('anthropic'),
     models: [
-      { label: 'Claude Opus 4.8 (Recommended)', value: 'claude-opus-4-8' },
+      { label: 'Claude Opus 5 (Recommended)', value: 'claude-opus-5' },
+      { label: 'Claude Opus 4.8', value: 'claude-opus-4-8' },
       { label: 'Claude Fable 5', value: 'claude-fable-5' },
       { label: 'Claude Opus 4.7', value: 'claude-opus-4-7' },
       { label: 'Claude Opus 4.6', value: 'claude-opus-4-6' },
