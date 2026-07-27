@@ -21,7 +21,7 @@ const config = {
   max_blank_time: 1_000 // Maximum time to consider a blank (ms)
 }
 const serverUrl =
-  import.meta.env.VITE_LEON_NODE_ENV === 'production'
+  import.meta.env.PROD
     ? ''
     : `${config.server_host}:${config.server_port}`
 
