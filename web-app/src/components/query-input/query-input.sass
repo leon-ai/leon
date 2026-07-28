@@ -6,21 +6,23 @@
 
   &::before
     position: absolute
-    top: 0
     bottom: 0
     left: 50%
     z-index: -1
     width: 85%
+    height: var(--query-input-height)
     background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 66%, transparent), color-mix(in srgb, var(--color-accent-pink) 66%, transparent))
     filter: blur(66px)
     opacity: .66
     pointer-events: none
     transform: translateX(-50%)
-    transition: opacity .75s var(--transition-timing-main)
+    transform-origin: center bottom
+    transition: opacity .75s var(--transition-timing-main), transform .75s var(--transition-timing-main)
     content: ''
 
   &:focus-within::before
-    opacity: .9
+    opacity: .8
+    animation: query-input-glow-breathe 5s ease-in-out .75s infinite
 
 .query-input
   --query-input-action-gap: var(--space-sm)
@@ -36,7 +38,7 @@
   padding: var(--query-input-padding-block) var(--query-input-padding-inline)
   border: var(--query-input-border-width) solid transparent
   border-radius: 30px
-  background: linear-gradient(var(--color-query-background), var(--color-query-background)) padding-box, var(--gradient-border) border-box
+  background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
   backdrop-filter: blur(18px)
   overflow: hidden
   transition: height var(--transition-duration-main) var(--transition-timing-main)
@@ -119,3 +121,21 @@
     visibility: hidden
     pointer-events: none
     resize: none
+
+@keyframes query-input-glow-breathe
+  0%,
+  100%
+    opacity: .8
+    transform: translateX(-50%) scale3d(1, 1, 1)
+
+  50%
+    opacity: .7
+    transform: translateX(-50%) scale3d(.98, .9, 1)
+
+@media (prefers-reduced-motion: reduce)
+  .query-input-container
+    &::before
+      transition: none
+
+    &:focus-within::before
+      animation: none
