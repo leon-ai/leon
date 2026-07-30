@@ -52,7 +52,8 @@ const DEFAULT_CONFIG: LeonConfig = {
   },
   runtime: {
     pulse_enabled: true,
-    private_diary_enabled: true
+    private_diary_enabled: true,
+    progressive_toolkit_loading: true
   },
   context: {
     disabled_files: []

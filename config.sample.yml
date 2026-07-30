@@ -88,6 +88,8 @@ runtime:
   pulse_enabled: true
   # Enable Leon's private diary/self-model mechanism.
   private_diary_enabled: true
+  # Load toolkit function schemas only when needed.
+  progressive_toolkit_loading: true
 
 context:
   # Context files to disable. Use ["*"] to disable all context files, including

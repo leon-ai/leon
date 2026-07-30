@@ -95,7 +95,8 @@ export const configSchemaObject = strictObject({
   }),
   runtime: strictObject({
     pulse_enabled: Type.Boolean(),
-    private_diary_enabled: Type.Boolean()
+    private_diary_enabled: Type.Boolean(),
+    progressive_toolkit_loading: Type.Boolean()
   }),
   context: strictObject({
     disabled_files: Type.Array(Type.String({ minLength: 1 }), {

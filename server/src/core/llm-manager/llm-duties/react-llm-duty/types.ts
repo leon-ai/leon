@@ -17,6 +17,7 @@ export interface FunctionConfig {
   description: string
   parameters: Record<string, unknown>
   output_schema?: Record<string, unknown>
+  deduplicate_calls?: boolean
   hooks?: {
     post_execution?: {
       response_jq?: string

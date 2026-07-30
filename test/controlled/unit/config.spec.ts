@@ -185,7 +185,8 @@ describe('ConfigManager', () => {
       },
       runtime: {
         pulse_enabled: false,
-        private_diary_enabled: false
+        private_diary_enabled: false,
+        progressive_toolkit_loading: false
       },
       context: {
         disabled_files: ['*']

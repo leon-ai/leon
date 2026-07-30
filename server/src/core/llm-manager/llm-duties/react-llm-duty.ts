@@ -39,6 +39,7 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
+import { CONFIG_MANAGER } from '@/config'
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentProvider()
@@ -205,6 +206,7 @@ export class ReActLLMDuty extends LLMDuty {
   protected systemPrompt: LLMDutyParams['systemPrompt'] = null
   protected readonly name = 'Agent LLM Duty'
   protected input: LLMDutyParams['input'] = null
+  private completionCount = 0
   private totalInputTokens = 0
   private totalOutputTokens = 0
   private totalVisibleOutputTokens = 0
@@ -261,6 +263,7 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.info('Executing...')
 
     this.executionStartedAt = Date.now()
+    this.completionCount = 0
     this.totalInputTokens = 0
     this.totalOutputTokens = 0
     this.totalVisibleOutputTokens = 0
@@ -328,7 +331,8 @@ export class ReActLLMDuty extends LLMDuty {
 
       const catalog = buildAgentToolCatalog(
         this.activeForcedToolName,
-        continuation?.loadedToolkitIds
+        continuation?.loadedToolkitIds,
+        CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
       )
       if (catalog.tools.length === 0) {
         return finalize(
@@ -1645,6 +1649,7 @@ export class ReActLLMDuty extends LLMDuty {
     const observedMetrics = observeCompletionMetrics({
       providerName: getLLMProviderName(),
       accumulator: {
+        completionCount: this.completionCount,
         totalInputTokens: this.totalInputTokens,
         totalOutputTokens: this.totalOutputTokens,
         totalVisibleOutputTokens: this.totalVisibleOutputTokens,
@@ -1666,6 +1671,7 @@ export class ReActLLMDuty extends LLMDuty {
       ...(params.firstTokenAt ? { firstTokenAt: params.firstTokenAt } : {}),
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
+    this.completionCount = observedMetrics.accumulator.completionCount
     this.totalInputTokens = observedMetrics.accumulator.totalInputTokens
     this.totalOutputTokens = observedMetrics.accumulator.totalOutputTokens
     this.totalVisibleOutputTokens =
@@ -1792,6 +1798,7 @@ export class ReActLLMDuty extends LLMDuty {
     )
 
     const llmMetrics = deriveLLMMetrics({
+      completionCount: this.completionCount,
       providerName: getLLMProviderName(),
       normalizedOutput,
       totalInputTokens: this.totalInputTokens,

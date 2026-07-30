@@ -49,6 +49,12 @@ const toolFunctionSchemaObject = Type.Strict(
         }
       )
     ),
+    deduplicate_calls: Type.Optional(
+      Type.Boolean({
+        description:
+          'Whether the agent should block repeated successful calls with the same input. Disable this for state reads whose result can change over time.'
+      })
+    ),
     hooks: Type.Optional(
       Type.Strict(
         Type.Object({
