@@ -119,6 +119,7 @@ describe('ConfigManager', () => {
         default: null,
         workflow: 'openai/gpt-4.1-mini',
         agent: null,
+        model_settings: {},
         providers: {
           llamacpp: {
             base_url: 'http://127.0.0.1:8081/v1',

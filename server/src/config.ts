@@ -90,6 +90,7 @@ const DEFAULT_CONFIG: LeonConfig = {
     default: null,
     workflow: null,
     agent: null,
+    model_settings: {},
     providers: {
       llamacpp: {
         base_url: 'http://127.0.0.1:8080/v1',

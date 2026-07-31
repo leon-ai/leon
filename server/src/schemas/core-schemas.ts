@@ -5,6 +5,11 @@ import {
   type TProperties
 } from '@sinclair/typebox'
 
+import {
+  LLM_MODEL_REASONING_VALUES,
+  LLM_MODEL_SPEED_VALUES
+} from '@/core/llm-manager/llm-model-catalog'
+
 const optionalString = Type.Union([Type.String(), Type.Null()])
 const strictObject = <T extends TProperties>(properties: T): TObject<T> =>
   Type.Strict(Type.Object(properties, { additionalProperties: false }))
@@ -39,6 +44,16 @@ const llmProviderWithBaseURL = strictObject({
   base_url: Type.String({ minLength: 1 }),
   api_key: secretReference
 })
+const llmModelSetting = strictObject({
+  reasoning: Type.Optional(
+    Type.Union(
+      LLM_MODEL_REASONING_VALUES.map((value) => Type.Literal(value))
+    )
+  ),
+  speed: Type.Optional(
+    Type.Union(LLM_MODEL_SPEED_VALUES.map((value) => Type.Literal(value)))
+  )
+})
 
 export const configSchemaObject = strictObject({
   language: Type.String({ minLength: 1 }),
@@ -69,6 +84,10 @@ export const configSchemaObject = strictObject({
     default: optionalString,
     workflow: optionalString,
     agent: optionalString,
+    model_settings: Type.Record(
+      Type.String({ minLength: 1 }),
+      llmModelSetting
+    ),
     providers: strictObject({
       llamacpp: llmProviderWithBaseURL,
       sglang: llmProviderWithBaseURL,

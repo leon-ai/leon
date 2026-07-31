@@ -124,6 +124,43 @@ export default class LLMProvider {
       : undefined
   }
 
+  /** Applies per-model user overrides without defeating duty safety settings. */
+  private applyConfiguredModelSettings(
+    completionParams: CompletionParams
+  ): void {
+    const target = this.getTargetForDuty(completionParams.dutyType)
+    const settings = CONFIG_STATE.getModelSettingsState().getSettings(target)
+    const hasDutyReasoningOverride =
+      completionParams.disableThinking === true ||
+      completionParams.reasoningMode === 'off'
+
+    if (settings.reasoning !== 'auto' && !hasDutyReasoningOverride) {
+      completionParams.reasoningMode = settings.reasoning === 'none'
+        ? 'off'
+        : 'on'
+
+      if (settings.reasoning === 'on') {
+        completionParams.reasoningUseDefaultEffort = true
+      } else {
+        completionParams.reasoningEffort = settings.reasoning
+      }
+
+      if (settings.reasoning === 'none') {
+        completionParams.disableThinking = true
+      }
+    }
+
+    // AI SDK v4 still calls OpenAI's Fast Mode "priority". OpenRouter maps
+    // the same internal hint to throughput routing in its provider adapter.
+    if (!completionParams.serviceTier) {
+      if (settings.speed === 'fast') {
+        completionParams.serviceTier = 'priority'
+      } else if (settings.speed === 'normal') {
+        completionParams.serviceTier = 'default'
+      }
+    }
+  }
+
   constructor() {
     LogHelper.title('LLM Provider')
     LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
@@ -2134,6 +2171,8 @@ export default class LLMProvider {
     completionParams.remoteProviderErrorRetries =
       completionParams.remoteProviderErrorRetries ??
       DEFAULT_REMOTE_PROVIDER_ERROR_RETRIES
+
+    this.applyConfiguredModelSettings(completionParams)
 
     /**
      * TODO: support onToken (stream) for Groq provider too

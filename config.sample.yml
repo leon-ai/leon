@@ -26,6 +26,8 @@ llm:
   # Optional per-mode overrides. Null values fall back to llm.default.
   workflow: null
   agent: null
+  # Persisted per-model overrides.
+  model_settings: {}
   providers:
     llamacpp:
       base_url: http://127.0.0.1:8080/v1

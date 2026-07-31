@@ -4,8 +4,10 @@ import type {
   CompletionParams,
   LLMReasoningMode
 } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
+import { canDisableLLMModelReasoning } from '@/core/llm-manager/llm-model-catalog'
 
-type ClaudeModelFamily = 'haiku' | 'opus' | 'sonnet'
+type ClaudeModelFamily = 'fable' | 'haiku' | 'opus' | 'sonnet'
 
 interface ClaudeModelVersion {
   family: ClaudeModelFamily
@@ -16,10 +18,19 @@ interface ClaudeModelVersion {
 const CLAUDE_MODEL_ID_PART_SEPARATOR = '-'
 const CLAUDE_MODEL_ID_PREFIX = 'claude'
 const CLAUDE_MODEL_DATE_PART_LENGTH = 8
-const CLAUDE_MODEL_FAMILIES: ClaudeModelFamily[] = ['haiku', 'opus', 'sonnet']
+const CLAUDE_MODEL_FAMILIES: ClaudeModelFamily[] = [
+  'fable',
+  'haiku',
+  'opus',
+  'sonnet'
+]
 const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  fable: {
+    major: 5,
+    minor: 0
+  },
   opus: {
     major: 4,
     minor: 6
@@ -32,6 +43,10 @@ const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
 const CLAUDE_SAMPLING_UNSUPPORTED_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  fable: {
+    major: 5,
+    minor: 0
+  },
   opus: {
     major: 4,
     minor: 7
@@ -118,6 +133,11 @@ function buildManualThinkingOptions(
   completionParams: CompletionParams
 ): Record<string, unknown> {
   const budget = completionParams.thoughtTokensBudget
+  const speed = completionParams.serviceTier === 'priority'
+    ? 'fast'
+    : completionParams.serviceTier === 'default'
+      ? 'standard'
+      : undefined
 
   return {
     anthropic: {
@@ -127,6 +147,7 @@ function buildManualThinkingOptions(
           ? { budgetTokens: Math.max(1_024, Math.floor(budget)) }
           : { budgetTokens: 1_024 })
       },
+      ...(speed ? { speed } : {}),
       sendReasoning: true
     }
   }
@@ -137,6 +158,11 @@ function buildAnthropicProviderOptions(
   reasoningMode: LLMReasoningMode | null,
   completionParams: CompletionParams
 ): Record<string, unknown> {
+  const speed = completionParams.serviceTier === 'priority'
+    ? 'fast'
+    : completionParams.serviceTier === 'default'
+      ? 'standard'
+      : undefined
   const effectiveReasoningMode = completionParams.disableThinking === true
     || (
       Array.isArray(completionParams.tools) &&
@@ -147,10 +173,28 @@ function buildAnthropicProviderOptions(
     ? 'off'
     : reasoningMode
 
+  if (
+    (effectiveReasoningMode === 'off' || effectiveReasoningMode === 'guarded') &&
+    !canDisableLLMModelReasoning(LLMProviders.Anthropic, model)
+  ) {
+    return {
+      anthropic: {
+        thinking: {
+          type: 'adaptive',
+          display: 'summarized'
+        },
+        effort: 'low',
+        ...(speed ? { speed } : {}),
+        sendReasoning: true
+      }
+    }
+  }
+
   if (effectiveReasoningMode === 'off' || effectiveReasoningMode === 'guarded') {
     return {
       anthropic: {
         thinking: { type: 'disabled' },
+        ...(speed ? { speed } : {}),
         sendReasoning: true
       }
     }
@@ -166,7 +210,10 @@ function buildAnthropicProviderOptions(
         type: 'adaptive',
         display: 'summarized'
       },
-      effort: 'high',
+      effort: completionParams.reasoningEffort === 'none'
+        ? 'high'
+        : completionParams.reasoningEffort || 'high',
+      ...(speed ? { speed } : {}),
       sendReasoning: true
     }
   }

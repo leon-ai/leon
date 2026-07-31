@@ -9,6 +9,11 @@ import {
 } from '@/built-in-command/built-in-command'
 import { createListResult } from '@/built-in-command/built-in-command-renderer'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import {
+  getLLMModelCatalogEntries,
+  type LLMModelReasoning,
+  type LLMModelSpeed
+} from '@/core/llm-manager/llm-model-catalog'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { ProfileHelper } from '@/helpers/profile-helper'
 
@@ -19,15 +24,26 @@ const CONFIGURED_TARGET_PARAMETER_NAME = 'configured_target'
 const PROVIDER_PARAMETER_NAME = 'provider'
 const API_KEY_ENV_PARAMETER_NAME = 'api_key_env'
 const CREATE_API_KEY_LINK_LABEL = 'Create your API key here'
+const REASONING_SUBCOMMAND = 'reasoning'
+const SPEED_SUBCOMMAND = 'speed'
+const MODEL_SETTING_SUBCOMMANDS = [
+  REASONING_SUBCOMMAND,
+  SPEED_SUBCOMMAND
+] as const
 const HIDDEN_MODEL_COMMAND_PROVIDERS = new Set<LLMProviders>([
   LLMProviders.SGLang
 ])
 
 export class ModelCommand extends BuiltInCommand {
   protected override description =
-    'Display or change the configured LLM provider and model.'
+    'Display or change the configured LLM model, reasoning, and speed.'
   protected override icon_name = 'ri-brain-line'
-  protected override supported_usages = ['/model', '/model <provider> <model>']
+  protected override supported_usages = [
+    '/model',
+    '/model <provider> <model>',
+    '/model reasoning [value]',
+    '/model speed [value]'
+  ]
   protected override help_usage = '/model <provider> <model>'
   protected override required_parameters = [
     {
@@ -47,13 +63,38 @@ export class ModelCommand extends BuiltInCommand {
     const providerArgument = context.args[0]?.toLowerCase() || ''
     const requestedModel = context.args.slice(1).join(' ').trim()
 
+    if (providerArgument === REASONING_SUBCOMMAND) {
+      return this.getModelSettingAutocompleteItems(
+        REASONING_SUBCOMMAND,
+        context.args[1] || ''
+      )
+    }
+
+    if (providerArgument === SPEED_SUBCOMMAND) {
+      return this.getModelSettingAutocompleteItems(
+        SPEED_SUBCOMMAND,
+        context.args[1] || ''
+      )
+    }
+
     if (
       context.args.length === 0 ||
       (context.args.length === 1 && !context.ends_with_space)
     ) {
-      return this.getVisibleSupportedProviders()
+      const subcommandItems = MODEL_SETTING_SUBCOMMANDS
+        .filter((subcommand) => subcommand.startsWith(providerArgument))
+        .map((subcommand): BuiltInCommandAutocompleteItem => ({
+          type: 'parameter',
+          icon_name: this.getIconName(),
+          name: subcommand,
+          description: `Configure the active model's ${subcommand}.`,
+          usage: `/model ${subcommand} [value]`,
+          supported_usages: this.getSupportedUsages(),
+          value: `/model ${subcommand}`
+        }))
+      const providerItems = this.getVisibleSupportedProviders()
         .filter((provider) => provider.startsWith(providerArgument))
-        .map((provider) => ({
+        .map((provider): BuiltInCommandAutocompleteItem => ({
           type: 'parameter',
           icon_name: this.getIconName(),
           name: provider,
@@ -62,29 +103,46 @@ export class ModelCommand extends BuiltInCommand {
           supported_usages: this.getSupportedUsages(),
           value: `/model ${provider}`
         }))
+
+      return [...subcommandItems, ...providerItems]
     }
 
     if (!modelState.isSupportedProvider(providerArgument)) {
       return []
     }
 
-    return [
-      {
+    const catalogEntries = getLLMModelCatalogEntries(providerArgument)
+      .filter((entry) => {
+        const normalizedCandidate = requestedModel.toLowerCase()
+
+        return !normalizedCandidate ||
+          entry.model.toLowerCase().startsWith(normalizedCandidate) ||
+          entry.label.toLowerCase().startsWith(normalizedCandidate)
+      })
+
+    if (catalogEntries.length > 0) {
+      return catalogEntries.map((entry) => ({
         type: 'parameter',
         icon_name: this.getIconName(),
-        name: requestedModel || providerArgument,
-        description: requestedModel
-          ? `Set the ${providerArgument} model to "${requestedModel}".`
-          : `Set the ${providerArgument} model.`,
-        usage: requestedModel
-          ? `/model ${providerArgument} ${requestedModel}`
-          : `/model ${providerArgument} <model>`,
+        name: entry.label,
+        description: `Set the ${providerArgument} model to "${entry.model}".`,
+        usage: `/model ${providerArgument} ${entry.model}`,
         supported_usages: this.getSupportedUsages(),
-        value: requestedModel
-          ? `/model ${providerArgument} ${requestedModel}`
-          : `/model ${providerArgument}`
-      }
-    ]
+        value: `/model ${providerArgument} ${entry.model}`
+      }))
+    }
+
+    return requestedModel
+      ? [{
+          type: 'parameter',
+          icon_name: this.getIconName(),
+          name: requestedModel,
+          description: `Set the ${providerArgument} model to "${requestedModel}".`,
+          usage: `/model ${providerArgument} ${requestedModel}`,
+          supported_usages: this.getSupportedUsages(),
+          value: `/model ${providerArgument} ${requestedModel}`
+        }]
+      : []
   }
 
   public override async execute(
@@ -95,7 +153,26 @@ export class ModelCommand extends BuiltInCommand {
     const providerArgument = context.args[0]?.toLowerCase() || ''
     const requestedModel = context.args.slice(1).join(' ').trim()
 
+    if (providerArgument === REASONING_SUBCOMMAND) {
+      return this.executeModelSetting(
+        REASONING_SUBCOMMAND,
+        context.args[1]?.toLowerCase() || ''
+      )
+    }
+
+    if (providerArgument === SPEED_SUBCOMMAND) {
+      return this.executeModelSetting(
+        SPEED_SUBCOMMAND,
+        context.args[1]?.toLowerCase() || ''
+      )
+    }
+
     if (!providerArgument) {
+      const agentTarget = modelState.getAgentTarget()
+      const modelSettings = CONFIG_STATE
+        .getModelSettingsState()
+        .getSettings(agentTarget)
+
       return {
         status: 'completed',
         result: createListResult({
@@ -121,6 +198,14 @@ export class ModelCommand extends BuiltInCommand {
             {
               label: 'Agent model',
               value: modelState.getAgentModelName()
+            },
+            {
+              label: 'Agent reasoning',
+              value: modelSettings.reasoning
+            },
+            {
+              label: 'Agent speed',
+              value: modelSettings.speed
             },
             {
               label: 'Supported providers',
@@ -297,6 +382,113 @@ export class ModelCommand extends BuiltInCommand {
             tone: 'error'
           }
         ]
+      })
+    }
+  }
+
+  private getModelSettingAutocompleteItems(
+    setting: typeof REASONING_SUBCOMMAND | typeof SPEED_SUBCOMMAND,
+    requestedValue: string
+  ): BuiltInCommandAutocompleteItem[] {
+    const target = CONFIG_STATE.getModelState().getAgentTarget()
+    const settingsState = CONFIG_STATE.getModelSettingsState()
+    const normalizedRequestedValue = requestedValue.toLowerCase()
+    const values = setting === REASONING_SUBCOMMAND
+      ? settingsState.getAvailableReasoning(target)
+      : settingsState.getAvailableSpeed(target)
+
+    return values
+      .filter((value) => value.startsWith(normalizedRequestedValue))
+      .map((value) => ({
+        type: 'parameter',
+        icon_name: this.getIconName(),
+        name: value,
+        description: `Set ${target.label} ${setting} to "${value}".`,
+        usage: `/model ${setting} ${value}`,
+        supported_usages: this.getSupportedUsages(),
+        value: `/model ${setting} ${value}`
+      }))
+  }
+
+  private async executeModelSetting(
+    setting: typeof REASONING_SUBCOMMAND | typeof SPEED_SUBCOMMAND,
+    requestedValue: string
+  ): Promise<BuiltInCommandExecutionResult> {
+    const target = CONFIG_STATE.getModelState().getAgentTarget()
+    const settingsState = CONFIG_STATE.getModelSettingsState()
+    const currentSettings = settingsState.getSettings(target)
+    const availableValues = setting === REASONING_SUBCOMMAND
+      ? settingsState.getAvailableReasoning(target)
+      : settingsState.getAvailableSpeed(target)
+
+    if (!target.isEnabled || !target.isResolved) {
+      return {
+        status: 'error',
+        result: createListResult({
+          title: 'Model Not Configured',
+          tone: 'error',
+          items: [{
+            label: 'Configure an agent model before changing its settings.',
+            tone: 'error'
+          }]
+        })
+      }
+    }
+
+    if (!requestedValue) {
+      return {
+        status: 'completed',
+        result: createListResult({
+          title: `Model ${setting === REASONING_SUBCOMMAND ? 'Reasoning' : 'Speed'}`,
+          tone: 'info',
+          items: [
+            { label: 'Model', value: target.label },
+            { label: 'Current value', value: currentSettings[setting] },
+            { label: 'Available values', value: availableValues.join(', ') }
+          ]
+        })
+      }
+    }
+
+    try {
+      if (setting === REASONING_SUBCOMMAND) {
+        await settingsState.setReasoning(
+          target,
+          requestedValue as LLMModelReasoning
+        )
+      } else {
+        await settingsState.setSpeed(target, requestedValue as LLMModelSpeed)
+      }
+    } catch (error) {
+      return {
+        status: 'error',
+        result: createListResult({
+          title: `Unsupported Model ${setting === REASONING_SUBCOMMAND ? 'Reasoning' : 'Speed'}`,
+          tone: 'error',
+          items: [
+            {
+              label: error instanceof Error ? error.message : String(error),
+              tone: 'error'
+            },
+            {
+              label: 'Available values',
+              value: availableValues.join(', '),
+              tone: 'error'
+            }
+          ]
+        })
+      }
+    }
+
+    return {
+      status: 'completed',
+      result: createListResult({
+        title: `Model ${setting === REASONING_SUBCOMMAND ? 'Reasoning' : 'Speed'} Updated`,
+        tone: 'success',
+        items: [{
+          label: `${target.label} ${setting} is now set to "${requestedValue}".`,
+          tone: 'success'
+        }]
       })
     }
   }

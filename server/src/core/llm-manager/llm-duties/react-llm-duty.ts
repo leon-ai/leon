@@ -1212,10 +1212,32 @@ export class ReActLLMDuty extends LLMDuty {
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
+    const modelSettings = CONFIG_STATE
+      .getModelSettingsState()
+      .getSettings(CONFIG_STATE.getModelState().getAgentTarget())
+    const configuredReasoning = modelSettings.reasoning
     const reasoningMode =
       options.isRecoveryAttempt || options.isFinalizationAttempt
       ? 'off'
-      : inferencePolicy.reasoningMode
+      : configuredReasoning === 'auto'
+        ? inferencePolicy.reasoningMode
+        : configuredReasoning === 'none'
+          ? 'off'
+          : 'on'
+    const reasoningEffort =
+      options.isRecoveryAttempt || options.isFinalizationAttempt ||
+      configuredReasoning === 'auto' || configuredReasoning === 'on'
+        ? undefined
+        : configuredReasoning
+    const reasoningUseDefaultEffort =
+      !options.isRecoveryAttempt &&
+      !options.isFinalizationAttempt &&
+      configuredReasoning === 'on'
+    const serviceTier = modelSettings.speed === 'fast'
+      ? 'priority'
+      : modelSettings.speed === 'normal'
+        ? 'default'
+        : undefined
     const disableThinking = reasoningMode === 'off'
     const shouldEmitReasoning =
       reasoningMode !== 'off' && inferencePolicy.emitReasoning
@@ -1242,6 +1264,8 @@ export class ReActLLMDuty extends LLMDuty {
       phasePolicySummary: formatAgentInferencePolicyForLog({
         ...inferencePolicy,
         reasoningMode,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(serviceTier ? { serviceTier } : {}),
         emitReasoning: shouldEmitReasoning
       }),
       shouldStream: inferencePolicy.streamToProvider
@@ -1338,6 +1362,9 @@ export class ReActLLMDuty extends LLMDuty {
             }
           : {}),
         reasoningMode,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(reasoningUseDefaultEffort ? { reasoningUseDefaultEffort: true } : {}),
+        ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),
         tools: preparedTools,
         toolChoice: 'auto',
