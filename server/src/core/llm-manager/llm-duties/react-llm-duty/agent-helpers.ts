@@ -154,7 +154,11 @@ export function findDuplicateToolInputMatch(
 
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const execution = history[index]
-    if (!execution || execution.function !== functionName) {
+    if (
+      !execution ||
+      execution.status !== 'success' ||
+      execution.function !== functionName
+    ) {
       continue
     }
 

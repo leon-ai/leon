@@ -3,18 +3,26 @@
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
-import { stripVTControlCharacters } from 'node:util'
+import {
+  isDeepStrictEqual,
+  stripVTControlCharacters
+} from 'node:util'
 
 const INSTALL_COMMAND =
   'stty rows 40 cols 120 && pnpm install --frozen-lockfile'
 const INSTALL_TIMEOUT = 45 * 60 * 1_000
+const REBUILD_TIMEOUT = 15 * 60 * 1_000
 const BUILD_TIMEOUT = 10 * 60 * 1_000
 const START_TIMEOUT = 2 * 60 * 1_000
 const PROCESS_STOP_TIMEOUT = 5_000
 const OUTPUT_BUFFER_LIMIT = 32_000
 const DEFAULT_API_KEY = 'xxx'
 const DEFAULT_LOG_PATH = '/tmp/leon-fresh-install.log'
+const MODULES_STATE_PATH = path.join('node_modules', '.modules.yaml')
 const SERVER_READY_MESSAGE = 'Server is available at '
+const JQ_SENTINEL_INPUT = {
+  lifecycleScripts: 'available'
+}
 const SCRIPT_ARGUMENTS = [
   '--quiet',
   '--return',
@@ -267,6 +275,74 @@ function runCommand(command, args, environment, timeoutMs) {
   })
 }
 
+async function getPendingBuilds() {
+  // The CI harness starts before dependencies exist, so load YAML after install.
+  const { parse } = await import('yaml')
+  const modulesState = parse(
+    await fs.promises.readFile(MODULES_STATE_PATH, 'utf8')
+  )
+  const pendingBuilds = modulesState?.pendingBuilds
+
+  if (pendingBuilds === undefined) {
+    return []
+  }
+
+  if (
+    !Array.isArray(pendingBuilds) ||
+    pendingBuilds.some((packageId) => typeof packageId !== 'string')
+  ) {
+    throw new Error(`Invalid pendingBuilds in ${MODULES_STATE_PATH}`)
+  }
+
+  return pendingBuilds
+}
+
+async function verifyPendingBuilds(environment) {
+  const initialPendingBuilds = await getPendingBuilds()
+
+  if (initialPendingBuilds.length === 0) {
+    console.log('No pending dependency builds found.')
+    return
+  }
+
+  console.log(
+    `Rebuilding pending dependencies: ${initialPendingBuilds.join(', ')}`
+  )
+  await runCommand(
+    'pnpm',
+    ['rebuild', '--pending'],
+    environment,
+    REBUILD_TIMEOUT
+  )
+
+  const remainingPendingBuilds = await getPendingBuilds()
+  if (remainingPendingBuilds.length > 0) {
+    throw new Error(
+      `Pending dependency builds remain after rebuild: ${remainingPendingBuilds.join(', ')}`
+    )
+  }
+
+  // A fresh install must work without requiring users to repair skipped builds.
+  throw new Error(
+    `Fresh installation left dependency builds pending: ${initialPendingBuilds.join(', ')}`
+  )
+}
+
+async function verifyDependencyLifecycleScripts() {
+  // node-jq downloads its executable during preinstall, making it a lifecycle sentinel.
+  const { default: jq } = await import('node-jq')
+  const output = await jq.run('.', JQ_SENTINEL_INPUT, {
+    input: 'json',
+    output: 'json'
+  })
+
+  if (!isDeepStrictEqual(output, JQ_SENTINEL_INPUT)) {
+    throw new Error('node-jq lifecycle sentinel returned unexpected output')
+  }
+
+  console.log('Dependency lifecycle script sentinel passed.')
+}
+
 function smokeTestStart(environment) {
   return new Promise((resolve, reject) => {
     let hasSettled = false
@@ -347,6 +423,8 @@ async function main() {
 
   ensureEmptyPNPMStore(environment)
   await runInteractiveInstall(environment, apiKey, logPath)
+  await verifyPendingBuilds(environment)
+  await verifyDependencyLifecycleScripts()
   await runCommand('pnpm', ['build'], environment, BUILD_TIMEOUT)
   await smokeTestStart(environment)
   console.log('Fresh installation, build, and start verification passed.')

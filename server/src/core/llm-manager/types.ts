@@ -103,6 +103,14 @@ export interface OpenAIToolCall {
 }
 
 export type LLMReasoningMode = 'off' | 'guarded' | 'on'
+export type LLMReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max'
 export type LLMReasoningSummary = 'auto' | 'detailed'
 export type LLMTextVerbosity = 'low' | 'medium' | 'high'
 export type LLMPromptCacheRetention = 'in_memory' | '24h'
@@ -140,6 +148,10 @@ export interface CompletionParams {
    * This is more expressive than the legacy disableThinking boolean.
    */
   reasoningMode?: LLMReasoningMode
+  /** Exact provider-normalized reasoning effort, when the model supports it. */
+  reasoningEffort?: LLMReasoningEffort
+  /** Enable reasoning while leaving the effort at the provider's model default. */
+  reasoningUseDefaultEffort?: boolean
   reasoningSummary?: LLMReasoningSummary | undefined
   textVerbosity?: LLMTextVerbosity | undefined
   promptCacheKey?: string | undefined

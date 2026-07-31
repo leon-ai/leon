@@ -73,7 +73,6 @@ function includesVendorPackagePrefix(moduleId, packagePrefix) {
 
 // Map necessary Leon's env vars as Vite only expose VITE_*
 const leonConfig = readAppLeonConfig()
-process.env.VITE_LEON_NODE_ENV = process.env.LEON_NODE_ENV
 process.env.VITE_LEON_HOST = leonConfig.host
 process.env.VITE_LEON_PORT = String(leonConfig.port)
 

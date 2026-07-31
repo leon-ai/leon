@@ -1,11 +1,15 @@
 import type {
   LLMReasoningMode,
+  LLMReasoningEffort,
   LLMReasoningSummary,
-  LLMTextVerbosity
+  LLMTextVerbosity,
+  LLMServiceTier
 } from '@/core/llm-manager/types'
 
 export interface AgentInferencePolicy {
   reasoningMode: LLMReasoningMode
+  reasoningEffort?: LLMReasoningEffort
+  serviceTier?: LLMServiceTier
   streamToProvider: boolean
   emitReasoning: boolean
   reasoningSummary?: LLMReasoningSummary
@@ -27,5 +31,5 @@ export function getAgentInferencePolicy(): AgentInferencePolicy {
 export function formatAgentInferencePolicyForLog(
   policy: AgentInferencePolicy
 ): string {
-  return `phase=agent | thinking=${policy.reasoningMode} | budget=provider_default | provider_stream=${policy.streamToProvider ? 'on' : 'off'} | reasoning=${policy.emitReasoning ? 'on' : 'off'} | reasoning_summary=${policy.reasoningSummary ?? 'off'} | verbosity=${policy.textVerbosity ?? 'default'}`
+  return `phase=agent | thinking=${policy.reasoningMode} | effort=${policy.reasoningEffort ?? 'auto'} | speed=${policy.serviceTier ?? 'auto'} | provider_stream=${policy.streamToProvider ? 'on' : 'off'} | reasoning=${policy.emitReasoning ? 'on' : 'off'} | reasoning_summary=${policy.reasoningSummary ?? 'off'} | verbosity=${policy.textVerbosity ?? 'default'}`
 }

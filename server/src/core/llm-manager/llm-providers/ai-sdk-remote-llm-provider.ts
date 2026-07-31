@@ -21,6 +21,7 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { CONFIG_MANAGER } from '@/config'
 import type {
   CompletionParams,
+  LLMReasoningEffort,
   LLMReasoningMode,
   AgentToolTranscriptMessage,
   OpenAITool,
@@ -28,6 +29,8 @@ import type {
   OpenAIToolChoice,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
+import { canDisableLLMModelReasoning } from '@/core/llm-manager/llm-model-catalog'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -516,10 +519,15 @@ export default class AISDKRemoteLLMProvider {
   }
 
   private getOpenAIReasoningEffort(
-    reasoningMode: LLMReasoningMode
-  ): string {
+    reasoningMode: LLMReasoningMode,
+    completionParams: CompletionParams
+  ): LLMReasoningEffort {
+    if (completionParams.reasoningEffort) {
+      return completionParams.reasoningEffort
+    }
+
     if (reasoningMode === 'off') {
-      return 'low'
+      return 'none'
     }
 
     return reasoningMode === 'guarded' ? 'low' : 'medium'
@@ -552,7 +560,10 @@ export default class AISDKRemoteLLMProvider {
       return {
         openai: {
           ...this.buildOpenAICommonProviderOptions(completionParams),
-          reasoningEffort: this.getOpenAIReasoningEffort(reasoningMode),
+          reasoningEffort: this.getOpenAIReasoningEffort(
+            reasoningMode,
+            completionParams
+          ),
           ...(reasoningMode !== 'off' && completionParams.reasoningSummary
             ? { reasoningSummary: completionParams.reasoningSummary }
             : {})
@@ -561,14 +572,28 @@ export default class AISDKRemoteLLMProvider {
     }
 
     if (this.config.flavor === 'openrouter') {
+      // OpenRouter's equivalent of Fast Mode is provider routing optimized for
+      // throughput, not an OpenAI-style service tier.
+      const routing = completionParams.serviceTier === 'priority'
+        ? { provider: { sort: 'throughput' } }
+        : {}
+
       if (reasoningMode === 'off') {
-        return {
-          openrouter: {
-            reasoning: {
+        const reasoning = canDisableLLMModelReasoning(
+          LLMProviders.OpenRouter,
+          this.model
+        )
+          ? {
               enabled: false,
               effort: 'none',
               exclude: true
             }
+          : { effort: 'low' }
+
+        return {
+          openrouter: {
+            ...routing,
+            reasoning
           }
         }
       }
@@ -576,9 +601,19 @@ export default class AISDKRemoteLLMProvider {
       if (reasoningMode === 'guarded') {
         return {
           openrouter: {
+            ...routing,
             reasoning: {
-              effort: 'low'
+              effort: completionParams.reasoningEffort || 'low'
             }
+          }
+        }
+      }
+
+      if (completionParams.reasoningUseDefaultEffort) {
+        return {
+          openrouter: {
+            ...routing,
+            reasoning: { enabled: true }
           }
         }
       }
@@ -586,26 +621,47 @@ export default class AISDKRemoteLLMProvider {
       const reasoningBudget = this.getReasoningBudget(completionParams)
       return {
         openrouter: {
+          ...routing,
           reasoning: {
             ...(typeof reasoningBudget === 'number'
               ? { max_tokens: reasoningBudget }
-              : { effort: 'high' })
+              : { effort: completionParams.reasoningEffort || 'high' })
           }
         }
       }
     }
 
     if (this.config.flavor === 'openai-compatible') {
-      return completionParams.textVerbosity
-        ? {
-            openaiCompatible: {
-              textVerbosity: completionParams.textVerbosity
-            }
-          }
-        : {}
+      return {
+        openaiCompatible: {
+          ...(completionParams.reasoningEffort
+            ? { reasoningEffort: completionParams.reasoningEffort }
+            : {}),
+          ...(completionParams.textVerbosity
+            ? { textVerbosity: completionParams.textVerbosity }
+            : {})
+        }
+      }
     }
 
     if (this.config.flavor === 'moonshotai') {
+      if (this.model === 'kimi-k3') {
+        // K3 always reasons and replaces K2's thinking object with a top-level
+        // effort. Recovery uses its lowest supported level instead of "none".
+        const reasoningEffort = reasoningMode === 'off' ||
+          reasoningMode === 'guarded'
+          ? 'low'
+          : completionParams.reasoningEffort
+
+        return reasoningEffort
+          ? { moonshotai: { reasoningEffort } }
+          : {}
+      }
+
+      if (!reasoningMode) {
+        return {}
+      }
+
       if (reasoningMode === 'on') {
         const reasoningBudget = this.getReasoningBudget(
           completionParams,
@@ -624,8 +680,8 @@ export default class AISDKRemoteLLMProvider {
         }
       }
 
-      // Moonshot's explicit thinking budget starts at 1024 tokens, so guarded
-      // mode falls back to disabled instead of forcing a large reasoning block.
+      // K2's explicit thinking budget starts at 1,024 tokens, so guarded mode
+      // falls back to disabled instead of forcing a large reasoning block.
       return {
         moonshotai: {
           thinking: { type: 'disabled' },
@@ -638,9 +694,8 @@ export default class AISDKRemoteLLMProvider {
       return {
         huggingface: {
           reasoningEffort:
-            reasoningMode === 'on'
-              ? 'medium'
-              : 'low'
+            completionParams.reasoningEffort ||
+            (reasoningMode === 'on' ? 'medium' : 'low')
         }
       }
     }
@@ -649,9 +704,8 @@ export default class AISDKRemoteLLMProvider {
       return {
         cerebras: {
           reasoningEffort:
-            reasoningMode === 'on'
-              ? 'medium'
-              : 'low'
+            completionParams.reasoningEffort ||
+            (reasoningMode === 'on' ? 'medium' : 'low')
         }
       }
     }
@@ -668,7 +722,8 @@ export default class AISDKRemoteLLMProvider {
 
       return {
         groq: {
-          reasoningEffort: reasoningMode === 'guarded' ? 'low' : 'medium',
+          reasoningEffort: completionParams.reasoningEffort ||
+            (reasoningMode === 'guarded' ? 'low' : 'medium'),
           reasoningFormat: 'parsed'
         }
       }
@@ -742,7 +797,10 @@ export default class AISDKRemoteLLMProvider {
       if (completionParams.disableThinking === true) {
         providerOptions['openai'] = {
           ...openAIOptions,
-          reasoningEffort: this.getOpenAIReasoningEffort('off')
+          reasoningEffort: this.getOpenAIReasoningEffort(
+            'off',
+            completionParams
+          )
         }
       } else {
         providerOptions['openai'] = {
@@ -753,14 +811,28 @@ export default class AISDKRemoteLLMProvider {
         }
       }
     } else if (this.config.flavor === 'openrouter') {
+      const routing = completionParams.serviceTier === 'priority'
+        ? { provider: { sort: 'throughput' } }
+        : {}
+
       if (completionParams.disableThinking === true) {
+        const reasoning = canDisableLLMModelReasoning(
+          LLMProviders.OpenRouter,
+          this.model
+        )
+          ? {
+              enabled: false,
+              effort: 'none',
+              exclude: true
+            }
+          : { effort: 'low' }
+
         providerOptions['openrouter'] = {
-          reasoning: {
-            enabled: false,
-            effort: 'none',
-            exclude: true
-          }
+          ...routing,
+          reasoning
         }
+      } else if (Object.keys(routing).length > 0) {
+        providerOptions['openrouter'] = routing
       }
     } else if (this.config.flavor === 'openai-compatible') {
       if (completionParams.disableThinking === true) {

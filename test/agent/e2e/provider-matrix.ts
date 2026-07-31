@@ -6,37 +6,46 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'llamacpp',
     requiredEnv: 'LEON_LLAMACPP_BASE_URL',
-    llmTarget: 'llamacpp'
+    llmTarget: 'llamacpp',
+    // The concrete local model is discovered at runtime, so its capabilities
+    // cannot be selected from the curated remote-model catalog here.
+    reasoning: null
   },
   {
     provider: 'openrouter',
     requiredEnv: 'LEON_OPENROUTER_API_KEY',
-    llmTarget: 'openrouter/z-ai/glm-5-turbo'
+    llmTarget: 'openrouter/qwen/qwen3.6-flash',
+    reasoning: 'none'
   },
   {
     provider: 'openai',
     requiredEnv: 'LEON_OPENAI_API_KEY',
-    llmTarget: 'openai/gpt-5.6-terra'
+    llmTarget: 'openai/gpt-5.6-terra',
+    reasoning: 'low'
   },
   {
     provider: 'anthropic',
     requiredEnv: 'LEON_ANTHROPIC_API_KEY',
-    llmTarget: 'anthropic/claude-haiku-4-5'
+    llmTarget: 'anthropic/claude-haiku-4-5',
+    reasoning: 'none'
   },
   {
     provider: 'moonshotai',
     requiredEnv: 'LEON_MOONSHOTAI_API_KEY',
-    llmTarget: 'moonshotai/kimi-k2.5'
+    llmTarget: 'moonshotai/kimi-k2.6',
+    reasoning: 'none'
   },
   {
     provider: 'zai',
     requiredEnv: 'LEON_ZAI_API_KEY',
-    llmTarget: 'zai/glm-5-turbo'
+    llmTarget: 'zai/glm-5-turbo',
+    reasoning: 'none'
   },
   {
     provider: 'minimax',
     requiredEnv: 'LEON_MINIMAX_API_KEY',
-    llmTarget: 'minimax/MiniMax-M3'
+    llmTarget: 'minimax/MiniMax-M3',
+    reasoning: 'none'
   }
 ] as const
 

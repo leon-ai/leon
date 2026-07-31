@@ -181,7 +181,8 @@ export interface AgentLoopResult {
  */
 export function buildAgentToolCatalog(
   forcedToolName?: string | null,
-  initiallyLoadedToolkitIds: Iterable<string> = []
+  initiallyLoadedToolkitIds: Iterable<string> = [],
+  progressiveToolkitLoading = true
 ): AgentToolCatalog {
   const tools: OpenAITool[] = []
   const functionsByToolName = new Map<string, AgentCallableFunction>()
@@ -211,7 +212,7 @@ export function buildAgentToolCatalog(
     return catalog
   }
 
-  if (availableToolkitsById.size > 0) {
+  if (progressiveToolkitLoading && availableToolkitsById.size > 0) {
     tools.push(createToolkitLoaderTool(availableToolkitsById))
   }
   tools.push(
@@ -220,9 +221,14 @@ export function buildAgentToolCatalog(
     createAgentSkillTool()
   )
 
-  // Clarification resumes must expose the same schemas that were loaded before
-  // the pause; the transcript alone cannot make those functions callable.
-  for (const toolkitId of initiallyLoadedToolkitIds) {
+  // Eager mode is useful for a small profile allowlist where one extra
+  // discovery inference costs more than exposing every available schema.
+  // Progressive clarification resumes still restore only previously loaded
+  // schemas because the transcript alone cannot make them callable.
+  const toolkitIdsToLoad = progressiveToolkitLoading
+    ? initiallyLoadedToolkitIds
+    : availableToolkitsById.keys()
+  for (const toolkitId of toolkitIdsToLoad) {
     loadToolkitFunctions(catalog, toolkitId)
   }
 
@@ -1057,12 +1063,15 @@ async function executeAgentToolCall(
 
   const validatedInput =
     validation.repairedToolInput ?? toolCall.function.arguments
-  const duplicate = findDuplicateToolInputMatch(
-    executionHistory,
-    callable.qualifiedName,
-    callable.qualifiedName,
-    validatedInput
-  )
+  const duplicate =
+    callable.functionConfig.deduplicate_calls === false
+      ? null
+      : findDuplicateToolInputMatch(
+          executionHistory,
+          callable.qualifiedName,
+          callable.qualifiedName,
+          validatedInput
+        )
   if (duplicate) {
     return {
       content: `Duplicate call blocked: ${callable.qualifiedName} already ran with the same or an overlapping input in step ${duplicate.stepNumber}. Reuse its result from the transcript or request only the unread range.`,

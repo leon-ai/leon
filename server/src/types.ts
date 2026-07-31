@@ -88,6 +88,7 @@ export interface ConversationWidgetData {
 }
 
 export interface LLMAnswerMetrics {
+  completionCount?: number
   inputTokens: number
   outputTokens: number
   totalTokens: number

@@ -55,7 +55,7 @@ jobs:
 
       - name: Upload installer log on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fresh-install-log-pnpm-${{ matrix.pnpm-version }}
           path: /tmp/leon-fresh-install.log

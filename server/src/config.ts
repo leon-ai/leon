@@ -52,7 +52,8 @@ const DEFAULT_CONFIG: LeonConfig = {
   },
   runtime: {
     pulse_enabled: true,
-    private_diary_enabled: true
+    private_diary_enabled: true,
+    progressive_toolkit_loading: true
   },
   context: {
     disabled_files: []
@@ -89,6 +90,7 @@ const DEFAULT_CONFIG: LeonConfig = {
     default: null,
     workflow: null,
     agent: null,
+    model_settings: {},
     providers: {
       llamacpp: {
         base_url: 'http://127.0.0.1:8080/v1',

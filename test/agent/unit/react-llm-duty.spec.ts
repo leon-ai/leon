@@ -865,6 +865,54 @@ describe('continuous agent loop', () => {
     expect(result.answer).toBe('I reused the first result.')
   })
 
+  it('allows repeated successful calls when deduplication is disabled', async () => {
+    const repeatableCallable: AgentCallableFunction = {
+      ...callable,
+      functionConfig: {
+        ...callable.functionConfig,
+        deduplicate_calls: false
+      }
+    }
+    const repeatableCatalog: AgentToolCatalog = {
+      ...createCatalog(),
+      functionsByToolName: new Map([
+        [CALLABLE_TOOL_NAME, repeatableCallable]
+      ])
+    }
+    const executeFunction = vi.fn().mockResolvedValue({
+      execution: {
+        function: repeatableCallable.qualifiedName,
+        status: 'success',
+        observation: 'Current state.',
+        requestedToolInput: JSON.stringify({ query: 'Leon' })
+      }
+    })
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Refresh the state twice.' }],
+      catalog: repeatableCatalog,
+      callModel: async () => {
+        modelTurn += 1
+        if (modelTurn <= 2) {
+          return {
+            toolCalls: [
+              toolCall(`lookup-${modelTurn}`, CALLABLE_TOOL_NAME, {
+                query: 'Leon'
+              })
+            ]
+          }
+        }
+        return { textContent: 'Both state reads completed.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction).toHaveBeenCalledTimes(2)
+    expect(result.answer).toBe('Both state reads completed.')
+  })
+
   it('blocks overlapping reads of the same tool artifact', () => {
     const previousInput = JSON.stringify({
       outputLogPath: '/tmp/tool-output.log',
@@ -890,6 +938,26 @@ describe('continuous agent loop', () => {
         candidateInput
       )
     ).toMatchObject({ stepNumber: 1 })
+  })
+
+  it('allows an identical retry after a failed tool execution', () => {
+    const toolInput = JSON.stringify({ level: 35 })
+
+    expect(
+      findDuplicateToolInputMatch(
+        [
+          {
+            function: 'device_control.display.set_volume',
+            status: 'error',
+            observation: 'Transient failure.',
+            requestedToolInput: toolInput
+          }
+        ],
+        'device_control.display.set_volume',
+        'Set volume',
+        toolInput
+      )
+    ).toBeNull()
   })
 
   it('restores execution and plan state after clarification', async () => {
@@ -1001,6 +1069,36 @@ describe('continuous agent loop', () => {
 
     expect(result.intent).toBe('answer')
     expect(catalog.loadedToolkitIds).toEqual(new Set(['video_streaming']))
+  })
+
+  it('loads every available toolkit schema eagerly without a discovery tool', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'device_control',
+        toolkitName: 'Device Control',
+        toolkitDescription: 'Control a connected device.',
+        toolId: 'robot',
+        toolName: 'Robot',
+        toolDescription: 'Control robot positioning.'
+      }
+    ])
+    coreMocks.getToolFunctions.mockReturnValue({
+      home: {
+        description: 'Return the robot to its home position.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false
+        }
+      }
+    })
+
+    const catalog = buildAgentToolCatalog(null, [], false)
+    const toolNames = catalog.tools.map((tool) => tool.function.name)
+
+    expect(toolNames).not.toContain(AGENT_TOOLKIT_LOADER_NAME)
+    expect(toolNames).toContain('device_control__robot__home')
+    expect(catalog.loadedToolkitIds).toEqual(new Set(['device_control']))
   })
 
   it('bounds large observations and prunes inactive schemas near the context limit', () => {

@@ -4,6 +4,7 @@ import path from 'node:path'
 
 import YAML from 'yaml'
 
+import type { LLMModelReasoning } from '../../../server/src/core/llm-manager/llm-model-catalog'
 import type { MessageLog } from '../../../server/src/types'
 import type { AgentProvider } from './provider-matrix'
 import { PROVIDER_MATRIX, PROVIDER_REQUIRED_ENV } from './provider-matrix'
@@ -171,7 +172,8 @@ async function prepareTestProfilePath(
 async function prepareTestProfileConfig(
   sourceConfigPath: string,
   targetConfigPath: string,
-  llmTarget: string
+  llmTarget: string,
+  reasoning: LLMModelReasoning | null
 ): Promise<void> {
   if (!sourceConfigPath || !await fs.stat(sourceConfigPath).then(
     (stat) => stat.isFile(),
@@ -195,6 +197,12 @@ async function prepareTestProfileConfig(
   document.setIn(['llm', 'default'], llmTarget)
   document.setIn(['llm', 'workflow'], null)
   document.setIn(['llm', 'agent'], null)
+  if (reasoning) {
+    document.setIn(
+      ['llm', 'model_settings', llmTarget, 'reasoning'],
+      reasoning
+    )
+  }
 
   await fs.mkdir(path.dirname(targetConfigPath), { recursive: true })
   await fs.writeFile(targetConfigPath, String(document), 'utf8')
@@ -252,7 +260,8 @@ async function main(): Promise<void> {
   await prepareTestProfileConfig(
     String(process.env[SOURCE_CONFIG_PATH_ENV] || '').trim(),
     testConfigPath,
-    llmTarget
+    llmTarget,
+    providerConfig?.reasoning || null
   )
 
   const tempAssetPath = path.join(

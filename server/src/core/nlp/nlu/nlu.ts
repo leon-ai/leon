@@ -931,6 +931,9 @@ export default class NLU {
               text: String(output),
               speech: String(output),
               llmMetrics: {
+                completionCount: Number(
+                  llmMetrics['completionCount'] || 0
+                ),
                 inputTokens: Number(llmMetrics['inputTokens'] || 0),
                 outputTokens: Number(llmMetrics['outputTokens'] || 0),
                 totalTokens: Number(llmMetrics['totalTokens'] || 0),

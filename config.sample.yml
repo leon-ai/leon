@@ -26,6 +26,8 @@ llm:
   # Optional per-mode overrides. Null values fall back to llm.default.
   workflow: null
   agent: null
+  # Persisted per-model overrides.
+  model_settings: {}
   providers:
     llamacpp:
       base_url: http://127.0.0.1:8080/v1
@@ -88,6 +90,8 @@ runtime:
   pulse_enabled: true
   # Enable Leon's private diary/self-model mechanism.
   private_diary_enabled: true
+  # Load toolkit function schemas only when needed.
+  progressive_toolkit_loading: true
 
 context:
   # Context files to disable. Use ["*"] to disable all context files, including

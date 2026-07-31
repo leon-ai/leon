@@ -49,6 +49,7 @@ export interface PhaseMetricSnapshot extends RawPhaseMetric {
 export type PhaseMetricSnapshots = Record<AgentPhase, PhaseMetricSnapshot>
 
 export interface DerivedLLMMetrics {
+  completionCount: number
   inputTokens: number
   outputTokens: number
   totalTokens: number
@@ -69,6 +70,7 @@ export interface DerivedLLMMetrics {
 }
 
 export interface AccumulatedLLMMetricsState {
+  completionCount: number
   totalInputTokens: number
   totalOutputTokens: number
   totalVisibleOutputTokens: number
@@ -84,6 +86,7 @@ export interface MeasureVisibleOutputOptions {
 }
 
 interface DeriveLLMMetricsOptions extends MeasureVisibleOutputOptions {
+  completionCount: number
   providerName: LLMProviders
   normalizedOutput: string
   totalInputTokens: number
@@ -199,6 +202,7 @@ export function recordCompletionMetrics(
   params: RecordCompletionMetricsParams
 ): AccumulatedLLMMetricsState {
   return {
+    completionCount: accumulator.completionCount + 1,
     totalInputTokens: accumulator.totalInputTokens + (params.usedInputTokens ?? 0),
     totalOutputTokens:
       accumulator.totalOutputTokens + (params.usedOutputTokens ?? 0),
@@ -479,6 +483,7 @@ export function deriveLLMMetrics(
     averagedPhaseTokensPerSecond
   })
   return {
+    completionCount: options.completionCount,
     inputTokens: options.totalInputTokens,
     outputTokens: options.totalOutputTokens,
     totalTokens: options.totalInputTokens + options.totalOutputTokens,
