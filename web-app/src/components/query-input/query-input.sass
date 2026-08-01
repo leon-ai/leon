@@ -38,7 +38,7 @@
   padding: var(--query-input-padding-block) var(--query-input-padding-inline)
   border: var(--query-input-border-width) solid transparent
   border-radius: 30px
-  background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
+  background: linear-gradient(var(--color-surface), var(--color-surface)) padding-box, var(--gradient-border) border-box
   backdrop-filter: blur(18px)
   overflow: hidden
   transition: height var(--transition-duration-main) var(--transition-timing-main)
@@ -71,6 +71,10 @@
 
   .query-input-actions
     right: var(--query-input-padding-inline)
+
+  .query-input-submit
+    .button-icon
+      transform: translateY(2px)
 
   .query-input-field
     width: auto

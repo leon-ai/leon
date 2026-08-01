@@ -68,6 +68,10 @@
   &.button-primary:active:not(:disabled):not([aria-disabled='true'])
     background-color: var(--color-primary-button-active)
 
+  &.button-primary:disabled,
+  &.button-primary[aria-disabled='true']
+    background-color: var(--color-primary-button-disabled)
+
   &.button-danger
     background-color: var(--color-danger)
     color: var(--color-danger-contrast)

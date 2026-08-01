@@ -262,7 +262,7 @@ export function QueryInput({
           <Button
             className="query-input-submit"
             type="submit"
-            variant="secondary"
+            variant="primary"
             iconName="send-ins"
             tooltipMessage="Send message"
             tooltipPosition="top"
