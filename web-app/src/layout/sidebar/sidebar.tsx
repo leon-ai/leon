@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type TransitionEvent } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { clsx } from 'clsx'
 
 import './sidebar.sass'
@@ -18,28 +19,18 @@ import {
 import { Logo } from './logo'
 import { Menu } from './menu'
 import { SessionList } from './session-list'
+import { SidebarFooter } from './sidebar-footer'
 
 const DARK_THEME_LOGO_SRC = '/img/logo-for-dark-bg-text.svg'
 const LIGHT_THEME_LOGO_SRC = '/img/logo-for-light-bg-text.svg'
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  return (
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    (
-      target instanceof HTMLElement &&
-      target.isContentEditable
-    )
-  )
-}
 
 function shouldReduceMotion(): boolean {
   return window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
 }
 
 export function Sidebar() {
+  const navigate = useNavigate()
   const sidebarScrollAreaRef = useRef<HTMLDivElement>(null)
   const [soundsEnabled, setSoundsEnabled] = useState(getStoredSoundsEnabled)
   const [theme, setTheme] = useState<Theme>(getStoredTheme)
@@ -114,12 +105,27 @@ export function Sidebar() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {
+      const modifierKeyPressed = event.ctrlKey || event.metaKey
+      const key = event.key.toLowerCase()
+
       if (
-        isEditableTarget(event.target) ||
+        event.repeat ||
         event.altKey ||
+        !modifierKeyPressed
+      ) {
+        return
+      }
+
+      if (event.shiftKey && key === 'o') {
+        event.preventDefault()
+        setSearchSessionsDialogOpen(false)
+        void navigate({ to: '/' })
+        return
+      }
+
+      if (
         event.shiftKey ||
-        event.key.toLowerCase() !== 'k' ||
-        (!event.ctrlKey && !event.metaKey)
+        key !== 'k'
       ) {
         return
       }
@@ -133,7 +139,7 @@ export function Sidebar() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [])
+  }, [navigate])
 
   const logoSrc = theme === 'dark' ? DARK_THEME_LOGO_SRC : LIGHT_THEME_LOGO_SRC
 
@@ -157,6 +163,7 @@ export function Sidebar() {
           <div className="sidebar-logo-open-button">
             <Button
               iconName="sidebar-unfold"
+              tone="muted"
               tooltipMessage="Open sidebar"
               tooltipPosition="right"
               onClick={() => updateSidebarExpanded(true)}
@@ -166,16 +173,19 @@ export function Sidebar() {
         <div className="sidebar-controls">
           <Button
             iconName={soundsEnabled ? 'volume-up' : 'volume-mute'}
+            tone="muted"
             tooltipMessage={soundsEnabled ? 'Mute sounds' : 'Unmute sounds'}
             onClick={() => updateSoundsEnabled(!soundsEnabled)}
           />
           <Button
             iconName={theme === 'dark' ? 'moon' : 'sun'}
+            tone="muted"
             tooltipMessage={theme === 'dark' ? 'Apply light theme' : 'Apply dark theme'}
             onClick={toggleTheme}
           />
           <Button
             iconName={sidebarExpanded ? 'sidebar-fold' : 'sidebar-unfold'}
+            tone="muted"
             tooltipMessage={sidebarExpanded ? 'Close sidebar' : 'Open sidebar'}
             onClick={() => updateSidebarExpanded(!sidebarExpanded)}
           />
@@ -205,9 +215,7 @@ export function Sidebar() {
         aria-label="Open sidebar"
         onClick={() => updateSidebarExpanded(true)}
       />
-      <footer className="sidebar-footer-slot">
-
-      </footer>
+      <SidebarFooter />
       <Dialog
         hideHeader
         open={searchSessionsDialogOpen}

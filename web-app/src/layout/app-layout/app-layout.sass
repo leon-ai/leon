@@ -1,17 +1,24 @@
 .app-layout
+  --active-sidebar-width: var(--sidebar-width)
   min-height: 100vh
   background-color: var(--color-background)
 
-  > main
+  &:has(> .sidebar-collapsed)
+    --active-sidebar-width: var(--sidebar-collapsed-width)
+
+  > .app-main
     position: relative
     z-index: 2
-    display: grid
-    justify-items: center
+    display: flex
+    justify-content: center
+    box-sizing: border-box
     height: 100vh
     min-height: 100vh
-    margin-left: var(--sidebar-width)
+    margin-left: var(--active-sidebar-width)
+    padding: 0 var(--space-xl)
     overflow: auto
     scrollbar-width: none
+    transition: margin-left var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
     &::-webkit-scrollbar
       display: none
@@ -21,5 +28,10 @@
     .sidebar
       transform: translateX(calc(var(--sidebar-width) * -1))
 
-    > main
+    > .app-main
       margin-left: 0
+      padding: 0 var(--space-lg)
+
+@media (prefers-reduced-motion: reduce)
+  .app-layout > .app-main
+    transition: none

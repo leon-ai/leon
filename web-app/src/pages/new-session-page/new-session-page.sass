@@ -1,0 +1,38 @@
+.new-session-page
+  display: flex
+  align-items: center
+  width: 100%
+  min-height: 85vh
+
+.new-session-page-composer
+  position: relative
+  width: 100%
+  height: var(--query-input-height)
+
+  &::before
+    position: absolute
+    bottom: 16%
+    left: 50%
+    width: min(40%, 304px)
+    aspect-ratio: 44 / 46
+    background: url('/img/logo-for-dark-bg.svg') center / contain no-repeat
+    opacity: .075
+    pointer-events: none
+    transform: translateX(-50%)
+    -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, .075) 76%, transparent 100%)
+    mask-image: linear-gradient(to bottom, #000 0%, rgba(0, 0, 0, .037) 76%, transparent 100%)
+    content: ''
+
+  .query-input-container
+    position: absolute
+    top: 0
+    right: 0
+    left: 0
+
+[data-theme='light']
+  .new-session-page-composer::before
+    background-image: url('/img/logo-for-light-bg.svg')
+
+@media (max-height: 720px)
+  .new-session-page-composer::before
+    width: min(32%, 240px)

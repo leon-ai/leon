@@ -1,53 +1,145 @@
-.query-input
-  position: fixed
-  right: max(var(--space-xl), calc((100vw - var(--sidebar-width) - var(--content-width)) / 2))
-  bottom: var(--space-xl)
+.query-input-container
+  position: relative
   z-index: 3
-  display: grid
-  grid-template-columns: 40px 1fr 40px 48px
-  align-items: center
-  gap: var(--space-sm)
-  width: min(var(--content-width), calc(100vw - var(--sidebar-width) - (var(--space-xl) * 2)))
+  isolation: isolate
+  width: 100%
+
+  &::before
+    position: absolute
+    bottom: 0
+    left: 50%
+    z-index: -1
+    width: 85%
+    height: var(--query-input-height)
+    background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 66%, transparent), color-mix(in srgb, var(--color-accent-pink) 66%, transparent))
+    filter: blur(66px)
+    opacity: .66
+    pointer-events: none
+    transform: translateX(-50%)
+    transform-origin: center bottom
+    transition: opacity .75s var(--transition-timing-main), transform .75s var(--transition-timing-main)
+    content: ''
+
+  &:focus-within::before
+    opacity: .8
+    animation: query-input-glow-breathe 5s ease-in-out .75s infinite
+
+.query-input
+  --query-input-action-gap: var(--space-sm)
+  --query-input-border-width: 1px
+  --query-input-padding-block: 6px
+  --query-input-padding-inline: 12px
+  position: relative
+  z-index: 3
+  display: block
+  box-sizing: border-box
+  width: 100%
   min-height: var(--query-input-height)
-  padding: 8px 10px 8px 20px
-  border: 1px solid var(--color-query-border)
-  border-radius: var(--border-radius-xl)
-  background: linear-gradient(var(--color-query-background), var(--color-query-background)) padding-box, var(--gradient-query) border-box
-  box-shadow: 0 22px 80px rgba(28, 117, 219, .12)
+  padding: var(--query-input-padding-block) var(--query-input-padding-inline)
+  border: var(--query-input-border-width) solid transparent
+  border-radius: 30px
+  background: linear-gradient(var(--color-surface), var(--color-surface)) padding-box, var(--gradient-border) border-box
   backdrop-filter: blur(18px)
+  overflow: hidden
+  transition: height var(--transition-duration-main) var(--transition-timing-main)
 
-  input
-    border: 0
-    background: transparent
-    padding: 0
-    color: var(--color-text)
-    font-size: var(--font-size-md)
-    line-height: var(--line-height-md)
+  &.query-input-expanded
+    .query-input-field
+      margin-right: 0
+      margin-left: 0
 
-    &:hover,
-    &:focus,
-    &:active
-      border: 0
+    .query-input-leading-action,
+    .query-input-actions
+      top: calc(100% - var(--query-input-padding-block) - var(--query-input-border-width) - var(--button-md-icon-only-size))
+      transform: none
 
-  button
-    display: grid
-    place-items: center
-    color: var(--color-text-secondary)
-    font-size: 28px
+  .query-input-leading-action,
+  .query-input-actions
+    position: absolute
+    top: 50%
+    z-index: 1
+    display: flex
+    align-items: center
+    transform: translateY(-50%)
+    transition: top var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
 
-  .add,
-  .voice
-    width: 40px
-    height: 40px
+    .button-icon
+      font-size: 20px
 
-  .send
-    width: 48px
-    height: 48px
-    border: 1px solid var(--color-border-strong)
-    border-radius: var(--border-radius-pill)
+  .query-input-leading-action
+    left: var(--query-input-padding-inline)
 
-@media (max-width: 960px)
-  .query-input
-    right: var(--space-lg)
-    left: var(--space-lg)
+  .query-input-actions
+    right: var(--query-input-padding-inline)
+
+  .query-input-submit
+    .button-icon
+      transform: translateY(2px)
+
+  .query-input-field
     width: auto
+    min-width: 0
+    margin-right: calc(var(--button-md-icon-only-size) + var(--query-input-action-gap))
+    margin-left: calc(var(--button-md-icon-only-size) + var(--query-input-action-gap))
+    transition: margin var(--transition-duration-main) var(--transition-timing-main)
+
+    .input-field
+      resize: none
+      overflow: hidden
+      transition: color var(--transition-duration-main) var(--transition-timing-main)
+
+    &.query-input-field-scrollable
+      .input-field
+        overflow-y: auto
+        scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
+        scrollbar-width: thin
+
+        &::-webkit-scrollbar
+          width: 5px
+
+        &::-webkit-scrollbar-track
+          background-color: transparent
+
+        &::-webkit-scrollbar-thumb
+          border-radius: var(--border-radius-pill)
+          background-color: var(--color-scrollbar-thumb-muted)
+
+        &::-webkit-scrollbar-thumb:hover
+          background-color: var(--color-scrollbar-thumb)
+
+  .query-input-field .input-field,
+  .query-input-measurement
+    min-height: 42px
+    padding: 10px 0
+    border: 0
+    color: var(--color-text)
+    font-family: var(--font-family)
+    font-size: var(--font-size-lg)
+    line-height: var(--line-height-lg)
+
+  .query-input-measurement
+    position: absolute
+    box-sizing: border-box
+    height: auto
+    overflow: hidden
+    visibility: hidden
+    pointer-events: none
+    resize: none
+
+@keyframes query-input-glow-breathe
+  0%,
+  100%
+    opacity: .8
+    transform: translateX(-50%) scale3d(1, 1, 1)
+
+  50%
+    opacity: .7
+    transform: translateX(-50%) scale3d(.98, .9, 1)
+
+@media (prefers-reduced-motion: reduce)
+  .query-input-container
+    &::before
+      transition: none
+
+    &:focus-within::before
+      animation: none

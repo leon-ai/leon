@@ -1,3 +1,9 @@
+.button-icon-only.button-tone-default
+  color: var(--color-text)
+
+.button-icon-only.button-tone-muted
+  color: var(--color-text-secondary)
+
 .button
   display: inline-flex
   align-items: center
@@ -30,7 +36,6 @@
 
     &.button-icon-only
       box-sizing: border-box
-      color: var(--color-text-secondary)
       width: var(--button-md-icon-only-size)
       height: var(--button-md-icon-only-size)
       min-height: 0
@@ -44,6 +49,8 @@
   &.button-secondary
     background-color: transparent
     border-color: var(--color-border)
+
+  &.button-secondary:not(.button-icon-only)
     color: var(--color-text)
 
   &.button-ghost:active:not(:disabled):not([aria-disabled='true']),
@@ -60,6 +67,10 @@
 
   &.button-primary:active:not(:disabled):not([aria-disabled='true'])
     background-color: var(--color-primary-button-active)
+
+  &.button-primary:disabled,
+  &.button-primary[aria-disabled='true']
+    background-color: var(--color-primary-button-disabled)
 
   &.button-danger
     background-color: var(--color-danger)

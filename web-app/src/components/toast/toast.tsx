@@ -112,6 +112,7 @@ function ToastCard({
       >
         <Button
           iconName="close"
+          tone="muted"
           ariaLabel="Close notification"
           onClick={() => onClose(toast.id)}
         />

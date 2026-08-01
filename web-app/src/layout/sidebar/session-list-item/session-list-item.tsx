@@ -155,6 +155,7 @@ export function SessionListItem({
         >
           <Button
             iconName="more-2"
+            tone="muted"
             ariaLabel="Session options"
           />
         </Dropdown>

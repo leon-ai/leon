@@ -11,16 +11,19 @@ type AppRouteTo = '/'
 type ButtonIconType = 'line' | 'fill'
 type ButtonIconPosition = 'left' | 'right'
 type ButtonSize = 'sm' | 'md'
+type ButtonTone = 'default' | 'muted'
 export type ButtonVariant = 'ghost' | 'secondary' | 'primary' | 'danger'
 
 interface ButtonBaseProps {
   children?: ReactNode
+  className?: string
   iconName?: string
   iconType?: ButtonIconType
   iconPosition?: ButtonIconPosition
   tooltipMessage?: string
   tooltipPosition?: TooltipPosition
   ariaLabel?: string
+  tone?: ButtonTone
   variant?: ButtonVariant
   size?: ButtonSize
   cursorStyle?: CSSProperties['cursor']
@@ -55,6 +58,7 @@ type ButtonProps = ButtonBaseProps & (
 
 export function Button({
   children,
+  className,
   type = 'button',
   to,
   href,
@@ -66,6 +70,7 @@ export function Button({
   tooltipMessage,
   tooltipPosition = 'bottom',
   ariaLabel,
+  tone = 'default',
   variant = 'ghost',
   size = 'md',
   cursorStyle = 'pointer',
@@ -77,7 +82,7 @@ export function Button({
   const isIconOnly = children === undefined
   const accessibleLabel = ariaLabel ?? tooltipMessage
   const iconClassName = `ri-${iconName}-${iconType}`
-  const className = clsx('button', `button-${variant}`, `button-${size}`, {
+  const buttonClassName = clsx('button', `button-${variant}`, `button-${size}`, `button-tone-${tone}`, className, {
     'button-icon-only': isIconOnly
   })
   const content = (
@@ -94,7 +99,7 @@ export function Button({
   const button = to !== undefined ? (
     <Link
       to={to}
-      className={className}
+      className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-busy={loading}
       aria-disabled={isDisabled}
@@ -113,7 +118,7 @@ export function Button({
   ) : href === undefined ? (
     <button
       type={type}
-      className={className}
+      className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-busy={loading}
       disabled={isDisabled}
@@ -125,7 +130,7 @@ export function Button({
   ) : (
     <a
       href={href}
-      className={className}
+      className={buttonClassName}
       aria-label={isIconOnly ? accessibleLabel : ariaLabel}
       aria-busy={loading}
       aria-disabled={isDisabled}
