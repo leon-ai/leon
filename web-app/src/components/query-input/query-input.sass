@@ -3,26 +3,34 @@
   z-index: 3
   isolation: isolate
   width: 100%
+  view-transition-name: query-input
 
-  &::before
+  &:focus-within
+    .query-input-glow
+      opacity: .6
+
+    .query-input-glow::before
+      animation: query-input-glow-breathe 5s ease-in-out .75s infinite
+
+  .query-input-glow
     position: absolute
     bottom: 0
     left: 50%
     z-index: -1
     width: 85%
     height: var(--query-input-height)
-    background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 66%, transparent), color-mix(in srgb, var(--color-accent-pink) 66%, transparent))
-    filter: blur(66px)
-    opacity: .66
+    opacity: .4
     pointer-events: none
     transform: translateX(-50%)
-    transform-origin: center bottom
-    transition: opacity .75s var(--transition-timing-main), transform .75s var(--transition-timing-main)
-    content: ''
+    transition: opacity .75s var(--transition-timing-main)
 
-  &:focus-within::before
-    opacity: .8
-    animation: query-input-glow-breathe 5s ease-in-out .75s infinite
+    &::before
+      position: absolute
+      inset: 0
+      background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 66%, transparent), color-mix(in srgb, var(--color-accent-pink) 66%, transparent))
+      filter: blur(48px)
+      transform-origin: center bottom
+      content: ''
 
 .query-input
   --query-input-action-gap: var(--space-sm)
@@ -129,17 +137,15 @@
 @keyframes query-input-glow-breathe
   0%,
   100%
-    opacity: .8
-    transform: translateX(-50%) scale3d(1, 1, 1)
+    transform: scale3d(1, 1, 1)
 
   50%
-    opacity: .7
-    transform: translateX(-50%) scale3d(.98, .9, 1)
+    transform: scale3d(.98, .9, 1)
 
 @media (prefers-reduced-motion: reduce)
   .query-input-container
-    &::before
+    .query-input-glow
       transition: none
 
-    &:focus-within::before
+    &:focus-within .query-input-glow::before
       animation: none

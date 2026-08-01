@@ -32,3 +32,11 @@ button
   border: 0
   background: transparent
   cursor: pointer
+
+::view-transition-group(root),
+::view-transition-group(query-input)
+  animation-duration: .7s
+  animation-timing-function: var(--transition-timing-sidebar)
+
+::view-transition-group(query-input)
+  z-index: 10

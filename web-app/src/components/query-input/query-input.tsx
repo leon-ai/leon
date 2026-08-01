@@ -208,6 +208,7 @@ export function QueryInput({
 
   return (
     <div className="query-input-container">
+      <div className="query-input-glow" aria-hidden="true" />
       <form
         ref={formRef}
         className={clsx('query-input', {
