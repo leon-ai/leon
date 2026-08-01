@@ -12,8 +12,8 @@
     width: 85%
     height: var(--query-input-height)
     background: linear-gradient(90deg, color-mix(in srgb, var(--color-accent) 66%, transparent), color-mix(in srgb, var(--color-accent-pink) 66%, transparent))
-    filter: blur(66px)
-    opacity: .66
+    filter: blur(48px)
+    opacity: .4
     pointer-events: none
     transform: translateX(-50%)
     transform-origin: center bottom
@@ -21,7 +21,7 @@
     content: ''
 
   &:focus-within::before
-    opacity: .8
+    opacity: .6
     animation: query-input-glow-breathe 5s ease-in-out .75s infinite
 
 .query-input
@@ -129,11 +129,11 @@
 @keyframes query-input-glow-breathe
   0%,
   100%
-    opacity: .8
+    opacity: .6
     transform: translateX(-50%) scale3d(1, 1, 1)
 
   50%
-    opacity: .7
+    opacity: .5
     transform: translateX(-50%) scale3d(.98, .9, 1)
 
 @media (prefers-reduced-motion: reduce)
