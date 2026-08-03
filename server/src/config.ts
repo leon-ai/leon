@@ -149,6 +149,12 @@ const DEFAULT_CONFIG: LeonConfig = {
         api_key: {
           env: 'LEON_GROQ_API_KEY'
         }
+      },
+      celeris: {
+        base_url: 'https://inference.celeris.ai/celeris-1/v1',
+        api_key: {
+          env: 'LEON_CELERIS_API_KEY'
+        }
       }
     }
   }

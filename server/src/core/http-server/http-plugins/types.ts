@@ -16,6 +16,8 @@ export interface HTTPPluginRuntimeConfig {
 export interface HTTPPluginRunAgentInput {
   query: string
   session_id?: string
+  create_session?: boolean
+  allow_direct_answer_handoff?: boolean
   request_id?: string
   metadata?: Record<string, unknown>
 }

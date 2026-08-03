@@ -64,13 +64,17 @@ async function runAgent(
   const requestedSession = input.session_id
     ? CONVERSATION_SESSION_MANAGER.getSession(input.session_id)
     : null
-  const sessionId = requestedSession?.id ||
+  const createdSession = !requestedSession && input.create_session === true
+    ? CONVERSATION_SESSION_MANAGER.createSession()
+    : null
+  const sessionId = requestedSession?.id || createdSession?.id ||
     CONVERSATION_SESSION_MANAGER.getActiveSessionId()
   const result = await CONVERSATION_SESSION_MANAGER.runWithSession(
     sessionId,
     async () => {
       const duty = new ReActLLMDuty({
-        input: input.query.trim()
+        input: input.query.trim(),
+        allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true
       })
 
       await duty.init()

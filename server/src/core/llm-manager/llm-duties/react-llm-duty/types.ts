@@ -11,6 +11,7 @@ export interface AgentSkillContext {
 export interface ReactLLMDutyParams extends LLMDutyParams {
   agentSkill?: AgentSkillContext | null
   forcedToolName?: string | null
+  allowDirectAnswerHandoff?: boolean
 }
 
 export interface FunctionConfig {

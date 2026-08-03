@@ -137,6 +137,19 @@ function getWeatherDescription(code: number): string {
   return WMO_CODE_DESCRIPTIONS[code] || 'Unknown'
 }
 
+/** Ensure Open-Meteo always receives both boundaries for a requested interval. */
+export function normalizeWeatherDateRange(
+  startDate?: string,
+  endDate?: string
+): { startDate?: string, endDate?: string } {
+  const suppliedBoundary = startDate || endDate
+
+  return {
+    startDate: startDate || suppliedBoundary,
+    endDate: endDate || suppliedBoundary
+  }
+}
+
 function mapHourlyToCurrent(hourly: HourlyWeather): CurrentWeather | null {
   if (!hourly.time || hourly.time.length === 0) {
     return null
@@ -317,6 +330,7 @@ export default class OpenMeteoTool extends Tool {
     startDate?: string,
     endDate?: string
   ): Promise<WeatherResponse> {
+    const normalizedDateRange = normalizeWeatherDateRange(startDate, endDate)
     const queryParams = new URLSearchParams({
       latitude: latitude.toString(),
       longitude: longitude.toString(),
@@ -325,17 +339,13 @@ export default class OpenMeteoTool extends Tool {
       timezone: 'auto'
     })
 
-    if (startDate || endDate) {
+    if (normalizedDateRange.startDate && normalizedDateRange.endDate) {
       queryParams.set(
         'hourly',
         'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m'
       )
-      if (startDate) {
-        queryParams.set('start_date', startDate)
-      }
-      if (endDate) {
-        queryParams.set('end_date', endDate)
-      }
+      queryParams.set('start_date', normalizedDateRange.startDate)
+      queryParams.set('end_date', normalizedDateRange.endDate)
     } else {
       queryParams.set(
         'current',

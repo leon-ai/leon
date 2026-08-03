@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
 
@@ -59,13 +60,16 @@ async function runNLTKDownloader(datasetIDs, status) {
     attempt += 1
   ) {
     try {
-      await execa(PYTHON_TCP_SERVER_VENV_BIN_PATH, [
-        '-m',
-        'nltk.downloader',
-        '-d',
-        NLTK_DATA_PATH,
-        ...datasetIDs
-      ])
+      await execa(
+        PYTHON_TCP_SERVER_VENV_BIN_PATH,
+        ['-m', 'nltk.downloader', '-d', NLTK_DATA_PATH, ...datasetIDs],
+        {
+          // NLTK blocks dependencies located below the process cwd. Leon's
+          // project-local virtualenv is below the repository root, so launch
+          // the downloader from a neutral directory instead.
+          cwd: os.tmpdir()
+        }
+      )
 
       return
     } catch (error) {

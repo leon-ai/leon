@@ -116,6 +116,11 @@ const ROUTABLE_SPEED = [
  */
 export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
+   * @see https://docs.celeris.ai/models Fast diffusion model for short agentic calls.
+   */
+  { provider: LLMProviders.Celeris, model: 'celeris-1', label: 'Celeris 1', recommended: true, reasoning: AUTO_REASONING, speed: AUTO_SPEED },
+
+  /**
    * @see https://openrouter.ai/openai/gpt-5.6-sol Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */

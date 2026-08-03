@@ -226,6 +226,7 @@ export class ReActLLMDuty extends LLMDuty {
   private lastExecutionHistory: ExecutionRecord[] = []
   private activeAgentSkillContext: AgentSkillContext | null
   private activeForcedToolName: string | null
+  private allowDirectAnswerHandoff: boolean
 
   constructor(params: ReactLLMDutyParams) {
     super()
@@ -240,6 +241,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.input = params.input
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
+    this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
     this.systemPrompt = PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
       includePersonality: false,
       includeMood: false
@@ -387,7 +389,8 @@ export class ReActLLMDuty extends LLMDuty {
               initialTrackedSteps: continuation.trackedSteps
             }
           : {}),
-        allowDirectAnswerHandoff: Boolean(this.activeForcedToolName),
+        allowDirectAnswerHandoff:
+          Boolean(this.activeForcedToolName) || this.allowDirectAnswerHandoff,
         callModel: async (messages, tools, options) => {
           // Intermediate text is buffered until a final text-only response.
           return this.callAgentModel(

@@ -64,6 +64,12 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: null
     },
     {
+      label: 'Celeris',
+      value: LLMProviders.Celeris,
+      apiKeyEnv: 'LEON_CELERIS_API_KEY',
+      apiKeyURL: 'https://console.celeris.ai'
+    },
+    {
       label: 'Hugging Face',
       value: LLMProviders.HuggingFace,
       apiKeyEnv: 'LEON_HUGGINGFACE_API_KEY',
