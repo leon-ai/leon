@@ -83,14 +83,27 @@ export function extractFinalAnswerFromToolResult(toolExecutionResult: {
   }
 
   const output = toolExecutionResult.data?.output || {}
-  const finalAnswer = output['final_answer']
-  if (typeof finalAnswer === 'string' && finalAnswer.trim()) {
-    return finalAnswer
+  const nestedResult = output['result']
+  const candidates = [
+    output,
+    nestedResult && typeof nestedResult === 'object' && !Array.isArray(nestedResult)
+      ? nestedResult as Record<string, unknown>
+      : null
+  ]
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue
+    }
+
+    for (const key of ['final_answer', 'answer']) {
+      const answer = candidate[key]
+      if (typeof answer === 'string' && answer.trim()) {
+        return answer
+      }
+    }
   }
-  const answer = output['answer']
-  if (typeof answer === 'string' && answer.trim()) {
-    return answer
-  }
+
   return null
 }
 
