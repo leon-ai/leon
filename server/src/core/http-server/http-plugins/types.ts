@@ -15,6 +15,7 @@ export interface HTTPPluginRuntimeConfig {
 
 export interface HTTPPluginRunAgentInput {
   query: string
+  profile_id?: string
   session_id?: string
   create_session?: boolean
   allow_direct_answer_handoff?: boolean
@@ -41,12 +42,30 @@ export interface HTTPPluginRunAgentResult {
   metrics: unknown
 }
 
+export interface HTTPPluginAppendConversationMessageInput {
+  profile_id?: string
+  session_id: string
+  role: 'owner' | 'assistant'
+  message: string
+  message_id?: string
+}
+
+export interface HTTPPluginAppendConversationMessageResult {
+  profile_id: string
+  session_id: string
+  role: 'owner' | 'assistant'
+  message_id: string | null
+}
+
 export interface HTTPPluginLeonServices {
   readonly profileId: string
   isLLMEnabled: () => boolean
   runAgent: (
     input: HTTPPluginRunAgentInput
   ) => Promise<HTTPPluginRunAgentResult>
+  appendConversationMessage: (
+    input: HTTPPluginAppendConversationMessageInput
+  ) => Promise<HTTPPluginAppendConversationMessageResult>
 }
 
 export type HTTPPluginSourceScope = 'global' | 'profile'
