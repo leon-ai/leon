@@ -150,6 +150,9 @@ export async function runAgent(
 
         const duty = new ReActLLMDuty({
           input: query,
+          ...(input.additionalInstructions
+            ? { additionalInstructions: input.additionalInstructions }
+            : {}),
           allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true
         })
 

@@ -227,6 +227,7 @@ export class ReActLLMDuty extends LLMDuty {
   private activeAgentSkillContext: AgentSkillContext | null
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
+  private readonly additionalInstructions: string
 
   constructor(params: ReactLLMDutyParams) {
     super()
@@ -242,10 +243,13 @@ export class ReActLLMDuty extends LLMDuty {
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
-    this.systemPrompt = PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
-      includePersonality: false,
-      includeMood: false
-    })
+    this.additionalInstructions = params.additionalInstructions?.trim() || ''
+    this.systemPrompt = this.appendAdditionalInstructions(
+      PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
+        includePersonality: false,
+        includeMood: false
+      })
+    )
   }
 
   public async init(
@@ -343,12 +347,14 @@ export class ReActLLMDuty extends LLMDuty {
         )
       }
 
-      const agentSystemPrompt = PERSONA.getCompactDutySystemPrompt(
-        AGENT_SYSTEM_PROMPT,
-        {
-          includePersonality: true,
-          includeMood: true
-        }
+      const agentSystemPrompt = this.appendAdditionalInstructions(
+        PERSONA.getCompactDutySystemPrompt(
+          AGENT_SYSTEM_PROMPT,
+          {
+            includePersonality: true,
+            includeMood: true
+          }
+        )
       )
       this.systemPrompt = agentSystemPrompt
 
@@ -1037,6 +1043,21 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     return this.safeJSONStringify(input)
+  }
+
+  /** Appends trusted integration guidance without changing the shared loop. */
+  private appendAdditionalInstructions(systemPrompt: string): string {
+    if (!this.additionalInstructions) {
+      return systemPrompt
+    }
+
+    return [
+      systemPrompt,
+      '',
+      '<additional_instructions>',
+      this.additionalInstructions,
+      '</additional_instructions>'
+    ].join('\n')
   }
 
   /**

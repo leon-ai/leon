@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   activeProfile: 'startup-profile',
   nextSessionId: 0,
   sessions: new Map<string, Set<string>>(),
+  agentDutyParams: [] as Array<Record<string, unknown>>,
   persistedMessages: [] as Array<{
     profileId: string
     sessionId: string
@@ -87,6 +88,10 @@ vi.mock('@/core/session-manager', () => ({
 
 vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
   ReActLLMDuty: class {
+    constructor(params: Record<string, unknown>) {
+      mocks.agentDutyParams.push(params)
+    }
+
     async init(): Promise<void> {}
 
     async execute(): Promise<Record<string, unknown>> {
@@ -111,7 +116,25 @@ describe('HTTP plugin Leon services', () => {
     mocks.activeProfile = 'startup-profile'
     mocks.nextSessionId = 0
     mocks.sessions.clear()
+    mocks.agentDutyParams.length = 0
     mocks.persistedMessages.length = 0
+  })
+
+  it('forwards trusted additional instructions to the agent duty', async () => {
+    await runAgent({
+      profile_id: 'owner-a',
+      query: 'Check the weather.',
+      create_session: true,
+      additionalInstructions: 'Acknowledge pending background work.'
+    })
+
+    expect(mocks.agentDutyParams).toEqual([
+      {
+        input: 'Check the weather.',
+        additionalInstructions: 'Acknowledge pending background work.',
+        allowDirectAnswerHandoff: false
+      }
+    ])
   })
 
   it('persists coherent turns inside the requested profile and session', async () => {

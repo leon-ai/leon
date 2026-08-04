@@ -15,6 +15,8 @@ export interface HTTPPluginRuntimeConfig {
 
 export interface HTTPPluginRunAgentInput {
   query: string
+  /** Trusted turn-level guidance supplied by the installed HTTP plugin. */
+  additionalInstructions?: string
   profile_id?: string
   session_id?: string
   create_session?: boolean
