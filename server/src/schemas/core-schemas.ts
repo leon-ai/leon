@@ -99,7 +99,8 @@ export const configSchemaObject = strictObject({
       moonshotai: llmProvider,
       huggingface: llmProvider,
       cerebras: llmProvider,
-      groq: llmProvider
+      groq: llmProvider,
+      celeris: llmProviderWithBaseURL
     })
   }),
   mood: strictObject({

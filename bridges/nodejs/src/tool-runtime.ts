@@ -10,6 +10,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { Tool } from '@sdk/base-tool'
 import {
+  PROFILE_TOOLS_PATH,
   TOOLS_PATH
 } from '@bridge/constants'
 import { setToolReporter } from '@sdk/tool-reporter'
@@ -62,16 +63,18 @@ const resolveToolModulePath = (
   toolkitId: string,
   toolId: string
 ): string | null => {
-  const flatBuiltInToolPath = path.join(
-    TOOLS_PATH,
-    toolkitId,
-    toolId,
-    'src',
-    'nodejs',
-    'index.ts'
-  )
-  if (fs.existsSync(flatBuiltInToolPath)) {
-    return flatBuiltInToolPath
+  for (const toolsPath of [PROFILE_TOOLS_PATH, TOOLS_PATH]) {
+    const toolModulePath = path.join(
+      toolsPath,
+      toolkitId,
+      toolId,
+      'src',
+      'nodejs',
+      'index.ts'
+    )
+    if (fs.existsSync(toolModulePath)) {
+      return toolModulePath
+    }
   }
 
   return null

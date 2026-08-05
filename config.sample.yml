@@ -80,6 +80,12 @@ llm:
       api_key:
         # The value is read from LEON_GROQ_API_KEY in your profile .env file.
         env: LEON_GROQ_API_KEY
+    celeris:
+      # The model is part of Celeris's OpenAI-compatible base URL.
+      base_url: https://inference.celeris.ai/celeris-1/v1
+      api_key:
+        # The value is read from LEON_CELERIS_API_KEY in your profile .env file.
+        env: LEON_CELERIS_API_KEY
 
 mood:
   # Mood mode: auto | default | tired | cocky | sad | angry

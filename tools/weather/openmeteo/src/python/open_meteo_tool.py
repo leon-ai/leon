@@ -72,6 +72,14 @@ def _get_weather_description(code: int) -> str:
     return WMO_CODE_DESCRIPTIONS.get(code, "Unknown")
 
 
+def _normalize_date_range(
+    start_date: Optional[str], end_date: Optional[str]
+) -> tuple[Optional[str], Optional[str]]:
+    """Ensure Open-Meteo always receives both interval boundaries."""
+    supplied_boundary = start_date or end_date
+    return start_date or supplied_boundary, end_date or supplied_boundary
+
+
 def _map_hourly_to_current(hourly: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     times = hourly.get("time")
     if not isinstance(times, list) or not times:
@@ -252,6 +260,9 @@ class OpenMeteoTool(BaseTool):
     ) -> Dict[str, Any]:
         from urllib.parse import urlencode
 
+        normalized_start_date, normalized_end_date = _normalize_date_range(
+            start_date, end_date
+        )
         query_params_object = {
             "latitude": str(latitude),
             "longitude": str(longitude),
@@ -260,14 +271,12 @@ class OpenMeteoTool(BaseTool):
             "timezone": "auto",
         }
 
-        if start_date or end_date:
+        if normalized_start_date and normalized_end_date:
             query_params_object["hourly"] = (
                 "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m"
             )
-            if start_date:
-                query_params_object["start_date"] = start_date
-            if end_date:
-                query_params_object["end_date"] = end_date
+            query_params_object["start_date"] = normalized_start_date
+            query_params_object["end_date"] = normalized_end_date
         else:
             query_params_object["current"] = (
                 "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m"

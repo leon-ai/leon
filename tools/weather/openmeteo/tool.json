@@ -11,7 +11,7 @@
   },
   "functions": {
     "getCurrentConditions": {
-      "description": "Get current weather conditions for a location. Date range is optional when supported.",
+      "description": "Get current weather conditions or the first hourly observation in a date range for a location.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -20,16 +20,17 @@
           },
           "start_date": {
             "type": "string",
-            "description": "Start date in YYYY-MM-DD format."
+            "description": "Start date in YYYY-MM-DD format. Provide it with end_date; for one day, use the same date for both. A missing boundary is normalized to the supplied boundary."
           },
           "end_date": {
             "type": "string",
-            "description": "End date in YYYY-MM-DD format."
+            "description": "End date in YYYY-MM-DD format. Provide it with start_date; for one day, use the same date for both. A missing boundary is normalized to the supplied boundary."
           }
         },
         "required": [
           "location"
-        ]
+        ],
+        "additionalProperties": false
       }
     }
   }

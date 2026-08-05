@@ -8,6 +8,7 @@ import {
   IS_DEVELOPMENT_ENV,
   IS_PRODUCTION_ENV,
   IS_TELEMETRY_ENABLED,
+  LEON_PROFILE_NAME,
   LANG as LEON_LANG,
   NVIDIA_CUBLAS_PATH,
   NVIDIA_CUDNN_PATH,
@@ -50,10 +51,12 @@ import { SystemHelper } from '@/helpers/system-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 async function bootstrap(): Promise<void> {
-  process.title = 'leon'
+  // Scope process replacement to one profile so separate Leon workers can
+  // share a runtime without terminating each other during startup.
+  process.title = `leon-${LEON_PROFILE_NAME}`
   const shouldStartPythonTCPServer = SHOULD_START_PYTHON_TCP_SERVER
 
-  // Kill any existing Leon process before starting a new one
+  // Kill only an existing worker for this profile before starting a new one.
   const processList = await psList()
   processList
     .filter(
