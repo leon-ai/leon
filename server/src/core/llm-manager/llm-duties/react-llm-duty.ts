@@ -406,14 +406,15 @@ export class ReActLLMDuty extends LLMDuty {
             options
           )
         },
-        executeFunction: async (callable, toolInput) => {
+        executeFunction: async (callable, toolInput, toolCallTitle) => {
           const toolResult = await runToolExecution(
             callable.toolkitId,
             callable.toolId,
             callable.functionName,
             toolInput,
             undefined,
-            callable.qualifiedName
+            callable.qualifiedName,
+            toolCallTitle
           )
 
           return {

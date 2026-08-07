@@ -24,7 +24,8 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import {
   AGENT_MAX_ITERATIONS,
-  AGENT_MAX_PARALLEL_TOOL_CALLS
+  AGENT_MAX_PARALLEL_TOOL_CALLS,
+  AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
 } from '@/core/llm-manager/llm-duties/react-llm-duty/constants'
 import type {
   AgentToolTranscriptMessage,
@@ -192,6 +193,56 @@ describe('continuous agent loop', () => {
 
     expect(executeFunction).not.toHaveBeenCalled()
     expect(result.intent).toBe('answer')
+  })
+
+  it('separates a generated title from executable tool arguments', async () => {
+    const executeFunction = vi.fn(
+      async (
+        _callable: AgentCallableFunction,
+        toolInput: string
+      ) => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Desktop files listed.',
+          requestedToolInput: toolInput
+        }
+      })
+    )
+    let modelTurn = 0
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'List my desktop files.' }],
+      catalog: createCatalog(),
+      callModel: async () => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('list-desktop', CALLABLE_TOOL_NAME, {
+                query: '~/Desktop',
+                [AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]:
+                  'List files on ~/Desktop'
+              })
+            ]
+          }
+        }
+
+        return { textContent: 'The desktop files were listed.' }
+      },
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+
+    expect(executeFunction).toHaveBeenCalledWith(
+      callable,
+      JSON.stringify({ query: '~/Desktop' }),
+      'List files on ~/Desktop'
+    )
+    expect(result.executionHistory[0]).toMatchObject({
+      toolCallTitle: 'List files on ~/Desktop',
+      requestedToolInput: JSON.stringify({ query: '~/Desktop' })
+    })
   })
 
   it('compacts context and disables reasoning for one empty-output recovery', async () => {
@@ -1082,14 +1133,15 @@ describe('continuous agent loop', () => {
         toolDescription: 'Control robot positioning.'
       }
     ])
+    const parameters = {
+      type: 'object',
+      properties: {},
+      additionalProperties: false
+    }
     coreMocks.getToolFunctions.mockReturnValue({
       home: {
         description: 'Return the robot to its home position.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          additionalProperties: false
-        }
+        parameters
       }
     })
 
@@ -1099,6 +1151,23 @@ describe('continuous agent loop', () => {
     expect(toolNames).not.toContain(AGENT_TOOLKIT_LOADER_NAME)
     expect(toolNames).toContain('device_control__robot__home')
     expect(catalog.loadedToolkitIds).toEqual(new Set(['device_control']))
+
+    const homeTool = catalog.tools.find(
+      (tool) => tool.function.name === 'device_control__robot__home'
+    )
+    expect(homeTool?.function.parameters).toMatchObject({
+      properties: {
+        [AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]: {
+          type: 'string'
+        }
+      },
+      required: [AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]
+    })
+    expect(parameters).toEqual({
+      type: 'object',
+      properties: {},
+      additionalProperties: false
+    })
   })
 
   it('bounds large observations and prunes inactive schemas near the context limit', () => {
