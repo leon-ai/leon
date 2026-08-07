@@ -22,7 +22,9 @@ import {
   AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS,
   AGENT_LIMIT_RECOVERY_REQUEST_MAX_CHARS,
   AGENT_MAX_PARALLEL_TOOL_CALLS,
-  AGENT_MAX_ITERATIONS
+  AGENT_MAX_ITERATIONS,
+  AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
+  AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './constants'
 import { validateToolInput } from './utils'
 
@@ -49,6 +51,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 
 <tool_policy>
 - Use only the provided tools.
+- For every executable toolkit call, set ${AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME} to a very short, action-specific title that explains the immediate goal and includes the key target when useful.
 - Load the most specific relevant toolkit before acting. Prefer a dedicated toolkit over a general operating-system toolkit when both could perform the task.
 - When the owner provides a source to understand, prefer direct-source tools over secondary search. Use search as fallback when the source cannot be accessed or does not contain the needed evidence.
 - Use the exact observed values from earlier tool results when chaining calls.
@@ -155,7 +158,8 @@ export interface AgentLoopParams {
   ) => Promise<AgentModelResult | null>
   executeFunction: (
     callable: AgentCallableFunction,
-    toolInput: string
+    toolInput: string,
+    toolCallTitle?: string
   ) => Promise<AgentFunctionExecutionResult>
   loadAgentSkill: (skillId: string) => Promise<AgentSkillContext | null>
   loadToolkitContext?: (toolkitId: string) => string
@@ -301,7 +305,7 @@ function loadToolkitFunctions(
         function: {
           name: toolName,
           description: `${qualifiedName}: ${functionConfig.description}`,
-          parameters: functionConfig.parameters
+          parameters: addToolCallTitleParameter(functionConfig.parameters)
         }
       })
       loadedFunctionCount += 1
@@ -313,6 +317,41 @@ function loadToolkitFunctions(
   }
 
   return loadedFunctionCount
+}
+
+/** Adds Leon-owned display metadata without changing the tool's input schema. */
+function addToolCallTitleParameter(
+  parameters: Record<string, unknown>
+): Record<string, unknown> {
+  const properties = parameters['properties']
+  const required = parameters['required']
+  const existingProperties =
+    properties && typeof properties === 'object' && !Array.isArray(properties)
+      ? properties as Record<string, unknown>
+      : {}
+  const existingRequired = Array.isArray(required)
+    ? required.filter((value): value is string => typeof value === 'string')
+    : []
+
+  return {
+    ...parameters,
+    properties: {
+      ...existingProperties,
+      [AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]: {
+        type: 'string',
+        minLength: 1,
+        maxLength: AGENT_TOOL_CALL_TITLE_MAX_CHARS,
+        description:
+          'Very short user-facing title describing the immediate goal of this tool call, including its key target when useful.'
+      }
+    },
+    required: [
+      ...existingRequired.filter(
+        (name) => name !== AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
+      ),
+      AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
+    ]
+  }
 }
 
 /**
@@ -1050,8 +1089,9 @@ async function executeAgentToolCall(
     }
   }
 
+  const toolCallInput = extractToolCallInput(toolCall.function.arguments)
   const validation = validateToolInput(
-    toolCall.function.arguments,
+    toolCallInput.toolInput,
     callable.functionConfig.parameters
   )
   if (!validation.isValid) {
@@ -1062,7 +1102,7 @@ async function executeAgentToolCall(
   }
 
   const validatedInput =
-    validation.repairedToolInput ?? toolCall.function.arguments
+    validation.repairedToolInput ?? toolCallInput.toolInput
   const duplicate =
     callable.functionConfig.deduplicate_calls === false
       ? null
@@ -1082,8 +1122,17 @@ async function executeAgentToolCall(
   let execution: ExecutionRecord
   let handoffSignal: FinalResponseSignal | undefined
   try {
-    const result = await params.executeFunction(callable, validatedInput)
-    execution = result.execution
+    const result = await params.executeFunction(
+      callable,
+      validatedInput,
+      toolCallInput.title
+    )
+    execution = {
+      ...result.execution,
+      ...(toolCallInput.title
+        ? { toolCallTitle: toolCallInput.title }
+        : {})
+    }
     handoffSignal = result.handoffSignal
   } catch (error) {
     // Tool failures stay inside the protocol so the model can recover using
@@ -1092,6 +1141,9 @@ async function executeAgentToolCall(
       function: callable.qualifiedName,
       status: 'error',
       observation: `Tool execution failed: ${String(error)}`,
+      ...(toolCallInput.title
+        ? { toolCallTitle: toolCallInput.title }
+        : {}),
       stepLabel: callable.qualifiedName,
       requestedToolInput: validatedInput
     }
@@ -1105,6 +1157,44 @@ async function executeAgentToolCall(
     content: execution.observation,
     trackedSteps,
     ...(handoffSignal && shouldHandoff ? { signal: handoffSignal } : {})
+  }
+}
+
+/** Separates Leon-owned display metadata from arguments sent to a tool. */
+function extractToolCallInput(input: string): {
+  toolInput: string
+  title?: string
+} {
+  try {
+    const parsed = JSON.parse(input) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { toolInput: input }
+    }
+
+    const record = parsed as Record<string, unknown>
+    if (!(AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME in record)) {
+      return { toolInput: input }
+    }
+
+    const titleValue = record[AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]
+    const toolArguments = { ...record }
+    delete toolArguments[AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]
+
+    if (typeof titleValue !== 'string' || !titleValue.trim()) {
+      return { toolInput: JSON.stringify(toolArguments) }
+    }
+
+    const title = titleValue.trim()
+    const boundedTitle = title.length <= AGENT_TOOL_CALL_TITLE_MAX_CHARS
+      ? title
+      : `${title.slice(0, AGENT_TOOL_CALL_TITLE_MAX_CHARS - 3).trimEnd()}...`
+
+    return {
+      toolInput: JSON.stringify(toolArguments),
+      title: boundedTitle
+    }
+  } catch {
+    return { toolInput: input }
   }
 }
 

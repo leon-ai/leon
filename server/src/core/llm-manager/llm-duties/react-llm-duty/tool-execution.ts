@@ -118,6 +118,7 @@ function emitToolExecutionInputToWebApp(params: {
   functionName: string
   toolInput: string
   toolGroupId: string
+  toolCallTitle?: string
   stepLabel?: string
 }): void {
   const displayContext = getToolDisplayContext(
@@ -143,6 +144,9 @@ function emitToolExecutionInputToWebApp(params: {
     toolGroupId: params.toolGroupId,
     functionName: params.functionName,
     toolInput: params.toolInput,
+    ...(params.toolCallTitle
+      ? { toolCallTitle: params.toolCallTitle }
+      : {}),
     ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
   })
 }
@@ -153,6 +157,7 @@ function emitToolPreparationProgressToWebApp(params: {
   functionName: string
   toolGroupId: string
   message: string
+  toolCallTitle?: string
   stepLabel?: string
 }): void {
   const message = params.message.trim()
@@ -174,6 +179,9 @@ function emitToolPreparationProgressToWebApp(params: {
     functionName: params.functionName,
     status: 'running',
     message,
+    ...(params.toolCallTitle
+      ? { toolCallTitle: params.toolCallTitle }
+      : {}),
     ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
   })
 }
@@ -184,6 +192,7 @@ function emitToolExecutionOutputDeltaToWebApp(params: {
   functionName: string
   toolGroupId: string
   output: string
+  toolCallTitle?: string
   stepLabel?: string
 }): void {
   const output = params.output
@@ -205,6 +214,9 @@ function emitToolExecutionOutputDeltaToWebApp(params: {
     functionName: params.functionName,
     status: 'running',
     outputDelta: output,
+    ...(params.toolCallTitle
+      ? { toolCallTitle: params.toolCallTitle }
+      : {}),
     ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
   })
 }
@@ -236,6 +248,7 @@ function emitToolExecutionOutputToWebApp(params: {
   output: Record<string, unknown>
   status: string
   message: string
+  toolCallTitle?: string
   stepLabel?: string
 }): void {
   const outputPayload = {
@@ -263,6 +276,9 @@ function emitToolExecutionOutputToWebApp(params: {
     status: params.status,
     message: params.message,
     output: params.output,
+    ...(params.toolCallTitle
+      ? { toolCallTitle: params.toolCallTitle }
+      : {}),
     ...(params.stepLabel ? { stepLabel: params.stepLabel } : {})
   })
 }
@@ -273,7 +289,8 @@ export async function runToolExecution(
   functionName: string,
   toolInput: string,
   parsedInput?: Record<string, unknown>,
-  stepLabel?: string
+  stepLabel?: string,
+  toolCallTitle?: string
 ): Promise<ToolExecutionResult> {
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
   const requestedToolInput = toolInput
@@ -390,6 +407,7 @@ export async function runToolExecution(
     functionName,
     toolInput: requestedToolInput,
     toolGroupId,
+    ...(toolCallTitle ? { toolCallTitle } : {}),
     ...(stepLabel ? { stepLabel } : {})
   })
 
@@ -413,6 +431,7 @@ export async function runToolExecution(
         functionName,
         toolGroupId,
         output,
+        ...(toolCallTitle ? { toolCallTitle } : {}),
         ...(stepLabel ? { stepLabel } : {})
       })
       return
@@ -424,6 +443,7 @@ export async function runToolExecution(
       functionName,
       toolGroupId,
       message: progress.message,
+      ...(toolCallTitle ? { toolCallTitle } : {}),
       ...(stepLabel ? { stepLabel } : {})
     })
 
@@ -513,6 +533,7 @@ export async function runToolExecution(
     output: toolExecutionResult.data?.output || {},
     status: effectiveStatus,
     message: effectiveMessage,
+    ...(toolCallTitle ? { toolCallTitle } : {}),
     ...(stepLabel ? { stepLabel } : {})
   })
 

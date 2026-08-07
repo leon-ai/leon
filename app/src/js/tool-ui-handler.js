@@ -191,7 +191,10 @@ export default class ToolUIHandler {
 
     const title = document.createElement('span')
     title.className = 'tool-title'
-    title.textContent = data.stepLabel || this.humanizeFunctionName(answerKey)
+    title.textContent =
+      data.toolCallTitle ||
+      data.stepLabel ||
+      this.humanizeFunctionName(answerKey)
 
     const subtitle = document.createElement('span')
     subtitle.className = 'tool-subtitle'
@@ -422,6 +425,7 @@ export default class ToolUIHandler {
    */
   updateActivityCard(toolGroupContainer, data, answerKey) {
     const title =
+      data.toolCallTitle ||
       data.stepLabel ||
       this.humanizeFunctionName(data.functionName || answerKey)
     toolGroupContainer.title.textContent = title

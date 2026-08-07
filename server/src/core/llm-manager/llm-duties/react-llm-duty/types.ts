@@ -31,6 +31,7 @@ export interface ExecutionRecord {
   function: string
   status: string
   observation: string
+  toolCallTitle?: string
   stepLabel?: string
   requestedToolInput?: string
 }
