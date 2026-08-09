@@ -1,16 +1,39 @@
 .thinking-message
-  display: grid
-  gap: var(--space-md)
+  display: flex
+  flex-direction: column
+  gap: var(--space-sm)
 
-  h2
-    color: var(--color-text)
-    font-size: var(--font-size-md)
-    font-weight: var(--font-weight-semi-bold)
-    line-height: var(--line-height-md)
+.thinking-message-heading
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
 
-  .lines
-    display: grid
-    gap: var(--space-sm)
-    color: var(--color-text-secondary)
-    font-size: var(--font-size-md)
-    line-height: var(--line-height-md)
+.thinking-message-heading-animate
+  opacity: 0
+  animation: thinking-message-heading-enter .3s ease-out forwards
+
+.thinking-message-title
+  margin: 0
+  color: var(--color-text)
+  font-size: var(--font-size-lg)
+  font-weight: var(--font-weight-regular)
+  line-height: var(--line-height-lg)
+
+.thinking-message-details
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-md)
+  line-height: 28px
+
+@keyframes thinking-message-heading-enter
+  from
+    opacity: 0
+    transform: translate3d(0, 4px, 0)
+
+  to
+    opacity: 1
+    transform: translate3d(0, 0, 0)
+
+@media (prefers-reduced-motion: reduce)
+  .thinking-message-heading-animate
+    opacity: 1
+    animation: none
