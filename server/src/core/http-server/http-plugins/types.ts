@@ -98,6 +98,46 @@ export interface HTTPPluginAppendConversationMessageResult {
   message_id: string | null
 }
 
+export interface HTTPPluginConversationSession {
+  id: string
+  title: string
+  is_pinned: boolean
+  created_at: number
+  updated_at: number
+  last_message_at: number | null
+  message_count: number
+}
+
+export interface HTTPPluginListConversationSessionsInput {
+  profile_id?: string
+}
+
+export interface HTTPPluginListConversationSessionsResult {
+  profile_id: string
+  active_session_id: string
+  sessions: HTTPPluginConversationSession[]
+}
+
+export interface HTTPPluginConversationMessage {
+  role: 'owner' | 'assistant'
+  content: string
+  created_at: number
+  message_id: string | null
+  metrics: unknown
+}
+
+export interface HTTPPluginGetConversationHistoryInput {
+  profile_id?: string
+  session_id: string
+  limit?: number
+}
+
+export interface HTTPPluginGetConversationHistoryResult {
+  profile_id: string
+  session_id: string
+  messages: HTTPPluginConversationMessage[]
+}
+
 export interface HTTPPluginLeonServices {
   readonly profileId: string
   isLLMEnabled: () => boolean
@@ -110,6 +150,12 @@ export interface HTTPPluginLeonServices {
   appendConversationMessage: (
     input: HTTPPluginAppendConversationMessageInput
   ) => Promise<HTTPPluginAppendConversationMessageResult>
+  listConversationSessions: (
+    input: HTTPPluginListConversationSessionsInput
+  ) => Promise<HTTPPluginListConversationSessionsResult>
+  getConversationHistory: (
+    input: HTTPPluginGetConversationHistoryInput
+  ) => Promise<HTTPPluginGetConversationHistoryResult>
 }
 
 export type HTTPPluginSourceScope = 'global' | 'profile'

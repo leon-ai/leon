@@ -18,12 +18,22 @@ import {
 } from '@/core/profile-runtime/profile-context'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
-import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import {
+  CONVERSATION_SESSION_MANAGER,
+  type ConversationSession
+} from '@/core/session-manager'
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 
 import type {
   HTTPPluginAppendConversationMessageInput,
   HTTPPluginAppendConversationMessageResult,
+  HTTPPluginConversationMessage,
+  HTTPPluginConversationSession,
+  HTTPPluginGetConversationHistoryInput,
+  HTTPPluginGetConversationHistoryResult,
   HTTPPluginLeonServices,
+  HTTPPluginListConversationSessionsInput,
+  HTTPPluginListConversationSessionsResult,
   HTTPPluginRunControlledSkillInput,
   HTTPPluginRunControlledSkillResult,
   HTTPPluginRunAgentInput,
@@ -33,6 +43,8 @@ import type {
 
 const CONTROLLED_HISTORY_LIMIT = 6
 const CONTROLLED_CONTEXT_UTTERANCE_LIMIT = 4
+const DEFAULT_HISTORY_LIMIT = 100
+const MAXIMUM_HISTORY_LIMIT = 500
 
 function elapsedMilliseconds(startedAt: number): number {
   return Number((performance.now() - startedAt).toFixed(2))
@@ -81,6 +93,98 @@ function normalizeToolCalls(result: LLMDutyResult | null): HTTPPluginToolCall[] 
       return toolCall
     })
     .filter((item): item is HTTPPluginToolCall => item !== null)
+}
+
+function normalizeConversationSession(
+  session: ConversationSession
+): HTTPPluginConversationSession {
+  return {
+    id: session.id,
+    title: session.title,
+    is_pinned: session.isPinned,
+    created_at: session.createdAt,
+    updated_at: session.updatedAt,
+    last_message_at: session.lastMessageAt,
+    message_count: session.messageCount
+  }
+}
+
+function normalizeHistoryLimit(limit?: number): number {
+  if (!Number.isInteger(limit) || !limit || limit < 1) {
+    return DEFAULT_HISTORY_LIMIT
+  }
+
+  return Math.min(limit, MAXIMUM_HISTORY_LIMIT)
+}
+
+/** Lists conversation sessions inside one trusted profile runtime. */
+export async function listConversationSessions(
+  input: HTTPPluginListConversationSessionsInput
+): Promise<HTTPPluginListConversationSessionsResult> {
+  const profileName = input.profile_id?.trim() || getActiveProfileName()
+
+  if (!isValidProfileName(profileName)) {
+    throw new Error(`Invalid Leon profile name "${profileName}".`)
+  }
+
+  return runWithProfileContext({ profileName }, async () => {
+    await ensureActiveProfileRuntime()
+
+    return {
+      profile_id: getActiveProfileName(),
+      active_session_id: CONVERSATION_SESSION_MANAGER.getActiveSessionId(),
+      sessions: CONVERSATION_SESSION_MANAGER.listSessions().map(
+        normalizeConversationSession
+      )
+    }
+  })
+}
+
+/** Reads persisted, user-visible conversation messages for one profile session. */
+export async function getConversationHistory(
+  input: HTTPPluginGetConversationHistoryInput
+): Promise<HTTPPluginGetConversationHistoryResult> {
+  const profileName = input.profile_id?.trim() || getActiveProfileName()
+
+  if (!isValidProfileName(profileName)) {
+    throw new Error(`Invalid Leon profile name "${profileName}".`)
+  }
+
+  return runWithProfileContext({ profileName }, async () => {
+    await ensureActiveProfileRuntime()
+    const sessionId = input.session_id.trim()
+
+    if (!sessionId) {
+      throw new Error('A conversation session ID is required.')
+    }
+    if (!CONVERSATION_SESSION_MANAGER.getSession(sessionId)) {
+      throw new Error(
+        `Conversation session "${sessionId}" does not exist in profile "${profileName}".`
+      )
+    }
+
+    const logs = await CONVERSATION_LOGGER.load({
+      sessionId,
+      nbOfLogsToLoad: normalizeHistoryLimit(input.limit)
+    })
+    const messages: HTTPPluginConversationMessage[] =
+      ConversationHistoryHelper.toHistoryItems(
+        logs.filter((log) => ConversationHistoryHelper.isAddedToHistory(log)),
+        { supportsWidgets: false, source: 'conversation_history' }
+      ).map((item) => ({
+        role: item.who === 'leon' ? 'assistant' : 'owner',
+        content: item.string,
+        created_at: item.sentAt,
+        message_id: item.messageId || null,
+        metrics: item.llmMetrics || null
+      }))
+
+    return {
+      profile_id: getActiveProfileName(),
+      session_id: sessionId,
+      messages
+    }
+  })
 }
 
 function resolveSessionId(input: {
@@ -456,6 +560,8 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
     isLLMEnabled: () => LLM_MANAGER.isLLMEnabled,
     runAgent,
     runControlledSkill,
-    appendConversationMessage
+    appendConversationMessage,
+    listConversationSessions,
+    getConversationHistory
   }
 }

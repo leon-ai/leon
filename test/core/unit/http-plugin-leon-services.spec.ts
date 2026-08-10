@@ -28,6 +28,9 @@ const mocks = vi.hoisted(() => ({
     sessionId: string
     who: string
     message: string
+    sentAt: number
+    messageId?: string
+    llmMetrics?: Record<string, unknown>
   }>
 }))
 
@@ -55,27 +58,41 @@ vi.mock('@/core', () => ({
     })
   },
   CONVERSATION_LOGGER: {
-    load: vi.fn(async () => mocks.persistedMessages
+    load: vi.fn(async (params?: {
+      sessionId?: string
+      nbOfLogsToLoad?: number
+    }) => mocks.persistedMessages
       .filter((message) =>
         message.profileId === mocks.activeProfile &&
-        message.sessionId === mocks.activeSessionId
+        message.sessionId === (params?.sessionId || mocks.activeSessionId)
       )
+      .slice(-(params?.nbOfLogsToLoad || mocks.persistedMessages.length))
       .map((message) => ({
         who: message.who,
         message: message.message,
-        sentAt: 0,
-        isAddedToHistory: true
+        sentAt: message.sentAt,
+        isAddedToHistory: true,
+        ...(message.messageId ? { messageId: message.messageId } : {}),
+        ...(message.llmMetrics ? { llmMetrics: message.llmMetrics } : {})
       }))),
     upsert: vi.fn(
       async (
-        record: { who: string, message: string },
+        record: {
+          who: string
+          message: string
+          messageId?: string
+          llmMetrics?: Record<string, unknown>
+        },
         params: { sessionId: string }
       ) => {
         mocks.persistedMessages.push({
           profileId: mocks.activeProfile,
           sessionId: params.sessionId,
           who: record.who,
-          message: record.message
+          message: record.message,
+          sentAt: mocks.persistedMessages.length + 1,
+          ...(record.messageId ? { messageId: record.messageId } : {}),
+          ...(record.llmMetrics ? { llmMetrics: record.llmMetrics } : {})
         })
       }
     )
@@ -126,6 +143,18 @@ vi.mock('@/core/session-manager', () => ({
     },
     getActiveSessionId: (): string =>
       [...getProfileSessions()][0] || 'active-session',
+    listSessions: (): Array<Record<string, unknown>> =>
+      [...getProfileSessions()].map((id, index) => ({
+        id,
+        title: `Session ${index + 1}`,
+        isTitleGenerated: true,
+        isPinned: index === 0,
+        createdAt: index + 1,
+        updatedAt: index + 2,
+        lastMessageAt: index + 2,
+        messageCount: 2,
+        modelTarget: null
+      })),
     runWithSession: async <T>(
       sessionId: string,
       callback: () => Promise<T>
@@ -211,6 +240,8 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
 
 import {
   appendConversationMessage,
+  getConversationHistory,
+  listConversationSessions,
   runAgent,
   runControlledSkill
 } from '@/core/http-server/http-plugins/leon-services'
@@ -341,25 +372,33 @@ describe('HTTP plugin Leon services', () => {
         profileId: 'owner-a',
         sessionId: firstTurn.session_id,
         who: 'owner',
-        message: 'Remember the demo code 7742.'
+        message: 'Remember the demo code 7742.',
+        sentAt: 1,
+        messageId: 'turn-1'
       },
       {
         profileId: 'owner-a',
         sessionId: firstTurn.session_id,
         who: 'leon',
-        message: 'Acknowledged.'
+        message: 'Acknowledged.',
+        sentAt: 2,
+        messageId: 'turn-1:leon'
       },
       {
         profileId: 'owner-a',
         sessionId: firstTurn.session_id,
         who: 'owner',
-        message: 'What is the demo code?'
+        message: 'What is the demo code?',
+        sentAt: 3,
+        messageId: 'turn-2'
       },
       {
         profileId: 'owner-a',
         sessionId: firstTurn.session_id,
         who: 'leon',
-        message: 'Acknowledged.'
+        message: 'Acknowledged.',
+        sentAt: 4,
+        messageId: 'turn-2:leon'
       }
     ])
   })
@@ -409,7 +448,9 @@ describe('HTTP plugin Leon services', () => {
       profileId: 'owner-a',
       sessionId: turn.session_id,
       who: 'leon',
-      message: 'It is overcast and 26C in Shenzhen.'
+      message: 'It is overcast and 26C in Shenzhen.',
+      sentAt: 3,
+      messageId: 'background-job-1'
     })
   })
 
@@ -425,6 +466,70 @@ describe('HTTP plugin Leon services', () => {
       session_id: turn.session_id || '',
       role: 'assistant',
       message: 'This must not cross profiles.'
+    })).rejects.toThrow('does not exist in profile "owner-b"')
+  })
+
+  it('lists sessions inside the requested profile', async () => {
+    await runAgent({
+      profile_id: 'owner-a',
+      query: 'Owner A turn.',
+      create_session: true
+    })
+
+    const result = await listConversationSessions({ profile_id: 'owner-a' })
+
+    expect(result.profile_id).toBe('owner-a')
+    expect(result.active_session_id).toBe('session-1')
+    expect(result.sessions).toEqual([
+      {
+        id: 'session-1',
+        title: 'Session 1',
+        is_pinned: true,
+        created_at: 1,
+        updated_at: 2,
+        last_message_at: 2,
+        message_count: 2
+      }
+    ])
+  })
+
+  it('reads persisted history without crossing profile sessions', async () => {
+    const turn = await runAgent({
+      profile_id: 'owner-a',
+      query: 'Remember this.',
+      create_session: true,
+      request_id: 'turn-1'
+    })
+
+    const result = await getConversationHistory({
+      profile_id: 'owner-a',
+      session_id: turn.session_id || ''
+    })
+
+    expect(result).toEqual({
+      profile_id: 'owner-a',
+      session_id: 'session-1',
+      messages: [
+        {
+          role: 'owner',
+          content: 'Remember this.',
+          created_at: 1,
+          message_id: 'turn-1',
+          metrics: null
+        },
+        {
+          role: 'assistant',
+          content: 'Acknowledged.',
+          created_at: 2,
+          message_id: 'turn-1:leon',
+          metrics: null
+        }
+      ]
+    })
+
+    await expect(getConversationHistory({
+      profile_id: 'owner-b',
+      session_id: turn.session_id || ''
     })).rejects.toThrow('does not exist in profile "owner-b"')
   })
 
