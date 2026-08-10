@@ -1,10 +1,36 @@
 .leon-message
-  display: grid
-  gap: var(--space-sm)
-  max-width: 760px
+  display: flex
+  width: 100%
+  max-width: 100%
+  flex-direction: column
+  gap: var(--space-xl)
   color: var(--color-text)
-  font-size: var(--font-size-md)
-  line-height: 28px
+  font-size: var(--font-size-lg)
+  line-height: var(--line-height-lg)
 
-  p
-    color: var(--color-text)
+.leon-message-summary
+  margin: 0
+  color: var(--color-text)
+  font-size: var(--font-size-lg)
+  line-height: var(--line-height-lg)
+
+.leon-message-execution
+  opacity: 1
+
+.leon-message-execution-animate
+  opacity: 0
+  animation: leon-message-execution-enter .34s ease-out .72s forwards
+
+@keyframes leon-message-execution-enter
+  from
+    opacity: 0
+    transform: translate3d(0, 6px, 0)
+
+  to
+    opacity: 1
+    transform: translate3d(0, 0, 0)
+
+@media (prefers-reduced-motion: reduce)
+  .leon-message-execution-animate
+    opacity: 1
+    animation: none

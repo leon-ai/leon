@@ -1,5 +1,6 @@
 .app-layout
   --active-sidebar-width: var(--sidebar-width)
+  --app-main-inline-padding: var(--space-xl)
   min-height: 100vh
   background-color: var(--color-background)
 
@@ -15,13 +16,26 @@
     height: 100vh
     min-height: 100vh
     margin-left: var(--active-sidebar-width)
-    padding: 0 var(--space-xl)
+    padding: 0 var(--app-main-inline-padding)
     overflow: auto
-    scrollbar-width: none
+    scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
+    scrollbar-width: thin
     transition: margin-left var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
     &::-webkit-scrollbar
-      display: none
+      width: 8px
+
+    &::-webkit-scrollbar-track
+      background-color: transparent
+
+    &::-webkit-scrollbar-thumb
+      border: 2px solid transparent
+      border-radius: var(--border-radius-pill)
+      background-clip: content-box
+      background-color: var(--color-scrollbar-thumb-muted)
+
+    &::-webkit-scrollbar-thumb:hover
+      background-color: var(--color-scrollbar-thumb)
 
 @media (max-width: 960px)
   .app-layout
@@ -29,8 +43,9 @@
       transform: translateX(calc(var(--sidebar-width) * -1))
 
     > .app-main
+      --active-sidebar-width: 0px
+      --app-main-inline-padding: var(--space-lg)
       margin-left: 0
-      padding: 0 var(--space-lg)
 
 @media (prefers-reduced-motion: reduce)
   .app-layout > .app-main
