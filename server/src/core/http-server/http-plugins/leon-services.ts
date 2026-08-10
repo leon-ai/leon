@@ -704,6 +704,8 @@ export async function runAgent(
     const sessionId = resolveSessionId(input)
     const planSteps = new Map<string, HTTPPluginAgentTrace['plan_steps'][number]>()
     const toolCalls = new Map<string, HTTPPluginToolCall>()
+    const toolStartedAt = new Map<string, number>()
+    let actionExecutionMs = 0
     let reasoningSummary = 'Understanding your request'
     const requestId = input.request_id || null
     let finalMetrics: Record<string, unknown> | null = null
@@ -787,6 +789,17 @@ export async function runAgent(
                 ? { native_skill_path: event.toolCall.nativeSkillPath }
                 : {})
             }
+            if (event.toolCall.status === 'running') {
+              if (!toolStartedAt.has(event.toolCall.id)) {
+                toolStartedAt.set(event.toolCall.id, performance.now())
+              }
+            } else {
+              const startedAt = toolStartedAt.get(event.toolCall.id)
+              if (startedAt !== undefined) {
+                actionExecutionMs += performance.now() - startedAt
+                toolStartedAt.delete(event.toolCall.id)
+              }
+            }
             toolCalls.set(event.toolCall.id, toolCall)
             emit('tool_call', { tool_call: toolCall })
           }
@@ -800,6 +813,13 @@ export async function runAgent(
           ...(data['llmMetrics'] && typeof data['llmMetrics'] === 'object'
             ? data['llmMetrics'] as Record<string, unknown>
             : {}),
+          inference_duration_ms:
+            typeof data['llmMetrics'] === 'object' && data['llmMetrics']
+              ? Number(
+                  (data['llmMetrics'] as Record<string, unknown>)['durationMs'] || 0
+                )
+              : 0,
+          action_execution_ms: Number(actionExecutionMs.toFixed(2)),
           total_duration_ms: elapsedMilliseconds(totalStartedAt)
         }
         finalMetrics = metrics
