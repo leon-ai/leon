@@ -8,11 +8,40 @@ export interface AgentSkillContext {
   instructions: string
 }
 
+export type AgentRunProgressEvent =
+  | {
+      type: 'reasoning_summary'
+      summary: string
+    }
+  | {
+      type: 'plan_step'
+      step: {
+        id: string
+        label: string
+        status: PlanStepStatus
+      }
+    }
+  | {
+      type: 'tool_call'
+      toolCall: {
+        id: string
+        name: string
+        status: 'running' | 'success' | 'error'
+        input?: unknown
+        output?: unknown
+        stepLabel?: string
+        errorMessage?: string
+        skillId?: string
+        nativeSkillPath?: string
+      }
+    }
+
 export interface ReactLLMDutyParams extends LLMDutyParams {
   agentSkill?: AgentSkillContext | null
   forcedToolName?: string | null
   allowDirectAnswerHandoff?: boolean
   additionalInstructions?: string
+  onProgressEvent?: (event: AgentRunProgressEvent) => void
 }
 
 export interface FunctionConfig {

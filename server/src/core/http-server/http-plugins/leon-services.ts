@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import { EventEmitter } from 'node:events'
 
 import { BRAIN, CONVERSATION_LOGGER, LLM_MANAGER, NLU } from '@/core'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
@@ -38,13 +39,59 @@ import type {
   HTTPPluginRunControlledSkillResult,
   HTTPPluginRunAgentInput,
   HTTPPluginRunAgentResult,
-  HTTPPluginToolCall
+  HTTPPluginToolCall,
+  HTTPPluginAgentEvent,
+  HTTPPluginAgentTrace,
+  HTTPPluginConversationSessionMutationResult,
+  HTTPPluginCreateConversationSessionInput,
+  HTTPPluginSelectConversationSessionInput,
+  HTTPPluginSubscribeAgentEventsInput
 } from './types'
 
 const CONTROLLED_HISTORY_LIMIT = 6
 const CONTROLLED_CONTEXT_UTTERANCE_LIMIT = 4
 const DEFAULT_HISTORY_LIMIT = 100
 const MAXIMUM_HISTORY_LIMIT = 500
+const MAXIMUM_REPLAY_EVENTS = 500
+
+interface AgentEventChannel {
+  sequence: number
+  events: HTTPPluginAgentEvent[]
+  emitter: EventEmitter
+}
+
+const agentEventChannels = new Map<string, AgentEventChannel>()
+
+function getAgentEventChannel(profileId: string): AgentEventChannel {
+  let channel = agentEventChannels.get(profileId)
+  if (!channel) {
+    channel = { sequence: 0, events: [], emitter: new EventEmitter() }
+    channel.emitter.setMaxListeners(100)
+    agentEventChannels.set(profileId, channel)
+  }
+
+  return channel
+}
+
+function publishAgentEvent(
+  profileId: string,
+  event: Omit<HTTPPluginAgentEvent, 'sequence' | 'profile_id' | 'created_at'>
+): HTTPPluginAgentEvent {
+  const channel = getAgentEventChannel(profileId)
+  const published: HTTPPluginAgentEvent = {
+    ...event,
+    sequence: ++channel.sequence,
+    profile_id: profileId,
+    created_at: Date.now()
+  }
+  channel.events.push(published)
+  if (channel.events.length > MAXIMUM_REPLAY_EVENTS) {
+    channel.events.splice(0, channel.events.length - MAXIMUM_REPLAY_EVENTS)
+  }
+  channel.emitter.emit('event', published)
+
+  return published
+}
 
 function elapsedMilliseconds(startedAt: number): number {
   return Number((performance.now() - startedAt).toFixed(2))
@@ -61,7 +108,7 @@ function normalizeToolCalls(result: LLMDutyResult | null): HTTPPluginToolCall[] 
     : []
 
   return executionHistory
-    .map((item): HTTPPluginToolCall | null => {
+    .map((item, index): HTTPPluginToolCall | null => {
       if (!item || typeof item !== 'object') {
         return null
       }
@@ -74,6 +121,7 @@ function normalizeToolCalls(result: LLMDutyResult | null): HTTPPluginToolCall[] 
       }
 
       const toolCall: HTTPPluginToolCall = {
+        id: `tool-${index + 1}`,
         name,
         status: record['status'] === 'error' ? 'error' : 'success'
       }
@@ -93,6 +141,24 @@ function normalizeToolCalls(result: LLMDutyResult | null): HTTPPluginToolCall[] 
       return toolCall
     })
     .filter((item): item is HTTPPluginToolCall => item !== null)
+}
+
+function stripDeveloperProvenance(
+  trace: HTTPPluginAgentTrace,
+  includeDeveloperProvenance: boolean
+): HTTPPluginAgentTrace {
+  if (includeDeveloperProvenance) {
+    return trace
+  }
+
+  return {
+    ...trace,
+    tool_calls: trace.tool_calls.map((toolCall) => {
+      const sanitized = { ...toolCall }
+      delete sanitized.native_skill_path
+      return sanitized
+    })
+  }
 }
 
 function normalizeConversationSession(
@@ -176,7 +242,49 @@ export async function getConversationHistory(
         content: item.string,
         created_at: item.sentAt,
         message_id: item.messageId || null,
-        metrics: item.llmMetrics || null
+        metrics: item.llmMetrics || null,
+        response_trace: item.agentResponseTrace
+          ? stripDeveloperProvenance(
+              {
+                ...(item.agentResponseTrace.reasoningSummary
+                  ? {
+                      reasoning_summary:
+                        item.agentResponseTrace.reasoningSummary
+                    }
+                  : {}),
+                plan_steps: item.agentResponseTrace.planSteps.map((step) => ({
+                  id: step.id,
+                  label: step.label,
+                  status: step.status
+                })),
+                tool_calls: item.agentResponseTrace.toolCalls.map((toolCall) => ({
+                  id: toolCall.id,
+                  name: toolCall.name,
+                  status: toolCall.status,
+                  ...(toolCall.input !== undefined
+                    ? { input: toolCall.input }
+                    : {}),
+                  ...(toolCall.output !== undefined
+                    ? { output: toolCall.output }
+                    : {}),
+                  ...(toolCall.stepLabel
+                    ? { step_label: toolCall.stepLabel }
+                    : {}),
+                  ...(toolCall.errorMessage
+                    ? { error_message: toolCall.errorMessage }
+                    : {}),
+                  ...(toolCall.skillId ? { skill_id: toolCall.skillId } : {}),
+                  ...(toolCall.nativeSkillPath
+                    ? { native_skill_path: toolCall.nativeSkillPath }
+                    : {})
+                })),
+                ...(item.agentResponseTrace.metrics
+                  ? { metrics: item.agentResponseTrace.metrics }
+                  : {})
+              },
+              input.include_developer_provenance === true
+            )
+          : null
       }))
 
     return {
@@ -185,6 +293,92 @@ export async function getConversationHistory(
       messages
     }
   })
+}
+
+/** Creates and activates an owner-scoped conversation session. */
+export async function createConversationSession(
+  input: HTTPPluginCreateConversationSessionInput
+): Promise<HTTPPluginConversationSessionMutationResult> {
+  const profileName = input.profile_id?.trim() || getActiveProfileName()
+  if (!isValidProfileName(profileName)) {
+    throw new Error(`Invalid Leon profile name "${profileName}".`)
+  }
+
+  return runWithProfileContext({ profileName }, async () => {
+    await ensureActiveProfileRuntime()
+    const session = CONVERSATION_SESSION_MANAGER.createSession()
+    const normalizedSession = normalizeConversationSession(session)
+    publishAgentEvent(getActiveProfileName(), {
+      session_id: session.id,
+      turn_id: null,
+      response_id: null,
+      type: 'session_changed',
+      data: { session: normalizedSession, is_active: true }
+    })
+
+    return {
+      profile_id: getActiveProfileName(),
+      active_session_id: session.id,
+      session: normalizedSession
+    }
+  })
+}
+
+/** Selects an existing owner-scoped conversation session. */
+export async function selectConversationSession(
+  input: HTTPPluginSelectConversationSessionInput
+): Promise<HTTPPluginConversationSessionMutationResult> {
+  const profileName = input.profile_id?.trim() || getActiveProfileName()
+  if (!isValidProfileName(profileName)) {
+    throw new Error(`Invalid Leon profile name "${profileName}".`)
+  }
+
+  return runWithProfileContext({ profileName }, async () => {
+    await ensureActiveProfileRuntime()
+    const session = CONVERSATION_SESSION_MANAGER.setActiveSession(
+      input.session_id.trim()
+    )
+    const normalizedSession = normalizeConversationSession(session)
+    publishAgentEvent(getActiveProfileName(), {
+      session_id: session.id,
+      turn_id: null,
+      response_id: null,
+      type: 'session_changed',
+      data: { session: normalizedSession, is_active: true }
+    })
+
+    return {
+      profile_id: getActiveProfileName(),
+      active_session_id: session.id,
+      session: normalizedSession
+    }
+  })
+}
+
+/** Replays buffered events and then subscribes to live owner-scoped events. */
+export async function subscribeAgentEvents(
+  input: HTTPPluginSubscribeAgentEventsInput,
+  listener: (event: HTTPPluginAgentEvent) => void
+): Promise<() => void> {
+  const profileName = input.profile_id?.trim() || getActiveProfileName()
+  if (!isValidProfileName(profileName)) {
+    throw new Error(`Invalid Leon profile name "${profileName}".`)
+  }
+  await runWithProfileContext({ profileName }, ensureActiveProfileRuntime)
+  const channel = getAgentEventChannel(profileName)
+  const matches = (event: HTTPPluginAgentEvent): boolean =>
+    (!input.session_id || event.session_id === input.session_id) &&
+    event.sequence > (input.after_sequence || 0)
+
+  for (const event of channel.events.filter(matches)) {
+    listener(event)
+  }
+  const onEvent = (event: HTTPPluginAgentEvent): void => {
+    if (matches(event)) listener(event)
+  }
+  channel.emitter.on('event', onEvent)
+
+  return () => channel.emitter.off('event', onEvent)
 }
 
 function resolveSessionId(input: {
@@ -468,6 +662,23 @@ export async function appendConversationMessage(
       { sessionId }
     )
 
+    if (input.role === 'assistant') {
+      publishAgentEvent(getActiveProfileName(), {
+        session_id: sessionId,
+        turn_id: input.message_id || null,
+        response_id: input.message_id || null,
+        type: 'final_answer',
+        data: {
+          message_id: input.message_id || '',
+          content: message,
+          response_trace: {
+            plan_steps: [],
+            tool_calls: []
+          }
+        }
+      })
+    }
+
     return {
       profile_id: getActiveProfileName(),
       session_id: sessionId,
@@ -487,9 +698,33 @@ export async function runAgent(
   }
 
   return runWithProfileContext({ profileName }, async () => {
+    const totalStartedAt = performance.now()
     await ensureActiveProfileRuntime()
     const query = input.query.trim()
     const sessionId = resolveSessionId(input)
+    const planSteps = new Map<string, HTTPPluginAgentTrace['plan_steps'][number]>()
+    const toolCalls = new Map<string, HTTPPluginToolCall>()
+    let reasoningSummary = 'Understanding your request'
+    const requestId = input.request_id || null
+    let finalMetrics: Record<string, unknown> | null = null
+    const emit = (
+      type: HTTPPluginAgentEvent['type'],
+      data: Record<string, unknown>
+    ): void => {
+      publishAgentEvent(getActiveProfileName(), {
+        session_id: sessionId,
+        turn_id: requestId,
+        response_id: requestId,
+        type,
+        data
+      })
+    }
+    emit('session_changed', {
+      session: normalizeConversationSession(
+        CONVERSATION_SESSION_MANAGER.getSession(sessionId)!
+      ),
+      is_active: true
+    })
     const result = await CONVERSATION_SESSION_MANAGER.runWithSession(
       sessionId,
       async () => {
@@ -511,25 +746,127 @@ export async function runAgent(
           ...(input.additionalInstructions
             ? { additionalInstructions: input.additionalInstructions }
             : {}),
-          allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true
+          allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true,
+          onProgressEvent: (event): void => {
+            if (event.type === 'reasoning_summary') {
+              reasoningSummary = event.summary
+              emit('reasoning_summary', { summary: event.summary })
+              return
+            }
+            if (event.type === 'plan_step') {
+              const step = {
+                id: event.step.id,
+                label: event.step.label,
+                status: event.step.status
+              }
+              planSteps.set(step.id, step)
+              emit('plan_step', { step })
+              return
+            }
+
+            const toolCall: HTTPPluginToolCall = {
+              id: event.toolCall.id,
+              name: event.toolCall.name,
+              status: event.toolCall.status,
+              ...(event.toolCall.input !== undefined
+                ? { input: event.toolCall.input }
+                : {}),
+              ...(event.toolCall.output !== undefined
+                ? { output: event.toolCall.output }
+                : {}),
+              ...(event.toolCall.stepLabel
+                ? { step_label: event.toolCall.stepLabel }
+                : {}),
+              ...(event.toolCall.errorMessage
+                ? { error_message: event.toolCall.errorMessage }
+                : {}),
+              ...(event.toolCall.skillId
+                ? { skill_id: event.toolCall.skillId }
+                : {}),
+              ...(event.toolCall.nativeSkillPath
+                ? { native_skill_path: event.toolCall.nativeSkillPath }
+                : {})
+            }
+            toolCalls.set(event.toolCall.id, toolCall)
+            emit('tool_call', { tool_call: toolCall })
+          }
         })
 
         await duty.init()
         const dutyResult = await duty.execute()
         const output = dutyResult?.output as unknown
+        const data = dutyResult?.data || {}
+        const metrics = {
+          ...(data['llmMetrics'] && typeof data['llmMetrics'] === 'object'
+            ? data['llmMetrics'] as Record<string, unknown>
+            : {}),
+          total_duration_ms: elapsedMilliseconds(totalStartedAt)
+        }
+        finalMetrics = metrics
+        const finalToolCalls = normalizeToolCalls(dutyResult)
+        for (const toolCall of finalToolCalls) {
+          const existing = [...toolCalls.values()].find(
+            (candidate) => candidate.name === toolCall.name
+          )
+          toolCalls.set(existing?.id || toolCall.id || toolCall.name, {
+            ...existing,
+            ...toolCall
+          })
+        }
+        const trace: HTTPPluginAgentTrace = {
+          reasoning_summary: reasoningSummary,
+          plan_steps: [...planSteps.values()],
+          tool_calls: [...toolCalls.values()],
+          metrics
+        }
 
         if (typeof output === 'string' && output.trim()) {
+          const messageId = input.request_id
+            ? `${input.request_id}:leon`
+            : undefined
           await CONVERSATION_LOGGER.upsert(
             {
               who: 'leon',
               message: output,
               isAddedToHistory: true,
-              ...(input.request_id
-                ? { messageId: `${input.request_id}:leon` }
-                : {})
+              ...(messageId ? { messageId } : {}),
+              agentResponseTrace: {
+                reasoningSummary,
+                planSteps: trace.plan_steps.map((step) => ({ ...step })),
+                toolCalls: trace.tool_calls.map((toolCall) => ({
+                  id: toolCall.id || toolCall.name,
+                  name: toolCall.name,
+                  status: toolCall.status,
+                  ...(toolCall.input !== undefined
+                    ? { input: toolCall.input }
+                    : {}),
+                  ...(toolCall.output !== undefined
+                    ? { output: toolCall.output }
+                    : {}),
+                  ...(toolCall.step_label
+                    ? { stepLabel: toolCall.step_label }
+                    : {}),
+                  ...(toolCall.error_message
+                    ? { errorMessage: toolCall.error_message }
+                    : {}),
+                  ...(toolCall.skill_id
+                    ? { skillId: toolCall.skill_id }
+                    : {}),
+                  ...(toolCall.native_skill_path
+                    ? { nativeSkillPath: toolCall.native_skill_path }
+                    : {})
+                })),
+                metrics
+              }
             },
             { sessionId }
           )
+          emit('metrics', { metrics })
+          emit('final_answer', {
+            message_id: messageId || '',
+            content: output,
+            response_trace: trace
+          })
         }
 
         return dutyResult
@@ -547,7 +884,7 @@ export async function runAgent(
       request_id: input.request_id || null,
       final_intent:
         typeof data['finalIntent'] === 'string' ? data['finalIntent'] : null,
-      metrics: data['llmMetrics'] || null
+      metrics: finalMetrics || data['llmMetrics'] || null
     }
   })
 }
@@ -562,6 +899,9 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
     runControlledSkill,
     appendConversationMessage,
     listConversationSessions,
-    getConversationHistory
+    getConversationHistory,
+    createConversationSession,
+    selectConversationSession,
+    subscribeAgentEvents
   }
 }

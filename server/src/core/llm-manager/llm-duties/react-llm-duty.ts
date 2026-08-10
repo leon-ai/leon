@@ -76,7 +76,8 @@ import type {
   LLMCaller,
   FinalResponseSignal,
   AgentPhase,
-  AgentSkillContext
+  AgentSkillContext,
+  AgentRunProgressEvent
 } from './react-llm-duty/types'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
 import {
@@ -228,6 +229,8 @@ export class ReActLLMDuty extends LLMDuty {
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
+  private readonly onProgressEvent:
+    ((event: AgentRunProgressEvent) => void) | undefined
 
   constructor(params: ReactLLMDutyParams) {
     super()
@@ -244,6 +247,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
     this.additionalInstructions = params.additionalInstructions?.trim() || ''
+    this.onProgressEvent = params.onProgressEvent
     this.systemPrompt = this.appendAdditionalInstructions(
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
         includePersonality: false,
@@ -285,6 +289,10 @@ export class ReActLLMDuty extends LLMDuty {
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
+    this.onProgressEvent?.({
+      type: 'reasoning_summary',
+      summary: 'Understanding your request'
+    })
 
     try {
       const { messageLogs: history } = await this.loadPreparedHistory()
@@ -414,7 +422,22 @@ export class ReActLLMDuty extends LLMDuty {
             toolInput,
             undefined,
             callable.qualifiedName,
-            toolCallTitle
+            toolCallTitle,
+            (event) => {
+              const agentSkill = caller.agentSkillContext
+              this.onProgressEvent?.({
+                type: 'tool_call',
+                toolCall: {
+                  ...event,
+                  ...(agentSkill
+                    ? {
+                        skillId: agentSkill.id,
+                        nativeSkillPath: agentSkill.skillPath
+                      }
+                    : {})
+                }
+              })
+            }
           )
 
           return {
@@ -443,6 +466,25 @@ export class ReActLLMDuty extends LLMDuty {
             hasPlanningWidget
           )
           hasPlanningWidget = true
+          for (const [index, step] of trackedSteps.entries()) {
+            this.onProgressEvent?.({
+              type: 'plan_step',
+              step: {
+                id: `plan-${index + 1}`,
+                label: step.label,
+                status: step.status
+              }
+            })
+          }
+          const activeStep = trackedSteps.find(
+            (step) => step.status === 'in_progress'
+          )
+          if (activeStep) {
+            this.onProgressEvent?.({
+              type: 'reasoning_summary',
+              summary: activeStep.label
+            })
+          }
         }
       })
 

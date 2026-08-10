@@ -26,11 +26,29 @@ export interface HTTPPluginRunAgentInput {
 }
 
 export interface HTTPPluginToolCall {
+  id?: string
   name: string
-  status: 'success' | 'error'
+  status: 'running' | 'success' | 'error'
   observation?: string
   step_label?: string
   input?: unknown
+  output?: unknown
+  error_message?: string
+  skill_id?: string
+  native_skill_path?: string
+}
+
+export interface HTTPPluginPlanStep {
+  id: string
+  label: string
+  status: 'pending' | 'in_progress' | 'completed' | 'error'
+}
+
+export interface HTTPPluginAgentTrace {
+  reasoning_summary?: string
+  plan_steps: HTTPPluginPlanStep[]
+  tool_calls: HTTPPluginToolCall[]
+  metrics?: Record<string, unknown>
 }
 
 export interface HTTPPluginRunAgentResult {
@@ -124,18 +142,61 @@ export interface HTTPPluginConversationMessage {
   created_at: number
   message_id: string | null
   metrics: unknown
+  response_trace: HTTPPluginAgentTrace | null
 }
 
 export interface HTTPPluginGetConversationHistoryInput {
   profile_id?: string
   session_id: string
   limit?: number
+  include_developer_provenance?: boolean
 }
 
 export interface HTTPPluginGetConversationHistoryResult {
   profile_id: string
   session_id: string
   messages: HTTPPluginConversationMessage[]
+}
+
+export interface HTTPPluginCreateConversationSessionInput {
+  profile_id?: string
+}
+
+export interface HTTPPluginSelectConversationSessionInput {
+  profile_id?: string
+  session_id: string
+}
+
+export interface HTTPPluginConversationSessionMutationResult {
+  profile_id: string
+  active_session_id: string
+  session: HTTPPluginConversationSession
+}
+
+export type HTTPPluginAgentEventType =
+  | 'reasoning_summary'
+  | 'plan_step'
+  | 'tool_call'
+  | 'final_answer'
+  | 'metrics'
+  | 'error'
+  | 'session_changed'
+
+export interface HTTPPluginAgentEvent {
+  sequence: number
+  profile_id: string
+  session_id: string
+  turn_id: string | null
+  response_id: string | null
+  created_at: number
+  type: HTTPPluginAgentEventType
+  data: Record<string, unknown>
+}
+
+export interface HTTPPluginSubscribeAgentEventsInput {
+  profile_id?: string
+  session_id?: string
+  after_sequence?: number
 }
 
 export interface HTTPPluginLeonServices {
@@ -156,6 +217,16 @@ export interface HTTPPluginLeonServices {
   getConversationHistory: (
     input: HTTPPluginGetConversationHistoryInput
   ) => Promise<HTTPPluginGetConversationHistoryResult>
+  createConversationSession: (
+    input: HTTPPluginCreateConversationSessionInput
+  ) => Promise<HTTPPluginConversationSessionMutationResult>
+  selectConversationSession: (
+    input: HTTPPluginSelectConversationSessionInput
+  ) => Promise<HTTPPluginConversationSessionMutationResult>
+  subscribeAgentEvents: (
+    input: HTTPPluginSubscribeAgentEventsInput,
+    listener: (event: HTTPPluginAgentEvent) => void
+  ) => Promise<() => void>
 }
 
 export type HTTPPluginSourceScope = 'global' | 'profile'

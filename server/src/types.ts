@@ -110,6 +110,32 @@ export interface LLMAnswerMetrics {
   tokensPerSecond: number
 }
 
+export interface AgentResponsePlanStep {
+  id: string
+  label: string
+  status: 'pending' | 'in_progress' | 'completed' | 'error'
+}
+
+export interface AgentResponseToolCall {
+  id: string
+  name: string
+  status: 'running' | 'success' | 'error'
+  input?: unknown
+  output?: unknown
+  stepLabel?: string
+  errorMessage?: string
+  skillId?: string
+  nativeSkillPath?: string
+}
+
+/** Persisted, user-visible trace for replaying an agent turn. */
+export interface AgentResponseTrace {
+  reasoningSummary?: string
+  planSteps: AgentResponsePlanStep[]
+  toolCalls: AgentResponseToolCall[]
+  metrics?: Record<string, unknown>
+}
+
 export interface MessageLog {
   who: 'owner' | 'leon'
   sentAt: number
@@ -118,6 +144,7 @@ export interface MessageLog {
   messageId?: string
   widget?: ConversationWidgetData | null
   llmMetrics?: LLMAnswerMetrics
+  agentResponseTrace?: AgentResponseTrace
 }
 
 export interface ConversationHistoryItem {
@@ -128,4 +155,5 @@ export interface ConversationHistoryItem {
   source: ConversationItemSource
   messageId?: string
   llmMetrics?: LLMAnswerMetrics
+  agentResponseTrace?: AgentResponseTrace
 }
