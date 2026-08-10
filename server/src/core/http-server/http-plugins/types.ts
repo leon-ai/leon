@@ -22,6 +22,8 @@ export interface HTTPPluginRunAgentInput {
   create_session?: boolean
   allow_direct_answer_handoff?: boolean
   request_id?: string
+  /** Time spent by the host integration choosing this agent path. */
+  router_response_ms?: number
   metadata?: Record<string, unknown>
 }
 

@@ -885,6 +885,7 @@ export async function runAgent(
                   (data['llmMetrics'] as Record<string, unknown>)['durationMs'] || 0
                 )
               : 0,
+          router_response_ms: Number(input.router_response_ms || 0),
           action_execution_ms: Number(actionExecutionMs.toFixed(2)),
           total_duration_ms: elapsedMilliseconds(totalStartedAt)
         }
