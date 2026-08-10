@@ -2,9 +2,27 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   activeProfile: 'startup-profile',
+  activeSessionId: 'active-session',
   nextSessionId: 0,
   sessions: new Map<string, Set<string>>(),
   agentDutyParams: [] as Array<Record<string, unknown>>,
+  controlledDutyParams: [] as Array<Record<string, unknown>>,
+  controlledDutyOutputs: [] as Array<Array<Record<string, unknown>>>,
+  skillActions: [] as Array<Record<string, unknown>>,
+  skillAnswer: 'Done — I’ve applied that.',
+  nluProcessResult: {
+    context: {
+      utterances: [],
+      actionArguments: [],
+      entities: []
+    },
+    new: {
+      utterance: '',
+      actionArguments: {}
+    },
+    skillName: '',
+    actionName: ''
+  } as Record<string, unknown>,
   persistedMessages: [] as Array<{
     profileId: string
     sessionId: string
@@ -25,7 +43,29 @@ function getProfileSessions(): Set<string> {
 }
 
 vi.mock('@/core', () => ({
+  BRAIN: {
+    isMuted: false,
+    runSkillAction: vi.fn(async (nluProcessResult: Record<string, unknown>) => {
+      mocks.skillActions.push(structuredClone(nluProcessResult))
+      return {
+        lastOutputFromSkill: {
+          answer: mocks.skillAnswer
+        }
+      }
+    })
+  },
   CONVERSATION_LOGGER: {
+    load: vi.fn(async () => mocks.persistedMessages
+      .filter((message) =>
+        message.profileId === mocks.activeProfile &&
+        message.sessionId === mocks.activeSessionId
+      )
+      .map((message) => ({
+        who: message.who,
+        message: message.message,
+        sentAt: 0,
+        isAddedToHistory: true
+      }))),
     upsert: vi.fn(
       async (
         record: { who: string, message: string },
@@ -42,6 +82,14 @@ vi.mock('@/core', () => ({
   },
   LLM_MANAGER: {
     isLLMEnabled: true
+  },
+  NLU: {
+    get nluProcessResult(): Record<string, unknown> {
+      return mocks.nluProcessResult
+    },
+    set nluProcessResult(value: Record<string, unknown>) {
+      mocks.nluProcessResult = value
+    }
   }
 }))
 
@@ -79,10 +127,65 @@ vi.mock('@/core/session-manager', () => ({
     getActiveSessionId: (): string =>
       [...getProfileSessions()][0] || 'active-session',
     runWithSession: async <T>(
-      _sessionId: string,
+      sessionId: string,
       callback: () => Promise<T>
-    ): Promise<T> => callback(),
+    ): Promise<T> => {
+      const previousSessionId = mocks.activeSessionId
+      mocks.activeSessionId = sessionId
+
+      try {
+        return await callback()
+      } finally {
+        mocks.activeSessionId = previousSessionId
+      }
+    },
     maybeSetFallbackTitle: vi.fn()
+  }
+}))
+
+vi.mock('@/core/llm-manager/llm-duties/action-calling-llm-duty', () => ({
+  ActionCallingLLMDuty: class {
+    constructor(params: Record<string, unknown>) {
+      mocks.controlledDutyParams.push(params)
+    }
+
+    async init(): Promise<void> {}
+
+    async execute(): Promise<Record<string, unknown>> {
+      return {
+        output: JSON.stringify(mocks.controlledDutyOutputs.shift() || [
+          { status: 'not_found' }
+        ])
+      }
+    }
+  }
+}))
+
+vi.mock('@/core/nlp/nlu/nlu-process-result-updater', () => ({
+  DEFAULT_NLU_PROCESS_RESULT: {
+    context: {
+      utterances: [],
+      actionArguments: [],
+      entities: []
+    },
+    new: {
+      utterance: '',
+      actionArguments: {}
+    },
+    skillName: '',
+    actionName: ''
+  },
+  NLUProcessResultUpdater: {
+    update: vi.fn(async (update: Record<string, unknown>) => {
+      mocks.nluProcessResult = {
+        ...mocks.nluProcessResult,
+        ...update,
+        new: {
+          ...(mocks.nluProcessResult['new'] as Record<string, unknown>),
+          ...((update['new'] as Record<string, unknown> | undefined) || {})
+        }
+      }
+    })
   }
 }))
 
@@ -108,16 +211,98 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
 
 import {
   appendConversationMessage,
-  runAgent
+  runAgent,
+  runControlledSkill
 } from '@/core/http-server/http-plugins/leon-services'
 
 describe('HTTP plugin Leon services', () => {
   beforeEach(() => {
     mocks.activeProfile = 'startup-profile'
+    mocks.activeSessionId = 'active-session'
     mocks.nextSessionId = 0
     mocks.sessions.clear()
     mocks.agentDutyParams.length = 0
+    mocks.controlledDutyParams.length = 0
+    mocks.controlledDutyOutputs.length = 0
+    mocks.skillActions.length = 0
+    mocks.skillAnswer = 'Done — I’ve applied that.'
+    mocks.nluProcessResult = {
+      context: {
+        utterances: [],
+        actionArguments: [],
+        entities: []
+      },
+      new: {
+        utterance: '',
+        actionArguments: {}
+      },
+      skillName: '',
+      actionName: ''
+    }
     mocks.persistedMessages.length = 0
+  })
+
+  it('executes and persists one matched controlled action', async () => {
+    mocks.controlledDutyOutputs.push([
+      {
+        status: 'success',
+        name: 'start_timer',
+        arguments: { duration_minutes: 15 }
+      }
+    ])
+
+    const result = await runControlledSkill({
+      profile_id: 'owner-a',
+      query: 'Start a timer for 15 minutes.',
+      skill_name: 'timer_skill',
+      fallback_action_name: 'fallback_to_agent',
+      create_session: true,
+      request_id: 'turn-1'
+    })
+
+    expect(result).toMatchObject({
+      matched: true,
+      status: 'success',
+      answer: 'Done — I’ve applied that.',
+      action: {
+        name: 'start_timer',
+        input: { duration_minutes: 15 }
+      }
+    })
+    expect(mocks.skillActions).toHaveLength(1)
+    expect(mocks.persistedMessages.map(({ who, message }) => ({
+      who,
+      message
+    }))).toEqual([
+      { who: 'owner', message: 'Start a timer for 15 minutes.' },
+      { who: 'leon', message: 'Done — I’ve applied that.' }
+    ])
+  })
+
+  it('leaves an explicit fallback action uncommitted for agent mode', async () => {
+    mocks.controlledDutyOutputs.push([
+      {
+        status: 'success',
+        name: 'fallback_to_agent',
+        arguments: {}
+      }
+    ])
+
+    const result = await runControlledSkill({
+      profile_id: 'owner-a',
+      query: 'Summarize the latest research on renewable energy.',
+      skill_name: 'timer_skill',
+      fallback_action_name: 'fallback_to_agent',
+      create_session: true
+    })
+
+    expect(result).toMatchObject({
+      matched: false,
+      status: 'not_found',
+      action: null
+    })
+    expect(mocks.skillActions).toHaveLength(0)
+    expect(mocks.persistedMessages).toHaveLength(0)
   })
 
   it('forwards trusted additional instructions to the agent duty', async () => {

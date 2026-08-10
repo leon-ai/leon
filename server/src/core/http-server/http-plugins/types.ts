@@ -44,6 +44,45 @@ export interface HTTPPluginRunAgentResult {
   metrics: unknown
 }
 
+export interface HTTPPluginRunControlledSkillInput {
+  query: string
+  skill_name: string
+  /** An explicit native action that hands the request back to the caller. */
+  fallback_action_name?: string
+  profile_id?: string
+  session_id?: string
+  create_session?: boolean
+  request_id?: string
+}
+
+export interface HTTPPluginControlledAction {
+  name: string
+  input: Record<string, unknown>
+}
+
+export interface HTTPPluginControlledSkillMetrics {
+  total_duration_ms: number
+  profile_activation_ms: number
+  history_load_ms: number
+  inference_duration_ms: number
+  action_execution_ms: number
+  persistence_ms: number
+  input_tokens: number
+  output_tokens: number
+}
+
+export interface HTTPPluginRunControlledSkillResult {
+  answer: string
+  tier: 'leon-controlled'
+  matched: boolean
+  status: 'success' | 'not_found' | 'missing_parameters' | 'error'
+  action: HTTPPluginControlledAction | null
+  profile_id: string
+  session_id: string | null
+  request_id: string | null
+  metrics: HTTPPluginControlledSkillMetrics
+}
+
 export interface HTTPPluginAppendConversationMessageInput {
   profile_id?: string
   session_id: string
@@ -65,6 +104,9 @@ export interface HTTPPluginLeonServices {
   runAgent: (
     input: HTTPPluginRunAgentInput
   ) => Promise<HTTPPluginRunAgentResult>
+  runControlledSkill: (
+    input: HTTPPluginRunControlledSkillInput
+  ) => Promise<HTTPPluginRunControlledSkillResult>
   appendConversationMessage: (
     input: HTTPPluginAppendConversationMessageInput
   ) => Promise<HTTPPluginAppendConversationMessageResult>

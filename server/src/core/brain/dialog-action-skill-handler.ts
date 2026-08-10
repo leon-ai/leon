@@ -40,11 +40,14 @@ export class DialogActionSkillHandler {
 
       // Prepare data from context (entities and action arguments)
       const data = this.getDataToMap(nluProcessResult.context)
-
-      // Get a random answer
-      let randomAnswer = this.getDialogAnswer(answers)
-      // Find a fallback answer if necessary
-      randomAnswer = this.getFallbackAnswer(randomAnswer, answers, data)
+      const mappableAnswers = answers.filter((answer) =>
+        !this.answerHasPlaceholders(this.mapAnswerPlaceholders(answer, data))
+      )
+      // Parameter-free variants stay eligible alongside fully resolvable
+      // dynamic ones, keeping repeated acknowledgements natural.
+      const randomAnswer = this.getDialogAnswer(
+        mappableAnswers.length > 0 ? mappableAnswers : answers
+      )
 
       // Map data from context
       const finalAnswer = this.mapAnswerPlaceholders(randomAnswer, data)
@@ -62,7 +65,15 @@ export class DialogActionSkillHandler {
       resolve({
         utteranceId,
         lang: BRAIN.lang,
-        core: {}
+        core: {},
+        // Expose the selected answer to non-socket callers such as HTTP
+        // plugins. Socket delivery still remains owned by BRAIN.talk above.
+        lastOutputFromSkill: {
+          codes: [],
+          answer: finalAnswer,
+          core: undefined,
+          options: {}
+        }
         // action,
         // nextAction
       })
@@ -143,32 +154,6 @@ export class DialogActionSkillHandler {
     }
 
     return false
-  }
-
-  /**
-   * Get a fallback answer if the current one has placeholders
-   * but no data is available
-   */
-  private static getFallbackAnswer(
-    currentAnswer: SkillAnswerConfigSchema,
-    allAnswers: SkillAnswerConfigSchema[],
-    data: Record<string, unknown>
-  ): SkillAnswerConfigSchema {
-    // If the answer has placeholders and no data to map, we need to find a fallback answer that does not have placeholders
-    if (
-      this.answerHasPlaceholders(currentAnswer) &&
-      Object.keys(data).length === 0
-    ) {
-      const fallbackAnswers = allAnswers.filter(
-        (ans) => !this.answerHasPlaceholders(ans)
-      )
-
-      if (fallbackAnswers.length > 0) {
-        return this.getDialogAnswer(fallbackAnswers)
-      }
-    }
-
-    return currentAnswer
   }
 
   /**
