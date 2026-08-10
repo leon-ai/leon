@@ -131,6 +131,18 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(options['responseFormat']).toBeUndefined()
   })
 
+  it('forwards deterministic generation options to the provider', () => {
+    const provider = createOpenRouterProvider()
+    const options = provider.buildCallOptions('Choose a tool.', {
+      ...createCompletionParams(null),
+      seed: 7,
+      temperature: 0
+    })
+
+    expect(options['seed']).toBe(7)
+    expect(options['temperature']).toBe(0)
+  })
+
   it('preserves assistant tool calls and matching tool results', () => {
     const provider = createOpenRouterProvider()
     const options = provider.buildCallOptions(

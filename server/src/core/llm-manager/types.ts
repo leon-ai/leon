@@ -130,6 +130,7 @@ export interface CompletionParams {
   maxTokens?: number | undefined
   thoughtTokensBudget?: number | undefined
   temperature?: number | undefined
+  seed?: number | undefined
   timeout?: number
   signal?: AbortSignal
   maxRetries?: number

@@ -121,6 +121,11 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   { provider: LLMProviders.Celeris, model: 'celeris-1', label: 'Celeris 1', recommended: true, reasoning: AUTO_REASONING, speed: AUTO_SPEED },
 
   /**
+   * @see https://openrouter.ai/google/gemini-3.5-flash-lite Reasoning is mandatory for this endpoint.
+   */
+  { provider: LLMProviders.OpenRouter, model: 'google/gemini-3.5-flash-lite', label: 'google/gemini-3.5-flash-lite', reasoning: AUTO_REASONING, speed: ROUTABLE_SPEED },
+
+  /**
    * @see https://openrouter.ai/openai/gpt-5.6-sol Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */

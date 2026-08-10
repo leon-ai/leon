@@ -13,6 +13,7 @@ interface CoreLLMDutyConfig {
   maxTokens?: number
   temperature?: number
   thoughtTokensBudget?: number
+  seed?: number
 }
 
 interface CoreLLMDuties {
@@ -26,6 +27,7 @@ type SkillListContent = string | null
 
 const WORKFLOW_SKILL_ROUTER_MAX_TOKENS = 72
 const WORKFLOW_ACTION_CALLING_MAX_TOKENS = 256
+const WORKFLOW_ACTION_CALLING_SEED = 7
 const WORKFLOW_SLOT_FILLING_MAX_TOKENS = 128
 const WORKFLOW_PARAPHRASE_MAX_TOKENS = 8_192
 
@@ -40,7 +42,8 @@ const CORE_LLM_DUTIES: CoreLLMDuties = {
   [LLMDuties.ActionCalling]: {
     maxTokens: WORKFLOW_ACTION_CALLING_MAX_TOKENS,
     thoughtTokensBudget: 0,
-    temperature: 0.1
+    temperature: 0,
+    seed: WORKFLOW_ACTION_CALLING_SEED
   },
   [LLMDuties.SlotFilling]: {
     maxTokens: WORKFLOW_SLOT_FILLING_MAX_TOKENS,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  canDisableLLMModelReasoning,
   getLLMModelCatalogEntries,
   getLLMModelCatalogEntry,
   LLM_MODEL_CATALOG,
@@ -87,6 +88,14 @@ describe('LLM model catalog', () => {
       LLMProviders.OpenAI,
       'gpt-5.4-mini'
     )?.speed).toEqual(['auto'])
+    expect(getLLMModelCatalogEntry(
+      LLMProviders.OpenRouter,
+      'google/gemini-3.5-flash-lite'
+    )?.reasoning).toEqual(['auto'])
+    expect(canDisableLLMModelReasoning(
+      LLMProviders.OpenRouter,
+      'google/gemini-3.5-flash-lite'
+    )).toBe(false)
   })
 
   it('preserves curated setup order and recommendations', () => {
