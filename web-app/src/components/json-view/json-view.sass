@@ -1,0 +1,60 @@
+.json-view
+  display: flex
+  box-sizing: border-box
+  height: 220px
+  min-width: 0
+  flex-direction: column
+
+.json-view-label
+  padding: var(--space-sm) var(--space-md)
+  border-bottom: 1px solid var(--color-border-secondary)
+  color: var(--color-text-tertiary)
+  font-size: var(--font-size-xs)
+  font-weight: var(--font-weight-semi-bold)
+  line-height: var(--line-height-xs)
+  text-transform: uppercase
+
+.json-view-code
+  flex: 1 1 auto
+  min-height: 0
+  margin: 0
+  padding: var(--space-md)
+  overflow: auto
+  color: var(--color-text-secondary)
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
+  font-size: var(--font-size-xs)
+  line-height: var(--line-height-sm)
+  scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
+  scrollbar-width: thin
+
+  &::-webkit-scrollbar
+    width: 8px
+    height: 8px
+
+  &::-webkit-scrollbar-track
+    background-color: transparent
+
+  &::-webkit-scrollbar-thumb
+    border: 2px solid transparent
+    border-radius: var(--border-radius-pill)
+    background-clip: content-box
+    background-color: var(--color-scrollbar-thumb-muted)
+
+  &::-webkit-scrollbar-thumb:hover
+    background-color: var(--color-scrollbar-thumb)
+
+.json-view-key
+  color: var(--color-text-secondary)
+
+.json-view-string
+  color: var(--color-yellow)
+
+.json-view-number
+  color: var(--color-purple)
+
+.json-view-boolean
+  color: var(--color-pink)
+
+.json-view-null,
+.json-view-punctuation
+  color: var(--color-text-tertiary)
