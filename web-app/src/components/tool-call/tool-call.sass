@@ -1,28 +1,135 @@
 .tool-call
-  display: grid
+  position: relative
+  min-width: 0
+
+  &:not(:last-child)::before
+    position: absolute
+    top: calc(var(--tool-call-marker-offset) + var(--tool-call-marker-size) + var(--timeline-connector-gap))
+    left: calc(var(--tool-call-marker-size) / 2)
+    width: 1px
+    height: calc(100% + var(--tool-call-list-gap) - var(--tool-call-marker-size) - var(--timeline-connector-gap) - var(--timeline-connector-gap))
+    background-color: var(--color-timeline-border)
+    content: ''
+
+.tool-call-animate
+  opacity: 0
+  animation: tool-call-enter .24s ease-out forwards
+
+.tool-call:nth-child(2)
+  animation-delay: 60ms
+
+.tool-call:nth-child(3)
+  animation-delay: 120ms
+
+.tool-call-trigger
+  display: flex
+  align-items: center
   gap: var(--space-sm)
+  width: auto
+  max-width: 100%
+  padding: 0
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+  text-align: left
 
-  > p
-    color: var(--color-text-tertiary)
-    font-size: var(--font-size-sm)
-    line-height: var(--line-height-sm)
+  &:focus-visible
+    outline: 1px solid var(--color-accent)
+    outline-offset: var(--space-xs)
 
-  .panes
-    display: grid
-    grid-template-columns: repeat(2, minmax(0, 1fr))
-    overflow: hidden
-    border: 1px solid var(--color-border)
-    border-radius: var(--border-radius-md)
-    background-color: rgba(0, 0, 0, .34)
+.tool-call-tool-icon
+  position: relative
+  z-index: 1
+  display: inline-flex
+  flex: 0 0 auto
+  align-items: center
+  justify-content: center
+  width: var(--tool-call-marker-size)
+  height: var(--tool-call-marker-size)
+  background-color: var(--color-background)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-md)
+  line-height: 1
 
-  pre
-    overflow: hidden
-    min-height: 150px
-    padding: var(--space-md)
-    color: var(--color-text-secondary)
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace
-    font-size: 13px
-    line-height: 20px
+.tool-call-title
+  flex: 1 1 auto
+  min-width: 0
+  overflow: hidden
+  text-overflow: ellipsis
+  white-space: nowrap
 
-    + pre
-      border-left: 1px solid var(--color-border)
+.tool-call-running .tool-call-title
+  color: var(--color-text)
+
+.tool-call-running .tool-call-tool-icon
+  color: var(--color-text)
+
+.tool-call-chevron
+  flex: 0 0 auto
+  font-size: var(--font-size-xl)
+  line-height: 1
+  color: var(--color-text-secondary)
+
+.tool-call-details
+  display: grid
+  grid-template-columns: repeat(2, minmax(0, 1fr))
+  margin: var(--space-sm) 0 var(--space-md) 24px
+  overflow: hidden
+  background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
+  border: 1px solid transparent
+  border-radius: var(--border-radius-md)
+  opacity: 1
+  animation: tool-call-details-enter .2s ease-out both
+
+  .json-view + .json-view
+    border-left: 1px solid var(--color-border-secondary)
+
+.tool-call-details-title
+  grid-column: 1 / -1
+  margin: 0
+  padding: var(--space-sm) var(--space-md)
+  border-bottom: 1px solid var(--color-border-secondary)
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+@starting-style
+  .tool-call-details
+    opacity: 0
+    transform: translate3d(0, -4px, 0)
+
+@keyframes tool-call-details-enter
+  from
+    opacity: 0
+    transform: translate3d(0, -4px, 0)
+
+  to
+    opacity: 1
+    transform: translate3d(0, 0, 0)
+
+@keyframes tool-call-enter
+  from
+    opacity: 0
+    transform: translate3d(0, 4px, 0)
+
+  to
+    opacity: 1
+    transform: translate3d(0, 0, 0)
+
+@media (max-width: 680px)
+  .tool-call-details
+    grid-template-columns: minmax(0, 1fr)
+    margin-left: var(--space-sm)
+
+    .json-view + .json-view
+      border-top: 1px solid var(--color-border-secondary)
+      border-left: 0
+
+@media (prefers-reduced-motion: reduce)
+  .tool-call-animate,
+  .tool-call-trigger,
+  .tool-call-chevron,
+  .tool-call-details
+    opacity: 1
+    animation: none
+    transition: none

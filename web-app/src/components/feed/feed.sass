@@ -1,7 +1,49 @@
 .feed
-  display: grid
-  align-content: start
-  gap: var(--space-xl)
-  width: min(100%, var(--content-width))
-  padding: 52px 0 150px
+  --feed-bottom-clearance: 148px
+  --feed-entry-gap: 42px
+  box-sizing: border-box
+  width: 100%
+  padding: 52px 0 var(--feed-bottom-clearance)
   color: var(--color-text-secondary)
+  font-size: var(--font-size-lg)
+  line-height: var(--line-height-lg)
+
+.feed-virtual-content
+  position: relative
+  width: 100%
+
+.feed-entry
+  position: absolute
+  top: 0
+  left: 0
+  box-sizing: border-box
+  width: 100%
+  padding-bottom: var(--feed-entry-gap)
+
+.feed-entry-turn-start
+  padding-top: var(--space-xl)
+
+.feed-entry-last-leon
+  padding-bottom: 0
+
+.feed-mask
+  position: fixed
+  bottom: 0
+  left: 0
+  z-index: 2
+  width: 100%
+  height: var(--feed-bottom-clearance)
+  background-color: var(--color-background)
+  mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
+  pointer-events: none
+  transition: background-color var(--transition-duration-main) var(--transition-timing-main)
+
+@media (max-width: 680px)
+  .feed
+    --feed-bottom-clearance: 132px
+    padding-top: var(--space-xl)
+
+@media (prefers-reduced-motion: reduce)
+  .feed-mask
+    transition: none

@@ -1,0 +1,22 @@
+.streaming-text-characters
+  white-space: pre-wrap
+
+.streaming-text-character-new
+  opacity: 0
+  animation: streaming-text-character-enter .28s ease-out forwards
+
+.streaming-text-character-visible
+  opacity: 1
+
+@keyframes streaming-text-character-enter
+  from
+    opacity: 0
+
+  to
+    opacity: 1
+
+@media (prefers-reduced-motion: reduce)
+  .streaming-text-character-new
+    opacity: 1
+    animation: none
+

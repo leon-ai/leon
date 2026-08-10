@@ -1,55 +1,94 @@
 .task-list-item
+  --task-list-item-marker-size: 20px
   position: relative
-  display: grid
-  grid-template-columns: 24px 1fr
+  display: flex
   gap: var(--space-sm)
   color: var(--color-text-secondary)
 
-  &:not(:last-child)::after
-    position: absolute
-    top: 24px
-    bottom: -18px
-    left: 11px
-    width: 1px
-    background-color: rgba(245, 245, 247, .2)
-    content: ''
+.task-list-item-animate
+  opacity: 0
+  animation: task-list-item-enter .28s ease-out forwards
 
-  .marker
-    z-index: 1
-    display: grid
-    width: 22px
-    height: 22px
-    place-items: center
-    border-radius: var(--border-radius-pill)
-    background-color: var(--color-surface)
-    color: var(--color-text-secondary)
-    font-size: 14px
+.task-list-item:nth-child(2)
+  animation-delay: 80ms
 
-  &.done .marker,
-  &.active .marker
-    background-color: var(--color-accent-soft)
-    color: var(--color-accent)
+.task-list-item:nth-child(3)
+  animation-delay: 160ms
 
-  &.active .marker::before
-    width: 10px
-    height: 10px
-    border-radius: var(--border-radius-pill)
-    background-color: var(--color-accent)
-    content: ''
+.task-list-item-marker
+  position: relative
+  z-index: 1
+  display: flex
+  flex: 0 0 auto
+  align-items: center
+  justify-content: center
+  width: var(--task-list-item-marker-size)
+  height: var(--task-list-item-marker-size)
+  border-radius: var(--border-radius-pill)
+  background-color: var(--color-surface)
+  color: var(--color-text-tertiary)
+  font-size: 14px
 
-  .content
-    display: grid
-    gap: var(--space-sm)
+.task-list-item-completed .task-list-item-marker
+  background-color: var(--color-accent-soft)
+  color: var(--color-accent)
 
-    p
-      display: inline-flex
-      align-items: center
-      gap: var(--space-sm)
-      min-height: 22px
-      font-size: var(--font-size-md)
-      line-height: var(--line-height-md)
+.task-list-item-in_progress .task-list-item-marker
+  background-color: transparent
+  color: var(--color-accent)
 
-    span
-      color: var(--color-text-tertiary)
-      font-size: var(--font-size-sm)
-      line-height: var(--line-height-sm)
+.task-list-item-error .task-list-item-marker
+  background-color: var(--color-danger-soft)
+  color: var(--color-danger)
+
+.task-list-item-marker-icon
+  line-height: 1
+
+.task-list-item-content
+  display: flex
+  flex: 1 1 auto
+  min-width: 0
+  flex-direction: column
+  gap: var(--space-xl)
+
+.task-list-item-trigger,
+.task-list-item-heading
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  min-height: 22px
+  padding: 0
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+  text-align: left
+
+.task-list-item-trigger
+  align-self: flex-start
+
+  &:hover
+    color: var(--color-text)
+
+.task-list-item-label
+  min-width: 0
+  overflow-wrap: anywhere
+
+.task-list-item-chevron
+  flex: 0 0 auto
+  font-size: var(--font-size-xl)
+  line-height: 1
+  color: var(--color-text-secondary)
+
+@keyframes task-list-item-enter
+  from
+    opacity: 0
+    transform: translate3d(0, 5px, 0)
+
+  to
+    opacity: 1
+    transform: translate3d(0, 0, 0)
+
+@media (prefers-reduced-motion: reduce)
+  .task-list-item-animate
+    opacity: 1
+    animation: none

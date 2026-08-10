@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 
 import { QueryInput } from '../../components/query-input'
+import { setMockSessionInitialQuery } from '../../data/mock-session-store'
 
 import './new-session-page.sass'
 
@@ -9,10 +10,13 @@ const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 export function NewSessionPage() {
   const navigate = useNavigate()
 
-  function handleSubmit(): void {
+  function handleSubmit(query: string): void {
+    const sessionId = window.crypto.randomUUID()
+    setMockSessionInitialQuery(sessionId, query)
+
     const navigateToSession = () => navigate({
       to: '/session/$sessionId',
-      params: { sessionId: window.crypto.randomUUID() }
+      params: { sessionId }
     })
 
     if (

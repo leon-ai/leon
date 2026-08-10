@@ -1,14 +1,17 @@
 .session-page
-  display: flex
-  flex-direction: column
+  position: relative
   width: 100%
   min-height: 100vh
 
-  .feed
-    flex: 1 1 auto
-
   .query-input-container
-    position: sticky
+    position: fixed
     bottom: var(--space-xl)
-    flex: 0 0 auto
-    margin-bottom: var(--space-xl)
+    left: calc(50% + (var(--active-sidebar-width) / 2))
+    width: var(--content-width)
+    max-width: calc(100vw - var(--active-sidebar-width) - var(--app-main-inline-padding) - var(--app-main-inline-padding))
+    transform: translateX(-50%)
+    transition: left var(--transition-duration-sidebar) var(--transition-timing-sidebar), max-width var(--transition-duration-sidebar) var(--transition-timing-sidebar)
+
+@media (prefers-reduced-motion: reduce)
+  .session-page .query-input-container
+    transition: none

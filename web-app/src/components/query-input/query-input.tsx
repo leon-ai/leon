@@ -191,6 +191,7 @@ export function QueryInput({
     }
 
     onSubmit?.(normalizedQuery)
+    setQuery('')
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void {

@@ -1,0 +1,37 @@
+.loader-indicator
+  position: relative
+  display: inline-block
+  width: 20px
+  height: 20px
+  color: var(--color-accent)
+
+  &::before,
+  &::after
+    position: absolute
+    inset: 0
+    box-sizing: border-box
+    border-radius: var(--border-radius-pill)
+    background-color: currentColor
+    animation: loader-indicator-pulse 1s linear infinite
+    content: ''
+
+  &::after
+    opacity: 0
+    animation-delay: .4s
+
+@keyframes loader-indicator-pulse
+  from
+    opacity: 1
+    transform: scale(0)
+
+  to
+    opacity: 0
+    transform: scale(1)
+
+@media (prefers-reduced-motion: reduce)
+  .loader-indicator::before,
+  .loader-indicator::after
+    animation: none
+
+  .loader-indicator::after
+    display: none

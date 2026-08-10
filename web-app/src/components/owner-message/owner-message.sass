@@ -1,8 +1,30 @@
 .owner-message
   max-width: 520px
-  padding: 12px 24px
-  border: 1px solid rgba(245, 245, 247, .18)
-  border-radius: var(--border-radius-pill)
-  background-color: var(--color-accent)
-  font-size: var(--font-size-md)
-  line-height: var(--line-height-md)
+  margin: 0
+  padding: 8px 16px
+  border: 1px solid transparent
+  border-radius: 24px
+  background: linear-gradient(var(--color-accent), var(--color-accent)) padding-box, linear-gradient(to bottom, #84BDFF 0%, rgba(245, 245, 247, .1) 100%) border-box
+  color: var(--color-accent-contrast)
+  overflow-wrap: anywhere
+  white-space: pre-wrap
+
+  &::selection
+    background-color: var(--color-accent-contrast)
+    color: var(--color-accent)
+
+.owner-message-animate
+  animation: owner-message-enter .34s cubic-bezier(.2, .8, .2, 1) both
+
+@keyframes owner-message-enter
+  from
+    opacity: 0
+    transform: translate3d(0, 10px, 0)
+
+  to
+    opacity: 1
+    transform: translate3d(0, 0, 0)
+
+@media (prefers-reduced-motion: reduce)
+  .owner-message-animate
+    animation: none
