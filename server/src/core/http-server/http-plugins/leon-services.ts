@@ -452,6 +452,19 @@ export async function runControlledSkill(
     const query = input.query.trim()
     const skillName = input.skill_name.trim()
     const sessionId = resolveSessionId(input)
+    const requestId = input.request_id || null
+    const emit = (
+      type: HTTPPluginAgentEvent['type'],
+      data: Record<string, unknown>
+    ): void => {
+      publishAgentEvent(getActiveProfileName(), {
+        session_id: sessionId,
+        turn_id: requestId,
+        response_id: requestId,
+        type,
+        data
+      })
+    }
 
     if (!query) {
       throw new Error('A controlled-skill query is required.')
@@ -459,6 +472,14 @@ export async function runControlledSkill(
     if (!skillName) {
       throw new Error('A controlled skill name is required.')
     }
+
+    emit('session_changed', {
+      session: normalizeConversationSession(
+        CONVERSATION_SESSION_MANAGER.getSession(sessionId)!
+      ),
+      is_active: true
+    })
+    emit('reasoning_summary', { summary: 'Choosing the right action' })
 
     return CONVERSATION_SESSION_MANAGER.runWithSession(
       sessionId,
@@ -504,6 +525,7 @@ export async function runControlledSkill(
           profile_activation_ms: profileActivationMs,
           history_load_ms: historyLoadMs,
           inference_duration_ms: inferenceDurationMs,
+          router_response_ms: inferenceDurationMs,
           input_tokens: Number(dutyUsage?.usedInputTokens || 0),
           output_tokens: Number(dutyUsage?.usedOutputTokens || 0)
         }
@@ -545,6 +567,15 @@ export async function runControlledSkill(
           name: selected.name,
           input: selected.arguments
         }
+        const toolCallId = `${input.request_id || sessionId}:controlled-action`
+        const runningToolCall: HTTPPluginToolCall = {
+          id: toolCallId,
+          name: action.name,
+          status: 'running',
+          input: action.input,
+          skill_id: skillName
+        }
+        emit('tool_call', { tool_call: runningToolCall })
 
         const ownerPersistenceStartedAt = performance.now()
         await CONVERSATION_LOGGER.upsert(
@@ -584,6 +615,24 @@ export async function runControlledSkill(
           NLU.nluProcessResult = structuredClone(DEFAULT_NLU_PROCESS_RESULT)
         }
         const actionExecutionMs = elapsedMilliseconds(actionStartedAt)
+        const metrics = {
+          ...baseMetrics,
+          total_duration_ms: elapsedMilliseconds(totalStartedAt),
+          action_execution_ms: actionExecutionMs,
+          persistence_ms: Number(persistenceMs.toFixed(2))
+        }
+        const completedToolCall: HTTPPluginToolCall = {
+          ...runningToolCall,
+          status: 'success',
+          ...(answer ? { output: answer } : {})
+        }
+        const trace: HTTPPluginAgentTrace = {
+          reasoning_summary: 'Completed the selected action',
+          plan_steps: [],
+          tool_calls: [completedToolCall],
+          metrics
+        }
+        emit('tool_call', { tool_call: completedToolCall })
 
         if (answer) {
           const answerPersistenceStartedAt = performance.now()
@@ -594,12 +643,34 @@ export async function runControlledSkill(
               isAddedToHistory: true,
               ...(input.request_id
                 ? { messageId: `${input.request_id}:leon` }
-                : {})
+                : {}),
+              agentResponseTrace: {
+                reasoningSummary: 'Completed the selected action',
+                planSteps: [],
+                toolCalls: [{
+                  id: toolCallId,
+                  name: action.name,
+                  status: 'success',
+                  input: action.input,
+                  ...(answer ? { output: answer } : {}),
+                  skillId: skillName
+                }],
+                metrics
+              }
             },
             { sessionId }
           )
           persistenceMs += elapsedMilliseconds(answerPersistenceStartedAt)
         }
+
+        metrics.persistence_ms = Number(persistenceMs.toFixed(2))
+        metrics.total_duration_ms = elapsedMilliseconds(totalStartedAt)
+        emit('metrics', { metrics })
+        emit('final_answer', {
+          message_id: input.request_id ? `${input.request_id}:leon` : '',
+          content: answer,
+          response_trace: trace
+        })
 
         return {
           answer,
@@ -610,12 +681,7 @@ export async function runControlledSkill(
           profile_id: getActiveProfileName(),
           session_id: sessionId,
           request_id: input.request_id || null,
-          metrics: {
-            ...baseMetrics,
-            total_duration_ms: elapsedMilliseconds(totalStartedAt),
-            action_execution_ms: actionExecutionMs,
-            persistence_ms: Number(persistenceMs.toFixed(2))
-          }
+          metrics
         }
       }
     )
