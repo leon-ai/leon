@@ -40,6 +40,7 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
 import { CONFIG_MANAGER } from '@/config'
+import type { PostTurnMaintenanceTask } from '@/core/post-turn-maintenance-queue'
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentProvider()
@@ -332,9 +333,9 @@ export class ReActLLMDuty extends LLMDuty {
         }))
 
         const dutyResult = this.makeDutyResult(answer)
-        POST_TURN_MAINTENANCE_QUEUE.enqueue(
+        POST_TURN_MAINTENANCE_QUEUE.enqueueIfNeeded(
           'agent history compaction',
-          () => this.maybeCompactHistoryAfterAnswer(
+          () => this.prepareHistoryCompactionAfterAnswer(
             planWidgetIdValue,
             trackedSteps
           )
@@ -936,10 +937,10 @@ export class ReActLLMDuty extends LLMDuty {
     }
   }
 
-  private async maybeCompactHistoryAfterAnswer(
+  private async prepareHistoryCompactionAfterAnswer(
     planWidgetId: string,
     trackedSteps: TrackedPlanStep[]
-  ): Promise<void> {
+  ): Promise<PostTurnMaintenanceTask | null> {
     const historyConfig = this.getHistoryCompactionConfig()
     const historyScope = this.getHistoryCompactionScope()
     const conversationLogs = this.getHistoryEligibleConversationLogs(
@@ -966,32 +967,34 @@ export class ReActLLMDuty extends LLMDuty {
       : stateToCompact.tail.length >= historyConfig.historyLimit
 
     if (!shouldCompact) {
-      return
+      return null
     }
 
-    const compactionWidgetSteps = [
-      ...trackedSteps.map((step) => ({ ...step })),
-      {
-        label: 'Compacting history...',
-        status: 'in_progress' as PlanStepStatus
+    return async () => {
+      const compactionWidgetSteps = [
+        ...trackedSteps.map((step) => ({ ...step })),
+        {
+          label: 'Compacting history...',
+          status: 'in_progress' as PlanStepStatus
+        }
+      ]
+
+      emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
+
+      const compactedState = await this.rollHistoryCompactionState(
+        stateToCompact,
+        historyConfig
+      )
+
+      if (!compactedState) {
+        emitPlanWidget(trackedSteps, null, planWidgetId, true, null)
+        return
       }
-    ]
 
-    emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
-
-    const compactedState = await this.rollHistoryCompactionState(
-      stateToCompact,
-      historyConfig
-    )
-
-    if (!compactedState) {
-      emitPlanWidget(trackedSteps, null, planWidgetId, true, null)
-      return
+      this.saveHistoryCompactionProviderState(historyScope, compactedState)
+      compactionWidgetSteps[compactionWidgetSteps.length - 1]!.status = 'completed'
+      emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
     }
-
-    this.saveHistoryCompactionProviderState(historyScope, compactedState)
-    compactionWidgetSteps[compactionWidgetSteps.length - 1]!.status = 'completed'
-    emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
   }
 
   private buildHistoryFromCompactionState(

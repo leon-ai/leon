@@ -1,6 +1,10 @@
 import { LogHelper } from '@/helpers/log-helper'
 
-type PostTurnMaintenanceTask = () => Promise<void> | void
+export type PostTurnMaintenanceTask = () => Promise<void> | void
+type PostTurnMaintenanceTaskPreparer = () =>
+  | Promise<PostTurnMaintenanceTask | null>
+  | PostTurnMaintenanceTask
+  | null
 
 function waitForDisplayPathToUnwind(): Promise<void> {
   return new Promise((resolve) => {
@@ -17,12 +21,28 @@ export default class PostTurnMaintenanceQueue {
   private pendingCount = 0
 
   public enqueue(label: string, task: PostTurnMaintenanceTask): void {
+    this.enqueueIfNeeded(label, () => task)
+  }
+
+  /**
+   * Serializes a lightweight eligibility check and only announces maintenance
+   * when that check returns work to execute.
+   */
+  public enqueueIfNeeded(
+    label: string,
+    prepareTask: PostTurnMaintenanceTaskPreparer
+  ): void {
     this.pendingCount += 1
     this.queue = this.queue.then(async () => {
-      const startedAt = Date.now()
-
       try {
         await waitForDisplayPathToUnwind()
+        const task = await prepareTask()
+
+        if (!task) {
+          return
+        }
+
+        const startedAt = Date.now()
         LogHelper.title('Post-Turn Maintenance')
         LogHelper.debug(
           `Running "${label}" | pending=${this.pendingCount}`

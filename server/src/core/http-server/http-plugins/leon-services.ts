@@ -1,7 +1,14 @@
 import { performance } from 'node:perf_hooks'
 import { EventEmitter } from 'node:events'
 
-import { BRAIN, CONVERSATION_LOGGER, LLM_MANAGER, NLU } from '@/core'
+import {
+  BRAIN,
+  CONVERSATION_LOGGER,
+  LLM_MANAGER,
+  NLU,
+  POST_TURN_MAINTENANCE_QUEUE
+} from '@/core'
+import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
 import type { LLMDutyResult } from '@/core/llm-manager/llm-duty'
 import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calling-llm-duty'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
@@ -141,6 +148,44 @@ function normalizeToolCalls(result: LLMDutyResult | null): HTTPPluginToolCall[] 
       return toolCall
     })
     .filter((item): item is HTTPPluginToolCall => item !== null)
+}
+
+function normalizeOwnerProfileToolExecutions(
+  result: LLMDutyResult | null
+): Array<{
+  functionName: string
+  status: 'success' | 'error'
+  observation: string
+}> {
+  const data = result?.data || {}
+  const executionHistory = Array.isArray(data['executionHistory'])
+    ? data['executionHistory']
+    : []
+
+  return executionHistory
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null
+      }
+
+      const record = item as Record<string, unknown>
+      const functionName = getStringField(record, 'function')
+
+      if (!functionName) {
+        return null
+      }
+
+      return {
+        functionName,
+        status: record['status'] === 'error' ? 'error' as const : 'success' as const,
+        observation: getStringField(record, 'observation')
+      }
+    })
+    .filter((item): item is {
+      functionName: string
+      status: 'success' | 'error'
+      observation: string
+    } => item !== null)
 }
 
 function stripDeveloperProvenance(
@@ -954,6 +999,19 @@ export async function runAgent(
             content: output,
             response_trace: trace
           })
+
+          // HTTP agent turns bypass NLU, so mirror its explicit-memory owner
+          // profile maintenance after the user-visible answer is available.
+          if (data['hasExplicitMemoryWrite'] === true) {
+            POST_TURN_MAINTENANCE_QUEUE.enqueue(
+              'owner profile sync',
+              () => syncOwnerProfileFromTurn(
+                query,
+                output,
+                normalizeOwnerProfileToolExecutions(dutyResult)
+              ).then(() => undefined)
+            )
+          }
         }
 
         return dutyResult

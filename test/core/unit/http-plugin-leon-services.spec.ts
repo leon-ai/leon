@@ -8,7 +8,20 @@ const mocks = vi.hoisted(() => ({
   agentDutyParams: [] as Array<Record<string, unknown>>,
   controlledDutyParams: [] as Array<Record<string, unknown>>,
   controlledDutyOutputs: [] as Array<Array<Record<string, unknown>>>,
+  agentDutyResult: {
+    output: 'Acknowledged.',
+    data: {
+      finalIntent: 'answer',
+      executionHistory: []
+    }
+  } as Record<string, unknown>,
   skillActions: [] as Array<Record<string, unknown>>,
+  maintenanceTasks: [] as Array<{ label: string, task: () => unknown }>,
+  ownerProfileSyncCalls: [] as Array<{
+    userMessage: string
+    assistantMessage: string
+    toolExecutions: Array<Record<string, unknown>>
+  }>,
   skillAnswer: 'Done — I’ve applied that.',
   nluProcessResult: {
     context: {
@@ -107,7 +120,29 @@ vi.mock('@/core', () => ({
     set nluProcessResult(value: Record<string, unknown>) {
       mocks.nluProcessResult = value
     }
+  },
+  POST_TURN_MAINTENANCE_QUEUE: {
+    enqueue: vi.fn((label: string, task: () => unknown) => {
+      mocks.maintenanceTasks.push({ label, task })
+      void task()
+    })
   }
+}))
+
+vi.mock('@/core/context-manager/owner-profile-sync', () => ({
+  syncOwnerProfileFromTurn: vi.fn(async (
+    userMessage: string,
+    assistantMessage: string,
+    toolExecutions: Array<Record<string, unknown>>
+  ) => {
+    mocks.ownerProfileSyncCalls.push({
+      userMessage,
+      assistantMessage,
+      toolExecutions
+    })
+
+    return { profileChanged: true, contextChanged: true }
+  })
 }))
 
 vi.mock('@/core/profile-runtime/profile-context', () => ({
@@ -227,13 +262,7 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
     async init(): Promise<void> {}
 
     async execute(): Promise<Record<string, unknown>> {
-      return {
-        output: 'Acknowledged.',
-        data: {
-          finalIntent: 'answer',
-          executionHistory: []
-        }
-      }
+      return structuredClone(mocks.agentDutyResult)
     }
   }
 }))
@@ -255,7 +284,16 @@ describe('HTTP plugin Leon services', () => {
     mocks.agentDutyParams.length = 0
     mocks.controlledDutyParams.length = 0
     mocks.controlledDutyOutputs.length = 0
+    mocks.agentDutyResult = {
+      output: 'Acknowledged.',
+      data: {
+        finalIntent: 'answer',
+        executionHistory: []
+      }
+    }
     mocks.skillActions.length = 0
+    mocks.maintenanceTasks.length = 0
+    mocks.ownerProfileSyncCalls.length = 0
     mocks.skillAnswer = 'Done — I’ve applied that.'
     mocks.nluProcessResult = {
       context: {
@@ -348,7 +386,8 @@ describe('HTTP plugin Leon services', () => {
       {
         input: 'Check the weather.',
         additionalInstructions: 'Acknowledge pending background work.',
-        allowDirectAnswerHandoff: false
+        allowDirectAnswerHandoff: false,
+        onProgressEvent: expect.any(Function)
       }
     ])
   })
@@ -399,6 +438,53 @@ describe('HTTP plugin Leon services', () => {
         message: 'Acknowledged.',
         sentAt: 4,
         messageId: 'turn-2:leon'
+      }
+    ])
+  })
+
+  it('syncs the owner profile after an explicit HTTP agent memory write', async () => {
+    const observation = JSON.stringify({
+      data: {
+        parsed_input: {
+          content: 'The owner lives in Shenzhen.'
+        }
+      }
+    })
+    mocks.agentDutyResult = {
+      output: 'I will remember that you live in Shenzhen.',
+      data: {
+        finalIntent: 'answer',
+        hasExplicitMemoryWrite: true,
+        executionHistory: [
+          {
+            function: 'structured_knowledge.memory.write',
+            status: 'success',
+            observation
+          }
+        ]
+      }
+    }
+
+    await runAgent({
+      profile_id: 'owner-a',
+      query: 'I live in Shenzhen. Remember that.',
+      create_session: true
+    })
+
+    expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual([
+      'owner profile sync'
+    ])
+    expect(mocks.ownerProfileSyncCalls).toEqual([
+      {
+        userMessage: 'I live in Shenzhen. Remember that.',
+        assistantMessage: 'I will remember that you live in Shenzhen.',
+        toolExecutions: [
+          {
+            functionName: 'structured_knowledge.memory.write',
+            status: 'success',
+            observation
+          }
+        ]
       }
     ])
   })
@@ -515,14 +601,16 @@ describe('HTTP plugin Leon services', () => {
           content: 'Remember this.',
           created_at: 1,
           message_id: 'turn-1',
-          metrics: null
+          metrics: null,
+          response_trace: null
         },
         {
           role: 'assistant',
           content: 'Acknowledged.',
           created_at: 2,
           message_id: 'turn-1:leon',
-          metrics: null
+          metrics: null,
+          response_trace: null
         }
       ]
     })
