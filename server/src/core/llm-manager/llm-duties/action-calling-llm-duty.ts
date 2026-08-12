@@ -1,4 +1,3 @@
-import type { SkillSchema } from '@/schemas/skill-schemas'
 import {
   LLMDuty,
   formatParameterDescription,
@@ -49,6 +48,21 @@ interface OpenAIJSONSchema {
   additionalProperties?: boolean
 }
 
+interface ActionToolConfig {
+  type?: string
+  description?: string
+  parameters?: Record<string, unknown>
+  optional_parameters?: string[]
+}
+
+type ActionToolConfigs = Record<string, ActionToolConfig | undefined>
+
+interface ActionCallingSkillConfig {
+  action_notes?: string[]
+  actions: ActionToolConfigs
+  workflow?: string[]
+}
+
 export class ActionCallingLLMDuty extends LLMDuty {
   private static instance: ActionCallingLLMDuty
   protected readonly systemPrompt: LLMDutyParams['systemPrompt'] = `You are a function-calling AI that translates user requests into Leon action calls.
@@ -89,14 +103,14 @@ Rules:
   }
 
   private parseOptionalParameters(
-    skillConfig: SkillSchema,
+    actions: ActionToolConfigs,
     dutyOutput: ActionCallingOutput
   ): ActionCallingOutput {
     if (dutyOutput.status !== ActionCallingStatus.MissingParams) {
       return dutyOutput
     }
 
-    const actionConfig = skillConfig.actions[dutyOutput.name]
+    const actionConfig = actions[dutyOutput.name]
     if (!actionConfig?.optional_parameters) {
       return dutyOutput
     }
@@ -120,14 +134,14 @@ Rules:
   }
 
   private filterActionsWithWorkflow(
-    actions: SkillSchema['actions'],
-    workflow: SkillSchema['workflow']
-  ): SkillSchema['actions'] {
+    actions: ActionToolConfigs,
+    workflow: string[] | undefined
+  ): ActionToolConfigs {
     if (!workflow || !Array.isArray(workflow) || workflow.length === 0) {
       return actions
     }
 
-    const filteredActions: SkillSchema['actions'] = {}
+    const filteredActions: ActionToolConfigs = {}
     const [firstActionName] = workflow
     const firstAction = actions[firstActionName as string]
 
@@ -144,12 +158,13 @@ Rules:
     return filteredActions
   }
 
-  private actionsToOpenAITools(
-    actions: SkillSchema['actions']
-  ): OpenAITool[] {
+  private actionsToOpenAITools(actions: ActionToolConfigs): OpenAITool[] {
     const tools: OpenAITool[] = []
+    // The generated skill schema is recursively typed. Only these action
+    // fields are needed here, so keep TypeScript from expanding the full tree.
+    const actionEntries = Object.entries(actions)
 
-    for (const [actionName, action] of Object.entries(actions)) {
+    for (const [actionName, action] of actionEntries) {
       if (!action || !action.type) {
         continue
       }
@@ -171,7 +186,7 @@ Rules:
         type: 'function',
         function: {
           name: actionName,
-          description: action.description,
+          description: action.description || '',
           parameters: {
             type: 'object',
             properties,
@@ -186,8 +201,8 @@ Rules:
   }
 
   private handlePreLLMInference(
-    actions: SkillSchema['actions'],
-    workflow: SkillSchema['workflow']
+    actions: ActionToolConfigs,
+    workflow: string[] | undefined
   ): LLMDutyResult | true {
     const actionNames = Object.keys(actions)
 
@@ -328,7 +343,7 @@ Rules:
   private toMissingParamsOutput(
     functionName: string,
     params: Record<string, unknown>,
-    actionConfig: SkillSchema['actions'][string]
+    actionConfig: ActionToolConfig
   ): ActionCallingOutput {
     const requiredParams = Object.keys(actionConfig.parameters || {}).filter(
       (paramName) => !actionConfig.optional_parameters?.includes(paramName)
@@ -355,7 +370,7 @@ Rules:
   private normalizeActionOutput(
     functionName: string,
     rawParams: unknown,
-    actions: SkillSchema['actions']
+    actions: ActionToolConfigs
   ): ActionCallingOutput {
     const actionConfig = actions[functionName]
 
@@ -390,7 +405,7 @@ Rules:
     try {
       const skillConfig = await SkillDomainHelper.getNewSkillConfig(
         this.skillName
-      )
+      ) as unknown as ActionCallingSkillConfig | null
       const {
         action_notes: actionNotes = [],
         actions,
@@ -428,6 +443,7 @@ Rules:
         systemPrompt: this.systemPrompt as string,
         history: this.history,
         temperature: config.temperature,
+        seed: config.seed,
         maxTokens: config.maxTokens,
         thoughtTokensBudget: config.thoughtTokensBudget,
         disableThinking: true,
@@ -461,7 +477,7 @@ Rules:
           )
 
           dutyOutput.push(
-            this.parseOptionalParameters(skillConfig, actionOutput)
+            this.parseOptionalParameters(actions, actionOutput)
           )
         }
       } else {
@@ -495,7 +511,7 @@ Rules:
           }
 
           dutyOutput.push(
-            this.parseOptionalParameters(skillConfig, parsedOutput)
+            this.parseOptionalParameters(actions, parsedOutput)
           )
         } catch {
           dutyOutput.push({

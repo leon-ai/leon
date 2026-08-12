@@ -15,7 +15,7 @@ import { LEON_HOME_PATH } from '@/leon-roots'
 
 import { DUTY_NAME } from './constants'
 import { buildBoundedToolObservation } from './agent-context-budget'
-import type { ToolExecutionResult } from './types'
+import type { AgentRunProgressEvent, ToolExecutionResult } from './types'
 import {
   extractFinalAnswerFromToolResult,
   formatFilePath
@@ -290,7 +290,10 @@ export async function runToolExecution(
   toolInput: string,
   parsedInput?: Record<string, unknown>,
   stepLabel?: string,
-  toolCallTitle?: string
+  toolCallTitle?: string,
+  onProgressEvent?: (
+    event: Extract<AgentRunProgressEvent, { type: 'tool_call' }>['toolCall']
+  ) => void
 ): Promise<ToolExecutionResult> {
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
   const requestedToolInput = toolInput
@@ -401,6 +404,13 @@ export async function runToolExecution(
   LogHelper.debug(`Tool input: ${toolInput}`)
 
   const toolGroupId = createToolGroupId(toolkitId, toolId, functionName)
+  onProgressEvent?.({
+    id: toolGroupId,
+    name: qualifiedName,
+    status: 'running',
+    input: requestedToolInput,
+    ...(stepLabel ? { stepLabel } : {})
+  })
   emitToolExecutionInputToWebApp({
     toolkitId,
     toolId,
@@ -420,6 +430,14 @@ export async function runToolExecution(
   let didNotifyOwnerPreparationReady = false
   let didObservePreparationFailure = false
   toolExecutionInput.onProgress = (progress): void => {
+    onProgressEvent?.({
+      id: toolGroupId,
+      name: qualifiedName,
+      status: 'running',
+      input: requestedToolInput,
+      output: progress.data || progress.message,
+      ...(stepLabel ? { stepLabel } : {})
+    })
     if (progress.key === 'bridges.tools.command_output_delta') {
       const output =
         typeof progress.data?.['output'] === 'string'
@@ -535,6 +553,17 @@ export async function runToolExecution(
     message: effectiveMessage,
     ...(toolCallTitle ? { toolCallTitle } : {}),
     ...(stepLabel ? { stepLabel } : {})
+  })
+  onProgressEvent?.({
+    id: toolGroupId,
+    name: qualifiedName,
+    status: effectiveStatus === 'error' ? 'error' : 'success',
+    input: requestedToolInput,
+    output: toolExecutionResult.data?.output || {},
+    ...(stepLabel ? { stepLabel } : {}),
+    ...(effectiveStatus === 'error'
+      ? { errorMessage: effectiveMessage }
+      : {})
   })
 
   // Check for final_answer in tool result

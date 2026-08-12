@@ -207,6 +207,9 @@ export class ConversationHistoryHelper {
         ...(llmMetrics ? { llmMetrics } : {}),
         ...(conversationLog.messageId
           ? { messageId: conversationLog.messageId }
+          : {}),
+        ...(conversationLog.agentResponseTrace
+          ? { agentResponseTrace: conversationLog.agentResponseTrace }
           : {})
       }
     })

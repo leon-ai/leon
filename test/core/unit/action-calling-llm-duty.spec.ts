@@ -12,7 +12,8 @@ const coreMocks = vi.hoisted(() => ({
       'action-calling': {
         maxTokens: 384,
         thoughtTokensBudget: 0,
-        temperature: 0.1
+        temperature: 0,
+        seed: 7
       }
     }
   }
@@ -103,6 +104,14 @@ describe('ActionCallingLLMDuty', () => {
     await duty.init()
     const result = await duty.execute()
     const parsedOutput = JSON.parse(String(result?.output))
+
+    expect(coreMocks.llmProvider.prompt).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        seed: 7,
+        temperature: 0
+      })
+    )
 
     expect(parsedOutput).toEqual([
       {

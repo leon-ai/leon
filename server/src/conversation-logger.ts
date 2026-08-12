@@ -1,7 +1,12 @@
 import path from 'node:path'
 import fs from 'node:fs'
 
-import type { ConversationWidgetData, LLMAnswerMetrics, MessageLog } from '@/types'
+import type {
+  AgentResponseTrace,
+  ConversationWidgetData,
+  LLMAnswerMetrics,
+  MessageLog
+} from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
@@ -38,6 +43,8 @@ export class ConversationLogger {
     '__LEON_INLINE_WIDGET__'
   private static readonly LLM_METRICS_PLACEHOLDER_PREFIX =
     '__LEON_INLINE_LLM_METRICS__'
+  private static readonly AGENT_TRACE_PLACEHOLDER_PREFIX =
+    '__LEON_INLINE_AGENT_TRACE__'
 
   get loggerName(): string {
     return this.settings.loggerName
@@ -112,9 +119,11 @@ export class ConversationLogger {
   private serializeLogs(conversationLogs: MessageLog[]): string {
     const serializedWidgets = new Map<string, string>()
     const serializedLLMMetrics = new Map<string, string>()
+    const serializedAgentTraces = new Map<string, string>()
     const preparedLogs = conversationLogs.map((conversationLog, index) => {
       let widgetPlaceholder: string | null = null
       let llmMetricsPlaceholder: string | null = null
+      let agentTracePlaceholder: string | null = null
       const preparedConversationLog: MessageLog = {
         who: conversationLog.who,
         sentAt: conversationLog.sentAt,
@@ -141,6 +150,14 @@ export class ConversationLogger {
         )
       }
 
+      if (conversationLog.agentResponseTrace) {
+        agentTracePlaceholder = `${ConversationLogger.AGENT_TRACE_PLACEHOLDER_PREFIX}_${index}`
+        serializedAgentTraces.set(
+          agentTracePlaceholder,
+          JSON.stringify(conversationLog.agentResponseTrace)
+        )
+      }
+
       return {
         ...preparedConversationLog,
         ...(widgetPlaceholder
@@ -153,6 +170,12 @@ export class ConversationLogger {
           ? {
               llmMetrics:
                 llmMetricsPlaceholder as unknown as LLMAnswerMetrics
+            }
+          : {}),
+        ...(agentTracePlaceholder
+          ? {
+              agentResponseTrace:
+                agentTracePlaceholder as unknown as AgentResponseTrace
             }
           : {})
       }
@@ -171,6 +194,14 @@ export class ConversationLogger {
       serializedLogs = serializedLogs.replace(
         `"${placeholder}"`,
         serializedMetrics
+      )
+    }
+
+
+    for (const [placeholder, serializedTrace] of serializedAgentTraces.entries()) {
+      serializedLogs = serializedLogs.replace(
+        `"${placeholder}"`,
+        serializedTrace
       )
     }
 
