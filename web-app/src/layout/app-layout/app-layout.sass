@@ -3,6 +3,7 @@
   --app-main-inline-padding: var(--space-xl)
   min-height: 100vh
   background-color: var(--color-background)
+  transition: background-color var(--transition-duration-main) var(--transition-timing-main)
 
   &:has(> .sidebar-collapsed)
     --active-sidebar-width: var(--sidebar-collapsed-width)
@@ -48,5 +49,6 @@
       margin-left: 0
 
 @media (prefers-reduced-motion: reduce)
+  .app-layout,
   .app-layout > .app-main
     transition: none
