@@ -32,6 +32,20 @@
   font-size: var(--font-size-md)
   line-height: var(--line-height-md)
   text-align: left
+  transition: color var(--transition-duration-main) var(--transition-timing-main)
+
+  &:hover
+    color: var(--color-text)
+
+    .tool-call-tool-icon,
+    .tool-call-chevron
+      color: var(--color-text)
+      opacity: 1
+
+  &:focus-visible,
+  &[aria-expanded='true']
+    .tool-call-chevron
+      opacity: 1
 
   &:focus-visible
     outline: 1px solid var(--color-accent)
@@ -50,6 +64,7 @@
   color: var(--color-text-secondary)
   font-size: var(--font-size-md)
   line-height: 1
+  transition: color var(--transition-duration-main) var(--transition-timing-main)
 
 .tool-call-title
   flex: 1 1 auto
@@ -65,10 +80,14 @@
   color: var(--color-text)
 
 .tool-call-chevron
+  position: relative
+  top: 1px
   flex: 0 0 auto
+  opacity: 0
   font-size: var(--font-size-xl)
   line-height: 1
   color: var(--color-text-secondary)
+  transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main)
 
 .tool-call-details
   display: grid
@@ -128,6 +147,7 @@
 @media (prefers-reduced-motion: reduce)
   .tool-call-animate,
   .tool-call-trigger,
+  .tool-call-tool-icon,
   .tool-call-chevron,
   .tool-call-details
     opacity: 1

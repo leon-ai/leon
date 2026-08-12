@@ -65,19 +65,33 @@
 
 .task-list-item-trigger
   align-self: flex-start
+  transition: color var(--transition-duration-main) var(--transition-timing-main)
 
   &:hover
     color: var(--color-text)
+
+    .task-list-item-chevron
+      color: var(--color-text)
+      opacity: 1
+
+  &:focus-visible,
+  &[aria-expanded='true']
+    .task-list-item-chevron
+      opacity: 1
 
 .task-list-item-label
   min-width: 0
   overflow-wrap: anywhere
 
 .task-list-item-chevron
+  position: relative
+  top: 1px
   flex: 0 0 auto
+  opacity: 0
   font-size: var(--font-size-xl)
   line-height: 1
   color: var(--color-text-secondary)
+  transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main)
 
 @keyframes task-list-item-enter
   from
@@ -92,3 +106,7 @@
   .task-list-item-animate
     opacity: 1
     animation: none
+
+  .task-list-item-trigger,
+  .task-list-item-chevron
+    transition: none
