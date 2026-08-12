@@ -1,5 +1,6 @@
 .task-list-item
   --task-list-item-marker-size: 20px
+  --task-list-item-title-color: var(--color-text-secondary)
   position: relative
   display: flex
   gap: var(--space-sm)
@@ -28,6 +29,7 @@
   background-color: var(--color-surface)
   color: var(--color-text-tertiary)
   font-size: 14px
+  pointer-events: none
 
 .task-list-item-completed .task-list-item-marker
   background-color: var(--color-accent-soft)
@@ -36,6 +38,12 @@
 .task-list-item-in_progress .task-list-item-marker
   background-color: transparent
   color: var(--color-accent)
+
+.task-list-item-in_progress
+  --task-list-item-title-color: var(--color-text)
+
+.task-list-item-pending
+  cursor: default
 
 .task-list-item-error .task-list-item-marker
   background-color: var(--color-danger-soft)
@@ -65,23 +73,27 @@
 
 .task-list-item-trigger
   align-self: flex-start
-  transition: color var(--transition-duration-main) var(--transition-timing-main)
+  margin-left: calc((var(--task-list-item-marker-size) + var(--space-sm)) * -1)
+  padding-left: calc(var(--task-list-item-marker-size) + var(--space-sm))
 
   &:hover
-    color: var(--color-text)
-
+    .task-list-item-label,
     .task-list-item-chevron
       color: var(--color-text)
+
+    .task-list-item-chevron
       opacity: 1
 
-  &:focus-visible,
   &[aria-expanded='true']
     .task-list-item-chevron
       opacity: 1
+      transform: rotate(90deg)
 
 .task-list-item-label
   min-width: 0
   overflow-wrap: anywhere
+  color: var(--task-list-item-title-color)
+  transition: color var(--transition-duration-main) var(--transition-timing-main)
 
 .task-list-item-chevron
   position: relative
@@ -90,8 +102,10 @@
   opacity: 0
   font-size: var(--font-size-xl)
   line-height: 1
-  color: var(--color-text-secondary)
-  transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main)
+  color: var(--task-list-item-title-color)
+  transform: rotate(0deg)
+  transform-origin: center
+  transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
 
 @keyframes task-list-item-enter
   from
@@ -107,6 +121,6 @@
     opacity: 1
     animation: none
 
-  .task-list-item-trigger,
+  .task-list-item-label,
   .task-list-item-chevron
     transition: none
