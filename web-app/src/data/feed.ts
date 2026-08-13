@@ -35,6 +35,7 @@ export interface FeedPlanStep {
 
 export interface FeedThinking {
   details: string[]
+  durationMs: number
   isActive: boolean
 }
 

@@ -36,6 +36,7 @@ const THINKING_DETAILS = [
   'I need to inspect the current environment and collect enough evidence before making changes.',
   'I will use the available system and search tools, then verify the result before finishing.'
 ]
+const THINKING_DURATION_MS = 8_400
 
 const FINAL_ANSWER = [
   'Fixed it.',
@@ -209,6 +210,7 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
       role: 'leon',
       thinking: {
         details: THINKING_DETAILS,
+        durationMs: THINKING_DURATION_MS,
         isActive: isInProgress
       },
       summary,
@@ -222,6 +224,7 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
     role: 'leon',
     thinking: {
       details: THINKING_DETAILS,
+      durationMs: THINKING_DURATION_MS,
       isActive: isInProgress
     },
     summary,
