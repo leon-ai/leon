@@ -48,7 +48,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
     toolCall.toolkitName,
     toolCall.toolName,
     formatFunctionName(toolCall.functionName)
-  ].join(' - ')
+  ].join(' • ')
 
   return (
     <section className={clsx(
@@ -69,10 +69,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
         />
         <span className="tool-call-title">{toolCall.toolCallTitle}</span>
         <i
-          className={clsx(
-            'tool-call-chevron',
-            isExpanded ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line'
-          )}
+          className="tool-call-chevron ri-arrow-right-s-line"
           aria-hidden="true"
         />
       </button>

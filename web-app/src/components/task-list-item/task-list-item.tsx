@@ -28,10 +28,7 @@ export function TaskListItem({ step }: TaskListItemProps) {
       <span className="task-list-item-label">{step.label}</span>
       {hasToolCalls && (
         <i
-          className={clsx(
-            'task-list-item-chevron',
-            isExpanded ? 'ri-arrow-down-s-line' : 'ri-arrow-right-s-line'
-          )}
+          className="task-list-item-chevron ri-arrow-right-s-line"
           aria-hidden="true"
         />
       )}

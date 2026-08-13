@@ -1,0 +1,58 @@
+.process-group
+  display: flex
+  min-width: 0
+  flex-direction: column
+  gap: var(--space-sm)
+
+.process-group-heading,
+.process-group-trigger
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  min-width: 0
+  min-height: 25px
+  padding: 0
+  color: var(--color-text)
+  font-size: var(--font-size-md)
+  line-height: var(--line-height-md)
+  text-align: left
+
+.process-group-trigger
+  align-self: flex-start
+  max-width: 100%
+
+  &:hover
+    .process-group-chevron
+      opacity: 1
+
+  &[aria-expanded='true']
+    .process-group-chevron
+      opacity: 1
+      transform: rotate(90deg)
+
+  &:focus-visible
+    outline: 1px solid var(--color-accent)
+    outline-offset: var(--space-xs)
+
+.process-group-title
+  min-width: 0
+  overflow-wrap: anywhere
+
+.process-group-chevron
+  position: relative
+  top: 1px
+  flex: 0 0 auto
+  opacity: 0
+  color: currentColor
+  font-size: var(--font-size-xl)
+  line-height: 1
+  transform: rotate(0deg)
+  transform-origin: center
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
+
+.process-group-content
+  min-width: 0
+
+@media (prefers-reduced-motion: reduce)
+  .process-group-chevron
+    transition: none
