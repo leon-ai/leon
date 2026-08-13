@@ -1,9 +1,10 @@
 .feed
   --feed-bottom-clearance: 148px
   --feed-entry-gap: 42px
+  --feed-top-clearance: 52px
   box-sizing: border-box
   width: 100%
-  padding: 52px 0 var(--feed-bottom-clearance)
+  padding: var(--feed-top-clearance) 0 var(--feed-bottom-clearance)
   color: var(--color-text-secondary)
   font-size: var(--font-size-lg)
   line-height: var(--line-height-lg)
@@ -12,19 +13,24 @@
   position: relative
   width: 100%
 
-.feed-entry
+.feed-turn
   position: absolute
   top: 0
   left: 0
   box-sizing: border-box
   width: 100%
+
+.feed-turn:not(.feed-turn-latest)
+  padding-bottom: calc(var(--feed-entry-gap) + var(--space-xl))
+
+.feed-turn-latest
+  min-height: calc(100vh - var(--feed-top-clearance) - var(--feed-bottom-clearance))
+
+.feed-turn-awaiting-owner .owner-message-animate
+  animation-play-state: paused
+
+.feed-entry:not(:last-child)
   padding-bottom: var(--feed-entry-gap)
-
-.feed-entry-turn-start
-  padding-top: var(--space-xl)
-
-.feed-entry-last-leon
-  padding-bottom: 0
 
 .feed-mask
   position: fixed
@@ -42,7 +48,7 @@
 @media (max-width: 680px)
   .feed
     --feed-bottom-clearance: 132px
-    padding-top: var(--space-xl)
+    --feed-top-clearance: var(--space-xl)
 
 @media (prefers-reduced-motion: reduce)
   .feed-mask

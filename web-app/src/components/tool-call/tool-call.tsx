@@ -48,7 +48,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
     toolCall.toolkitName,
     toolCall.toolName,
     formatFunctionName(toolCall.functionName)
-  ].join(' - ')
+  ].join(' • ')
 
   return (
     <section className={clsx(

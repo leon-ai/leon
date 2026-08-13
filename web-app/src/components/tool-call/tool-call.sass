@@ -61,7 +61,6 @@
   justify-content: center
   width: var(--tool-call-marker-size)
   height: var(--tool-call-marker-size)
-  background-color: var(--color-background)
   color: var(--tool-call-title-color)
   font-size: var(--font-size-md)
   line-height: 1
@@ -99,8 +98,6 @@
   background: linear-gradient(var(--color-surface-elevated), var(--color-surface-elevated)) padding-box, var(--gradient-border) border-box
   border: 1px solid transparent
   border-radius: var(--border-radius-md)
-  opacity: 1
-  animation: tool-call-details-enter .2s ease-out both
 
   .json-view + .json-view
     border-left: 1px solid var(--color-border-secondary)
@@ -111,22 +108,8 @@
   padding: var(--space-sm) var(--space-md)
   border-bottom: 1px solid var(--color-border-secondary)
   color: var(--color-text-secondary)
-  font-size: var(--font-size-sm)
-  line-height: var(--line-height-sm)
-
-@starting-style
-  .tool-call-details
-    opacity: 0
-    transform: translate3d(0, -4px, 0)
-
-@keyframes tool-call-details-enter
-  from
-    opacity: 0
-    transform: translate3d(0, -4px, 0)
-
-  to
-    opacity: 1
-    transform: translate3d(0, 0, 0)
+  font-size: var(--font-size-xs)
+  line-height: var(--line-height-xs)
 
 @keyframes tool-call-enter
   from
@@ -147,13 +130,11 @@
       border-left: 0
 
 @media (prefers-reduced-motion: reduce)
-  .tool-call-animate,
-  .tool-call-details
+  .tool-call-animate
     opacity: 1
     animation: none
 
   .tool-call-title,
   .tool-call-tool-icon,
-  .tool-call-chevron,
-  .tool-call-details
+  .tool-call-chevron
     transition: none
