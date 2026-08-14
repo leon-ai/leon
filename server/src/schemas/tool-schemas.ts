@@ -153,6 +153,19 @@ export const toolManifestSchemaObject = Type.Strict(
         }
       )
     ),
+    execution: Type.Optional(
+      Type.Strict(
+        Type.Object({
+          provider: Type.String({
+            minLength: 1,
+            description:
+              'Long-lived Core provider used instead of a short-lived tool worker.'
+          })
+        }, {
+          description: 'Optional persistent execution provider.'
+        })
+      )
+    ),
     functions: Type.Record(
       Type.String({
         minLength: 1,
