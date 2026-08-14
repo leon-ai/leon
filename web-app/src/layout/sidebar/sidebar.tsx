@@ -24,6 +24,7 @@ import { SidebarFooter } from './sidebar-footer'
 const DARK_THEME_LOGO_SRC = '/img/logo-for-dark-bg-text.svg'
 const LIGHT_THEME_LOGO_SRC = '/img/logo-for-light-bg-text.svg'
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
+const SCROLL_MASK_FADE_DISTANCE_PX = 54
 
 function shouldReduceMotion(): boolean {
   return window.matchMedia(REDUCED_MOTION_MEDIA_QUERY).matches
@@ -96,7 +97,17 @@ export function Sidebar() {
       return
     }
 
-    setSidebarScrollAreaScrolled(scrollArea.scrollTop > 0)
+    const scrollTop = Math.max(0, scrollArea.scrollTop)
+    const maskOpacity = Math.min(
+      scrollTop / SCROLL_MASK_FADE_DISTANCE_PX,
+      1
+    )
+
+    scrollArea.style.setProperty(
+      '--sidebar-scroll-area-mask-opacity',
+      String(maskOpacity)
+    )
+    setSidebarScrollAreaScrolled(scrollTop > 0)
   }
 
   function openSearchSessionsDialog(): void {

@@ -6,7 +6,6 @@ import {
   type RefObject
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { clsx } from 'clsx'
 
 import { sessionIndex, type ConversationSession } from '../../../data/sessions'
 import { useToast } from '../../../components/toast'
@@ -16,7 +15,7 @@ import './session-list.sass'
 
 const SESSION_ITEM_ESTIMATED_HEIGHT = 41
 const SESSION_LIST_OVERSCAN = 5
-const SCROLL_END_TOLERANCE_PX = 1
+const SCROLL_MASK_FADE_DISTANCE_PX = 54
 
 interface SessionListProps {
   collapsed?: boolean
@@ -40,8 +39,8 @@ export function SessionList({
   scrollElementRef
 }: SessionListProps) {
   const { showToast } = useToast()
+  const scrollMaskRef = useRef<HTMLDivElement>(null)
   const virtualListRef = useRef<HTMLUListElement>(null)
-  const [scrollAtEnd, setScrollAtEnd] = useState(false)
   const [scrollMargin, setScrollMargin] = useState(0)
   const [sessions, setSessions] = useState<ConversationSession[]>(
     () => sessionIndex.sessions
@@ -98,8 +97,9 @@ export function SessionList({
 
   useLayoutEffect(() => {
     const virtualList = virtualListRef.current
+    const scrollMask = scrollMaskRef.current
 
-    if (virtualList === null) {
+    if (virtualList === null || scrollMask === null) {
       return undefined
     }
 
@@ -112,21 +112,29 @@ export function SessionList({
     }
 
     const observedVirtualList = virtualList
+    const observedScrollMask = scrollMask
     const observedScrollElement = scrollElement
 
-    function updateScrollEndState(): void {
-      setScrollAtEnd(
+    function updateScrollMaskOpacity(): void {
+      const remainingScrollDistance = Math.max(
+        0,
         observedScrollElement.scrollHeight -
         observedScrollElement.scrollTop -
-        observedScrollElement.clientHeight <= SCROLL_END_TOLERANCE_PX
+        observedScrollElement.clientHeight
       )
+      const maskOpacity = Math.min(
+        remainingScrollDistance / SCROLL_MASK_FADE_DISTANCE_PX,
+        1
+      )
+
+      observedScrollMask.style.opacity = String(maskOpacity)
     }
 
     // The sidebar scroll container starts above this list, so the virtual rows
     // need the list offset to keep their transforms local to the list element.
     function updateLayout(): void {
       setScrollMargin(observedVirtualList.offsetTop)
-      updateScrollEndState()
+      updateScrollMaskOpacity()
     }
 
     updateLayout()
@@ -134,13 +142,16 @@ export function SessionList({
     const resizeObserver = new ResizeObserver(updateLayout)
     resizeObserver.observe(observedVirtualList)
     resizeObserver.observe(observedScrollElement)
-    observedScrollElement.addEventListener('scroll', updateScrollEndState, {
+    observedScrollElement.addEventListener('scroll', updateScrollMaskOpacity, {
       passive: true
     })
 
     return () => {
       resizeObserver.disconnect()
-      observedScrollElement.removeEventListener('scroll', updateScrollEndState)
+      observedScrollElement.removeEventListener(
+        'scroll',
+        updateScrollMaskOpacity
+      )
     }
   }, [collapsed])
 
@@ -182,9 +193,8 @@ export function SessionList({
         })}
       </ul>
       <div
-        className={clsx('session-list-mask', {
-          'session-list-mask-hidden': scrollAtEnd
-        })}
+        ref={scrollMaskRef}
+        className="session-list-mask"
         aria-hidden="true"
       />
     </nav>

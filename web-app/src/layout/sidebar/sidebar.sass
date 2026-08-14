@@ -68,12 +68,14 @@
   .sidebar-scroll-area
     position: relative
     flex: 1 1 auto
+    box-sizing: border-box
     min-height: 0
+    border-top: 1px solid transparent
     overflow-x: hidden
     overflow-y: auto
     scrollbar-color: var(--color-scrollbar-thumb-muted) transparent
     scrollbar-width: thin
-    transition: box-shadow var(--transition-duration-main) var(--transition-timing-main)
+    transition: border-color var(--transition-duration-main) var(--transition-timing-main)
 
     &::-webkit-scrollbar
       width: 8px
@@ -92,10 +94,7 @@
       background-color: var(--color-scrollbar-thumb-hover)
 
     &.sidebar-scroll-area-scrolled
-      box-shadow: inset 0 1px 0 var(--color-border-secondary)
-
-      .sidebar-scroll-area-mask
-        opacity: 1
+      border-top-color: var(--color-border-secondary)
 
     .sidebar-scroll-area-mask
       position: sticky
@@ -106,9 +105,9 @@
       height: 54px
       margin-bottom: -54px
       background-color: var(--color-sidebar-background)
-      mask-image: linear-gradient(to bottom, #000, #000 26%, transparent)
-      -webkit-mask-image: linear-gradient(to bottom, #000, #000 26%, transparent)
-      opacity: 0
+      mask-image: linear-gradient(to bottom, #000, transparent)
+      -webkit-mask-image: linear-gradient(to bottom, #000, transparent)
+      opacity: var(--sidebar-scroll-area-mask-opacity, 0)
       pointer-events: none
       transition: background-color var(--transition-duration-sidebar) var(--transition-timing-sidebar)
 
