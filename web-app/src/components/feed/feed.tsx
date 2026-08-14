@@ -11,7 +11,7 @@ import { FeedAnimationProvider } from '../streaming-text'
 import './feed.sass'
 
 const FEED_TURN_ESTIMATED_HEIGHT = 608
-const FEED_OVERSCAN_COUNT = 4
+const FEED_OVERSCAN_COUNT = 1
 const OWNER_MESSAGE_REVEAL_SCROLL_PROGRESS = .33
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SCROLL_POSITION_TOLERANCE_PX = 1
@@ -50,6 +50,10 @@ function supportsScrollEnd(element: HTMLElement): boolean {
   return 'onscrollend' in element
 }
 
+function shouldAdjustFeedScrollPosition(): boolean {
+  return false
+}
+
 export function Feed({ entries }: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
   const bottomMaskRef = useRef<HTMLDivElement>(null)
@@ -65,8 +69,14 @@ export function Feed({ entries }: FeedProps) {
       feedRef.current?.closest<HTMLElement>('.app-main') ?? null,
     getItemKey: (index) => turns[index]?.id ?? index,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
-    overscan: FEED_OVERSCAN_COUNT
+    overscan: FEED_OVERSCAN_COUNT,
+    useAnimationFrameWithResizeObserver: true
   })
+
+  // Disclosure resizing happens in visible content, so compensating scroll
+  // offsets on every animation frame would make older turns visibly jitter.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange =
+    shouldAdjustFeedScrollPosition
 
   useLayoutEffect(() => {
     const feed = feedRef.current
