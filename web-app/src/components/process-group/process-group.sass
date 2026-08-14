@@ -1,5 +1,9 @@
 .process-group
+  --process-group-heading-height: 25px
+  --process-group-indicator-size: 20px
+  --process-group-indicator-transition-duration: 140ms
   display: flex
+  position: relative
   min-width: 0
   flex-direction: column
   gap: var(--space-sm)
@@ -10,8 +14,8 @@
   align-items: center
   gap: var(--space-sm)
   min-width: 0
-  min-height: 25px
-  padding: 0
+  min-height: var(--process-group-heading-height)
+  padding: 0 0 0 calc(var(--process-group-indicator-size) + var(--space-sm))
   color: var(--color-text)
   font-size: var(--font-size-md)
   line-height: var(--line-height-md)
@@ -29,6 +33,10 @@
     .process-group-chevron
       opacity: 1
 
+    + .process-group-indicator
+      .process-group-indicator-completed
+        color: var(--color-text)
+
   &[aria-expanded='true']
     .process-group-chevron
       opacity: 1
@@ -38,9 +46,50 @@
     outline: 1px solid var(--color-accent)
     outline-offset: var(--space-xs)
 
+    + .process-group-indicator
+      .process-group-indicator-completed
+        color: var(--color-text)
+
 .process-group-title
   min-width: 0
   overflow-wrap: anywhere
+
+.process-group-indicator
+  position: absolute
+  top: calc((var(--process-group-heading-height) - var(--process-group-indicator-size)) / 2)
+  left: 0
+  width: var(--process-group-indicator-size)
+  height: var(--process-group-indicator-size)
+  pointer-events: none
+
+.process-group-indicator-active,
+.process-group-indicator-completed
+  display: flex
+  position: absolute
+  inset: 0
+  align-items: center
+  justify-content: center
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-xl)
+  line-height: 1
+  transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--process-group-indicator-transition-duration) ease-out, transform var(--process-group-indicator-transition-duration) ease-out
+
+.process-group-indicator-active
+  opacity: 0
+  transform: scale(.92)
+
+.process-group-indicator-completed
+  opacity: 1
+  transform: scale(1)
+
+.process-group-active
+  .process-group-indicator-active
+    opacity: 1
+    transform: scale(1)
+
+  .process-group-indicator-completed
+    opacity: 0
+    transform: scale(.92)
 
 .process-group-chevron
   position: relative
@@ -59,5 +108,7 @@
 
 @media (prefers-reduced-motion: reduce)
   .process-group-trigger,
-  .process-group-chevron
+  .process-group-chevron,
+  .process-group-indicator-active,
+  .process-group-indicator-completed
     transition: none

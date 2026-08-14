@@ -5,23 +5,25 @@ import './process-group.sass'
 
 interface ProcessGroupProps {
   active: boolean
+  activeIndicator: ReactNode
   activeLabel: string
   ariaLabel: string
   children: ReactNode
   className?: string
+  completedIndicator: ReactNode
   completedLabel: string
-  indicator: ReactNode
 }
 
 /** Groups one progressive agent activity behind a shared status disclosure. */
 export function ProcessGroup({
   active,
+  activeIndicator,
   activeLabel,
   ariaLabel,
   children,
   className,
-  completedLabel,
-  indicator
+  completedIndicator,
+  completedLabel
 }: ProcessGroupProps) {
   const contentId = useId()
   const previousActiveRef = useRef(active)
@@ -39,7 +41,6 @@ export function ProcessGroup({
 
   const headingContent = (
     <>
-      {indicator}
       <span className="process-group-title">
         {active ? activeLabel : completedLabel}
       </span>
@@ -72,6 +73,14 @@ export function ProcessGroup({
           />
         </button>
       )}
+      <span className="process-group-indicator" aria-hidden="true">
+        <span className="process-group-indicator-active">
+          {activeIndicator}
+        </span>
+        <span className="process-group-indicator-completed">
+          {completedIndicator}
+        </span>
+      </span>
       {isExpanded && (
         <div id={contentId} className="process-group-content">
           {children}

@@ -60,15 +60,10 @@ export function ThinkingMessage({
     })}>
       <ProcessGroup
         active={isActive}
-        activeLabel="Thinking..."
-        ariaLabel="Leon’s thinking"
-        completedLabel={`Thought for ${formatDuration(durationMs)}`}
-        indicator={(
+        activeIndicator={(
           <DottedIcon
             active={isActive}
-            ariaLabel={isActive
-              ? 'Leon is thinking'
-              : 'Leon thought through this response'}
+            ariaLabel="Leon is thinking"
             columnCount={BRAIN_DOT_COLUMN_COUNT}
             maskMode="light"
             source={BRAIN_MASK_SOURCE}
@@ -76,6 +71,12 @@ export function ThinkingMessage({
             sourceWidth={BRAIN_SOURCE_WIDTH}
           />
         )}
+        activeLabel="Thinking..."
+        ariaLabel="Leon’s thinking"
+        completedIndicator={(
+          <span className="thinking-message-completed-icon" />
+        )}
+        completedLabel={`Thought for ${formatDuration(durationMs)}`}
       >
         {isActive ? (
           <StreamingText

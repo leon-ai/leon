@@ -50,44 +50,44 @@ export function LeonMessage({ entry }: LeonMessageProps) {
         {plan !== undefined ? (
           <ProcessGroup
             active={planIsActive}
-            activeLabel="Executing plan..."
-            ariaLabel="Leon’s execution plan"
-            completedLabel="Completed plan"
-            indicator={(
+            activeIndicator={(
               <DottedIcon
                 active={planIsActive}
-                ariaLabel={planIsActive
-                  ? 'Leon is executing a plan'
-                  : 'Leon completed the plan'}
+                ariaLabel="Leon is executing a plan"
                 source={mapIconSource}
                 sourceHeight={24}
                 sourceWidth={24}
               />
             )}
+            activeLabel="Executing plan..."
+            ariaLabel="Leon’s execution plan"
+            completedIndicator={(
+              <i className="ri-map-2-line" />
+            )}
+            completedLabel="Completed plan"
           >
             <TaskList steps={plan} />
           </ProcessGroup>
         ) : toolCount > 0 ? (
           <ProcessGroup
             active={toolsAreActive}
-            activeLabel="Using tools..."
-            ariaLabel="Leon’s tool usage"
-            completedLabel={`Used ${toolCount} ${
-              toolCount === 1 ? 'tool' : 'tools'
-            }`}
-            indicator={(
+            activeIndicator={(
               <DottedIcon
                 active={toolsAreActive}
-                ariaLabel={toolsAreActive
-                  ? 'Leon is using tools'
-                  : `Leon used ${toolCount} ${
-                    toolCount === 1 ? 'tool' : 'tools'
-                  }`}
+                ariaLabel="Leon is using tools"
                 source={toolsIconSource}
                 sourceHeight={24}
                 sourceWidth={24}
               />
             )}
+            activeLabel="Using tools..."
+            ariaLabel="Leon’s tool usage"
+            completedIndicator={(
+              <i className="ri-tools-line" />
+            )}
+            completedLabel={`Used ${toolCount} ${
+              toolCount === 1 ? 'tool' : 'tools'
+            }`}
           >
             <ToolCallList toolCalls={toolCalls} />
           </ProcessGroup>

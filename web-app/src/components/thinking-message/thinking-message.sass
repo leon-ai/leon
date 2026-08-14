@@ -8,6 +8,26 @@
   line-height: 28px
   white-space: pre-line
 
+.thinking-message-completed-icon
+  display: block
+  width: 20px
+  height: 20px
+  opacity: .78
+  background: url('/img/logo-for-dark-bg.svg') center / contain no-repeat
+  transition: opacity var(--transition-duration-main) var(--transition-timing-main)
+
+.process-group-trigger
+  &:hover,
+  &:focus-visible
+    + .process-group-indicator
+      .thinking-message-completed-icon
+        opacity: 1
+
+[data-theme='light']
+  .thinking-message-completed-icon
+    opacity: .67
+    background-image: url('/img/logo-for-light-bg.svg')
+
 @keyframes thinking-message-heading-enter
   from
     opacity: 0
@@ -21,3 +41,6 @@
   .thinking-message-animate
     opacity: 1
     animation: none
+
+  .thinking-message-completed-icon
+    transition: none
