@@ -9,6 +9,8 @@ import {
 } from 'react'
 import { clsx } from 'clsx'
 
+import { Collapse } from '../collapse'
+
 import './process-group.sass'
 
 interface ProcessGroupProps {
@@ -113,11 +115,13 @@ export function ProcessGroup({
             </span>
           ) : headingLayer(label)}
         </button>
-        {isExpanded && (
-          <div id={contentId} className="process-group-content">
-            {children}
-          </div>
-        )}
+        <Collapse
+          id={contentId}
+          className="process-group-content"
+          isOpen={isExpanded}
+        >
+          {children}
+        </Collapse>
       </section>
     </NestedDisclosureDefaultContext.Provider>
   )

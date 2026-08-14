@@ -46,7 +46,18 @@
   flex: 1 1 auto
   min-width: 0
   flex-direction: column
-  gap: var(--activity-node-gap)
+  gap: 0
+
+.task-list-item-tool-calls
+  width: calc(100% + var(--task-list-item-marker-size) + var(--space-sm))
+  margin-left: calc((var(--task-list-item-marker-size) + var(--space-sm)) * -1)
+
+  > .collapse-content > .collapse-body
+    padding-top: var(--activity-node-gap)
+
+  .tool-call-list-nested
+    width: 100%
+    margin-left: 0
 
 .task-list-item-trigger,
 .task-list-item-heading

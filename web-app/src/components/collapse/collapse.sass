@@ -1,0 +1,33 @@
+.collapse
+  display: grid
+  min-width: 0
+  transition: grid-template-rows var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
+
+.collapse-open
+  grid-template-rows: 1fr
+  opacity: 1
+  transform: translate3d(0, 0, 0)
+
+.collapse-closed
+  grid-template-rows: 0fr
+  opacity: 0
+  transform: translate3d(0, -4px, 0)
+  pointer-events: none
+
+.collapse-content
+  min-width: 0
+  min-height: 0
+  overflow: hidden
+
+.collapse-body
+  min-width: 0
+
+@starting-style
+  .collapse-open
+    grid-template-rows: 0fr
+    opacity: 0
+    transform: translate3d(0, -4px, 0)
+
+@media (prefers-reduced-motion: reduce)
+  .collapse
+    transition: none

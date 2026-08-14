@@ -6,7 +6,7 @@
   position: relative
   min-width: 0
   flex-direction: column
-  gap: var(--activity-node-gap)
+  gap: 0
 
 .process-group-trigger
   display: flex
@@ -99,6 +99,9 @@
 
 .process-group-content
   min-width: 0
+
+  > .collapse-content > .collapse-body
+    padding-top: var(--activity-node-gap)
 
 @keyframes process-group-activity-wave
   0%
