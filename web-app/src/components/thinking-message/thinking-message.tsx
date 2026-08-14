@@ -1,8 +1,8 @@
 import { clsx } from 'clsx'
 
-import { DottedIcon } from '../dotted-icon'
 import { ProcessGroup } from '../process-group'
 import { StreamingText, useAnimateOnce } from '../streaming-text'
+import { ThoughtIcon } from '../thought-icon'
 
 import './thinking-message.sass'
 
@@ -16,11 +16,6 @@ interface ThinkingMessageProps {
 const MILLISECONDS_PER_SECOND = 1_000
 const MILLISECONDS_PER_MINUTE = 60_000
 const MILLISECONDS_PER_HOUR = 3_600_000
-const BRAIN_MASK_SOURCE = '/img/logo-for-dark-bg.svg'
-const BRAIN_SOURCE_WIDTH = 44
-const BRAIN_SOURCE_HEIGHT = 46
-const BRAIN_DOT_COLUMN_COUNT = 18
-
 function formatDuration(durationMs: number): string {
   if (durationMs < MILLISECONDS_PER_MINUTE) {
     const seconds = Math.max(
@@ -60,23 +55,10 @@ export function ThinkingMessage({
     })}>
       <ProcessGroup
         active={isActive}
-        activeIndicator={(
-          <DottedIcon
-            active={isActive}
-            ariaLabel="Leon is thinking"
-            columnCount={BRAIN_DOT_COLUMN_COUNT}
-            maskMode="light"
-            source={BRAIN_MASK_SOURCE}
-            sourceHeight={BRAIN_SOURCE_HEIGHT}
-            sourceWidth={BRAIN_SOURCE_WIDTH}
-          />
-        )}
         activeLabel="Thinking..."
         ariaLabel="Leon’s thinking"
-        completedIndicator={(
-          <span className="thinking-message-completed-icon" />
-        )}
         completedLabel={`Thought for ${formatDuration(durationMs)}`}
+        indicator={<ThoughtIcon />}
       >
         {isActive ? (
           <StreamingText

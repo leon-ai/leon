@@ -1,9 +1,6 @@
 import { clsx } from 'clsx'
-import mapIconSource from 'remixicon/icons/Map/map-2-line.svg?url'
-import toolsIconSource from 'remixicon/icons/Design/tools-line.svg?url'
 
 import type { LeonFeedEntry } from '../../data/feed'
-import { DottedIcon } from '../dotted-icon'
 import { FinalAnswer } from '../final-answer'
 import { ProcessGroup } from '../process-group'
 import { StreamingText, useAnimateOnce } from '../streaming-text'
@@ -50,44 +47,24 @@ export function LeonMessage({ entry }: LeonMessageProps) {
         {plan !== undefined ? (
           <ProcessGroup
             active={planIsActive}
-            activeIndicator={(
-              <DottedIcon
-                active={planIsActive}
-                ariaLabel="Leon is executing a plan"
-                source={mapIconSource}
-                sourceHeight={24}
-                sourceWidth={24}
-              />
-            )}
             activeLabel="Executing plan..."
             ariaLabel="Leon’s execution plan"
-            completedIndicator={(
-              <i className="ri-map-2-line" />
-            )}
             completedLabel="Completed plan"
+            indicator={<i className="ri-map-2-line" aria-hidden="true" />}
           >
             <TaskList steps={plan} />
           </ProcessGroup>
         ) : toolCount > 0 ? (
           <ProcessGroup
             active={toolsAreActive}
-            activeIndicator={(
-              <DottedIcon
-                active={toolsAreActive}
-                ariaLabel="Leon is using tools"
-                source={toolsIconSource}
-                sourceHeight={24}
-                sourceWidth={24}
-              />
-            )}
             activeLabel="Using tools..."
             ariaLabel="Leon’s tool usage"
-            completedIndicator={(
-              <i className="ri-tools-line" />
-            )}
             completedLabel={`Used ${toolCount} ${
               toolCount === 1 ? 'tool' : 'tools'
             }`}
+            indicator={(
+              <i className="ri-pencil-ruler-2-line" aria-hidden="true" />
+            )}
           >
             <ToolCallList toolCalls={toolCalls} />
           </ProcessGroup>

@@ -5,25 +5,23 @@ import './process-group.sass'
 
 interface ProcessGroupProps {
   active: boolean
-  activeIndicator: ReactNode
   activeLabel: string
   ariaLabel: string
   children: ReactNode
   className?: string
-  completedIndicator: ReactNode
   completedLabel: string
+  indicator: ReactNode
 }
 
 /** Groups one progressive agent activity behind a shared status disclosure. */
 export function ProcessGroup({
   active,
-  activeIndicator,
   activeLabel,
   ariaLabel,
   children,
   className,
-  completedIndicator,
-  completedLabel
+  completedLabel,
+  indicator
 }: ProcessGroupProps) {
   const contentId = useId()
   const previousActiveRef = useRef(active)
@@ -39,13 +37,27 @@ export function ProcessGroup({
     previousActiveRef.current = active
   }, [active])
 
-  const headingContent = (
-    <>
-      <span className="process-group-title">
-        {active ? activeLabel : completedLabel}
+  const headingLayer = (
+    label: string,
+    className?: string,
+    decorative = false
+  ) => (
+    <span
+      className={clsx('process-group-heading-layer', className)}
+      aria-hidden={decorative || undefined}
+    >
+      <span className="process-group-indicator" aria-hidden="true">
+        {indicator}
       </span>
-    </>
+      <span className="process-group-title">{label}</span>
+      <i
+        className="process-group-chevron ri-arrow-right-s-line"
+        aria-hidden="true"
+      />
+    </span>
   )
+
+  const label = active ? activeLabel : completedLabel
 
   return (
     <section
@@ -54,33 +66,20 @@ export function ProcessGroup({
       })}
       aria-label={ariaLabel}
     >
-      {active ? (
-        <div className="process-group-heading">
-          {headingContent}
-        </div>
-      ) : (
-        <button
-          type="button"
-          className="process-group-trigger"
-          aria-controls={contentId}
-          aria-expanded={isExpanded}
-          onClick={() => setIsExpanded((isOpen) => !isOpen)}
-        >
-          {headingContent}
-          <i
-            className="process-group-chevron ri-arrow-right-s-line"
-            aria-hidden="true"
-          />
-        </button>
-      )}
-      <span className="process-group-indicator" aria-hidden="true">
-        <span className="process-group-indicator-active">
-          {activeIndicator}
-        </span>
-        <span className="process-group-indicator-completed">
-          {completedIndicator}
-        </span>
-      </span>
+      <button
+        type="button"
+        className="process-group-trigger"
+        aria-controls={contentId}
+        aria-expanded={isExpanded}
+        onClick={() => setIsExpanded((isOpen) => !isOpen)}
+      >
+        {active ? (
+          <span className="process-group-active-content">
+            {headingLayer(label)}
+            {headingLayer(label, 'process-group-wave', true)}
+          </span>
+        ) : headingLayer(label)}
+      </button>
       {isExpanded && (
         <div id={contentId} className="process-group-content">
           {children}

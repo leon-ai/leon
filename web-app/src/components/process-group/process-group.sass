@@ -1,21 +1,20 @@
 .process-group
   --process-group-heading-height: 25px
   --process-group-indicator-size: 20px
-  --process-group-indicator-transition-duration: 140ms
+  --activity-highlight-width: 48px
   display: flex
   position: relative
   min-width: 0
   flex-direction: column
   gap: var(--space-sm)
 
-.process-group-heading,
 .process-group-trigger
   display: flex
   align-items: center
   gap: var(--space-sm)
   min-width: 0
   min-height: var(--process-group-heading-height)
-  padding: 0 0 0 calc(var(--process-group-indicator-size) + var(--space-sm))
+  padding: 0
   color: var(--color-text)
   font-size: var(--font-size-md)
   line-height: var(--line-height-md)
@@ -33,10 +32,6 @@
     .process-group-chevron
       opacity: 1
 
-    + .process-group-indicator
-      .process-group-indicator-completed
-        color: var(--color-text)
-
   &[aria-expanded='true']
     .process-group-chevron
       opacity: 1
@@ -46,50 +41,49 @@
     outline: 1px solid var(--color-accent)
     outline-offset: var(--space-xs)
 
-    + .process-group-indicator
-      .process-group-indicator-completed
-        color: var(--color-text)
+.process-group-active
+  .process-group-trigger
+    color: var(--color-text)
+
+.process-group-active-content
+  display: block
+  position: relative
+  min-width: 0
+
+.process-group-heading-layer
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  min-width: 0
 
 .process-group-title
   min-width: 0
   overflow-wrap: anywhere
 
 .process-group-indicator
-  position: absolute
-  top: calc((var(--process-group-heading-height) - var(--process-group-indicator-size)) / 2)
-  left: 0
-  width: var(--process-group-indicator-size)
-  height: var(--process-group-indicator-size)
-  pointer-events: none
-
-.process-group-indicator-active,
-.process-group-indicator-completed
   display: flex
-  position: absolute
-  inset: 0
   align-items: center
   justify-content: center
-  color: var(--color-text-secondary)
+  flex: 0 0 auto
+  width: var(--process-group-indicator-size)
+  height: var(--process-group-indicator-size)
   font-size: var(--font-size-xl)
   line-height: 1
-  transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--process-group-indicator-transition-duration) ease-out, transform var(--process-group-indicator-transition-duration) ease-out
 
-.process-group-indicator-active
-  opacity: 0
-  transform: scale(.92)
-
-.process-group-indicator-completed
-  opacity: 1
-  transform: scale(1)
-
-.process-group-active
-  .process-group-indicator-active
-    opacity: 1
-    transform: scale(1)
-
-  .process-group-indicator-completed
-    opacity: 0
-    transform: scale(.92)
+.process-group-wave
+  position: absolute
+  inset: 0
+  color: var(--color-activity-wave)
+  pointer-events: none
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
+  -webkit-mask-position: calc(0px - var(--activity-highlight-width)) 0
+  -webkit-mask-repeat: no-repeat
+  -webkit-mask-size: var(--activity-highlight-width) 100%
+  mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
+  mask-position: calc(0px - var(--activity-highlight-width)) 0
+  mask-repeat: no-repeat
+  mask-size: var(--activity-highlight-width) 100%
+  animation: process-group-activity-wave var(--activity-animation-duration) linear infinite
 
 .process-group-chevron
   position: relative
@@ -106,9 +100,23 @@
 .process-group-content
   min-width: 0
 
+@keyframes process-group-activity-wave
+  0%
+    -webkit-mask-position: calc(0px - var(--activity-highlight-width)) 0
+    mask-position: calc(0px - var(--activity-highlight-width)) 0
+
+  84%
+    -webkit-mask-position: calc(100% + var(--activity-highlight-width)) 0
+    mask-position: calc(100% + var(--activity-highlight-width)) 0
+
+  100%
+    -webkit-mask-position: calc(100% + var(--activity-highlight-width)) 0
+    mask-position: calc(100% + var(--activity-highlight-width)) 0
+
 @media (prefers-reduced-motion: reduce)
   .process-group-trigger,
-  .process-group-chevron,
-  .process-group-indicator-active,
-  .process-group-indicator-completed
+  .process-group-chevron
     transition: none
+
+  .process-group-wave
+    display: none
