@@ -108,12 +108,65 @@
       padding-right: calc(var(--space-sm) - 1px)
 
   .session-list-item-title
+    position: relative
+    display: block
+    flex: 1
     min-width: 0
     overflow: hidden
     font-size: var(--font-size-md)
     line-height: var(--line-height-md)
-    text-overflow: ellipsis
     white-space: nowrap
+
+  .session-list-item-title-resting
+    display: block
+    overflow: hidden
+    text-overflow: ellipsis
+
+  .session-list-item-title-text
+    position: absolute
+    top: 0
+    left: 0
+    display: inline-block
+    min-width: max-content
+    opacity: 0
+    transform: translateX(0)
+
+  .session-list-item-title-mask
+    position: absolute
+    z-index: 1
+    top: 0
+    bottom: 0
+    width: var(--space-md)
+    background-color: var(--color-sidebar-background)
+    opacity: 0
+    pointer-events: none
+    transition: background-color var(--transition-duration-main) var(--transition-timing-main)
+
+  .session-list-item-link:active .session-list-item-title-mask
+    background-color: var(--color-sidebar-background-active)
+
+  .session-list-item-active .session-list-item-title-mask
+    background-color: var(--color-sidebar-background-hover)
+
+  .session-list-item-title-mask-left
+    left: 0
+    mask-image: linear-gradient(90deg, #000, transparent)
+    -webkit-mask-image: linear-gradient(90deg, #000, transparent)
+
+  .session-list-item-title-mask-right
+    right: 0
+    mask-image: linear-gradient(90deg, transparent, #000)
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000)
+
+  .session-list-item-title-scrolling
+    .session-list-item-title-resting
+      opacity: 0
+
+    .session-list-item-title-text
+      opacity: 1
+
+    .session-list-item-title-mask
+      background-color: var(--color-sidebar-background-hover)
 
 @media (prefers-reduced-motion: reduce)
   .session-list-item .session-list-item-link
@@ -123,4 +176,7 @@
     transition: none
 
   .session-list-item .session-list-item-pinned-icon
+    transition: none
+
+  .session-list-item .session-list-item-title-mask
     transition: none
