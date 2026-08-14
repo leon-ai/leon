@@ -1,2 +1,4 @@
-export { ProcessGroup } from './process-group'
-
+export {
+  ProcessGroup,
+  useProcessGroupNestedDisclosureDefault
+} from './process-group'

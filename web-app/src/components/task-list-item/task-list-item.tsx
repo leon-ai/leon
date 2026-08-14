@@ -3,6 +3,7 @@ import { clsx } from 'clsx'
 
 import type { FeedPlanStep } from '../../data/feed'
 import { Loader } from '../loader'
+import { useProcessGroupNestedDisclosureDefault } from '../process-group'
 import { useAnimateOnce } from '../streaming-text'
 import { ToolCallList } from '../tool-call-list'
 
@@ -14,7 +15,10 @@ interface TaskListItemProps {
 
 export function TaskListItem({ step }: TaskListItemProps) {
   const hasToolCalls = step.toolCalls.length > 0
-  const [isExpanded, setIsExpanded] = useState(hasToolCalls)
+  const expandByDefault = useProcessGroupNestedDisclosureDefault()
+  const [isExpanded, setIsExpanded] = useState(
+    hasToolCalls && expandByDefault
+  )
   const shouldAnimate = useAnimateOnce(`${step.id}:plan-step`)
   const marker = step.status === 'completed'
     ? <i className="task-list-item-marker-icon ri-check-line" aria-hidden="true" />

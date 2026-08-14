@@ -1,4 +1,12 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type ReactNode
+} from 'react'
 import { clsx } from 'clsx'
 
 import './process-group.sass'
@@ -11,6 +19,13 @@ interface ProcessGroupProps {
   className?: string
   completedLabel: string
   indicator: ReactNode
+}
+
+const NestedDisclosureDefaultContext = createContext(true)
+
+/** Returns whether nested disclosures should open on their next mount. */
+export function useProcessGroupNestedDisclosureDefault(): boolean {
+  return useContext(NestedDisclosureDefaultContext)
 }
 
 /** Groups one progressive agent activity behind a shared status disclosure. */
@@ -26,6 +41,7 @@ export function ProcessGroup({
   const contentId = useId()
   const previousActiveRef = useRef(active)
   const [isExpanded, setIsExpanded] = useState(active)
+  const [expandNestedByDefault, setExpandNestedByDefault] = useState(active)
 
   useEffect(() => {
     if (previousActiveRef.current === active) {
@@ -34,8 +50,18 @@ export function ProcessGroup({
 
     // Active work stays visible; the completed snapshot starts collapsed.
     setIsExpanded(active)
+    setExpandNestedByDefault(active)
     previousActiveRef.current = active
   }, [active])
+
+  function handleToggle(): void {
+    if (isExpanded) {
+      // Reopening a collapsed group should not reopen its entire disclosure tree.
+      setExpandNestedByDefault(false)
+    }
+
+    setIsExpanded(!isExpanded)
+  }
 
   const headingLayer = (
     label: string,
@@ -60,31 +86,35 @@ export function ProcessGroup({
   const label = active ? activeLabel : completedLabel
 
   return (
-    <section
-      className={clsx('process-group', className, {
-        'process-group-active': active
-      })}
-      aria-label={ariaLabel}
+    <NestedDisclosureDefaultContext.Provider
+      value={expandNestedByDefault}
     >
-      <button
-        type="button"
-        className="process-group-trigger"
-        aria-controls={contentId}
-        aria-expanded={isExpanded}
-        onClick={() => setIsExpanded((isOpen) => !isOpen)}
+      <section
+        className={clsx('process-group', className, {
+          'process-group-active': active
+        })}
+        aria-label={ariaLabel}
       >
-        {active ? (
-          <span className="process-group-active-content">
-            {headingLayer(label)}
-            {headingLayer(label, 'process-group-wave', true)}
-          </span>
-        ) : headingLayer(label)}
-      </button>
-      {isExpanded && (
-        <div id={contentId} className="process-group-content">
-          {children}
-        </div>
-      )}
-    </section>
+        <button
+          type="button"
+          className="process-group-trigger"
+          aria-controls={contentId}
+          aria-expanded={isExpanded}
+          onClick={handleToggle}
+        >
+          {active ? (
+            <span className="process-group-active-content">
+              {headingLayer(label)}
+              {headingLayer(label, 'process-group-wave', true)}
+            </span>
+          ) : headingLayer(label)}
+        </button>
+        {isExpanded && (
+          <div id={contentId} className="process-group-content">
+            {children}
+          </div>
+        )}
+      </section>
+    </NestedDisclosureDefaultContext.Provider>
   )
 }
