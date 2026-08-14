@@ -52,8 +52,9 @@ function supportsScrollEnd(element: HTMLElement): boolean {
 
 export function Feed({ entries }: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
-  const maskRef = useRef<HTMLDivElement>(null)
+  const bottomMaskRef = useRef<HTMLDivElement>(null)
   const previousTurnCountRef = useRef<number | null>(null)
+  const topMaskRef = useRef<HTMLDivElement>(null)
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const turnCount = turns.length
   const virtualizer = useVirtualizer({
@@ -69,20 +70,22 @@ export function Feed({ entries }: FeedProps) {
 
   useLayoutEffect(() => {
     const feed = feedRef.current
-    const mask = maskRef.current
+    const bottomMask = bottomMaskRef.current
     const scrollElement = feed?.closest<HTMLElement>('.app-main')
+    const topMask = topMaskRef.current
 
     if (
       feed === null ||
-      mask === null ||
+      bottomMask === null ||
       scrollElement === undefined ||
-      scrollElement === null
+      scrollElement === null ||
+      topMask === null
     ) {
       return undefined
     }
 
     const observedFeed = feed
-    const observedMask = mask
+    const observedMasks = [bottomMask, topMask]
     const observedScrollElement = scrollElement
 
     // Fixed elements use the viewport as their containing block, so measure
@@ -90,8 +93,10 @@ export function Feed({ entries }: FeedProps) {
     function updateMaskBounds(): void {
       const feedBounds = observedFeed.getBoundingClientRect()
 
-      observedMask.style.left = `${feedBounds.left}px`
-      observedMask.style.width = `${feedBounds.width}px`
+      for (const mask of observedMasks) {
+        mask.style.left = `${feedBounds.left}px`
+        mask.style.width = `${feedBounds.width}px`
+      }
     }
 
     const resizeObserver = new ResizeObserver(updateMaskBounds)
@@ -310,7 +315,16 @@ export function Feed({ entries }: FeedProps) {
             )
           })}
         </div>
-        <div ref={maskRef} className="feed-mask" aria-hidden="true" />
+        <div
+          ref={topMaskRef}
+          className="feed-mask feed-mask-top"
+          aria-hidden="true"
+        />
+        <div
+          ref={bottomMaskRef}
+          className="feed-mask feed-mask-bottom"
+          aria-hidden="true"
+        />
       </section>
     </FeedAnimationProvider>
   )
