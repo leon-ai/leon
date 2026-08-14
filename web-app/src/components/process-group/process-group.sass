@@ -20,8 +20,12 @@
 .process-group-trigger
   align-self: flex-start
   max-width: 100%
+  color: var(--color-text-secondary)
+  transition: color var(--transition-duration-main) var(--transition-timing-main)
 
   &:hover
+    color: var(--color-text)
+
     .process-group-chevron
       opacity: 1
 
@@ -54,5 +58,6 @@
   min-width: 0
 
 @media (prefers-reduced-motion: reduce)
+  .process-group-trigger,
   .process-group-chevron
     transition: none

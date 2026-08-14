@@ -3,7 +3,7 @@ import { clsx } from 'clsx'
 
 import './dotted-icon.sass'
 
-const DOT_COLUMN_COUNT = 15
+const DEFAULT_DOT_COLUMN_COUNT = 15
 const DOT_OFFSET_RATIO = .5
 const MASK_ALPHA_THRESHOLD = 128
 const MASK_LIGHTNESS_THRESHOLD = 160
@@ -19,6 +19,7 @@ interface DottedIconProps {
   active?: boolean
   ariaLabel: string
   className?: string
+  columnCount?: number
   maskMode?: 'alpha' | 'light'
   source: string
   sourceHeight: number
@@ -29,6 +30,7 @@ function createDots(
   image: HTMLImageElement,
   sourceWidth: number,
   sourceHeight: number,
+  columnCount: number,
   maskMode: DottedIconProps['maskMode']
 ): DottedIconPoint[] {
   const maskCanvas = document.createElement('canvas')
@@ -47,7 +49,7 @@ function createDots(
     sourceWidth,
     sourceHeight
   ).data
-  const spacing = sourceWidth / DOT_COLUMN_COUNT
+  const spacing = sourceWidth / columnCount
   const offset = spacing * DOT_OFFSET_RATIO
   const dots: DottedIconPoint[] = []
 
@@ -91,6 +93,7 @@ export function DottedIcon({
   active = true,
   ariaLabel,
   className,
+  columnCount = DEFAULT_DOT_COLUMN_COUNT,
   maskMode = 'alpha',
   source,
   sourceHeight,
@@ -215,6 +218,7 @@ export function DottedIcon({
         image,
         sourceWidth,
         sourceHeight,
+        Math.max(1, columnCount),
         maskMode
       )
       resizeCanvas()
@@ -239,7 +243,7 @@ export function DottedIcon({
       reducedMotionQuery.removeEventListener('change', updateAnimation)
       document.removeEventListener('visibilitychange', updateAnimation)
     }
-  }, [active, maskMode, source, sourceHeight, sourceWidth])
+  }, [active, columnCount, maskMode, source, sourceHeight, sourceWidth])
 
   return (
     <canvas
