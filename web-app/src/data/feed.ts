@@ -78,6 +78,7 @@ export interface LeonFeedEntry {
   role: 'leon'
   activities: LeonFeedActivity[]
   finalAnswer: string
+  bonusResponse?: string
 }
 
 export type FeedEntry = OwnerFeedEntry | LeonFeedEntry

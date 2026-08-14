@@ -6,6 +6,7 @@ import type {
   LeonFeedActivity,
   LeonFeedEntry
 } from '../../data/feed'
+import { BonusResponse } from '../bonus-response'
 import { FinalAnswer } from '../final-answer'
 import { ProcessGroup } from '../process-group'
 import { StreamingText, useAnimateOnce } from '../streaming-text'
@@ -103,6 +104,8 @@ function renderActivity(activity: LeonFeedActivity) {
 }
 
 export function LeonMessage({ entry }: LeonMessageProps) {
+  const bonusResponse = entry.bonusResponse
+
   return (
     <div className="leon-message">
       {entry.activities.map(renderActivity)}
@@ -110,6 +113,13 @@ export function LeonMessage({ entry }: LeonMessageProps) {
         <FinalAnswer animationId={`${entry.id}:final-answer`}>
           {entry.finalAnswer}
         </FinalAnswer>
+      )}
+      {entry.finalAnswer.trim().length > 0 &&
+        bonusResponse !== undefined &&
+        bonusResponse.trim().length > 0 && (
+        <BonusResponse animationId={`${entry.id}:bonus-response`}>
+          {bonusResponse}
+        </BonusResponse>
       )}
     </div>
   )

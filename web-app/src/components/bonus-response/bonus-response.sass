@@ -1,0 +1,36 @@
+.bonus-response
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  color: var(--color-text)
+  font-size: var(--font-size-md)
+  font-style: italic
+  line-height: var(--line-height-md)
+
+.bonus-response-icon
+  flex: 0 0 auto
+  width: 20px
+  height: 21px
+  background: url('/img/logo-for-dark-bg.svg') center / contain no-repeat
+
+[data-theme='light']
+  .bonus-response-icon
+    background-image: url('/img/logo-for-light-bg.svg')
+
+.bonus-response-animate .bonus-response-icon
+  opacity: 0
+  animation: bonus-response-icon-enter .34s ease-out 2.7s forwards
+
+@keyframes bonus-response-icon-enter
+  from
+    opacity: 0
+    transform: translate3d(0, 4px, 0)
+
+  to
+    opacity: 1
+    transform: translate3d(0, 0, 0)
+
+@media (prefers-reduced-motion: reduce)
+  .bonus-response-animate .bonus-response-icon
+    opacity: 1
+    animation: none

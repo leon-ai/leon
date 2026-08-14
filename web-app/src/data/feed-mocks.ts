@@ -53,6 +53,7 @@ const FINAL_ANSWER = [
   'What was wrong: Ghostty was loading its theme correctly, but the shell configuration was not exposing the expected colors.',
   'The configuration now resolves consistently and the original file remains backed up.'
 ].join('\n')
+const BONUS_RESPONSE = 'FYI, Ghostty was invented by Mitchell in 2021.'
 
 function createToolCall({
   functionName,
@@ -269,7 +270,8 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
           isInProgress
         )
       ],
-      finalAnswer: isInProgress ? '' : FINAL_ANSWER
+      finalAnswer: isInProgress ? '' : FINAL_ANSWER,
+      ...(isInProgress ? {} : { bonusResponse: BONUS_RESPONSE })
     }
   }
 
@@ -295,7 +297,8 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
       ),
       createToolsActivity([finalToolCall])
     ],
-    finalAnswer: isInProgress ? '' : FINAL_ANSWER
+    finalAnswer: isInProgress ? '' : FINAL_ANSWER,
+    ...(isInProgress ? {} : { bonusResponse: BONUS_RESPONSE })
   }
 }
 
