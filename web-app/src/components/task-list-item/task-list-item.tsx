@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedPlanStep } from '../../data/feed'
@@ -14,9 +14,27 @@ interface TaskListItemProps {
 export function TaskListItem({ step }: TaskListItemProps) {
   const hasToolCalls = step.toolCalls.length > 0
   const expandByDefault = useProcessGroupNestedDisclosureDefault()
+  const previousStatusRef = useRef(step.status)
   const [isExpanded, setIsExpanded] = useState(
-    hasToolCalls && expandByDefault
+    step.status === 'in_progress' && expandByDefault
   )
+
+  useLayoutEffect(() => {
+    if (previousStatusRef.current === step.status) {
+      return
+    }
+
+    previousStatusRef.current = step.status
+
+    // Move the disclosure with execution progress without overriding manual
+    // toggles while a step remains in the same state.
+    if (step.status === 'completed') {
+      setIsExpanded(false)
+    } else if (step.status === 'in_progress') {
+      setIsExpanded(true)
+    }
+  }, [step.status])
+
   const marker = step.status === 'completed'
     ? <i className="task-list-item-marker-icon ri-check-line" aria-hidden="true" />
     : step.status === 'error'

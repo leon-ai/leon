@@ -1,5 +1,5 @@
 .tool-call-list
-  --tool-call-marker-size: 20px
+  --tool-call-marker-size: 16px
   --tool-call-marker-offset: calc((var(--line-height-md) - var(--tool-call-marker-size)) / 2)
   --timeline-connector-gap: 4px
   --tool-call-list-gap: var(--space-xl)
@@ -14,9 +14,9 @@
 
   &::before
     position: absolute
-    top: calc(var(--task-list-item-marker-size) + var(--timeline-connector-gap) - var(--line-height-md) - var(--tool-call-list-gap))
+    top: calc(var(--task-list-item-marker-offset) + var(--task-list-item-marker-size) + var(--timeline-connector-gap) - var(--line-height-md) - var(--tool-call-list-gap))
     left: calc(var(--tool-call-marker-size) / 2)
     width: 1px
-    height: calc(var(--line-height-md) + var(--tool-call-list-gap) + var(--tool-call-marker-offset) - var(--task-list-item-marker-size) - var(--timeline-connector-gap) - var(--timeline-connector-gap))
+    height: calc(var(--line-height-md) + var(--tool-call-list-gap) + var(--tool-call-marker-offset) - var(--task-list-item-marker-offset) - var(--task-list-item-marker-size) - var(--timeline-connector-gap) - var(--timeline-connector-gap))
     background-color: var(--color-timeline-border)
     content: ''

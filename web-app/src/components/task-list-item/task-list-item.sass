@@ -1,5 +1,6 @@
 .task-list-item
-  --task-list-item-marker-size: 20px
+  --task-list-item-marker-size: 16px
+  --task-list-item-marker-offset: calc((var(--line-height-md) - var(--task-list-item-marker-size)) / 2)
   --task-list-item-title-color: var(--color-text-secondary)
   position: relative
   display: flex
@@ -15,10 +16,11 @@
   justify-content: center
   width: var(--task-list-item-marker-size)
   height: var(--task-list-item-marker-size)
+  margin-top: var(--task-list-item-marker-offset)
   border-radius: var(--border-radius-pill)
   background-color: var(--color-surface)
   color: var(--color-text-tertiary)
-  font-size: 14px
+  font-size: 12px
   pointer-events: none
 
 .task-list-item-completed .task-list-item-marker,
