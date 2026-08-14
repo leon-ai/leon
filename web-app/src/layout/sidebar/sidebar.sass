@@ -94,6 +94,24 @@
     &.sidebar-scroll-area-scrolled
       box-shadow: inset 0 1px 0 var(--color-border-secondary)
 
+      .sidebar-scroll-area-mask
+        opacity: 1
+
+    .sidebar-scroll-area-mask
+      position: sticky
+      top: 0
+      z-index: 2
+      display: block
+      width: 100%
+      height: 54px
+      margin-bottom: -54px
+      background-color: var(--color-sidebar-background)
+      mask-image: linear-gradient(to bottom, #000, #000 26%, transparent)
+      -webkit-mask-image: linear-gradient(to bottom, #000, #000 26%, transparent)
+      opacity: 0
+      pointer-events: none
+      transition: background-color var(--transition-duration-sidebar) var(--transition-timing-sidebar)
+
     &:hover
       scrollbar-color: var(--color-scrollbar-thumb) transparent
 
@@ -121,6 +139,9 @@
 
       &::-webkit-scrollbar
         display: none
+
+    .sidebar-scroll-area-mask
+      display: none
 
     .sidebar-logo-slot:hover,
     .sidebar-logo-slot:focus-within
@@ -169,6 +190,9 @@
       opacity: 0
       pointer-events: none
 
+    .sidebar-scroll-area-mask
+      opacity: 0
+
 @media (prefers-reduced-motion: reduce)
   .sidebar,
   .sidebar .sidebar-header,
@@ -176,5 +200,6 @@
   .sidebar .sidebar-logo-open-button,
   .sidebar .sidebar-controls,
   .sidebar .sidebar-scroll-area,
+  .sidebar .sidebar-scroll-area-mask,
   .sidebar .sidebar-collapsed-unfold-hit
     transition: none

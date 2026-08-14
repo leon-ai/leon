@@ -6,6 +6,7 @@ import {
   type RefObject
 } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { clsx } from 'clsx'
 
 import { sessionIndex, type ConversationSession } from '../../../data/sessions'
 import { useToast } from '../../../components/toast'
@@ -15,6 +16,7 @@ import './session-list.sass'
 
 const SESSION_ITEM_ESTIMATED_HEIGHT = 41
 const SESSION_LIST_OVERSCAN = 5
+const SCROLL_END_TOLERANCE_PX = 1
 
 interface SessionListProps {
   collapsed?: boolean
@@ -39,6 +41,7 @@ export function SessionList({
 }: SessionListProps) {
   const { showToast } = useToast()
   const virtualListRef = useRef<HTMLUListElement>(null)
+  const [scrollAtEnd, setScrollAtEnd] = useState(false)
   const [scrollMargin, setScrollMargin] = useState(0)
   const [sessions, setSessions] = useState<ConversationSession[]>(
     () => sessionIndex.sessions
@@ -100,21 +103,46 @@ export function SessionList({
       return undefined
     }
 
-    // The sidebar scroll container starts above this list, so the virtual rows
-    // need the list offset to keep their transforms local to the list element.
-    function updateScrollMargin(): void {
-      setScrollMargin(virtualList?.offsetTop ?? 0)
+    const scrollElement = virtualList.closest<HTMLDivElement>(
+      '.sidebar-scroll-area'
+    )
+
+    if (scrollElement === null) {
+      return undefined
     }
 
-    updateScrollMargin()
+    const observedVirtualList = virtualList
+    const observedScrollElement = scrollElement
 
-    const resizeObserver = new ResizeObserver(updateScrollMargin)
-    resizeObserver.observe(virtualList)
+    function updateScrollEndState(): void {
+      setScrollAtEnd(
+        observedScrollElement.scrollHeight -
+        observedScrollElement.scrollTop -
+        observedScrollElement.clientHeight <= SCROLL_END_TOLERANCE_PX
+      )
+    }
+
+    // The sidebar scroll container starts above this list, so the virtual rows
+    // need the list offset to keep their transforms local to the list element.
+    function updateLayout(): void {
+      setScrollMargin(observedVirtualList.offsetTop)
+      updateScrollEndState()
+    }
+
+    updateLayout()
+
+    const resizeObserver = new ResizeObserver(updateLayout)
+    resizeObserver.observe(observedVirtualList)
+    resizeObserver.observe(observedScrollElement)
+    observedScrollElement.addEventListener('scroll', updateScrollEndState, {
+      passive: true
+    })
 
     return () => {
       resizeObserver.disconnect()
+      observedScrollElement.removeEventListener('scroll', updateScrollEndState)
     }
-  }, [])
+  }, [collapsed])
 
   if (collapsed) {
     return null
@@ -153,7 +181,12 @@ export function SessionList({
           )
         })}
       </ul>
-      <div className="session-list-mask" aria-hidden="true" />
+      <div
+        className={clsx('session-list-mask', {
+          'session-list-mask-hidden': scrollAtEnd
+        })}
+        aria-hidden="true"
+      />
     </nav>
   )
 }
