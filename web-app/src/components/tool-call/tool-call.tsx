@@ -3,7 +3,6 @@ import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '../../data/feed'
 import { JsonView } from '../json-view'
-import { useAnimateOnce } from '../streaming-text'
 
 import './tool-call.sass'
 
@@ -43,7 +42,6 @@ function formatFunctionName(functionName: string): string {
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const detailsId = useId()
-  const shouldAnimate = useAnimateOnce(`${toolCall.id}:tool-call`)
   const technicalTitle = [
     toolCall.toolkitName,
     toolCall.toolName,
@@ -66,11 +64,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
   )
 
   return (
-    <section className={clsx(
-      'tool-call',
-      `tool-call-${toolCall.status}`,
-      { 'tool-call-animate': shouldAnimate }
-    )}>
+    <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
       <button
         type="button"
         className="tool-call-trigger"

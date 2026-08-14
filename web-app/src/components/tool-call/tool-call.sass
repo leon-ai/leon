@@ -13,16 +13,6 @@
     background-color: var(--color-timeline-border)
     content: ''
 
-.tool-call-animate
-  opacity: 0
-  animation: tool-call-enter .24s ease-out forwards
-
-.tool-call:nth-child(2)
-  animation-delay: 60ms
-
-.tool-call:nth-child(3)
-  animation-delay: 120ms
-
 .tool-call-trigger
   display: flex
   align-items: center
@@ -141,15 +131,6 @@
   font-size: var(--font-size-xs)
   line-height: var(--line-height-xs)
 
-@keyframes tool-call-enter
-  from
-    opacity: 0
-    transform: translate3d(0, 4px, 0)
-
-  to
-    opacity: 1
-    transform: translate3d(0, 0, 0)
-
 @keyframes tool-call-title-wave
   0%
     -webkit-mask-position: calc(0px - var(--tool-call-highlight-width)) 0
@@ -173,10 +154,6 @@
       border-left: 0
 
 @media (prefers-reduced-motion: reduce)
-  .tool-call-animate
-    opacity: 1
-    animation: none
-
   .tool-call-heading-layer,
   .tool-call-chevron
     transition: none

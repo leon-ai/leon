@@ -6,16 +6,6 @@
   gap: var(--space-sm)
   color: var(--color-text-secondary)
 
-.task-list-item-animate
-  opacity: 0
-  animation: task-list-item-enter .28s ease-out forwards
-
-.task-list-item:nth-child(2)
-  animation-delay: 80ms
-
-.task-list-item:nth-child(3)
-  animation-delay: 160ms
-
 .task-list-item-marker
   position: relative
   z-index: 1
@@ -104,20 +94,7 @@
   transform-origin: center
   transition: color var(--transition-duration-main) var(--transition-timing-main), opacity var(--transition-duration-main) var(--transition-timing-main), transform var(--transition-duration-main) var(--transition-timing-main)
 
-@keyframes task-list-item-enter
-  from
-    opacity: 0
-    transform: translate3d(0, 5px, 0)
-
-  to
-    opacity: 1
-    transform: translate3d(0, 0, 0)
-
 @media (prefers-reduced-motion: reduce)
-  .task-list-item-animate
-    opacity: 1
-    animation: none
-
   .task-list-item-label,
   .task-list-item-chevron
     transition: none
