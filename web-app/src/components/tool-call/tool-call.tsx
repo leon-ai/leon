@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '../../data/feed'
+import { Collapse } from '../collapse'
 import { JsonView } from '../json-view'
 
 import './tool-call.sass'
@@ -83,8 +84,8 @@ export function ToolCall({ toolCall }: ToolCallProps) {
           aria-hidden="true"
         />
       </button>
-      {isExpanded && (
-        <div id={detailsId} className="tool-call-details">
+      <Collapse id={detailsId} isOpen={isExpanded}>
+        <div className="tool-call-details">
           <p className="tool-call-details-title">{technicalTitle}</p>
           <JsonView label="Input" value={toolCall.input} />
           <JsonView
@@ -92,7 +93,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
             value={toolCall.output ?? { status: toolCall.status }}
           />
         </div>
-      )}
+      </Collapse>
     </section>
   )
 }
