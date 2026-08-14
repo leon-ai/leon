@@ -92,6 +92,7 @@
     "@tanstack/react-router": "1.170.10",
     "@tanstack/react-virtual": "3.14.2",
     "@tobilu/qmd": "2.8.3",
+    "@trycua/cua-driver": "0.22.0",
     "@vercel/ai-sdk-openai-websocket-fetch": "1.0.0",
     "ai": "7.0.31",
     "ajv": "8.18.0",
