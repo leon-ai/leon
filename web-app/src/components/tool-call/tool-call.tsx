@@ -49,6 +49,21 @@ export function ToolCall({ toolCall }: ToolCallProps) {
     toolCall.toolName,
     formatFunctionName(toolCall.functionName)
   ].join(' • ')
+  const headingLayer = (
+    className?: string,
+    decorative = false
+  ) => (
+    <span
+      className={clsx('tool-call-heading-layer', className)}
+      aria-hidden={decorative || undefined}
+    >
+      <i
+        className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
+        aria-hidden="true"
+      />
+      <span className="tool-call-title">{toolCall.toolCallTitle}</span>
+    </span>
+  )
 
   return (
     <section className={clsx(
@@ -63,11 +78,12 @@ export function ToolCall({ toolCall }: ToolCallProps) {
         aria-controls={detailsId}
         onClick={() => setIsExpanded((isOpen) => !isOpen)}
       >
-        <i
-          className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
-          aria-hidden="true"
-        />
-        <span className="tool-call-title">{toolCall.toolCallTitle}</span>
+        {toolCall.status === 'running' ? (
+          <span className="tool-call-running-content">
+            {headingLayer()}
+            {headingLayer('tool-call-wave', true)}
+          </span>
+        ) : headingLayer()}
         <i
           className="tool-call-chevron ri-arrow-right-s-line"
           aria-hidden="true"

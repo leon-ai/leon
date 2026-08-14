@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedPlanStep } from '../../data/feed'
-import { Loader } from '../loader'
 import { useProcessGroupNestedDisclosureDefault } from '../process-group'
 import { useAnimateOnce } from '../streaming-text'
 import { ToolCallList } from '../tool-call-list'
@@ -24,9 +23,7 @@ export function TaskListItem({ step }: TaskListItemProps) {
     ? <i className="task-list-item-marker-icon ri-check-line" aria-hidden="true" />
     : step.status === 'error'
       ? <i className="task-list-item-marker-icon ri-close-line" aria-hidden="true" />
-      : step.status === 'in_progress'
-        ? <Loader />
-        : null
+      : null
   const label = (
     <>
       <span className="task-list-item-label">{step.label}</span>

@@ -56,6 +56,7 @@ export function ThinkingMessage({
       <ProcessGroup
         active={isActive}
         activeLabel="Thinking..."
+        animateWhileActive
         ariaLabel="Leon’s thinking"
         completedLabel={`Thought for ${formatDuration(durationMs)}`}
         indicator={<ThoughtIcon />}

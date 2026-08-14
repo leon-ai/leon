@@ -14,6 +14,7 @@ import './process-group.sass'
 interface ProcessGroupProps {
   active: boolean
   activeLabel: string
+  animateWhileActive?: boolean
   ariaLabel: string
   children: ReactNode
   className?: string
@@ -32,6 +33,7 @@ export function useProcessGroupNestedDisclosureDefault(): boolean {
 export function ProcessGroup({
   active,
   activeLabel,
+  animateWhileActive = false,
   ariaLabel,
   children,
   className,
@@ -76,10 +78,12 @@ export function ProcessGroup({
         {indicator}
       </span>
       <span className="process-group-title">{label}</span>
-      <i
-        className="process-group-chevron ri-arrow-right-s-line"
-        aria-hidden="true"
-      />
+      {!decorative && (
+        <i
+          className="process-group-chevron ri-arrow-right-s-line"
+          aria-hidden="true"
+        />
+      )}
     </span>
   )
 
@@ -102,7 +106,7 @@ export function ProcessGroup({
           aria-expanded={isExpanded}
           onClick={handleToggle}
         >
-          {active ? (
+          {active && animateWhileActive ? (
             <span className="process-group-active-content">
               {headingLayer(label)}
               {headingLayer(label, 'process-group-wave', true)}
