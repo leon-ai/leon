@@ -1,0 +1,3345 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "cua",
+  "toolkit_id": "computer_use",
+  "name": "Cua",
+  "description": "Observe and operate visible apps through Cua Driver. Prefer dedicated tools. Use list_apps only when the owner did not name an app or the launch target is unknown; query it when looking for one app. Work in the background unless the owner asks to watch. Captured actions report visual_change: changed does not prove the intended outcome, while unchanged leaves it unverified.",
+  "icon_name": "computer-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "execution": {
+    "provider": "computer_use"
+  },
+  "functions": {
+    "list_apps": {
+      "description": "List a compact set of installed desktop applications and configured preferred_apps. Use this before selecting a destination when the owner did not name one, but inspect current windows first when an existing workspace may already satisfy the request. Query by app name only when a new launch target is needed.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "description": "Optional case-insensitive app name, bundle ID, or launch-path substring.",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "list_windows": {
+      "description": "List a compact set of native desktop windows. Use this before launching when the request may continue in an existing workspace. Filter by pid when the destination process is already known, and use on_screen_only when only visible windows matter.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "on_screen_only": {
+            "description": "When true, filter to visible windows only. Default false.",
+            "type": "boolean"
+          },
+          "pid": {
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "properties": {
+              "windows": {
+                "items": {
+                  "additionalProperties": true,
+                  "properties": {
+                    "z_index": {
+                      "description": "Higher values are closer to the front. Null means the provider cannot observe stacking order; callers must not infer an order from array position or treat null as zero.",
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "z_index"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "windows"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "get_window_state": {
+      "description": "Inspect one native window and return its interface tree plus a screenshot. Use this for visible appearance, colors, or controls after list_windows.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_mode": {
+            "description": "DEPRECATED and ignored. get_window_state always returns BOTH the element tree and a screenshot — ground on both. The modality is chosen at action time by how you address the target: an element ax action (element_index/element_token) or an element px action (x,y). Any value (including the old \"som\"/\"screenshot\" aliases) is accepted but has no effect.",
+            "enum": [
+              "ax",
+              "vision"
+            ],
+            "type": "string"
+          },
+          "include_screenshot": {
+            "description": "Default true — returns a grounding screenshot alongside the tree. Set false to skip the grab and return tree only (the cheap path for re-indexing before an element ax action).",
+            "type": "boolean"
+          },
+          "max_depth": {
+            "description": "Cap on the AT-SPI tree walk depth. Omit for the default (uncapped). Lower for deeply nested apps.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "max_elements": {
+            "description": "Cap on total AT-SPI nodes walked. Omit for the default (5 000). Lower for huge web/Electron trees.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "query": {
+            "description": "Optional case-insensitive substring. Projects both tree_markdown and structured elements to matches plus ancestors while preserving original indices. Compare total_element_count with returned_element_count.",
+            "type": "string"
+          },
+          "window_id": {
+            "description": "Native window identifier from list_windows.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pid",
+          "window_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "verify_state": {
+      "description": "Deterministically verify a concrete task postcondition after an action. Do not call this merely to confirm that an unrelated target window still exists.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "expect": {
+            "description": "One to eight predicates, combined with logical AND.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "element": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "exists": {
+                      "description": "Set true to assert that at least one trusted element matches the selector.",
+                      "type": "boolean"
+                    },
+                    "selected": {
+                      "type": "boolean"
+                    },
+                    "selector": {
+                      "additionalProperties": false,
+                      "description": "Element selector. Provide role or label_contains.",
+                      "properties": {
+                        "label_contains": {
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "role": {
+                          "minLength": 1,
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "value_equals": {
+                      "type": "string"
+                    }
+                  },
+                  "type": "object"
+                },
+                "window": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "bounds": {
+                      "additionalProperties": false,
+                      "description": "Expected bounds. Provide x, y, width, and height; tolerance_px is optional.",
+                      "properties": {
+                        "height": {
+                          "type": "number"
+                        },
+                        "tolerance_px": {
+                          "maximum": 100,
+                          "minimum": 0,
+                          "type": "number"
+                        },
+                        "width": {
+                          "type": "number"
+                        },
+                        "x": {
+                          "type": "number"
+                        },
+                        "y": {
+                          "type": "number"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "exists": {
+                      "type": "boolean"
+                    }
+                  },
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": "array"
+          },
+          "include_screenshot": {
+            "description": "Return the final window screenshot as image content for a multimodal\ncaller. The driver does not interpret that image.",
+            "type": "boolean"
+          },
+          "pid": {
+            "description": "Exact process whose window may be observed.",
+            "minimum": 1,
+            "type": "integer"
+          },
+          "stable_samples": {
+            "default": 2,
+            "description": "Consecutive satisfied samples required before returning success.",
+            "maximum": 5,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "timeout_ms": {
+            "default": 5000,
+            "description": "Bounded wait. Zero performs one sample.",
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "window_id": {
+            "description": "Exact native window identifier.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pid",
+          "window_id",
+          "expect"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "properties": {
+              "elapsed_ms": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "predicates": {
+                "items": {
+                  "properties": {
+                    "index": {
+                      "format": "uint64",
+                      "minimum": 0,
+                      "type": "integer"
+                    },
+                    "observed_json": {
+                      "anyOf": [
+                        {
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "status": {
+                      "enum": [
+                        "satisfied",
+                        "unsatisfied",
+                        "unknown"
+                      ],
+                      "type": "string"
+                    },
+                    "unknown_reason": {
+                      "anyOf": [
+                        {
+                          "enum": [
+                            "invalid_predicate",
+                            "unsupported_predicate",
+                            "untrusted_source",
+                            "multi_match",
+                            "target_missing",
+                            "observation_unavailable",
+                            "stability_unproven"
+                          ],
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "index",
+                    "status",
+                    "unknown_reason",
+                    "observed_json"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "samples": {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "stable": {
+                "type": "boolean"
+              },
+              "status": {
+                "enum": [
+                  "satisfied",
+                  "unsatisfied",
+                  "unknown"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "status",
+              "stable",
+              "elapsed_ms",
+              "samples",
+              "predicates"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "get_desktop_state": {
+      "description": "Inspect the whole visible desktop and return its current screenshot and interface state. Use this only when the task spans multiple windows or the target window is unknown; do not call it when get_window_state already provides sufficient visual evidence.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "properties": {
+              "display": {
+                "type": "string"
+              },
+              "platform": {
+                "enum": [
+                  "macos",
+                  "linux",
+                  "windows"
+                ],
+                "type": "string"
+              },
+              "scale_factor": {
+                "type": "number"
+              },
+              "screen_height": {
+                "type": "integer"
+              },
+              "screen_width": {
+                "type": "integer"
+              },
+              "screenshot_file_path": {
+                "type": "string"
+              },
+              "screenshot_height": {
+                "type": "integer"
+              },
+              "screenshot_mime_type": {
+                "const": "image/png"
+              },
+              "screenshot_width": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "platform",
+              "display",
+              "screenshot_width",
+              "screenshot_height",
+              "screen_width",
+              "screen_height",
+              "scale_factor",
+              "screenshot_mime_type"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "launch_app": {
+      "description": "Launch a chosen desktop application by name, bundle ID, or path. Use the matching launch_path from list_apps when available. URLs use the OS default handler independently, so put a destination URL in additional_arguments when the exact application matters.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "additional_arguments": {
+            "description": "Extra command-line arguments passed to the exact launched process. Put a browser destination URL here instead of urls when browser identity matters. On Linux, include --force-renderer-accessibility when launching a Chromium browser for browser_prepare/get_browser_state.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "bundle_id": {
+            "description": "Ignored on Linux (macOS/Windows concept).",
+            "type": "string"
+          },
+          "launch_path": {
+            "description": "Round-trip the `launch_path` returned by `list_apps` — the Exec= command from the .desktop file with XDG field codes already stripped. Highest precedence on Linux; spawned directly via the system shell.",
+            "type": "string"
+          },
+          "name": {
+            "description": "App name or command to launch. Tried as a direct command first, then matched against installed .desktop applications (exact display name, desktop-file id, or Exec basename; else an unambiguous display-name substring).",
+            "type": "string"
+          },
+          "urls": {
+            "description": "URLs opened through the OS default handler, independently of launch_path or name. Do not use this when an exact browser was selected.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "bring_to_front": {
+      "description": "Bring one known application window to the foreground only when the owner explicitly needs to see it. Input actions already provide bounded foreground delivery when visible mode is enabled.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "pid": {
+            "type": "integer"
+          },
+          "window_id": {
+            "description": "X11 window id (xid) to activate. If omitted, the first window of `pid` is used.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pid"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "invoke_menu": {
+      "description": "Invoke an exact native application-menu path through accessibility APIs.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "description": "Exact, immediate-child application menu path to resolve and invoke through\nthe operating system's accessibility API. Path labels are matched after\ntrimming surrounding whitespace and otherwise remain case-sensitive.",
+        "properties": {
+          "path": {
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 16,
+            "minItems": 1,
+            "type": "array"
+          },
+          "pid": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "window_id": {
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pid",
+          "window_id",
+          "path"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "click": {
+      "description": "Click a UI element from the latest window state, or use screenshot coordinates when no semantic element exists.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_after": {
+            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "type": "boolean"
+          },
+          "button": {
+            "description": "Mouse button. Default: \"left\" (legacy back-compat). X11: routed via ButtonPress/Release with the matching evdev code. Native Wayland: only left-button is supported via the virtual-pointer protocol; right/middle return an error.",
+            "enum": [
+              "left",
+              "right",
+              "middle"
+            ],
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "cursor_id": {
+            "description": "Optional multi-cursor instance id. Default: 'default'.",
+            "type": "string"
+          },
+          "delivery_mode": {
+            "default": "background",
+            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "modifier": {
+            "description": "Modifier keys held during the action: cmd, shift, option/alt, ctrl.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "scope": {
+            "default": "window",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": false,
+            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "properties": {
+              "display_id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "window",
+                  "desktop"
+                ],
+                "type": "string"
+              },
+              "pid": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "window_id": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "window_id": {
+            "type": "integer"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "drag": {
+      "description": "Drag between two screenshot coordinates in one target window.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_after": {
+            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "type": "boolean"
+          },
+          "button": {
+            "description": "Mouse button. Default \"left\".",
+            "enum": [
+              "left",
+              "right",
+              "middle"
+            ],
+            "type": "string"
+          },
+          "cursor_id": {
+            "description": "Optional multi-cursor instance id. Default: 'default'.",
+            "type": "string"
+          },
+          "delivery_mode": {
+            "default": "background",
+            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "duration_ms": {
+            "description": "Total drag duration. Default: 500.",
+            "maximum": 10000,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "from_x": {
+            "type": "number"
+          },
+          "from_y": {
+            "type": "number"
+          },
+          "modifier": {
+            "description": "Modifier keys held during the action: cmd, shift, option/alt, ctrl.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "scope": {
+            "default": "window",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "steps": {
+            "description": "Intermediate MotionNotify events. Default: 20.",
+            "maximum": 200,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "target": {
+            "additionalProperties": false,
+            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "properties": {
+              "display_id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "window",
+                  "desktop"
+                ],
+                "type": "string"
+              },
+              "pid": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "window_id": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "to_x": {
+            "type": "number"
+          },
+          "to_y": {
+            "type": "number"
+          },
+          "window_id": {
+            "description": "Target window XID. Required.",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_x",
+          "from_y",
+          "to_x",
+          "to_y"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "scroll": {
+      "description": "Scroll a target window or UI element in one direction.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_after": {
+            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "type": "boolean"
+          },
+          "amount": {
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "by": {
+            "enum": [
+              "line",
+              "page"
+            ],
+            "type": "string"
+          },
+          "cursor_id": {
+            "description": "Optional multi-cursor instance id. Default: 'default'.",
+            "type": "string"
+          },
+          "delivery_mode": {
+            "default": "background",
+            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "direction": {
+            "enum": [
+              "up",
+              "down",
+              "left",
+              "right"
+            ],
+            "type": "string"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "scope": {
+            "default": "window",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": false,
+            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "properties": {
+              "display_id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "window",
+                  "desktop"
+                ],
+                "type": "string"
+              },
+              "pid": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "window_id": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "window_id": {
+            "type": "integer"
+          },
+          "x": {
+            "description": "Window-local screenshot-pixel X of the scroll target. Pass with y and without element_index.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Window-local screenshot-pixel Y of the scroll target. Pass with x and without element_index.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "direction"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "type_text": {
+      "description": "Type text into a target window or UI element.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_after": {
+            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "type": "boolean"
+          },
+          "delivery_mode": {
+            "default": "background",
+            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "scope": {
+            "default": "window",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": false,
+            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "properties": {
+              "display_id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "window",
+                  "desktop"
+                ],
+                "type": "string"
+              },
+              "pid": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "window_id": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "text": {
+            "type": "string"
+          },
+          "window_id": {
+            "type": "integer"
+          },
+          "x": {
+            "description": "Screenshot-pixel X of the field to type into — the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Screenshot-pixel Y of the field (see x).",
+            "type": "number"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "press_key": {
+      "description": "Press one key, with optional modifiers, in a target window.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_after": {
+            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "type": "boolean"
+          },
+          "delivery_mode": {
+            "default": "background",
+            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "key": {
+            "description": "Canonical lowercase CUA key name. Use `return` to submit or commit, not `enter`; common names include `tab`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, and `delete`. Letters, digits, and function keys use their lowercase form.",
+            "type": "string"
+          },
+          "modifiers": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "scope": {
+            "default": "window",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": false,
+            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "properties": {
+              "display_id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "window",
+                  "desktop"
+                ],
+                "type": "string"
+              },
+              "pid": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "window_id": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "window_id": {
+            "type": "integer"
+          },
+          "x": {
+            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_index.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Screenshot-pixel Y (see x).",
+            "type": "number"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "hotkey": {
+      "description": "Press a key combination in a target window.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_after": {
+            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "type": "boolean"
+          },
+          "delivery_mode": {
+            "default": "background",
+            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "keys": {
+            "description": "Canonical lowercase CUA names for modifier(s) plus one non-modifier key, e.g. [\"ctrl\",\"c\"]. Use `return` rather than `enter`.",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "type": "array"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "scope": {
+            "default": "window",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "type": "string"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "target": {
+            "additionalProperties": false,
+            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "properties": {
+              "display_id": {
+                "type": "string"
+              },
+              "kind": {
+                "enum": [
+                  "window",
+                  "desktop"
+                ],
+                "type": "string"
+              },
+              "pid": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "window_id": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "type": "object"
+          },
+          "window_id": {
+            "type": "integer"
+          },
+          "x": {
+            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the combo (so e.g. Ctrl+V pastes into that field). Pass with y. Use for Chromium/Electron surfaces the background combo can't reach.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Screenshot-pixel Y (see x).",
+            "type": "number"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "set_value": {
+      "description": "Set the value of an editable UI element from the latest window state.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "element_index": {
+            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "type": "integer"
+          },
+          "element_token": {
+            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "type": "string"
+          },
+          "pid": {
+            "type": "integer"
+          },
+          "snapshot_id": {
+            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "pattern": "^s[0-9a-f]{8}$",
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "window_id": {
+            "description": "Required when element_index is used; optional when element_token is supplied (the token carries it).",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pid",
+          "value"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "clipboard_read": {
+      "description": "Read the current desktop clipboard.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "include_text": {
+            "default": false,
+            "description": "Return plain-text clipboard content in addition to the available types.\nClipboard content is privacy-sensitive and is never retained in telemetry.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "properties": {
+              "content_redacted_from_telemetry": {
+                "type": "boolean"
+              },
+              "privacy_sensitive": {
+                "type": "boolean"
+              },
+              "supported": {
+                "type": "boolean"
+              },
+              "text": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "types": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "supported",
+              "types",
+              "text",
+              "privacy_sensitive",
+              "content_redacted_from_telemetry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "clipboard_write": {
+      "description": "Write text, an image, or a file to the desktop clipboard.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "file_path": {
+            "description": "Absolute path to a local file to place on the clipboard as a file URL.",
+            "type": "string"
+          },
+          "image_path": {
+            "description": "Absolute path to a local image to place on the clipboard.",
+            "type": "string"
+          },
+          "text": {
+            "description": "Plain text to place on the clipboard.",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "properties": {
+              "content_redacted_from_telemetry": {
+                "type": "boolean"
+              },
+              "privacy_sensitive": {
+                "type": "boolean"
+              },
+              "supported": {
+                "type": "boolean"
+              },
+              "types": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "written_type": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "supported",
+              "written_type",
+              "types",
+              "privacy_sensitive",
+              "content_redacted_from_telemetry"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "browser_prepare": {
+      "description": "Prepare an owned browser endpoint only when get_browser_state reports that setup is required. This action is only for a browser process; never use it for an Electron app or another desktop application. A current owner request to work in their signed-in browser account is explicit authorization for that task; otherwise continue with native window actions or an isolated profile.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_launch": {
+            "description": "Allow a separate driver-owned isolated Chromium process to be launched (default false).",
+            "type": "boolean"
+          },
+          "pid": {
+            "description": "Browser process id to prepare. Required except for a driver-owned isolated_new/isolated_named launch with allow_launch=true.",
+            "type": "integer"
+          },
+          "profile": {
+            "additionalProperties": false,
+            "description": "Launch profile. Provide mode; name is also required for isolated_named.",
+            "properties": {
+              "mode": {
+                "enum": [
+                  "isolated_new",
+                  "isolated_named"
+                ],
+                "type": "string"
+              },
+              "name": {
+                "description": "Required only for isolated_named; 1-64 path-safe ASCII characters.",
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "strategy": {
+            "additionalProperties": false,
+            "description": "Existing-profile strategy. Provide kind=existing_profile only with explicit owner authorization.",
+            "properties": {
+              "kind": {
+                "enum": [
+                  "existing_profile"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "window_id": {
+            "description": "Exact native window approval anchor; required for strategy.kind=existing_profile.",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "get_browser_state": {
+      "description": "Inspect browser page structure and optionally its viewport. Use this only when browser semantics are needed; visible appearance is simpler with get_window_state. Pass query whenever the target text is known so Leon receives a small, actionable snapshot.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": true,
+        "properties": {
+          "continuation": {
+            "description": "Opaque continuation minted by an earlier semantic_v2 response.",
+            "type": "string"
+          },
+          "include_screenshot": {
+            "default": false,
+            "description": "Capture the exact tab viewport as PNG through CDP without selecting the tab or foregrounding its native window. The request refuses if capture cannot be completed.",
+            "type": "boolean"
+          },
+          "pid": {
+            "description": "Native browser process id (bind mode).",
+            "type": "integer"
+          },
+          "query": {
+            "description": "Read-only semantic match over role, accessible name, and visible text.",
+            "type": "string"
+          },
+          "scope_ref": {
+            "description": "Current semantic/content ref whose subtree should be observed.",
+            "type": "string"
+          },
+          "snapshot_format": {
+            "description": "Versioned snapshot contract. dom_refs_v1 remains the compatibility default.",
+            "enum": [
+              "dom_refs_v1",
+              "semantic_v2"
+            ],
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Opaque tab id from get_browser_state (session-scoped).",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
+            "type": "string"
+          },
+          "window_id": {
+            "description": "Native window id owned by pid (bind mode).",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "browser_navigate": {
+      "description": "Navigate one bound browser tab directly to the intended URL. Do not perform an intermediate web search when the destination URL is already known.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": true,
+        "properties": {
+          "tab_id": {
+            "description": "Opaque tab id from get_browser_state (session-scoped).",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
+            "type": "string"
+          },
+          "url": {
+            "description": "Destination URL (http:, https:, or about:).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "tab_id",
+          "url"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "browser_click": {
+      "description": "Click a semantic reference or coordinates in one bound browser tab.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": true,
+        "properties": {
+          "input_route": {
+            "description": "\"trusted\" (default): Input.dispatchMouseEvent. It refuses rather than foregrounding a standalone browser. \"dom_event\": synthetic full-background DOM click, only when explicitly requested. Dispatch does not prove the control activated; refresh page state and verify the expected postcondition.",
+            "enum": [
+              "trusted",
+              "dom_event"
+            ],
+            "type": "string"
+          },
+          "ref": {
+            "description": "Page element ref in the p<snapshot>:<index> namespace from get_browser_state. Refs are invalidated by navigation and by newer snapshots of the same tab.",
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Opaque tab id from get_browser_state (session-scoped).",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
+            "type": "string"
+          },
+          "x": {
+            "description": "Viewport x (CSS px) — alternative to ref.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Viewport y (CSS px) — alternative to ref.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "target_id",
+          "tab_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "browser_type": {
+      "description": "Type text into a semantic field in one bound browser tab.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": true,
+        "properties": {
+          "mode": {
+            "description": "insert_text (default): bulk Input.insertText. keystrokes: per-character Input.dispatchKeyEvent.",
+            "enum": [
+              "insert_text",
+              "keystrokes"
+            ],
+            "type": "string"
+          },
+          "ref": {
+            "description": "Page element ref in the p<snapshot>:<index> namespace from get_browser_state. Refs are invalidated by navigation and by newer snapshots of the same tab.",
+            "type": "string"
+          },
+          "replace": {
+            "description": "false (default): insert at the caret, appending to whatever the field already holds. true: select the element's whole content first so the text replaces it — with an empty text this clears the field. Replacement goes through the selection, so beforeinput/input still fire and framework state stays consistent.",
+            "type": "boolean"
+          },
+          "tab_id": {
+            "description": "Opaque tab id from get_browser_state (session-scoped).",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
+            "type": "string"
+          },
+          "text": {
+            "description": "Text to type.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "tab_id",
+          "ref",
+          "text"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "browser_pointer": {
+      "description": "Hover, right-click, double-click, scroll, or drag in one exactly bound browser tab.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "enum": [
+              "hover",
+              "right_click",
+              "double_click",
+              "scroll",
+              "drag"
+            ],
+            "type": "string"
+          },
+          "delta_x": {
+            "description": "Horizontal scroll delta in CSS pixels.",
+            "type": "number"
+          },
+          "delta_y": {
+            "description": "Vertical scroll delta in CSS pixels.",
+            "type": "number"
+          },
+          "destination_ref": {
+            "description": "Drag destination page ref in the exact same frame.",
+            "type": "string"
+          },
+          "input_route": {
+            "default": "trusted",
+            "enum": [
+              "trusted",
+              "dom_event"
+            ],
+            "type": "string"
+          },
+          "ref": {
+            "description": "Origin page ref. Alternative to x/y.",
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Opaque tab id minted by get_browser_state.",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "Opaque target id minted by get_browser_state.",
+            "type": "string"
+          },
+          "to_x": {
+            "description": "Drag destination viewport x in CSS pixels.",
+            "type": "number"
+          },
+          "to_y": {
+            "description": "Drag destination viewport y in CSS pixels.",
+            "type": "number"
+          },
+          "x": {
+            "description": "Origin viewport x in CSS pixels.",
+            "type": "number"
+          },
+          "y": {
+            "description": "Origin viewport y in CSS pixels.",
+            "type": "number"
+          }
+        },
+        "required": [
+          "target_id",
+          "tab_id",
+          "action"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "delivery": {
+                "additionalProperties": false,
+                "properties": {
+                  "delivered_count": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  },
+                  "mode": {
+                    "enum": [
+                      "background",
+                      "foreground",
+                      "not_applicable",
+                      "unknown"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "mode"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "effect": {
+                "enum": [
+                  "confirmed",
+                  "partial",
+                  "unverifiable",
+                  "suspected_noop",
+                  "refused"
+                ],
+                "type": "string"
+              },
+              "escalation": {
+                "additionalProperties": false,
+                "properties": {
+                  "reason": {
+                    "enum": [
+                      "route_unavailable",
+                      "delivery_failed",
+                      "effect_unconfirmed",
+                      "suspected_noop",
+                      "permission_required"
+                    ],
+                    "type": "string"
+                  },
+                  "target": {
+                    "enum": [
+                      "pixel",
+                      "foreground",
+                      "page",
+                      "session"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "target",
+                  "reason"
+                ],
+                "type": [
+                  "object",
+                  "null"
+                ]
+              },
+              "evidence": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "enum": [
+                        "value_readback",
+                        "window_change"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ],
+                  "type": "object"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "route": {
+                "enum": [
+                  "accessibility",
+                  "synthetic_events",
+                  "global_input",
+                  "system_api",
+                  "dom",
+                  "trusted_input"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "effect",
+              "route"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": true,
+            "anyOf": [
+              {
+                "required": [
+                  "refusal"
+                ]
+              },
+              {
+                "required": [
+                  "status"
+                ]
+              },
+              {
+                "required": [
+                  "code"
+                ]
+              }
+            ],
+            "type": "object"
+          }
+        ],
+        "type": "object"
+      }
+    },
+    "browser_dialog": {
+      "description": "Inspect, accept, or dismiss a JavaScript dialog in one exactly bound browser tab.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": true,
+        "properties": {
+          "action": {
+            "enum": [
+              "inspect",
+              "accept",
+              "dismiss"
+            ],
+            "type": "string"
+          },
+          "delivery_mode": {
+            "default": "background",
+            "description": "Requested foreground posture for accept/dismiss. Linux Chromium requires foreground; inspect is read-only.",
+            "enum": [
+              "background",
+              "foreground"
+            ],
+            "type": "string"
+          },
+          "dialog_id": {
+            "description": "Opaque current dialog generation returned by action=inspect.",
+            "type": "string"
+          },
+          "prompt_text": {
+            "description": "Sensitive response text, valid only when accepting a prompt dialog.",
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Opaque tab id from get_browser_state (session-scoped).",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "tab_id",
+          "action"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "browser_set_input_files": {
+      "description": "Assign explicit local files to one semantic browser file input without opening a native picker.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": true,
+        "properties": {
+          "files": {
+            "items": {
+              "description": "Absolute path to one local regular file.",
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "type": "array"
+          },
+          "ref": {
+            "description": "Page element ref in the p<snapshot>:<index> namespace from get_browser_state. Refs are invalidated by navigation and by newer snapshots of the same tab.",
+            "type": "string"
+          },
+          "tab_id": {
+            "description": "Opaque tab id from get_browser_state (session-scoped).",
+            "type": "string"
+          },
+          "target_id": {
+            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id",
+          "tab_id",
+          "ref",
+          "files"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "start_recording": {
+      "description": "Start a host-managed computer-use recording for the current conversation.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "record_video": {
+            "description": "Capture the main display to <output_dir>/recording.mp4. Default: false. Set to true to also capture the main display to recording.mp4 (otherwise only the per-turn screenshots + JSON are recorded). On macOS this uses native ScreenCaptureKit (no extra TCC prompt, macOS 15.0+); on Windows + Linux it requires ffmpeg on PATH.",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "stop_recording": {
+      "description": "Stop and finalize the active computer-use recording.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    }
+  }
+}
