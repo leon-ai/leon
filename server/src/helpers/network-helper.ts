@@ -4,10 +4,13 @@ import readline from 'node:readline'
 
 import axios from 'axios'
 
+import { LogHelper } from '@/helpers/log-helper'
+
 const HUGGING_FACE_URL = 'https://huggingface.co'
 const HUGGING_FACE_MIRROR_URL = 'https://hf-mirror.com'
 const PARALLEL_DOWNLOAD_MIN_BYTES = 128 * 1_024 * 1_024
 const PARALLEL_DOWNLOAD_MIN_RANGE_BYTES = 16 * 1_024 * 1_024
+const DOWNLOAD_INACTIVITY_TIMEOUT_MS = 30_000
 const DOWNLOAD_PROGRESS_SPINNER_COLOR_START = '\x1b[36m'
 const DOWNLOAD_PROGRESS_SPINNER_COLOR_END = '\x1b[39m'
 const DOWNLOAD_PROGRESS_SPINNER_FRAMES = [
@@ -27,6 +30,7 @@ const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
 
 export interface DownloadFileOptions {
   cliProgress?: boolean
+  inactivityTimeoutMs?: number
   onProgress?: (progress: DownloadFileProgress) => void
   parallelStreams?: number
   skipExisting?: boolean
@@ -82,6 +86,7 @@ export class NetworkHelper {
   private static readonly DEFAULT_DOWNLOAD_OPTIONS: ResolvedDownloadFileOptions =
     {
       cliProgress: true,
+      inactivityTimeoutMs: DOWNLOAD_INACTIVITY_TIMEOUT_MS,
       parallelStreams: 3,
       skipExisting: false,
       retry: {
@@ -105,6 +110,54 @@ export class NetworkHelper {
     error.name = 'AbortError'
 
     return error
+  }
+
+  private static createInactivityController(
+    parentSignal: AbortSignal | undefined,
+    inactivityTimeoutMs: number
+  ): {
+    signal: AbortSignal
+    refresh: () => void
+    dispose: () => void
+  } {
+    const controller = new AbortController()
+    let timeoutId: NodeJS.Timeout | null = null
+    const abortFromParent = (): void => {
+      controller.abort(parentSignal?.reason)
+    }
+    const refresh = (): void => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+
+      timeoutId = setTimeout(() => {
+        controller.abort(
+          new Error(`Download stalled for ${inactivityTimeoutMs}ms`)
+        )
+      }, inactivityTimeoutMs)
+      timeoutId.unref?.()
+    }
+    const dispose = (): void => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      parentSignal?.removeEventListener('abort', abortFromParent)
+    }
+
+    if (parentSignal?.aborted) {
+      abortFromParent()
+    } else {
+      parentSignal?.addEventListener('abort', abortFromParent, { once: true })
+    }
+    refresh()
+
+    return {
+      signal: controller.signal,
+      refresh,
+      dispose
+    }
   }
 
   private static throwIfAborted(signal?: AbortSignal): void {
@@ -270,6 +323,8 @@ export class NetworkHelper {
     const shouldEmitSetupDownloadProgressEvents = options.cliProgress
     let lastRenderAt = 0
     let didEmitSetupDownloadProgressStart = false
+    let initialDownloadedBytes: number | null = null
+    let transferStartedAt = startedAt
 
     if (options.cliProgress) {
       process.emit(SETUP_DOWNLOAD_PROGRESS_START_EVENT)
@@ -281,8 +336,17 @@ export class NetworkHelper {
     const createProgressSnapshot = (
       downloadedBytes: number
     ): DownloadFileProgress => {
-      const elapsedMs = Math.max(1, Date.now() - startedAt)
-      const bytesPerSecond = downloadedBytes / (elapsedMs / 1_000)
+      if (initialDownloadedBytes === null) {
+        initialDownloadedBytes = downloadedBytes
+        transferStartedAt = Date.now()
+      }
+
+      const elapsedMs = Math.max(1, Date.now() - transferStartedAt)
+      const transferredBytes = Math.max(
+        0,
+        downloadedBytes - initialDownloadedBytes
+      )
+      const bytesPerSecond = transferredBytes / (elapsedMs / 1_000)
       const etaMs =
         typeof totalBytes === 'number' &&
         totalBytes > downloadedBytes &&
@@ -536,6 +600,7 @@ export class NetworkHelper {
     temporaryPath: string,
     probe: DownloadProbe,
     reporter: ProgressReporter,
+    inactivityTimeoutMs: number,
     signal?: AbortSignal
   ): Promise<number> {
     let startOffset = 0
@@ -562,25 +627,31 @@ export class NetworkHelper {
               range: `bytes=${startOffset}-`
             }
           : undefined
-      const response = await fetch(
-        fileURL,
-        headers
-          ? {
-              headers,
-              ...(signal ? { signal } : {})
-            }
-          : signal
-            ? { signal }
-            : undefined
+      const inactivityController = this.createInactivityController(
+        signal,
+        inactivityTimeoutMs
       )
+      let response: Response
+
+      try {
+        response = await fetch(fileURL, {
+          ...(headers ? { headers } : {}),
+          signal: inactivityController.signal
+        })
+      } catch (error) {
+        inactivityController.dispose()
+        throw error
+      }
 
       if (!response.ok) {
+        inactivityController.dispose()
         throw new Error(
           `Failed to download "${fileURL}" (HTTP ${response.status} ${response.statusText})`
         )
       }
 
       if (!response.body) {
+        inactivityController.dispose()
         throw new Error(`Failed to download "${fileURL}": empty response body`)
       }
 
@@ -591,6 +662,7 @@ export class NetworkHelper {
         startOffset = 0
         reporter.update(0)
         await response.body.cancel().catch(() => {})
+        inactivityController.dispose()
         continue
       }
 
@@ -617,6 +689,7 @@ export class NetworkHelper {
 
           const chunk = Buffer.from(value)
           await fileHandle.write(chunk, 0, chunk.length, writePosition)
+          inactivityController.refresh()
           writePosition += chunk.length
           downloadedBytes += chunk.length
           reporter.update(downloadedBytes)
@@ -639,6 +712,7 @@ export class NetworkHelper {
       } finally {
         await reader.cancel().catch(() => {})
         await fileHandle.close()
+        inactivityController.dispose()
       }
     }
   }
@@ -649,24 +723,71 @@ export class NetworkHelper {
     totalBytes: number,
     parallelStreams: number,
     reporter: ProgressReporter,
+    retryOptions: RetryOptions,
+    inactivityTimeoutMs: number,
     signal?: AbortSignal
   ): Promise<number> {
-    const partCount = this.getParallelPartCount(totalBytes, parallelStreams)
-    const ranges = this.splitByteRanges(totalBytes, partCount)
-    const fileHandle = await fs.promises.open(temporaryPath, 'w')
-    let downloadedBytes = 0
+    let initialDownloadedBytes = 0
 
-    reporter.update(0)
+    if (fs.existsSync(temporaryPath)) {
+      const temporaryStat = await fs.promises.stat(temporaryPath)
 
-    try {
-      await Promise.all(
-        ranges.map(async (range) => {
-          this.throwIfAborted(signal)
+      if (temporaryStat.isFile() && temporaryStat.size < totalBytes) {
+        initialDownloadedBytes = temporaryStat.size
+      } else {
+        await fs.promises.rm(temporaryPath, { force: true })
+      }
+    }
+
+    const remainingBytes = totalBytes - initialDownloadedBytes
+    const partCount = this.getParallelPartCount(
+      remainingBytes,
+      parallelStreams
+    )
+    const ranges = this.splitByteRanges(remainingBytes, partCount).map(
+      (range) => ({
+        start: range.start + initialDownloadedBytes,
+        end: range.end + initialDownloadedBytes
+      })
+    )
+    const fileHandle = await fs.promises.open(
+      temporaryPath,
+      initialDownloadedBytes > 0 ? 'r+' : 'w'
+    )
+    let downloadedBytes = initialDownloadedBytes
+    const rangeAbortController = new AbortController()
+    const abortRanges = (): void => {
+      rangeAbortController.abort(signal?.reason)
+    }
+
+    if (signal?.aborted) {
+      abortRanges()
+    } else {
+      signal?.addEventListener('abort', abortRanges, { once: true })
+    }
+
+    reporter.update(initialDownloadedBytes)
+
+    const rangeTasks = ranges.map(async (range) => {
+      let writePosition = range.start
+
+      for (
+        let attempt = 0;
+        attempt <= retryOptions.retries;
+        attempt += 1
+      ) {
+        const inactivityController = this.createInactivityController(
+          rangeAbortController.signal,
+          inactivityTimeoutMs
+        )
+
+        try {
+          this.throwIfAborted(rangeAbortController.signal)
           const response = await fetch(fileURL, {
             headers: {
-              range: `bytes=${range.start}-${range.end}`
+              range: `bytes=${writePosition}-${range.end}`
             },
-            ...(signal ? { signal } : {})
+            signal: inactivityController.signal
           })
 
           if (response.status !== 206) {
@@ -676,15 +797,16 @@ export class NetworkHelper {
           }
 
           if (!response.body) {
-            throw new Error(`Failed to download "${fileURL}": empty response body`)
+            throw new Error(
+              `Failed to download "${fileURL}": empty response body`
+            )
           }
 
           const reader = response.body.getReader()
-          let writePosition = range.start
 
           try {
             while (true) {
-              this.throwIfAborted(signal)
+              this.throwIfAborted(rangeAbortController.signal)
               const { done, value } = await reader.read()
 
               if (done) {
@@ -697,6 +819,7 @@ export class NetworkHelper {
 
               const chunk = Buffer.from(value)
               await fileHandle.write(chunk, 0, chunk.length, writePosition)
+              inactivityController.refresh()
               writePosition += chunk.length
               downloadedBytes += chunk.length
               reporter.update(downloadedBytes)
@@ -710,8 +833,36 @@ export class NetworkHelper {
               `Incomplete ranged download for "${fileURL}" on bytes ${range.start}-${range.end}.`
             )
           }
-        })
+
+          return
+        } catch (error) {
+          if (
+            this.isAbortError(error) ||
+            rangeAbortController.signal.aborted
+          ) {
+            throw error
+          }
+
+          if (attempt === retryOptions.retries) {
+            throw error
+          }
+
+          LogHelper.warning(
+            `Download range ${range.start}-${range.end} failed at byte ${writePosition}; retrying: ${String(error)}`
+          )
+          await this.sleep(this.getRetryDelay(attempt + 1, retryOptions))
+        } finally {
+          inactivityController.dispose()
+        }
+      }
+
+      throw new Error(
+        `Failed to download range ${range.start}-${range.end}.`
       )
+    })
+
+    try {
+      await Promise.all(rangeTasks)
 
       if (downloadedBytes !== totalBytes) {
         throw new Error(
@@ -722,7 +873,15 @@ export class NetworkHelper {
       await fileHandle.sync()
 
       return downloadedBytes
+    } catch (error) {
+      rangeAbortController.abort(error)
+      await Promise.allSettled(rangeTasks)
+      // Concurrent writes can make the file sparse. Retain only the contiguous
+      // prefix that was known to be complete before this parallel attempt.
+      await fileHandle.truncate(initialDownloadedBytes)
+      throw error
     } finally {
+      signal?.removeEventListener('abort', abortRanges)
       await fileHandle.close()
     }
   }
@@ -751,8 +910,6 @@ export class NetworkHelper {
           finish: () => {},
           fail: () => {}
         }
-        let shouldCleanupTemporaryFile = false
-
         try {
           this.throwIfAborted(signal)
           const probe = await this.probeRemoteFile(
@@ -766,17 +923,12 @@ export class NetworkHelper {
             probe.totalBytes >= PARALLEL_DOWNLOAD_MIN_BYTES &&
             options.parallelStreams > 1
 
-          shouldCleanupTemporaryFile = useParallelDownload
-
           await Promise.all([
             fs.promises.mkdir(path.dirname(destinationPath), {
               recursive: true
             }),
             fs.promises.rm(destinationPath, { force: true }),
-            fs.promises.rm(legacyTemporaryPath, { force: true }),
-            ...(useParallelDownload
-              ? [fs.promises.rm(temporaryPath, { force: true })]
-              : [])
+            fs.promises.rm(legacyTemporaryPath, { force: true })
           ])
 
           reporter = this.createProgressReporter(
@@ -792,6 +944,8 @@ export class NetworkHelper {
                 probe.totalBytes as number,
                 options.parallelStreams,
                 reporter,
+                retryOptions,
+                options.inactivityTimeoutMs,
                 signal
               )
             : await this.downloadSequential(
@@ -799,6 +953,7 @@ export class NetworkHelper {
                 temporaryPath,
                 probe,
                 reporter,
+                options.inactivityTimeoutMs,
                 signal
               )
 
@@ -813,10 +968,6 @@ export class NetworkHelper {
 
           await fs.promises.rm(destinationPath, { force: true })
 
-          if (shouldCleanupTemporaryFile) {
-            await fs.promises.rm(temporaryPath, { force: true })
-          }
-
           if (this.isAbortError(error) || signal.aborted) {
             throw this.createAbortError()
           }
@@ -824,6 +975,10 @@ export class NetworkHelper {
           if (attempt === retryOptions.retries) {
             throw error
           }
+
+          LogHelper.warning(
+            `Download attempt ${attempt + 1} failed; retrying: ${String(error)}`
+          )
 
           await this.sleep(this.getRetryDelay(attempt + 1, retryOptions))
         }
