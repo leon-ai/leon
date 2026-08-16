@@ -990,9 +990,11 @@ export class NetworkHelper {
               throw error
             }
 
-            LogHelper.warning(
-              `Download range ${range.start}-${range.end} failed at byte ${writePosition}; retrying: ${String(error)}`
-            )
+            if (!madeProgress) {
+              LogHelper.warning(
+                `Download connection made no progress; retrying (${consecutiveNoProgressFailures}/${retryOptions.retries}): ${String(error)}`
+              )
+            }
             await this.sleep(
               this.getRetryDelay(
                 Math.max(1, consecutiveNoProgressFailures),

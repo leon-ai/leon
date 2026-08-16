@@ -195,7 +195,9 @@ describe('NetworkHelper', () => {
       `${destinationPath}.download`,
       Buffer.alloc(existingPrefixBytes, 'b')
     )
-    vi.spyOn(LogHelper, 'warning').mockImplementation(() => {})
+    const warningSpy = vi
+      .spyOn(LogHelper, 'warning')
+      .mockImplementation(() => {})
 
     const modelURL = `http://127.0.0.1:${address.port}/model.gguf`
     const downloadOptions = {
@@ -246,6 +248,7 @@ describe('NetworkHelper', () => {
     )
     expect(fs.statSync(destinationPath).size).toBe(totalBytes)
     expect(fs.existsSync(`${destinationPath}.download.state.json`)).toBe(false)
+    expect(warningSpy).not.toHaveBeenCalled()
 
     const fileHandle = fs.openSync(destinationPath, 'r')
     const sample = Buffer.alloc(3)
