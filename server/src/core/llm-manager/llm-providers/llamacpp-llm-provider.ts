@@ -794,6 +794,7 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
         String(getURLPort(runtimeServerURL)),
         '--ctx-size',
         String(LOCAL_LLM_CONTEXT_WINDOW_TOKENS),
+        '--jinja',
         '--flash-attn',
         'on',
         '--cache-type-k',

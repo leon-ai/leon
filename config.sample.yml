@@ -19,8 +19,8 @@ llm:
   # Examples:
   # default: openai/gpt-5.6-sol
   # default: openrouter/z-ai/glm-5.2
-  # default: llamacpp/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
-  # default: sglang/Qwen3.6-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf
+  # default: llamacpp/Qwen3.8-27B-Uncensored-Aggressive-Q4_K_M.gguf
+  # default: sglang/Qwen3.8-27B-Uncensored-Aggressive-Q4_K_M.gguf
   # default: /absolute/path/model.gguf
   default: null
   # Optional per-mode overrides. Null values fall back to llm.default.
