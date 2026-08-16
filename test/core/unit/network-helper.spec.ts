@@ -121,6 +121,8 @@ describe('NetworkHelper', () => {
     const partialBytes = 1_024 * 1_024
     const rangeRequests: Array<{ start: number, end: number }> = []
     let stalledRangeStart: number | null = null
+    let stalledRangeEnd: number | null = null
+    let stalledRequestCount = 0
     const server = http.createServer((request, response) => {
       if (request.method === 'HEAD') {
         response.writeHead(200, {
@@ -143,13 +145,20 @@ describe('NetworkHelper', () => {
       rangeRequests.push({ start, end })
       const rangeLength = end - start + 1
 
-      if (stalledRangeStart === null && rangeRequests.length === 2) {
+      if (stalledRangeEnd === null && rangeRequests.length === 2) {
         stalledRangeStart = start
+        stalledRangeEnd = end
+      }
+
+      if (end === stalledRangeEnd && stalledRequestCount < 3) {
+        stalledRequestCount += 1
         response.writeHead(206, {
           'content-length': rangeLength,
           'content-range': `bytes ${start}-${end}/${totalBytes}`
         })
-        response.write(Buffer.alloc(partialBytes, 'b'))
+        if (stalledRequestCount > 1) {
+          response.write(Buffer.alloc(partialBytes, 'b'))
+        }
         return
       }
 
@@ -188,21 +197,31 @@ describe('NetworkHelper', () => {
     )
     vi.spyOn(LogHelper, 'warning').mockImplementation(() => {})
 
+    const modelURL = `http://127.0.0.1:${address.port}/model.gguf`
+    const downloadOptions = {
+      cliProgress: false,
+      inactivityTimeoutMs: 500,
+      parallelStreams: 3,
+      retry: {
+        retries: 0,
+        minTimeout: 1,
+        maxTimeout: 1
+      }
+    }
+
     try {
-      await NetworkHelper.downloadFile(
-        `http://127.0.0.1:${address.port}/model.gguf`,
-        destinationPath,
-        {
-          cliProgress: false,
-          inactivityTimeoutMs: 100,
-          parallelStreams: 3,
-          retry: {
-            retries: 1,
-            minTimeout: 1,
-            maxTimeout: 1
-          }
-        }
-      )
+      await expect(
+        NetworkHelper.downloadFile(
+          modelURL,
+          destinationPath,
+          downloadOptions
+        )
+      ).rejects.toThrow('Download stalled')
+      expect(
+        fs.existsSync(`${destinationPath}.download.state.json`)
+      ).toBe(true)
+
+      await NetworkHelper.downloadFile(modelURL, destinationPath, downloadOptions)
     } finally {
       server.closeAllConnections()
       await new Promise<void>((resolve) => {
@@ -210,7 +229,7 @@ describe('NetworkHelper', () => {
       })
     }
 
-    expect(rangeRequests).toHaveLength(4)
+    expect(rangeRequests).toHaveLength(6)
     expect(Math.min(...rangeRequests.map(({ start }) => start))).toBe(
       existingPrefixBytes
     )
@@ -220,7 +239,13 @@ describe('NetworkHelper', () => {
         start: (stalledRangeStart as number) + partialBytes
       })
     )
+    expect(rangeRequests).toContainEqual(
+      expect.objectContaining({
+        start: (stalledRangeStart as number) + 2 * partialBytes
+      })
+    )
     expect(fs.statSync(destinationPath).size).toBe(totalBytes)
+    expect(fs.existsSync(`${destinationPath}.download.state.json`)).toBe(false)
 
     const fileHandle = fs.openSync(destinationPath, 'r')
     const sample = Buffer.alloc(3)

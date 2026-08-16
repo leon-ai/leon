@@ -11,6 +11,8 @@ const HUGGING_FACE_MIRROR_URL = 'https://hf-mirror.com'
 const PARALLEL_DOWNLOAD_MIN_BYTES = 128 * 1_024 * 1_024
 const PARALLEL_DOWNLOAD_MIN_RANGE_BYTES = 16 * 1_024 * 1_024
 const DOWNLOAD_INACTIVITY_TIMEOUT_MS = 30_000
+const PARALLEL_DOWNLOAD_CHECKPOINT_BYTES = 64 * 1_024 * 1_024
+const PARALLEL_DOWNLOAD_STATE_VERSION = 1
 const DOWNLOAD_PROGRESS_SPINNER_COLOR_START = '\x1b[36m'
 const DOWNLOAD_PROGRESS_SPINNER_COLOR_END = '\x1b[39m'
 const DOWNLOAD_PROGRESS_SPINNER_FRAMES = [
@@ -59,6 +61,19 @@ export interface DownloadFileProgress {
 interface DownloadProbe {
   totalBytes: number | null
   acceptRanges: boolean
+}
+
+interface ParallelDownloadRange {
+  start: number
+  end: number
+  position: number
+}
+
+interface ParallelDownloadState {
+  version: typeof PARALLEL_DOWNLOAD_STATE_VERSION
+  fileURL: string
+  totalBytes: number
+  ranges: ParallelDownloadRange[]
 }
 
 interface ProgressReporter {
@@ -717,6 +732,89 @@ export class NetworkHelper {
     }
   }
 
+  private static getParallelDownloadStatePath(temporaryPath: string): string {
+    return `${temporaryPath}.state.json`
+  }
+
+  private static readParallelDownloadState(
+    statePath: string,
+    fileURL: string,
+    totalBytes: number
+  ): ParallelDownloadState | null {
+    if (!fs.existsSync(statePath)) {
+      return null
+    }
+
+    try {
+      const state = JSON.parse(
+        fs.readFileSync(statePath, 'utf8')
+      ) as ParallelDownloadState
+      const hasValidRanges =
+        Array.isArray(state.ranges) &&
+        state.ranges.every(
+          (range) =>
+            Number.isInteger(range.start) &&
+            Number.isInteger(range.end) &&
+            Number.isInteger(range.position) &&
+            range.start >= 0 &&
+            range.end >= range.start &&
+            range.end < totalBytes &&
+            range.position >= range.start &&
+            range.position <= range.end + 1
+        )
+
+      if (
+        state.version !== PARALLEL_DOWNLOAD_STATE_VERSION ||
+        state.fileURL !== fileURL ||
+        state.totalBytes !== totalBytes ||
+        !hasValidRanges
+      ) {
+        return null
+      }
+
+      return state
+    } catch {
+      return null
+    }
+  }
+
+  private static persistParallelDownloadState(
+    statePath: string,
+    state: ParallelDownloadState
+  ): void {
+    const nextStatePath = `${statePath}.next`
+
+    fs.writeFileSync(nextStatePath, JSON.stringify(state), 'utf8')
+    fs.renameSync(nextStatePath, statePath)
+  }
+
+  private static createParallelDownloadState(
+    fileURL: string,
+    totalBytes: number,
+    initialDownloadedBytes: number,
+    parallelStreams: number
+  ): ParallelDownloadState {
+    const remainingBytes = totalBytes - initialDownloadedBytes
+    const partCount = this.getParallelPartCount(
+      remainingBytes,
+      parallelStreams
+    )
+    const ranges = this.splitByteRanges(remainingBytes, partCount).map(
+      (range): ParallelDownloadRange => ({
+        start: range.start + initialDownloadedBytes,
+        end: range.end + initialDownloadedBytes,
+        position: range.start + initialDownloadedBytes
+      })
+    )
+
+    return {
+      version: PARALLEL_DOWNLOAD_STATE_VERSION,
+      fileURL,
+      totalBytes,
+      ranges
+    }
+  }
+
   private static async downloadParallel(
     fileURL: string,
     temporaryPath: string,
@@ -727,9 +825,27 @@ export class NetworkHelper {
     inactivityTimeoutMs: number,
     signal?: AbortSignal
   ): Promise<number> {
+    const statePath = this.getParallelDownloadStatePath(temporaryPath)
+    const hadStateFile = fs.existsSync(statePath)
+    let state = this.readParallelDownloadState(
+      statePath,
+      fileURL,
+      totalBytes
+    )
     let initialDownloadedBytes = 0
 
-    if (fs.existsSync(temporaryPath)) {
+    if (state && !fs.existsSync(temporaryPath)) {
+      state = null
+    }
+
+    if (!state && hadStateFile) {
+      await Promise.all([
+        fs.promises.rm(statePath, { force: true }),
+        fs.promises.rm(temporaryPath, { force: true })
+      ])
+    }
+
+    if (!state && fs.existsSync(temporaryPath)) {
       const temporaryStat = await fs.promises.stat(temporaryPath)
 
       if (temporaryStat.isFile() && temporaryStat.size < totalBytes) {
@@ -739,22 +855,31 @@ export class NetworkHelper {
       }
     }
 
-    const remainingBytes = totalBytes - initialDownloadedBytes
-    const partCount = this.getParallelPartCount(
-      remainingBytes,
-      parallelStreams
+    if (!state) {
+      state = this.createParallelDownloadState(
+        fileURL,
+        totalBytes,
+        initialDownloadedBytes,
+        parallelStreams
+      )
+      this.persistParallelDownloadState(statePath, state)
+    }
+
+    const ranges = state.ranges
+    const downloadedRangeBytes = ranges.reduce(
+      (total, range) => total + (range.position - range.start),
+      0
     )
-    const ranges = this.splitByteRanges(remainingBytes, partCount).map(
-      (range) => ({
-        start: range.start + initialDownloadedBytes,
-        end: range.end + initialDownloadedBytes
-      })
+    const totalRangeBytes = ranges.reduce(
+      (total, range) => total + (range.end - range.start + 1),
+      0
     )
+    initialDownloadedBytes = totalBytes - totalRangeBytes
     const fileHandle = await fs.promises.open(
       temporaryPath,
-      initialDownloadedBytes > 0 ? 'r+' : 'w'
+      fs.existsSync(temporaryPath) ? 'r+' : 'w'
     )
-    let downloadedBytes = initialDownloadedBytes
+    let downloadedBytes = initialDownloadedBytes + downloadedRangeBytes
     const rangeAbortController = new AbortController()
     const abortRanges = (): void => {
       rangeAbortController.abort(signal?.reason)
@@ -766,100 +891,123 @@ export class NetworkHelper {
       signal?.addEventListener('abort', abortRanges, { once: true })
     }
 
-    reporter.update(initialDownloadedBytes)
+    reporter.update(downloadedBytes)
 
-    const rangeTasks = ranges.map(async (range) => {
-      let writePosition = range.start
+    const rangeTasks = ranges
+      .filter((range) => range.position <= range.end)
+      .map(async (range) => {
+        let writePosition = range.position
+        let nextCheckpointAt =
+          writePosition + PARALLEL_DOWNLOAD_CHECKPOINT_BYTES
+        let consecutiveNoProgressFailures = 0
 
-      for (
-        let attempt = 0;
-        attempt <= retryOptions.retries;
-        attempt += 1
-      ) {
-        const inactivityController = this.createInactivityController(
-          rangeAbortController.signal,
-          inactivityTimeoutMs
-        )
-
-        try {
-          this.throwIfAborted(rangeAbortController.signal)
-          const response = await fetch(fileURL, {
-            headers: {
-              range: `bytes=${writePosition}-${range.end}`
-            },
-            signal: inactivityController.signal
-          })
-
-          if (response.status !== 206) {
-            throw new Error(
-              `Server does not support ranged download for "${fileURL}".`
-            )
-          }
-
-          if (!response.body) {
-            throw new Error(
-              `Failed to download "${fileURL}": empty response body`
-            )
-          }
-
-          const reader = response.body.getReader()
+        while (writePosition <= range.end) {
+          const requestStartPosition = writePosition
+          const inactivityController = this.createInactivityController(
+            rangeAbortController.signal,
+            inactivityTimeoutMs
+          )
 
           try {
-            while (true) {
-              this.throwIfAborted(rangeAbortController.signal)
-              const { done, value } = await reader.read()
+            this.throwIfAborted(rangeAbortController.signal)
+            const response = await fetch(fileURL, {
+              headers: {
+                range: `bytes=${writePosition}-${range.end}`
+              },
+              signal: inactivityController.signal
+            })
 
-              if (done) {
-                break
-              }
-
-              if (!value || value.byteLength === 0) {
-                continue
-              }
-
-              const chunk = Buffer.from(value)
-              await fileHandle.write(chunk, 0, chunk.length, writePosition)
-              inactivityController.refresh()
-              writePosition += chunk.length
-              downloadedBytes += chunk.length
-              reporter.update(downloadedBytes)
+            if (response.status !== 206) {
+              throw new Error(
+                `Server does not support ranged download for "${fileURL}".`
+              )
             }
-          } finally {
-            await reader.cancel().catch(() => {})
-          }
 
-          if (writePosition !== range.end + 1) {
-            throw new Error(
-              `Incomplete ranged download for "${fileURL}" on bytes ${range.start}-${range.end}.`
+            if (!response.body) {
+              throw new Error(
+                `Failed to download "${fileURL}": empty response body`
+              )
+            }
+
+            const reader = response.body.getReader()
+
+            try {
+              while (true) {
+                this.throwIfAborted(rangeAbortController.signal)
+                const { done, value } = await reader.read()
+
+                if (done) {
+                  break
+                }
+
+                if (!value || value.byteLength === 0) {
+                  continue
+                }
+
+                const chunk = Buffer.from(value)
+                await fileHandle.write(chunk, 0, chunk.length, writePosition)
+                inactivityController.refresh()
+                writePosition += chunk.length
+                range.position = writePosition
+                downloadedBytes += chunk.length
+                reporter.update(downloadedBytes)
+
+                if (writePosition >= nextCheckpointAt) {
+                  this.persistParallelDownloadState(statePath, state)
+                  nextCheckpointAt =
+                    writePosition + PARALLEL_DOWNLOAD_CHECKPOINT_BYTES
+                }
+              }
+            } finally {
+              await reader.cancel().catch(() => {})
+            }
+
+            if (writePosition !== range.end + 1) {
+              throw new Error(
+                `Incomplete ranged download for "${fileURL}" on bytes ${range.start}-${range.end}.`
+              )
+            }
+
+            this.persistParallelDownloadState(statePath, state)
+            return
+          } catch (error) {
+            range.position = writePosition
+            this.persistParallelDownloadState(statePath, state)
+
+            if (
+              this.isAbortError(error) ||
+              rangeAbortController.signal.aborted
+            ) {
+              throw error
+            }
+
+            const madeProgress = writePosition > requestStartPosition
+            consecutiveNoProgressFailures = madeProgress
+              ? 0
+              : consecutiveNoProgressFailures + 1
+
+            if (consecutiveNoProgressFailures > retryOptions.retries) {
+              throw error
+            }
+
+            LogHelper.warning(
+              `Download range ${range.start}-${range.end} failed at byte ${writePosition}; retrying: ${String(error)}`
             )
+            await this.sleep(
+              this.getRetryDelay(
+                Math.max(1, consecutiveNoProgressFailures),
+                retryOptions
+              )
+            )
+          } finally {
+            inactivityController.dispose()
           }
-
-          return
-        } catch (error) {
-          if (
-            this.isAbortError(error) ||
-            rangeAbortController.signal.aborted
-          ) {
-            throw error
-          }
-
-          if (attempt === retryOptions.retries) {
-            throw error
-          }
-
-          LogHelper.warning(
-            `Download range ${range.start}-${range.end} failed at byte ${writePosition}; retrying: ${String(error)}`
-          )
-          await this.sleep(this.getRetryDelay(attempt + 1, retryOptions))
-        } finally {
-          inactivityController.dispose()
         }
-      }
 
-      throw new Error(
-        `Failed to download range ${range.start}-${range.end}.`
-      )
-    })
+        throw new Error(
+          `Failed to download range ${range.start}-${range.end}.`
+        )
+      })
 
     try {
       await Promise.all(rangeTasks)
@@ -876,9 +1024,7 @@ export class NetworkHelper {
     } catch (error) {
       rangeAbortController.abort(error)
       await Promise.allSettled(rangeTasks)
-      // Concurrent writes can make the file sparse. Retain only the contiguous
-      // prefix that was known to be complete before this parallel attempt.
-      await fileHandle.truncate(initialDownloadedBytes)
+      this.persistParallelDownloadState(statePath, state)
       throw error
     } finally {
       signal?.removeEventListener('abort', abortRanges)
@@ -893,6 +1039,7 @@ export class NetworkHelper {
   ): Promise<void> {
     const retryOptions = options.retry
     const temporaryPath = `${destinationPath}.download`
+    const parallelStatePath = this.getParallelDownloadStatePath(temporaryPath)
     const legacyTemporaryPath = `${destinationPath}.ipull`
     const abortController = new AbortController()
     const { signal } = abortController
@@ -960,6 +1107,7 @@ export class NetworkHelper {
           this.throwIfAborted(signal)
           await this.movePath(temporaryPath, destinationPath)
           await this.ensureDownloadedFilePath(destinationPath)
+          await fs.promises.rm(parallelStatePath, { force: true })
           reporter.finish(downloadedBytes)
 
           return
