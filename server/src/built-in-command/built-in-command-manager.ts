@@ -239,6 +239,10 @@ export class BuiltInCommandManager {
       .getRequiredParameters()
       .map((parameter) => parameter.name)
 
+    // History records owner intent at submission time, including long-running,
+    // failed, cancelled, and parameter-gathering command executions.
+    this.persistRecentCommandValue(parsedInput.normalized_input)
+
     const executionResult = await command.execute({
       raw_input: parsedInput.normalized_input,
       args: parsedInput.args,
@@ -256,10 +260,6 @@ export class BuiltInCommandManager {
         : executionResult.status === 'error'
           ? 'error'
           : 'completed'
-
-    if (executionResult.status === 'completed') {
-      this.persistRecentCommandValue(parsedInput.normalized_input)
-    }
 
     return {
       mode: 'execute',
@@ -328,10 +328,6 @@ export class BuiltInCommandManager {
         : executionResult.status === 'error'
           ? 'error'
           : 'completed'
-
-    if (executionResult.status === 'completed') {
-      this.persistRecentCommandValue(session.raw_input)
-    }
 
     return {
       mode: 'execute',
