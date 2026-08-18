@@ -2,7 +2,11 @@ import os from 'node:os'
 
 import { io } from 'socket.io-client'
 
-import { TOOLKIT_REGISTRY, TOOL_EXECUTOR } from '@/core'
+import {
+  TOOLKIT_REGISTRY,
+  TOOL_EXECUTOR,
+  TOOL_PROVIDER_REGISTRY
+} from '@/core'
 import {
   SATELLITE_EVENTS,
   SATELLITE_PROTOCOL_VERSION,
@@ -15,6 +19,7 @@ import {
   readStoredProfileToken
 } from '@/core/profile-auth'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { LogHelper } from '@/helpers/log-helper'
 import type { ToolExecutionResult } from '@/core/tool-executor'
@@ -140,16 +145,25 @@ async function startSatellite(): Promise<void> {
       try {
         result = await runWithProfileContext(
           { profileName: credential.profileName },
-          async () =>
-            TOOL_EXECUTOR.executeTool({
-              ...invocation.input,
-              onProgress: (progress) => {
-                socket.emit(SATELLITE_EVENTS.toolProgress, {
-                  invocationId: invocation.invocationId,
-                  progress
-                })
-              }
-            })
+          async () => {
+            const execute = (): Promise<ToolExecutionResult> =>
+              TOOL_EXECUTOR.executeTool({
+                ...invocation.input,
+                onProgress: (progress) => {
+                  socket.emit(SATELLITE_EVENTS.toolProgress, {
+                    invocationId: invocation.invocationId,
+                    progress
+                  })
+                }
+              })
+
+            return invocation.conversationSessionId
+              ? runWithConversationSession(
+                  { sessionId: invocation.conversationSessionId },
+                  execute
+                )
+              : execute()
+          }
         )
       } catch (error) {
         result = buildSatelliteToolError(invocation, error)
@@ -176,6 +190,21 @@ async function startSatellite(): Promise<void> {
 }
 
 process.title = 'leon-satellite'
+
+let isShuttingDown = false
+
+const shutDown = async (): Promise<void> => {
+  if (isShuttingDown) {
+    return
+  }
+
+  isShuttingDown = true
+  await TOOL_PROVIDER_REGISTRY.dispose()
+  process.exit(0)
+}
+
+process.once('SIGINT', () => void shutDown())
+process.once('SIGTERM', () => void shutDown())
 
 void startSatellite().catch((error: unknown) => {
   LogHelper.title('Satellite')

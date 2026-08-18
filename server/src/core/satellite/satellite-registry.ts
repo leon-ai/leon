@@ -92,6 +92,7 @@ class SatelliteRegistry {
   public async invokeTool(input: {
     profileName: string
     deviceId: string
+    conversationSessionId?: string | null
     toolInput: ToolExecutionInput
     onProgress?: (progress: ToolRuntimeProgress) => void
   }): Promise<ToolExecutionResult> {
@@ -104,7 +105,10 @@ class SatelliteRegistry {
     const invocationId = randomUUID()
     const invocation: SatelliteToolInvocation = {
       invocationId,
-      input: input.toolInput
+      input: input.toolInput,
+      ...(input.conversationSessionId
+        ? { conversationSessionId: input.conversationSessionId }
+        : {})
     }
 
     return new Promise<ToolExecutionResult>((resolve, reject) => {
