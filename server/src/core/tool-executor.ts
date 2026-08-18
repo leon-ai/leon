@@ -16,7 +16,11 @@ import {
   TSX_CLI_PATH
 } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
-import { TOOLKIT_REGISTRY, TOOL_CALL_LOGGER } from '@/core'
+import {
+  TOOLKIT_REGISTRY,
+  TOOL_CALL_LOGGER,
+  TOOL_PROVIDER_REGISTRY
+} from '@/core'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_MANAGER } from '@/config'
@@ -24,6 +28,10 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import type { LongLanguageCode } from '@/types'
+import type {
+  ToolProviderExecutionResult,
+  ToolProviderModelFile
+} from '@/core/tool-provider/types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
@@ -51,6 +59,7 @@ export interface ToolExecutionResult {
     parsed_input: Record<string, unknown> | null
     output_log_path?: string | null
     output: Record<string, unknown>
+    model_files?: ToolProviderModelFile[]
   }
   toolLabel?: string | undefined
 }
@@ -306,6 +315,7 @@ export default class ToolExecutor {
         return await SATELLITE_REGISTRY.invokeTool({
           profileName: getActiveProfileName(),
           deviceId: satelliteDeviceId,
+          conversationSessionId: getActiveConversationSessionId(),
           toolInput: {
             ...serializableInput,
             executionTarget: 'any'
@@ -358,10 +368,26 @@ export default class ToolExecutor {
       unknown
     >
     const responseJQ = this.getResponseJQ(functionConfig)
+    const executionProvider = TOOLKIT_REGISTRY.getToolExecutionProvider(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
 
-    let argsArray: unknown[]
+    let argsArray: unknown[] = []
     try {
-      argsArray = this.mapArgs(normalizedParsedInput, functionConfig.parameters)
+      if (executionProvider) {
+        // Providers consume the named JSON object directly, so positional bridge
+        // ordering must not reject otherwise valid provider parameters.
+        this.validateRequiredParameters(
+          normalizedParsedInput,
+          functionConfig.parameters
+        )
+      } else {
+        argsArray = this.mapArgs(
+          normalizedParsedInput,
+          functionConfig.parameters
+        )
+      }
     } catch (error) {
       return this.buildResult({
         status: 'invalid_input',
@@ -373,13 +399,23 @@ export default class ToolExecutor {
         output: {}
       })
     }
-    const runtimeResult = await this.runToolRuntime({
-      toolkitId: resolvedTool.toolkitId,
-      toolId: resolvedTool.toolId,
-      functionName,
-      args: argsArray,
-      ...(input.onProgress ? { onProgress: input.onProgress } : {})
-    })
+    const runtimeResult = executionProvider
+      ? await TOOL_PROVIDER_REGISTRY.execute(executionProvider, {
+          toolkitId: resolvedTool.toolkitId,
+          toolId: resolvedTool.toolId,
+          functionName,
+          parameters: normalizedParsedInput,
+          profileName: getActiveProfileName(),
+          conversationSessionId: getActiveConversationSessionId(),
+          ...(input.onProgress ? { onProgress: input.onProgress } : {})
+        })
+      : await this.runToolRuntime({
+          toolkitId: resolvedTool.toolkitId,
+          toolId: resolvedTool.toolId,
+          functionName,
+          args: argsArray,
+          ...(input.onProgress ? { onProgress: input.onProgress } : {})
+        })
     let runtimeOutput = this.normalizeFilesystemValues(
       runtimeResult.output
     ) as Record<string, unknown>
@@ -418,7 +454,10 @@ export default class ToolExecutor {
       resolvedTool,
       functionName,
       parsedInput: normalizedParsedInput,
-      output: runtimeOutput
+      output: runtimeOutput,
+      ...(runtimeResult.modelFiles
+        ? { modelFiles: runtimeResult.modelFiles }
+        : {})
     })
   }
 
@@ -430,6 +469,7 @@ export default class ToolExecutor {
     functionName?: string | null
     parsedInput?: Record<string, unknown> | null
     output?: Record<string, unknown>
+    modelFiles?: ToolProviderModelFile[]
   }): Promise<ToolExecutionResult> {
     const result: ToolExecutionResult = {
       status: params.status,
@@ -440,7 +480,8 @@ export default class ToolExecutor {
         function_name: params.functionName ?? null,
         input: params.input,
         parsed_input: params.parsedInput ?? null,
-        output: params.output ?? {}
+        output: params.output ?? {},
+        ...(params.modelFiles ? { model_files: params.modelFiles } : {})
       }
     }
 
@@ -815,15 +856,7 @@ export default class ToolExecutor {
       ? (parameters?.['required'] as string[])
       : []
     const orderedKeys = Object.keys(properties)
-    const missingRequired = requiredList.filter(
-      (key) => argsObject[key] === undefined
-    )
-
-    if (missingRequired.length > 0) {
-      throw new Error(
-        `Missing required tool_input fields: ${missingRequired.join(', ')}`
-      )
-    }
+    this.validateRequiredParameters(argsObject, parameters)
 
     if (requiredList.length > 0) {
       const lastRequiredIndex = Math.max(
@@ -853,17 +886,31 @@ export default class ToolExecutor {
     return orderedArgs
   }
 
+  private validateRequiredParameters(
+    argsObject: Record<string, unknown>,
+    parameters?: Record<string, unknown>
+  ): void {
+    const requiredList = Array.isArray(parameters?.['required'])
+      ? (parameters['required'] as string[])
+      : []
+    const missingRequired = requiredList.filter(
+      (key) => argsObject[key] === undefined
+    )
+
+    if (missingRequired.length > 0) {
+      throw new Error(
+        `Missing required tool_input fields: ${missingRequired.join(', ')}`
+      )
+    }
+  }
+
   private async runToolRuntime(params: {
     toolkitId: string
     toolId: string
     functionName: string
     args: unknown[]
     onProgress?: (progress: ToolRuntimeProgress) => void
-  }): Promise<{
-    success: boolean
-    message: string
-    output: Record<string, unknown>
-  }> {
+  }): Promise<ToolProviderExecutionResult> {
     const nodeArgs = [
       TSX_CLI_PATH,
       '--tsconfig',
