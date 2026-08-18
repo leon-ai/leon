@@ -48,6 +48,8 @@ const MAX_INSTALLED_APPS = 80
 const MAX_CATEGORY_LINES = 14
 const MAX_PERIPHERAL_ITEMS = 8
 const MAX_STATE_APPS = 500
+const MAX_SUMMARY_CATEGORIES = 6
+const MAX_SUMMARY_APPS_PER_CATEGORY = 3
 
 const FALLBACK_STATE: LocalInventoryState = {
   trackingStartedAt: new Date(0).toISOString(),
@@ -89,6 +91,8 @@ export class LocalInventoryContextFile extends ContextFile {
       ...installedApps,
       ...activeApps.map((entry) => entry.appName)
     ])
+    const installedAppHighlights =
+      this.buildInstalledAppHighlights(installedApps)
 
     const installedAppLines =
       installedApps.length > 0
@@ -111,7 +115,12 @@ export class LocalInventoryContextFile extends ContextFile {
           })
         : ['- No category signals yet']
 
-    const summary = `Local inventory tracks ${installedApps.length} installed app entry(ies), usage signals across ${rankedByUsage.length} app(s), and peripherals (${peripherals.keyboards.length} keyboard(s), ${peripherals.pointers.length} pointer(s), ${peripherals.webcams.length} webcam(s)).`
+    const summary = [
+      `Local inventory tracks ${installedApps.length} installed app entry(ies), usage signals across ${rankedByUsage.length} app(s), and peripherals (${peripherals.keyboards.length} keyboard(s), ${peripherals.pointers.length} pointer(s), ${peripherals.webcams.length} webcam(s)).`,
+      ...(installedAppHighlights
+        ? [`Installed app highlights: ${installedAppHighlights}.`]
+        : [])
+    ].join(' ')
 
     return [
       `> Usage-ranked apps, installed apps, categories, peripherals. ${summary}`,
@@ -646,6 +655,29 @@ $audio = Get-CimInstance Win32_SoundDevice | Select-Object Name
     return [...categoryMap.entries()]
       .map(([category, count]) => ({ category, count }))
       .sort((entryA, entryB) => entryB.count - entryA.count)
+  }
+
+  private buildInstalledAppHighlights(appNames: string[]): string {
+    const appsByCategory = new Map<string, string[]>()
+
+    for (const appName of appNames) {
+      const category = this.detectCategory(appName)
+      if (category === 'other') {
+        continue
+      }
+
+      const categoryApps = appsByCategory.get(category) || []
+      if (categoryApps.length < MAX_SUMMARY_APPS_PER_CATEGORY) {
+        categoryApps.push(appName)
+        appsByCategory.set(category, categoryApps)
+      }
+    }
+
+    return [...appsByCategory.entries()]
+      .sort(([categoryA], [categoryB]) => categoryA.localeCompare(categoryB))
+      .slice(0, MAX_SUMMARY_CATEGORIES)
+      .map(([category, apps]) => `${category}: ${apps.join(', ')}`)
+      .join('; ')
   }
 
   private detectCategory(appName: string): string {
