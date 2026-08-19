@@ -502,6 +502,9 @@ export async function runToolExecution(
 
   const toolExecutionResult =
     await TOOL_EXECUTOR.executeTool(toolExecutionInput)
+  const modelFiles = toolExecutionResult.data.model_files
+  const observationData = { ...toolExecutionResult.data }
+  delete observationData.model_files
   const outputLogPath =
     typeof toolExecutionResult.data?.output_log_path === 'string'
       ? toolExecutionResult.data.output_log_path
@@ -580,6 +583,7 @@ export async function runToolExecution(
         requestedToolInput,
         ...(stepLabel ? { stepLabel } : {})
       },
+      ...(modelFiles ? { modelFiles } : {}),
       handoffSignal: {
         intent: 'answer',
         draft: finalAnswer
@@ -632,7 +636,7 @@ export async function runToolExecution(
       : {}),
     ...(outputLogPath ? { output_log_path: outputLogPath } : {}),
     message: effectiveMessage,
-    data: toolExecutionResult.data,
+    data: observationData,
     ...(hasObservedToolFailure
       ? {
         observed_tool_failure: {
@@ -650,6 +654,7 @@ export async function runToolExecution(
       observation,
       requestedToolInput,
       ...(stepLabel ? { stepLabel } : {})
-    }
+    },
+    ...(modelFiles ? { modelFiles } : {})
   }
 }

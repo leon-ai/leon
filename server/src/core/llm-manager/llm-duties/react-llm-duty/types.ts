@@ -85,6 +85,12 @@ export interface FinalResponseSignal {
 
 export interface ToolExecutionResult {
   execution: ExecutionRecord
+  modelFiles?: Array<{
+    dataBase64: string
+    mediaType: string
+    filename?: string
+    visualDetail?: 'auto' | 'low' | 'high'
+  }>
   handoffSignal?: FinalResponseSignal
 }
 
