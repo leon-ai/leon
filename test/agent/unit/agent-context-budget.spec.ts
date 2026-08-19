@@ -45,6 +45,43 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('keeps only the two most recent computer-use screenshots', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Operate the app.' }
+    ]
+    for (let index = 1; index <= 4; index += 1) {
+      transcript.push({
+        role: 'tool',
+        toolCallId: `cua-${index}`,
+        toolName: 'computer_use__cua__get_window_state',
+        content: `Capture ${index}`,
+        files: [
+          {
+            dataBase64: 'x'.repeat(100_000),
+            mediaType: 'image/png'
+          }
+        ]
+      })
+    }
+
+    const context = prepareAgentModelContext({
+      transcript,
+      systemPrompt: 'Use tools.',
+      tools: [],
+      compactionTriggerTokens: 10_000
+    })
+    const toolMessages = context.transcript.filter(
+      (message) => message.role === 'tool'
+    )
+
+    expect(toolMessages[0]).not.toHaveProperty('files')
+    expect(toolMessages[1]).not.toHaveProperty('files')
+    expect(toolMessages[2]).toHaveProperty('files')
+    expect(toolMessages[3]).toHaveProperty('files')
+    expect(context.wasCompacted).toBe(false)
+    expect(context.estimatedInputTokens).toBeLessThan(10_000)
+  })
+
   it('uses 75% of the shared local context window', () => {
     expect(
       resolveAgentContextCompactionTriggerTokens(LLMProviders.LlamaCPP)

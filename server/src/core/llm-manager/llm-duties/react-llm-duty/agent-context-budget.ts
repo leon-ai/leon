@@ -19,6 +19,8 @@ import {
   AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS,
   AGENT_RECENT_TOOL_EXCHANGE_LIMIT,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
+  AGENT_RECENT_COMPUTER_USE_IMAGE_LIMIT,
+  AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   AGENT_TOOL_OBSERVATION_MAX_CHARS,
@@ -125,11 +127,60 @@ function estimateAgentInputTokens(
   systemPrompt: string,
   tools: OpenAITool[]
 ): number {
+  let imageCount = 0
+  const serializedTranscript = JSON.stringify(transcript, (key, value) => {
+    if (key === 'dataBase64' && typeof value === 'string') {
+      imageCount += 1
+      return ''
+    }
+    return value
+  })
+
   return (
-    estimateTokens(JSON.stringify(transcript)) +
+    estimateTokens(serializedTranscript) +
+    imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS +
     estimateTokens(systemPrompt) +
     estimateTokens(JSON.stringify(tools))
   )
+}
+
+/** Keeps only recent Cua screenshots while retaining every textual result. */
+function retainRecentComputerUseImages(
+  transcript: AgentToolTranscriptMessage[]
+): AgentToolTranscriptMessage[] {
+  const retainedImageIndexes = new Set<number>()
+  for (
+    let index = transcript.length - 1;
+    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_COMPUTER_USE_IMAGE_LIMIT;
+    index -= 1
+  ) {
+    const message = transcript[index]
+    if (
+      message?.role === 'tool' &&
+      message.toolName.startsWith('computer_use__') &&
+      message.files?.length
+    ) {
+      retainedImageIndexes.add(index)
+    }
+  }
+
+  return transcript.map((message, index) => {
+    if (
+      message.role !== 'tool' ||
+      !message.toolName.startsWith('computer_use__') ||
+      !message.files?.length ||
+      retainedImageIndexes.has(index)
+    ) {
+      return message
+    }
+
+    return {
+      role: message.role,
+      toolCallId: message.toolCallId,
+      toolName: message.toolName,
+      content: message.content
+    }
+  })
 }
 
 function createTextPreview(value: string, maxChars: number): string {
@@ -649,8 +700,9 @@ function pruneInactiveToolkitSchemas(
 export function prepareAgentModelContext(
   params: AgentModelContextParams
 ): PreparedAgentModelContext {
+  const boundedTranscript = retainRecentComputerUseImages(params.transcript)
   const initialEstimate = estimateAgentInputTokens(
-    params.transcript,
+    boundedTranscript,
     params.systemPrompt,
     params.tools
   )
@@ -659,7 +711,7 @@ export function prepareAgentModelContext(
     initialEstimate <= params.compactionTriggerTokens
   ) {
     return {
-      transcript: params.transcript,
+      transcript: boundedTranscript,
       tools: params.tools,
       estimatedInputTokens: initialEstimate,
       wasCompacted: false,
@@ -667,8 +719,8 @@ export function prepareAgentModelContext(
     }
   }
 
-  const tools = pruneInactiveToolkitSchemas(params.transcript, params.tools)
-  let transcript = params.transcript.map((message) =>
+  const tools = pruneInactiveToolkitSchemas(boundedTranscript, params.tools)
+  let transcript = boundedTranscript.map((message) =>
     message.role === 'tool'
       ? {
           ...message,
