@@ -48,6 +48,7 @@ vi.mock('@/helpers/log-helper', () => ({
 }))
 
 interface ProviderWithPrivateCallOptions {
+  config: { flavor: string }
   buildCallOptions(
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
@@ -204,6 +205,145 @@ describe('AISDKRemoteLLMProvider', () => {
         ]
       }
     ])
+  })
+
+  it.each([
+    'openai-responses',
+    'openrouter',
+    'openai-compatible',
+    'anthropic',
+    'moonshotai',
+    'huggingface',
+    'cerebras',
+    'groq'
+  ])('delivers tool images through the portable %s schema', (flavor) => {
+    const provider = createOpenRouterProvider()
+    provider.config.flavor = flavor
+    const options = provider.buildCallOptions(
+      [
+        { role: 'user', content: 'Inspect the window.' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [
+            {
+              id: 'call_vision',
+              type: 'function',
+              function: {
+                name: 'computer_use__cua__get_window_state',
+                arguments: '{}'
+              }
+            }
+          ]
+        },
+        {
+          role: 'tool',
+          toolCallId: 'call_vision',
+          toolName: 'computer_use__cua__get_window_state',
+          content: 'Window captured.',
+          files: [
+            {
+              dataBase64: 'aW1hZ2U=',
+              mediaType: 'image/png',
+              filename: 'window.png',
+              visualDetail: 'high'
+            }
+          ]
+        }
+      ],
+      createCompletionParams(null)
+    )
+    const messages = options['prompt'] as Array<Record<string, unknown>>
+
+    expect(messages[3]).toMatchObject({
+      role: 'tool',
+      content: [
+        {
+          type: 'tool-result',
+          output: {
+            type: 'text',
+            value: 'Window captured.'
+          }
+        }
+      ]
+    })
+    const imagePart = {
+      type: 'file',
+      mediaType: 'image/png',
+      filename: 'window.png',
+      ...(flavor === 'openai-responses'
+        ? {
+            providerOptions: {
+              openai: { imageDetail: 'high' }
+            }
+          }
+        : {})
+    }
+    expect(messages[4]).toMatchObject({
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: 'Visual evidence returned by computer_use__cua__get_window_state.'
+        },
+        imagePart
+      ]
+    })
+  })
+
+  it('keeps parallel tool results ahead of their visual evidence', () => {
+    const provider = createOpenRouterProvider()
+    const options = provider.buildCallOptions(
+      [
+        { role: 'user', content: 'Inspect both windows.' },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'inspect_first', arguments: '{}' }
+            },
+            {
+              id: 'call_2',
+              type: 'function',
+              function: { name: 'inspect_second', arguments: '{}' }
+            }
+          ]
+        },
+        {
+          role: 'tool',
+          toolCallId: 'call_1',
+          toolName: 'inspect_first',
+          content: 'First window captured.',
+          files: [{ dataBase64: 'Zmlyc3Q=', mediaType: 'image/png' }]
+        },
+        {
+          role: 'tool',
+          toolCallId: 'call_2',
+          toolName: 'inspect_second',
+          content: 'Second window captured.'
+        }
+      ],
+      createCompletionParams(null)
+    )
+    const messages = options['prompt'] as Array<Record<string, unknown>>
+
+    expect(messages[3]).toMatchObject({
+      role: 'tool',
+      content: [
+        { toolCallId: 'call_1' },
+        { toolCallId: 'call_2' }
+      ]
+    })
+    expect(messages[4]).toMatchObject({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'Visual evidence returned by inspect_first.' },
+        { type: 'file', mediaType: 'image/png' }
+      ]
+    })
   })
 
   it('makes malformed historical tool arguments safe for recovery turns', () => {

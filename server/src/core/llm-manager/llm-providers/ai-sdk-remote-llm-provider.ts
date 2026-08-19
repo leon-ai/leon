@@ -376,29 +376,80 @@ export default class AISDKRemoteLLMProvider {
   private toAgentToolMessages(
     transcript: AgentToolTranscriptMessage[]
   ): LanguageModelV4Prompt {
-    return transcript.map((message) => {
+    const messages: LanguageModelV4Prompt = []
+
+    for (let index = 0; index < transcript.length; index += 1) {
+      const message = transcript[index]!
+
       if (message.role === 'user') {
-        return {
+        messages.push({
           role: 'user',
           content: [{ type: 'text', text: message.content }]
-        }
+        })
+        continue
       }
 
       if (message.role === 'tool') {
-        return {
-          role: 'tool',
-          content: [
-            {
-              type: 'tool-result',
-              toolCallId: message.toolCallId,
-              toolName: message.toolName,
-              output: {
-                type: 'text',
-                value: message.content
-              }
+        const toolResults: Extract<
+          LanguageModelV4Prompt[number],
+          { role: 'tool' }
+        >['content'] = []
+        const visualEvidence: Extract<
+          LanguageModelV4Prompt[number],
+          { role: 'user' }
+        >['content'] = []
+
+        // Keep every result from a parallel tool-call batch contiguous. Some
+        // provider protocols reject a user message before all results arrive.
+        while (index < transcript.length) {
+          const toolMessage = transcript[index]!
+          if (toolMessage.role !== 'tool') {
+            index -= 1
+            break
+          }
+
+          toolResults.push({
+            type: 'tool-result',
+            toolCallId: toolMessage.toolCallId,
+            toolName: toolMessage.toolName,
+            output: {
+              type: 'text',
+              value: toolMessage.content
             }
-          ]
+          })
+
+          if (toolMessage.files?.length) {
+            visualEvidence.push({
+              type: 'text',
+              text: `Visual evidence returned by ${toolMessage.toolName}.`
+            })
+            visualEvidence.push(
+              ...toolMessage.files.map((file) => ({
+                type: 'file' as const,
+                data: {
+                  type: 'data' as const,
+                  data: file.dataBase64
+                },
+                mediaType: file.mediaType,
+                ...(file.filename ? { filename: file.filename } : {}),
+                ...this.getVisualFileProviderOptions(file.visualDetail)
+              }))
+            )
+          }
+
+          index += 1
         }
+
+        messages.push({
+          role: 'tool',
+          content: toolResults
+        })
+        if (visualEvidence.length > 0) {
+          // User-role image parts are the common multimodal input surface.
+          // Tool-result image parts are not preserved by every compatible API.
+          messages.push({ role: 'user', content: visualEvidence })
+        }
+        continue
       }
 
       const content: Extract<
@@ -417,11 +468,27 @@ export default class AISDKRemoteLLMProvider {
         })
       }
 
-      return {
+      messages.push({
         role: 'assistant',
         content
+      })
+    }
+
+    return messages
+  }
+
+  private getVisualFileProviderOptions(
+    visualDetail: 'auto' | 'low' | 'high' | undefined
+  ): { providerOptions: SharedV4ProviderOptions } | Record<string, never> {
+    if (!visualDetail || this.config.flavor !== 'openai-responses') {
+      return {}
+    }
+
+    return {
+      providerOptions: {
+        openai: { imageDetail: visualDetail }
       }
-    })
+    }
   }
 
   private parseAgentToolInput(input: string): unknown {
