@@ -1,4 +1,5 @@
 .tool-call
+  --tool-call-highlight-width: 48px
   --tool-call-title-color: var(--color-text-secondary)
   position: relative
   min-width: 0
@@ -11,16 +12,6 @@
     height: calc(100% + var(--tool-call-list-gap) - var(--tool-call-marker-size) - var(--timeline-connector-gap) - var(--timeline-connector-gap))
     background-color: var(--color-timeline-border)
     content: ''
-
-.tool-call-animate
-  opacity: 0
-  animation: tool-call-enter .24s ease-out forwards
-
-.tool-call:nth-child(2)
-  animation-delay: 60ms
-
-.tool-call:nth-child(3)
-  animation-delay: 120ms
 
 .tool-call-trigger
   display: flex
@@ -35,8 +26,7 @@
   text-align: left
 
   &:hover
-    .tool-call-title,
-    .tool-call-tool-icon,
+    .tool-call-heading-layer:not(.tool-call-wave),
     .tool-call-chevron
       color: var(--color-text)
 
@@ -52,6 +42,22 @@
     outline: 1px solid var(--color-accent)
     outline-offset: var(--space-xs)
 
+.tool-call-running-content
+  isolation: isolate
+  display: block
+  position: relative
+  min-width: 0
+  flex: 1 1 auto
+
+.tool-call-heading-layer
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  min-width: 0
+  flex: 1 1 auto
+  color: var(--tool-call-title-color)
+  transition: color var(--transition-duration-main) var(--transition-timing-main)
+
 .tool-call-tool-icon
   position: relative
   z-index: 1
@@ -61,10 +67,9 @@
   justify-content: center
   width: var(--tool-call-marker-size)
   height: var(--tool-call-marker-size)
-  color: var(--tool-call-title-color)
+  color: currentColor
   font-size: var(--font-size-md)
   line-height: 1
-  transition: color var(--transition-duration-main) var(--transition-timing-main)
 
 .tool-call-title
   flex: 1 1 auto
@@ -72,11 +77,26 @@
   overflow: hidden
   text-overflow: ellipsis
   white-space: nowrap
-  color: var(--tool-call-title-color)
-  transition: color var(--transition-duration-main) var(--transition-timing-main)
+  color: currentColor
 
 .tool-call-running
   --tool-call-title-color: var(--color-text)
+
+.tool-call-wave
+  position: absolute
+  inset: 0
+  z-index: 2
+  color: var(--color-activity-wave)
+  pointer-events: none
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
+  -webkit-mask-position: calc(0px - var(--tool-call-highlight-width)) 0
+  -webkit-mask-repeat: no-repeat
+  -webkit-mask-size: var(--tool-call-highlight-width) 100%
+  mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
+  mask-position: calc(0px - var(--tool-call-highlight-width)) 0
+  mask-repeat: no-repeat
+  mask-size: var(--tool-call-highlight-width) 100%
+  animation: tool-call-title-wave var(--activity-animation-duration) linear infinite
 
 .tool-call-chevron
   position: relative
@@ -111,14 +131,18 @@
   font-size: var(--font-size-xs)
   line-height: var(--line-height-xs)
 
-@keyframes tool-call-enter
-  from
-    opacity: 0
-    transform: translate3d(0, 4px, 0)
+@keyframes tool-call-title-wave
+  0%
+    -webkit-mask-position: calc(0px - var(--tool-call-highlight-width)) 0
+    mask-position: calc(0px - var(--tool-call-highlight-width)) 0
 
-  to
-    opacity: 1
-    transform: translate3d(0, 0, 0)
+  84%
+    -webkit-mask-position: calc(100% + var(--tool-call-highlight-width)) 0
+    mask-position: calc(100% + var(--tool-call-highlight-width)) 0
+
+  100%
+    -webkit-mask-position: calc(100% + var(--tool-call-highlight-width)) 0
+    mask-position: calc(100% + var(--tool-call-highlight-width)) 0
 
 @media (max-width: 680px)
   .tool-call-details
@@ -130,11 +154,9 @@
       border-left: 0
 
 @media (prefers-reduced-motion: reduce)
-  .tool-call-animate
-    opacity: 1
-    animation: none
-
-  .tool-call-title,
-  .tool-call-tool-icon,
+  .tool-call-heading-layer,
   .tool-call-chevron
     transition: none
+
+  .tool-call-wave
+    display: none

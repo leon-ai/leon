@@ -1,9 +1,10 @@
 .leon-message
+  --activity-node-gap: var(--space-md)
   display: flex
   width: 100%
   max-width: 100%
   flex-direction: column
-  gap: var(--space-xl)
+  gap: var(--activity-node-gap)
   color: var(--color-text)
   font-size: var(--font-size-lg)
   line-height: var(--line-height-lg)
@@ -16,6 +17,9 @@
 
 .leon-message-execution
   opacity: 1
+
+.leon-message > .final-answer
+  margin-top: var(--space-md)
 
 .leon-message-execution-animate
   opacity: 0

@@ -11,7 +11,7 @@ import { FeedAnimationProvider } from '../streaming-text'
 import './feed.sass'
 
 const FEED_TURN_ESTIMATED_HEIGHT = 608
-const FEED_OVERSCAN_COUNT = 4
+const FEED_OVERSCAN_COUNT = 1
 const OWNER_MESSAGE_REVEAL_SCROLL_PROGRESS = .33
 const REDUCED_MOTION_MEDIA_QUERY = '(prefers-reduced-motion: reduce)'
 const SCROLL_POSITION_TOLERANCE_PX = 1
@@ -50,10 +50,15 @@ function supportsScrollEnd(element: HTMLElement): boolean {
   return 'onscrollend' in element
 }
 
+function shouldAdjustFeedScrollPosition(): boolean {
+  return false
+}
+
 export function Feed({ entries }: FeedProps) {
   const feedRef = useRef<HTMLElement>(null)
-  const maskRef = useRef<HTMLDivElement>(null)
+  const bottomMaskRef = useRef<HTMLDivElement>(null)
   const previousTurnCountRef = useRef<number | null>(null)
+  const topMaskRef = useRef<HTMLDivElement>(null)
   const turns = useMemo(() => groupEntriesByTurn(entries), [entries])
   const turnCount = turns.length
   const virtualizer = useVirtualizer({
@@ -64,25 +69,33 @@ export function Feed({ entries }: FeedProps) {
       feedRef.current?.closest<HTMLElement>('.app-main') ?? null,
     getItemKey: (index) => turns[index]?.id ?? index,
     estimateSize: () => FEED_TURN_ESTIMATED_HEIGHT,
-    overscan: FEED_OVERSCAN_COUNT
+    overscan: FEED_OVERSCAN_COUNT,
+    useAnimationFrameWithResizeObserver: true
   })
+
+  // Disclosure resizing happens in visible content, so compensating scroll
+  // offsets on every animation frame would make older turns visibly jitter.
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange =
+    shouldAdjustFeedScrollPosition
 
   useLayoutEffect(() => {
     const feed = feedRef.current
-    const mask = maskRef.current
+    const bottomMask = bottomMaskRef.current
     const scrollElement = feed?.closest<HTMLElement>('.app-main')
+    const topMask = topMaskRef.current
 
     if (
       feed === null ||
-      mask === null ||
+      bottomMask === null ||
       scrollElement === undefined ||
-      scrollElement === null
+      scrollElement === null ||
+      topMask === null
     ) {
       return undefined
     }
 
     const observedFeed = feed
-    const observedMask = mask
+    const observedMasks = [bottomMask, topMask]
     const observedScrollElement = scrollElement
 
     // Fixed elements use the viewport as their containing block, so measure
@@ -90,8 +103,10 @@ export function Feed({ entries }: FeedProps) {
     function updateMaskBounds(): void {
       const feedBounds = observedFeed.getBoundingClientRect()
 
-      observedMask.style.left = `${feedBounds.left}px`
-      observedMask.style.width = `${feedBounds.width}px`
+      for (const mask of observedMasks) {
+        mask.style.left = `${feedBounds.left}px`
+        mask.style.width = `${feedBounds.width}px`
+      }
     }
 
     const resizeObserver = new ResizeObserver(updateMaskBounds)
@@ -310,7 +325,16 @@ export function Feed({ entries }: FeedProps) {
             )
           })}
         </div>
-        <div ref={maskRef} className="feed-mask" aria-hidden="true" />
+        <div
+          ref={topMaskRef}
+          className="feed-mask feed-mask-top"
+          aria-hidden="true"
+        />
+        <div
+          ref={bottomMaskRef}
+          className="feed-mask feed-mask-bottom"
+          aria-hidden="true"
+        />
       </section>
     </FeedAnimationProvider>
   )

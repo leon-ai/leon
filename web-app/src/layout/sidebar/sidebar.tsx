@@ -203,6 +203,7 @@ export function Sidebar() {
         ref={sidebarScrollAreaRef}
         onScroll={handleSidebarScroll}
       >
+        <div className="sidebar-scroll-area-mask" aria-hidden="true" />
         <Menu collapsed={sidebarContentCollapsed} variant="scrollable" />
         <SessionList
           collapsed={sidebarContentCollapsed}

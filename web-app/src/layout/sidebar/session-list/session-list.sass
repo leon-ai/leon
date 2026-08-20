@@ -26,8 +26,12 @@
     background-color: var(--color-sidebar-background)
     mask-image: linear-gradient(to bottom, transparent, #000 74%, #000)
     -webkit-mask-image: linear-gradient(to bottom, transparent, #000 74%, #000)
+    opacity: 1
     pointer-events: none
     transition: background-color var(--transition-duration-sidebar) var(--transition-timing-sidebar)
+
+    &.session-list-mask-hidden
+      opacity: 0
 
 @media (prefers-reduced-motion: reduce)
   .session-list

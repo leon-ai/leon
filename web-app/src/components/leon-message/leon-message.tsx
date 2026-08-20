@@ -1,9 +1,11 @@
 import { clsx } from 'clsx'
-import mapIconSource from 'remixicon/icons/Map/map-2-line.svg?url'
-import toolsIconSource from 'remixicon/icons/Design/tools-line.svg?url'
 
-import type { LeonFeedEntry } from '../../data/feed'
-import { DottedIcon } from '../dotted-icon'
+import type {
+  FeedPlanActivity,
+  FeedToolsActivity,
+  LeonFeedActivity,
+  LeonFeedEntry
+} from '../../data/feed'
 import { FinalAnswer } from '../final-answer'
 import { ProcessGroup } from '../process-group'
 import { StreamingText, useAnimateOnce } from '../streaming-text'
@@ -17,82 +19,93 @@ interface LeonMessageProps {
   entry: LeonFeedEntry
 }
 
-export function LeonMessage({ entry }: LeonMessageProps) {
-  const shouldAnimateExecution = useAnimateOnce(`${entry.id}:execution`)
-  const plan = entry.plan
-  const toolCalls = entry.toolCalls ?? []
-  const planIsActive = plan?.some((step) =>
-    step.status === 'in_progress' || step.status === 'pending'
-  ) ?? false
-  const toolsAreActive = toolCalls.some((toolCall) =>
+interface ExecutionActivityProps {
+  activity: FeedPlanActivity | FeedToolsActivity
+}
+
+function ExecutionActivity({ activity }: ExecutionActivityProps) {
+  const shouldAnimate = useAnimateOnce(`${activity.id}:execution`)
+
+  if (activity.type === 'plan') {
+    const planIsActive = activity.steps.some((step) =>
+      step.status === 'in_progress' || step.status === 'pending'
+    )
+
+    return (
+      <div className={clsx('leon-message-execution', {
+        'leon-message-execution-animate': shouldAnimate
+      })}>
+        <ProcessGroup
+          active={planIsActive}
+          activeLabel="Executing plan..."
+          ariaLabel="Leon’s execution plan"
+          completedLabel="Completed plan"
+          indicator={<i className="ri-map-2-line" aria-hidden="true" />}
+        >
+          <TaskList steps={activity.steps} />
+        </ProcessGroup>
+      </div>
+    )
+  }
+
+  const toolsAreActive = activity.toolCalls.some((toolCall) =>
     toolCall.status === 'running'
   )
-  const toolCount = toolCalls.length
+  const toolCount = activity.toolCalls.length
 
   return (
-    <div className="leon-message">
+    <div className={clsx('leon-message-execution', {
+      'leon-message-execution-animate': shouldAnimate
+    })}>
+      <ProcessGroup
+        active={toolsAreActive}
+        activeLabel="Using tools..."
+        ariaLabel="Leon’s tool usage"
+        completedLabel={`Used ${toolCount} ${
+          toolCount === 1 ? 'tool' : 'tools'
+        }`}
+        indicator={(
+          <i className="ri-pencil-ruler-2-line" aria-hidden="true" />
+        )}
+      >
+        <ToolCallList toolCalls={activity.toolCalls} />
+      </ProcessGroup>
+    </div>
+  )
+}
+
+function renderActivity(activity: LeonFeedActivity) {
+  if (activity.type === 'thinking') {
+    return (
       <ThinkingMessage
-        animationId={`${entry.id}:thinking`}
-        details={entry.thinking.details}
-        durationMs={entry.thinking.durationMs}
-        isActive={entry.thinking.isActive}
+        key={activity.id}
+        animationId={activity.id}
+        details={activity.details}
+        durationMs={activity.durationMs}
+        isActive={activity.isActive}
       />
-      <p className="leon-message-summary">
+    )
+  }
+
+  if (activity.type === 'summary') {
+    return (
+      <p key={activity.id} className="leon-message-summary">
         <StreamingText
-          animationId={`${entry.id}:summary`}
+          animationId={activity.id}
           startDelay={420}
-          text={entry.summary}
+          text={activity.content}
         />
       </p>
-      <div className={clsx('leon-message-execution', {
-        'leon-message-execution-animate': shouldAnimateExecution
-      })}>
-        {plan !== undefined ? (
-          <ProcessGroup
-            active={planIsActive}
-            activeLabel="Executing plan..."
-            ariaLabel="Leon’s execution plan"
-            completedLabel="Completed plan"
-            indicator={(
-              <DottedIcon
-                active={planIsActive}
-                ariaLabel={planIsActive
-                  ? 'Leon is executing a plan'
-                  : 'Leon completed the plan'}
-                source={mapIconSource}
-                sourceHeight={24}
-                sourceWidth={24}
-              />
-            )}
-          >
-            <TaskList steps={plan} />
-          </ProcessGroup>
-        ) : toolCount > 0 ? (
-          <ProcessGroup
-            active={toolsAreActive}
-            activeLabel="Using tools..."
-            ariaLabel="Leon’s tool usage"
-            completedLabel={`Used ${toolCount} ${
-              toolCount === 1 ? 'tool' : 'tools'
-            }`}
-            indicator={(
-              <DottedIcon
-                active={toolsAreActive}
-                ariaLabel={toolsAreActive
-                  ? 'Leon is using tools'
-                  : `Leon used ${toolCount} ${
-                    toolCount === 1 ? 'tool' : 'tools'
-                  }`}
-                source={toolsIconSource}
-                sourceHeight={24}
-                sourceWidth={24}
-              />
-            )}
-          >
-            <ToolCallList toolCalls={toolCalls} />
-          </ProcessGroup>
-        ) : null}
-      </div>
+    )
+  }
+
+  return <ExecutionActivity key={activity.id} activity={activity} />
+}
+
+export function LeonMessage({ entry }: LeonMessageProps) {
+  return (
+    <div className="leon-message">
+      {entry.activities.map(renderActivity)}
       {entry.finalAnswer.trim().length > 0 && (
         <FinalAnswer animationId={`${entry.id}:final-answer`}>
           {entry.finalAnswer}

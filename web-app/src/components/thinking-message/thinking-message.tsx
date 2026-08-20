@@ -2,7 +2,7 @@ import { clsx } from 'clsx'
 
 import { ProcessGroup } from '../process-group'
 import { StreamingText, useAnimateOnce } from '../streaming-text'
-import { ThinkingBrain } from '../thinking-brain'
+import { ThoughtIcon } from '../thought-icon'
 
 import './thinking-message.sass'
 
@@ -16,7 +16,6 @@ interface ThinkingMessageProps {
 const MILLISECONDS_PER_SECOND = 1_000
 const MILLISECONDS_PER_MINUTE = 60_000
 const MILLISECONDS_PER_HOUR = 3_600_000
-
 function formatDuration(durationMs: number): string {
   if (durationMs < MILLISECONDS_PER_MINUTE) {
     const seconds = Math.max(
@@ -57,9 +56,10 @@ export function ThinkingMessage({
       <ProcessGroup
         active={isActive}
         activeLabel="Thinking..."
+        animateWhileActive
         ariaLabel="Leon’s thinking"
         completedLabel={`Thought for ${formatDuration(durationMs)}`}
-        indicator={<ThinkingBrain active={isActive} />}
+        indicator={<ThoughtIcon />}
       >
         {isActive ? (
           <StreamingText

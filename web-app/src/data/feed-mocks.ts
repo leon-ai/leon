@@ -1,9 +1,13 @@
 import type {
   FeedEntry,
+  FeedPlanActivity,
   FeedPlanStep,
   FeedPlanStepStatus,
+  FeedSummaryActivity,
+  FeedThinkingActivity,
   FeedToolCall,
   FeedToolCallStatus,
+  FeedToolsActivity,
   JsonValue,
   LeonFeedEntry
 } from './feed'
@@ -37,6 +41,11 @@ const THINKING_DETAILS = [
   'I will use the available system and search tools, then verify the result before finishing.'
 ]
 const THINKING_DURATION_MS = 8_400
+const FOLLOW_UP_THINKING_DETAILS = [
+  'The first results narrow the issue to the resolved shell configuration.',
+  'I need to verify the remaining value before finalizing the change.'
+]
+const FOLLOW_UP_THINKING_DURATION_MS = 3_600
 
 const FINAL_ANSWER = [
   'Fixed it.',
@@ -197,6 +206,44 @@ function createPlan(isCompleted: boolean): FeedPlanStep[] {
   ]
 }
 
+function createThinkingActivity(
+  details: string[],
+  durationMs: number,
+  isActive: boolean
+): FeedThinkingActivity {
+  return {
+    id: window.crypto.randomUUID(),
+    type: 'thinking',
+    details,
+    durationMs,
+    isActive
+  }
+}
+
+function createSummaryActivity(content: string): FeedSummaryActivity {
+  return {
+    id: window.crypto.randomUUID(),
+    type: 'summary',
+    content
+  }
+}
+
+function createPlanActivity(steps: FeedPlanStep[]): FeedPlanActivity {
+  return {
+    id: window.crypto.randomUUID(),
+    type: 'plan',
+    steps
+  }
+}
+
+function createToolsActivity(toolCalls: FeedToolCall[]): FeedToolsActivity {
+  return {
+    id: window.crypto.randomUUID(),
+    type: 'tools',
+    toolCalls
+  }
+}
+
 function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
   const isInProgress = scenario.startsWith('in-progress')
   const hasPlan = scenario.endsWith('plan') && !scenario.endsWith('no-plan')
@@ -208,37 +255,47 @@ function createLeonEntry(scenario: MockFeedScenario): LeonFeedEntry {
     return {
       id: window.crypto.randomUUID(),
       role: 'leon',
-      thinking: {
-        details: THINKING_DETAILS,
-        durationMs: THINKING_DURATION_MS,
-        isActive: isInProgress
-      },
-      summary,
-      finalAnswer: isInProgress ? '' : FINAL_ANSWER,
-      plan: createPlan(!isInProgress)
+      activities: [
+        createThinkingActivity(
+          THINKING_DETAILS,
+          THINKING_DURATION_MS,
+          false
+        ),
+        createSummaryActivity(summary),
+        createPlanActivity(createPlan(!isInProgress)),
+        createThinkingActivity(
+          FOLLOW_UP_THINKING_DETAILS,
+          FOLLOW_UP_THINKING_DURATION_MS,
+          isInProgress
+        )
+      ],
+      finalAnswer: isInProgress ? '' : FINAL_ANSWER
     }
   }
+
+  const firstToolCalls = [createFileReadToolCall(), createSearchToolCall()]
+  const finalToolCall = createShellToolCall(
+    isInProgress ? 'running' : 'success',
+    isInProgress
+      ? 'Inspect resolved Ghostty configuration'
+      : 'Verify Ghostty configuration'
+  )
 
   return {
     id: window.crypto.randomUUID(),
     role: 'leon',
-    thinking: {
-      details: THINKING_DETAILS,
-      durationMs: THINKING_DURATION_MS,
-      isActive: isInProgress
-    },
-    summary,
-    finalAnswer: isInProgress ? '' : FINAL_ANSWER,
-    toolCalls: isInProgress
-      ? [
-          createFileReadToolCall(),
-          createShellToolCall('running', 'Inspect resolved Ghostty configuration')
-        ]
-      : [
-          createFileReadToolCall(),
-          createSearchToolCall(),
-          createShellToolCall('success', 'Verify Ghostty configuration')
-        ]
+    activities: [
+      createThinkingActivity(THINKING_DETAILS, THINKING_DURATION_MS, false),
+      createSummaryActivity(summary),
+      createToolsActivity(firstToolCalls),
+      createThinkingActivity(
+        FOLLOW_UP_THINKING_DETAILS,
+        FOLLOW_UP_THINKING_DURATION_MS,
+        false
+      ),
+      createToolsActivity([finalToolCall])
+    ],
+    finalAnswer: isInProgress ? '' : FINAL_ANSWER
   }
 }
 

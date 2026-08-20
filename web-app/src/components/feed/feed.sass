@@ -34,16 +34,24 @@
 
 .feed-mask
   position: fixed
-  bottom: 0
   left: 0
   z-index: 2
   width: 100%
-  height: var(--feed-bottom-clearance)
   background-color: var(--color-background)
-  mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
   pointer-events: none
   transition: background-color var(--transition-duration-main) var(--transition-timing-main)
+
+.feed-mask-top
+  top: 0
+  height: var(--feed-top-clearance)
+  mask-image: linear-gradient(to bottom, #000, #000 0%, transparent)
+  -webkit-mask-image: linear-gradient(to bottom, #000, #000 0%, transparent)
+
+.feed-mask-bottom
+  bottom: 0
+  height: var(--feed-bottom-clearance)
+  mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 46%, #000)
 
 @media (max-width: 680px)
   .feed

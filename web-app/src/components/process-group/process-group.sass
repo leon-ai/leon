@@ -1,16 +1,19 @@
 .process-group
+  --process-group-heading-height: 25px
+  --process-group-indicator-size: 16px
+  --activity-highlight-width: 48px
   display: flex
+  position: relative
   min-width: 0
   flex-direction: column
-  gap: var(--space-sm)
+  gap: 0
 
-.process-group-heading,
 .process-group-trigger
   display: flex
   align-items: center
   gap: var(--space-sm)
   min-width: 0
-  min-height: 25px
+  min-height: var(--process-group-heading-height)
   padding: 0
   color: var(--color-text)
   font-size: var(--font-size-md)
@@ -20,8 +23,12 @@
 .process-group-trigger
   align-self: flex-start
   max-width: 100%
+  color: var(--color-text-secondary)
+  transition: color var(--transition-duration-main) var(--transition-timing-main)
 
   &:hover
+    color: var(--color-text)
+
     .process-group-chevron
       opacity: 1
 
@@ -34,9 +41,49 @@
     outline: 1px solid var(--color-accent)
     outline-offset: var(--space-xs)
 
+.process-group-active
+  .process-group-trigger
+    color: var(--color-text)
+
+.process-group-active-content
+  display: block
+  position: relative
+  min-width: 0
+
+.process-group-heading-layer
+  display: flex
+  align-items: center
+  gap: var(--space-sm)
+  min-width: 0
+
 .process-group-title
   min-width: 0
   overflow-wrap: anywhere
+
+.process-group-indicator
+  display: flex
+  align-items: center
+  justify-content: center
+  flex: 0 0 auto
+  width: var(--process-group-indicator-size)
+  height: var(--process-group-indicator-size)
+  font-size: var(--font-size-md)
+  line-height: 1
+
+.process-group-wave
+  position: absolute
+  inset: 0
+  color: var(--color-activity-wave)
+  pointer-events: none
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
+  -webkit-mask-position: calc(0px - var(--activity-highlight-width)) 0
+  -webkit-mask-repeat: no-repeat
+  -webkit-mask-size: var(--activity-highlight-width) 100%
+  mask-image: linear-gradient(90deg, transparent, #000 50%, transparent)
+  mask-position: calc(0px - var(--activity-highlight-width)) 0
+  mask-repeat: no-repeat
+  mask-size: var(--activity-highlight-width) 100%
+  animation: process-group-activity-wave var(--activity-animation-duration) linear infinite
 
 .process-group-chevron
   position: relative
@@ -53,6 +100,26 @@
 .process-group-content
   min-width: 0
 
+  > .collapse-content > .collapse-body
+    padding-top: var(--activity-node-gap)
+
+@keyframes process-group-activity-wave
+  0%
+    -webkit-mask-position: calc(0px - var(--activity-highlight-width)) 0
+    mask-position: calc(0px - var(--activity-highlight-width)) 0
+
+  84%
+    -webkit-mask-position: calc(100% + var(--activity-highlight-width)) 0
+    mask-position: calc(100% + var(--activity-highlight-width)) 0
+
+  100%
+    -webkit-mask-position: calc(100% + var(--activity-highlight-width)) 0
+    mask-position: calc(100% + var(--activity-highlight-width)) 0
+
 @media (prefers-reduced-motion: reduce)
+  .process-group-trigger,
   .process-group-chevron
     transition: none
+
+  .process-group-wave
+    display: none

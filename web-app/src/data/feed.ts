@@ -33,11 +33,39 @@ export interface FeedPlanStep {
   toolCalls: FeedToolCall[]
 }
 
-export interface FeedThinking {
+export interface FeedThinkingActivity {
+  id: string
+  type: 'thinking'
   details: string[]
   durationMs: number
   isActive: boolean
 }
+
+export interface FeedSummaryActivity {
+  id: string
+  type: 'summary'
+  content: string
+}
+
+export interface FeedPlanActivity {
+  id: string
+  type: 'plan'
+  steps: FeedPlanStep[]
+}
+
+export interface FeedToolsActivity {
+  id: string
+  type: 'tools'
+  toolCalls: FeedToolCall[]
+}
+
+// Preserve agent-loop chronology by representing each phase as its own node.
+// In particular, later reasoning must create another thinking activity.
+export type LeonFeedActivity =
+  | FeedThinkingActivity
+  | FeedSummaryActivity
+  | FeedPlanActivity
+  | FeedToolsActivity
 
 export interface OwnerFeedEntry {
   id: string
@@ -48,11 +76,8 @@ export interface OwnerFeedEntry {
 export interface LeonFeedEntry {
   id: string
   role: 'leon'
-  thinking: FeedThinking
-  summary: string
+  activities: LeonFeedActivity[]
   finalAnswer: string
-  plan?: FeedPlanStep[]
-  toolCalls?: FeedToolCall[]
 }
 
 export type FeedEntry = OwnerFeedEntry | LeonFeedEntry

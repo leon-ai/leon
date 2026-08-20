@@ -2,8 +2,8 @@ import { useId, useState } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '../../data/feed'
+import { Collapse } from '../collapse'
 import { JsonView } from '../json-view'
-import { useAnimateOnce } from '../streaming-text'
 
 import './tool-call.sass'
 
@@ -43,19 +43,29 @@ function formatFunctionName(functionName: string): string {
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const detailsId = useId()
-  const shouldAnimate = useAnimateOnce(`${toolCall.id}:tool-call`)
   const technicalTitle = [
     toolCall.toolkitName,
     toolCall.toolName,
     formatFunctionName(toolCall.functionName)
   ].join(' • ')
+  const headingLayer = (
+    className?: string,
+    decorative = false
+  ) => (
+    <span
+      className={clsx('tool-call-heading-layer', className)}
+      aria-hidden={decorative || undefined}
+    >
+      <i
+        className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
+        aria-hidden="true"
+      />
+      <span className="tool-call-title">{toolCall.toolCallTitle}</span>
+    </span>
+  )
 
   return (
-    <section className={clsx(
-      'tool-call',
-      `tool-call-${toolCall.status}`,
-      { 'tool-call-animate': shouldAnimate }
-    )}>
+    <section className={clsx('tool-call', `tool-call-${toolCall.status}`)}>
       <button
         type="button"
         className="tool-call-trigger"
@@ -63,18 +73,19 @@ export function ToolCall({ toolCall }: ToolCallProps) {
         aria-controls={detailsId}
         onClick={() => setIsExpanded((isOpen) => !isOpen)}
       >
-        <i
-          className={`tool-call-tool-icon ri-${toolCall.toolIconName}`}
-          aria-hidden="true"
-        />
-        <span className="tool-call-title">{toolCall.toolCallTitle}</span>
+        {toolCall.status === 'running' ? (
+          <span className="tool-call-running-content">
+            {headingLayer()}
+            {headingLayer('tool-call-wave', true)}
+          </span>
+        ) : headingLayer()}
         <i
           className="tool-call-chevron ri-arrow-right-s-line"
           aria-hidden="true"
         />
       </button>
-      {isExpanded && (
-        <div id={detailsId} className="tool-call-details">
+      <Collapse id={detailsId} isOpen={isExpanded}>
+        <div className="tool-call-details">
           <p className="tool-call-details-title">{technicalTitle}</p>
           <JsonView label="Input" value={toolCall.input} />
           <JsonView
@@ -82,7 +93,7 @@ export function ToolCall({ toolCall }: ToolCallProps) {
             value={toolCall.output ?? { status: toolCall.status }}
           />
         </div>
-      )}
+      </Collapse>
     </section>
   )
 }
