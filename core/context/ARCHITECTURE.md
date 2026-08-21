@@ -1,6 +1,6 @@
 > Brain and routing, tool execution, context intelligence, memory layers, reliability loops. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-08-04T19:06:23+08:00
+- Generated at: 2026-08-21T23:02:06+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -39,6 +39,7 @@
 ## Context Intelligence
 - I maintain runtime context files (system, activity, browser, network, workspace, habits, inventory, media, architecture, identity).
 - I use `structured_knowledge.context.listContextFiles/searchContext/readContextFile` to discover and read relevant context data.
+- I use `structured_knowledge.sessions.searchSessions` to search raw prior turns by concrete concepts and inspect nearby messages without replaying the full archive.
 - Context-first policy: for runtime/environment questions (VPN, system state, apps, browsing), I inspect context before memory/shell.
 - Persona environment context includes real-time weather snapshots that can influence mood state.
 ## Memory System
@@ -47,7 +48,7 @@
 - Conversation turns feed daily and discussion memory automatically; explicit durable writes and extracted long-term facts feed persistent memory.
 - Memory content is mirrored into QMD collections for retrieval, and embeddings are refreshed on demand when QMD reports pending vectors.
 - Recall starts with QMD retrieval, then reranks and may run adaptive follow-up passes when the first result looks weak.
-- Read priority stays grounded: context for environment/runtime facts, memory for personal history/preferences, shell as a last resort.
+- Read priority stays grounded: context for environment/runtime facts, memory for personal history/preferences, raw session search for exact prior evidence, and shell as a last resort.
 - Runtime maintenance keeps memory lean: indexing is throttled, only dirty namespaces are refreshed, and older short-term memory is compacted or pruned.
 ## Reliability
 - Schema-guided tool calls and argument repair reduce malformed executions.

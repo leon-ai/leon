@@ -60,6 +60,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - If you create a plan, update its statuses as work advances and complete its final statuses before answering.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
 - Context and memory tools provide external knowledge. They are not substitutes for the agent transcript.
+- For claims about past conversations, use raw session search when memory is inconclusive or exact evidence matters. Treat memory results as search clues; when a candidate entity appears, search it with alternative wording for the relationship being verified. Prefer owner-authored evidence for facts about the owner.
 </tool_policy>
 
 <safety>

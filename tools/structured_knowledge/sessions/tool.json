@@ -1,0 +1,58 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "sessions",
+  "toolkit_id": "structured_knowledge",
+  "name": "Sessions",
+  "description": "Search raw prior conversation turns for supporting evidence. Start with concrete concepts from the owner's request or memory results. When a result reveals a candidate entity, search it again with alternative wording for the relationship being verified. Prefer owner-authored matches for claims about the owner; interest or research alone does not prove ownership or preference.",
+  "icon_name": "chat-history-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "searchSessions": {
+      "description": "Search visible messages across prior sessions. Returns the best match per session with nearby turns for evidence and provenance.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Concrete names, phrases, or concepts likely to appear in the prior conversation. Refine a discovered entity with alternative wording for the relationship being verified."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": [
+                  "owner",
+                  "leon",
+                  "both"
+                ],
+                "description": "Whose messages may be direct matches. Use owner for personal facts; surrounding context still includes both roles."
+              },
+              "topK": {
+                "type": "number",
+                "description": "Maximum number of distinct sessions to return, from 1 to 10."
+              },
+              "contextWindow": {
+                "type": "number",
+                "description": "Nearby visible turns to return on each side, from 0 to 6."
+              },
+              "includeCurrentSession": {
+                "type": "boolean",
+                "description": "Also search the current session. Defaults to false because the current transcript is already available."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

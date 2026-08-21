@@ -21,6 +21,7 @@ import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_MANAGER } from '@/config'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import type { LongLanguageCode } from '@/types'
 
@@ -906,7 +907,8 @@ export default class ToolExecutor {
         env: {
           ...process.env,
           LEON_CODEBASE_PATH: CODEBASE_PATH,
-          LEON_PROFILE: getActiveProfileName()
+          LEON_PROFILE: getActiveProfileName(),
+          LEON_SESSION_ID: getActiveConversationSessionId() || ''
         },
         windowsHide: true
       })

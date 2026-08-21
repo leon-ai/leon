@@ -37,6 +37,7 @@ export const LEON_TOOLKITS_PATH = path.join(LEON_HOME_PATH, 'toolkits')
 export const CODEBASE_CONTEXT_PATH = path.join(CODEBASE_PATH, 'core', 'context')
 export const PROFILE_CONTEXT_PATH = path.join(LEON_PROFILE_PATH, 'context')
 export const PROFILE_MEMORY_PATH = path.join(LEON_PROFILE_PATH, 'memory')
+export const PROFILE_SESSIONS_PATH = path.join(LEON_PROFILE_PATH, 'sessions')
 export const PROFILE_MEMORY_DB_PATH = path.join(
   PROFILE_MEMORY_PATH,
   'index.sqlite'
