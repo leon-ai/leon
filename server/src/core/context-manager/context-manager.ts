@@ -43,6 +43,7 @@ const CODEBASE_CONTEXT_FILES = new Set([
   'LEON.md',
   'ARCHITECTURE.md'
 ])
+const GENERATED_AT_LINE_PREFIX = '- Generated at: '
 const BOOT_REFRESH_MIN_DELAY_MS = 6_000
 const BOOT_REFRESH_MAX_DELAY_MS = 20_000
 const BOOT_REFRESH_RETRY_DELAY_MS = 4_000
@@ -502,6 +503,26 @@ export default class ContextManager {
 
       const filePath = this.getContextFilePath(definition.filename)
       const content = this.ensureTrailingNewline(parsed.content)
+      if (CODEBASE_CONTEXT_FILES.has(definition.filename) && fs.existsSync(filePath)) {
+        const currentContent = fs.readFileSync(filePath, 'utf-8')
+        const currentGeneratedAt = currentContent
+          .split('\n')
+          .find((line) => line.startsWith(GENERATED_AT_LINE_PREFIX))
+        const nextGeneratedAt = content
+          .split('\n')
+          .find((line) => line.startsWith(GENERATED_AT_LINE_PREFIX))
+
+        if (
+          currentGeneratedAt !== undefined &&
+          nextGeneratedAt !== undefined &&
+          currentContent.replace(currentGeneratedAt, nextGeneratedAt) === content
+        ) {
+          const stats = fs.statSync(filePath)
+          fs.utimesSync(filePath, stats.atime, new Date())
+          return false
+        }
+      }
+
       fs.mkdirSync(path.dirname(filePath), { recursive: true })
       fs.writeFileSync(filePath, content, 'utf-8')
       this.metadata.set(definition.filename, {
