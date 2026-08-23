@@ -11,11 +11,11 @@
     "url": "https://x.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-linux-x86_64",
-    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-linux-aarch64",
-    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-macosx-x86_64",
-    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-macosx-arm64",
-    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_7.0.2/ffprobe_7.0.2-win-amd64.exe"
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_9.0.1/ffprobe_9.0.1-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_9.0.1/ffprobe_9.0.1-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_9.0.1/ffprobe_9.0.1-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_9.0.1/ffprobe_9.0.1-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffprobe_9.0.1/ffprobe_9.0.1-win-amd64.exe"
   },
   "functions": {
     "getMediaFormatInfo": {
