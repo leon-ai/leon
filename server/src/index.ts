@@ -37,6 +37,7 @@ import {
   LLM_PROVIDER,
   LLM_MANAGER,
   TOOLKIT_REGISTRY,
+  TOOL_PROVIDER_REGISTRY,
   CONTEXT_MANAGER,
   PULSE_MANAGER
 } from '@/core'
@@ -49,6 +50,8 @@ import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+
+const SHUTDOWN_FORCE_TIMEOUT_MS = 5_000
 
 async function bootstrap(): Promise<void> {
   // Scope process replacement to one profile so separate Leon workers can
@@ -261,9 +264,21 @@ async function bootstrap(): Promise<void> {
       Telemetry.stop()
     }
 
-    setTimeout(() => {
+    const forceExitTimeout = setTimeout(() => {
       process.exit(exitCode)
-    }, 1_000)
+    }, SHUTDOWN_FORCE_TIMEOUT_MS)
+    forceExitTimeout.unref()
+
+    void TOOL_PROVIDER_REGISTRY.dispose()
+      .catch((error: unknown) => {
+        LogHelper.error(
+          `Tool provider shutdown failed: ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+      .finally(() => {
+        clearTimeout(forceExitTimeout)
+        process.exit(exitCode)
+      })
   }
 
   setShutdownHandler(shutdown)
