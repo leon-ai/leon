@@ -271,8 +271,10 @@ import {
   appendConversationMessage,
   getConversationHistory,
   listConversationSessions,
+  publishConversationEvent,
   runAgent,
-  runControlledSkill
+  runControlledSkill,
+  subscribeAgentEvents
 } from '@/core/http-server/http-plugins/leon-services'
 
 describe('HTTP plugin Leon services', () => {
@@ -538,6 +540,44 @@ describe('HTTP plugin Leon services', () => {
       sentAt: 3,
       messageId: 'background-job-1'
     })
+  })
+
+  it('publishes trusted progress with Leon-owned sequence correlation', async () => {
+    const turn = await runAgent({
+      profile_id: 'owner-a',
+      query: 'Complete this in the background.',
+      create_session: true,
+      request_id: 'turn-1'
+    })
+    const events: Array<Record<string, unknown>> = []
+    const unsubscribe = await subscribeAgentEvents(
+      {
+        profile_id: 'owner-a',
+        session_id: turn.session_id || ''
+      },
+      (event) => events.push(event)
+    )
+
+    const published = await publishConversationEvent({
+      profile_id: 'owner-a',
+      session_id: turn.session_id || '',
+      turn_id: 'turn-1',
+      response_id: 'background:job-1',
+      type: 'reasoning_summary',
+      data: { summary: 'Inspecting the active application' }
+    })
+    unsubscribe()
+
+    expect(events.at(-1)).toEqual(published)
+    expect(published).toMatchObject({
+      profile_id: 'owner-a',
+      session_id: turn.session_id,
+      turn_id: 'turn-1',
+      response_id: 'background:job-1',
+      type: 'reasoning_summary',
+      data: { summary: 'Inspecting the active application' }
+    })
+    expect(published.sequence).toBeGreaterThan(0)
   })
 
   it('rejects an external message for another profile session', async () => {

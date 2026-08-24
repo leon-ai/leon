@@ -62,6 +62,7 @@ export interface HTTPPluginRunAgentResult {
   request_id: string | null
   final_intent: string | null
   metrics: unknown
+  response_trace: HTTPPluginAgentTrace
 }
 
 export interface HTTPPluginRunControlledSkillInput {
@@ -109,6 +110,16 @@ export interface HTTPPluginAppendConversationMessageInput {
   role: 'owner' | 'assistant'
   message: string
   message_id?: string
+  response_trace?: HTTPPluginAgentTrace
+}
+
+export interface HTTPPluginPublishConversationEventInput {
+  profile_id?: string
+  session_id: string
+  turn_id?: string
+  response_id?: string
+  type: HTTPPluginAgentEventType
+  data: Record<string, unknown>
 }
 
 export interface HTTPPluginAppendConversationMessageResult {
@@ -213,6 +224,9 @@ export interface HTTPPluginLeonServices {
   appendConversationMessage: (
     input: HTTPPluginAppendConversationMessageInput
   ) => Promise<HTTPPluginAppendConversationMessageResult>
+  publishConversationEvent: (
+    input: HTTPPluginPublishConversationEventInput
+  ) => Promise<HTTPPluginAgentEvent>
   listConversationSessions: (
     input: HTTPPluginListConversationSessionsInput
   ) => Promise<HTTPPluginListConversationSessionsResult>
