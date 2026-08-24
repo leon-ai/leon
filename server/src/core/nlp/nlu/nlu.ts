@@ -42,7 +42,12 @@ import { SkillRouterLLMDuty } from '@/core/llm-manager/llm-duties/skill-router-l
 import { ActionCallingLLMDuty } from '@/core/llm-manager/llm-duties/action-calling-llm-duty'
 import { SlotFillingLLMDuty } from '@/core/llm-manager/llm-duties/slot-filling-llm-duty'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
-import { RoutingMode, SkillFormat, type MessageLog } from '@/types'
+import {
+  RoutingMode,
+  SkillFormat,
+  type AgentResponseTrace,
+  type MessageLog
+} from '@/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { WorkflowProgressWidget } from '@/core/nlp/nlu/workflow-progress-widget'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
@@ -886,6 +891,11 @@ export default class NLU {
       reactData['llmMetrics'] && typeof reactData['llmMetrics'] === 'object'
         ? (reactData['llmMetrics'] as Record<string, unknown>)
         : null
+    const agentResponseTrace =
+      reactData['agentResponseTrace'] &&
+      typeof reactData['agentResponseTrace'] === 'object'
+        ? (reactData['agentResponseTrace'] as AgentResponseTrace)
+        : null
     const finalIntent =
       typeof reactData['finalIntent'] === 'string'
         ? (reactData['finalIntent'] as
@@ -926,59 +936,62 @@ export default class NLU {
 
     if (output && !BRAIN.isMuted) {
       await BRAIN.talk(
-        llmMetrics
+        llmMetrics || agentResponseTrace
           ? {
               text: String(output),
               speech: String(output),
-              llmMetrics: {
-                completionCount: Number(
-                  llmMetrics['completionCount'] || 0
-                ),
-                inputTokens: Number(llmMetrics['inputTokens'] || 0),
-                outputTokens: Number(llmMetrics['outputTokens'] || 0),
-                totalTokens: Number(llmMetrics['totalTokens'] || 0),
-                finalAnswerOutputTokens: Number(
-                  llmMetrics['finalAnswerOutputTokens'] || 0
-                ),
-                durationMs: Number(llmMetrics['durationMs'] || 0),
-                finalAnswerDurationMs: Number(
-                  llmMetrics['finalAnswerDurationMs'] || 0
-                ),
-                finalAnswerTokensPerSecond: Number(
-                  llmMetrics['finalAnswerTokensPerSecond'] || 0
-                ),
-                finalAnswerCharsPerSecond: Number(
-                  llmMetrics['finalAnswerCharsPerSecond'] || 0
-                ),
-                outputCharsPerSecond: Number(
-                  llmMetrics['outputCharsPerSecond'] || 0
-                ),
-                averagedPhaseTokensPerSecond: Number(
-                  llmMetrics['averagedPhaseTokensPerSecond'] || 0
-                ),
-                ...(llmMetrics['phaseMetrics'] &&
-                typeof llmMetrics['phaseMetrics'] === 'object'
-                  ? {
-                      phaseMetrics: llmMetrics['phaseMetrics'] as {
-                        agent: {
-                          outputTokens: number
-                          durationMs: number
-                          tokensPerSecond: number
-                        }
-                        final_answer: {
-                          outputTokens: number
-                          durationMs: number
-                          tokensPerSecond: number
-                        }
-                      }
+              ...(llmMetrics
+                ? {
+                    llmMetrics: {
+                      completionCount: Number(llmMetrics['completionCount'] || 0),
+                      inputTokens: Number(llmMetrics['inputTokens'] || 0),
+                      outputTokens: Number(llmMetrics['outputTokens'] || 0),
+                      totalTokens: Number(llmMetrics['totalTokens'] || 0),
+                      finalAnswerOutputTokens: Number(
+                        llmMetrics['finalAnswerOutputTokens'] || 0
+                      ),
+                      durationMs: Number(llmMetrics['durationMs'] || 0),
+                      finalAnswerDurationMs: Number(
+                        llmMetrics['finalAnswerDurationMs'] || 0
+                      ),
+                      finalAnswerTokensPerSecond: Number(
+                        llmMetrics['finalAnswerTokensPerSecond'] || 0
+                      ),
+                      finalAnswerCharsPerSecond: Number(
+                        llmMetrics['finalAnswerCharsPerSecond'] || 0
+                      ),
+                      outputCharsPerSecond: Number(
+                        llmMetrics['outputCharsPerSecond'] || 0
+                      ),
+                      averagedPhaseTokensPerSecond: Number(
+                        llmMetrics['averagedPhaseTokensPerSecond'] || 0
+                      ),
+                      ...(llmMetrics['phaseMetrics'] &&
+                      typeof llmMetrics['phaseMetrics'] === 'object'
+                        ? {
+                            phaseMetrics: llmMetrics['phaseMetrics'] as {
+                              agent: {
+                                outputTokens: number
+                                durationMs: number
+                                tokensPerSecond: number
+                              }
+                              final_answer: {
+                                outputTokens: number
+                                durationMs: number
+                                tokensPerSecond: number
+                              }
+                            }
+                          }
+                        : {}),
+                      turnInputTokens: Number(llmMetrics['turnInputTokens'] || 0),
+                      turnOutputTokens: Number(llmMetrics['turnOutputTokens'] || 0),
+                      turnTotalTokens: Number(llmMetrics['turnTotalTokens'] || 0),
+                      ttftMs: Number(llmMetrics['ttftMs'] || 0),
+                      tokensPerSecond: Number(llmMetrics['tokensPerSecond'] || 0)
                     }
-                  : {}),
-                turnInputTokens: Number(llmMetrics['turnInputTokens'] || 0),
-                turnOutputTokens: Number(llmMetrics['turnOutputTokens'] || 0),
-                turnTotalTokens: Number(llmMetrics['turnTotalTokens'] || 0),
-                ttftMs: Number(llmMetrics['ttftMs'] || 0),
-                tokensPerSecond: Number(llmMetrics['tokensPerSecond'] || 0)
-              }
+                  }
+                : {}),
+              ...(agentResponseTrace ? { agentResponseTrace } : {})
             }
           : String(output),
         true
