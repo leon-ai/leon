@@ -1,13 +1,13 @@
-> Brain and routing, tool execution, context intelligence, memory layers, reliability loops. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
+> Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-08-21T23:02:06+08:00
+- Generated at: 2026-08-25T19:44:13+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
 ## Core Principles
-- Explicit tools over implicit behavior: I call declared tools/functions instead of free-form shell logic whenever possible.
-- Progressive grounding: I prefer context and memory tools first, then shell only when no dedicated tool can satisfy the request.
-- Auditable steps: I keep plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
+- Explicit tools over implicit behavior: Leon calls declared tools/functions instead of free-form shell logic whenever possible.
+- Progressive grounding: Leon prefers context and memory tools first, then shell only when no dedicated tool can satisfy the request.
+- Auditable steps: Leon keeps plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
 - HTTP APIs remain request/response support surfaces; live profile-scoped utterances should use the Socket.IO client interface.
@@ -21,6 +21,10 @@
 - Leon Satellite is an optional process on a user device that connects its enabled and available profile tools to a remote Leon server.
 - Eligible tool calls are routed through Satellite and executed on that device; those tools become unavailable when Satellite disconnects.
 - Satellite provides generic transport only. Device-, application-, and company-specific behavior stays in tools and skills instead of Leon Core.
+## Computer Use
+- Leon loads computer use progressively for graphical application control and visual verification, prefers dedicated tools when available, and attaches screenshots only when an observation returns visual evidence.
+- A persistent profile-scoped driver runs beside the applications it controls, either in the local Leon server or on Leon Satellite; actions stay in the background unless the owner or profile requests visible execution.
+- Leon respects explicit app choices and preferences, otherwise uses local inventory to choose a suitable specialized app, follows the shortest sufficient interaction path, and verifies the requested outcome.
 ## Agent Loop
 - One continuous provider tool-calling transcript carries the owner request, assistant tool calls, matching tool results, recovery decisions, and final answer.
 - Tool schemas are disclosed progressively: the loop starts with control tools and the toolkit catalog, then loads only the exact schemas and compact toolkit context needed for the task.
@@ -33,14 +37,14 @@
 - The final eight iterations add convergence guidance. Context-pressure failures get one smaller compacted retry, while failed checkpoint synthesis gets one evidence-only retry before a focused continuation is offered.
 - Terminal tool handoffs, missing-settings blockers, and final text responses end the loop directly without an extra planning, recovery, or final-answer inference.
 - Empty or truncated model output gets one compacted retry with reasoning disabled; repeated exhaustion returns a precise error instead of looping.
-- I have a living personality and a changing mood that influence my tone and behavior.
+- Leon has a living personality and a changing mood that influence its tone and behavior.
 - A bounded private self-model/diary is updated after turns, promotes repeated habits into stable behavioral principles, and injects only a compact snapshot into the first agent request.
 - A periodic pulse manager can generate autonomous agent matters from memory, context deltas, and the private self-model, persist them to `PULSE.md`, execute at most one matter per tick, and suppress repeated matters after owner declines.
 ## Context Intelligence
-- I maintain runtime context files (system, activity, browser, network, workspace, habits, inventory, media, architecture, identity).
-- I use `structured_knowledge.context.listContextFiles/searchContext/readContextFile` to discover and read relevant context data.
-- I use `structured_knowledge.sessions.searchSessions` to search raw prior turns by concrete concepts and inspect nearby messages without replaying the full archive.
-- Context-first policy: for runtime/environment questions (VPN, system state, apps, browsing), I inspect context before memory/shell.
+- Leon maintains runtime context files (system, activity, browser, network, workspace, habits, inventory, media, architecture, identity).
+- Leon uses `structured_knowledge.context.listContextFiles/searchContext/readContextFile` to discover and read relevant context data.
+- Leon uses `structured_knowledge.sessions.searchSessions` to search raw prior turns by concrete concepts and inspect nearby messages without replaying the full archive.
+- Context-first policy: for runtime/environment questions (VPN, system state, apps, browsing), Leon inspects context before memory/shell.
 - Persona environment context includes real-time weather snapshots that can influence mood state.
 ## Memory System
 - Memory is layered into persistent, daily, and discussion stores, with context files available as a separate grounding source.
@@ -53,4 +57,4 @@
 ## Reliability
 - Schema-guided tool calls and argument repair reduce malformed executions.
 - Duplicate-input guards and observation-driven recovery reduce repeated bad calls while preserving successful progress.
-- I prefer dedicated tools over shell commands to keep behavior stable and auditable.
+- Leon prefers dedicated tools over shell commands to keep behavior stable and auditable.
