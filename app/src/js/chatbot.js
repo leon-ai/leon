@@ -328,6 +328,7 @@ export default class Chatbot {
 
   resetFeed() {
     WIDGETS_TO_FETCH.length = 0
+    this.toolUIHandler.clearToolGroups()
     this.feed.innerHTML = ''
     this.noBubbleMessage = document.createElement('p')
     this.noBubbleMessage.id = 'no-bubble'
@@ -397,6 +398,12 @@ export default class Chatbot {
         ToolUIHandler.isToolOutputMarker(bubble.originalString)
       ) {
         continue
+      }
+
+      if (bubble.who === 'leon' && bubble.agentResponseTrace) {
+        this.toolUIHandler.replayAgentResponseTrace(
+          bubble.agentResponseTrace
+        )
       }
 
       this.createBubble({
