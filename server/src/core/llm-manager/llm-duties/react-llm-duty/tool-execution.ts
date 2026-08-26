@@ -404,10 +404,21 @@ export async function runToolExecution(
   LogHelper.debug(`Tool input: ${toolInput}`)
 
   const toolGroupId = createToolGroupId(toolkitId, toolId, functionName)
+  const toolDisplayContext = getToolDisplayContext(
+    toolkitId,
+    toolId,
+    functionName
+  )
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
     status: 'running',
+    ...(toolDisplayContext.toolkitIconName
+      ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+      : {}),
+    ...(toolDisplayContext.toolIconName
+      ? { toolIconName: toolDisplayContext.toolIconName }
+      : {}),
     input: requestedToolInput,
     ...(stepLabel ? { stepLabel } : {})
   })
@@ -421,11 +432,6 @@ export async function runToolExecution(
     ...(stepLabel ? { stepLabel } : {})
   })
 
-  const toolDisplayContext = getToolDisplayContext(
-    toolkitId,
-    toolId,
-    functionName
-  )
   let didNotifyOwnerPreparationStarted = false
   let didNotifyOwnerPreparationReady = false
   let didObservePreparationFailure = false
@@ -434,6 +440,12 @@ export async function runToolExecution(
       id: toolGroupId,
       name: qualifiedName,
       status: 'running',
+      ...(toolDisplayContext.toolkitIconName
+        ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+        : {}),
+      ...(toolDisplayContext.toolIconName
+        ? { toolIconName: toolDisplayContext.toolIconName }
+        : {}),
       input: requestedToolInput,
       output: progress.data || progress.message,
       ...(stepLabel ? { stepLabel } : {})
@@ -561,6 +573,12 @@ export async function runToolExecution(
     id: toolGroupId,
     name: qualifiedName,
     status: effectiveStatus === 'error' ? 'error' : 'success',
+    ...(toolDisplayContext.toolkitIconName
+      ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+      : {}),
+    ...(toolDisplayContext.toolIconName
+      ? { toolIconName: toolDisplayContext.toolIconName }
+      : {}),
     input: requestedToolInput,
     output: toolExecutionResult.data?.output || {},
     ...(stepLabel ? { stepLabel } : {}),

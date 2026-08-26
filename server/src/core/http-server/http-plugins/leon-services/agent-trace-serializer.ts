@@ -16,6 +16,12 @@ export function serializeAgentTrace(
       id: toolCall.id,
       name: toolCall.name,
       status: toolCall.status,
+      ...(toolCall.toolkitIconName
+        ? { toolkit_icon_name: toolCall.toolkitIconName }
+        : {}),
+      ...(toolCall.toolIconName
+        ? { tool_icon_name: toolCall.toolIconName }
+        : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
       ...(toolCall.stepLabel ? { step_label: toolCall.stepLabel } : {}),
@@ -42,6 +48,12 @@ export function deserializeAgentTrace(
       id: toolCall.id || toolCall.name,
       name: toolCall.name,
       status: toolCall.status,
+      ...(toolCall.toolkit_icon_name
+        ? { toolkitIconName: toolCall.toolkit_icon_name }
+        : {}),
+      ...(toolCall.tool_icon_name
+        ? { toolIconName: toolCall.tool_icon_name }
+        : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
       ...(toolCall.step_label ? { stepLabel: toolCall.step_label } : {}),

@@ -1003,6 +1003,12 @@ export default class ToolUIHandler {
         toolName,
         functionName,
         toolGroupId,
+        ...(toolCall.toolkitIconName
+          ? { toolkitIconName: toolCall.toolkitIconName }
+          : {}),
+        ...(toolCall.toolIconName
+          ? { toolIconName: toolCall.toolIconName }
+          : {}),
         ...(toolCall.stepLabel ? { stepLabel: toolCall.stepLabel } : {})
       }
       const serializedInput =

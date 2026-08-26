@@ -117,6 +117,8 @@ export interface AgentResponseToolCall {
   id: string
   name: string
   status: 'running' | 'success' | 'error'
+  toolkitIconName?: string
+  toolIconName?: string
   input?: unknown
   output?: unknown
   stepLabel?: string

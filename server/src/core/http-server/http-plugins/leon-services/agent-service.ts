@@ -111,6 +111,12 @@ export async function runAgent(
               id: event.toolCall.id,
               name: event.toolCall.name,
               status: event.toolCall.status,
+              ...(event.toolCall.toolkitIconName
+                ? { toolkit_icon_name: event.toolCall.toolkitIconName }
+                : {}),
+              ...(event.toolCall.toolIconName
+                ? { tool_icon_name: event.toolCall.toolIconName }
+                : {}),
               ...(event.toolCall.input !== undefined
                 ? { input: event.toolCall.input }
                 : {}),
