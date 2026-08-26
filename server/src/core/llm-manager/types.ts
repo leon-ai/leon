@@ -64,6 +64,12 @@ export type AgentToolTranscriptMessage =
       toolCallId: string
       toolName: string
       content: string
+      files?: Array<{
+        dataBase64: string
+        mediaType: string
+        filename?: string
+        visualDetail?: 'auto' | 'low' | 'high'
+      }>
     }
 
 export type PromptOrChatHistory = string | AgentToolTranscriptMessage[]

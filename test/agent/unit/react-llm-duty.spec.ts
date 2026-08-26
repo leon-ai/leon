@@ -164,6 +164,53 @@ describe('continuous agent loop', () => {
     expect(result.transcript).toBe(transcript)
   })
 
+  it('keeps visual files returned by a tool in the model transcript', async () => {
+    let modelTurn = 0
+
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Inspect the screen.' }],
+      catalog: createCatalog(),
+      callModel: async (messages) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          return {
+            toolCalls: [
+              toolCall('capture-1', CALLABLE_TOOL_NAME, { query: 'screen' })
+            ]
+          }
+        }
+
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          toolCallId: 'capture-1',
+          files: [
+            {
+              dataBase64: 'aW1hZ2U=',
+              mediaType: 'image/png',
+              visualDetail: 'high'
+            }
+          ]
+        })
+        return { textContent: 'The screen is visible.' }
+      },
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: 'Screen captured.'
+        },
+        modelFiles: [
+          {
+            dataBase64: 'aW1hZ2U=',
+            mediaType: 'image/png',
+            visualDetail: 'high'
+          }
+        ]
+      }),
+      loadAgentSkill: async () => null
+    })
+  })
+
   it('returns validation failures as observations so the model can recover', async () => {
     const executeFunction = vi.fn()
     let modelTurn = 0

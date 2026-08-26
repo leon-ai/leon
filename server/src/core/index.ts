@@ -24,6 +24,8 @@ import SelfModelManager from '@/core/self-model-manager'
 import PulseManager from '@/core/pulse-manager'
 import PostTurnMaintenanceQueue from '@/core/post-turn-maintenance-queue'
 import ToolExecutor from '@/core/tool-executor'
+import { ToolProviderRegistry } from '@/core/tool-provider/tool-provider-registry'
+import { ComputerUseToolProvider } from '@/core/computer-use/computer-use-tool-provider'
 import { ConversationLogger } from '@/conversation-logger'
 import { ToolCallLogger } from '@/tool-call-logger'
 import { createProfileServiceProxy } from '@/core/profile-runtime/profile-runtime-manager'
@@ -88,6 +90,9 @@ export const TOOL_EXECUTOR = createProfileServiceProxy(
   'tool-executor',
   () => new ToolExecutor()
 )
+
+export const TOOL_PROVIDER_REGISTRY = new ToolProviderRegistry()
+TOOL_PROVIDER_REGISTRY.register(new ComputerUseToolProvider())
 
 export const PERSONA = createProfileServiceProxy(
   'persona',

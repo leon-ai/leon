@@ -27,6 +27,8 @@ export type AgentRunProgressEvent =
         id: string
         name: string
         status: 'running' | 'success' | 'error'
+        toolkitIconName?: string
+        toolIconName?: string
         input?: unknown
         output?: unknown
         stepLabel?: string
@@ -85,6 +87,12 @@ export interface FinalResponseSignal {
 
 export interface ToolExecutionResult {
   execution: ExecutionRecord
+  modelFiles?: Array<{
+    dataBase64: string
+    mediaType: string
+    filename?: string
+    visualDetail?: 'auto' | 'low' | 'high'
+  }>
   handoffSignal?: FinalResponseSignal
 }
 

@@ -13,10 +13,7 @@
  * @see https://www.iso.org/iso-3166-country-codes.html
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { default: LANG_CONFIGS } = await import('@@/core/langs.json', {
-  with: { type: 'json' }
-})
+import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
 
 export type Languages = typeof LANG_CONFIGS
 export type LongLanguageCode = keyof Languages
@@ -120,6 +117,8 @@ export interface AgentResponseToolCall {
   id: string
   name: string
   status: 'running' | 'success' | 'error'
+  toolkitIconName?: string
+  toolIconName?: string
   input?: unknown
   output?: unknown
   stepLabel?: string

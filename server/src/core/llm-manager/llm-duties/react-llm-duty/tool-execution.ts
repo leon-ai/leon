@@ -404,10 +404,21 @@ export async function runToolExecution(
   LogHelper.debug(`Tool input: ${toolInput}`)
 
   const toolGroupId = createToolGroupId(toolkitId, toolId, functionName)
+  const toolDisplayContext = getToolDisplayContext(
+    toolkitId,
+    toolId,
+    functionName
+  )
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
     status: 'running',
+    ...(toolDisplayContext.toolkitIconName
+      ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+      : {}),
+    ...(toolDisplayContext.toolIconName
+      ? { toolIconName: toolDisplayContext.toolIconName }
+      : {}),
     input: requestedToolInput,
     ...(stepLabel ? { stepLabel } : {})
   })
@@ -421,11 +432,6 @@ export async function runToolExecution(
     ...(stepLabel ? { stepLabel } : {})
   })
 
-  const toolDisplayContext = getToolDisplayContext(
-    toolkitId,
-    toolId,
-    functionName
-  )
   let didNotifyOwnerPreparationStarted = false
   let didNotifyOwnerPreparationReady = false
   let didObservePreparationFailure = false
@@ -434,6 +440,12 @@ export async function runToolExecution(
       id: toolGroupId,
       name: qualifiedName,
       status: 'running',
+      ...(toolDisplayContext.toolkitIconName
+        ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+        : {}),
+      ...(toolDisplayContext.toolIconName
+        ? { toolIconName: toolDisplayContext.toolIconName }
+        : {}),
       input: requestedToolInput,
       output: progress.data || progress.message,
       ...(stepLabel ? { stepLabel } : {})
@@ -502,6 +514,9 @@ export async function runToolExecution(
 
   const toolExecutionResult =
     await TOOL_EXECUTOR.executeTool(toolExecutionInput)
+  const modelFiles = toolExecutionResult.data.model_files
+  const observationData = { ...toolExecutionResult.data }
+  delete observationData.model_files
   const outputLogPath =
     typeof toolExecutionResult.data?.output_log_path === 'string'
       ? toolExecutionResult.data.output_log_path
@@ -558,6 +573,12 @@ export async function runToolExecution(
     id: toolGroupId,
     name: qualifiedName,
     status: effectiveStatus === 'error' ? 'error' : 'success',
+    ...(toolDisplayContext.toolkitIconName
+      ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+      : {}),
+    ...(toolDisplayContext.toolIconName
+      ? { toolIconName: toolDisplayContext.toolIconName }
+      : {}),
     input: requestedToolInput,
     output: toolExecutionResult.data?.output || {},
     ...(stepLabel ? { stepLabel } : {}),
@@ -580,6 +601,7 @@ export async function runToolExecution(
         requestedToolInput,
         ...(stepLabel ? { stepLabel } : {})
       },
+      ...(modelFiles ? { modelFiles } : {}),
       handoffSignal: {
         intent: 'answer',
         draft: finalAnswer
@@ -632,7 +654,7 @@ export async function runToolExecution(
       : {}),
     ...(outputLogPath ? { output_log_path: outputLogPath } : {}),
     message: effectiveMessage,
-    data: toolExecutionResult.data,
+    data: observationData,
     ...(hasObservedToolFailure
       ? {
         observed_tool_failure: {
@@ -650,6 +672,7 @@ export async function runToolExecution(
       observation,
       requestedToolInput,
       ...(stepLabel ? { stepLabel } : {})
-    }
+    },
+    ...(modelFiles ? { modelFiles } : {})
   }
 }

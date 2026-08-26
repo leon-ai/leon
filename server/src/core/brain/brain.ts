@@ -2,7 +2,11 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { LLMAnswerMetrics, ShortLanguageCode } from '@/types'
+import type {
+  AgentResponseTrace,
+  LLMAnswerMetrics,
+  ShortLanguageCode
+} from '@/types'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import type { NLUProcessResult } from '@/core/nlp/types'
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
@@ -36,6 +40,7 @@ type QueuedAnswer =
       speech: string
       text?: string
       llmMetrics?: LLMAnswerMetrics
+      agentResponseTrace?: AgentResponseTrace
       shouldSkipParaphrase?: boolean
     }
 
@@ -210,6 +215,10 @@ export default class Brain {
         answer && typeof answer === 'object' && 'llmMetrics' in answer
           ? answer.llmMetrics
           : undefined
+      const agentResponseTrace =
+        answer && typeof answer === 'object' && 'agentResponseTrace' in answer
+          ? answer.agentResponseTrace
+          : undefined
       const shouldSkipParaphrase =
         answer &&
         typeof answer === 'object' &&
@@ -312,10 +321,11 @@ export default class Brain {
           const sentAt = Date.now()
 
           SOCKET_SERVER.emitAnswerToChatClients(
-            llmMetrics
+            llmMetrics || agentResponseTrace
               ? {
                   answer: finalTextAnswer,
-                  llmMetrics
+                  ...(llmMetrics ? { llmMetrics } : {}),
+                  ...(agentResponseTrace ? { agentResponseTrace } : {})
                 }
               : finalTextAnswer
           )
@@ -337,7 +347,8 @@ export default class Brain {
             who: 'leon',
             message: finalTextAnswer,
             isAddedToHistory: true,
-            ...(llmMetrics ? { llmMetrics } : {})
+            ...(llmMetrics ? { llmMetrics } : {}),
+            ...(agentResponseTrace ? { agentResponseTrace } : {})
           })
           POST_TURN_MAINTENANCE_QUEUE.enqueue(
             'session title generation',

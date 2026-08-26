@@ -1,0 +1,14 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Computer Use",
+  "description": "Observe and operate desktop or browser interfaces when a dedicated tool cannot complete the owner's request or visual verification is required. Follow the shortest sufficient path, use relevant visual evidence directly, and verify only the requested outcome. Treat multi-step work as one continuous journey: continue from a relevant existing app and window when available, and launch a new app only when the current workspace cannot satisfy the request. Do not switch applications solely to gain a richer control backend. When no relevant workspace exists, launch the app named by the owner or consider their preferences and installed specialized apps. Work in the background by default; use visible interaction when the owner asks to watch.",
+  "icon_name": "computer-line",
+  "context_files": [
+    "LEON.md",
+    "ARCHITECTURE.md",
+    "HOST_SYSTEM.md"
+  ],
+  "tools": [
+    "cua"
+  ]
+}

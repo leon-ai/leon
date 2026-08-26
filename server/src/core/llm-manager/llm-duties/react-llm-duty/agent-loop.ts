@@ -13,6 +13,7 @@ import type {
   FinalPhaseIntent,
   FunctionConfig,
   PlanStepStatus,
+  ToolExecutionResult,
   TrackedPlanStep
 } from './types'
 import { findDuplicateToolInputMatch } from './agent-helpers'
@@ -53,6 +54,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - Use only the provided tools.
 - For every executable toolkit call, set ${AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME} to a very short, action-specific title that explains the immediate goal and includes the key target when useful.
 - Load the most specific relevant toolkit before acting. Prefer a dedicated toolkit over a general operating-system toolkit when both could perform the task.
+- Prefer dedicated/API tools, then semantic OS tools. Use a bounded shell command for non-visual system work when no dedicated tool fits. Use computer use for graphical application launch or control, visible UI state, and visual verification. Observe before acting. For a low-risk, reversible action, a successful tool result is sufficient unless it reports failure or a suspected no-op; add verification only when ambiguity or consequences justify it.
 - When the owner provides a source to understand, prefer direct-source tools over secondary search. Use search as fallback when the source cannot be accessed or does not contain the needed evidence.
 - Use the exact observed values from earlier tool results when chaining calls.
 - Do not repeat an identical call when its result is already in the transcript.
@@ -67,6 +69,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - Verify required paths, identifiers, accepted values, and prerequisites before side effects.
 - Do not invent current, exact, mutable, environment-specific, or tool-produced facts.
 - Stop and explain a genuine blocker rather than fabricating a result.
+- Never use computer or browser automation to hide automation, spoof identity, bypass CAPTCHA or anti-bot controls, or evade a service's usage policy.
 </safety>
 
 <response_policy>
@@ -144,10 +147,7 @@ interface AgentModelCallOptions {
   remainingIterations?: number
 }
 
-interface AgentFunctionExecutionResult {
-  execution: ExecutionRecord
-  handoffSignal?: FinalResponseSignal
-}
+type AgentFunctionExecutionResult = ToolExecutionResult
 
 export interface AgentLoopParams {
   transcript: AgentToolTranscriptMessage[]
@@ -561,7 +561,8 @@ export async function runAgentLoop(
         role: 'tool',
         toolCallId: toolCall.id,
         toolName: toolCall.function.name,
-        content: toolResult.content
+        content: toolResult.content,
+        ...(toolResult.files ? { files: toolResult.files } : {})
       })
       terminalSignal = toolResult.signal
     }
@@ -708,7 +709,8 @@ async function attemptAgentLimitFinalization(
       role: 'tool',
       toolCallId: toolCall.id,
       toolName: toolCall.function.name,
-      content: toolResult.content
+      content: toolResult.content,
+      ...(toolResult.files ? { files: toolResult.files } : {})
     })
     if (toolResult.signal?.intent === 'clarification') {
       clarificationSignal = toolResult.signal
@@ -933,6 +935,7 @@ async function executeAgentToolCall(
   trackedSteps: TrackedPlanStep[]
 ): Promise<{
   content: string
+  files?: NonNullable<ToolExecutionResult['modelFiles']>
   trackedSteps: TrackedPlanStep[]
   signal?: FinalResponseSignal
 }> {
@@ -1121,6 +1124,7 @@ async function executeAgentToolCall(
   }
 
   let execution: ExecutionRecord
+  let modelFiles: ToolExecutionResult['modelFiles']
   let handoffSignal: FinalResponseSignal | undefined
   try {
     const result = await params.executeFunction(
@@ -1134,6 +1138,7 @@ async function executeAgentToolCall(
         ? { toolCallTitle: toolCallInput.title }
         : {})
     }
+    modelFiles = result.modelFiles
     handoffSignal = result.handoffSignal
   } catch (error) {
     // Tool failures stay inside the protocol so the model can recover using
@@ -1156,6 +1161,7 @@ async function executeAgentToolCall(
 
   return {
     content: execution.observation,
+    ...(modelFiles ? { files: modelFiles } : {}),
     trackedSteps,
     ...(handoffSignal && shouldHandoff ? { signal: handoffSignal } : {})
   }

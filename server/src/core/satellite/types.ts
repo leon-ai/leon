@@ -21,6 +21,9 @@ export interface SatelliteToolDefinition {
   name: string
   description: string
   icon_name?: string
+  execution?: {
+    provider: string
+  }
   functions: Record<
     string,
     {
@@ -57,6 +60,7 @@ export interface SatelliteInitPayload {
 export interface SatelliteToolInvocation {
   invocationId: string
   input: ToolExecutionInput
+  conversationSessionId?: string
 }
 
 export interface SatelliteToolProgressPayload {

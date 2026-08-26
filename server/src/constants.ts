@@ -3,6 +3,7 @@ import fs from 'node:fs'
 
 import dotenv from 'dotenv'
 
+import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
 import type { LongLanguageCode } from '@/types'
 import {
   CODEBASE_PATH,
@@ -40,9 +41,7 @@ export const API_VERSION = 'v1'
 export const WEB_APP_DEV_SERVER_PORT = 5_173
 export const REMIX_ICON_NAME_PATTERN = '^(?!.*-fill$).+$'
 
-export const { default: LANG_CONFIGS } = await import('@@/core/langs.json', {
-  with: { type: 'json' }
-})
+export { LANG_CONFIGS }
 
 /**
  * Environments

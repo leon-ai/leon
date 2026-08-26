@@ -980,6 +980,63 @@ export default class ToolUIHandler {
     return messageString && messageString.startsWith('[TOOL_OUTPUT:')
   }
 
+  /** Recreates completed activity cards from a persisted agent trace. */
+  replayAgentResponseTrace(trace) {
+    if (!trace || !Array.isArray(trace.toolCalls)) {
+      return
+    }
+
+    for (const toolCall of trace.toolCalls) {
+      if (!toolCall || typeof toolCall.name !== 'string') {
+        continue
+      }
+
+      const nameParts = toolCall.name.split('.')
+      const toolkitName = nameParts[0] || 'Leon'
+      const toolName = nameParts[1] || toolkitName
+      const functionName = nameParts.at(-1) || toolCall.name
+      const toolGroupId = toolCall.id || `history-${toolCall.name}`
+      const sharedData = {
+        isToolOutput: true,
+        toolDisplayMode: 'activity_card',
+        toolkitName,
+        toolName,
+        functionName,
+        toolGroupId,
+        ...(toolCall.toolkitIconName
+          ? { toolkitIconName: toolCall.toolkitIconName }
+          : {}),
+        ...(toolCall.toolIconName
+          ? { toolIconName: toolCall.toolIconName }
+          : {}),
+        ...(toolCall.stepLabel ? { stepLabel: toolCall.stepLabel } : {})
+      }
+      const serializedInput =
+        typeof toolCall.input === 'string'
+          ? toolCall.input
+          : JSON.stringify(toolCall.input ?? {})
+
+      this.handleToolOutput({
+        ...sharedData,
+        toolPhase: 'input',
+        toolInput: serializedInput,
+        answer: serializedInput
+      })
+      this.handleToolOutput({
+        ...sharedData,
+        toolPhase: 'output',
+        status: toolCall.status,
+        message:
+          toolCall.errorMessage ||
+          (toolCall.status === 'error'
+            ? 'The function failed.'
+            : 'The function completed.'),
+        output: toolCall.output ?? null,
+        answer: ''
+      })
+    }
+  }
+
   /**
    * Clear all tool groups.
    */

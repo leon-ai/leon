@@ -1,5 +1,6 @@
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
 import type {
+  AgentResponseTrace,
   ConversationHistoryItem,
   LLMAnswerMetrics,
   ConversationWidgetData,
@@ -7,6 +8,11 @@ import type {
 } from '@/types'
 
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
+
+interface ToolIconNames {
+  toolkitIconName?: string
+  toolIconName?: string
+}
 
 export class ConversationHistoryHelper {
   private static normalizeMetricNumber(value: unknown): number | null {
@@ -186,6 +192,7 @@ export class ConversationHistoryHelper {
     options: {
       supportsWidgets: boolean
       source?: ConversationHistoryItem['source']
+      resolveToolIconNames?: (qualifiedName: string) => ToolIconNames | null
     }
   ): ConversationHistoryItem[] {
     return conversationLogs.map((conversationLog) => {
@@ -196,6 +203,12 @@ export class ConversationHistoryHelper {
           : conversationLog.message
       const llmMetrics = conversationLog.llmMetrics
         ? this.normalizeLLMAnswerMetrics(conversationLog.llmMetrics)
+        : null
+      const agentResponseTrace = conversationLog.agentResponseTrace
+        ? this.resolveAgentTraceToolIcons(
+            conversationLog.agentResponseTrace,
+            options.resolveToolIconNames
+          )
         : null
 
       return {
@@ -208,10 +221,31 @@ export class ConversationHistoryHelper {
         ...(conversationLog.messageId
           ? { messageId: conversationLog.messageId }
           : {}),
-        ...(conversationLog.agentResponseTrace
-          ? { agentResponseTrace: conversationLog.agentResponseTrace }
+        ...(agentResponseTrace
+          ? { agentResponseTrace }
           : {})
       }
     })
+  }
+
+  private static resolveAgentTraceToolIcons(
+    trace: AgentResponseTrace,
+    resolveToolIconNames?: (qualifiedName: string) => ToolIconNames | null
+  ): AgentResponseTrace {
+    if (!resolveToolIconNames) {
+      return trace
+    }
+
+    return {
+      ...trace,
+      toolCalls: trace.toolCalls.map((toolCall) => {
+        if (toolCall.toolIconName && toolCall.toolkitIconName) {
+          return toolCall
+        }
+
+        const iconNames = resolveToolIconNames(toolCall.name)
+        return iconNames ? { ...iconNames, ...toolCall } : toolCall
+      })
+    }
   }
 }
