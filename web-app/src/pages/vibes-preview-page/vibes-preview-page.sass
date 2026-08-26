@@ -1,0 +1,83 @@
+.vibes-preview-page
+  box-sizing: border-box
+  width: 100%
+  padding-top: var(--space-xl)
+  color: var(--color-text)
+
+.vibes-preview-header
+  display: flex
+  align-items: flex-start
+  justify-content: space-between
+  margin-bottom: var(--space-xl)
+
+.vibes-preview-title
+  margin: 0
+  font-size: var(--font-size-xl)
+  line-height: var(--line-height-xl)
+
+.vibes-preview-resolution
+  margin: var(--space-xs) 0 0
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+  line-height: var(--line-height-sm)
+
+.vibes-preview-controls
+  display: flex
+  flex-wrap: wrap
+  gap: var(--space-lg)
+  margin: 0
+  padding: var(--space-lg)
+  border: 1px solid var(--color-border)
+  border-radius: var(--border-radius-sm)
+  background-color: color-mix(in srgb, var(--color-background) 88%, transparent)
+  backdrop-filter: blur(16px)
+
+.vibes-preview-legend
+  padding: 0 var(--space-xs)
+  font-weight: var(--font-weight-semi-bold)
+
+.vibes-preview-field
+  display: flex
+  flex: 1 1 180px
+  flex-direction: column
+  gap: var(--space-xs)
+  min-width: 0
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-sm)
+
+  select
+    box-sizing: border-box
+    width: 100%
+    min-height: 40px
+    padding: 0 var(--space-md)
+    border: 1px solid var(--color-input-border)
+    border-radius: var(--border-radius-sm)
+    outline: 0
+    background-color: var(--color-background)
+    color: var(--color-text)
+    font: inherit
+
+    &:hover
+      border-color: var(--color-border-strong)
+
+    &:focus
+      border-color: var(--color-accent)
+
+.vibes-preview-intensity
+  flex-basis: 100%
+
+  input
+    width: 100%
+    accent-color: var(--color-accent)
+
+    &:disabled
+      cursor: not-allowed
+      opacity: .4
+
+@media (max-width: 680px)
+  .vibes-preview-page
+    padding-top: var(--space-lg)
+
+  .vibes-preview-controls
+    gap: var(--space-md)
+    padding: var(--space-md)

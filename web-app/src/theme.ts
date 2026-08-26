@@ -6,6 +6,8 @@ const SOUNDS_ENABLED_STORAGE_KEY = 'leon.web-app.sounds-enabled'
 const THEME_STORAGE_KEY = 'leon.web-app.theme'
 const THEMES = ['dark', 'light'] as const
 
+export const THEME_CHANGE_EVENT = 'leon:web-app-theme-change'
+
 export type Theme = (typeof THEMES)[number]
 
 function isTheme(theme: string | null): theme is Theme {
@@ -28,6 +30,9 @@ function saveBoolean(key: string, value: boolean): void {
 
 export function applyTheme(theme: Theme): void {
   document.documentElement.dataset['theme'] = theme
+  window.dispatchEvent(new CustomEvent<Theme>(THEME_CHANGE_EVENT, {
+    detail: theme
+  }))
 }
 
 export function getStoredTheme(): Theme {

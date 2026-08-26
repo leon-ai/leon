@@ -13,6 +13,7 @@ import {
   saveSidebarExpanded,
   saveSoundsEnabled,
   saveTheme,
+  THEME_CHANGE_EVENT,
   type Theme
 } from '../../theme'
 
@@ -113,6 +114,18 @@ export function Sidebar() {
   function openSearchSessionsDialog(): void {
     setSearchSessionsDialogOpen(true)
   }
+
+  useEffect(() => {
+    function handleThemeChange(event: Event): void {
+      setTheme((event as CustomEvent<Theme>).detail)
+    }
+
+    window.addEventListener(THEME_CHANGE_EVENT, handleThemeChange)
+
+    return () => {
+      window.removeEventListener(THEME_CHANGE_EVENT, handleThemeChange)
+    }
+  }, [])
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent): void {

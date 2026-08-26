@@ -1,98 +1,202 @@
 .vibes
+  --vibes-scene-brightness: var(--vibes-dark-brightness)
+  --vibes-scene-contrast: var(--vibes-dark-contrast)
+  --vibes-scene-mask-opacity: var(--vibes-dark-mask-opacity)
+  --vibes-scene-opacity: var(--vibes-dark-opacity)
+  --vibes-scene-saturation: var(--vibes-dark-saturation)
   position: fixed
-  inset: 0
+  top: 0
+  right: 0
+  bottom: 0
+  left: var(--active-sidebar-width)
   z-index: 0
   overflow: hidden
-  // background: radial-gradient(circle at 58% 56%, rgba(28, 117, 219, .1), transparent 23%), #000000
+  background-color: var(--color-background)
+  contain: strict
   pointer-events: none
+  transition: left var(--transition-duration-sidebar) var(--transition-timing-sidebar), background-color var(--transition-duration-main) var(--transition-timing-main)
 
-/*  &::before,
+.vibes-tone
+  position: absolute
+  inset: 0
+  width: 100%
+  height: 100%
+
+.vibes-stage
+  position: absolute
+  bottom: 0
+  left: 50%
+  width: min(100%, 1672px)
+  aspect-ratio: 1672 / 941
+  transform: translateX(-50%)
+
+.vibes-scene-art
+  position: absolute
+  inset: 0
+  filter: brightness(var(--vibes-scene-brightness)) contrast(var(--vibes-scene-contrast)) saturate(var(--vibes-scene-saturation))
+  opacity: var(--vibes-scene-opacity)
+
+.vibes-scene,
+.vibes-scene-layer
+  position: absolute
+  image-rendering: pixelated
+  user-select: none
+
+.vibes-scene,
+.vibes-room-desk
+  inset: 0
+  width: 100%
+  height: 100%
+  object-fit: cover
+  object-position: center
+
+.vibes-window-view,
+.vibes-weather-window
+  position: absolute
+  top: 5%
+  right: 4%
+  width: 22.5%
+  height: 55%
+  overflow: hidden
+  clip-path: polygon(3% 2%, 98% 0, 96% 96%, 1% 93%)
+
+.vibes-window-view
+  z-index: 1
+
+.vibes-landscape
+  inset: 0
+  width: 100%
+  height: 100%
+  object-fit: cover
+  object-position: center
+
+.vibes-weather-window
+  z-index: 2
+
+.vibes-window-frame
+  top: -1.5%
+  right: -.5%
+  z-index: 3
+  width: 33%
+
+.vibes-lamp-plant
+  top: 26.25%
+  left: .3%
+  z-index: 3
+  width: 22.37%
+
+.vibes-lamp-glow
+  position: absolute
+  top: 38%
+  left: 12%
+  z-index: 2
+  width: 20%
+  height: 32%
+  border-radius: 50%
+  background: radial-gradient(ellipse at top, rgba(255, 196, 105, .72), rgba(255, 144, 48, .2) 46%, transparent 72%)
+  filter: blur(18px)
+  opacity: var(--vibes-lamp-intensity)
+
+.vibes-keyboard
+  bottom: 4%
+  left: 20%
+  z-index: 3
+  width: 48%
+
+.vibes-cup
+  right: 10.5%
+  bottom: 5%
+  z-index: 3
+  width: 13%
+
+.vibes-cup-steam
+  position: absolute
+  right: 14%
+  bottom: 20%
+  z-index: 4
+  width: 5%
+  height: 12%
+  opacity: 0
+
+  &::before,
   &::after
-    position: absolute
-    inset: 0
     content: ''
+    position: absolute
+    bottom: 0
+    width: 28%
+    height: 82%
+    border-left: 2px solid rgba(245, 245, 247, .38)
+    border-radius: 50%
+    filter: blur(1px)
+    animation: vibes-steam-rise 2.8s ease-in-out infinite
 
   &::before
-    background: radial-gradient(circle at 28% 72%, rgba(255, 246, 152, .2), transparent 18%), radial-gradient(circle at 78% 72%, rgba(28, 117, 219, .18), transparent 24%)
-    opacity: .7
+    left: 24%
 
   &::after
-    background: linear-gradient(90deg, rgba(0, 0, 0, .08), rgba(0, 0, 0, .8) 38%, rgba(0, 0, 0, .2) 64%, rgba(0, 0, 0, .82)), linear-gradient(0deg, rgba(0, 0, 0, .75), transparent 28%, rgba(0, 0, 0, .8))
+    right: 18%
+    animation-delay: -1.4s
 
-  .mark
-    position: absolute
-    top: 11%
-    left: 48%
-    width: 380px
-    height: 380px
-    border: 18px solid rgba(245, 245, 247, .04)
-    border-radius: 44%
-    transform: translateX(-50%)
+.vibes[data-cup-state='steaming'] .vibes-cup-steam
+  opacity: 1
 
-  .desk
-    position: absolute
-    bottom: 0
-    left: var(--sidebar-width)
-    width: calc(100% - var(--sidebar-width))
-    height: 34%
-    background: linear-gradient(180deg, transparent, rgba(92, 45, 18, .2) 45%, rgba(0, 0, 0, .9))
+.vibes-tone
+  background: linear-gradient(90deg, rgba(0, 0, 0, .08), rgba(0, 0, 0, .58) 36%, rgba(0, 0, 0, .62) 64%, rgba(0, 0, 0, .08)), linear-gradient(0deg, rgba(0, 0, 0, .4), transparent 36%, rgba(0, 0, 0, .2))
+  opacity: var(--vibes-scene-mask-opacity)
 
-  .lamp
-    position: absolute
-    bottom: 34%
-    left: 4%
-    width: 170px
-    height: 130px
-    border-radius: 60% 60% 18% 18%
-    background: radial-gradient(circle at 50% 70%, rgba(255, 246, 152, .85), rgba(255, 246, 152, .16) 22%, transparent 45%), linear-gradient(135deg, rgba(245, 245, 247, .18), rgba(21, 21, 21, .9))
-    filter: blur(.2px)
-    transform: rotate(-18deg)
+[data-theme='light']
+  .vibes
+    --vibes-scene-brightness: var(--vibes-light-brightness)
+    --vibes-scene-contrast: var(--vibes-light-contrast)
+    --vibes-scene-mask-opacity: var(--vibes-light-mask-opacity)
+    --vibes-scene-opacity: var(--vibes-light-opacity)
+    --vibes-scene-saturation: var(--vibes-light-saturation)
 
-  .plant
-    position: absolute
-    bottom: 16%
-    left: 6%
-    width: 170px
-    height: 160px
-    border-radius: 48% 48% 12px 12px
-    background: radial-gradient(ellipse at 52% 18%, rgba(120, 173, 45, .72), transparent 35%), radial-gradient(ellipse at 30% 44%, rgba(120, 173, 45, .7), transparent 28%), linear-gradient(180deg, transparent 45%, rgba(115, 58, 21, .9) 46%, rgba(58, 24, 10, .9) 75%, transparent 76%)
+  .vibes-scene-art
+    mask-image: radial-gradient(ellipse 48% 62% at 50% 44%, transparent 18%, rgba(0, 0, 0, .08) 48%, rgba(0, 0, 0, .62) 76%, #000 100%)
 
-  .keyboard
-    position: absolute
-    right: 26%
-    bottom: 0
-    width: 720px
-    height: 120px
-    border-radius: 18px 18px 0 0
-    background: repeating-linear-gradient(90deg, rgba(245, 245, 247, .05) 0 32px, transparent 32px 42px), linear-gradient(180deg, rgba(167, 179, 200, .08), transparent)
-    opacity: .6
+  .vibes-scene-layered .vibes-scene-art
+    opacity: 1
 
-  .window
-    position: absolute
-    top: 22%
-    right: 3%
-    width: 360px
-    height: 300px
-    border: 18px solid rgba(78, 91, 116, .24)
-    background: radial-gradient(circle at 82% 20%, rgba(245, 245, 247, .75), rgba(245, 245, 247, .18) 4%, transparent 8%), linear-gradient(135deg, rgba(28, 117, 219, .22), rgba(0, 0, 0, .65))
-    box-shadow: 0 0 80px rgba(28, 117, 219, .08)
+  .vibes-scene
+    opacity: 1
 
-  .mug
-    position: absolute
-    right: 7%
-    bottom: 14%
-    width: 170px
-    height: 150px
-    border-radius: 0 0 36px 36px
-    background: linear-gradient(90deg, rgba(245, 245, 247, .04), rgba(21, 21, 21, .86))
-    box-shadow: inset 0 16px 0 rgba(245, 245, 247, .08)
+  .vibes-room-desk
+    opacity: .18
 
-  .glow
-    position: absolute
-    right: 21%
-    bottom: 2%
-    width: 720px
-    height: 180px
-    background: var(--gradient-vibe-a)
-    filter: blur(90px)
-    opacity: .4*/
+  .vibes-landscape
+    opacity: .92
+
+  .vibes-lamp-plant,
+  .vibes-keyboard,
+  .vibes-cup,
+  .vibes-window-frame
+    opacity: .95
+
+  .vibes-tone
+    background: linear-gradient(90deg, rgba(255, 255, 255, .06), rgba(255, 255, 255, .8) 34%, rgba(255, 255, 255, .8) 66%, rgba(255, 255, 255, .06)), linear-gradient(0deg, rgba(255, 255, 255, .3), transparent 44%, rgba(255, 255, 255, .12))
+
+@keyframes vibes-steam-rise
+  0%
+    opacity: 0
+    transform: translateY(8%) scaleX(.8)
+
+  35%
+    opacity: .7
+
+  100%
+    opacity: 0
+    transform: translateY(-24%) scaleX(1.2)
+
+@media (max-width: 960px)
+  .vibes
+    left: 0
+
+@media (prefers-reduced-motion: reduce)
+  .vibes
+    transition: background-color var(--transition-duration-main) var(--transition-timing-main)
+
+  .vibes-cup-steam::before,
+  .vibes-cup-steam::after
+    animation: none
+    opacity: .45
