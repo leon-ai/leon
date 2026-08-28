@@ -53,6 +53,18 @@ const VIDEO_METADATA_FIELDS = [
   'track', 'artist', 'artists', 'album', 'release_date'
 ] as const
 
+const CAPTION_METADATA_FIELDS = ['subtitles', 'automatic_captions'] as const
+const METADATA_OUTPUT_FIELDS = [
+  ...new Set([
+    ...VIDEO_METADATA_FIELDS,
+    ...SUBTITLE_METADATA_LANGUAGE_FIELDS,
+    '_type',
+    'playlist',
+    ...CAPTION_METADATA_FIELDS.map((field) => `${field}_languages`)
+  ])
+]
+const METADATA_OUTPUT_TEMPLATE = `%(.{${METADATA_OUTPUT_FIELDS.join(',')}})j`
+
 interface OutputTarget {
   directoryPath: string
   outputTemplate: string
@@ -450,16 +462,60 @@ export default class YtdlpTool extends Tool {
     const output = await this.executeCommand({
       binaryName: 'yt-dlp',
       // Simulation prevents sidecar writes too; bound extraction for playlist-only URLs.
-      args: [...this.getConfigArgs(), '--dump-single-json', '--skip-download',
-        '--simulate', '--no-cache-dir', '--no-playlist', '--playlist-end', '1', '--', videoUrl],
+      // Keep caption language keys, not the large signed URL lists, inside the
+      // subprocess. Filtering after capture can overflow Node's output buffer.
+      args: [
+        ...this.getConfigArgs(),
+        ...CAPTION_METADATA_FIELDS.flatMap((field) => [
+          '--parse-metadata',
+          `%(${field}|)l:%(${field}_languages)s`
+        ]),
+        '--print',
+        METADATA_OUTPUT_TEMPLATE,
+        '--skip-download',
+        '--simulate',
+        '--no-cache-dir',
+        '--no-playlist',
+        '--flat-playlist',
+        '--playlist-end',
+        '1',
+        '--',
+        videoUrl
+      ],
       options: { sync: true }
     })
 
-    const metadata: unknown = JSON.parse(output.trim())
-    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) || 'entries' in metadata) {
-      throw new Error('Expected metadata for a single video; provide a video URL, not a playlist URL.')
+    const metadata: unknown = output.trim() ? JSON.parse(output.trim()) : null
+
+    if (
+      !metadata ||
+      typeof metadata !== 'object' ||
+      Array.isArray(metadata) ||
+      ('_type' in metadata && metadata['_type'] !== 'video') ||
+      ('playlist' in metadata && metadata.playlist != null)
+    ) {
+      throw new Error(
+        'Expected metadata for a single video; provide a video URL, not a playlist URL.'
+      )
     }
-    return metadata as VideoMetadata
+
+    const videoMetadata = metadata as VideoMetadata
+
+    for (const field of CAPTION_METADATA_FIELDS) {
+      const languages = videoMetadata[`${field}_languages`]
+
+      videoMetadata[field] = Object.fromEntries(
+        (typeof languages === 'string'
+          ? languages.split(LANGUAGE_CODE_SEPARATOR)
+          : []
+        )
+          .map((language) => language.trim())
+          .filter(Boolean)
+          .map((language) => [language, []])
+      )
+    }
+
+    return videoMetadata
   }
 
   /**

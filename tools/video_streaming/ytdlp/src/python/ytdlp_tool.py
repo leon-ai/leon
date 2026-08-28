@@ -66,6 +66,15 @@ VIDEO_METADATA_FIELDS = (
     "track", "artist", "artists", "album", "release_date",
 )
 
+CAPTION_METADATA_FIELDS = ("subtitles", "automatic_captions")
+METADATA_OUTPUT_FIELDS = list(dict.fromkeys([
+    *VIDEO_METADATA_FIELDS,
+    *SUBTITLE_METADATA_LANGUAGE_FIELDS,
+    "_type", "playlist",
+    *(f"{field}_languages" for field in CAPTION_METADATA_FIELDS),
+]))
+METADATA_OUTPUT_TEMPLATE = "%(.{" + ",".join(METADATA_OUTPUT_FIELDS) + "})j"
+
 
 class OutputTarget(TypedDict, total=False):
     directory_path: str
@@ -450,13 +459,21 @@ class YtdlpTool(BaseTool):
         """
         Load one video's metadata for inspection or subtitle language selection.
         """
-        args = self._get_config_args() + [
-            "--dump-single-json",
+        # Project caption dictionaries to language keys before capturing output;
+        # the signed caption URL lists can span many megabytes.
+        args = self._get_config_args()
+
+        for field in CAPTION_METADATA_FIELDS:
+            args += ["--parse-metadata", f"%({field}|)l:%({field}_languages)s"]
+
+        args += [
+            "--print", METADATA_OUTPUT_TEMPLATE,
             "--skip-download",
             # Simulation prevents sidecar writes too; bound playlist-only URLs.
             "--simulate",
             "--no-cache-dir",
             "--no-playlist",
+            "--flat-playlist",
             "--playlist-end", "1",
             "--", video_url,
         ]
@@ -466,11 +483,24 @@ class YtdlpTool(BaseTool):
             )
         )
 
-        metadata = json.loads(output.strip())
-        if not isinstance(metadata, dict) or "entries" in metadata:
+        metadata = json.loads(output.strip()) if output.strip() else None
+
+        if (not isinstance(metadata, dict)
+                or metadata.get("_type", "video") != "video"
+                or metadata.get("playlist") is not None):
             raise ValueError(
                 "Expected metadata for a single video; provide a video URL, not a playlist URL."
             )
+
+        for field in CAPTION_METADATA_FIELDS:
+            languages = metadata.get(f"{field}_languages")
+            metadata[field] = {
+                language.strip(): []
+                for language in (languages.split(LANGUAGE_CODE_SEPARATOR)
+                                 if isinstance(languages, str) else [])
+                if language.strip()
+            }
+
         return metadata
 
     def get_video_metadata(self, video_url: str) -> dict[str, Any]:
