@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
@@ -374,13 +376,21 @@ describe('continuous agent loop', () => {
   })
 
   it('requires coding delegation before toolkit selection without choosing a product', () => {
+    const skill = fs.readFileSync('skills/agent/coding-delegation/SKILL.md', 'utf8')
+
     expect(AGENT_SYSTEM_PROMPT.indexOf('<coding_delegation>')).toBeLessThan(
       AGENT_SYSTEM_PROMPT.indexOf('<tool_policy>')
     )
-    expect(AGENT_SYSTEM_PROMPT).toContain('Always delegate coding tasks, including repository investigation')
-    expect(AGENT_SYSTEM_PROMPT).toContain('Do not perform the coding work yourself')
-    expect(AGENT_SYSTEM_PROMPT).toContain('submitting a prompt is not completion')
-    expect(AGENT_SYSTEM_PROMPT).toContain('Never silently take over the coding task')
+
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      'Load the coding-delegation Agent Skill before starting'
+    )
+    expect(AGENT_SYSTEM_PROMPT).toContain('never do the coding work yourself')
+    expect(skill).toContain('submitting a prompt is not completion')
+    expect(skill).toContain('Never silently take over the coding task')
+    expect(skill).toContain(
+      'a request for analysis or a suggested fix does not authorize edits'
+    )
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Codex')
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')
   })

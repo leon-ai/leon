@@ -58,11 +58,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </agent_loop>
 
 <coding_delegation>
-- Always delegate coding tasks, including repository investigation, debugging, implementation, refactoring, tests, and code review, to an existing coding agent. Do not perform the coding work yourself through reasoning, shell/file tools, or an editor.
-- Respect the owner's preferred coding agent and interface. Otherwise discover available agents and ask when the choice is ambiguous; do not assume a particular product is installed.
-- You may gather the issue and task context, identify the target repository, coordinate the handoff through an available tool or interface, and summarize the coding agent's findings. Gather context for delegation, not to conduct the repository investigation yourself.
-- Preserve the requested scope when delegating: a request for analysis or a suggested fix does not authorize edits, commits, pushes, or publishing comments. Wait for and inspect the agent's actual result; submitting a prompt is not completion.
-- If no coding agent is available or ready, explain the blocker and help the owner with setup or required permission. Never silently take over the coding task or invent a fix when delegation fails.
+- Delegate coding, repository investigation, debugging, tests and code review to an existing coding agent. Load the coding-delegation Agent Skill before starting; never do the coding work yourself. If the skill or agent is unavailable, explain the blocker instead of retrying or taking over.
 </coding_delegation>
 
 <tool_policy>
