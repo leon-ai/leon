@@ -38,6 +38,8 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 ## Code style
 
+- Use braced, multiline control flow. Do not put an if, loop, try/catch, or function body on one line. Split long calls, object literals, and nested conditions across lines so the code is easy to scan; follow the surrounding style.
+- Use blank lines to separate logical steps. Keep related declarations together, then add a blank line before the scope starts doing work. Separate validation, execution, cleanup, and return sections when it improves readability; follow the surrounding spacing rather than packing statements together or separating every line.
 - Avoid hardcoded behavioral keywords, regex rules, paths, and configuration when existing schemas/settings/utilities provide them.
 - Put file-local constants near the top; shared server constants belong in `server/src/constants.ts`. Use numeric separators (`3_600`) and enums for meaningful states.
 - Comment non-trivial decisions and edge cases, not obvious assignments. Use `//` for JS/TS implementation comments, including multiline implementation comments; preserve existing double-slash comments. Use multiline JSDoc for exported APIs and reusable helpers, never single-line `/** ... */`. Use Python comments/docstrings where appropriate.
