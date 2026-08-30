@@ -18,6 +18,7 @@ import {
   IS_GITHUB_ACTIONS
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { ensureConnectionEncryptionKey } from '@/core/connections/connection-store'
 import { NetworkHelper } from '@/helpers/network-helper'
 
 import buildApp from '../app/build-app'
@@ -376,6 +377,9 @@ async function syncLLMSetupChoice(preferences) {
 
     currentStep = 'generateProfileToken'
     await generateProfileToken()
+    currentStep = 'generateConnectionEncryptionKey'
+    await ensureConnectionEncryptionKey()
+    LogHelper.success('Connection encryption key ready')
     currentStep = 'train'
     await train()
     currentStep = 'setFfprobePermissions'

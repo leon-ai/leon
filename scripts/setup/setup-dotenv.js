@@ -32,6 +32,8 @@ function getEnvVariableName(line) {
 async function mergeMissingEnvVariables() {
   const sampleContent = await fs.promises.readFile(DOT_ENV_SAMPLE_PATH, 'utf8')
   const dotEnvContent = await fs.promises.readFile(DOT_ENV_PATH, 'utf8')
+
+  await fs.promises.chmod(DOT_ENV_PATH, 0o600)
   const dotEnvLines = splitEnvLines(dotEnvContent)
   const existingVariableNames = new Set(
     dotEnvLines
@@ -57,6 +59,7 @@ async function mergeMissingEnvVariables() {
   const mergedContent = `${normalizedDotEnvContent}${separator}${missingSampleLines.join('\n')}\n`
 
   await fs.promises.writeFile(DOT_ENV_PATH, mergedContent)
+  await fs.promises.chmod(DOT_ENV_PATH, 0o600)
 
   return `.env: +${missingSampleLines.length} variable${
     missingSampleLines.length > 1 ? 's' : ''
@@ -109,6 +112,7 @@ export default async () => {
   if (!fs.existsSync(DOT_ENV_PATH)) {
     await fs.promises.mkdir(path.dirname(DOT_ENV_PATH), { recursive: true })
     await fs.promises.copyFile(DOT_ENV_SAMPLE_PATH, DOT_ENV_PATH)
+    await fs.promises.chmod(DOT_ENV_PATH, 0o600)
     status.succeed('.env: created')
 
     return

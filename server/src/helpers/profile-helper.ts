@@ -335,6 +335,7 @@ export class ProfileHelper {
       dotEnvPath,
       `${normalizedLines.join('\n')}\n`
     )
+    await fs.promises.chmod(dotEnvPath, 0o600)
     CONFIG_MANAGER.reload()
   }
 }
