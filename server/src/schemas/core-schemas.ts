@@ -46,9 +46,7 @@ const llmProviderWithBaseURL = strictObject({
 })
 const llmModelSetting = strictObject({
   reasoning: Type.Optional(
-    Type.Union(
-      LLM_MODEL_REASONING_VALUES.map((value) => Type.Literal(value))
-    )
+    Type.Union(LLM_MODEL_REASONING_VALUES.map((value) => Type.Literal(value)))
   ),
   speed: Type.Optional(
     Type.Union(LLM_MODEL_SPEED_VALUES.map((value) => Type.Literal(value)))
@@ -58,6 +56,7 @@ const llmModelSetting = strictObject({
 export const configSchemaObject = strictObject({
   language: Type.String({ minLength: 1 }),
   server: strictObject({
+    public_url: Type.Optional(Type.String({ format: 'uri' })),
     host: Type.String({ minLength: 1 }),
     port: Type.Integer({ minimum: 1, maximum: 65_535 })
   }),
@@ -115,7 +114,9 @@ export const configSchemaObject = strictObject({
     ])
   }),
   runtime: strictObject({
-    agent_max_iterations: Type.Optional(Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })),
+    agent_max_iterations: Type.Optional(
+      Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })
+    ),
     pulse_enabled: Type.Boolean(),
     private_diary_enabled: Type.Boolean(),
     progressive_toolkit_loading: Type.Boolean()
@@ -129,9 +130,14 @@ export const configSchemaObject = strictObject({
     skills: accessList,
     tools: accessList
   }),
-  satellite: Type.Optional(strictObject({
-    tools: Type.Record(Type.String({ minLength: 1 }), Type.String({ minLength: 1 }))
-  })),
+  satellite: Type.Optional(
+    strictObject({
+      tools: Type.Record(
+        Type.String({ minLength: 1 }),
+        Type.String({ minLength: 1 })
+      )
+    })
+  ),
   python_tcp_server: strictObject({
     host: Type.String({ minLength: 1 }),
     port: Type.Integer({ minimum: 1, maximum: 65_535 })

@@ -2,6 +2,7 @@ import json
 import os
 import ntpath
 import posixpath
+import tempfile
 from typing import Dict, Any, Optional
 
 from ..constants import LEON_PROFILES_PATH, LEON_PROFILE_NAME, TOOLS_PATH
@@ -173,6 +174,36 @@ class ToolkitConfig:
 
         cls._settings_cache[cache_key] = merged_settings
         return merged_settings
+
+    @classmethod
+    def save_tool_settings(
+        cls,
+        toolkit_name: str,
+        tool_name: str,
+        values: Dict[str, Any],
+        profile_name: str = LEON_PROFILE_NAME,
+    ) -> None:
+        """Merge owner edits and atomically replace private profile tool settings."""
+        profile_name = profile_name.strip()
+        settings = {
+            **cls.load_tool_settings(toolkit_name, tool_name, {}, True, profile_name),
+            **values,
+        }
+        settings_path = os.path.join(
+            LEON_PROFILES_PATH, profile_name, "tools", toolkit_name, tool_name, "settings.json"
+        )
+        descriptor, temporary_path = tempfile.mkstemp(dir=os.path.dirname(settings_path))
+
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as target:
+                json.dump(settings, target, indent=2)
+
+            os.replace(temporary_path, settings_path)
+        finally:
+            if os.path.exists(temporary_path):
+                os.unlink(temporary_path)
+
+        cls._settings_cache[f"{profile_name}:{toolkit_name}:{tool_name}"] = settings
 
     @classmethod
     def get_binary_url(cls, config: Dict[str, Any]) -> Optional[str]:
