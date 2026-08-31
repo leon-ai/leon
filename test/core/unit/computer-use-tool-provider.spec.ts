@@ -664,6 +664,14 @@ describe('ComputerUseToolProvider', () => {
       profileName: PROFILE_NAME,
       conversationSessionId: 'session-1'
     })
+    await provider.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'get_window_state',
+      parameters: { pid: 42, window_id: 7 },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'session-1'
+    })
 
     const sessionInput = JSON.parse(driver.callTool.mock.calls[0]![1]) as {
       session: string
@@ -679,6 +687,365 @@ describe('ComputerUseToolProvider', () => {
         session: sessionInput.session
       })
     ])
+    expect(
+      driver.callTool.mock.calls.filter(([name]) => name === 'start_session')
+    ).toHaveLength(1)
+  })
+
+  it('restores an ended hidden Cua session and retries once', async () => {
+    const successfulResult = {
+      text: 'Window captured.',
+      images: [],
+      structuredJson: '{}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    }
+    const driver = createDriver(successfulResult)
+    let observationCount = 0
+    driver.callTool.mockImplementation((action: string) => {
+      if (action === 'get_window_state' && observationCount++ === 0) {
+        return Promise.resolve({
+          text: 'The session ended.',
+          images: [],
+          structuredJson: JSON.stringify({
+            status: 'refused',
+            refusal: {
+              code: 'session_ended',
+              message: 'The session ended.'
+            }
+          }),
+          rawJson: '{}',
+          errorCode: 'session_ended',
+          isError: false,
+          degraded: false
+        })
+      }
+      return Promise.resolve(successfulResult)
+    })
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never
+    )
+
+    const result = await provider.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'get_window_state',
+      parameters: { pid: 42, window_id: 7 },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'session-recovery'
+    })
+
+    expect(result.success).toBe(true)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'start_session',
+      'get_window_state',
+      'start_session',
+      'get_window_state'
+    ])
+  })
+
+  it('runs a grounded mechanical sequence without intermediate model turns', async () => {
+    const successfulResult = {
+      text: 'Done.',
+      images: [],
+      structuredJson: '{"effect":"confirmed"}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    }
+    const driver = createDriver(successfulResult)
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never
+    )
+
+    const result = await provider.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'perform_actions',
+      parameters: {
+        capture_after: true,
+        steps: [
+          {
+            action: 'hotkey',
+            parameters: { pid: 42, window_id: 7, keys: ['ctrl', 'l'] }
+          },
+          {
+            action: 'type_text',
+            parameters: { pid: 42, window_id: 7, text: 'Leon' }
+          },
+          {
+            action: 'press_key',
+            parameters: { pid: 42, window_id: 7, key: 'return' }
+          }
+        ]
+      },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'session-1'
+    })
+
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'hotkey',
+      'type_text',
+      'press_key',
+      'get_window_state'
+    ])
+    expect(result).toMatchObject({
+      success: true,
+      output: {
+        completed_action_count: 3,
+        steps: [
+          { action: 'hotkey', success: true },
+          { action: 'type_text', success: true },
+          { action: 'press_key', success: true }
+        ]
+      }
+    })
+  })
+
+  it('requires a fresh observation between multiple pixel-targeted clicks', async () => {
+    const driver = createDriver({})
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never
+    )
+
+    const result = await provider.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'perform_actions',
+      parameters: {
+        steps: [
+          { action: 'click', parameters: { x: 10, y: 20 } },
+          { action: 'click', parameters: { x: 30, y: 40 } }
+        ]
+      },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'session-1'
+    })
+
+    expect(result).toMatchObject({
+      success: false,
+      message: expect.stringContaining('at most one pixel-targeted click')
+    })
+    expect(driver.callTool).not.toHaveBeenCalled()
+  })
+
+  it('waits for a launched application to expose a usable window', async () => {
+    vi.useFakeTimers()
+    const driver = createDriver({})
+    let windowObservationCount = 0
+    driver.callTool.mockImplementation((action: string) => {
+      if (action === 'launch_app') {
+        return Promise.resolve({
+          text: 'Application process started.',
+          images: [],
+          structuredJson: JSON.stringify({
+            name: 'Example Editor',
+            pid: 42,
+            windows: []
+          }),
+          rawJson: '{}',
+          isError: false,
+          degraded: false
+        })
+      }
+
+      windowObservationCount += 1
+      return Promise.resolve({
+        text: 'Windows observed.',
+        images: [],
+        structuredJson: JSON.stringify({
+          windows:
+            windowObservationCount === 1
+              ? []
+              : [
+                  {
+                    app_name: 'Example Editor',
+                    pid: 42,
+                    window_id: 7,
+                    is_on_screen: true
+                  }
+                ]
+        }),
+        rawJson: '{}',
+        isError: false,
+        degraded: false
+      })
+    })
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never
+    )
+
+    try {
+      const execution = provider.execute({
+        toolkitId: 'computer_use',
+        toolId: 'cua',
+        functionName: 'launch_app',
+        parameters: { name: 'Example Editor' },
+        profileName: PROFILE_NAME,
+        conversationSessionId: 'session-1'
+      })
+      await vi.runAllTimersAsync()
+      const result = await execution
+
+      expect(result).toMatchObject({
+        success: true,
+        output: {
+          result: {
+            window_ready: true,
+            windows: [{ pid: 42, window_id: 7 }]
+          }
+        }
+      })
+      expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+        'list_windows',
+        'launch_app',
+        'list_windows'
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects an unrelated window reported for an application launch', async () => {
+    vi.useFakeTimers()
+    const driver = createDriver({})
+    const terminalWindow = {
+      app_name: 'Terminal',
+      pid: 10,
+      window_id: 1,
+      title: 'Working',
+      is_on_screen: true
+    }
+    driver.callTool.mockImplementation((action: string) =>
+      Promise.resolve({
+        text: action === 'launch_app'
+          ? 'Application process started.'
+          : 'Windows observed.',
+        images: [],
+        structuredJson: JSON.stringify(
+          action === 'launch_app'
+            ? {
+                name: 'Calculator',
+                pid: 42,
+                windows: [{ ...terminalWindow, title: 'Still working' }]
+              }
+            : { windows: [terminalWindow] }
+        ),
+        rawJson: '{}',
+        isError: false,
+        degraded: false
+      })
+    )
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never
+    )
+
+    try {
+      const execution = provider.execute({
+        toolkitId: 'computer_use',
+        toolId: 'cua',
+        functionName: 'launch_app',
+        parameters: { name: 'Calculator' },
+        profileName: PROFILE_NAME,
+        conversationSessionId: 'session-1'
+      })
+      await vi.runAllTimersAsync()
+      const result = await execution
+
+      expect(result).toMatchObject({
+        success: false,
+        output: {
+          result: { window_ready: false, windows: expect.any(Array) }
+        }
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('resolves a URL launch when the frontmost existing window changes', async () => {
+    vi.useFakeTimers()
+    const driver = createDriver({})
+    const beforeWindows = [
+      {
+        app_name: 'Terminal',
+        pid: 10,
+        window_id: 1,
+        title: 'Working',
+        z_index: 2,
+        is_on_screen: true
+      },
+      {
+        app_name: 'Web Browser',
+        pid: 20,
+        window_id: 2,
+        title: 'Previous page',
+        z_index: 3,
+        is_on_screen: true
+      }
+    ]
+    let listCount = 0
+    driver.callTool.mockImplementation((action: string) => {
+      if (action === 'launch_app') {
+        return Promise.resolve({
+          text: 'URL opened.',
+          images: [],
+          structuredJson: JSON.stringify({
+            name: 'OS URL handler',
+            windows: []
+          }),
+          rawJson: '{}',
+          isError: false,
+          degraded: false
+        })
+      }
+
+      listCount += 1
+      return Promise.resolve({
+        text: 'Windows observed.',
+        images: [],
+        structuredJson: JSON.stringify({
+          windows: listCount === 1
+            ? beforeWindows
+            : [
+                { ...beforeWindows[0], title: 'Still working' },
+                { ...beforeWindows[1], title: 'Requested page' }
+              ]
+        }),
+        rawJson: '{}',
+        isError: false,
+        degraded: false
+      })
+    })
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never
+    )
+
+    try {
+      const execution = provider.execute({
+        toolkitId: 'computer_use',
+        toolId: 'cua',
+        functionName: 'launch_app',
+        parameters: { urls: ['https://example.com'] },
+        profileName: PROFILE_NAME,
+        conversationSessionId: 'session-1'
+      })
+      await vi.runAllTimersAsync()
+      const result = await execution
+
+      expect(result).toMatchObject({
+        success: true,
+        output: {
+          result: {
+            window_ready: true,
+            windows: [{ window_id: 2, title: 'Requested page' }]
+          }
+        }
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('uses foreground delivery without enabling the optional agent cursor', async () => {
@@ -807,11 +1174,6 @@ describe('ComputerUseToolProvider', () => {
         text: 'Window captured.',
         images: [{ dataBase64: screenshot, mimeType: 'image/png' }],
         structuredJson: '{"screenshot_width":1,"screenshot_height":1}'
-      })
-      .mockResolvedValueOnce({
-        ...successfulResult,
-        text: 'Session ready.',
-        structuredJson: '{}'
       })
       .mockResolvedValueOnce({
         ...successfulResult,

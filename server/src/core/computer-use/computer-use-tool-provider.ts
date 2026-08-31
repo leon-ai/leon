@@ -5,6 +5,7 @@ import type {
 } from '@/core/tool-provider/types'
 
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
+import { ComputerUseApplicationLauncher } from './computer-use-application-launcher'
 import {
   COMPUTER_USE_ACTIONS,
   COMPUTER_USE_ACTION_SEQUENCE_LIMIT,
@@ -60,6 +61,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   private readonly visualTransforms = new Map<string, ComputerUseImageTransform>()
   private readonly visualFingerprints = new Map<string, string>()
   private readonly artifactStore = new ComputerUseArtifactStore()
+  private readonly applicationLauncher = new ComputerUseApplicationLauncher()
   private readonly resultCompactor: ComputerUseResultCompactor
   private readonly runtimeManager: ComputerUseRuntimeManager
   private executionTail: Promise<void> = Promise.resolve()
@@ -134,10 +136,14 @@ export class ComputerUseToolProvider implements ToolProvider {
         // Querying is a Leon-side compaction hint, not a Cua Driver parameter.
         delete driverParameters[COMPUTER_USE_APP_QUERY_PARAMETER]
       }
-      const coordinateSafeParameters = this.mapCoordinatesToSource(
+      const coordinateSafeParameters = this.applyObservationDefaults(
         input,
         action,
-        driverParameters
+        this.mapCoordinatesToSource(
+          input,
+          action,
+          driverParameters
+        )
       )
       const actionParameters = await this.runtimeManager.prepareParameters(
         runtime,
@@ -145,14 +151,31 @@ export class ComputerUseToolProvider implements ToolProvider {
         action,
         coordinateSafeParameters
       )
+      const launchWindowBaseline =
+        action === 'launch_app'
+          ? await this.applicationLauncher.captureWindowBaseline(runtime.driver)
+          : null
       const result = await this.callAction(
         runtime.driver,
         input,
         action,
         actionParameters
       )
-      const structuredResult =
+      let structuredResult =
         parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+      const launchResolution =
+        action === 'launch_app' && structuredResult && launchWindowBaseline
+          ? await this.applicationLauncher.resolve(
+              runtime.driver,
+              input,
+              actionParameters,
+              structuredResult,
+              launchWindowBaseline
+            )
+          : null
+      if (launchResolution) {
+        structuredResult = launchResolution.result
+      }
       const compactedResult = structuredResult
         ? this.resultCompactor.compact(input, action, structuredResult)
         : null
@@ -214,12 +237,17 @@ export class ComputerUseToolProvider implements ToolProvider {
       const structuredFailure =
         this.resultCompactor.getStructuredFailure(structuredResult)
       const failureMessage =
-        result.text ||
+        (launchResolution && !launchResolution.ready
+          ? 'The application process started, but no usable window became available.'
+          : result.text) ||
         result.errorCode ||
         structuredFailure?.message ||
         'Computer-use action failed.'
       const succeeded =
-        !result.isError && !result.errorCode && structuredFailure === null
+        !result.isError &&
+        !result.errorCode &&
+        structuredFailure === null &&
+        launchResolution?.ready !== false
       const successMessage = this.getSuccessMessage(capturedState?.visualChange)
 
       return {
@@ -243,8 +271,15 @@ export class ComputerUseToolProvider implements ToolProvider {
             ? { verification: result.verification }
             : {}),
           ...(artifacts.length > 0 ? { artifacts } : {}),
-          ...(result.errorCode || structuredFailure?.code
-            ? { error_code: result.errorCode || structuredFailure?.code }
+          ...(result.errorCode ||
+          structuredFailure?.code ||
+          launchResolution?.errorCode
+            ? {
+                error_code:
+                  result.errorCode ||
+                  structuredFailure?.code ||
+                  launchResolution?.errorCode
+              }
             : {}),
           degraded: result.degraded
         },
