@@ -9,7 +9,15 @@ export const COMPUTER_USE_APP_QUERY_PARAMETER = 'query'
 export const COMPUTER_USE_WINDOW_RESULT_LIMIT = 24
 export const COMPUTER_USE_BROWSER_REF_LIMIT = 120
 export const COMPUTER_USE_VISUAL_STATE_LIMIT = 512
+export const COMPUTER_USE_ACTION_SEQUENCE_LIMIT = 8
+export const COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT = 1
 export const COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS = [500, 1_000] as const
+export const COMPUTER_USE_LAUNCH_WINDOW_RETRY_DELAYS_MS = [
+  250,
+  500,
+  1_000,
+  1_750
+] as const
 export const CUA_TELEMETRY_ENABLED_ENV = 'CUA_TELEMETRY_ENABLED'
 export const CUA_X11_UINPUT_SAFETY_ENV = 'KDE_FULL_SESSION'
 export const COMPUTER_USE_REMOTE_DRIVER_URL_ENV =
@@ -20,7 +28,9 @@ export const COMPUTER_USE_REMOTE_MODEL_FILES_FIELD = 'cybopal_model_files'
 export const COMPUTER_USE_INTERACTION_MODE_SETTING = 'interaction_mode'
 export const COMPUTER_USE_PREFERRED_APPS_SETTING = 'preferred_apps'
 export const CUA_FOREGROUND_DELIVERY_MODE = 'foreground'
+export const CUA_SESSION_ENDED_ERROR_CODE = 'session_ended'
 export const COMPUTER_USE_CAPTURE_AFTER_PARAMETER = 'capture_after'
+export const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
 
 export const COMPUTER_USE_ACTION_NAMES = [
   'list_apps',
@@ -37,6 +47,7 @@ export const COMPUTER_USE_ACTION_NAMES = [
   'type_text',
   'press_key',
   'hotkey',
+  COMPUTER_USE_ACTION_SEQUENCE_NAME,
   'set_value',
   'clipboard_read',
   'clipboard_write',
@@ -83,6 +94,17 @@ export const COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS = new Set<string>([
 export const COMPUTER_USE_CAPTURE_ACTIONS = new Set([
   'click',
   'drag',
+  'scroll',
+  'type_text',
+  'press_key',
+  'hotkey'
+])
+
+// Sequences are intentionally limited to mechanical input whose next target
+// does not need a fresh observation. Semantic browser actions can invalidate
+// references and therefore remain separate model-visible steps.
+export const COMPUTER_USE_SEQUENCE_ACTIONS = new Set([
+  'click',
   'scroll',
   'type_text',
   'press_key',

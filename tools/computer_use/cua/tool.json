@@ -3,7 +3,7 @@
   "tool_id": "cua",
   "toolkit_id": "computer_use",
   "name": "Cua",
-  "description": "Observe and operate visible apps through Cua Driver. Prefer dedicated tools. Use list_apps only when the owner did not name an app or the launch target is unknown; query it when looking for one app. Work in the background unless the owner asks to watch. Captured actions report visual_change: changed does not prove the intended outcome, while unchanged leaves it unverified.",
+  "description": "Observe and operate visible apps through Cua Driver. Prefer dedicated tools. Use list_apps only when the owner did not name an app or the launch target is unknown; query it when looking for one app. Use perform_actions for a short mechanical sequence only when no intermediate visual decision is needed. Work in the background unless the owner asks to watch. Captured actions report visual_change: changed does not prove the intended outcome, while unchanged leaves it unverified.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -2157,6 +2157,53 @@
             "type": "object"
           }
         ],
+        "type": "object"
+      }
+    },
+    "perform_actions": {
+      "description": "Perform up to eight already-grounded mechanical input actions in order and stop on the first failure. Use this to avoid separate model turns for a predictable sequence such as focusing a known field, typing, and submitting. A sequence may contain at most one pixel-targeted click; observe between spatial targets or use semantic element handles. Do not use it when a step changes the interface in a way that must be observed before choosing the next target.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "capture_after": {
+            "description": "Capture the resulting interface after the final action.",
+            "type": "boolean"
+          },
+          "steps": {
+            "description": "Ordered mechanical actions. Each parameters object uses the regular schema of its selected action.",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "action": {
+                  "enum": [
+                    "click",
+                    "scroll",
+                    "type_text",
+                    "press_key",
+                    "hotkey"
+                  ],
+                  "type": "string"
+                },
+                "parameters": {
+                  "additionalProperties": true,
+                  "type": "object"
+                }
+              },
+              "type": "object"
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "steps"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "additionalProperties": true,
         "type": "object"
       }
     },

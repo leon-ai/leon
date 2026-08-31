@@ -7,13 +7,18 @@ import type {
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
 import {
   COMPUTER_USE_ACTIONS,
+  COMPUTER_USE_ACTION_SEQUENCE_LIMIT,
+  COMPUTER_USE_ACTION_SEQUENCE_NAME,
+  COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT,
   COMPUTER_USE_APP_QUERY_PARAMETER,
   COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS,
   COMPUTER_USE_CAPTURE_ACTIONS,
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
   COMPUTER_USE_COORDINATE_FIELDS,
   COMPUTER_USE_PROVIDER_ID,
-  COMPUTER_USE_VISUAL_STATE_LIMIT
+  COMPUTER_USE_SEQUENCE_ACTIONS,
+  COMPUTER_USE_VISUAL_STATE_LIMIT,
+  CUA_SESSION_ENDED_ERROR_CODE
 } from './constants'
 import { mapComputerUseCoordinateToSource } from './computer-use-coordinate-mapper'
 import { ComputerUseResultCompactor } from './computer-use-result-compactor'
@@ -108,6 +113,10 @@ export class ComputerUseToolProvider implements ToolProvider {
     action: string,
     parameters: Record<string, unknown>
   ): Promise<ToolProviderExecutionResult> {
+    if (action === COMPUTER_USE_ACTION_SEQUENCE_NAME) {
+      return this.executeActionSequence(input, parameters)
+    }
+
     input.onProgress?.({
       source: 'log',
       message: `Running computer-use action ${action}.`
@@ -248,6 +257,144 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
   }
 
+  private async executeActionSequence(
+    input: ToolProviderExecutionInput,
+    parameters: Record<string, unknown>
+  ): Promise<ToolProviderExecutionResult> {
+    const steps = parameters['steps']
+    if (
+      !Array.isArray(steps) ||
+      steps.length === 0 ||
+      steps.length > COMPUTER_USE_ACTION_SEQUENCE_LIMIT
+    ) {
+      return this.failure(
+        `perform_actions requires between 1 and ${COMPUTER_USE_ACTION_SEQUENCE_LIMIT} steps.`
+      )
+    }
+
+    const captureAfter = parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] === true
+    const pixelClickCount = steps.filter((value) => {
+      const step = asRecord(value)
+      const stepParameters = asRecord(step?.['parameters'])
+      return (
+        step?.['action'] === 'click' &&
+        typeof stepParameters?.['x'] === 'number' &&
+        typeof stepParameters?.['y'] === 'number' &&
+        stepParameters?.['element_token'] === undefined &&
+        stepParameters?.['element_index'] === undefined
+      )
+    }).length
+    if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
+      return this.failure(
+        'perform_actions accepts at most one pixel-targeted click. Observe between spatial targets or use semantic element handles.'
+      )
+    }
+
+    const stepResults: Array<Record<string, unknown>> = []
+    const artifacts: Array<Record<string, unknown>> = []
+    let modelFiles: ToolProviderExecutionResult['modelFiles'] = []
+
+    for (const [index, value] of steps.entries()) {
+      const step = asRecord(value)
+      const stepAction = step?.['action']
+      const stepParameters = asRecord(step?.['parameters']) || {}
+      if (
+        typeof stepAction !== 'string' ||
+        !COMPUTER_USE_SEQUENCE_ACTIONS.has(stepAction)
+      ) {
+        return this.failure(
+          `Step ${index + 1} must use a supported mechanical action.`
+        )
+      }
+
+      const boundedParameters = { ...stepParameters }
+      delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
+      if (
+        captureAfter &&
+        index === steps.length - 1 &&
+        COMPUTER_USE_CAPTURE_ACTIONS.has(stepAction)
+      ) {
+        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = true
+      }
+
+      input.onProgress?.({
+        source: 'log',
+        message: `Running computer-use sequence step ${index + 1} of ${steps.length}.`
+      })
+      const result = await this.executeAction(
+        input,
+        stepAction,
+        boundedParameters
+      )
+      const resultArtifacts = result.output['artifacts']
+      if (Array.isArray(resultArtifacts)) {
+        artifacts.push(
+          ...resultArtifacts.filter(
+            (artifact): artifact is Record<string, unknown> =>
+              asRecord(artifact) !== null
+          )
+        )
+      }
+      if (result.modelFiles?.length) {
+        modelFiles = result.modelFiles
+      }
+      stepResults.push({
+        action: stepAction,
+        success: result.success,
+        result: result.output['result'] ?? null,
+        ...(result.output['visual_change'] !== undefined
+          ? { visual_change: result.output['visual_change'] }
+          : {})
+      })
+
+      if (!result.success) {
+        return {
+          success: false,
+          message: `Computer-use sequence stopped at step ${index + 1}: ${result.message}`,
+          output: {
+            success: false,
+            completed_action_count: index,
+            steps: stepResults,
+            ...(artifacts.length > 0 ? { artifacts } : {})
+          },
+          ...(modelFiles.length > 0 ? { modelFiles } : {})
+        }
+      }
+    }
+
+    return {
+      success: true,
+      message: `Completed ${steps.length} computer-use actions.`,
+      output: {
+        completed_action_count: steps.length,
+        steps: stepResults,
+        ...(artifacts.length > 0 ? { artifacts } : {})
+      },
+      ...(modelFiles.length > 0 ? { modelFiles } : {})
+    }
+  }
+
+  private applyObservationDefaults(
+    input: ToolProviderExecutionInput,
+    action: string,
+    parameters: Record<string, unknown>
+  ): Record<string, unknown> {
+    if (
+      action !== 'get_window_state' ||
+      parameters['include_screenshot'] !== undefined ||
+      typeof parameters['query'] !== 'string' ||
+      parameters['query'].trim().length === 0 ||
+      !this.visualFingerprints.has(this.getVisualTransformKey(input, parameters))
+    ) {
+      return parameters
+    }
+
+    // A filtered accessibility refresh can reuse the latest image coordinate
+    // space. This avoids attaching another screenshot just to mint fresh
+    // semantic element handles.
+    return { ...parameters, include_screenshot: false }
+  }
+
   private async callAction(
     driver: ComputerUseDriver,
     input: ToolProviderExecutionInput,
@@ -256,6 +403,22 @@ export class ComputerUseToolProvider implements ToolProvider {
   ): Promise<CuaToolResult> {
     const serializedParameters = JSON.stringify(parameters)
     let result = await driver.callTool(action, serializedParameters)
+
+    if (this.shouldRestoreSession(parameters, result)) {
+      input.onProgress?.({
+        source: 'log',
+        message: 'Restoring the computer-use session.'
+      })
+      const session = parameters['session'] as string
+      const sessionResult = await driver.callTool(
+        'start_session',
+        JSON.stringify({ session })
+      )
+      if (sessionResult.isError || sessionResult.errorCode) {
+        return sessionResult
+      }
+      result = await driver.callTool(action, serializedParameters)
+    }
 
     if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
       return result
@@ -279,6 +442,24 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
 
     return result
+  }
+
+  private shouldRestoreSession(
+    parameters: Record<string, unknown>,
+    result: CuaToolResult
+  ): boolean {
+    if (typeof parameters['session'] !== 'string') {
+      return false
+    }
+
+    const structuredResult =
+      parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+    const refusal = asRecord(structuredResult?.['refusal'])
+    return (
+      result.errorCode === CUA_SESSION_ENDED_ERROR_CODE ||
+      refusal?.['code'] === CUA_SESSION_ENDED_ERROR_CODE ||
+      structuredResult?.['code'] === CUA_SESSION_ENDED_ERROR_CODE
+    )
   }
 
   private shouldRetryBrowserQuery(
