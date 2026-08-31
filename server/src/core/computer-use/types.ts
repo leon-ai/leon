@@ -41,6 +41,7 @@ export interface ManagedComputerUseRuntime {
   driver: ComputerUseDriver
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
+  initializedSessions: Set<string>
 }
 
 export interface ComputerUseImageDimensions {

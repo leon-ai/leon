@@ -44,6 +44,7 @@ export class ComputerUseRuntimeManager {
 
       return {
         driver,
+        initializedSessions: new Set<string>(),
         ...(await this.getActionCapabilities(driver))
       }
     })
@@ -112,16 +113,19 @@ export class ComputerUseRuntimeManager {
       .update(sessionSource)
       .digest('hex')
       .slice(0, 12)}`
-    const sessionResult = await runtime.driver.callTool(
-      'start_session',
-      JSON.stringify({ session })
-    )
-    if (sessionResult.isError) {
-      throw new Error(
-        sessionResult.text ||
-          sessionResult.errorCode ||
-          'Unable to start the computer-use session.'
+    if (!runtime.initializedSessions.has(session)) {
+      const sessionResult = await runtime.driver.callTool(
+        'start_session',
+        JSON.stringify({ session })
       )
+      if (sessionResult.isError) {
+        throw new Error(
+          sessionResult.text ||
+            sessionResult.errorCode ||
+            'Unable to start the computer-use session.'
+        )
+      }
+      runtime.initializedSessions.add(session)
     }
 
     return { ...managedParameters, session }
