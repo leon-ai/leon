@@ -24,6 +24,17 @@ function createToolCall(id: string): OpenAIToolCall {
   }
 }
 
+function createComputerUseToolCall(id: string): OpenAIToolCall {
+  return {
+    id,
+    type: 'function',
+    function: {
+      name: 'computer_use__cua__get_window_state',
+      arguments: JSON.stringify({ pid: 42, window_id: 7 })
+    }
+  }
+}
+
 function appendToolExchange(
   transcript: AgentToolTranscriptMessage[],
   id: string,
@@ -45,7 +56,7 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
-  it('keeps only the two most recent computer-use screenshots', () => {
+  it('keeps only the most recent computer-use screenshot', () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Operate the app.' }
     ]
@@ -76,10 +87,44 @@ describe('agent context budget', () => {
 
     expect(toolMessages[0]).not.toHaveProperty('files')
     expect(toolMessages[1]).not.toHaveProperty('files')
-    expect(toolMessages[2]).toHaveProperty('files')
+    expect(toolMessages[2]).not.toHaveProperty('files')
     expect(toolMessages[3]).toHaveProperty('files')
     expect(context.wasCompacted).toBe(false)
     expect(context.estimatedInputTokens).toBeLessThan(10_000)
+  })
+
+  it('compacts older computer-use exchanges before global context pressure', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Operate the app.' }
+    ]
+    for (let index = 1; index <= 7; index += 1) {
+      const toolCall = createComputerUseToolCall(`cua-${index}`)
+      transcript.push(
+        { role: 'assistant', content: '', toolCalls: [toolCall] },
+        {
+          role: 'tool',
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          content: JSON.stringify({
+            status: 'success',
+            data: `capture ${index} `.repeat(200)
+          })
+        }
+      )
+    }
+
+    const context = prepareAgentModelContext({
+      transcript,
+      systemPrompt: 'Use tools.',
+      tools: [],
+      compactionTriggerTokens: 96_000
+    })
+
+    expect(context.wasCompacted).toBe(true)
+    expect(context.compactedToolExchangeCount).toBe(3)
+    expect(
+      context.transcript.filter((message) => message.role === 'tool')
+    ).toHaveLength(4)
   })
 
   it('uses 75% of the shared local context window', () => {

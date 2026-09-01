@@ -20,6 +20,7 @@ import {
   AGENT_RECENT_TOOL_EXCHANGE_LIMIT,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
   AGENT_RECENT_COMPUTER_USE_IMAGE_LIMIT,
+  AGENT_RECENT_COMPUTER_USE_EXCHANGE_LIMIT,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
@@ -476,6 +477,53 @@ function compactOldestCompletedToolExchange(
   ]
 }
 
+function isComputerUseExchange(exchange: CompletedToolExchange): boolean {
+  return exchange.assistantMessage.toolCalls.length > 0 &&
+    exchange.assistantMessage.toolCalls.every((toolCall) =>
+      toolCall.function.name.startsWith('computer_use__')
+    )
+}
+
+function compactOlderComputerUseExchanges(
+  transcript: AgentToolTranscriptMessage[]
+): {
+  transcript: AgentToolTranscriptMessage[]
+  compactedCount: number
+} {
+  let boundedTranscript = transcript
+  let compactedCount = 0
+
+  while (true) {
+    const computerUseExchanges = findCompletedToolExchanges(
+      boundedTranscript
+    ).filter(isComputerUseExchange)
+    if (
+      computerUseExchanges.length <=
+      AGENT_RECENT_COMPUTER_USE_EXCHANGE_LIMIT
+    ) {
+      break
+    }
+
+    const exchange = computerUseExchanges[0]!
+    boundedTranscript = [
+      ...boundedTranscript.slice(0, exchange.startIndex),
+      buildCompactedToolExchangeMessage(exchange),
+      ...boundedTranscript.slice(exchange.endIndex + 1)
+    ]
+    compactedCount += 1
+  }
+
+  if (compactedCount > 1) {
+    boundedTranscript =
+      mergeCompactedToolExchangeHistory(
+        boundedTranscript,
+        AGENT_COMPACTED_TOOL_HISTORY_MAX_CHARS
+      ) || boundedTranscript
+  }
+
+  return { transcript: boundedTranscript, compactedCount }
+}
+
 function readStringArray(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === 'string')
@@ -700,7 +748,13 @@ function pruneInactiveToolkitSchemas(
 export function prepareAgentModelContext(
   params: AgentModelContextParams
 ): PreparedAgentModelContext {
-  const boundedTranscript = retainRecentComputerUseImages(params.transcript)
+  const imageBoundedTranscript = retainRecentComputerUseImages(
+    params.transcript
+  )
+  const computerUseContext = compactOlderComputerUseExchanges(
+    imageBoundedTranscript
+  )
+  const boundedTranscript = computerUseContext.transcript
   const initialEstimate = estimateAgentInputTokens(
     boundedTranscript,
     params.systemPrompt,
@@ -714,8 +768,8 @@ export function prepareAgentModelContext(
       transcript: boundedTranscript,
       tools: params.tools,
       estimatedInputTokens: initialEstimate,
-      wasCompacted: false,
-      compactedToolExchangeCount: 0
+      wasCompacted: computerUseContext.compactedCount > 0,
+      compactedToolExchangeCount: computerUseContext.compactedCount
     }
   }
 
@@ -733,7 +787,7 @@ export function prepareAgentModelContext(
     params.systemPrompt,
     tools
   )
-  let compactedToolExchangeCount = 0
+  let compactedToolExchangeCount = computerUseContext.compactedCount
   let recentExchangeLimit = AGENT_RECENT_TOOL_EXCHANGE_LIMIT
 
   // Remove complete protocol pairs together, oldest first, until the prompt is
