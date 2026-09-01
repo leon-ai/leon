@@ -35,6 +35,7 @@ import type {
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
+const CONVENTIONAL_USER_HOME_PARENT_NAMES = new Set(['home', 'users'])
 const TOOL_RUNTIME_LOG_PREFIX = '[LEON_TOOL_LOG]'
 const TOOL_RUNTIME_REPORT_PREFIX = '[LEON_TOOL_REPORT]'
 
@@ -621,21 +622,10 @@ export default class ToolExecutor {
   }
 
   private resolveFilesystemPathCandidate(value: string): string | null {
-    if (
-      ABSOLUTE_OR_HOME_PATH_PATTERN.test(value) ||
+    return ABSOLUTE_OR_HOME_PATH_PATTERN.test(value) ||
       EXPLICIT_RELATIVE_PATH_PATTERN.test(value)
-    ) {
-      return this.correctHomePath(this.resolveAbsoluteLikePath(value))
-    }
-
-    const existingCandidate = this.buildFilesystemCandidates(value).find(
-      (candidate) => fs.existsSync(candidate)
-    )
-    if (existingCandidate) {
-      return path.normalize(existingCandidate)
-    }
-
-    return null
+      ? this.correctHomePath(this.resolveAbsoluteLikePath(value))
+      : null
   }
 
   private resolveAbsoluteLikePath(value: string): string {
@@ -654,27 +644,6 @@ export default class ToolExecutor {
     return path.resolve(process.cwd(), value)
   }
 
-  private buildFilesystemCandidates(value: string): string[] {
-    const homeDirectory = os.homedir()
-    const cwdCandidate = path.resolve(process.cwd(), value)
-    const homeCandidate = path.resolve(homeDirectory, value)
-    const downloadsCandidate = path.resolve(
-      path.join(homeDirectory, 'Downloads'),
-      value
-    )
-    const desktopCandidate = path.resolve(
-      path.join(homeDirectory, 'Desktop'),
-      value
-    )
-
-    return [...new Set([
-      cwdCandidate,
-      downloadsCandidate,
-      desktopCandidate,
-      homeCandidate
-    ])]
-  }
-
   private correctHomePath(candidate: string): string {
     const currentHome = path.normalize(os.homedir())
     if (!currentHome || !path.isAbsolute(candidate)) {
@@ -683,9 +652,13 @@ export default class ToolExecutor {
 
     const currentHomeParent = path.dirname(currentHome)
     const currentHomeName = path.basename(currentHome)
+    const currentHomeParentName = path
+      .basename(currentHomeParent)
+      .toLocaleLowerCase()
     if (
       !currentHomeParent ||
       currentHomeParent === currentHome ||
+      !CONVENTIONAL_USER_HOME_PARENT_NAMES.has(currentHomeParentName) ||
       !candidate.startsWith(`${currentHomeParent}${path.sep}`)
     ) {
       return candidate
