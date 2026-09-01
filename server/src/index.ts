@@ -53,6 +53,22 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 const SHUTDOWN_FORCE_TIMEOUT_MS = 5_000
 
+/** List processes when the host provides the platform process utility. */
+async function listRunningProcesses(): Promise<
+  Awaited<ReturnType<typeof psList>>
+> {
+  try {
+    return await psList()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+
+    // Minimal containers may omit `ps`; startup must not depend on optional
+    // same-profile process replacement in an otherwise isolated runtime.
+    LogHelper.warning('Process discovery is unavailable; skipping stale process cleanup.')
+    return []
+  }
+}
+
 async function bootstrap(): Promise<void> {
   // Scope process replacement to one profile so separate Leon workers can
   // share a runtime without terminating each other during startup.
@@ -60,7 +76,7 @@ async function bootstrap(): Promise<void> {
   const shouldStartPythonTCPServer = SHOULD_START_PYTHON_TCP_SERVER
 
   // Kill only an existing worker for this profile before starting a new one.
-  const processList = await psList()
+  const processList = await listRunningProcesses()
   processList
     .filter(
       (p) =>
