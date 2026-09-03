@@ -12,6 +12,7 @@ import { ProfileHelper } from '@/helpers/profile-helper'
 
 const CONNECTION_KEY_ENV_NAME = 'LEON_CONNECTIONS_ENCRYPTION_KEY'
 const ENCRYPTION_ALGORITHM = 'aes-256-gcm'
+const TOKEN_REFRESH_WINDOW_MS = 60_000
 const encryptionKeyPromises = new Map<string, Promise<Buffer>>()
 
 export type ConnectionAuthType = 'api_key' | 'oauth'
@@ -302,10 +303,11 @@ export class ConnectionStore {
    */
   async getCredentials(
     provider: string,
-    profileName?: string
+    profileName?: string,
+    forceRefresh = false
   ): Promise<Record<string, unknown> | null> {
     return this.withConnectionLock(provider, profileName, () =>
-      this.readCredentials(provider, profileName)
+      this.readCredentials(provider, profileName, forceRefresh)
     )
   }
 
@@ -314,7 +316,8 @@ export class ConnectionStore {
    */
   private async readCredentials(
     provider: string,
-    profileName?: string
+    profileName?: string,
+    forceRefresh = false
   ): Promise<Record<string, unknown> | null> {
     try {
       const raw = await fs.readFile(
@@ -326,6 +329,38 @@ export class ConnectionStore {
         stored,
         await ensureConnectionEncryptionKey(profileName)
       )
+      const expiresAt = Number(credentials['expires_at'] || 0)
+
+      if (
+        stored.auth_type === 'oauth' &&
+        (forceRefresh ||
+          (expiresAt > 0 && expiresAt <= Date.now() + TOKEN_REFRESH_WINDOW_MS))
+      ) {
+        // Load the OAuth manager only when a refresh is needed to avoid coupling
+        // ordinary API-key reads to OAuth provider code.
+        const { OAUTH_MANAGER } = await import('./oauth-manager')
+        const refreshed = await runWithProfileContext(
+          { profileName: profileName || getActiveProfileName() },
+          () => OAUTH_MANAGER.refreshCredentials(stored.provider, credentials)
+        )
+
+        await this.saveCredentials(
+          {
+            provider: stored.provider,
+            auth_type: stored.auth_type,
+            connected_at: stored.connected_at,
+            credentials: refreshed,
+            ...(stored.account_label
+              ? { account_label: stored.account_label }
+              : {}),
+            ...(stored.scopes ? { scopes: stored.scopes } : {})
+          },
+          profileName
+        )
+
+        return refreshed
+      }
+
       return credentials
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
