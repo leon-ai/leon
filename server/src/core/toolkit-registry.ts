@@ -9,6 +9,8 @@ import { LogHelper } from '@/helpers/log-helper'
 import { resolveToolDirectory } from '@/leon-roots'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { ConnectionStatus } from '@/core/connections/connection-store'
+import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
 import type {
   SatelliteToolkitDefinition,
   SatelliteToolDefinition
@@ -34,6 +36,7 @@ interface ToolkitToolDefinition {
   icon_name?: string
   binaries?: Record<string, string>
   resources?: Record<string, string[]>
+  connection?: ToolConnectionSchema
   functions: Record<
     string,
     {
@@ -131,7 +134,9 @@ export default class ToolkitRegistry {
     return this._isLoaded
   }
 
-  public getFlattenedTools(): FlattenedToolkitTool[] {
+  public getFlattenedTools(
+    options: { includeConnectionSetup?: boolean } = {}
+  ): FlattenedToolkitTool[] {
     const flattened: FlattenedToolkitTool[] = []
 
     for (const toolkit of this._toolkits) {
@@ -140,7 +145,14 @@ export default class ToolkitRegistry {
       }
 
       for (const [toolId, tool] of Object.entries(toolkit.tools)) {
-        if (!this.isToolAvailable(toolkit.id, toolId)) {
+        const availability = this.getToolAvailability(toolkit.id, toolId)
+        const canConnect =
+          options.includeConnectionSetup &&
+          !this.getToolSatelliteDevice(toolkit.id, toolId) &&
+          availability.missingSettings.length === 0 &&
+          this.needsToolConnection(toolkit.id, toolId)
+
+        if (!availability.available && !canConnect) {
           continue
         }
 
@@ -419,6 +431,91 @@ export default class ToolkitRegistry {
       ) ||
       null
     )
+  }
+
+  /**
+   * Keeps tools needing account setup discoverable without allowing execution.
+   */
+  public needsToolConnection(toolkitId: string, toolId: string): boolean {
+    const tool = this._localToolkits.find((toolkit) => toolkit.id === toolkitId)
+      ?.tools?.[toolId]
+
+    if (!tool?.connection) {
+      return false
+    }
+
+    const record = this.readSettingsSync(
+      path.join(
+        this.profilePaths.connections,
+        `${this.getQualifiedToolId(toolkitId, toolId)}.json`
+      )
+    )
+
+    if (record['status'] !== ConnectionStatus.Connected) {
+      return true
+    }
+
+    // Existing authorizations do not gain permissions when a manifest adds scopes.
+    const scopes = Array.isArray(record['scopes']) ? record['scopes'] : []
+
+    return (
+      record['auth_type'] === 'oauth' &&
+      Boolean(
+        tool.connection.methods.oauth?.scopes.some(
+          (scope) => !scopes.includes(scope)
+        )
+      )
+    )
+  }
+
+  /**
+   * Lists provider connections explicitly required by a tool manifest.
+   */
+  public getToolConnectionProviders(
+    toolkitId: string,
+    toolId: string
+  ): string[] {
+    const tool = this._localToolkits.find((toolkit) => toolkit.id === toolkitId)
+      ?.tools?.[toolId]
+
+    return tool?.connection ? [this.getQualifiedToolId(toolkitId, toolId)] : []
+  }
+
+  /**
+   * Reads connection setup metadata from installed local tool manifests.
+   */
+  public getConnectionTools(): Array<
+    ToolkitToolDefinition & { connection: ToolConnectionSchema }
+  > {
+    return this._localToolkits
+      .flatMap((toolkit) => Object.values(toolkit.tools || {}))
+      .filter(
+        (
+          tool
+        ): tool is ToolkitToolDefinition & {
+          connection: ToolConnectionSchema
+        } => Boolean(tool.connection)
+      )
+  }
+
+  /**
+   * Resolves the tool that owns a provider connection.
+   */
+  public getConnectionTool(
+    provider: string
+  ): ToolkitToolDefinition & { connection: ToolConnectionSchema } {
+    const tool = this.getConnectionTools().find(
+      (entry) =>
+        this.getQualifiedToolId(entry.toolkit_id, entry.tool_id) === provider
+    )
+
+    if (!tool) {
+      throw new Error(
+        `No installed tool declares the connection "${provider}".`
+      )
+    }
+
+    return tool
   }
 
   public setFunctionParameterEnum(
@@ -727,6 +824,13 @@ export default class ToolkitRegistry {
     toolkitId: string,
     toolId: string
   ): string | null {
+    const tool = this._localToolkits.find((toolkit) => toolkit.id === toolkitId)
+      ?.tools?.[toolId]
+
+    if (tool && this.needsToolConnection(toolkitId, toolId)) {
+      return `Connect ${tool.name} using the connection widget in chat before using this tool.`
+    }
+
     if (
       toolkitId !== HOSTED_SEARCH_TOOLKIT_ID ||
       toolId !== HOSTED_SEARCH_TOOL_ID
