@@ -19,6 +19,10 @@ export interface ToolExecutionContext {
   parameters: Record<string, unknown>
   profileName: string
   conversationSessionId: string | null
+  /**
+   * Profile-scoped secrets declared by this tool's connection requirements.
+   */
+  connections?: Record<string, Record<string, unknown>>
   signal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
 }

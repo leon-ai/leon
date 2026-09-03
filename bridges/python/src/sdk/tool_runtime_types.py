@@ -35,6 +35,7 @@ class ToolExecutionContext:
     parameters: dict[str, Any]
     profile_name: str
     conversation_session_id: str | None
+    connections: dict[str, dict[str, Any]] | None = None
     signal: Event | None = None
     on_progress: Callable[[ToolRuntimeProgress], None] | None = None
 

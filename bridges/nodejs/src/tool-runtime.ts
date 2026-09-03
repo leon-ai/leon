@@ -9,6 +9,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { resolveToolDirectory } from '@/leon-roots'
 
+import { ConnectionRequiredError } from '@sdk/base-tool'
 import type { ToolExecutionContext, ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { ToolRuntimeLifetime, type ManagedTool, type ToolWorkerRequest } from './tool-runtime-types'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
@@ -134,10 +135,14 @@ const execute = async (context: ToolExecutionContext, args: unknown[]): Promise<
     }
   } catch (error) {
     const { isMissingToolSettingsError } = await import('@sdk/tool-manager')
+
     return {
       success: false, message: (error as Error).message || 'Unknown tool runtime error.',
       output: isMissingToolSettingsError(error)
-        ? { missing_settings: error.missing, settings_path: error.settingsPath } : {}
+        ? { missing_settings: error.missing, settings_path: error.settingsPath }
+        : error instanceof ConnectionRequiredError
+          ? { connection_required: true }
+          : {}
     }
   }
 }

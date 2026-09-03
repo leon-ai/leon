@@ -68,6 +68,11 @@ export interface ExecuteCommandOptions {
   skipBinaryDownload?: boolean
 }
 
+/**
+ * Signals rejected account authorization without exposing a provider response body.
+ */
+export class ConnectionRequiredError extends Error {}
+
 export abstract class Tool {
   protected executionContext: ToolExecutionContext | null = null
 
@@ -77,6 +82,49 @@ export abstract class Tool {
   public async prepareExecution(context: ToolExecutionContext): Promise<void> {
     this.executionContext = context
     this.modelFiles.length = 0
+  }
+
+  /**
+   * Gets credentials for a provider declared in this tool's manifest.
+   */
+  protected getConnectionCredentials(
+    provider: string
+  ): Record<string, unknown> | null {
+    return this.executionContext?.connections?.[provider] || null
+  }
+
+  /**
+   * Validates encrypted connection credentials with the ordinary mandatory-settings check.
+   */
+  protected requireConnectionCredentials(): Record<string, unknown> {
+    const config = ToolkitConfig.load(this.toolkit, this.toolName)
+
+    if (!config.connection) {
+      throw new Error('This tool does not declare a connection.')
+    }
+
+    const credentials =
+      this.getConnectionCredentials(`${this.toolkit}.${this.toolName}`) || {}
+
+    this.checkRequiredSettings(
+      this.toolName,
+      credentials,
+      config.connection.required_settings
+    )
+    if (this.missingSettings) {
+      throw new Error(
+        `Connect ${config.name} using the connection widget in chat before using this tool. Missing: ${this.missingSettings.missing.join(', ')}.`
+      )
+    }
+
+    return credentials
+  }
+
+  /**
+   * Checks account access before Core persists credentials supplied during onboarding.
+   */
+  public async validateConnection(): Promise<{ account_label?: string }> {
+    throw new Error('This tool does not implement connection validation.')
   }
 
   /**
@@ -192,14 +240,19 @@ export abstract class Tool {
   /**
    * Check required settings and store missing ones
    */
-  protected checkRequiredSettings(toolName?: string): void {
-    if (this.requiredSettings.length === 0) {
+  protected checkRequiredSettings(
+    toolName?: string,
+    settings = this.settings,
+    requiredSettings = this.requiredSettings
+  ): void {
+    if (requiredSettings.length === 0) {
       this.missingSettings = null
       return
     }
 
-    const missing = this.requiredSettings.filter((key) => {
-      const value = this.settings[key]
+    const missing = requiredSettings.filter((key) => {
+      const value = settings[key]
+
       if (value === undefined || value === null) return true
       if (typeof value === 'string' && value.trim() === '') return true
       return false

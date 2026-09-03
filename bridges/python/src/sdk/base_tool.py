@@ -77,6 +77,10 @@ class ExecuteCommandOptions:
         self.skip_binary_download = skip_binary_download
 
 
+class ConnectionRequiredError(Exception):
+    """Signals rejected account authorization without exposing provider bodies."""
+
+
 class BaseTool(ABC):
     """Base class for Python tools"""
 
@@ -93,6 +97,41 @@ class BaseTool(ABC):
         """Reset per-call evidence when a host prepares this tool for execution."""
         self.execution_context = context
         self._model_files.clear()
+
+    def get_connection_credentials(self, provider: str) -> dict[str, Any] | None:
+        """Get credentials for a provider declared in this tool's manifest."""
+        if self.execution_context is None or self.execution_context.connections is None:
+            return None
+
+        return self.execution_context.connections.get(provider)
+
+    def require_connection_credentials(self) -> dict[str, Any]:
+        """Validate connection credentials using the mandatory-settings check."""
+        config = ToolkitConfig.load(self.toolkit, self.tool_name)
+        connection = config.get("connection")
+
+        if not connection:
+            raise ValueError("This tool does not declare a connection.")
+
+        credentials = (
+            self.get_connection_credentials(f"{self.toolkit}.{self.tool_name}") or {}
+        )
+
+        self._check_required_settings(
+            self.tool_name, credentials, connection["required_settings"]
+        )
+        if self.missing_settings:
+            missing = ", ".join(self.missing_settings["missing"])
+
+            raise ValueError(
+                f"Connect {config['name']} using the connection widget in chat before using this tool. Missing: {missing}."
+            )
+
+        return credentials
+
+    async def validate_connection(self) -> dict[str, str]:
+        """Check account access before Core persists onboarding credentials."""
+        raise NotImplementedError("This tool does not implement connection validation.")
 
     def _attach_model_files(self, files: list[ToolModelFile]) -> None:
         """Attach already encoded evidence without an extra filesystem roundtrip."""
@@ -145,14 +184,26 @@ class BaseTool(ABC):
             PROFILE_TOOLS_PATH, self.toolkit, resolved_tool_name, "settings.json"
         )
 
-    def _check_required_settings(self, tool_name: Optional[str] = None) -> None:
-        if not self.required_settings:
+    def _check_required_settings(
+        self,
+        tool_name: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
+        required_settings: Optional[List[str]] = None,
+    ) -> None:
+        settings = self.settings if settings is None else settings
+        required_settings = (
+            self.required_settings if required_settings is None else required_settings
+        )
+
+        if not required_settings:
             self.missing_settings = None
             return
 
         missing: List[str] = []
-        for key in self.required_settings:
-            value = self.settings.get(key)
+
+        for key in required_settings:
+            value = settings.get(key)
+
             if value is None:
                 missing.append(key)
                 continue
