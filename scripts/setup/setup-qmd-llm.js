@@ -68,7 +68,7 @@ async function movePath(sourcePath, destinationPath) {
   }
 }
 
-async function downloadModel(model) {
+async function downloadModel(model, onProgress) {
   const destinationPath = path.join(QMD_MODELS_DIR_PATH, model.filename)
   const legacyFilename = getModelFilenameFromURL(model.url)
   const legacyPath = path.join(QMD_MODELS_DIR_PATH, legacyFilename)
@@ -88,6 +88,8 @@ async function downloadModel(model) {
   // Model files are large enough that transient CDN failures are common.
   // Keep resumable downloads alive longer than the general file default.
   await FileHelper.downloadFile(resolvedURL, destinationPath, {
+    cliProgress: !onProgress,
+    onProgress,
     retry: QMD_DOWNLOAD_RETRY_OPTIONS,
     retryFetchDownloadInfo: QMD_DOWNLOAD_INFO_RETRY_OPTIONS
   })
@@ -95,7 +97,13 @@ async function downloadModel(model) {
   return 'downloaded'
 }
 
-export default async () => {
+/**
+ * Ensure every QMD model is available locally.
+ *
+ * Optional lifecycle callbacks let desktop integrations expose first-run
+ * download progress without duplicating Leon's model manifest or downloader.
+ */
+export default async (callbacks = {}) => {
   const status = createSetupStatus('Checking QMD models...').start()
 
   try {
@@ -106,12 +114,33 @@ export default async () => {
     status.pause()
     let downloadedModelCount = 0
 
-    for (const model of QMD_MODELS) {
-      const modelState = await downloadModel(model)
+    for (const [modelIndex, model] of QMD_MODELS.entries()) {
+      callbacks.onModelStart?.({
+        filename: model.filename,
+        modelIndex,
+        modelCount: QMD_MODELS.length
+      })
+      const onProgress = callbacks.onModelProgress
+        ? (progress) => {
+            callbacks.onModelProgress({
+              ...progress,
+              filename: model.filename,
+              modelIndex,
+              modelCount: QMD_MODELS.length
+            })
+          }
+        : undefined
+      const modelState = await downloadModel(model, onProgress)
 
       if (modelState === 'downloaded') {
         downloadedModelCount += 1
       }
+      callbacks.onModelReady?.({
+        filename: model.filename,
+        modelIndex,
+        modelCount: QMD_MODELS.length,
+        modelState
+      })
     }
 
     status.text = 'Finalizing QMD models...'
