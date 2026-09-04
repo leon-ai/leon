@@ -314,8 +314,14 @@ async function syncLLMSetupChoice(preferences) {
     await setupNodejsBridgeEnv()
     currentStep = 'setupPythonBridgeEnv'
     await setupPythonBridgeEnv()
-    currentStep = 'setupTCPServerEnv'
-    await setupTCPServerEnv()
+    if (!IS_GITHUB_ACTIONS) {
+      currentStep = 'setupTCPServerEnv'
+      await setupTCPServerEnv()
+    } else {
+      SetupUI.info(
+        'Skipping Python TCP server setup because it is running in CI'
+      )
+    }
     currentStep = 'setupToolsDependencies'
     await setupToolsDependencies()
     currentStep = 'setupToolsSettings'
