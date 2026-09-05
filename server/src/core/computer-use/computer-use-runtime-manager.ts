@@ -129,6 +129,21 @@ export class ComputerUseRuntimeManager {
         window_id: target['window_id']
       }
     }
+    if (target?.['kind'] === 'desktop') {
+      // Accept duplicate representations only when they identify the same
+      // desktop; never silently reinterpret window coordinates as global input.
+      if ((managedParameters['scope'] != null && managedParameters['scope'] !== 'desktop') ||
+          ['pid', 'window_id', 'element_index', 'snapshot_id'].some((key) =>
+            managedParameters[key] != null || target[key] != null) || hasElement) {
+        throw new Error('A desktop target cannot include window scope, identifiers, or element selectors.')
+      }
+      if (managedParameters['display_id'] != null &&
+          managedParameters['display_id'] !== target['display_id']) {
+        throw new Error('Conflicting computer-use display_id; select one exact desktop.')
+      }
+      delete managedParameters['scope']
+      delete managedParameters['display_id']
+    }
     if (action === 'browser_prepare') {
       const strategy = asRecord(managedParameters['strategy'])
       if (strategy?.['kind'] === 'existing_profile') {

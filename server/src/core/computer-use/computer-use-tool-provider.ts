@@ -271,7 +271,10 @@ export class ComputerUseToolProvider implements ToolProvider {
           } : asRecord(primaryResult['escalation']) ? {
             recovery: 'Check whether the intended result is already present before retrying. If absent, follow escalation.recommended using a grounded target; do not repeat the same ineffective route. Foreground input requires an available desktop, and browser setup still requires authorization.'
           } : {}),
-          ...(capturedState ? { post_action_state: capturedState.result } : {}),
+          ...(capturedState ? {
+            post_action_state: capturedState.result,
+            next_step: 'Inspect the attached post-action screenshot before another observation or retry. If navigation opened a new app or dialog, inspect that destination rather than bringing the previous window forward. Reuse this screenshot for the next action and tutorial evidence; observe again only when needed information is missing or the interface has changed.'
+          } : {}),
           ...(result.text && !compactedResult?.changed
             ? { summary: this.artifactStore.buildTextPreview(succeeded ? result.text : failureMessage) }
             : {}),
