@@ -11,6 +11,8 @@ export const COMPUTER_USE_APP_QUERY_PARAMETER = 'query'
 export const COMPUTER_USE_WINDOW_RESULT_LIMIT = 24
 export const COMPUTER_USE_BROWSER_REF_LIMIT = 120
 export const COMPUTER_USE_VISUAL_STATE_LIMIT = 512
+export const COMPUTER_USE_WINDOW_MAX_ELEMENTS = 200
+export const COMPUTER_USE_WINDOW_MAX_DEPTH = 6
 export const COMPUTER_USE_ACTION_SEQUENCE_LIMIT = 8
 export const COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT = 1
 export const COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS = [500, 1_000] as const
@@ -94,6 +96,7 @@ export const COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS = new Set<string>([
 ])
 
 export const COMPUTER_USE_CAPTURE_ACTIONS = new Set([
+  'invoke_menu',
   'click',
   'drag',
   'scroll',

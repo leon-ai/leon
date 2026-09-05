@@ -716,13 +716,16 @@ export default class AISDKRemoteLLMProvider {
       }
 
       const reasoningBudget = this.getReasoningBudget(completionParams)
+      // With no explicit effort, let the provider choose its model default.
       return {
         openrouter: {
           ...routing,
           reasoning: {
             ...(typeof reasoningBudget === 'number'
               ? { max_tokens: reasoningBudget }
-              : { effort: completionParams.reasoningEffort || 'high' })
+              : completionParams.reasoningEffort
+                ? { effort: completionParams.reasoningEffort }
+                : { enabled: true })
           }
         }
       }
@@ -999,6 +1002,15 @@ export default class AISDKRemoteLLMProvider {
             reasoningEffort: 'medium',
             reasoningFormat: 'parsed'
           }
+    }
+
+    // OpenRouter's SDK omits tool_choice when the tool list is empty. Preserve
+    // an explicit text-only request even if the transcript contains tool calls.
+    if (this.config.flavor === 'openrouter' && toolChoice?.type === 'none') {
+      providerOptions['openrouter'] = {
+        ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
+        tool_choice: 'none'
+      }
     }
 
     if (Object.keys(providerOptions).length > 0) {

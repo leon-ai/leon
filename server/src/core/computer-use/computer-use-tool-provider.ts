@@ -20,6 +20,8 @@ import {
   COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
   COMPUTER_USE_VISUAL_STATE_LIMIT,
+  COMPUTER_USE_WINDOW_MAX_ELEMENTS,
+  COMPUTER_USE_WINDOW_MAX_DEPTH,
   CUA_SESSION_ENDED_ERROR_CODE
 } from './constants'
 import { mapComputerUseCoordinateToSource } from './computer-use-coordinate-mapper'
@@ -36,13 +38,11 @@ import type {
   ComputerUseDriverFactory,
   ComputerUseImageTransform,
   ComputerUseInteractionModeResolver,
-  ComputerUseVisualChange,
   CuaToolResult,
   ManagedComputerUseRuntime,
   PreferredApplicationsResolver
 } from './types'
-import { ComputerUseVisualChangeStatus } from './types'
-import { asRecord, parseJsonRecord } from './utils'
+import { asRecord, parseJsonRecord, hasCuaError } from './utils'
 
 export { COMPUTER_USE_ACTION_NAMES } from './constants'
 export {
@@ -60,7 +60,6 @@ export class ComputerUseToolProvider implements ToolProvider {
   public readonly id = COMPUTER_USE_PROVIDER_ID
 
   private readonly visualTransforms = new Map<string, ComputerUseImageTransform>()
-  private readonly visualFingerprints = new Map<string, string>()
   private readonly artifactStore = new ComputerUseArtifactStore()
   private readonly applicationLauncher = new ComputerUseApplicationLauncher()
   private readonly resultCompactor: ComputerUseResultCompactor
@@ -107,7 +106,6 @@ export class ComputerUseToolProvider implements ToolProvider {
   public async dispose(): Promise<void> {
     await this.executionTail
     this.visualTransforms.clear()
-    this.visualFingerprints.clear()
     await this.runtimeManager.dispose()
   }
 
@@ -127,12 +125,19 @@ export class ComputerUseToolProvider implements ToolProvider {
 
     try {
       const runtime = await this.runtimeManager.get(input.profileName)
+      const recording = runtime.recordingSessionId !== undefined &&
+        runtime.recordingSessionId === input.conversationSessionId
       const captureAfter =
-        parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] === true &&
+        (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? recording) === true &&
         COMPUTER_USE_CAPTURE_ACTIONS.has(action) &&
         runtime.driver.supportsPostActionCapture !== false
       const driverParameters = { ...parameters }
       delete driverParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
+      // Tutorial queries need both handles and capture-bound annotation geometry.
+      if (recording && action === 'get_window_state' &&
+          driverParameters['include_screenshot'] === undefined) {
+        driverParameters['include_screenshot'] = true
+      }
       if (action === 'list_apps') {
         // Querying is a Leon-side compaction hint, not a Cua Driver parameter.
         delete driverParameters[COMPUTER_USE_APP_QUERY_PARAMETER]
@@ -192,28 +197,18 @@ export class ComputerUseToolProvider implements ToolProvider {
         actionParameters,
         persistedImages.transform
       )
-      this.rememberVisualFingerprint(
-        input,
-        action,
-        actionParameters,
-        persistedImages.fingerprint
-      )
-      let primaryResult = this.describeModelCoordinateSpace(
+      const primaryResult = this.describeModelCoordinateSpace(
         compactedResult?.result || {
           text: this.artifactStore.buildTextPreview(result.text)
         },
         persistedImages.transform
       )
-      const capturedState = captureAfter
-        ? await this.captureStateAfterAction(runtime, input, actionParameters)
+      const capturedState = captureAfter &&
+        !hasCuaError(result) &&
+        !this.resultCompactor.getStructuredFailure(structuredResult)
+        ? await this.captureStateAfterAction(runtime, input, actionParameters, action)
         : null
       await this.artifactStore.persistCaptureMetadata(persistedImages, primaryResult)
-      if (
-        capturedState?.visualChange.status ===
-        ComputerUseVisualChangeStatus.Unchanged
-      ) {
-        primaryResult = this.markSuspectedNoop(primaryResult)
-      }
       const structuredArtifact =
         structuredResult && compactedResult?.changed
           ? await this.artifactStore.persistStructuredResult(
@@ -246,11 +241,21 @@ export class ComputerUseToolProvider implements ToolProvider {
         result.errorCode ||
         'Computer-use action failed.'
       const succeeded =
-        !result.isError &&
-        !result.errorCode &&
+        !hasCuaError(result) &&
         structuredFailure === null &&
         launchResolution?.ready !== false
-      const successMessage = this.getSuccessMessage(capturedState?.visualChange)
+      if (succeeded && action === 'start_recording') {
+        runtime.recordingSessionId = input.conversationSessionId
+      } else if (succeeded && action === 'stop_recording') {
+        delete runtime.recordingSessionId
+      }
+      const successMessage = this.getSuccessMessage(primaryResult)
+      const target = asRecord(actionParameters['target'])
+      // An unverified dispatch is not a failed click. Let the agent compare
+      // the observed result before choosing a different input route.
+      const windowClickNeedsObservation = action === 'click' &&
+        (actionParameters['window_id'] != null || target?.['kind'] === 'window') &&
+        ['unverifiable', 'suspected_noop'].includes(String(primaryResult['effect']))
 
       return {
         success: succeeded,
@@ -261,10 +266,12 @@ export class ComputerUseToolProvider implements ToolProvider {
           action,
           ...(!succeeded ? { success: false } : {}),
           result: primaryResult,
+          ...(windowClickNeedsObservation ? {
+            recovery: 'Inspect the post-action state or observe the target before retrying; unverifiable does not mean failure. If the intended change is absent, do not repeat the window click. When foreground interaction is permitted, bring the target to the front, take a fresh get_desktop_state screenshot, and click the visibly exposed control with target={kind:"desktop",display_id:"primary"}. Use only that desktop image\'s coordinates, omit window identifiers and element tokens, then verify the change. If the target is obscured or focus changes, observe again before acting.'
+          } : asRecord(primaryResult['escalation']) ? {
+            recovery: 'Check whether the intended result is already present before retrying. If absent, follow escalation.recommended using a grounded target; do not repeat the same ineffective route. Foreground input requires an available desktop, and browser setup still requires authorization.'
+          } : {}),
           ...(capturedState ? { post_action_state: capturedState.result } : {}),
-          ...(capturedState
-            ? { visual_change: capturedState.visualChange }
-            : {}),
           ...(result.text && !compactedResult?.changed
             ? { summary: this.artifactStore.buildTextPreview(succeeded ? result.text : failureMessage) }
             : {}),
@@ -273,14 +280,14 @@ export class ComputerUseToolProvider implements ToolProvider {
             ? { verification: result.verification }
             : {}),
           ...(artifacts.length > 0 ? { artifacts } : {}),
-          ...(result.errorCode ||
+          ...(!succeeded && (result.errorCode ||
           structuredFailure?.code ||
-          launchResolution?.errorCode
+          launchResolution?.errorCode)
             ? {
                 error_code:
-                  result.errorCode ||
                   structuredFailure?.code ||
-                  launchResolution?.errorCode
+                  launchResolution?.errorCode ||
+                  result.errorCode
               }
             : {}),
           degraded: result.degraded
@@ -288,9 +295,8 @@ export class ComputerUseToolProvider implements ToolProvider {
         ...(modelFiles.length > 0 ? { modelFiles } : {})
       }
     } catch (error) {
-      return this.failure(
-        error instanceof Error ? error.message : String(error)
-      )
+      const message = error instanceof Error ? error.message : String(error)
+      return this.failure(message)
     }
   }
 
@@ -309,7 +315,10 @@ export class ComputerUseToolProvider implements ToolProvider {
       )
     }
 
-    const captureAfter = parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] === true
+    const runtime = await this.runtimeManager.get(input.profileName)
+    const recording = runtime.recordingSessionId !== undefined &&
+      runtime.recordingSessionId === input.conversationSessionId
+    const captureAfter = (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? recording) === true
     const pixelClickCount = steps.filter((value) => {
       const step = asRecord(value)
       const stepParameters = asRecord(step?.['parameters'])
@@ -346,12 +355,16 @@ export class ComputerUseToolProvider implements ToolProvider {
 
       const boundedParameters = { ...stepParameters }
       delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
+      // A capture mints new element handles. Preserve the already-grounded
+      // handles of a mechanical sequence until its final action.
+      if (index < steps.length - 1) {
+        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = false
+      }
       if (
-        captureAfter &&
         index === steps.length - 1 &&
         COMPUTER_USE_CAPTURE_ACTIONS.has(stepAction)
       ) {
-        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = true
+        boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = captureAfter
       }
 
       input.onProgress?.({
@@ -378,10 +391,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       stepResults.push({
         action: stepAction,
         success: result.success,
-        result: result.output['result'] ?? null,
-        ...(result.output['visual_change'] !== undefined
-          ? { visual_change: result.output['visual_change'] }
-          : {})
+        result: result.output['result'] ?? null
       })
 
       if (!result.success) {
@@ -416,12 +426,20 @@ export class ComputerUseToolProvider implements ToolProvider {
     action: string,
     parameters: Record<string, unknown>
   ): Record<string, unknown> {
+    if (action !== 'get_window_state') return parameters
+
+    // Bound the driver walk itself, not just the text sent to the model.
+    // Callers can request deeper observations when a needed control is omitted.
+    parameters = {
+      max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
+      max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH,
+      ...parameters
+    }
     if (
-      action !== 'get_window_state' ||
       parameters['include_screenshot'] !== undefined ||
       typeof parameters['query'] !== 'string' ||
       parameters['query'].trim().length === 0 ||
-      !this.visualFingerprints.has(this.getVisualTransformKey(input, parameters))
+      !this.visualTransforms.has(this.getVisualTransformKey(input, parameters))
     ) {
       return parameters
     }
@@ -451,7 +469,7 @@ export class ComputerUseToolProvider implements ToolProvider {
         'start_session',
         JSON.stringify({ session })
       )
-      if (sessionResult.isError || sessionResult.errorCode) {
+      if (hasCuaError(sessionResult)) {
         return sessionResult
       }
       result = await driver.callTool(action, serializedParameters)
@@ -506,7 +524,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   ): boolean {
     if (
       action !== 'get_browser_state' ||
-      result.isError ||
+      hasCuaError(result) ||
       typeof parameters['query'] !== 'string' ||
       parameters['query'].trim().length === 0
     ) {
@@ -593,26 +611,6 @@ export class ComputerUseToolProvider implements ToolProvider {
     )
   }
 
-  private rememberVisualFingerprint(
-    input: ToolProviderExecutionInput,
-    action: string,
-    parameters: Record<string, unknown>,
-    fingerprint: string | null
-  ): void {
-    if (
-      !fingerprint ||
-      (action !== 'get_window_state' && action !== 'get_desktop_state')
-    ) {
-      return
-    }
-
-    this.rememberVisualState(
-      this.visualFingerprints,
-      this.getVisualTransformKey(input, parameters),
-      fingerprint
-    )
-  }
-
   private rememberVisualState<T>(
     store: Map<string, T>,
     key: string,
@@ -641,13 +639,19 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
 
     const windowId = parameters['window_id'] ?? target?.['window_id']
+    const pid = parameters['pid'] ?? target?.['pid']
+    if (typeof parameters['target_id'] === 'string') {
+      return `${sessionKey}:browser:${parameters['target_id']}:${parameters['tab_id'] ?? ''}`
+    }
     return typeof windowId === 'number'
-      ? `${sessionKey}:window:${windowId}`
+      ? `${sessionKey}:window:${pid}:${windowId}`
       : `${sessionKey}:desktop`
   }
 
   private boundWindowObservation(output: Record<string, unknown>): Record<string, unknown> {
-    const result = asRecord(output['result'])
+    const field = asRecord(output['post_action_state'])?.['elements']
+      ? 'post_action_state' : 'result'
+    const result = asRecord(output[field])
     if (!result || !Array.isArray(result['elements'])) return output
     const elements = result['elements']
     const bounded = {
@@ -656,13 +660,13 @@ export class ComputerUseToolProvider implements ToolProvider {
       returned_element_count: 0,
       omitted_element_count: elements.length,
       elements_complete: false,
-      hint: 'Use pid and window_id with current element tokens. Observe again after acting; old tokens expire. Query omitted controls. Verify the effect of input; if window actions have no effect, follow capture_coverage.recovery using a fresh desktop screenshot and desktop target.'
+      hint: 'Use pid and window_id with current element tokens. Observe again after acting; old tokens expire. Increase max_elements/max_depth if a needed control is omitted; query filters results, not traversal cost. If a window click has no effect, bring the target forward when permitted, then use a fresh desktop screenshot and desktop target for the visible control. Never reuse window coordinates on the desktop.'
     }
     // Include paths, metadata and envelope in the budget, not just AX elements.
     // Reserve the worst-case counter width so counters cannot overflow it.
     const budgetBase = { ...bounded, returned_element_count: elements.length }
     let remaining = COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS -
-      JSON.stringify({ ...output, result: budgetBase }).length
+      JSON.stringify({ ...output, [field]: budgetBase }).length
     for (const element of elements) {
       const cost = JSON.stringify(element).length + 1
       if (cost > remaining) continue
@@ -673,7 +677,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     bounded.returned_element_count = bounded.elements.length
     bounded.omitted_element_count = omitted + Number(result['omitted_element_count'] || 0)
     bounded.elements_complete = omitted === 0 && result['elements_complete'] !== false
-    return { ...output, result: bounded }
+    return { ...output, [field]: bounded }
   }
 
   private describeModelCoordinateSpace(
@@ -737,10 +741,12 @@ export class ComputerUseToolProvider implements ToolProvider {
   private async captureStateAfterAction(
     runtime: ManagedComputerUseRuntime,
     input: ToolProviderExecutionInput,
-    actionParameters: Record<string, unknown>
+    actionParameters: Record<string, unknown>,
+    action: string
   ): Promise<CapturedComputerUseState | null> {
     const target = asRecord(actionParameters['target'])
     const isDesktop =
+      action === 'invoke_menu' ||
       actionParameters['scope'] === 'desktop' || target?.['kind'] === 'desktop'
     const pid = actionParameters['pid'] ?? target?.['pid']
     const windowId = actionParameters['window_id'] ?? target?.['window_id']
@@ -759,7 +765,12 @@ export class ComputerUseToolProvider implements ToolProvider {
     const session = actionParameters['session']
     const captureParameters: Record<string, unknown> = isDesktop
       ? {}
-      : { pid, window_id: windowId }
+      : {
+          pid,
+          window_id: windowId,
+          max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
+          max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH
+        }
     if (
       typeof session === 'string' &&
       runtime.sessionAwareActions.has(captureAction)
@@ -767,21 +778,22 @@ export class ComputerUseToolProvider implements ToolProvider {
       captureParameters['session'] = session
     }
 
-    const observationKey = this.getVisualTransformKey(input, actionParameters)
-    const previousFingerprint = this.visualFingerprints.get(observationKey)
     const captureResult = await this.callAction(
       runtime.driver,
       input,
       captureAction,
       captureParameters
     )
-    if (captureResult.isError || captureResult.errorCode) {
+    if (hasCuaError(captureResult)) {
       return null
     }
 
     const structuredResult =
       parseJsonRecord(captureResult.structuredJson) ||
       parseJsonRecord(captureResult.rawJson)
+    if (this.resultCompactor.getStructuredFailure(structuredResult)) {
+      return null
+    }
     const compactedResult = structuredResult
         ? this.resultCompactor.compact(input, captureAction, structuredResult)
         : null
@@ -797,54 +809,32 @@ export class ComputerUseToolProvider implements ToolProvider {
       captureParameters,
       persistedImages.transform
     )
-    this.rememberVisualFingerprint(
-      input,
-      captureAction,
-      captureParameters,
-      persistedImages.fingerprint
+    const observation = this.describeModelCoordinateSpace(
+      compactedResult?.result || {
+        text: this.artifactStore.buildTextPreview(captureResult.text)
+      },
+      persistedImages.transform
     )
-
-    const visualChange: ComputerUseVisualChange = {
-      status:
-        previousFingerprint && persistedImages.fingerprint
-          ? previousFingerprint === persistedImages.fingerprint
-            ? ComputerUseVisualChangeStatus.Unchanged
-            : ComputerUseVisualChangeStatus.Changed
-          : ComputerUseVisualChangeStatus.Unavailable,
-      comparison: 'exact_capture'
+    if (isDesktop) {
+      // Native menus are composited outside a window capture on macOS.
+      // Label the new coordinate space so it cannot be used as window pixels.
+      observation['capture_target'] = { kind: 'desktop' }
+      observation['hint'] = 'This is a desktop observation. Use a desktop target for its pixels; window-local coordinates and old element tokens do not apply. A highlighted menu item alone does not prove the command ran.'
     }
-
+    // Post-action captures are tutorial evidence too; bind annotation geometry
+    // to their own screenshot rather than the pre-action snapshot.
+    await this.artifactStore.persistCaptureMetadata(persistedImages, observation)
     return {
-      result: this.describeModelCoordinateSpace(
-        compactedResult?.result || {
-          text: this.artifactStore.buildTextPreview(captureResult.text)
-        },
-        persistedImages.transform
-      ),
+      result: observation,
       artifacts: persistedImages.artifacts,
-      modelFiles: persistedImages.modelFiles,
-      visualChange
+      modelFiles: persistedImages.modelFiles
     }
   }
 
-  private markSuspectedNoop(
-    result: Record<string, unknown>
-  ): Record<string, unknown> {
-    return result['effect'] === 'confirmed'
-      ? result
-      : { ...result, effect: 'suspected_noop' }
-  }
-
-  private getSuccessMessage(
-    visualChange?: ComputerUseVisualChange
-  ): string {
-    if (visualChange?.status === ComputerUseVisualChangeStatus.Unchanged) {
-      return 'Computer input was delivered, but the captured interface did not change. Treat the intended effect as unverified.'
+  private getSuccessMessage(result: Record<string, unknown>): string {
+    if (result?.['effect'] === 'unverifiable' || result?.['effect'] === 'suspected_noop') {
+      return 'Input was delivered, but its intended effect is unverified. Observe the target before deciding whether to retry.'
     }
-    if (visualChange?.status === ComputerUseVisualChangeStatus.Changed) {
-      return 'Computer input was delivered and the captured interface changed. Verify the intended result from the returned state.'
-    }
-
     return 'Computer-use action completed.'
   }
 

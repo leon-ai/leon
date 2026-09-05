@@ -3,7 +3,7 @@
   "tool_id": "cua",
   "toolkit_id": "computer_use",
   "name": "Cua",
-  "description": "Observe and operate visible apps through Cua Driver. Prefer dedicated tools. Use list_apps only when the owner did not name an app or the launch target is unknown; query it when looking for one app. Use perform_actions for a short mechanical sequence only when no intermediate visual decision is needed. Work in the background unless the owner asks to watch. Captured actions report visual_change: changed does not prove the intended outcome, while unchanged leaves it unverified.",
+  "description": "Observe and operate apps through Cua Driver. Prefer dedicated tools. Discover the target once and reuse its observed identifiers while valid. Prefer invoke_menu for an observed native menu path instead of navigating each menu level. Use perform_actions for short mechanical sequences without intermediate visual decisions. Work in the background unless the owner asks to watch. Native menu and foreground input actions handle activation themselves; do not precede them with bring_to_front unless focus must persist across actions. Use current accessibility handles or screenshot-grounded coordinates, and follow Cua's effect and escalation diagnostics. After uncertain input or a timeout, inspect the target before retrying: input may already have landed. Use capture_after=true when a resulting screenshot is needed, including tutorial evidence. A successful dispatch is not proof that the task is complete.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -123,12 +123,12 @@
             "type": "boolean"
           },
           "max_depth": {
-            "description": "Cap on the AT-SPI tree walk depth. Omit for the default (uncapped). Lower for deeply nested apps.",
+            "description": "Cap on accessibility-tree walk depth. Leon defaults to 6. Increase only when a needed control is omitted.",
             "minimum": 1,
             "type": "integer"
           },
           "max_elements": {
-            "description": "Cap on total AT-SPI nodes walked. Omit for the default (5 000). Lower for huge web/Electron trees.",
+            "description": "Cap on total accessibility nodes walked. Leon defaults to 200. Increase only when a needed control is omitted; query filters the result without reducing traversal cost.",
             "minimum": 1,
             "type": "integer"
           },
@@ -393,7 +393,7 @@
       }
     },
     "get_desktop_state": {
-      "description": "Inspect the whole visible desktop and return its current screenshot and interface state. Use this only when the task spans multiple windows or the target window is unknown; do not call it when get_window_state already provides sufficient visual evidence.",
+      "description": "Capture the visible desktop without an accessibility-tree walk. Use for controls outside a window, multiple windows, or recovery after a window click visibly has no effect. When foreground interaction is permitted, bring the intended window forward before capture and locate the exposed control in this fresh image. Use target={kind:desktop,display_id:primary} for its coordinates, without window identifiers or element tokens; never reuse window-image coordinates. Observe again if focus or window placement changes.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -540,7 +540,7 @@
       }
     },
     "invoke_menu": {
-      "description": "Invoke an exact native application-menu path through accessibility APIs.",
+      "description": "Invoke an exact observed native application-menu path in one call, rather than clicking each menu level. The driver handles target activation and focus restoration; a separate bring_to_front is unnecessary. Observe the resulting state to verify completion.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,

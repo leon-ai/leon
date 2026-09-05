@@ -74,7 +74,7 @@ export async function renderTutorial(binary, sessionRoot, outputDir, steps) {
     if (step.targetToken) {
       const target = metadata.elements?.find(element => element.element_token === step.targetToken)
       if (!target?.pixel_center || !target?.pixel_bounds) {
-        throw new Error('Target token has no geometry in this capture. Use a target from this exact screenshot.')
+        throw new Error(`Step ${index + 1}: targetToken "${step.targetToken}" has no geometry in ${path.basename(screenshot)}. Read ${screenshot}.json and use a token with geometry from that capture; tokens from other screenshots are not interchangeable. If no highlight is needed, omit targetToken and keep the instruction caption.`)
       }
       point = { ...target.pixel_center, coordinateWidth: metadata.screenshot_width, coordinateHeight: metadata.screenshot_height }
       bounds = target.pixel_bounds
@@ -84,9 +84,8 @@ export async function renderTutorial(binary, sessionRoot, outputDir, steps) {
     if (step.point && index === steps.length - 1) {
       throw new Error('Do not guess a point on the final result. Omit the annotation or use verified targetToken geometry.')
     }
-    if (step.point && metadata?.elements?.some(element => element.pixel_center && element.pixel_bounds)) {
-      throw new Error('This capture contains accessible target geometry. Use targetToken from this exact screenshot instead of a guessed point.')
-    }
+    // Other accessible controls do not establish geometry for this target.
+    // Coordinate annotations still have to match the source capture below.
     if (point && metadata &&
         !(point.coordinateWidth === metadata.screenshot_width && point.coordinateHeight === metadata.screenshot_height) &&
         !(point.coordinateWidth === width && point.coordinateHeight === height)) {
@@ -176,7 +175,8 @@ export async function renderTutorial(binary, sessionRoot, outputDir, steps) {
   const duration = durations.reduce((sum, value) => sum + value, 0)
   const manifest = durations.map((seconds, index) => `file 'step-${index + 1}.png'\nduration ${seconds}\n`).join('') + `file 'step-${captures.length}.png'\n`
   await fs.writeFile(path.join(work, 'frames.txt'), manifest)
-  await execute(['-f', 'concat', '-safe', '1', '-i', 'frames.txt', '-t', String(duration), '-r', '30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', 'tutorial.mp4'])
+  // Expand still-frame timestamps before encoding so the last step keeps its duration.
+  await execute(['-f', 'concat', '-safe', '1', '-i', 'frames.txt', '-t', String(duration), '-vf', 'fps=30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', 'tutorial.mp4'])
   // Decode the entire result before exposing its path as a deliverable.
   await execute(['-xerror', '-i', 'tutorial.mp4', '-f', 'null', '-'])
   const filePath = await fs.realpath(path.join(work, 'tutorial.mp4'))

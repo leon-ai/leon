@@ -57,8 +57,12 @@ export async function buildAgentContinuationTranscript(
     ].join('\n')
   }
   const request = parts.older.findLast((item) => item.role === 'user')
-  const replacement = [...(request ? [request] : []), message]
-  if (JSON.stringify(replacement).length >= history.length) return transcript
+  const replacement = [...(request ? [request] : []), message, ...parts.visual]
+  // Compare text sizes consistently; retained images already have a fixed cap.
+  const replacementText = JSON.stringify(replacement, (key, value) =>
+    key === 'dataBase64' ? undefined : value
+  )
+  if (replacementText.length >= history.length) return transcript
   return [...replacement, ...parts.recent]
 }
 

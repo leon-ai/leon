@@ -15,6 +15,7 @@ import {
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 
 import type {
   HTTPPluginAgentEvent,
@@ -170,9 +171,26 @@ export async function runControlledSkill(
           }
         }
 
+        let responseLocale: string | undefined
+        const actionArguments = { ...selected.arguments }
+        if (input.response_locale_parameter) {
+          const parameterName = input.response_locale_parameter
+          const skillConfig = await SkillDomainHelper.getNewSkillConfig(skillName)
+          const actions = skillConfig?.actions as Record<string, {
+            parameters?: Record<string, { enum?: string[] }>
+          }> | undefined
+          const allowedLocales = actions?.[selected.name]?.parameters?.[parameterName]?.enum
+          const selectedLocale = actionArguments[parameterName]
+          if (typeof selectedLocale !== 'string' || !allowedLocales?.includes(selectedLocale)) {
+            throw new Error('The controlled action did not select a declared reply locale.')
+          }
+          responseLocale = selectedLocale
+          // Locale metadata must never reach the host's device-action schema.
+          delete actionArguments[parameterName]
+        }
         const action = {
           name: selected.name,
-          input: selected.arguments
+          input: actionArguments
         }
         const toolCallId = `${input.request_id || sessionId}:controlled-action`
         const runningToolCall: HTTPPluginToolCall = {
@@ -202,8 +220,8 @@ export async function runControlledSkill(
         const actionStartedAt = performance.now()
         try {
           await NLUProcessResultUpdater.update({ new: { utterance: query } })
-          await NLUProcessResultUpdater.update({ skillName })
-          await NLUProcessResultUpdater.update({ actionName: action.name })
+          await NLUProcessResultUpdater.update({ skillName }, responseLocale)
+          await NLUProcessResultUpdater.update({ actionName: action.name }, responseLocale)
           await NLUProcessResultUpdater.update({
             new: { actionArguments: action.input }
           })

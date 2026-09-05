@@ -692,6 +692,7 @@ export class ReActLLMDuty extends LLMDuty {
     tools: OpenAITool[],
     options: {
       isRecoveryAttempt: boolean
+      isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
       isContextRecoveryAttempt?: boolean
       remainingIterations?: number
@@ -749,6 +750,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
     const preparedTranscript = preparedContext.transcript
     const preparedTools = preparedContext.tools
+    const toolChoice = options.isFinalizationAttempt ? 'none' : 'auto'
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
@@ -775,6 +777,16 @@ export class ReActLLMDuty extends LLMDuty {
         ? 'default'
         : undefined
     const disableThinking = reasoningMode === 'off'
+    const maxOutputTokens = resolveAgentMaxOutputTokens(
+      providerName,
+      preparedContext.estimatedInputTokens,
+      options.isOutputRecoveryAttempt
+    )
+    if (options.isOutputRecoveryAttempt) {
+      LogHelper.info(
+        `Retrying truncated agent output with max_tokens=${maxOutputTokens}; preserving configured reasoning`
+      )
+    }
     const shouldEmitReasoning =
       reasoningMode !== 'off' && inferencePolicy.emitReasoning
 
@@ -787,7 +799,7 @@ export class ReActLLMDuty extends LLMDuty {
       : null
 
     this.logTitle(phase)
-    LogHelper.debug(`callAgentModel: tools=[${toolNames}] | choice=auto`)
+    LogHelper.debug(`callAgentModel: tools=[${toolNames}] | choice=${toolChoice}`)
     if (preparedContext.wasCompacted) {
       LogHelper.debug(
         `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokens} | exchanges=${preparedContext.compactedToolExchangeCount} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
@@ -797,6 +809,7 @@ export class ReActLLMDuty extends LLMDuty {
       prompt: promptForLog,
       systemPrompt: activeSystemPrompt,
       tools: preparedTools,
+      toolChoice,
       phasePolicySummary: formatAgentInferencePolicyForLog({
         ...inferencePolicy,
         reasoningMode,
@@ -874,10 +887,7 @@ export class ReActLLMDuty extends LLMDuty {
         temperature: AGENT_TEMPERATURE,
         timeout: AGENT_INFERENCE_TIMEOUT_MS,
         maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
-        maxTokens: resolveAgentMaxOutputTokens(
-          providerName,
-          preparedContext.estimatedInputTokens
-        ),
+        maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
         promptCacheKey: AGENT_PROMPT_CACHE_KEY,
         ...(inferencePolicy.textVerbosity
@@ -903,7 +913,7 @@ export class ReActLLMDuty extends LLMDuty {
         ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),
         tools: preparedTools,
-        toolChoice: 'auto',
+        toolChoice,
         signal: toolCallAbortController.signal
       })
     } finally {
@@ -1096,6 +1106,7 @@ export class ReActLLMDuty extends LLMDuty {
     systemPrompt: string
     prompt: string
     tools: OpenAITool[]
+    toolChoice: 'auto' | 'none'
     phasePolicySummary?: string
     shouldStream?: boolean
   }): void {
@@ -1117,7 +1128,7 @@ export class ReActLLMDuty extends LLMDuty {
           ? [`policy=${params.phasePolicySummary}`]
           : []),
         `tool_count=${params.tools.length}`,
-        'tool_choice=auto',
+        `tool_choice=${params.toolChoice}`,
         ''
       ]
       const sectionLines = [
@@ -1155,6 +1166,7 @@ export class ReActLLMDuty extends LLMDuty {
     systemPrompt: string
     phasePolicySummary?: string
     tools: OpenAITool[]
+    toolChoice: 'auto' | 'none'
     shouldStream?: boolean
   }): void {
     const promptTokens = this.estimateTokensFromText(params.prompt)
@@ -1170,12 +1182,13 @@ export class ReActLLMDuty extends LLMDuty {
         params.shouldStream === true ? ' | stream=true' : ''
       }${
         params.phasePolicySummary ? ` | ${params.phasePolicySummary}` : ''
-      } | tools=${params.tools.length} | tool_choice=auto`
+      } | tools=${params.tools.length} | tool_choice=${params.toolChoice}`
     )
     this.writeAgentPromptLog({
       systemPrompt: params.systemPrompt,
       prompt: params.prompt,
       tools: params.tools,
+      toolChoice: params.toolChoice,
       ...(params.phasePolicySummary !== undefined
         ? { phasePolicySummary: params.phasePolicySummary }
         : {}),

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -84,8 +84,7 @@ export class ComputerUseArtifactStore {
       return {
         artifacts: [],
         modelFiles: [],
-        transform: null,
-        fingerprint: null
+        transform: null
       }
     }
 
@@ -128,8 +127,7 @@ export class ComputerUseArtifactStore {
             filename: path.basename(artifactPath),
             visualDetail: 'high' as const
           },
-          modelDimensions: modelImage.dimensions,
-          fingerprint: createHash('sha256').update(content).digest('hex')
+          modelDimensions: modelImage.dimensions
         }
       })
     )
@@ -144,8 +142,7 @@ export class ComputerUseArtifactStore {
       modelFiles: persistedImages
         .slice(-COMPUTER_USE_MODEL_IMAGE_LIMIT)
         .map(({ modelFile }) => modelFile),
-      transform,
-      fingerprint: latestImage?.fingerprint || null
+      transform
     }
   }
 

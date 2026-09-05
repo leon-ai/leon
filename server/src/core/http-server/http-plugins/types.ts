@@ -72,6 +72,8 @@ export interface HTTPPluginRunControlledSkillInput {
   skill_name: string
   /** An explicit native action that hands the request back to the caller. */
   fallback_action_name?: string
+  /** Declared action parameter selecting a skill-local reply locale, not a device argument. */
+  response_locale_parameter?: string
   profile_id?: string
   session_id?: string
   create_session?: boolean

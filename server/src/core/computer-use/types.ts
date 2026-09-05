@@ -23,12 +23,6 @@ export enum ComputerUseInteractionMode {
   Visible = 'visible'
 }
 
-export enum ComputerUseVisualChangeStatus {
-  Changed = 'changed',
-  Unchanged = 'unchanged',
-  Unavailable = 'unavailable'
-}
-
 export type ComputerUseInteractionModeResolver = (
   input: ToolProviderExecutionInput
 ) => ComputerUseInteractionMode
@@ -42,6 +36,8 @@ export interface ManagedComputerUseRuntime {
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
   initializedSessions: Set<string>
+  /** Only the conversation that started recording receives automatic evidence captures. */
+  recordingSessionId?: string | null
 }
 
 export interface ComputerUseImageDimensions {
@@ -58,19 +54,12 @@ export interface PersistedComputerUseImages {
   artifacts: Array<Record<string, unknown>>
   modelFiles: ToolProviderModelFile[]
   transform: ComputerUseImageTransform | null
-  fingerprint: string | null
 }
 
 export interface CapturedComputerUseState {
   result: Record<string, unknown>
   artifacts: Array<Record<string, unknown>>
   modelFiles: ToolProviderModelFile[]
-  visualChange: ComputerUseVisualChange
-}
-
-export interface ComputerUseVisualChange {
-  status: ComputerUseVisualChangeStatus
-  comparison: 'exact_capture'
 }
 
 export interface CompactedComputerUseResult {

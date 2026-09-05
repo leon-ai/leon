@@ -25,6 +25,7 @@ import {
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   AGENT_TOOL_OBSERVATION_MAX_CHARS,
+  AGENT_OUTPUT_RECOVERY_MAX_TOKENS,
   CHARS_PER_TOKEN
 } from './constants'
 
@@ -97,14 +98,16 @@ export function resolveAgentContextRecoveryTriggerTokens(
 
 /**
  * Gives local models the context capacity left after the prepared prompt and
- * a tokenizer-estimation margin. Remote providers manage their own ceiling.
+ * a tokenizer-estimation margin. Remote calls keep the provider layer's default
+ * unless retrying output exhaustion with a bounded larger allowance.
  */
 export function resolveAgentMaxOutputTokens(
   provider: LLMProviders,
-  estimatedInputTokens: number
+  estimatedInputTokens: number,
+  isOutputRecoveryAttempt = false
 ): number | undefined {
   if (!isLocalLLMProvider(provider)) {
-    return undefined
+    return isOutputRecoveryAttempt ? AGENT_OUTPUT_RECOVERY_MAX_TOKENS : undefined
   }
 
   const safetyMarginTokens = Math.floor(
@@ -384,6 +387,7 @@ export function splitAgentTranscriptForSummary(
   transcript: AgentToolTranscriptMessage[]
 ): {
   older: AgentToolTranscriptMessage[]
+  visual: AgentToolTranscriptMessage[]
   recent: AgentToolTranscriptMessage[]
 } | null {
   const exchanges = findCompletedToolExchanges(transcript)
@@ -397,9 +401,23 @@ export function splitAgentTranscriptForSummary(
   }
   if (boundary <= 0) return null
 
+  // Keep a bounded visual reference even when the recent tail is text-only.
+  // Retain whole exchanges so parallel tool results never become orphaned.
+  const boundedTranscript = retainRecentComputerUseImages(transcript)
+  const visual = findCompletedToolExchanges(boundedTranscript)
+    .filter((exchange) =>
+      exchange.endIndex < boundary && exchange.toolMessages.some((message) =>
+        message.toolName.startsWith('computer_use__') && message.files?.length
+      )
+    )
+    .flatMap((exchange) =>
+      boundedTranscript.slice(exchange.startIndex, exchange.endIndex + 1)
+    )
+
   return {
-    older: transcript.slice(0, boundary),
-    recent: transcript.slice(boundary)
+    older: boundedTranscript.slice(0, boundary),
+    visual,
+    recent: boundedTranscript.slice(boundary)
   }
 }
 

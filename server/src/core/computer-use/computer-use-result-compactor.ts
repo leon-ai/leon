@@ -189,7 +189,7 @@ export class ComputerUseResultCompactor {
         ['pid', 'window_id', 'snapshot_id', 'window_bounds', 'screenshot_width',
           'screenshot_height', 'screenshot_scale', 'screenshot_frame_valid',
           'elements_complete', 'total_element_count', 'background_input',
-          'capture_coverage'].includes(key)
+          'capture_coverage', 'degraded', 'effect', 'escalation', 'off_space'].includes(key)
       )
     )
     if (!metadata['window_bounds'] && windowFrame) {

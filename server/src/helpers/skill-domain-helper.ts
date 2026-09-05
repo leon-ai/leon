@@ -899,9 +899,15 @@ export class SkillDomainHelper {
    * @example getSkillLocaleConfig('en', 'color_skill')['actions'][actionName]
    */
   public static async getSkillLocaleConfig(
-    lang: ShortLanguageCode,
+    lang: string,
     skillName: SkillSchema['name']
   ): Promise<SkillLocaleConfigSchema | object> {
+    // A skill may provide locales outside the global UI language registry.
+    // Keep request-scoped locale names inside its locales directory.
+    if (!lang || lang === '.' || lang === '..' ||
+        path.posix.basename(lang) !== lang || path.win32.basename(lang) !== lang) {
+      throw new Error('Invalid skill locale name.')
+    }
     const skillPath = this.resolveSkillPath(skillName)
 
     if (!skillPath) {

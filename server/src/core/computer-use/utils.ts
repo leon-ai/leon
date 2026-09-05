@@ -1,3 +1,13 @@
+import type { CuaToolResult } from './types'
+
+/** Cua also exposes informational activation codes in its errorCode field. */
+export function hasCuaError(result: CuaToolResult): boolean {
+  if (result.isError) return true
+  if (!result.errorCode) return false
+  const output = parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+  return output?.['activated'] !== true && output?.['success'] !== true
+}
+
 /** Returns a plain object view when the input is a JSON record. */
 export function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)

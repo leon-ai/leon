@@ -22,7 +22,9 @@ import { asRecord, parseJsonRecord } from '../utils'
 
 /** Adapts an owner-device host bridge to the computer-use driver contract. */
 class RemoteCuaDriverAdapter implements ComputerUseDriver {
-  public readonly supportsPostActionCapture = false
+  // The host bridge exposes the same observation actions and image payloads.
+  // Keep verification in this layer so remote agents also see action effects.
+  public readonly supportsPostActionCapture = true
 
   public constructor(
     private readonly url: string,

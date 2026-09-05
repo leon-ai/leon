@@ -77,11 +77,11 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 export const AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT = `<execution_limit_checkpoint>
 The operational iteration budget is exhausted. Address the original owner request now using the evidence already present in the transcript.
 
-- No operational tools are available in this checkpoint.
+- No tools are available in this checkpoint. Return plain text only.
 - If the evidence is sufficient, return the complete user-facing answer as plain text with no tool call.
 - Do not claim completion when required evidence or work is still missing.
 - If work is still incomplete, state the concrete obstacle and what remains unfinished. Do not claim that an alternative deliverable satisfies the original request.
-- Call request_clarification only for genuinely missing information or authorization. An internal execution limit is not a reason to ask the owner to approve the same task again.
+- If genuinely missing information or authorization blocks completion, explain it in your answer. An internal execution limit is not a reason to ask the owner to approve the same task again.
 </execution_limit_checkpoint>`
 
 /** Adds lightweight convergence pressure near the hard iteration boundary. */
@@ -138,6 +138,7 @@ interface AgentModelResult {
 
 interface AgentModelCallOptions {
   isRecoveryAttempt: boolean
+  isOutputRecoveryAttempt?: boolean
   isFinalizationAttempt?: boolean
   isContextRecoveryAttempt?: boolean
   remainingIterations?: number
@@ -402,6 +403,7 @@ export async function runAgentLoop(
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     let modelResult: AgentModelResult | null
     let isRecoveryAttempt = false
+    let isOutputRecoveryAttempt = false
     // Once a provider needs the smaller context target, keep that target for
     // the rest of the run instead of allowing the prompt to grow back.
     let isContextRecoveryAttempt = hasUsedContextRecovery
@@ -414,6 +416,7 @@ export async function runAgentLoop(
           params.catalog.tools,
           {
             isRecoveryAttempt,
+            ...(isOutputRecoveryAttempt ? { isOutputRecoveryAttempt: true } : {}),
             ...(isContextRecoveryAttempt
               ? { isContextRecoveryAttempt: true }
               : {}),
@@ -479,10 +482,10 @@ export async function runAgentLoop(
         break
       }
 
-      // One deterministic recovery keeps transient context exhaustion from
-      // becoming a second agent mechanism or an unbounded retry loop.
+      // Retry once without appending partial text or incomplete tool arguments.
+      // Only an explicit length stop merits more output tokens, not an empty reply.
       hasUsedOutputRecovery = true
-      isRecoveryAttempt = true
+      isOutputRecoveryAttempt = Boolean(modelResult.isTruncated)
     }
 
     const emittedToolCalls = modelResult.toolCalls || []
@@ -495,7 +498,7 @@ export async function runAgentLoop(
     if (modelResult.isTruncated) {
       return {
         answer:
-          'I could not complete the request because the model exhausted its output budget after context recovery.',
+          'The model reached its output limit before completing the response.',
         intent: 'error',
         transcript,
         executionHistory,
@@ -615,36 +618,13 @@ async function finalizeAgentLoopAtLimit(
 ): Promise<AgentLoopResult> {
   const primaryOutcome = await attemptAgentLimitFinalization(
     params,
-    transcript,
-    executionHistory,
-    trackedSteps,
-    false
+    transcript
   )
   if (primaryOutcome) {
     transcript.push(...primaryOutcome.messages)
     return {
       answer: primaryOutcome.answer,
       intent: primaryOutcome.intent,
-      transcript,
-      executionHistory,
-      trackedSteps
-    }
-  }
-
-  // Retry through the existing smaller context budget without replacing exact
-  // execution state with clipped snippets that can omit the final actions.
-  const recoveryOutcome = await attemptAgentLimitFinalization(
-    params,
-    transcript,
-    executionHistory,
-    trackedSteps,
-    true
-  )
-  if (recoveryOutcome) {
-    transcript.push(...recoveryOutcome.messages)
-    return {
-      answer: recoveryOutcome.answer,
-      intent: recoveryOutcome.intent,
       transcript,
       executionHistory,
       trackedSteps
@@ -661,30 +641,35 @@ async function finalizeAgentLoopAtLimit(
 
 interface AgentLimitFinalizationOutcome {
   answer: string
-  intent: 'answer' | 'clarification'
+  intent: 'answer'
   messages: AgentToolTranscriptMessage[]
 }
 
 async function attemptAgentLimitFinalization(
   params: AgentLoopParams,
-  modelTranscript: AgentToolTranscriptMessage[],
-  executionHistory: ExecutionRecord[],
-  trackedSteps: TrackedPlanStep[],
-  isRecoveryAttempt: boolean
+  modelTranscript: AgentToolTranscriptMessage[]
 ): Promise<AgentLimitFinalizationOutcome | null> {
-  let modelResult: AgentModelResult | null
-  try {
-    modelResult = await params.callModel(
-      modelTranscript,
-      [createClarificationTool()],
-      {
-        isRecoveryAttempt,
-        isFinalizationAttempt: true,
-        ...(isRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
+  let modelResult: AgentModelResult | null = null
+  const options: AgentModelCallOptions = {
+    isRecoveryAttempt: false,
+    isFinalizationAttempt: true
+  }
+  // Final synthesis gets one retry too, using the remedy for the actual failure.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      modelResult = await params.callModel(modelTranscript, [], options)
+    } catch (error) {
+      if (!(error instanceof AgentModelProviderError) || !error.canRetryWithCompaction) {
+        return null
       }
-    )
-  } catch {
-    return null
+      options.isRecoveryAttempt = true
+      options.isContextRecoveryAttempt = true
+      continue
+    }
+    if (modelResult && !modelResult.isTruncated && modelResult.textContent?.trim()) {
+      break
+    }
+    options.isOutputRecoveryAttempt = Boolean(modelResult?.isTruncated)
   }
 
   if (!modelResult || modelResult.isTruncated) {
@@ -703,44 +688,8 @@ async function attemptAgentLimitFinalization(
       : null
   }
 
-  if (
-    toolCalls.some(
-      (toolCall) => toolCall.function.name !== AGENT_CLARIFICATION_TOOL_NAME
-    )
-  ) {
-    return null
-  }
-
-  const messages: AgentToolTranscriptMessage[] = [
-    { role: 'assistant', content: textContent, toolCalls }
-  ]
-  let clarificationSignal: FinalResponseSignal | undefined
-  for (const toolCall of toolCalls) {
-    const toolResult = await executeAgentToolCall(
-      toolCall,
-      params,
-      executionHistory,
-      trackedSteps
-    )
-    messages.push({
-      role: 'tool',
-      toolCallId: toolCall.id,
-      toolName: toolCall.function.name,
-      content: toolResult.content,
-      ...(toolResult.files ? { files: toolResult.files } : {})
-    })
-    if (toolResult.signal?.intent === 'clarification') {
-      clarificationSignal = toolResult.signal
-    }
-  }
-
-  return clarificationSignal
-    ? {
-        answer: clarificationSignal.draft,
-        intent: 'clarification',
-        messages
-      }
-    : null
+  // A provider violating the text-only checkpoint must not execute more tools.
+  return null
 }
 
 function createResumableAgentResult(

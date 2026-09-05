@@ -43,8 +43,10 @@ export const DEFAULT_NLU_PROCESS_RESULT: NLUProcessResult = {
 }
 
 export class NLUProcessResultUpdater {
+  /** Resolve skill-local answers for this update without changing the profile language. */
   public static async update(
-    newResult: Partial<NLUProcessResult>
+    newResult: Partial<NLUProcessResult>,
+    skillLocale: string = BRAIN.lang
   ): Promise<void> {
     /**
      * Utterance update dependencies, update:
@@ -119,7 +121,7 @@ export class NLUProcessResultUpdater {
         // Get the skill locale config for the new skill name
         const newSkillLocaleConfig =
           (await SkillDomainHelper.getSkillLocaleConfig(
-            BRAIN.lang,
+            skillLocale,
             newResult.skillName
           )) as SkillLocaleConfigSchema
         skillNameDepProperties.localeSkillConfig = {
@@ -174,7 +176,7 @@ export class NLUProcessResultUpdater {
       const newActionConfig = skillActions?.[newResult.actionName] || null
       const newSkillLocaleConfig =
         (await SkillDomainHelper.getSkillLocaleConfig(
-          BRAIN.lang,
+          skillLocale,
           skillName
         )) as SkillLocaleConfigSchema
       const localeActions = newSkillLocaleConfig['actions'] as Record<
@@ -186,7 +188,7 @@ export class NLUProcessResultUpdater {
       if (!newActionLocaleConfig) {
         LogHelper.title('NLU')
         LogHelper.error(
-          `Action locale config not found for the "${newResult.actionName}" action of the "${skillName}" skill. Please verify the action name matches in the "${BRAIN.lang}.json" locale config`
+          `Action locale config not found for the "${newResult.actionName}" action of the "${skillName}" skill. Please verify the action name matches in the "${skillLocale}.json" locale config`
         )
       }
 
