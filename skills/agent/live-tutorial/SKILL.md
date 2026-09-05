@@ -4,22 +4,24 @@ description: Create an annotated MP4 tutorial from a workflow demonstrated in th
 compatibility: Leon runtime with managed Node.js, bundled ffmpeg-static, and an active profile and session.
 metadata:
   author: "Louis Grenard <louis@getleon.ai>"
-  version: "1.2.5"
+  version: "1.2.7"
 ---
 
 # Live Tutorial
 
 Demonstrate the requested workflow, then return a verified MP4 made from its real screenshots.
 
+The request already authorizes completing and rendering the tutorial. Do not ask whether to continue or offer screenshots/text instead of the requested video merely because execution paused. Resume with the same recording, captures, and manifest; ask only for genuinely missing information or authorization.
+
 Use PNG paths returned in each observation's `artifacts` array. The recording `output_dir` is the destination for the video, not the location of those screenshots; do not search it for frames. The renderer is ready to run with the manifest below: no source inspection, image-processing code, or dependency setup is needed.
 
-Do not read tool-output logs, screenshot sidecars, or artifact directories: the live tool results already provide the recording directory, screenshot paths, and current target tokens. Each new window observation invalidates earlier tokens, so make one observation with any needed query and screenshot, then act immediately from that same result. Use the shell tool only for the final renderer command.
+Use the live tool results for recording directories, screenshot paths, and current target tokens. After a pause, read a specific saved artifact only if the checkpoint omits a required value; do not scan directories or reread evidence already available. Each new window observation invalidates earlier tokens, so make one observation with any needed query and screenshot, then act immediately from that same result. Use the shell tool only for the final renderer command.
 
 1. Select the target application and one clear route. If its current view already shows the result, navigate to a neutral view before recording. Do not inspect or switch to a pre-existing result tab or window.
 2. Start `computer_use.cua.start_recording` with `record_video: false`; retain `output_dir`.
 3. Demonstrate the route using the shortest deterministic, accessibility-backed actions; use `computer_use.cua.invoke_menu` for native application menus, never shell automation. Capture each meaningful action's target BEFORE acting, then verify that action with the next observation. Do not skip intermediate screens, substitute a shortcut for a click shown in the video, or describe an action that was not performed.
 4. Always stop recording. Select 2–6 distinct captures from the successful route, normally one per action plus the result; omit setup, failed attempts, retries, and polling. The final result must have been caused by the preceding tutorial actions. Use a short instruction for each action and a confirmation caption for the result.
-5. Write the manifest below with the file tool, then run the bundled renderer through the shell tool. Do not inspect or rewrite the renderer unless it reports an error.
+5. Write the manifest below with the file tool, then run the bundled renderer through the shell tool. Do not replace this with a raw screen recording or a custom automation/rendering script. Do not inspect or rewrite the renderer unless it reports an error.
 6. Check the renderer's `resolvedTargets` against the intended controls and the source observations. Correct any mismatch before returning `fileMarker` verbatim. The returned `previewPaths` identify the rendered step frames. If unfinished, explain the obstacle.
 
 ## Render

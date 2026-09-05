@@ -30,6 +30,7 @@ import {
 
 const TOOL_NAME_SEPARATOR = '__'
 const TOOLKIT_LOADER_NAME = 'load_toolkit'
+const SUMMARY_RECENT_EXCHANGES = 8
 
 interface AgentModelContextParams {
   transcript: AgentToolTranscriptMessage[]
@@ -37,6 +38,7 @@ interface AgentModelContextParams {
   tools: OpenAITool[]
   compactionTriggerTokens: number
   forceCompaction?: boolean
+  preserveToolExchanges?: boolean
 }
 
 export interface PreparedAgentModelContext {
@@ -123,6 +125,7 @@ function estimateTokens(value: string): number {
   return value ? Math.ceil(value.length / CHARS_PER_TOKEN) : 0
 }
 
+/** Estimates the complete request, excluding encoded image bytes. */
 function estimateAgentInputTokens(
   transcript: AgentToolTranscriptMessage[],
   systemPrompt: string,
@@ -371,6 +374,33 @@ function findCompletedToolExchanges(
   }
 
   return exchanges
+}
+
+/**
+ * Selects an older prefix without splitting parallel tool calls from results.
+ * Requiring another tail's worth of work avoids re-summarizing every turn.
+ */
+export function splitAgentTranscriptForSummary(
+  transcript: AgentToolTranscriptMessage[]
+): {
+  older: AgentToolTranscriptMessage[]
+  recent: AgentToolTranscriptMessage[]
+} | null {
+  const exchanges = findCompletedToolExchanges(transcript)
+  if (exchanges.length < SUMMARY_RECENT_EXCHANGES * 2) return null
+
+  let boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
+  // Keep the latest user correction verbatim, even if that enlarges the tail.
+  const lastUserIndex = transcript.findLastIndex((message) => message.role === 'user')
+  if (lastUserIndex > exchanges[0]!.startIndex) {
+    boundary = Math.min(boundary, lastUserIndex)
+  }
+  if (boundary <= 0) return null
+
+  return {
+    older: transcript.slice(0, boundary),
+    recent: transcript.slice(boundary)
+  }
 }
 
 function buildCompactedToolExchangeMessage(
@@ -751,6 +781,19 @@ export function prepareAgentModelContext(
   const imageBoundedTranscript = retainRecentComputerUseImages(
     params.transcript
   )
+  // Semantic summaries own history reduction on the live agent path. Keep
+  // recent evidence intact; an over-budget request must not silently lose it.
+  if (params.preserveToolExchanges) {
+    return {
+      transcript: imageBoundedTranscript,
+      tools: params.tools,
+      estimatedInputTokens: estimateAgentInputTokens(
+        imageBoundedTranscript, params.systemPrompt, params.tools
+      ),
+      wasCompacted: false,
+      compactedToolExchangeCount: 0
+    }
+  }
   const computerUseContext = compactOlderComputerUseExchanges(
     imageBoundedTranscript
   )

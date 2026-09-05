@@ -19,9 +19,6 @@ import type {
 import { findDuplicateToolInputMatch } from './agent-helpers'
 import {
   AGENT_CONVERGENCE_RESERVE_ITERATIONS,
-  AGENT_LIMIT_RECOVERY_EVIDENCE_MAX_CHARS,
-  AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS,
-  AGENT_LIMIT_RECOVERY_REQUEST_MAX_CHARS,
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_MAX_ITERATIONS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
@@ -83,7 +80,8 @@ The operational iteration budget is exhausted. Address the original owner reques
 - No operational tools are available in this checkpoint.
 - If the evidence is sufficient, return the complete user-facing answer as plain text with no tool call.
 - Do not claim completion when required evidence or work is still missing.
-- If the request cannot yet be fully satisfied, call request_clarification. Include a concise explanation of what remains incomplete and why, any practical alternatives that exist, and one question asking whether the owner wants you to continue with a focused next pass.
+- If work is still incomplete, state the concrete obstacle and what remains unfinished. Do not claim that an alternative deliverable satisfies the original request.
+- Call request_clarification only for genuinely missing information or authorization. An internal execution limit is not a reason to ask the owner to approve the same task again.
 </execution_limit_checkpoint>`
 
 /** Adds lightweight convergence pressure near the hard iteration boundary. */
@@ -168,6 +166,10 @@ export interface AgentLoopParams {
   initialTrackedSteps?: TrackedPlanStep[]
   allowDirectAnswerHandoff?: boolean
   maxIterations?: number
+  finishingIterations?: number
+  prepareContinuation?: (
+    state: Pick<AgentLoopResult, 'transcript' | 'executionHistory' | 'trackedSteps'>
+  ) => Promise<AgentToolTranscriptMessage[]>
 }
 
 export interface AgentLoopResult {
@@ -392,16 +394,18 @@ export async function runAgentLoop(
     ...step
   }))
   const maxIterations = params.maxIterations ?? AGENT_MAX_ITERATIONS
+  const finishingIterations = params.finishingIterations ?? 0
+  let iterationLimit = maxIterations
   let hasUsedOutputRecovery = false
   let hasUsedContextRecovery = false
 
-  for (let iteration = 0; iteration < maxIterations; iteration += 1) {
+  for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     let modelResult: AgentModelResult | null
     let isRecoveryAttempt = false
     // Once a provider needs the smaller context target, keep that target for
     // the rest of the run instead of allowing the prompt to grow back.
     let isContextRecoveryAttempt = hasUsedContextRecovery
-    const remainingIterations = maxIterations - iteration
+    const remainingIterations = iterationLimit - iteration
 
     while (true) {
       try {
@@ -574,6 +578,25 @@ export async function runAgentLoop(
         trackedSteps
       }
     }
+
+    // Continue an unfinished authorized run once, with bounded resume context.
+    // This is a bounded finishing pass, not a new task or a renewed permission.
+    if (iteration + 1 === maxIterations && finishingIterations > 0) {
+      iterationLimit += finishingIterations
+      if (params.prepareContinuation) {
+        const checkpoint = await params.prepareContinuation({
+          transcript,
+          executionHistory,
+          trackedSteps
+        })
+        transcript.splice(0, transcript.length, ...checkpoint)
+      }
+      transcript.push({
+        role: 'user',
+        content:
+          '<execution_finishing_pass>Continue the already authorized task from the existing evidence and active skill. Finish and verify the requested deliverable; do not restart, broaden the task, or substitute a different workflow. Stop on a genuine blocker. This is the final bounded finishing pass.</execution_finishing_pass>'
+      })
+    }
   }
 
   return finalizeAgentLoopAtLimit(
@@ -608,15 +631,11 @@ async function finalizeAgentLoopAtLimit(
     }
   }
 
-  // A minimal evidence-only retry avoids exposing orchestration language when
-  // the full transcript cannot produce a usable checkpoint response.
+  // Retry through the existing smaller context budget without replacing exact
+  // execution state with clipped snippets that can omit the final actions.
   const recoveryOutcome = await attemptAgentLimitFinalization(
     params,
-    buildAgentLimitRecoveryTranscript(
-      transcript,
-      executionHistory,
-      trackedSteps
-    ),
+    transcript,
     executionHistory,
     trackedSteps,
     true
@@ -722,110 +741,6 @@ async function attemptAgentLimitFinalization(
         messages
       }
     : null
-}
-
-function buildAgentLimitRecoveryTranscript(
-  transcript: AgentToolTranscriptMessage[],
-  executionHistory: ExecutionRecord[],
-  trackedSteps: TrackedPlanStep[]
-): AgentToolTranscriptMessage[] {
-  const originalRequest = findOriginalAgentRequest(transcript)
-  const evidenceLines: string[] = []
-  const seenEvidence = new Set<string>()
-  let evidenceChars = 0
-
-  for (const execution of executionHistory) {
-    const observation = clipAgentLimitText(
-      execution.observation,
-      AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS
-    )
-    const evidenceKey = [
-      execution.function,
-      execution.status,
-      observation
-    ].join('\n')
-    if (seenEvidence.has(evidenceKey)) {
-      continue
-    }
-
-    const line = `- ${execution.function} (${execution.status}): ${observation}`
-    if (
-      evidenceChars + line.length >
-      AGENT_LIMIT_RECOVERY_EVIDENCE_MAX_CHARS
-    ) {
-      break
-    }
-
-    seenEvidence.add(evidenceKey)
-    evidenceLines.push(line)
-    evidenceChars += line.length
-  }
-
-  const planLines = trackedSteps.map(
-    (step) => `- ${step.label}: ${step.status}`
-  )
-  return [
-    {
-      role: 'user',
-      content: [
-        '<original_owner_request>',
-        clipAgentLimitText(
-          originalRequest,
-          AGENT_LIMIT_RECOVERY_REQUEST_MAX_CHARS
-        ),
-        '</original_owner_request>',
-        '',
-        '<verified_execution_evidence>',
-        evidenceLines.length > 0
-          ? evidenceLines.join('\n')
-          : 'No completed tool evidence is available.',
-        '</verified_execution_evidence>',
-        '',
-        '<plan_state>',
-        planLines.length > 0 ? planLines.join('\n') : 'No explicit plan.',
-        '</plan_state>'
-      ].join('\n')
-    }
-  ]
-}
-
-function findOriginalAgentRequest(
-  transcript: AgentToolTranscriptMessage[]
-): string {
-  const firstToolCallIndex = transcript.findIndex(
-    (message) => message.role === 'assistant' && Boolean(message.toolCalls?.length)
-  )
-  const requestMessages = transcript
-    .slice(0, firstToolCallIndex === -1 ? transcript.length : firstToolCallIndex)
-    .filter(
-      (message): message is Extract<AgentToolTranscriptMessage, { role: 'user' }> =>
-        message.role === 'user'
-    )
-  const content = requestMessages.at(-1)?.content || 'Complete the owner request.'
-
-  return extractAgentTaggedContent(content, 'user_request') || content
-}
-
-function extractAgentTaggedContent(content: string, tagName: string): string {
-  const openingTag = `<${tagName}>`
-  const closingTag = `</${tagName}>`
-  const startIndex = content.indexOf(openingTag)
-  if (startIndex === -1) {
-    return ''
-  }
-
-  const valueStartIndex = startIndex + openingTag.length
-  const endIndex = content.indexOf(closingTag, valueStartIndex)
-  return endIndex === -1
-    ? ''
-    : content.slice(valueStartIndex, endIndex).trim()
-}
-
-function clipAgentLimitText(value: string, maxChars: number): string {
-  const normalized = value.trim()
-  return normalized.length <= maxChars
-    ? normalized
-    : `${normalized.slice(0, Math.max(maxChars - 3, 0)).trimEnd()}...`
 }
 
 function createResumableAgentResult(

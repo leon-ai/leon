@@ -52,7 +52,11 @@ import {
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS,
-  AGENT_MAX_ITERATIONS
+  AGENT_MAX_ITERATIONS,
+  AGENT_FINISHING_ITERATIONS,
+  AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
+  AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
+  AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT
 } from './react-llm-duty/constants'
 import type {
   ReactLLMDutyParams,
@@ -88,6 +92,7 @@ import {
 } from './react-llm-duty/metrics'
 import {
   createAgentLoopContinuationState,
+  buildAgentContinuationTranscript,
   isAgentLoopContinuationStateValid,
   type AgentLoopContinuationState
 } from './react-llm-duty/agent-loop-continuation'
@@ -144,6 +149,7 @@ export class ReActLLMDuty extends LLMDuty {
   protected readonly name = 'Agent LLM Duty'
   protected input: LLMDutyParams['input'] = null
   private completionCount = 0
+  private continuationSummaryFailed = false
   private totalInputTokens = 0
   private totalOutputTokens = 0
   private totalVisibleOutputTokens = 0
@@ -211,6 +217,7 @@ export class ReActLLMDuty extends LLMDuty {
 
     this.executionStartedAt = Date.now()
     this.completionCount = 0
+    this.continuationSummaryFailed = false
     this.totalInputTokens = 0
     this.totalOutputTokens = 0
     this.totalVisibleOutputTokens = 0
@@ -247,6 +254,15 @@ export class ReActLLMDuty extends LLMDuty {
       const executionHistory: ExecutionRecord[] = []
       let emittedAgentSkillActivityId: string | null = null
       const caller = this.createLLMCaller()
+      if (continuation?.activeSkillId) {
+        const skill = await SkillDomainHelper.getAgentSkillExecutionContext(
+          continuation.activeSkillId
+        )
+        if (!skill) {
+          throw new Error('The active Agent Skill is no longer available.')
+        }
+        caller.setAgentSkillContext(skill)
+      }
       const emitActiveAgentSkillActivity = (): void => {
         const activeAgentSkillContext = caller.agentSkillContext
 
@@ -336,6 +352,8 @@ export class ReActLLMDuty extends LLMDuty {
         transcript,
         catalog,
         maxIterations: AGENT_MAX_ITERATIONS,
+        finishingIterations: AGENT_FINISHING_ITERATIONS,
+        prepareContinuation: (state) => this.prepareContinuation(state.transcript),
         ...(continuation
           ? {
               initialExecutionHistory: continuation.executionHistory,
@@ -345,10 +363,21 @@ export class ReActLLMDuty extends LLMDuty {
         allowDirectAnswerHandoff:
           Boolean(this.activeForcedToolName) || this.allowDirectAnswerHandoff,
         callModel: async (messages, tools, options) => {
-          // Intermediate text is buffered until a final text-only response.
+          // Skill instructions must survive tool-history compaction and pauses.
+          const activeSkill = caller.agentSkillContext
+          const prompt = activeSkill
+            ? [
+                agentSystemPrompt,
+                '<active_agent_skill>',
+                `Name: ${activeSkill.name}`,
+                `Path: ${activeSkill.skillPath}`,
+                activeSkill.instructions,
+                '</active_agent_skill>'
+              ].join('\n')
+            : agentSystemPrompt
           return this.callAgentModel(
             messages,
-            agentSystemPrompt,
+            prompt,
             tools,
             options
           )
@@ -430,7 +459,7 @@ export class ReActLLMDuty extends LLMDuty {
           execution.function === 'structured_knowledge.memory.write'
       )
 
-      if (result.intent === 'clarification') {
+      if (result.intent !== 'answer') {
         this.saveAgentLoopContinuation(
           createAgentLoopContinuationState({
             originalInput,
@@ -438,7 +467,9 @@ export class ReActLLMDuty extends LLMDuty {
             planWidgetId: planWidgetIdValue,
             trackedSteps,
             executionHistory,
-            loadedToolkitIds: catalog.loadedToolkitIds
+            loadedToolkitIds: catalog.loadedToolkitIds,
+            transcript: await this.prepareContinuation(result.transcript),
+            activeSkillId: caller.agentSkillContext?.id ?? null
           })
         )
       }
@@ -609,6 +640,52 @@ export class ReActLLMDuty extends LLMDuty {
     }
   }
 
+  /** Uses the configured agent provider for a private, non-tool summary call. */
+  private async prepareContinuation(
+    transcript: AgentToolTranscriptMessage[]
+  ): Promise<AgentToolTranscriptMessage[]> {
+    // A failed summary must not cause an auxiliary retry on every tool turn.
+    if (this.continuationSummaryFailed) return transcript
+    return buildAgentContinuationTranscript(transcript, async (history) => {
+      const startedAt = Date.now()
+      try {
+        const result = await LLM_PROVIDER.prompt(history, {
+          dutyType: LLMDuties.ReAct,
+          systemPrompt: AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT,
+          temperature: 0,
+          maxTokens: AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
+          timeout: AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
+          maxRetries: 0,
+          remoteProviderErrorRetries: 0,
+          shouldStream: false,
+          trackProviderErrors: false
+        })
+        if (result) {
+          this.observeCompletionMetrics({
+            phase: 'agent',
+            completionStartedAt: startedAt,
+            completedAt: Date.now(),
+            ...result
+          })
+        }
+        const summary = typeof result?.output === 'string' ? result.output.trim() : ''
+        if (!summary || TRUNCATED_COMPLETION_FINISH_REASONS.has(
+          String(result?.finishReason ?? '')
+        )) {
+          throw new Error('Summary was empty or incomplete')
+        }
+        LogHelper.info(
+          `Agent continuation summary completed in ${Date.now() - startedAt}ms`
+        )
+        return summary
+      } catch {
+        this.continuationSummaryFailed = true
+        LogHelper.warning('Agent continuation summary unavailable; retaining original context')
+        return null
+      }
+    })
+  }
+
   private async callAgentModel(
     transcript: AgentToolTranscriptMessage[],
     systemPrompt: string,
@@ -640,14 +717,28 @@ export class ReActLLMDuty extends LLMDuty {
     const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
       ? resolveAgentContextRecoveryTriggerTokens(providerName)
       : resolveAgentContextCompactionTriggerTokens(providerName)
-    const preparedContext = prepareAgentModelContext({
+    let preparedContext = prepareAgentModelContext({
       transcript,
       systemPrompt: activeSystemPrompt,
       tools,
       compactionTriggerTokens: contextCompactionTriggerTokens,
       forceCompaction:
-        options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
+        options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt),
+      preserveToolExchanges: true
     })
+    if (preparedContext.estimatedInputTokens > contextCompactionTriggerTokens) {
+      const summarized = await this.prepareContinuation(transcript)
+      if (summarized !== transcript) {
+        transcript.splice(0, transcript.length, ...summarized)
+        preparedContext = prepareAgentModelContext({
+          transcript,
+          systemPrompt: activeSystemPrompt,
+          tools,
+          compactionTriggerTokens: contextCompactionTriggerTokens,
+          preserveToolExchanges: true
+        })
+      }
+    }
     if (
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
     ) {
