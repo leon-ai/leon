@@ -516,7 +516,9 @@ export async function runToolExecution(
   const toolExecutionResult =
     await TOOL_EXECUTOR.executeTool(toolExecutionInput)
   const modelFiles = toolExecutionResult.data.model_files
-  const observationData = { ...toolExecutionResult.data }
+  const observationData: Partial<typeof toolExecutionResult.data> = {
+    ...toolExecutionResult.data
+  }
   delete observationData.model_files
   // The assistant tool call already carries its input. Avoid duplicating both
   // serialized and parsed forms in the bounded observation so useful output

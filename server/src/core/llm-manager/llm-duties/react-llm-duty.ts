@@ -665,23 +665,19 @@ export class ReActLLMDuty extends LLMDuty {
       .getModelSettingsState()
       .getSettings(CONFIG_STATE.getModelState().getAgentTarget())
     const configuredReasoning = modelSettings.reasoning
+    // Finalization is still a model request. Keep its configured reasoning:
+    // providers with mandatory reasoning reject a forced reasoning-off retry.
     const reasoningMode =
-      options.isRecoveryAttempt || options.isFinalizationAttempt
-      ? 'off'
-      : configuredReasoning === 'auto'
+      configuredReasoning === 'auto'
         ? inferencePolicy.reasoningMode
         : configuredReasoning === 'none'
           ? 'off'
           : 'on'
     const reasoningEffort =
-      options.isRecoveryAttempt || options.isFinalizationAttempt ||
       configuredReasoning === 'auto' || configuredReasoning === 'on'
         ? undefined
         : configuredReasoning
-    const reasoningUseDefaultEffort =
-      !options.isRecoveryAttempt &&
-      !options.isFinalizationAttempt &&
-      configuredReasoning === 'on'
+    const reasoningUseDefaultEffort = configuredReasoning === 'on'
     const serviceTier = modelSettings.speed === 'fast'
       ? 'priority'
       : modelSettings.speed === 'normal'

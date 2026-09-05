@@ -7,7 +7,7 @@ import type {
 import { LLMProviders } from '@/core/llm-manager/types'
 import { canDisableLLMModelReasoning } from '@/core/llm-manager/llm-model-catalog'
 
-type ClaudeModelFamily = 'fable' | 'haiku' | 'opus' | 'sonnet'
+type ClaudeModelFamily = 'fable' | 'mythos' | 'haiku' | 'opus' | 'sonnet'
 
 interface ClaudeModelVersion {
   family: ClaudeModelFamily
@@ -20,6 +20,7 @@ const CLAUDE_MODEL_ID_PREFIX = 'claude'
 const CLAUDE_MODEL_DATE_PART_LENGTH = 8
 const CLAUDE_MODEL_FAMILIES: ClaudeModelFamily[] = [
   'fable',
+  'mythos',
   'haiku',
   'opus',
   'sonnet'
@@ -27,6 +28,10 @@ const CLAUDE_MODEL_FAMILIES: ClaudeModelFamily[] = [
 const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  mythos: {
+    major: 5,
+    minor: 1
+  },
   fable: {
     major: 5,
     minor: 0
@@ -43,6 +48,10 @@ const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
 const CLAUDE_SAMPLING_UNSUPPORTED_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  mythos: {
+    major: 5,
+    minor: 1
+  },
   fable: {
     major: 5,
     minor: 0

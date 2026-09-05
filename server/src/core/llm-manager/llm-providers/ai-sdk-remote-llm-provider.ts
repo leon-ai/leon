@@ -30,7 +30,10 @@ import type {
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
-import { canDisableLLMModelReasoning } from '@/core/llm-manager/llm-model-catalog'
+import {
+  canDisableLLMModelReasoning,
+  getLLMModelCatalogEntry
+} from '@/core/llm-manager/llm-model-catalog'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -589,6 +592,13 @@ export default class AISDKRemoteLLMProvider {
     reasoningMode: LLMReasoningMode,
     completionParams: CompletionParams
   ): LLMReasoningEffort {
+    if (
+      (reasoningMode === 'off' || completionParams.reasoningEffort === 'none') &&
+      !canDisableLLMModelReasoning(LLMProviders.OpenAI, this.model)
+    ) {
+      return 'low'
+    }
+
     if (completionParams.reasoningEffort) {
       return completionParams.reasoningEffort
     }
@@ -644,8 +654,28 @@ export default class AISDKRemoteLLMProvider {
       const routing = completionParams.serviceTier === 'priority'
         ? { provider: { sort: 'throughput' } }
         : {}
+      const catalogEntry = getLLMModelCatalogEntry(LLMProviders.OpenRouter, this.model)
 
-      if (reasoningMode === 'off') {
+      if (catalogEntry?.reasoning.includes('on')) {
+        const enabled = reasoningMode !== 'off' &&
+          completionParams.reasoningEffort !== 'none'
+        const reasoningBudget = this.getReasoningBudget(completionParams)
+
+        return {
+          openrouter: {
+            ...routing,
+            reasoning: {
+              enabled,
+              ...(!enabled ? { exclude: true } : {}),
+              ...(enabled && typeof reasoningBudget === 'number'
+                ? { max_tokens: reasoningBudget }
+                : {})
+            }
+          }
+        }
+      }
+
+      if (reasoningMode === 'off' || completionParams.reasoningEffort === 'none') {
         const reasoning = canDisableLLMModelReasoning(
           LLMProviders.OpenRouter,
           this.model
@@ -803,7 +833,12 @@ export default class AISDKRemoteLLMProvider {
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
   ): LanguageModelV4CallOptions {
+    const catalogEntry = getLLMModelCatalogEntry(
+      this.config.providerName as LLMProviders,
+      this.model
+    )
     const shouldOmitTemperature =
+      catalogEntry?.supportsTemperature === false ||
       this.config.shouldOmitTemperature?.(completionParams) === true
     const normalizedSchema = this.normalizeSchema(completionParams.data)
     const options: LanguageModelV4CallOptions = {
@@ -832,6 +867,14 @@ export default class AISDKRemoteLLMProvider {
     }
 
     const toolChoice = this.toToolChoice(completionParams.toolChoice)
+    if (
+      catalogEntry?.supportsForcedToolChoice === false &&
+      (toolChoice?.type === 'required' || toolChoice?.type === 'tool')
+    ) {
+      throw new Error(
+        `${this.model} does not support forced tool selection. Use toolChoice "auto" or "none".`
+      )
+    }
     if (toolChoice) {
       options.toolChoice = toolChoice
     }
@@ -855,6 +898,15 @@ export default class AISDKRemoteLLMProvider {
 
     if (customProviderOptions) {
       Object.assign(providerOptions, customProviderOptions)
+    } else if (catalogEntry?.reasoning.length === 1) {
+      // Auto-only entries use the provider's reasoning defaults. Do not invent
+      // an effort level for gateways with undocumented model-specific controls.
+      if (
+        this.config.flavor === 'openrouter' &&
+        completionParams.serviceTier === 'priority'
+      ) {
+        providerOptions['openrouter'] = { provider: { sort: 'throughput' } }
+      }
     } else if (managedReasoningMode) {
       Object.assign(
         providerOptions,
@@ -864,11 +916,14 @@ export default class AISDKRemoteLLMProvider {
       const openAIOptions = this.buildOpenAICommonProviderOptions(
         completionParams
       )
-      if (completionParams.disableThinking === true) {
+      if (
+        completionParams.disableThinking === true ||
+        completionParams.reasoningEffort
+      ) {
         providerOptions['openai'] = {
           ...openAIOptions,
           reasoningEffort: this.getOpenAIReasoningEffort(
-            'off',
+            completionParams.disableThinking === true ? 'off' : 'on',
             completionParams
           )
         }
@@ -886,21 +941,10 @@ export default class AISDKRemoteLLMProvider {
         : {}
 
       if (completionParams.disableThinking === true) {
-        const reasoning = canDisableLLMModelReasoning(
-          LLMProviders.OpenRouter,
-          this.model
+        Object.assign(
+          providerOptions,
+          this.buildManagedProviderOptions('off', completionParams)
         )
-          ? {
-              enabled: false,
-              effort: 'none',
-              exclude: true
-            }
-          : { effort: 'low' }
-
-        providerOptions['openrouter'] = {
-          ...routing,
-          reasoning
-        }
       } else if (Object.keys(routing).length > 0) {
         providerOptions['openrouter'] = routing
       }

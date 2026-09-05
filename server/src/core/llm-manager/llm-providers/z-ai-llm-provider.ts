@@ -12,6 +12,24 @@ function buildZAIProviderOptions(
   completionParams: CompletionParams,
   reasoningMode: LLMReasoningMode | null
 ): Record<string, unknown> {
+  if (model === 'glm-5.3' || model === 'glm-5.3-flash') {
+    const requestedEffort = completionParams.reasoningEffort
+    const lowEffort = completionParams.disableThinking === true ||
+      reasoningMode === 'off' || reasoningMode === 'guarded' ||
+      requestedEffort === 'none'
+
+    return {
+      zai: {
+        thinking: { type: 'enabled' },
+        ...(lowEffort
+          ? { reasoningEffort: 'low' }
+          : requestedEffort && ['low', 'high', 'max'].includes(requestedEffort)
+            ? { reasoningEffort: requestedEffort }
+            : {})
+      }
+    }
+  }
+
   if (!reasoningMode) {
     return {}
   }

@@ -102,7 +102,7 @@ describe('LLM model catalog', () => {
     const openAIModels = getLLMModelCatalogEntries(LLMProviders.OpenAI)
 
     expect(openAIModels[0]).toMatchObject({
-      model: 'gpt-5.6-sol',
+      model: 'gpt-6-astra',
       recommended: true
     })
   })
