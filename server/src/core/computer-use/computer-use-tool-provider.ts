@@ -17,6 +17,7 @@ import {
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
   COMPUTER_USE_COORDINATE_FIELDS,
   COMPUTER_USE_PROVIDER_ID,
+  COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   CUA_SESSION_ENDED_ERROR_CODE
@@ -206,6 +207,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       const capturedState = captureAfter
         ? await this.captureStateAfterAction(runtime, input, actionParameters)
         : null
+      await this.artifactStore.persistCaptureMetadata(persistedImages, primaryResult)
       if (
         capturedState?.visualChange.status ===
         ComputerUseVisualChangeStatus.Unchanged
@@ -239,9 +241,9 @@ export class ComputerUseToolProvider implements ToolProvider {
       const failureMessage =
         (launchResolution && !launchResolution.ready
           ? 'The application process started, but no usable window became available.'
-          : result.text) ||
+          : structuredFailure?.message) ||
+        result.text ||
         result.errorCode ||
-        structuredFailure?.message ||
         'Computer-use action failed.'
       const succeeded =
         !result.isError &&
@@ -255,7 +257,7 @@ export class ComputerUseToolProvider implements ToolProvider {
         message: succeeded
           ? successMessage
           : failureMessage,
-        output: {
+        output: this.boundWindowObservation({
           action,
           ...(!succeeded ? { success: false } : {}),
           result: primaryResult,
@@ -264,7 +266,7 @@ export class ComputerUseToolProvider implements ToolProvider {
             ? { visual_change: capturedState.visualChange }
             : {}),
           ...(result.text && !compactedResult?.changed
-            ? { summary: this.artifactStore.buildTextPreview(result.text) }
+            ? { summary: this.artifactStore.buildTextPreview(succeeded ? result.text : failureMessage) }
             : {}),
           ...(result.action ? { action_result: result.action } : {}),
           ...(result.verification
@@ -282,7 +284,7 @@ export class ComputerUseToolProvider implements ToolProvider {
               }
             : {}),
           degraded: result.degraded
-        },
+        }),
         ...(modelFiles.length > 0 ? { modelFiles } : {})
       }
     } catch (error) {
@@ -540,6 +542,9 @@ export class ComputerUseToolProvider implements ToolProvider {
       this.getVisualTransformKey(input, parameters)
     )
     if (!transform) {
+      if (fields.some((field) => typeof parameters[field] === 'number')) {
+        throw new Error('Observe this target with a fresh screenshot before using pixel coordinates; otherwise use its current element token.')
+      }
       return parameters
     }
 
@@ -548,6 +553,14 @@ export class ComputerUseToolProvider implements ToolProvider {
       const value = mappedParameters[field]
       if (typeof value !== 'number' || !Number.isFinite(value)) {
         continue
+      }
+
+      const axis = field.endsWith('x') ? 'x' : 'y'
+      const size = transform.model[axis === 'x' ? 'width' : 'height']
+      // Clamping a point outside the observed image can click a different
+      // control. Menu-bar actions, for example, need a desktop observation.
+      if (value < 0 || value >= size) {
+        throw new Error(`Coordinate ${field}=${value} is outside this screenshot (0..${size - 1}). Observe the intended target; use a desktop screenshot and desktop target for controls outside the window.`)
       }
 
       mappedParameters[field] = mapComputerUseCoordinateToSource(
@@ -566,10 +579,10 @@ export class ComputerUseToolProvider implements ToolProvider {
     parameters: Record<string, unknown>,
     transform: ComputerUseImageTransform | null
   ): void {
-    if (
-      !transform ||
-      (action !== 'get_window_state' && action !== 'get_desktop_state')
-    ) {
+    if (action !== 'get_window_state' && action !== 'get_desktop_state') return
+    if (!transform) {
+      // A new tree without an image cannot validate an older image's geometry.
+      this.visualTransforms.delete(this.getVisualTransformKey(input, parameters))
       return
     }
 
@@ -633,21 +646,91 @@ export class ComputerUseToolProvider implements ToolProvider {
       : `${sessionKey}:desktop`
   }
 
+  private boundWindowObservation(output: Record<string, unknown>): Record<string, unknown> {
+    const result = asRecord(output['result'])
+    if (!result || !Array.isArray(result['elements'])) return output
+    const elements = result['elements']
+    const bounded = {
+      ...result,
+      elements: [] as unknown[],
+      returned_element_count: 0,
+      omitted_element_count: elements.length,
+      elements_complete: false,
+      hint: 'Use pid and window_id with current element tokens. Observe again after acting; old tokens expire. Query omitted controls. Verify the effect of input; if window actions have no effect, follow capture_coverage.recovery using a fresh desktop screenshot and desktop target.'
+    }
+    // Include paths, metadata and envelope in the budget, not just AX elements.
+    // Reserve the worst-case counter width so counters cannot overflow it.
+    const budgetBase = { ...bounded, returned_element_count: elements.length }
+    let remaining = COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS -
+      JSON.stringify({ ...output, result: budgetBase }).length
+    for (const element of elements) {
+      const cost = JSON.stringify(element).length + 1
+      if (cost > remaining) continue
+      bounded.elements.push(element)
+      remaining -= cost
+    }
+    const omitted = elements.length - bounded.elements.length
+    bounded.returned_element_count = bounded.elements.length
+    bounded.omitted_element_count = omitted + Number(result['omitted_element_count'] || 0)
+    bounded.elements_complete = omitted === 0 && result['elements_complete'] !== false
+    return { ...output, result: bounded }
+  }
+
   private describeModelCoordinateSpace(
     result: Record<string, unknown>,
     transform: ComputerUseImageTransform | null
   ): Record<string, unknown> {
-    if (!transform) {
-      return result
+    const bounds = asRecord(result['window_bounds'])
+    const elements = Array.isArray(result['elements'])
+      ? result['elements'].map((value: unknown) => {
+          const element = asRecord(value)
+          if (!element) return value
+          const { screen_frame: screenFrame, ...compact } = element
+          const frame = asRecord(screenFrame)
+          if (!transform || !bounds || !frame) return compact
+          const x = Number(frame['x']) + Number(frame['w']) / 2 - Number(bounds['x'])
+          const y = Number(frame['y']) + Number(frame['h']) / 2 - Number(bounds['y'])
+          const width = Number(bounds['width'])
+          const height = Number(bounds['height'])
+          if (
+            ![x, y, width, height].every(Number.isFinite) ||
+            Number(frame['w']) <= 1 || Number(frame['h']) <= 1 ||
+            width <= 0 || height <= 0 ||
+            x < 0 || y < 0 || x >= width || y >= height
+          ) return compact
+          return {
+            ...compact,
+            pixel_center: {
+              x: Math.round(x / width * (transform.model.width - 1)),
+              y: Math.round(y / height * (transform.model.height - 1))
+            },
+            pixel_bounds: {
+              x: Math.round(Math.max(0, x - Number(frame['w']) / 2) / width * (transform.model.width - 1)),
+              y: Math.round(Math.max(0, y - Number(frame['h']) / 2) / height * (transform.model.height - 1)),
+              width: Math.round((Math.min(width, x + Number(frame['w']) / 2) - Math.max(0, x - Number(frame['w']) / 2)) / width * (transform.model.width - 1)),
+              height: Math.round((Math.min(height, y + Number(frame['h']) / 2) - Math.max(0, y - Number(frame['h']) / 2)) / height * (transform.model.height - 1))
+            }
+          }
+        })
+      : undefined
+
+    const observation = {
+      ...result,
+      ...(elements ? {
+        elements,
+        hint: `${result['hint'] || ''} pixel_center is in the latest attached screenshot's coordinates; use its x,y for a pixel action if AX activation has no effect. Do not use raw log frames as click coordinates.`.trim()
+      } : {})
     }
+    if (!transform) return observation
 
     return {
-      ...result,
+      ...observation,
       screenshot_width: transform.model.width,
       screenshot_height: transform.model.height,
       source_screenshot_width: transform.source.width,
       source_screenshot_height: transform.source.height,
-      coordinate_space: 'attached_model_image'
+      coordinate_space: 'attached_model_image',
+      coordinate_hint: `Use actual image pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}, not a normalized 0–1000 grid. Use pixel_center verbatim when available. To convert a normalized estimate, multiply x by ${(transform.model.width - 1) / 1000} and y by ${(transform.model.height - 1) / 1000}.`
     }
   }
 

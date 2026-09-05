@@ -26,6 +26,21 @@ const execFileAsync = promisify(execFile)
 
 /** Persists complete evidence while returning only bounded model attachments. */
 export class ComputerUseArtifactStore {
+  public async persistCaptureMetadata(
+    images: PersistedComputerUseImages,
+    observation: Record<string, unknown>
+  ): Promise<void> {
+    if (!images.transform) return
+    const artifact = images.artifacts.at(-1)
+    if (typeof artifact?.['path'] !== 'string') return
+    // Bind tutorial targets to the exact image, not a later window snapshot.
+    await fs.promises.writeFile(`${artifact['path']}.json`, JSON.stringify({
+      screenshot_width: images.transform.model.width,
+      screenshot_height: images.transform.model.height,
+      elements: observation['elements'] || []
+    }))
+  }
+
   public getArtifactDirectory(input: ToolProviderExecutionInput): string {
     const sessionDirectory = encodeURIComponent(
       input.conversationSessionId || 'unscoped'

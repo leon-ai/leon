@@ -35,8 +35,6 @@ export const AGENT_SKILL_TOOL_NAME = 'load_agent_skill'
 export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
 
 const AGENT_TOOL_NAME_SEPARATOR = '__'
-const AGENT_RECOVERY_SUMMARY_ITEM_LIMIT = 3
-const AGENT_RECOVERY_SUMMARY_MAX_CHARS = 240
 
 export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 
@@ -836,15 +834,10 @@ function createResumableAgentResult(
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
 ): AgentLoopResult {
-  const answer = buildResumableAgentAnswer(
-    failureKind,
-    transcript,
-    executionHistory,
-    trackedSteps
-  )
+  const answer = buildResumableAgentAnswer(failureKind)
   return {
     answer,
-    intent: 'clarification',
+    intent: 'error',
     transcript,
     executionHistory,
     trackedSteps
@@ -852,80 +845,11 @@ function createResumableAgentResult(
 }
 
 function buildResumableAgentAnswer(
-  failureKind: 'context' | 'synthesis',
-  transcript: AgentToolTranscriptMessage[],
-  executionHistory: ExecutionRecord[],
-  trackedSteps: TrackedPlanStep[]
+  failureKind: 'context' | 'synthesis'
 ): string {
-  const ownerRequest = clipAgentLimitText(
-    findOriginalAgentRequest(transcript),
-    AGENT_RECOVERY_SUMMARY_MAX_CHARS
-  )
-  const verifiedItems = collectExecutionSummaries(
-    executionHistory.filter((execution) => execution.status === 'success')
-  )
-  const unresolvedSteps = trackedSteps
-    .filter((step) => step.status !== 'completed')
-    .slice(0, AGENT_RECOVERY_SUMMARY_ITEM_LIMIT)
-    .map((step) => `- ${step.label} (${step.status})`)
-  const failedItems = collectExecutionSummaries(
-    executionHistory.filter((execution) => execution.status !== 'success')
-  )
-  const remainingItems = unresolvedSteps.length > 0
-    ? unresolvedSteps
-    : failedItems
-  const nextAction =
-    trackedSteps.find((step) => step.status !== 'completed')?.label ||
-    executionHistory
-      .findLast((execution) => execution.status !== 'success')
-      ?.stepLabel ||
-    'Produce the final answer from the verified findings without repeating completed work'
-  const failureExplanation =
-    failureKind === 'context'
-      ? 'The collected material could not be processed in one reliable pass.'
-      : 'The final synthesis did not produce a usable answer.'
-
-  return [
-    `I have not yet produced a reliable answer to: "${ownerRequest}"`,
-    failureExplanation,
-    ...(verifiedItems.length > 0
-      ? ['', 'Already verified:', ...verifiedItems]
-      : []),
-    '',
-    'Still unresolved:',
-    ...(remainingItems.length > 0
-      ? remainingItems
-      : ['- Turn the verified findings into the final answer.']),
-    '',
-    `Next, I will: ${nextAction}.`,
-    'May I continue with that next step?'
-  ].join('\n')
-}
-
-function collectExecutionSummaries(
-  executions: ExecutionRecord[]
-): string[] {
-  const summaries: string[] = []
-  const seenSummaries = new Set<string>()
-
-  for (const execution of executions) {
-    const observation = clipAgentLimitText(
-      execution.observation.replace(/\s+/g, ' '),
-      AGENT_RECOVERY_SUMMARY_MAX_CHARS
-    )
-    const summary = `- ${execution.stepLabel || execution.function}: ${observation}`
-    if (seenSummaries.has(summary)) {
-      continue
-    }
-
-    summaries.push(summary)
-    seenSummaries.add(summary)
-    if (summaries.length >= AGENT_RECOVERY_SUMMARY_ITEM_LIMIT) {
-      break
-    }
-  }
-
-  return summaries
+  return failureKind === 'context'
+    ? 'I could not finish because the model could not process the collected information. The task is incomplete; the session retains the work done so far.'
+    : 'I could not finish because the model failed to produce the final response. I cannot confirm that the task is complete. The session retains the work done so far.'
 }
 
 async function executeAgentToolCall(

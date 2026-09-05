@@ -753,7 +753,7 @@
             "type": "integer"
           },
           "element_token": {
-            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
             "type": "string"
           },
           "modifier": {
@@ -1259,7 +1259,7 @@
             "type": "integer"
           },
           "element_token": {
-            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
             "type": "string"
           },
           "pid": {
@@ -1485,7 +1485,7 @@
             "type": "integer"
           },
           "element_token": {
-            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
             "type": "string"
           },
           "pid": {
@@ -1714,7 +1714,7 @@
             "type": "integer"
           },
           "element_token": {
-            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
             "type": "string"
           },
           "key": {
@@ -1950,7 +1950,7 @@
             "type": "integer"
           },
           "element_token": {
-            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
             "type": "string"
           },
           "keys": {
@@ -2218,7 +2218,7 @@
             "type": "integer"
           },
           "element_token": {
-            "description": "Opaque per-snapshot element handle from `structuredContent.elements[].element_token`. If element_index, snapshot_id, or window_id are also supplied they must agree. Returns an explicit stale error once a newer snapshot supersedes it.",
+            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
             "type": "string"
           },
           "pid": {

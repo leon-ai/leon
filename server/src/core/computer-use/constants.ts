@@ -1,6 +1,8 @@
 export const COMPUTER_USE_PROVIDER_ID = 'computer_use'
 export const COMPUTER_USE_ARTIFACT_DIRECTORY = 'computer-use'
 export const COMPUTER_USE_TEXT_PREVIEW_MAX_CHARS = 8_000
+// Leave room for the agent's wrapper under its 6k per-tool observation limit.
+export const COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS = 5_000
 export const COMPUTER_USE_MODEL_IMAGE_LIMIT = 1
 export const COMPUTER_USE_MODEL_IMAGE_PIXEL_BUDGET = 800_000
 export const COMPUTER_USE_APP_RESULT_LIMIT = 24

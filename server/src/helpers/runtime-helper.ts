@@ -4,6 +4,8 @@ import path from 'node:path'
 import { LEON_HOME_PATH } from '@/leon-roots'
 import { SystemHelper } from '@/helpers/system-helper'
 
+const DEFAULT_POSIX_PATH = '/usr/bin:/bin:/usr/sbin:/sbin'
+
 export class RuntimeHelper {
   /**
    * Resolve Leon-managed runtime binaries from the local `bin/` directory first.
@@ -150,7 +152,11 @@ export class RuntimeHelper {
     const nodeDirPath = path.dirname(nodeBinPath)
     const pathKey = Object.keys(env).find((key) => key.toUpperCase() === 'PATH') ||
       'PATH'
-    const currentPathValue = env[pathKey] || ''
+    // Node normally searches a small system path when PATH is absent. Once we
+    // add the managed Node directory explicitly, preserve that default too so
+    // packaged services can still launch system commands such as bash.
+    const currentPathValue = env[pathKey] ||
+      (SystemHelper.isWindows() ? '' : DEFAULT_POSIX_PATH)
     const currentPathEntries = currentPathValue
       .split(path.delimiter)
       .filter(Boolean)

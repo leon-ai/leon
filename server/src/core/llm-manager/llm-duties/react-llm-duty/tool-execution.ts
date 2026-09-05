@@ -8,6 +8,7 @@ import {
   TOOL_EXECUTOR,
   TOOLKIT_REGISTRY
 } from '@/core'
+import { COMPUTER_USE_PROVIDER_ID } from '@/core/computer-use/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
@@ -517,6 +518,11 @@ export async function runToolExecution(
   const modelFiles = toolExecutionResult.data.model_files
   const observationData = { ...toolExecutionResult.data }
   delete observationData.model_files
+  // The assistant tool call already carries its input. Avoid duplicating both
+  // serialized and parsed forms in the bounded observation so useful output
+  // remains inline instead of forcing an artifact-log read.
+  delete observationData.input
+  delete observationData.parsed_input
   const outputLogPath =
     typeof toolExecutionResult.data?.output_log_path === 'string'
       ? toolExecutionResult.data.output_log_path
@@ -652,7 +658,14 @@ export async function runToolExecution(
     ...(effectiveStatus !== toolExecutionResult.status
       ? { raw_status: toolExecutionResult.status }
       : {}),
-    ...(outputLogPath ? { output_log_path: outputLogPath } : {}),
+    // Computer-use observations already expose a bounded result and focused
+    // query path. Keeping the full-log pointer encourages expensive reads of
+    // stale snapshots; retain it only for failures where diagnostics matter.
+    ...(outputLogPath &&
+      (toolkitId !== COMPUTER_USE_PROVIDER_ID ||
+        effectiveStatus === 'error')
+      ? { output_log_path: outputLogPath }
+      : {}),
     message: effectiveMessage,
     data: observationData,
     ...(hasObservedToolFailure

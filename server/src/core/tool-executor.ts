@@ -16,6 +16,7 @@ import {
   TSX_CLI_PATH
 } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
 import {
   TOOLKIT_REGISTRY,
   TOOL_CALL_LOGGER,
@@ -925,7 +926,7 @@ export default class ToolExecutor {
       const childProcess = spawn(NODE_RUNTIME_BIN_PATH, cliArgs, {
         cwd: NODEJS_BRIDGE_ROOT_PATH,
         env: {
-          ...process.env,
+          ...RuntimeHelper.getManagedNodeEnvironment(),
           LEON_CODEBASE_PATH: CODEBASE_PATH,
           LEON_PROFILE: getActiveProfileName(),
           LEON_SESSION_ID: getActiveConversationSessionId() || ''

@@ -31,6 +31,9 @@ export class ComputerUseResultCompactor {
     if (action === 'list_windows' && Array.isArray(result['windows'])) {
       return this.compactWindowResult(result)
     }
+    if (action === 'get_window_state' && Array.isArray(result['elements'])) {
+      return this.compactWindowState(input, result)
+    }
     if (
       action === 'get_browser_state' &&
       (Array.isArray(result['refs']) || Array.isArray(result['content_refs']))
@@ -44,33 +47,49 @@ export class ComputerUseResultCompactor {
   public getStructuredFailure(
     result: Record<string, unknown> | null
   ): StructuredComputerUseFailure | null {
-    const refusal = asRecord(result?.['refusal'])
+    if (!result) return null
+    const refusal = asRecord(result['refusal'])
     if (refusal) {
       return {
         ...(hasText(refusal['code']) ? { code: refusal['code'] } : {}),
-        message: hasText(refusal['message'])
+        message: (hasText(refusal['message'])
           ? refusal['message']
-          : 'Computer-use action was refused.'
+          : 'Computer-use action was refused.') +
+          (refusal['code'] === 'browser_route_unavailable'
+            ? ' Do not repeat this unsupported browser setup. Use get_window_state and normal window input on the existing browser instead; do not copy profiles or bypass authorization.'
+            : '')
       }
     }
 
-    const escalation = asRecord(result?.['escalation'])
-    if (!escalation || !hasText(result?.['code'])) {
+    const escalation = asRecord(result['escalation'])
+    if (
+      !hasText(result['code']) ||
+      (!escalation &&
+        Object.keys(result).length !== 1 &&
+        result['success'] !== false &&
+        result['status'] !== 'error' &&
+        result['code'] !== 'delivery_failed')
+    ) {
       return null
     }
 
-    // A structured escalation is a refusal even when the process exited cleanly.
+    // Cua can return a bare error code with a successful process exit status.
+    // Do not report a rejected action as a successful tool invocation.
     const message = [
-      result?.['detail'],
-      result?.['suggestion'],
-      escalation['reason']
+      result['detail'],
+      result['message'],
+      result['suggestion'],
+      escalation?.['reason']
     ].find((value) => hasText(value))
 
     return {
       code: result['code'],
-      message: hasText(message)
+      message: (hasText(message)
         ? message
-        : 'Computer-use action requires a different execution mode.'
+        : `Computer-use action failed: ${result['code']}. Correct the target or refresh its snapshot before retrying.`) +
+        (result['code'] === 'delivery_failed'
+          ? ' Refresh the window list and target the actual dialog window if one is open; the parent window cannot receive modal keyboard input.'
+          : '')
     }
   }
 
@@ -81,6 +100,11 @@ export class ComputerUseResultCompactor {
       .map(asRecord)
       .filter((window): window is Record<string, unknown> => window !== null)
     const windows = allWindows
+      .sort(
+        (a, b) =>
+          Number(b['is_on_screen'] === true) - Number(a['is_on_screen'] === true) ||
+          Number(hasText(b['title'])) - Number(hasText(a['title']))
+      )
       .slice(0, COMPUTER_USE_WINDOW_RESULT_LIMIT)
       .map((window) =>
         Object.fromEntries(
@@ -109,6 +133,83 @@ export class ComputerUseResultCompactor {
         total_window_count: allWindows.length,
         returned_window_count: windows.length,
         omitted_window_count: allWindows.length - windows.length
+      },
+      changed: true
+    }
+  }
+
+  private compactWindowState(
+    input: ToolProviderExecutionInput,
+    result: Record<string, unknown>
+  ): CompactedComputerUseResult {
+    const allElements = (result['elements'] as unknown[])
+      .map(asRecord)
+      .filter((element): element is Record<string, unknown> => element !== null)
+    const query = String(input.parameters['query'] || '').trim().toLowerCase()
+    const matchesQuery = (element: Record<string, unknown>): boolean =>
+      Boolean(query) &&
+      `${element['label'] || ''} ${element['value'] || ''}`
+        .toLowerCase()
+        .includes(query)
+    const windowFrame = asRecord(allElements.find(
+      (element) => element['role'] === 'AXWindow'
+    )?.['frame'])
+    // Preserve the driver's reading order, with explicit query matches first.
+    // Budget the complete model result in the provider, after coordinate mapping.
+    const candidates = allElements.filter((element) =>
+      hasText(element['label']) || hasText(element['value']) ||
+      element['enabled'] === true || element['focused'] === true || element['selected'] === true
+    ).sort(
+      (a, b) => Number(matchesQuery(b)) - Number(matchesQuery(a))
+    )
+    const elements: Record<string, unknown>[] = []
+    for (const element of candidates) {
+      const compact = Object.fromEntries(
+        Object.entries(element).filter(([key, value]) => {
+          if (key === 'element_index') return !hasText(element['element_token'])
+          if (key === 'value') return value !== element['label']
+          if (key === 'enabled') return value === false
+          if (key === 'selected' || key === 'focused') return value === true
+          return ['element_token', 'role', 'label'].includes(key)
+        })
+      )
+      // macOS AX frames are screen points, not screenshot pixels. Retain them
+      // internally so the provider can expose a correctly mapped pixel center.
+      if (String(element['role']).startsWith('AX') && asRecord(element['frame'])) {
+        compact['screen_frame'] = element['frame']
+      }
+      elements.push(compact)
+    }
+    // Keep current handles in the model's bounded observation instead of
+    // truncating the AX tree into an unusable log-file preview. Full state is
+    // persisted separately by the provider; omitted elements can be queried.
+    const omitted = allElements.length - elements.length
+    const metadata = Object.fromEntries(
+      Object.entries(result).filter(([key]) =>
+        ['pid', 'window_id', 'snapshot_id', 'window_bounds', 'screenshot_width',
+          'screenshot_height', 'screenshot_scale', 'screenshot_frame_valid',
+          'elements_complete', 'total_element_count', 'background_input',
+          'capture_coverage'].includes(key)
+      )
+    )
+    if (!metadata['window_bounds'] && windowFrame) {
+      metadata['window_bounds'] = {
+        x: windowFrame['x'], y: windowFrame['y'],
+        width: windowFrame['w'], height: windowFrame['h']
+      }
+    }
+    return {
+      result: {
+        ...metadata,
+        elements,
+        returned_element_count: elements.length,
+        omitted_element_count: omitted,
+        ...(omitted > 0
+          ? {
+              elements_complete: false,
+              hint: 'Use get_window_state with a focused query for omitted controls. Use only current element tokens; observe again after an action.'
+            }
+          : {})
       },
       changed: true
     }

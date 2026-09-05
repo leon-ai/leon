@@ -80,13 +80,135 @@ export class ComputerUseRuntimeManager {
     parameters: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
     let managedParameters = { ...parameters }
+    if (['click', 'type_text', 'press_key', 'hotkey', 'scroll'].includes(action)) {
+      const hasElement = typeof managedParameters['element_index'] === 'number' ||
+        (typeof managedParameters['element_token'] === 'string' &&
+          managedParameters['element_token'].length > 0)
+      const hasPixels = managedParameters['x'] != null || managedParameters['y'] != null
+      if (hasElement && hasPixels) {
+        throw new Error('Choose one target: a current element token/index OR screenshot pixels, not both.')
+      }
+      if (managedParameters['element_token'] === '' &&
+          managedParameters['element_index'] != null) {
+        throw new Error('An empty element token with an index is ambiguous. Supply only the intended current selector.')
+      }
+    }
+    const target = asRecord(managedParameters['target'])
+    const hasElement = typeof managedParameters['element_index'] === 'number' ||
+      (typeof managedParameters['element_token'] === 'string' &&
+        managedParameters['element_token'].length > 0)
+    if (hasElement) {
+      const pid = target?.['pid'] ?? managedParameters['pid']
+      const windowId = target?.['window_id'] ?? managedParameters['window_id']
+      // A snapshot token is not a process target. Require the observed window
+      // explicitly rather than guessing from whichever application is active.
+      if (!Number.isInteger(pid) || Number(pid) <= 0 ||
+          !Number.isInteger(windowId) || Number(windowId) <= 0) {
+        throw new Error('Element input requires pid and window_id from the same fresh get_window_state observation. Supply those fields (or an exact window target) with the current element token.')
+      }
+    }
+    if (target?.['kind'] === 'window') {
+      // Cua accepts either target or legacy window fields, never both.
+      // Models sometimes repeat the same target in both representations.
+      for (const key of ['pid', 'window_id']) {
+        const legacyValue = managedParameters[key]
+        if (legacyValue != null && legacyValue !== target[key]) {
+          throw new Error(
+            `Conflicting computer-use ${key}; select one exact window.`
+          )
+        }
+        delete managedParameters[key]
+      }
+      if (managedParameters['scope'] === 'desktop') {
+        throw new Error('A window target cannot use desktop coordinates.')
+      }
+      delete managedParameters['scope']
+      managedParameters['target'] = {
+        kind: 'window',
+        pid: target['pid'],
+        window_id: target['window_id']
+      }
+    }
+    if (action === 'browser_prepare') {
+      const strategy = asRecord(managedParameters['strategy'])
+      if (strategy?.['kind'] === 'existing_profile') {
+        const profile = asRecord(managedParameters['profile'])
+        // These optional defaults must not select the incompatible isolated
+        // launch route when an existing-profile strategy was requested.
+        if (managedParameters['allow_launch'] === false) {
+          delete managedParameters['allow_launch']
+        }
+        if (profile?.['mode'] === 'isolated_new' && !profile['name']) {
+          delete managedParameters['profile']
+        }
+        if (managedParameters['allow_launch'] != null || managedParameters['profile'] != null) {
+          throw new Error('Choose either strategy=existing_profile with pid/window_id, or an isolated profile with allow_launch=true; do not combine them.')
+        }
+      }
+    }
+    for (const key of ['element_token', 'snapshot_id', 'target_id', 'tab_id', 'scope_ref', 'continuation']) {
+      if (managedParameters[key] === '') delete managedParameters[key]
+    }
+    if (action === 'clipboard_write' && typeof managedParameters['text'] === 'string') {
+      for (const key of ['file_path', 'image_path']) {
+        if (managedParameters[key] === '') delete managedParameters[key]
+      }
+    }
+    if (action === 'list_windows' && managedParameters['pid'] === 0) {
+      delete managedParameters['pid']
+    }
     const interactionMode = this.interactionModeResolver(input)
     if (
       interactionMode === ComputerUseInteractionMode.Visible &&
-      runtime.foregroundCapableActions.has(action) &&
-      managedParameters['delivery_mode'] === undefined
+      (runtime.foregroundCapableActions.has(action) || action === 'invoke_menu')
     ) {
-      managedParameters['delivery_mode'] = CUA_FOREGROUND_DELIVERY_MODE
+      if (runtime.foregroundCapableActions.has(action)) {
+        managedParameters['delivery_mode'] = CUA_FOREGROUND_DELIVERY_MODE
+      }
+      const windowPid = target?.['pid'] ?? managedParameters['pid']
+      const windowId = target?.['window_id'] ?? managedParameters['window_id']
+      if (
+        process.platform === 'darwin' &&
+        typeof windowPid === 'number' && windowPid > 0 &&
+        typeof windowId === 'number' && windowId > 0 &&
+        (action === 'click' || action === 'invoke_menu' ||
+          !(await this.isForegroundProcess(runtime.driver, windowPid)))
+      ) {
+        // Foreground delivery restores the previously active app on macOS.
+        // Confirm activation before each pointer/menu action: list_apps can
+        // report a stale active flag. Avoid re-raising between keyboard inputs.
+        const activation = await runtime.driver.callTool(
+          'bring_to_front',
+          JSON.stringify({ pid: windowPid, window_id: windowId })
+        )
+        const output = asRecord(
+          JSON.parse(activation.structuredJson || activation.rawJson || '{}')
+        )
+        const observed = asRecord(output?.['observed'])
+        const effect = asRecord(output?.['exact_window_effect'])
+        // Auxiliary windows (e.g. a browser find bar) can be ahead in z-order.
+        // Accept only independently proven focus on our exact visible window
+        // in the foreground process. The input action still enforces its own
+        // targeting and authorization; process activation alone is insufficient.
+        const exactFocusProven =
+          output?.['code'] === 'bring_to_front_exact_window_unverified' &&
+          output['status'] === 'partial' &&
+          effect?.['focused'] === true &&
+          effect['target_visible_ordinary'] === true &&
+          observed?.['focused_window_id'] === windowId &&
+          observed['front_process_matches_target'] === true &&
+          observed['frontmost_pid'] === windowPid &&
+          observed['workspace_frontmost_pid'] === windowPid
+        if (
+          !exactFocusProven &&
+          (activation.isError || activation.errorCode || output?.['activated'] !== true)
+        ) {
+          throw new Error(
+            activation.text || activation.errorCode ||
+            String(output?.['code'] || 'Unable to activate the selected window.')
+          )
+        }
+      }
     }
 
     if (action === 'start_recording') {
@@ -129,6 +251,24 @@ export class ComputerUseRuntimeManager {
     }
 
     return { ...managedParameters, session }
+  }
+
+  private async isForegroundProcess(driver: ComputerUseDriver, pid: number): Promise<boolean> {
+    // Re-activating an already foreground window can remove focus from an
+    // address bar or editor between click, type, and Enter. Do not disturb it.
+    // Each input still carries its exact window target and is checked by Cua.
+    const result = await driver.callTool('list_apps', '{}')
+    if (result.isError || result.errorCode) {
+      throw new Error('Unable to verify the active application before visible input.')
+    }
+    const state = asRecord(JSON.parse(result.structuredJson || result.rawJson || '{}'))
+    const apps = Array.isArray(state?.['apps']) ? state['apps'] : []
+    // Use the driver's explicit active-app flag, not window stacking order:
+    // floating panels and overlays need not belong to the active application.
+    return apps.some((value) => {
+      const app = asRecord(value)
+      return app?.['pid'] === pid && app['active'] === true
+    })
   }
 
   private async getActionCapabilities(
