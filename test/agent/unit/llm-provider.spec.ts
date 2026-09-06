@@ -108,4 +108,14 @@ describe('LLMProvider', () => {
       finishReason: 'stop'
     })
   })
+
+  it('strips leftover empty thinking blocks from the result', () => {
+    const manager = new LLMProvider()
+
+    expect(manager.cleanUpResult('<think>\n\n</think>\n\nage_skill')).toBe(
+      'age_skill'
+    )
+    expect(manager.cleanUpResult('<think>reasoning</think>Hello')).toBe('Hello')
+    expect(manager.cleanUpResult('Hello there')).toBe('Hello there')
+  })
 })
