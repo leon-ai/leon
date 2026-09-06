@@ -9,6 +9,7 @@
   "tools": [
     "qwen3_asr",
     "qwen3_tts",
+    "minimax_tts",
     "ecapa",
     "chatterbox_onnx",
     "ultimate_vocal_remover_onnx"
