@@ -27,9 +27,11 @@ import {
 import { mapComputerUseCoordinateToSource } from './computer-use-coordinate-mapper'
 import { ComputerUseResultCompactor } from './computer-use-result-compactor'
 import { ComputerUseRuntimeManager } from './computer-use-runtime-manager'
+import { getComputerUseSetOfMarkKey } from './computer-use-set-of-mark'
 import {
   resolveComputerUseActivityOverlay,
   resolveComputerUseInteractionMode,
+  resolveComputerUseSetOfMarkMode,
   resolvePreferredApplications
 } from './computer-use-settings'
 import { createCuaDriverAdapter } from './cua/cua-driver-adapter'
@@ -40,6 +42,8 @@ import type {
   ComputerUseImageTransform,
   ComputerUseActivityOverlayResolver,
   ComputerUseInteractionModeResolver,
+  ComputerUseSetOfMarkAnnotation,
+  ComputerUseSetOfMarkModeResolver,
   CuaToolResult,
   ManagedComputerUseRuntime,
   PreferredApplicationsResolver
@@ -66,6 +70,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   private readonly applicationLauncher = new ComputerUseApplicationLauncher()
   private readonly resultCompactor: ComputerUseResultCompactor
   private readonly runtimeManager: ComputerUseRuntimeManager
+  private readonly setOfMarkModeResolver: ComputerUseSetOfMarkModeResolver
   private executionTail: Promise<void> = Promise.resolve()
 
   public constructor(
@@ -75,8 +80,11 @@ export class ComputerUseToolProvider implements ToolProvider {
     preferredApplicationsResolver: PreferredApplicationsResolver =
       resolvePreferredApplications,
     activityOverlayResolver: ComputerUseActivityOverlayResolver =
-      resolveComputerUseActivityOverlay
+      resolveComputerUseActivityOverlay,
+    setOfMarkModeResolver: ComputerUseSetOfMarkModeResolver =
+      resolveComputerUseSetOfMarkMode
   ) {
+    this.setOfMarkModeResolver = setOfMarkModeResolver
     this.resultCompactor = new ComputerUseResultCompactor(
       preferredApplicationsResolver
     )
@@ -194,7 +202,8 @@ export class ComputerUseToolProvider implements ToolProvider {
         input,
         action,
         structuredResult,
-        result
+        result,
+        this.setOfMarkModeResolver(input)
       )
       this.rememberVisualTransform(
         input,
@@ -206,7 +215,8 @@ export class ComputerUseToolProvider implements ToolProvider {
         compactedResult?.result || {
           text: this.artifactStore.buildTextPreview(result.text)
         },
-        persistedImages.transform
+        persistedImages.transform,
+        persistedImages.setOfMark
       )
       const capturedState = captureAfter &&
         !hasCuaError(result) &&
@@ -691,14 +701,21 @@ export class ComputerUseToolProvider implements ToolProvider {
 
   private describeModelCoordinateSpace(
     result: Record<string, unknown>,
-    transform: ComputerUseImageTransform | null
+    transform: ComputerUseImageTransform | null,
+    setOfMark: ComputerUseSetOfMarkAnnotation[] = []
   ): Record<string, unknown> {
     const bounds = asRecord(result['window_bounds'])
+    const marks = new Map(setOfMark.map(({ key, mark }) => [key, mark]))
     const elements = Array.isArray(result['elements'])
       ? result['elements'].map((value: unknown) => {
           const element = asRecord(value)
           if (!element) return value
           const { screen_frame: screenFrame, ...compact } = element
+          const key = getComputerUseSetOfMarkKey(element)
+          const mark = key ? marks.get(key) : undefined
+          if (mark !== undefined) {
+            compact['som_mark'] = mark
+          }
           const frame = asRecord(screenFrame)
           if (!transform || !bounds || !frame) return compact
           const x = Number(frame['x']) + Number(frame['w']) / 2 - Number(bounds['x'])
@@ -731,7 +748,13 @@ export class ComputerUseToolProvider implements ToolProvider {
       ...result,
       ...(elements ? {
         elements,
-        hint: `${result['hint'] || ''} pixel_center is in the latest attached screenshot's coordinates; use its x,y for a pixel action if AX activation has no effect. Do not use raw log frames as click coordinates.`.trim()
+        hint: [
+          result['hint'],
+          setOfMark.length > 0
+            ? 'Numbered labels in the attached image match elements[].som_mark.'
+            : '',
+          'pixel_center is in the latest attached screenshot\'s coordinates; use its x,y for a pixel action if AX activation has no effect. Do not use raw log frames as click coordinates.'
+        ].filter(Boolean).join(' ')
       } : {})
     }
     if (!transform) return observation
@@ -810,7 +833,8 @@ export class ComputerUseToolProvider implements ToolProvider {
       input,
       captureAction,
       structuredResult,
-      captureResult
+      captureResult,
+      this.setOfMarkModeResolver(input)
     )
     this.rememberVisualTransform(
       input,
@@ -822,7 +846,8 @@ export class ComputerUseToolProvider implements ToolProvider {
       compactedResult?.result || {
         text: this.artifactStore.buildTextPreview(captureResult.text)
       },
-      persistedImages.transform
+      persistedImages.transform,
+      persistedImages.setOfMark
     )
     if (isDesktop) {
       // Native menus are composited outside a window capture on macOS.

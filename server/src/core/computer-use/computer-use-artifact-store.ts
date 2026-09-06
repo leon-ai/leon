@@ -16,11 +16,13 @@ import {
   IMAGE_EXTENSION_BY_MIME_TYPE
 } from './constants'
 import { calculateComputerUseModelImageDimensions } from './computer-use-coordinate-mapper'
+import { createComputerUseSetOfMarkPlan } from './computer-use-set-of-mark'
 import type {
   ComputerUseImageDimensions,
   CuaToolResult,
   PersistedComputerUseImages
 } from './types'
+import { ComputerUseSetOfMarkMode } from './types'
 
 const execFileAsync = promisify(execFile)
 
@@ -78,13 +80,15 @@ export class ComputerUseArtifactStore {
     input: ToolProviderExecutionInput,
     action: string,
     structuredResult: Record<string, unknown> | null,
-    result: CuaToolResult
+    result: CuaToolResult,
+    setOfMarkMode = ComputerUseSetOfMarkMode.Auto
   ): Promise<PersistedComputerUseImages> {
     if (result.images.length === 0) {
       return {
         artifacts: [],
         modelFiles: [],
-        transform: null
+        transform: null,
+        setOfMark: []
       }
     }
 
@@ -108,11 +112,14 @@ export class ComputerUseArtifactStore {
                 artifactPath,
                 extension,
                 content,
-                sourceDimensions
+                sourceDimensions,
+                action === 'get_window_state' ? structuredResult : null,
+                setOfMarkMode
               )
             : {
                 dataBase64: image.dataBase64,
-                dimensions: sourceDimensions
+                dimensions: sourceDimensions,
+                setOfMark: []
               }
 
         return {
@@ -127,7 +134,8 @@ export class ComputerUseArtifactStore {
             filename: path.basename(artifactPath),
             visualDetail: 'high' as const
           },
-          modelDimensions: modelImage.dimensions
+          modelDimensions: modelImage.dimensions,
+          setOfMark: modelImage.setOfMark
         }
       })
     )
@@ -142,7 +150,8 @@ export class ComputerUseArtifactStore {
       modelFiles: persistedImages
         .slice(-COMPUTER_USE_MODEL_IMAGE_LIMIT)
         .map(({ modelFile }) => modelFile),
-      transform
+      transform,
+      setOfMark: latestImage?.setOfMark || []
     }
   }
 
@@ -178,28 +187,45 @@ export class ComputerUseArtifactStore {
     artifactPath: string,
     extension: string,
     originalContent: Buffer,
-    sourceDimensions: ComputerUseImageDimensions
+    sourceDimensions: ComputerUseImageDimensions,
+    structuredResult: Record<string, unknown> | null,
+    setOfMarkMode: ComputerUseSetOfMarkMode
   ): Promise<{
     dataBase64: string
     dimensions: ComputerUseImageDimensions
+    setOfMark: PersistedComputerUseImages['setOfMark']
   }> {
     const modelDimensions = calculateComputerUseModelImageDimensions(
       sourceDimensions
     )
+    const setOfMark = createComputerUseSetOfMarkPlan(
+      structuredResult,
+      setOfMarkMode,
+      modelDimensions
+    )
+    const needsResize =
+      modelDimensions.width !== sourceDimensions.width ||
+      modelDimensions.height !== sourceDimensions.height
     if (
       !ffmpegStatic ||
       extension === 'bin' ||
-      (modelDimensions.width === sourceDimensions.width &&
-        modelDimensions.height === sourceDimensions.height)
+      (!needsResize && !setOfMark.filter)
     ) {
       return {
         dataBase64: originalContent.toString('base64'),
-        dimensions: sourceDimensions
+        dimensions: sourceDimensions,
+        setOfMark: []
       }
     }
 
     const modelImagePath = `${artifactPath}.model.${extension}`
     try {
+      const filters = [
+        ...(needsResize
+          ? [`scale=${modelDimensions.width}:${modelDimensions.height}:flags=lanczos`]
+          : []),
+        ...(setOfMark.filter ? [setOfMark.filter] : [])
+      ].join(',')
       await execFileAsync(ffmpegStatic, [
         '-nostdin',
         '-hide_banner',
@@ -208,7 +234,7 @@ export class ComputerUseArtifactStore {
         '-i',
         artifactPath,
         '-vf',
-        `scale=${modelDimensions.width}:${modelDimensions.height}:flags=lanczos`,
+        filters,
         '-frames:v',
         '1',
         '-y',
@@ -217,12 +243,14 @@ export class ComputerUseArtifactStore {
       const resizedContent = await fs.promises.readFile(modelImagePath)
       return {
         dataBase64: resizedContent.toString('base64'),
-        dimensions: modelDimensions
+        dimensions: modelDimensions,
+        setOfMark: setOfMark.annotations
       }
     } catch {
       return {
         dataBase64: originalContent.toString('base64'),
-        dimensions: sourceDimensions
+        dimensions: sourceDimensions,
+        setOfMark: []
       }
     } finally {
       await fs.promises.rm(modelImagePath, { force: true })

@@ -10,6 +10,8 @@ import {
   mapComputerUsePointToSource,
   shouldUseCuaSafeX11Input
 } from '@/core/computer-use/computer-use-tool-provider'
+import { createComputerUseSetOfMarkPlan } from '@/core/computer-use/computer-use-set-of-mark'
+import { ComputerUseSetOfMarkMode } from '@/core/computer-use/types'
 
 const PROFILE_NAME = 'computer-use-test'
 const PORTABLE_INPUT_SCHEMA_UNSUPPORTED_KEYWORDS = new Set([
@@ -169,6 +171,55 @@ describe('ComputerUseToolProvider', () => {
       preferred_apps: {}
     })
     expect(Object.keys(settings).at(-1)).toBe('preferred_apps')
+  })
+
+  it('adds SOM labels automatically only for ambiguous actionable controls', () => {
+    const result = {
+      window_bounds: { x: 100, y: 200, width: 800, height: 600 },
+      elements: [
+        {
+          element_token: 'first',
+          label: 'Submit',
+          actions: ['click'],
+          frame: { x: 120, y: 230, w: 100, h: 30 }
+        },
+        {
+          element_token: 'second',
+          label: 'Submit',
+          actions: ['click'],
+          frame: { x: 240, y: 230, w: 100, h: 30 }
+        },
+        {
+          element_token: 'unique',
+          label: 'Cancel',
+          actions: ['click'],
+          frame: { x: 360, y: 230, w: 100, h: 30 }
+        }
+      ]
+    }
+    const autoPlan = createComputerUseSetOfMarkPlan(
+      result,
+      ComputerUseSetOfMarkMode.Auto,
+      { width: 800, height: 600 }
+    )
+    const alwaysPlan = createComputerUseSetOfMarkPlan(
+      result,
+      ComputerUseSetOfMarkMode.Always,
+      { width: 800, height: 600 }
+    )
+    const neverPlan = createComputerUseSetOfMarkPlan(
+      result,
+      ComputerUseSetOfMarkMode.Never,
+      { width: 800, height: 600 }
+    )
+
+    expect(autoPlan.annotations).toEqual([
+      { key: 'token:first', mark: 1 },
+      { key: 'token:second', mark: 2 }
+    ])
+    expect(autoPlan.filter).toContain('text=\'1\'')
+    expect(alwaysPlan.annotations).toHaveLength(3)
+    expect(neverPlan).toEqual({ annotations: [], filter: null })
   })
 
   it('uses Cua safe input only for local X11 sessions', () => {
