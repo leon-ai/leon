@@ -8,6 +8,7 @@ import { ComputerUseArtifactStore } from './computer-use-artifact-store'
 import { CUA_FOREGROUND_DELIVERY_MODE } from './constants'
 import {
   ComputerUseInteractionMode,
+  type ComputerUseActivityOverlayResolver,
   type ComputerUseDriver,
   type ComputerUseDriverFactory,
   type ComputerUseInteractionModeResolver,
@@ -25,6 +26,7 @@ export class ComputerUseRuntimeManager {
   public constructor(
     private readonly driverFactory: ComputerUseDriverFactory,
     private readonly interactionModeResolver: ComputerUseInteractionModeResolver,
+    private readonly activityOverlayResolver: ComputerUseActivityOverlayResolver,
     private readonly artifactStore: ComputerUseArtifactStore
   ) {}
 
@@ -45,6 +47,7 @@ export class ComputerUseRuntimeManager {
       return {
         driver,
         initializedSessions: new Set<string>(),
+        activityOverlayStates: new Map<string, boolean>(),
         ...(await this.getActionCapabilities(driver))
       }
     })
@@ -70,6 +73,20 @@ export class ComputerUseRuntimeManager {
         await result.value.driver.shutdown()
         result.value.driver.uniffiDestroy()
       })
+    )
+  }
+
+  /** Reapplies owner visibility after Cua revives an expired session. */
+  public async restoreActivityOverlay(
+    driver: ComputerUseDriver,
+    input: ToolProviderExecutionInput,
+    session: string
+  ): Promise<void> {
+    await this.setActivityOverlay(
+      driver,
+      input,
+      session,
+      this.activityOverlayResolver(input)
     )
   }
 
@@ -220,7 +237,55 @@ export class ComputerUseRuntimeManager {
       runtime.initializedSessions.add(session)
     }
 
+    await this.configureActivityOverlay(runtime, input, session)
+
     return { ...managedParameters, session }
+  }
+
+  private async configureActivityOverlay(
+    runtime: ManagedComputerUseRuntime,
+    input: ToolProviderExecutionInput,
+    session: string
+  ): Promise<void> {
+    const enabled = this.activityOverlayResolver(input)
+    if (
+      !runtime.driver.setAgentCursorEnabled ||
+      runtime.activityOverlayStates.get(session) === enabled
+    ) {
+      return
+    }
+
+    await this.setActivityOverlay(
+      runtime.driver,
+      input,
+      session,
+      enabled
+    )
+    // Remember unsupported hosts too so one unavailable overlay does not add a
+    // warning and an SDK round trip to every computer-use action.
+    runtime.activityOverlayStates.set(session, enabled)
+  }
+
+  private async setActivityOverlay(
+    driver: ComputerUseDriver,
+    input: ToolProviderExecutionInput,
+    session: string,
+    enabled: boolean
+  ): Promise<void> {
+    if (!driver.setAgentCursorEnabled) {
+      return
+    }
+
+    const result = await driver.setAgentCursorEnabled({
+      session,
+      enabled
+    })
+    if (hasCuaError(result)) {
+      input.onProgress?.({
+        source: 'log',
+        message: 'The computer-use activity overlay is unavailable on this host.'
+      })
+    }
   }
 
   private async getActionCapabilities(

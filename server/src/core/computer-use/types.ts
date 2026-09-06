@@ -13,6 +13,7 @@ export interface ComputerUseDriver extends Pick<
   'callTool' | 'isAvailable' | 'listToolsJson' | 'shutdown'
 > {
   supportsPostActionCapture?: boolean
+  setAgentCursorEnabled?: CuaDriverLike['setAgentCursorEnabled']
   uniffiDestroy(): void
 }
 
@@ -23,9 +24,23 @@ export enum ComputerUseInteractionMode {
   Visible = 'visible'
 }
 
+export enum ComputerUseSetOfMarkMode {
+  Auto = 'auto',
+  Always = 'always',
+  Never = 'never'
+}
+
 export type ComputerUseInteractionModeResolver = (
   input: ToolProviderExecutionInput
 ) => ComputerUseInteractionMode
+
+export type ComputerUseActivityOverlayResolver = (
+  input: ToolProviderExecutionInput
+) => boolean
+
+export type ComputerUseSetOfMarkModeResolver = (
+  input: ToolProviderExecutionInput
+) => ComputerUseSetOfMarkMode
 
 export type PreferredApplicationsResolver = (
   input: ToolProviderExecutionInput
@@ -36,6 +51,7 @@ export interface ManagedComputerUseRuntime {
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
   initializedSessions: Set<string>
+  activityOverlayStates: Map<string, boolean>
   /** Only the conversation that started recording receives automatic evidence captures. */
   recordingSessionId?: string | null
 }
@@ -54,6 +70,12 @@ export interface PersistedComputerUseImages {
   artifacts: Array<Record<string, unknown>>
   modelFiles: ToolProviderModelFile[]
   transform: ComputerUseImageTransform | null
+  setOfMark: ComputerUseSetOfMarkAnnotation[]
+}
+
+export interface ComputerUseSetOfMarkAnnotation {
+  key: string
+  mark: number
 }
 
 export interface CapturedComputerUseState {

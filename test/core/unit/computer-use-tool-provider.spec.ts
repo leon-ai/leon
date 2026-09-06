@@ -29,6 +29,7 @@ interface FakeDriver {
   callTool: ReturnType<typeof vi.fn>
   isAvailable: ReturnType<typeof vi.fn>
   listToolsJson: ReturnType<typeof vi.fn>
+  setAgentCursorEnabled: ReturnType<typeof vi.fn>
   shutdown: ReturnType<typeof vi.fn>
   uniffiDestroy: ReturnType<typeof vi.fn>
 }
@@ -56,6 +57,14 @@ function createDriver(result: Record<string, unknown>): FakeDriver {
         ]
       })
     ),
+    setAgentCursorEnabled: vi.fn().mockResolvedValue({
+      text: '',
+      images: [],
+      structuredJson: '{}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    }),
     shutdown: vi.fn().mockResolvedValue(undefined),
     uniffiDestroy: vi.fn()
   }
@@ -139,6 +148,29 @@ function findPortableInputSchemaIssues(
 }
 
 describe('ComputerUseToolProvider', () => {
+  it('keeps preferred_apps last in the default computer-use settings', () => {
+    const settings = JSON.parse(
+      fs.readFileSync(
+        path.join(
+          process.cwd(),
+          'tools',
+          'computer_use',
+          'cua',
+          'settings.sample.json'
+        ),
+        'utf8'
+      )
+    ) as Record<string, unknown>
+
+    expect(settings).toEqual({
+      interaction_mode: 'background',
+      activity_overlay: { enabled: true },
+      set_of_mark: { mode: 'auto' },
+      preferred_apps: {}
+    })
+    expect(Object.keys(settings).at(-1)).toBe('preferred_apps')
+  })
+
   it('uses Cua safe input only for local X11 sessions', () => {
     expect(
       shouldUseCuaSafeX11Input('linux', { XDG_SESSION_TYPE: 'x11' })
@@ -679,9 +711,16 @@ describe('ComputerUseToolProvider', () => {
     expect(driver.callTool.mock.calls[0]![0]).toBe('start_session')
     expect(sessionInput.session.startsWith('leon-')).toBe(true)
     expect(sessionInput.session).toHaveLength(17)
+    expect(driver.setAgentCursorEnabled).toHaveBeenCalledOnce()
+    expect(driver.setAgentCursorEnabled).toHaveBeenCalledWith({
+      session: sessionInput.session,
+      enabled: true
+    })
     expect(driver.callTool.mock.calls[1]).toEqual([
       'get_window_state',
       JSON.stringify({
+        max_elements: 200,
+        max_depth: 6,
         pid: 42,
         window_id: 7,
         session: sessionInput.session
@@ -690,6 +729,40 @@ describe('ComputerUseToolProvider', () => {
     expect(
       driver.callTool.mock.calls.filter(([name]) => name === 'start_session')
     ).toHaveLength(1)
+  })
+
+  it('can disable the owner-visible Cua activity overlay', async () => {
+    const driver = createDriver({
+      text: 'Window captured.',
+      images: [],
+      structuredJson: '{}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    })
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never,
+      () => 'background',
+      () => ({}),
+      () => false
+    )
+
+    await provider.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'get_window_state',
+      parameters: { pid: 42, window_id: 7 },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'session-1'
+    })
+
+    const sessionInput = JSON.parse(driver.callTool.mock.calls[0]![1]) as {
+      session: string
+    }
+    expect(driver.setAgentCursorEnabled).toHaveBeenCalledWith({
+      session: sessionInput.session,
+      enabled: false
+    })
   })
 
   it('restores an ended hidden Cua session and retries once', async () => {
@@ -1048,7 +1121,7 @@ describe('ComputerUseToolProvider', () => {
     }
   })
 
-  it('uses foreground delivery without enabling the optional agent cursor', async () => {
+  it('uses foreground delivery while independently enabling the activity overlay', async () => {
     const driver = createDriver({
       text: 'Clicked.',
       images: [],
@@ -1066,7 +1139,7 @@ describe('ComputerUseToolProvider', () => {
       toolkitId: 'computer_use',
       toolId: 'cua',
       functionName: 'click',
-      parameters: { pid: 42, window_id: 7, x: 10, y: 20 },
+      parameters: { pid: 42, window_id: 7, element_token: 'element-1' },
       profileName: PROFILE_NAME,
       conversationSessionId: 'session-1'
     })
@@ -1079,16 +1152,15 @@ describe('ComputerUseToolProvider', () => {
       JSON.stringify({
         pid: 42,
         window_id: 7,
-        x: 10,
-        y: 20,
+        element_token: 'element-1',
         delivery_mode: 'foreground',
         session: sessionInput.session
       })
     ])
-    expect(driver.callTool).not.toHaveBeenCalledWith(
-      'set_agent_cursor_enabled',
-      expect.any(String)
-    )
+    expect(driver.setAgentCursorEnabled).toHaveBeenCalledWith({
+      session: sessionInput.session,
+      enabled: true
+    })
   })
 
   it('can return the resulting visual state with the action', async () => {

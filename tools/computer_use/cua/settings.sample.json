@@ -1,4 +1,10 @@
 {
   "interaction_mode": "background",
+  "activity_overlay": {
+    "enabled": true
+  },
+  "set_of_mark": {
+    "mode": "auto"
+  },
   "preferred_apps": {}
 }

@@ -28,6 +28,7 @@ import { mapComputerUseCoordinateToSource } from './computer-use-coordinate-mapp
 import { ComputerUseResultCompactor } from './computer-use-result-compactor'
 import { ComputerUseRuntimeManager } from './computer-use-runtime-manager'
 import {
+  resolveComputerUseActivityOverlay,
   resolveComputerUseInteractionMode,
   resolvePreferredApplications
 } from './computer-use-settings'
@@ -37,6 +38,7 @@ import type {
   ComputerUseDriver,
   ComputerUseDriverFactory,
   ComputerUseImageTransform,
+  ComputerUseActivityOverlayResolver,
   ComputerUseInteractionModeResolver,
   CuaToolResult,
   ManagedComputerUseRuntime,
@@ -71,7 +73,9 @@ export class ComputerUseToolProvider implements ToolProvider {
     interactionModeResolver: ComputerUseInteractionModeResolver =
       resolveComputerUseInteractionMode,
     preferredApplicationsResolver: PreferredApplicationsResolver =
-      resolvePreferredApplications
+      resolvePreferredApplications,
+    activityOverlayResolver: ComputerUseActivityOverlayResolver =
+      resolveComputerUseActivityOverlay
   ) {
     this.resultCompactor = new ComputerUseResultCompactor(
       preferredApplicationsResolver
@@ -79,6 +83,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     this.runtimeManager = new ComputerUseRuntimeManager(
       driverFactory,
       interactionModeResolver,
+      activityOverlayResolver,
       this.artifactStore
     )
   }
@@ -475,6 +480,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       if (hasCuaError(sessionResult)) {
         return sessionResult
       }
+      await this.runtimeManager.restoreActivityOverlay(driver, input, session)
       result = await driver.callTool(action, serializedParameters)
     }
 
