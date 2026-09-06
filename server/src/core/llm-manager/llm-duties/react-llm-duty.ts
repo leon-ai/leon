@@ -81,6 +81,8 @@ import {
   buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
+  evaluateAgentToolkitPreloadCost,
+  findHighConfidenceAgentToolkitId,
   runAgentLoop
 } from './react-llm-duty/agent-loop'
 import { buildToolkitContextSection } from './react-llm-duty/agent-helpers'
@@ -299,11 +301,57 @@ export class ReActLLMDuty extends LLMDuty {
         return dutyResult
       }
 
-      const catalog = buildAgentToolCatalog(
+      const progressiveToolkitLoading =
+        CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
+      const matchedToolkitId =
+        !continuation &&
+        !this.activeForcedToolName &&
+        !caller.agentSkillContext &&
+        progressiveToolkitLoading
+          ? findHighConfidenceAgentToolkitId(originalInput)
+          : null
+      let catalog = buildAgentToolCatalog(
         this.activeForcedToolName,
         continuation?.loadedToolkitIds,
-        CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
+        progressiveToolkitLoading
       )
+
+      let preloadedToolkitContext = ''
+      if (matchedToolkitId) {
+        const candidateCatalog = buildAgentToolCatalog(
+          this.activeForcedToolName,
+          [matchedToolkitId],
+          progressiveToolkitLoading
+        )
+        const candidateToolkitContext = [
+          `<preloaded_toolkit toolkit_id="${matchedToolkitId}">`,
+          'Its function schemas are already available. Use them directly.',
+          buildToolkitContextSection(caller, matchedToolkitId),
+          '</preloaded_toolkit>'
+        ].join('\n')
+        const cost = evaluateAgentToolkitPreloadCost(
+          catalog,
+          candidateCatalog,
+          candidateToolkitContext,
+          this.estimateTokensFromText.bind(this)
+        )
+
+        if (
+          cost.shouldPreload &&
+          candidateCatalog.loadedToolkitIds.has(matchedToolkitId)
+        ) {
+          catalog = candidateCatalog
+          preloadedToolkitContext = candidateToolkitContext
+          LogHelper.info(
+            `Preloaded high-confidence agent toolkit: ${matchedToolkitId} | added_tokens=${cost.additionalPayloadTokens} | routing_budget=${cost.normalRoutingPayloadTokens}`
+          )
+        } else {
+          LogHelper.info(
+            `Skipped high-confidence agent toolkit preload: ${matchedToolkitId} | added_tokens=${cost.additionalPayloadTokens} | routing_budget=${cost.normalRoutingPayloadTokens}`
+          )
+        }
+      }
+
       if (catalog.tools.length === 0) {
         return finalize(
           `The tool "${this.activeForcedToolName}" is not available.`,
@@ -335,9 +383,12 @@ export class ReActLLMDuty extends LLMDuty {
           ].join('\n')
         })
       } else {
+        const agentRequest = await this.buildAgentRequest(caller, originalInput)
         transcript.push({
           role: 'user',
-          content: await this.buildAgentRequest(caller, originalInput)
+          content: [agentRequest, preloadedToolkitContext]
+            .filter(Boolean)
+            .join('\n\n')
         })
       }
 
