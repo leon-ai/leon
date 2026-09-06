@@ -47,6 +47,15 @@ export function normalizeToolCalls(
       const stepLabel = getStringField(record, 'stepLabel')
 
       if (observation) toolCall.observation = observation
+      if (typeof record['startedAt'] === 'number') {
+        toolCall.started_at = record['startedAt']
+      }
+      if (typeof record['completedAt'] === 'number') {
+        toolCall.completed_at = record['completedAt']
+      }
+      if (typeof record['durationMs'] === 'number') {
+        toolCall.duration_ms = record['durationMs']
+      }
       if (stepLabel) toolCall.step_label = stepLabel
       if (record['requestedToolInput'] !== undefined) {
         toolCall.input = record['requestedToolInput']

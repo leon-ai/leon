@@ -161,6 +161,11 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('Leon was found.')
     expect(result.executionHistory).toHaveLength(1)
+    expect(result.executionHistory[0]).toMatchObject({
+      startedAt: expect.any(Number),
+      completedAt: expect.any(Number),
+      durationMs: expect.any(Number)
+    })
     expect(result.transcript).toBe(transcript)
   })
 

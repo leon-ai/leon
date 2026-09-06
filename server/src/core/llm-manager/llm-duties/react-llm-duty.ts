@@ -1405,6 +1405,9 @@ export class ReActLLMDuty extends LLMDuty {
           function: item.function,
           status: item.status,
           observation: item.observation,
+          startedAt: item.startedAt,
+          completedAt: item.completedAt,
+          durationMs: item.durationMs,
           stepLabel: item.stepLabel,
           requestedToolInput: item.requestedToolInput
         }))

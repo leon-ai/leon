@@ -34,6 +34,9 @@ export interface HTTPPluginToolCall {
   toolkit_icon_name?: string
   tool_icon_name?: string
   observation?: string
+  started_at?: number
+  completed_at?: number
+  duration_ms?: number
   step_label?: string
   input?: unknown
   output?: unknown

@@ -62,6 +62,9 @@ export interface ExecutionRecord {
   function: string
   status: string
   observation: string
+  startedAt?: number
+  completedAt?: number
+  durationMs?: number
   toolCallTitle?: string
   stepLabel?: string
   requestedToolInput?: string

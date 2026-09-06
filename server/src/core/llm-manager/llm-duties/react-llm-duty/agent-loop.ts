@@ -914,14 +914,19 @@ async function executeAgentToolCall(
   let execution: ExecutionRecord
   let modelFiles: ToolExecutionResult['modelFiles']
   let handoffSignal: FinalResponseSignal | undefined
+  const executionStartedAt = Date.now()
   try {
     const result = await params.executeFunction(
       callable,
       validatedInput,
       toolCallInput.title
     )
+    const executionCompletedAt = Date.now()
     execution = {
       ...result.execution,
+      startedAt: executionStartedAt,
+      completedAt: executionCompletedAt,
+      durationMs: executionCompletedAt - executionStartedAt,
       ...(toolCallInput.title
         ? { toolCallTitle: toolCallInput.title }
         : {})
@@ -931,10 +936,14 @@ async function executeAgentToolCall(
   } catch (error) {
     // Tool failures stay inside the protocol so the model can recover using
     // the same transcript instead of aborting the whole agent turn.
+    const executionCompletedAt = Date.now()
     execution = {
       function: callable.qualifiedName,
       status: 'error',
       observation: `Tool execution failed: ${String(error)}`,
+      startedAt: executionStartedAt,
+      completedAt: executionCompletedAt,
+      durationMs: executionCompletedAt - executionStartedAt,
       ...(toolCallInput.title
         ? { toolCallTitle: toolCallInput.title }
         : {}),
