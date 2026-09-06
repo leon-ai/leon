@@ -3,7 +3,7 @@
   "tool_id": "ffprobe",
   "toolkit_id": "video_streaming",
   "name": "FFprobe",
-  "description": "A tool for analyzing and extracting metadata from video and audio files. Use this for inspecting media properties like duration, bitrate, codec information, stream details, and format data without modifying the files. For processing or converting media, use ffmpeg instead.",
+  "description": "Analyze and extract metadata from video and audio files, including duration, bitrate, codecs, streams, and format data, without modifying the files. Use ffmpeg for processing or conversion.",
   "icon_name": "radar-line",
   "author": {
     "name": "Louis Grenard",
