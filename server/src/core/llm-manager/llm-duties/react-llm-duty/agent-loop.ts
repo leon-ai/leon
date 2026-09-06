@@ -58,7 +58,6 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - If you create a plan, update its statuses as work advances and complete its final statuses before answering.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
 - Context and memory tools provide external knowledge. They are not substitutes for the agent transcript.
-- For claims about past conversations, use raw session search when memory is inconclusive or exact evidence matters. Treat memory results as search clues; when a candidate entity appears, search it with alternative wording for the relationship being verified. Prefer owner-authored evidence for facts about the owner.
 </tool_policy>
 
 <safety>
@@ -122,13 +121,26 @@ export interface AgentToolCatalog {
   functionsByToolName: Map<string, AgentCallableFunction>
   availableToolkitsById: Map<string, AgentToolkitSummary>
   loadedToolkitIds: Set<string>
+  loadedProgressiveGuidance: Map<string, AgentProgressiveGuidance>
 }
 
 interface AgentToolkitSummary {
   id: string
   name: string
   description: string
-  tools: string[]
+  progressiveGuidance?: string
+  tools: AgentToolSummary[]
+}
+
+interface AgentToolSummary {
+  id: string
+  description: string
+  progressiveGuidance?: string
+}
+
+interface AgentProgressiveGuidance {
+  label: string
+  content: string
 }
 
 interface AgentModelResult {
@@ -195,11 +207,16 @@ export function buildAgentToolCatalog(
   const functionsByToolName = new Map<string, AgentCallableFunction>()
   const availableToolkitsById = getAvailableToolkitSummaries()
   const loadedToolkitIds = new Set<string>()
+  const loadedProgressiveGuidance = new Map<
+    string,
+    AgentProgressiveGuidance
+  >()
   const catalog: AgentToolCatalog = {
     tools,
     functionsByToolName,
     availableToolkitsById,
-    loadedToolkitIds
+    loadedToolkitIds,
+    loadedProgressiveGuidance
   }
   const forcedTool = forcedToolName
     ? TOOLKIT_REGISTRY.resolveToolById(forcedToolName)
@@ -246,7 +263,13 @@ function getAvailableToolkitSummaries(): Map<string, AgentToolkitSummary> {
   const summaries = new Map<string, AgentToolkitSummary>()
 
   for (const tool of TOOLKIT_REGISTRY.getFlattenedTools()) {
-    const toolSummary = `${tool.toolId}: ${tool.toolDescription}`
+    const toolSummary: AgentToolSummary = {
+      id: tool.toolId,
+      description: tool.toolDescription,
+      ...(tool.toolProgressiveGuidance
+        ? { progressiveGuidance: tool.toolProgressiveGuidance }
+        : {})
+    }
     const existingSummary = summaries.get(tool.toolkitId)
     if (existingSummary) {
       existingSummary.tools.push(toolSummary)
@@ -257,6 +280,9 @@ function getAvailableToolkitSummaries(): Map<string, AgentToolkitSummary> {
       id: tool.toolkitId,
       name: tool.toolkitName,
       description: tool.toolkitDescription,
+      ...(tool.toolkitProgressiveGuidance
+        ? { progressiveGuidance: tool.toolkitProgressiveGuidance }
+        : {}),
       tools: [toolSummary]
     })
   }
@@ -270,6 +296,7 @@ function loadToolkitFunctions(
   onlyToolId?: string
 ): number {
   let loadedFunctionCount = 0
+  const loadedToolIds = new Set<string>()
 
   for (const tool of TOOLKIT_REGISTRY.getFlattenedTools()) {
     if (
@@ -312,14 +339,50 @@ function loadToolkitFunctions(
         }
       })
       loadedFunctionCount += 1
+      loadedToolIds.add(tool.toolId)
     }
   }
 
   if (loadedFunctionCount > 0) {
     catalog.loadedToolkitIds.add(toolkitId)
+    const toolkit = catalog.availableToolkitsById.get(toolkitId)
+    if (toolkit?.progressiveGuidance) {
+      catalog.loadedProgressiveGuidance.set(`toolkit:${toolkitId}`, {
+        label: `Toolkit ${toolkit.name}`,
+        content: toolkit.progressiveGuidance
+      })
+    }
+    for (const tool of toolkit?.tools || []) {
+      if (loadedToolIds.has(tool.id) && tool.progressiveGuidance) {
+        catalog.loadedProgressiveGuidance.set(
+          `tool:${toolkitId}.${tool.id}`,
+          {
+            label: `Tool ${toolkitId}.${tool.id}`,
+            content: tool.progressiveGuidance
+          }
+        )
+      }
+    }
   }
 
   return loadedFunctionCount
+}
+
+/** Builds the operational guidance for toolkits loaded in the current run. */
+export function buildAgentProgressiveGuidanceSystemPrompt(
+  catalog: AgentToolCatalog
+): string {
+  if (catalog.loadedProgressiveGuidance.size === 0) {
+    return ''
+  }
+
+  const sections = [...catalog.loadedProgressiveGuidance.values()].flatMap(
+    ({ label, content }) => [`## ${label}`, content]
+  )
+
+  return ['<progressive_guidance>', ...sections, '</progressive_guidance>'].join(
+    '\n'
+  )
 }
 
 /** Adds Leon-owned display metadata without changing the tool's input schema. */
@@ -1145,10 +1208,12 @@ function createToolkitLoaderTool(
 ): OpenAITool {
   const toolkits = [...toolkitsById.values()]
   const toolkitCatalog = toolkits
-    .map(
-      (toolkit) =>
-        `${toolkit.id}: ${toolkit.name} - ${toolkit.description} Tools: ${toolkit.tools.join('; ')}`
-    )
+    .map((toolkit) => {
+      const tools = toolkit.tools
+        .map((tool) => `${tool.id}: ${tool.description}`)
+        .join('; ')
+      return `${toolkit.id}: ${toolkit.name} - ${toolkit.description} Tools: ${tools}`
+    })
     .join('\n')
 
   return {

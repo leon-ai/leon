@@ -20,6 +20,7 @@ export interface SatelliteToolDefinition {
   toolkit_id: string
   name: string
   description: string
+  progressive_guidance?: string
   icon_name?: string
   execution?: {
     provider: string
@@ -38,6 +39,7 @@ export interface SatelliteToolkitDefinition {
   id: string
   name: string
   description: string
+  progressive_guidance?: string
   icon_name: string
   context_files?: string[]
   tools: Record<string, SatelliteToolDefinition>

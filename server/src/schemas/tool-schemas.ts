@@ -1,7 +1,10 @@
 import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
 
-import { REMIX_ICON_NAME_PATTERN } from '@/constants'
+import {
+  PROGRESSIVE_GUIDANCE_MAX_LENGTH,
+  REMIX_ICON_NAME_PATTERN
+} from '@/constants'
 
 const toolAuthorSchemaObject = Type.Strict(
   Type.Object({
@@ -107,6 +110,14 @@ export const toolManifestSchemaObject = Type.Strict(
       maxLength: 272,
       description: 'Short summary explaining what the tool is for.'
     }),
+    progressive_guidance: Type.Optional(
+      Type.String({
+        minLength: 8,
+        maxLength: PROGRESSIVE_GUIDANCE_MAX_LENGTH,
+        description:
+          'Operational guidance shown to the agent only after this tool is loaded.'
+      })
+    ),
     icon_name: Type.Optional(
       Type.String({
         minLength: 1,

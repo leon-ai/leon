@@ -78,6 +78,7 @@ import {
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
   buildAgentConvergenceSystemPrompt,
+  buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
   runAgentLoop
@@ -363,18 +364,25 @@ export class ReActLLMDuty extends LLMDuty {
         allowDirectAnswerHandoff:
           Boolean(this.activeForcedToolName) || this.allowDirectAnswerHandoff,
         callModel: async (messages, tools, options) => {
-          // Skill instructions must survive tool-history compaction and pauses.
+          // Loaded guidance and skills must survive compaction and pauses.
           const activeSkill = caller.agentSkillContext
-          const prompt = activeSkill
-            ? [
-                agentSystemPrompt,
-                '<active_agent_skill>',
-                `Name: ${activeSkill.name}`,
-                `Path: ${activeSkill.skillPath}`,
-                activeSkill.instructions,
-                '</active_agent_skill>'
-              ].join('\n')
-            : agentSystemPrompt
+          const progressiveGuidance =
+            buildAgentProgressiveGuidanceSystemPrompt(catalog)
+          const prompt = [
+            agentSystemPrompt,
+            progressiveGuidance,
+            ...(activeSkill
+              ? [
+                  '<active_agent_skill>',
+                  `Name: ${activeSkill.name}`,
+                  `Path: ${activeSkill.skillPath}`,
+                  activeSkill.instructions,
+                  '</active_agent_skill>'
+                ]
+              : [])
+          ]
+            .filter(Boolean)
+            .join('\n')
           return this.callAgentModel(
             messages,
             prompt,

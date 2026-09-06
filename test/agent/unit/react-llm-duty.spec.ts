@@ -9,7 +9,9 @@ import {
   AGENT_PLAN_TOOL_NAME,
   AGENT_SKILL_TOOL_NAME,
   AGENT_TOOLKIT_LOADER_NAME,
+  AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
+  buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
   runAgentLoop
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
@@ -81,7 +83,8 @@ function createCatalog(): AgentToolCatalog {
     ],
     functionsByToolName: new Map([[CALLABLE_TOOL_NAME, callable]]),
     availableToolkitsById: new Map(),
-    loadedToolkitIds: new Set(['test'])
+    loadedToolkitIds: new Set(['test']),
+    loadedProgressiveGuidance: new Map()
   }
 }
 
@@ -110,6 +113,11 @@ describe('continuous agent loop', () => {
 
   it('uses a 32-iteration operational budget', () => {
     expect(AGENT_MAX_ITERATIONS).toBe(32)
+  })
+
+  it('keeps computer-use guidance out of the global prompt', () => {
+    expect(AGENT_SYSTEM_PROMPT).not.toContain('<visual_inspection>')
+    expect(AGENT_SYSTEM_PROMPT).not.toContain('Survey long pages')
   })
 
   it('requests early convergence after excessive visual inspection', () => {
@@ -1218,9 +1226,11 @@ describe('continuous agent loop', () => {
         toolkitId: 'video_streaming',
         toolkitName: 'Video Streaming',
         toolkitDescription: 'Inspect online video sources.',
+        toolkitProgressiveGuidance: 'Use toolkit-level evidence guidance.',
         toolId: 'ytdlp',
         toolName: 'yt-dlp',
-        toolDescription: 'Download video metadata and subtitles.'
+        toolDescription: 'Download video metadata and subtitles.',
+        toolProgressiveGuidance: 'Prefer exact subtitle timestamps.'
       }
     ])
     coreMocks.getToolFunctions.mockReturnValue({
@@ -1241,6 +1251,16 @@ describe('continuous agent loop', () => {
     expect(catalog.tools.map((tool) => tool.function.name)).toContain(
       AGENT_TOOLKIT_LOADER_NAME
     )
+    const loader = catalog.tools.find(
+      (tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME
+    )
+    expect(loader?.function.description).not.toContain(
+      'toolkit-level evidence guidance'
+    )
+    expect(loader?.function.description).not.toContain(
+      'exact subtitle timestamps'
+    )
+    expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toBe('')
     let modelTurn = 0
 
     const result = await runAgentLoop({
@@ -1276,6 +1296,12 @@ describe('continuous agent loop', () => {
 
     expect(result.intent).toBe('answer')
     expect(catalog.loadedToolkitIds).toEqual(new Set(['video_streaming']))
+    expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain(
+      'Use toolkit-level evidence guidance.'
+    )
+    expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain(
+      'Prefer exact subtitle timestamps.'
+    )
   })
 
   it('loads every available toolkit schema eagerly without a discovery tool', () => {
@@ -1324,6 +1350,52 @@ describe('continuous agent loop', () => {
       properties: {},
       additionalProperties: false
     })
+  })
+
+  it('loads guidance only for the explicitly forced tool', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'computer_use',
+        toolkitName: 'Computer Use',
+        toolkitDescription: 'Operate graphical interfaces.',
+        toolkitProgressiveGuidance: 'Shared computer-use guidance.',
+        toolId: 'cua',
+        toolName: 'Cua',
+        toolDescription: 'Operate local applications.',
+        toolProgressiveGuidance: 'Cua driver guidance.'
+      },
+      {
+        toolkitId: 'computer_use',
+        toolkitName: 'Computer Use',
+        toolkitDescription: 'Operate graphical interfaces.',
+        toolkitProgressiveGuidance: 'Shared computer-use guidance.',
+        toolId: 'remote',
+        toolName: 'Remote Desktop',
+        toolDescription: 'Operate a remote desktop.',
+        toolProgressiveGuidance: 'Remote driver guidance.'
+      }
+    ])
+    coreMocks.resolveToolById.mockReturnValue({
+      toolkitId: 'computer_use',
+      toolId: 'cua'
+    })
+    coreMocks.getToolFunctions.mockReturnValue({
+      click: {
+        description: 'Click one target.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false
+        }
+      }
+    })
+
+    const catalog = buildAgentToolCatalog('cua')
+    const guidance = buildAgentProgressiveGuidanceSystemPrompt(catalog)
+
+    expect(guidance).toContain('Shared computer-use guidance.')
+    expect(guidance).toContain('Cua driver guidance.')
+    expect(guidance).not.toContain('Remote driver guidance.')
   })
 
   it('bounds large observations and prunes inactive schemas near the context limit', () => {

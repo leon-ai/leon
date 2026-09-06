@@ -24,6 +24,7 @@ interface ToolkitToolDefinition {
   toolkit_id: string
   name: string
   description: string
+  progressive_guidance?: string
   icon_name?: string
   binaries?: Record<string, string>
   resources?: Record<string, string[]>
@@ -49,10 +50,12 @@ interface FlattenedToolkitTool {
   toolkitId: string
   toolkitName: string
   toolkitDescription: string
+  toolkitProgressiveGuidance?: string
   toolkitIconName: string
   toolId: string
   toolName: string
   toolDescription: string
+  toolProgressiveGuidance?: string
   toolIconName: string
 }
 
@@ -84,6 +87,7 @@ interface ToolkitDefinition {
   id: string
   name: string
   description: string
+  progressiveGuidance?: string
   iconName: string
   contextFiles?: string[]
   tools?: Record<string, ToolkitToolDefinition>
@@ -140,10 +144,16 @@ export default class ToolkitRegistry {
           toolkitId: toolkit.id,
           toolkitName: toolkit.name,
           toolkitDescription: toolkit.description,
+          ...(toolkit.progressiveGuidance
+            ? { toolkitProgressiveGuidance: toolkit.progressiveGuidance }
+            : {}),
           toolkitIconName: toolkit.iconName,
           toolId,
           toolName: tool.name,
           toolDescription: tool.description,
+          ...(tool.progressive_guidance
+            ? { toolProgressiveGuidance: tool.progressive_guidance }
+            : {}),
           toolIconName: tool.icon_name || toolkit.iconName
         })
       }
@@ -360,6 +370,9 @@ export default class ToolkitRegistry {
       id: toolkit.id,
       name: toolkit.name,
       description: toolkit.description,
+      ...(toolkit.progressiveGuidance
+        ? { progressive_guidance: toolkit.progressiveGuidance }
+        : {}),
       icon_name: toolkit.iconName,
       ...(toolkit.contextFiles ? { context_files: [...toolkit.contextFiles] } : {}),
       tools: Object.fromEntries(
@@ -485,6 +498,12 @@ export default class ToolkitRegistry {
           id: satelliteToolkit.id,
           name: satelliteToolkit.name,
           description: satelliteToolkit.description,
+          ...(satelliteToolkit.progressive_guidance
+            ? {
+                progressiveGuidance:
+                  satelliteToolkit.progressive_guidance
+              }
+            : {}),
           iconName: satelliteToolkit.icon_name,
           contextFiles: [...(satelliteToolkit.context_files || [])],
           tools: {}
@@ -568,6 +587,12 @@ export default class ToolkitRegistry {
             id: toolkitId,
             name: toolkitConfig.name,
             description: toolkitConfig.description,
+            ...(toolkitConfig.progressive_guidance
+              ? {
+                  progressiveGuidance:
+                    toolkitConfig.progressive_guidance
+                }
+              : {}),
             iconName: toolkitConfig.icon_name,
             contextFiles: this.normalizeContextFiles(
               toolkitConfig.context_files
@@ -601,6 +626,7 @@ export default class ToolkitRegistry {
   private async loadToolkitConfig(toolkitConfigPath: string): Promise<{
     name: string
     description: string
+    progressive_guidance?: string
     icon_name: string
     context_files?: string[]
     tools?: string[]
@@ -610,6 +636,7 @@ export default class ToolkitRegistry {
     ) as {
       name: string
       description: string
+      progressive_guidance?: string
       icon_name: string
       context_files?: string[]
       tools?: string[]

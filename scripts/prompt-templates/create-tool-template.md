@@ -21,7 +21,7 @@ You must create a new tool for `{TOOL_ALIAS_NAME}`. {TOOL_DESCRIPTION}
 
 - Tools are located under `tools/{TOOL_TOOLKIT_NAME}/{TOOL_NAME}/src/nodejs` and `tools/{TOOL_TOOLKIT_NAME}/{TOOL_NAME}/src/python`.
 - The tool must belong to the `{TOOL_TOOLKIT_NAME}` toolkit.
-- Fill the `tools/{TOOL_TOOLKIT_NAME}/{TOOL_NAME}/tool.json` file. You must provide the description, binaries, resources, function definitions by following the OpenAI function-calling standard, etc. Create the file is not created yet.
+- Fill the `tools/{TOOL_TOOLKIT_NAME}/{TOOL_NAME}/tool.json` file. Keep `description` to a concise routing summary. Put shared operational instructions that are only needed after selection in `progressive_guidance`; keep function-specific details in each function schema. You must provide the binaries, resources, and function definitions by following the OpenAI function-calling standard. Create the file if it does not exist yet.
 - You must create the tool with the TypeScript SDK and the Python SDK. The business logic must literally be the same. Start by writting the TypeScript code and then translate/convert to Python for the Python tool.
 - Tool file names must be `{TOOL_TS_FILE_NAME}` and `{TOOL_PYTHON_FILE_NAME}`.
 - You must reuse the classes and functions provided by the SDK (network, settings, etc.). You will find them in the SDK folder.
