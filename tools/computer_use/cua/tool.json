@@ -3,7 +3,8 @@
   "tool_id": "cua",
   "toolkit_id": "computer_use",
   "name": "Cua",
-  "description": "Observe and operate apps through Cua Driver. Prefer dedicated tools. Discover the target once and reuse its observed identifiers while valid. Prefer invoke_menu for an observed native menu path instead of navigating each menu level. Use perform_actions for short mechanical sequences without intermediate visual decisions. Work in the background unless the owner asks to watch. Native menu and foreground input actions handle activation themselves; do not precede them with bring_to_front unless focus must persist across actions. Use current accessibility handles or screenshot-grounded coordinates, and follow Cua's effect and escalation diagnostics. After uncertain input or a timeout, inspect the target before retrying: input may already have landed. Use capture_after=true when a resulting screenshot is needed, including tutorial evidence; reuse that screenshot instead of capturing it again. If navigation opens another app or dialog, inspect that destination and use its observed identifiers; do not restore the previous window before checking the result. A successful dispatch is not proof that the task is complete.",
+  "description": "Observe and operate graphical desktop applications and browser interfaces through Cua Driver.",
+  "progressive_guidance": "Prefer dedicated tools when available. Discover a target once and reuse its identifiers while valid. Prefer invoke_menu for an observed native menu path and perform_actions for short mechanical sequences that need no intermediate visual decision.\nNative menu and foreground input actions activate their target; call bring_to_front only when focus must persist. Use current accessibility handles or screenshot-grounded coordinates. If accessibility exposes only the application frame, use the screenshot and retry the tree at most once for a specifically needed control.\nBackground delivery is the default and never raises the target. X11 uses XTEST/XInput2 without stealing focus. Wayland delivers through libei and xdg-desktop-portal to the compositor input focus, so it cannot address a specific unfocused window. If the result reports background_unavailable, remember it for that target and use foreground only when visible interaction is necessary and allowed by the request.\nAfter uncertain input or a timeout, inspect the target before retrying because the input may have landed. Use capture_after=true when the resulting screenshot is needed and reuse that screenshot. If navigation opens another app or dialog, inspect that destination before restoring the previous window. Successful dispatch alone does not prove completion.\nElement tokens belong to the latest get_window_state snapshot and the same pid/window target. A newer snapshot invalidates old tokens; never reuse tokens from logs. element_index requires its matching snapshot_id. A window target contains kind, pid, and window_id; a desktop target contains kind and display_id. Desktop coordinates must come from a fresh desktop capture and must not reuse window-image coordinates.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -15,7 +16,7 @@
   },
   "functions": {
     "list_apps": {
-      "description": "List a compact set of installed desktop applications and configured preferred_apps. Use this before selecting a destination when the owner did not name one, but inspect current windows first when an existing workspace may already satisfy the request. Query by app name only when a new launch target is needed.",
+      "description": "List installed desktop applications and configured preferred_apps. Use it to choose a launch target when the owner did not name one.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -393,7 +394,7 @@
       }
     },
     "get_desktop_state": {
-      "description": "Capture the visible desktop without an accessibility-tree walk. Use for controls outside a window, multiple windows, or recovery after a window click visibly has no effect. When foreground interaction is permitted, bring the intended window forward before capture and locate the exposed control in this fresh image. Use target={kind:desktop,display_id:primary} for its coordinates, without window identifiers or element tokens; never reuse window-image coordinates. Observe again if focus or window placement changes.",
+      "description": "Capture the visible desktop without an accessibility-tree walk. Use it for controls outside one window, multi-window context, or recovery after an ineffective window action.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -720,7 +721,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "description": "Return a fresh screenshot after the action.",
             "type": "boolean"
           },
           "button": {
@@ -741,7 +742,7 @@
           },
           "delivery_mode": {
             "default": "background",
-            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -749,11 +750,11 @@
             "type": "string"
           },
           "element_index": {
-            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
             "type": "integer"
           },
           "element_token": {
-            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
+            "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
           },
           "modifier": {
@@ -775,13 +776,13 @@
             "type": "string"
           },
           "snapshot_id": {
-            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "description": "Snapshot handle required with element_index.",
             "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
             "additionalProperties": false,
-            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "description": "Exact window or desktop target returned by a state call.",
             "properties": {
               "display_id": {
                 "type": "string"
@@ -964,7 +965,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "description": "Return a fresh screenshot after the action.",
             "type": "boolean"
           },
           "button": {
@@ -982,7 +983,7 @@
           },
           "delivery_mode": {
             "default": "background",
-            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1027,7 +1028,7 @@
           },
           "target": {
             "additionalProperties": false,
-            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "description": "Exact window or desktop target returned by a state call.",
             "properties": {
               "display_id": {
                 "type": "string"
@@ -1217,7 +1218,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "description": "Return a fresh screenshot after the action.",
             "type": "boolean"
           },
           "amount": {
@@ -1238,7 +1239,7 @@
           },
           "delivery_mode": {
             "default": "background",
-            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1255,11 +1256,11 @@
             "type": "string"
           },
           "element_index": {
-            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
             "type": "integer"
           },
           "element_token": {
-            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
+            "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
           },
           "pid": {
@@ -1274,13 +1275,13 @@
             "type": "string"
           },
           "snapshot_id": {
-            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "description": "Snapshot handle required with element_index.",
             "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
             "additionalProperties": false,
-            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "description": "Exact window or desktop target returned by a state call.",
             "properties": {
               "display_id": {
                 "type": "string"
@@ -1468,12 +1469,12 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "description": "Return a fresh screenshot after the action.",
             "type": "boolean"
           },
           "delivery_mode": {
             "default": "background",
-            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1481,11 +1482,11 @@
             "type": "string"
           },
           "element_index": {
-            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
             "type": "integer"
           },
           "element_token": {
-            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
+            "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
           },
           "pid": {
@@ -1500,13 +1501,13 @@
             "type": "string"
           },
           "snapshot_id": {
-            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "description": "Snapshot handle required with element_index.",
             "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
             "additionalProperties": false,
-            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "description": "Exact window or desktop target returned by a state call.",
             "properties": {
               "display_id": {
                 "type": "string"
@@ -1697,12 +1698,12 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "description": "Return a fresh screenshot after the action.",
             "type": "boolean"
           },
           "delivery_mode": {
             "default": "background",
-            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1710,11 +1711,11 @@
             "type": "string"
           },
           "element_index": {
-            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
             "type": "integer"
           },
           "element_token": {
-            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
+            "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
           },
           "key": {
@@ -1739,13 +1740,13 @@
             "type": "string"
           },
           "snapshot_id": {
-            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "description": "Snapshot handle required with element_index.",
             "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
             "additionalProperties": false,
-            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "description": "Exact window or desktop target returned by a state call.",
             "properties": {
               "display_id": {
                 "type": "string"
@@ -1933,12 +1934,12 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action when its visual result is needed, avoiding a separate state call.",
+            "description": "Return a fresh screenshot after the action.",
             "type": "boolean"
           },
           "delivery_mode": {
             "default": "background",
-            "description": "Input delivery mode. 'background' (default) never activates or raises the target window. On X11 it injects via XTEST / the XInput2 master pointer (no focus steal). On Wayland it goes through libei + xdg-desktop-portal, which injects to the compositor's input focus — Wayland's security model has no per-window background targeting, so a specific non-focused window cannot be aimed at; when no libei backend is available the tool returns a structured background_unavailable error.…",
+            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1946,11 +1947,11 @@
             "type": "string"
           },
           "element_index": {
-            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
             "type": "integer"
           },
           "element_token": {
-            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
+            "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
           },
           "keys": {
@@ -1973,13 +1974,13 @@
             "type": "string"
           },
           "snapshot_id": {
-            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "description": "Snapshot handle required with element_index.",
             "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
             "additionalProperties": false,
-            "description": "Optional exact capture/input target. For a window provide kind, pid, and window_id. For a desktop provide kind and display_id.",
+            "description": "Exact window or desktop target returned by a state call.",
             "properties": {
               "display_id": {
                 "type": "string"
@@ -2161,13 +2162,13 @@
       }
     },
     "perform_actions": {
-      "description": "Perform up to eight already-grounded mechanical input actions in order and stop on the first failure. Use this to avoid separate model turns for a predictable sequence such as focusing a known field, typing, and submitting. A sequence may contain at most one pixel-targeted click; observe between spatial targets or use semantic element handles. Do not use it when a step changes the interface in a way that must be observed before choosing the next target.",
+      "description": "Perform up to eight grounded input actions in order and stop on the first failure. Use it for a predictable sequence with no intermediate visual decision; observe between spatial targets.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Capture the resulting interface after the final action.",
+            "description": "Return a fresh screenshot after the action.",
             "type": "boolean"
           },
           "steps": {
@@ -2214,18 +2215,18 @@
         "additionalProperties": false,
         "properties": {
           "element_index": {
-            "description": "Element index from get_window_state. Requires the matching `snapshot_id` alongside it. Prefer `element_token`, which carries both values.",
+            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
             "type": "integer"
           },
           "element_token": {
-            "description": "Element handle from the latest get_window_state. Supply the same pid and window_id (or exact window target) with it. Observe again after acting; a newer snapshot invalidates old tokens. Do not reuse tokens from logs.",
+            "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
           },
           "pid": {
             "type": "integer"
           },
           "snapshot_id": {
-            "description": "Snapshot handle from get_window_state. Required when targeting by element_index; stale snapshots fail closed.",
+            "description": "Snapshot handle required with element_index.",
             "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
@@ -2543,7 +2544,7 @@
       }
     },
     "browser_prepare": {
-      "description": "Prepare an owned browser endpoint only when get_browser_state reports that setup is required. This action is only for a browser process; never use it for an Electron app or another desktop application. A current owner request to work in their signed-in browser account is explicit authorization for that task; otherwise continue with native window actions or an isolated profile.",
+      "description": "Prepare an owned browser endpoint only when get_browser_state says setup is required. Use it only for a browser process, never an Electron or desktop app.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -3280,7 +3281,7 @@
           },
           "delivery_mode": {
             "default": "background",
-            "description": "Requested foreground posture for accept/dismiss. Linux Chromium requires foreground; inspect is read-only.",
+            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
               "foreground"
