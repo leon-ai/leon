@@ -24,6 +24,7 @@ import {
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './constants'
+import { buildComputerUseConvergenceHint } from './computer-use-convergence'
 import { validateToolInput } from './utils'
 
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
@@ -953,11 +954,12 @@ async function executeAgentToolCall(
   }
 
   executionHistory.push(execution)
+  const convergenceHint = buildComputerUseConvergenceHint(executionHistory)
   const shouldHandoff =
     handoffSignal?.intent !== 'answer' || params.allowDirectAnswerHandoff
 
   return {
-    content: execution.observation,
+    content: [execution.observation, convergenceHint].filter(Boolean).join('\n\n'),
     ...(modelFiles ? { files: modelFiles } : {}),
     trackedSteps,
     ...(handoffSignal && shouldHandoff ? { signal: handoffSignal } : {})

@@ -13,6 +13,7 @@ import {
   buildAgentToolCatalog,
   runAgentLoop
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
+import { buildComputerUseConvergenceHint } from '@/core/llm-manager/llm-duties/react-llm-duty/computer-use-convergence'
 import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import {
   createAgentLoopContinuationState,
@@ -109,6 +110,109 @@ describe('continuous agent loop', () => {
 
   it('uses a 32-iteration operational budget', () => {
     expect(AGENT_MAX_ITERATIONS).toBe(32)
+  })
+
+  it('requests early convergence after excessive visual inspection', () => {
+    const executions = Array.from({ length: 8 }, (_, index) => ({
+      function: 'computer_use.cua.scroll',
+      status: 'success',
+      observation: `Captured viewport ${index + 1}.`,
+      requestedToolInput: JSON.stringify({
+        pid: 42,
+        window_id: 7,
+        direction: 'down',
+        by: 'page',
+        amount: 1
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      '8 computer-use calls have already run'
+    )
+  })
+
+  it('detects scroll oscillation before the inspection call threshold', () => {
+    const executions = ['down', 'up', 'down'].map((direction) => ({
+      function: 'computer_use.cua.scroll',
+      status: 'success',
+      observation: 'Captured viewport.',
+      requestedToolInput: JSON.stringify({
+        pid: 42,
+        window_id: 7,
+        direction
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'scrolled back and forth repeatedly'
+    )
+  })
+
+  it('detects repeated point actions on the same target', () => {
+    const executions = [
+      [560, 160],
+      [563, 163],
+      [568, 167]
+    ].map(([x, y]) => ({
+      function: 'computer_use.cua.click',
+      status: 'success',
+      observation: 'Clicked.',
+      requestedToolInput: JSON.stringify({
+        pid: 42,
+        window_id: 7,
+        x,
+        y
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'nearly the same screen point has been used repeatedly'
+    )
+  })
+
+  it('remembers unavailable background delivery for the target', () => {
+    const executions = [
+      {
+        function: 'computer_use.cua.click',
+        status: 'error',
+        observation: JSON.stringify({
+          data: { output: { code: 'background_unavailable' } }
+        }),
+        requestedToolInput: JSON.stringify({
+          pid: 42,
+          window_id: 7,
+          delivery_mode: 'background',
+          x: 100,
+          y: 100
+        })
+      }
+    ]
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'background delivery is unavailable for this target'
+    )
+  })
+
+  it('stops retrying accessibility when only the app frame is exposed', () => {
+    const executions = Array.from({ length: 2 }, () => ({
+      function: 'computer_use.cua.get_window_state',
+      status: 'success',
+      observation: JSON.stringify({
+        data: {
+          output: {
+            result: {
+              total_element_count: 1,
+              elements: [{ role: 'frame', label: 'Feishu' }]
+            }
+          }
+        }
+      }),
+      requestedToolInput: JSON.stringify({ pid: 42, window_id: 7 })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'accessibility snapshots exposed only the outer application frame'
+    )
   })
 
   it('keeps tool calls and results in one transcript until the final answer', async () => {
