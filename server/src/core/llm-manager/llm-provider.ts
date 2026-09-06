@@ -2104,6 +2104,9 @@ export default class LLMProvider {
   }
 
   public cleanUpResult(str: string): string {
+    // Remove leftover thinking blocks, including empty ones from disabled thinking
+    str = str.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^\s+/, '')
+
     // If starts and end with a double quote, remove them
     if (str.startsWith('"') && str.endsWith('"')) {
       return str.slice(1, -1)
