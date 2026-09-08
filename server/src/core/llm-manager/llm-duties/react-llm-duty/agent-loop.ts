@@ -33,6 +33,9 @@ export const AGENT_SKILL_TOOL_NAME = 'load_agent_skill'
 export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
 
 const AGENT_TOOL_NAME_SEPARATOR = '__'
+const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
+  granularity: 'word'
+})
 
 export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 
@@ -124,6 +127,13 @@ export interface AgentToolCatalog {
   loadedProgressiveGuidance: Map<string, AgentProgressiveGuidance>
 }
 
+export interface AgentToolkitPreloadCostEvaluation {
+  shouldPreload: boolean
+  normalRoutingPayloadTokens: number
+  preloadedRoutingPayloadTokens: number
+  additionalPayloadTokens: number
+}
+
 interface AgentToolkitSummary {
   id: string
   name: string
@@ -134,6 +144,7 @@ interface AgentToolkitSummary {
 
 interface AgentToolSummary {
   id: string
+  name: string
   description: string
   progressiveGuidance?: string
 }
@@ -236,15 +247,6 @@ export function buildAgentToolCatalog(
     return catalog
   }
 
-  if (progressiveToolkitLoading && availableToolkitsById.size > 0) {
-    tools.push(createToolkitLoaderTool(availableToolkitsById))
-  }
-  tools.push(
-    createPlanTool(),
-    createClarificationTool(),
-    createAgentSkillTool()
-  )
-
   // Eager mode is useful for a small profile allowlist where one extra
   // discovery inference costs more than exposing every available schema.
   // Progressive clarification resumes still restore only previously loaded
@@ -256,7 +258,165 @@ export function buildAgentToolCatalog(
     loadToolkitFunctions(catalog, toolkitId)
   }
 
+  const unloadedToolkits = new Map(
+    [...availableToolkitsById].filter(
+      ([toolkitId]) => !loadedToolkitIds.has(toolkitId)
+    )
+  )
+  if (progressiveToolkitLoading && unloadedToolkits.size > 0) {
+    tools.unshift(createToolkitLoaderTool(unloadedToolkits))
+  }
+  tools.push(
+    createPlanTool(),
+    createClarificationTool(),
+    createAgentSkillTool()
+  )
+
   return catalog
+}
+
+function tokenizeAgentToolkitRoutingText(value: string): string[] {
+  const normalizedValue = value
+    .normalize('NFKC')
+    .toLocaleLowerCase()
+    .replaceAll('_', ' ')
+  const tokens: string[] = []
+
+  for (const segment of AGENT_TOOLKIT_ROUTING_SEGMENTER.segment(
+    normalizedValue
+  )) {
+    if (segment.isWordLike) {
+      tokens.push(segment.segment)
+    }
+  }
+
+  return tokens
+}
+
+function containsTokenSequence(
+  inputTokens: string[],
+  candidateTokens: string[]
+): boolean {
+  if (
+    candidateTokens.length === 0 ||
+    candidateTokens.length > inputTokens.length
+  ) {
+    return false
+  }
+
+  for (
+    let startIndex = 0;
+    startIndex <= inputTokens.length - candidateTokens.length;
+    startIndex += 1
+  ) {
+    if (
+      candidateTokens.every(
+        (token, offset) => inputTokens[startIndex + offset] === token
+      )
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function getToolkitRoutingLabels(toolkit: AgentToolkitSummary): string[][] {
+  return [
+    toolkit.id,
+    toolkit.name,
+    ...toolkit.tools.flatMap((tool) => [tool.id, tool.name])
+  ]
+    .map(tokenizeAgentToolkitRoutingText)
+    .filter((tokens) => tokens.length > 0)
+}
+
+/**
+ * Selects one toolkit only when its exact registry label is unambiguous.
+ * Descriptive, multi-toolkit, and cross-language requests retain model-led
+ * discovery instead of trusting local semantic guesses.
+ */
+export function findHighConfidenceAgentToolkitId(input: string): string | null {
+  const inputTokens = tokenizeAgentToolkitRoutingText(input)
+  if (inputTokens.length === 0) {
+    return null
+  }
+
+  const toolkits = [...getAvailableToolkitSummaries().values()]
+  const toolkitLabels = new Map(
+    toolkits.map((toolkit) => [
+      toolkit.id,
+      getToolkitRoutingLabels(toolkit)
+    ])
+  )
+  const exactMatches = new Set<string>()
+
+  for (const [toolkitId, labels] of toolkitLabels) {
+    for (const labelTokens of labels) {
+      if (!containsTokenSequence(inputTokens, labelTokens)) {
+        continue
+      }
+
+      const matchingToolkitIds = [...toolkitLabels]
+        .filter(([, candidateLabels]) =>
+          candidateLabels.some((candidateTokens) =>
+            containsTokenSequence(candidateTokens, labelTokens)
+          )
+        )
+        .map(([candidateToolkitId]) => candidateToolkitId)
+      if (
+        matchingToolkitIds.length === 1 &&
+        matchingToolkitIds[0] === toolkitId
+      ) {
+        exactMatches.add(toolkitId)
+      }
+    }
+  }
+
+  return exactMatches.size === 1
+    ? exactMatches.values().next().value || null
+    : null
+}
+
+/**
+ * Prevents a skipped discovery turn from front-loading more toolkit context
+ * than the lightweight routing payload it replaces.
+ */
+export function evaluateAgentToolkitPreloadCost(
+  normalCatalog: AgentToolCatalog,
+  preloadedCatalog: AgentToolCatalog,
+  preloadedToolkitContext: string,
+  estimateTokens: (value: string) => number
+): AgentToolkitPreloadCostEvaluation {
+  const normalRoutingPayloadTokens = estimateTokens(
+    [
+      JSON.stringify(normalCatalog.tools),
+      buildAgentProgressiveGuidanceSystemPrompt(normalCatalog)
+    ]
+      .filter(Boolean)
+      .join('\n')
+  )
+  const preloadedRoutingPayloadTokens = estimateTokens(
+    [
+      JSON.stringify(preloadedCatalog.tools),
+      buildAgentProgressiveGuidanceSystemPrompt(preloadedCatalog),
+      preloadedToolkitContext
+    ]
+      .filter(Boolean)
+      .join('\n')
+  )
+  const additionalPayloadTokens = Math.max(
+    preloadedRoutingPayloadTokens - normalRoutingPayloadTokens,
+    0
+  )
+
+  return {
+    shouldPreload:
+      additionalPayloadTokens <= normalRoutingPayloadTokens,
+    normalRoutingPayloadTokens,
+    preloadedRoutingPayloadTokens,
+    additionalPayloadTokens
+  }
 }
 
 function getAvailableToolkitSummaries(): Map<string, AgentToolkitSummary> {
@@ -265,6 +425,7 @@ function getAvailableToolkitSummaries(): Map<string, AgentToolkitSummary> {
   for (const tool of TOOLKIT_REGISTRY.getFlattenedTools()) {
     const toolSummary: AgentToolSummary = {
       id: tool.toolId,
+      name: tool.toolName,
       description: tool.toolDescription,
       ...(tool.toolProgressiveGuidance
         ? { progressiveGuidance: tool.toolProgressiveGuidance }

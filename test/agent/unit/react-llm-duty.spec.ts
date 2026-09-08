@@ -13,6 +13,8 @@ import {
   AgentModelProviderError,
   buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
+  evaluateAgentToolkitPreloadCost,
+  findHighConfidenceAgentToolkitId,
   runAgentLoop
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
 import { buildComputerUseConvergenceHint } from '@/core/llm-manager/llm-duties/react-llm-duty/computer-use-convergence'
@@ -1302,6 +1304,285 @@ describe('continuous agent loop', () => {
     expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain(
       'Prefer exact subtitle timestamps.'
     )
+  })
+
+  it('preloads a toolkit when its registry label is an unambiguous match', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'weather',
+        toolkitName: 'Weather',
+        toolkitDescription: 'Tools for weather lookup and forecasts.',
+        toolId: 'openmeteo',
+        toolName: 'Open-Meteo',
+        toolDescription: 'Fetch current weather conditions.'
+      },
+      {
+        toolkitId: 'search_web',
+        toolkitName: 'Search & Web',
+        toolkitDescription: 'Tools to search the web.',
+        toolId: 'hosted',
+        toolName: 'Hosted Search',
+        toolDescription: 'Search current online sources.'
+      }
+    ])
+
+    expect(
+      findHighConfidenceAgentToolkitId(
+        'What is the weather like in Shenzhen?'
+      )
+    ).toBe('weather')
+  })
+
+  it('keeps model-led discovery when registry metadata is ambiguous', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'file_system',
+        toolkitName: 'File System',
+        toolkitDescription: 'Inspect files on the local system.',
+        toolId: 'reader',
+        toolName: 'Reader',
+        toolDescription: 'Read a file.'
+      },
+      {
+        toolkitId: 'operating_system_control',
+        toolkitName: 'Operating System Control',
+        toolkitDescription: 'Control the local operating system.',
+        toolId: 'file',
+        toolName: 'File',
+        toolDescription: 'Read or write local files.'
+      }
+    ])
+
+    expect(findHighConfidenceAgentToolkitId('Open a local file.')).toBeNull()
+    expect(findHighConfidenceAgentToolkitId('Tell me a joke.')).toBeNull()
+  })
+
+  it('keeps model-led discovery for translated descriptive wording', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'weather',
+        toolkitName: 'Weather',
+        toolkitDescription: 'Tools for weather lookup and forecasts.',
+        toolId: 'openmeteo',
+        toolName: 'Open-Meteo',
+        toolDescription: 'Fetch current weather conditions.'
+      }
+    ])
+
+    expect(findHighConfidenceAgentToolkitId('深圳今天天气如何？')).toBeNull()
+  })
+
+  it('omits a preloaded toolkit from the discovery catalog', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'weather',
+        toolkitName: 'Weather',
+        toolkitDescription: 'Tools for weather lookup and forecasts.',
+        toolId: 'openmeteo',
+        toolName: 'Open-Meteo',
+        toolDescription: 'Fetch current weather conditions.'
+      },
+      {
+        toolkitId: 'search_web',
+        toolkitName: 'Search & Web',
+        toolkitDescription: 'Tools to search the web.',
+        toolId: 'hosted',
+        toolName: 'Hosted Search',
+        toolDescription: 'Search current online sources.'
+      }
+    ])
+    coreMocks.getToolFunctions.mockReturnValue({
+      run: {
+        description: 'Run the selected tool.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false
+        }
+      }
+    })
+
+    const catalog = buildAgentToolCatalog(null, ['weather'])
+    const loader = catalog.tools.find(
+      (tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME
+    )
+
+    expect(catalog.loadedToolkitIds).toEqual(new Set(['weather']))
+    expect(catalog.tools.map((tool) => tool.function.name)).toContain(
+      'weather__openmeteo__run'
+    )
+    expect(loader?.function.parameters).toMatchObject({
+      properties: {
+        toolkit_id: {
+          enum: ['search_web']
+        }
+      }
+    })
+    expect(loader?.function.description).not.toContain('weather: Weather')
+  })
+
+  it('preloads only when the toolkit payload fits the routing budget', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'weather',
+        toolkitName: 'Weather',
+        toolkitDescription: 'Tools for weather lookup and forecasts.',
+        toolId: 'openmeteo',
+        toolName: 'Open-Meteo',
+        toolDescription: 'Fetch current weather conditions.'
+      },
+      {
+        toolkitId: 'search_web',
+        toolkitName: 'Search & Web',
+        toolkitDescription: 'Tools to search current online sources.',
+        toolId: 'hosted',
+        toolName: 'Hosted Search',
+        toolDescription: 'Search current online sources.'
+      }
+    ])
+    coreMocks.getToolFunctions.mockReturnValue({
+      run: {
+        description: 'Run the selected tool.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false
+        }
+      }
+    })
+
+    const normalCatalog = buildAgentToolCatalog()
+    const preloadedCatalog = buildAgentToolCatalog(null, ['weather'])
+    const cost = evaluateAgentToolkitPreloadCost(
+      normalCatalog,
+      preloadedCatalog,
+      'Toolkit Context: none',
+      (value) => Math.ceil(value.length / 4)
+    )
+
+    expect(cost.shouldPreload).toBe(true)
+    expect(cost.additionalPayloadTokens).toBeLessThanOrEqual(
+      cost.normalRoutingPayloadTokens
+    )
+  })
+
+  it('keeps discovery when a matched toolkit exceeds the routing budget', () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'operating_system_control',
+        toolkitName: 'Operating System Control',
+        toolkitDescription: 'Control the local operating system.',
+        toolId: 'shell',
+        toolName: 'Shell',
+        toolDescription: 'Execute local shell commands.'
+      },
+      {
+        toolkitId: 'weather',
+        toolkitName: 'Weather',
+        toolkitDescription: 'Tools for weather lookup and forecasts.',
+        toolId: 'openmeteo',
+        toolName: 'Open-Meteo',
+        toolDescription: 'Fetch current weather conditions.'
+      }
+    ])
+    coreMocks.getToolFunctions.mockImplementation((toolkitId: string) => ({
+      run: {
+        description:
+          toolkitId === 'operating_system_control'
+            ? 'Execute with extensive options. '.repeat(1_000)
+            : 'Run the selected tool.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          additionalProperties: false
+        }
+      }
+    }))
+
+    const normalCatalog = buildAgentToolCatalog()
+    const preloadedCatalog = buildAgentToolCatalog(null, [
+      'operating_system_control'
+    ])
+    const cost = evaluateAgentToolkitPreloadCost(
+      normalCatalog,
+      preloadedCatalog,
+      'Toolkit Context: none',
+      (value) => Math.ceil(value.length / 4)
+    )
+
+    expect(cost.shouldPreload).toBe(false)
+    expect(cost.additionalPayloadTokens).toBeGreaterThan(
+      cost.normalRoutingPayloadTokens
+    )
+  })
+
+  it('executes a preloaded toolkit in two model turns', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([
+      {
+        toolkitId: 'weather',
+        toolkitName: 'Weather',
+        toolkitDescription: 'Tools for weather lookup and forecasts.',
+        toolId: 'openmeteo',
+        toolName: 'Open-Meteo',
+        toolDescription: 'Fetch current weather conditions.'
+      }
+    ])
+    coreMocks.getToolFunctions.mockReturnValue({
+      getCurrentConditions: {
+        description: 'Get current weather conditions for a location.',
+        parameters: {
+          type: 'object',
+          properties: {
+            location: { type: 'string' }
+          },
+          required: ['location'],
+          additionalProperties: false
+        }
+      }
+    })
+
+    const catalog = buildAgentToolCatalog(null, ['weather'])
+    let modelTurn = 0
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Weather in Shenzhen?' }],
+      catalog,
+      callModel: async (_messages, tools) => {
+        modelTurn += 1
+        if (modelTurn === 1) {
+          expect(tools.map((tool) => tool.function.name)).toContain(
+            'weather__openmeteo__getCurrentConditions'
+          )
+          expect(tools.map((tool) => tool.function.name)).not.toContain(
+            AGENT_TOOLKIT_LOADER_NAME
+          )
+          return {
+            toolCalls: [
+              toolCall(
+                'weather-call',
+                'weather__openmeteo__getCurrentConditions',
+                {
+                  location: 'Shenzhen',
+                  [AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]: 'Check Shenzhen weather'
+                }
+              )
+            ]
+          }
+        }
+
+        return { textContent: 'It is 29 C in Shenzhen.' }
+      },
+      executeFunction: async (selectedCallable) => ({
+        execution: {
+          function: selectedCallable.qualifiedName,
+          status: 'success',
+          observation: '29 C'
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(modelTurn).toBe(2)
+    expect(result.answer).toBe('It is 29 C in Shenzhen.')
   })
 
   it('loads every available toolkit schema eagerly without a discovery tool', () => {

@@ -91,25 +91,18 @@ export class ConversationLogger {
   }
 
   private async getAllLogs(sessionId?: string | null): Promise<MessageLog[]> {
-    try {
-      let conversationLog: MessageLog[] = []
-      const conversationLogPath = this.resolveConversationLogPath(sessionId)
+    let conversationLog: MessageLog[] = []
+    const conversationLogPath = this.resolveConversationLogPath(sessionId)
 
-      if (fs.existsSync(conversationLogPath)) {
-        conversationLog = JSON.parse(
-          await fs.promises.readFile(conversationLogPath, 'utf-8')
-        )
-      } else {
-        await this.createConversationLogFile(conversationLogPath)
-      }
-
-      return conversationLog
-    } catch (e) {
-      LogHelper.title(this.settings.loggerName)
-      LogHelper.error(`Failed to get conversation log: ${e})`)
+    if (fs.existsSync(conversationLogPath)) {
+      conversationLog = JSON.parse(
+        await fs.promises.readFile(conversationLogPath, 'utf-8')
+      )
+    } else {
+      await this.createConversationLogFile(conversationLogPath)
     }
 
-    return []
+    return conversationLog
   }
 
   /**
@@ -182,27 +175,27 @@ export class ConversationLogger {
     })
 
     let serializedLogs = JSON.stringify(preparedLogs, null, 2)
-
-    for (const [placeholder, serializedWidget] of serializedWidgets.entries()) {
+    const replacePlaceholder = (
+      placeholder: string,
+      serializedValue: string
+    ): void => {
+      // A function replacement keeps `$` sequences in arbitrary payloads literal.
       serializedLogs = serializedLogs.replace(
         `"${placeholder}"`,
-        serializedWidget
+        () => serializedValue
       )
+    }
+
+    for (const [placeholder, serializedWidget] of serializedWidgets.entries()) {
+      replacePlaceholder(placeholder, serializedWidget)
     }
 
     for (const [placeholder, serializedMetrics] of serializedLLMMetrics.entries()) {
-      serializedLogs = serializedLogs.replace(
-        `"${placeholder}"`,
-        serializedMetrics
-      )
+      replacePlaceholder(placeholder, serializedMetrics)
     }
 
-
     for (const [placeholder, serializedTrace] of serializedAgentTraces.entries()) {
-      serializedLogs = serializedLogs.replace(
-        `"${placeholder}"`,
-        serializedTrace
-      )
+      replacePlaceholder(placeholder, serializedTrace)
     }
 
     return serializedLogs
