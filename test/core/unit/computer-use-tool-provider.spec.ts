@@ -945,6 +945,84 @@ describe('ComputerUseToolProvider', () => {
     ])
   })
 
+  it('restores an implicit session without passing a label to catalog actions', async () => {
+    const success = { images: [], text: '', structuredJson: '{}', rawJson: '{}', isError: false }
+    const driver = createDriver(success)
+    driver.callTool.mockResolvedValueOnce({
+      ...success,
+      structuredJson: JSON.stringify({ status: 'refused', refusal: { code: 'session_ended' } })
+    })
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const result = await provider.execute({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
+      parameters: { pid: 42 }, profileName: PROFILE_NAME,
+      conversationSessionId: 'implicit-recovery'
+    })
+    expect(result.success).toBe(true)
+    expect(driver.callTool.mock.calls).toEqual([
+      ['list_windows', '{"pid":42}'],
+      ['start_session', '{}'],
+      ['list_windows', '{"pid":42}']
+    ])
+    expect(driver.setAgentCursorEnabled).not.toHaveBeenCalled()
+  })
+
+  it('bounds implicit recovery to one retry and reports a technical blocker', async () => {
+    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
+    driver.callTool.mockImplementation(async (action: string) => ({
+      images: [], text: '', structuredJson: '{}',
+      isError: action !== 'start_session',
+      ...(action !== 'start_session' ? { errorCode: 'session_ended' } : {})
+    }))
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const result = await provider.execute({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
+      parameters: {}, profileName: PROFILE_NAME
+    })
+    expect(result.success).toBe(false)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'list_windows', 'start_session', 'list_windows'
+    ])
+    expect(result.output['recovery']).toContain('Automatic session recovery failed')
+  })
+
+  it.each(['browser_consent_required', 'cancelled', 'permission_denied'])(
+    'does not revive sessions on %s', async (code) => {
+      const driver = createDriver({
+        images: [], text: '', isError: true, errorCode: code,
+        structuredJson: JSON.stringify({ status: 'refused', refusal: { code } })
+      })
+      const provider = new ComputerUseToolProvider(async () => driver as never)
+      const result = await provider.execute({
+        toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
+        parameters: {}, profileName: PROFILE_NAME
+      })
+      expect(result.success).toBe(false)
+      expect(driver.callTool).toHaveBeenCalledTimes(1)
+      expect(result.output['error_code']).toBe(code)
+      if (code === 'browser_consent_required') {
+        expect(result.output['recovery']).toContain('explicit consent')
+      }
+    }
+  )
+
+  it('does not retry the action when session restoration is refused', async () => {
+    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
+    driver.callTool.mockImplementation(async (action: string) => ({
+      images: [], text: '', isError: false,
+      structuredJson: JSON.stringify({ status: 'refused', refusal: {
+        code: action === 'start_session' ? 'permission_denied' : 'session_ended'
+      } })
+    }))
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const result = await provider.execute({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
+      parameters: {}, profileName: PROFILE_NAME
+    })
+    expect(result.success).toBe(false)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual(['list_windows', 'start_session'])
+  })
+
   it('runs a grounded mechanical sequence without intermediate model turns', async () => {
     const successfulResult = {
       text: 'Done.',
@@ -994,6 +1072,7 @@ describe('ComputerUseToolProvider', () => {
       success: true,
       output: {
         completed_action_count: 3,
+        post_action_state: expect.any(Object),
         steps: [
           { action: 'hotkey', success: true },
           { action: 'type_text', success: true },

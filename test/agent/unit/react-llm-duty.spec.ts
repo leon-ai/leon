@@ -252,6 +252,51 @@ describe('continuous agent loop', () => {
     )
   })
 
+  it('blocks an ineffective computer-use retry before executing the tool', async () => {
+    const catalog = createCatalog()
+    const input = { pid: 42, window_id: 7, x: 500, y: 300 }
+    const computerCallable: AgentCallableFunction = {
+      ...callable,
+      qualifiedName: 'computer_use.cua.click',
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'click',
+      functionConfig: {
+        description: 'Click an observed control.',
+        deduplicate_calls: false,
+        parameters: {
+          type: 'object',
+          properties: Object.fromEntries(Object.keys(input).map((key) => [key, { type: 'number' }]))
+        }
+      }
+    }
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, computerCallable)
+    const executeFunction = vi.fn()
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Fill the form without submitting.' }],
+      catalog,
+      initialExecutionHistory: Array.from({ length: 2 }, () => ({
+        function: computerCallable.qualifiedName,
+        status: 'success',
+        requestedToolInput: JSON.stringify(input),
+        observation: JSON.stringify({
+          result: { effect: 'unverifiable' },
+          post_action_state: { visual_state_id: 'unchanged' }
+        })
+      })),
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ toolCalls: [toolCall('retry', CALLABLE_TOOL_NAME, input)] })
+        .mockResolvedValueOnce({ textContent: 'The form remains incomplete.' }),
+      executeFunction,
+      loadAgentSkill: async () => null
+    })
+    expect(executeFunction).not.toHaveBeenCalled()
+    expect(result.transcript).toContainEqual(expect.objectContaining({
+      role: 'tool', toolCallId: 'retry', content: expect.stringContaining('retry blocked')
+    }))
+    expect(result.executionHistory).toHaveLength(2)
+  })
+
   it('keeps tool calls and results in one transcript until the final answer', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Find the answer.' }

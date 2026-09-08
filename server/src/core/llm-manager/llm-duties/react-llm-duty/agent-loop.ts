@@ -24,7 +24,10 @@ import {
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './constants'
-import { buildComputerUseConvergenceHint } from './computer-use-convergence'
+import {
+  buildComputerUseConvergenceHint,
+  getComputerUseRetryBlocker
+} from './computer-use-convergence'
 import { createAgentTextPreview } from './agent-context-budget'
 import { validateToolInput } from './utils'
 
@@ -49,17 +52,17 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - Large tool results may include a preview and output_log_path. Read only the needed artifact section when the preview does not contain the required fact.
 - Treat tool errors as observations: correct the arguments, choose another available tool, or explain the blocker.
 - Continue until the requested deliverable is complete and verified. When complete, return the final user-facing answer as plain text with no tool call.
-- Call request_clarification with one concise question only when required information cannot be obtained with available tools.
+- Call request_clarification with one concise question only for required information, authorization, or owner action that available tools cannot resolve.
 </agent_loop>
 
 <tool_policy>
 - Use only the provided tools.
 - For every executable toolkit call, set ${AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME} to a very short, action-specific title that explains the immediate goal and includes the key target when useful.
 - Load the most specific relevant toolkit before acting. Prefer a dedicated toolkit over a general operating-system toolkit when both could perform the task.
-- Prefer dedicated/API tools, then semantic OS tools. Use a bounded shell command for non-visual system work when no dedicated tool fits. Use computer use for graphical application launch or control, visible UI state, and visual verification. Observe before acting. For a low-risk, reversible action, a successful tool result is sufficient unless it reports failure or a suspected no-op; add verification only when ambiguity or consequences justify it.
+- Prefer dedicated/API tools, then semantic OS tools. Use bounded shell commands for non-visual work without a dedicated tool, and computer use for graphical interaction. Observe before acting. Accept low-risk tool success unless the effect is unverified, failure is reported, or consequences require verification; follow the toolkit's verification rules.
 - When the owner provides a source to understand, prefer direct-source tools over secondary search. Use search as fallback when the source cannot be accessed or does not contain the needed evidence.
 - Use the exact observed values from earlier tool results when chaining calls.
-- Do not repeat an identical call when its result is already in the transcript.
+- Reuse prior results unless state may have changed or a failed call has a concrete recovery reason. Fresh UI observations are allowed when needed to ground the next action.
 - Use update_plan only when a visible plan materially helps a multi-step task. It is optional.
 - If you create a plan, update its statuses as work advances and complete its final statuses before answering.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
@@ -69,7 +72,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 <safety>
 - Verify required paths, identifiers, accepted values, and prerequisites before side effects.
 - Do not invent current, exact, mutable, environment-specific, or tool-produced facts.
-- Stop and explain a genuine blocker rather than fabricating a result.
+- Explain genuine blockers and complete independent authorized work; never fabricate results.
 - Never use computer or browser automation to hide automation, spoof identity, bypass CAPTCHA or anti-bot controls, or evade a service's usage policy.
 </safety>
 
@@ -86,7 +89,7 @@ The operational iteration budget is exhausted. Address the original owner reques
 - No operational tools are available in this checkpoint.
 - If the evidence is sufficient, return the complete user-facing answer as plain text with no tool call.
 - Do not claim completion when required evidence or work is still missing.
-- If work is still incomplete, call request_clarification with the concrete obstacle, practical alternatives, and one question that lets the owner resume this work. Do not claim that an alternative deliverable satisfies the original request.
+- If work is incomplete and requires owner input or action, call request_clarification with the concrete obstacle, practical alternatives, and one actionable question. Otherwise report the incomplete work and technical blocker without asking for renewed approval. Do not present an alternative deliverable as completion of the original request.
 - An internal execution limit is not a reason to ask the owner to approve the same task again.
 </execution_limit_checkpoint>`
 
@@ -1249,6 +1252,14 @@ async function executeAgentToolCall(
 
   const validatedInput =
     validation.repairedToolInput ?? toolCallInput.toolInput
+  const retryBlocker = getComputerUseRetryBlocker(
+    executionHistory,
+    callable.qualifiedName,
+    validatedInput
+  )
+  if (retryBlocker) {
+    return { content: retryBlocker, trackedSteps }
+  }
   const duplicate =
     callable.functionConfig.deduplicate_calls === false
       ? null

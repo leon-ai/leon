@@ -39,6 +39,7 @@ export const COMPUTER_USE_SET_OF_MARK_SETTING = 'set_of_mark'
 export const COMPUTER_USE_PREFERRED_APPS_SETTING = 'preferred_apps'
 export const CUA_FOREGROUND_DELIVERY_MODE = 'foreground'
 export const CUA_SESSION_ENDED_ERROR_CODE = 'session_ended'
+export const CUA_BROWSER_CONSENT_ERROR_CODE = 'browser_consent_required'
 export const COMPUTER_USE_CAPTURE_AFTER_PARAMETER = 'capture_after'
 export const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
 

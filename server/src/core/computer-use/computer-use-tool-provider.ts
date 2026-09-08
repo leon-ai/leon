@@ -22,7 +22,8 @@ import {
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
   COMPUTER_USE_WINDOW_MAX_DEPTH,
-  CUA_SESSION_ENDED_ERROR_CODE
+  CUA_SESSION_ENDED_ERROR_CODE,
+  CUA_BROWSER_CONSENT_ERROR_CODE
 } from './constants'
 import { mapComputerUseCoordinateToSource } from './computer-use-coordinate-mapper'
 import { ComputerUseResultCompactor } from './computer-use-result-compactor'
@@ -284,6 +285,15 @@ export class ComputerUseToolProvider implements ToolProvider {
         !hasCuaError(result) &&
         structuredFailure === null &&
         launchResolution?.ready !== false
+      const failureCode = structuredFailure?.code ||
+        launchResolution?.errorCode || result.errorCode
+      const failureRecovery = !succeeded && (
+        failureCode === CUA_SESSION_ENDED_ERROR_CODE
+          ? 'Automatic session recovery failed. Report this technical blocker and preserve completed work; do not ask the owner to restart an unspecified computer-use session.'
+          : failureCode === CUA_BROWSER_CONSENT_ERROR_CODE
+            ? 'Existing-profile browser access requires explicit consent. Explain that specific requirement if semantic access is necessary, or continue through permitted GUI interaction. Do not bypass the consent boundary.'
+            : undefined
+      )
       if (succeeded && action === 'start_recording') {
         runtime.recordingSessionId = input.conversationSessionId
       } else if (succeeded && action === 'stop_recording') {
@@ -308,7 +318,7 @@ export class ComputerUseToolProvider implements ToolProvider {
           action,
           ...(!succeeded ? { success: false } : {}),
           result: primaryResult,
-          ...(windowClickNeedsObservation ? {
+          ...(failureRecovery ? { recovery: failureRecovery } : windowClickNeedsObservation ? {
             recovery: 'Inspect the post-action state or observe the target before retrying; unverifiable does not mean failure. If the intended change is absent, do not repeat the window click. When foreground interaction is permitted, bring the target to the front, take a fresh get_desktop_state screenshot, and click the visibly exposed control with target={kind:"desktop",display_id:"primary"}. Use only that desktop image\'s coordinates, omit window identifiers and element tokens, then verify the change. If the target is obscured or focus changes, observe again before acting.'
           } : asRecord(primaryResult['escalation']) ? {
             recovery: 'Check whether the intended result is already present before retrying. If absent, follow escalation.recommended using a grounded target; do not repeat the same ineffective route. Foreground input requires an available desktop, and browser setup still requires authorization.'
@@ -333,14 +343,9 @@ export class ComputerUseToolProvider implements ToolProvider {
             ? { verification: result.verification }
             : {}),
           ...(artifacts.length > 0 ? { artifacts } : {}),
-          ...(!succeeded && (result.errorCode ||
-          structuredFailure?.code ||
-          launchResolution?.errorCode)
+          ...(!succeeded && failureCode
             ? {
-                error_code:
-                  structuredFailure?.code ||
-                  launchResolution?.errorCode ||
-                  result.errorCode
+                error_code: failureCode
               }
             : {}),
           degraded: result.degraded
@@ -392,6 +397,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     const stepResults: Array<Record<string, unknown>> = []
     const artifacts: Array<Record<string, unknown>> = []
     let modelFiles: ToolProviderExecutionResult['modelFiles'] = []
+    let postActionState: unknown
 
     for (const [index, value] of steps.entries()) {
       const step = asRecord(value)
@@ -441,6 +447,8 @@ export class ComputerUseToolProvider implements ToolProvider {
       if (result.modelFiles?.length) {
         modelFiles = result.modelFiles
       }
+      // Preserve final visual evidence for convergence checks across batches.
+      postActionState = result.output['post_action_state']
       stepResults.push({
         action: stepAction,
         success: result.success,
@@ -468,6 +476,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       output: {
         completed_action_count: steps.length,
         steps: stepResults,
+        ...(postActionState ? { post_action_state: postActionState } : {}),
         ...(artifacts.length > 0 ? { artifacts } : {})
       },
       ...(modelFiles.length > 0 ? { modelFiles } : {})
@@ -512,20 +521,26 @@ export class ComputerUseToolProvider implements ToolProvider {
     const serializedParameters = JSON.stringify(parameters)
     let result = await this.callDriverAction(driver, action, parameters)
 
-    if (this.shouldRestoreSession(parameters, result)) {
+    if (this.shouldRestoreSession(result)) {
       input.onProgress?.({
         source: 'log',
         message: 'Restoring the computer-use session.'
       })
-      const session = parameters['session'] as string
+      const session = parameters['session']
+      // Catalog-only actions use Cua's implicit transport session. They can
+      // expire while named-session actions continue, and cannot accept a label.
       const sessionResult = await driver.callTool(
         'start_session',
-        JSON.stringify({ session })
+        JSON.stringify(typeof session === 'string' ? { session } : {})
       )
-      if (hasCuaError(sessionResult)) {
+      if (hasCuaError(sessionResult) || this.resultCompactor.getStructuredFailure(
+        parseJsonRecord(sessionResult.structuredJson) || parseJsonRecord(sessionResult.rawJson)
+      )) {
         return sessionResult
       }
-      await this.runtimeManager.restoreActivityOverlay(driver, input, session)
+      if (typeof session === 'string') {
+        await this.runtimeManager.restoreActivityOverlay(driver, input, session)
+      }
       result = await this.callDriverAction(driver, action, parameters)
     }
 
@@ -591,13 +606,8 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private shouldRestoreSession(
-    parameters: Record<string, unknown>,
     result: CuaToolResult
   ): boolean {
-    if (typeof parameters['session'] !== 'string') {
-      return false
-    }
-
     const structuredResult =
       parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
     const refusal = asRecord(structuredResult?.['refusal'])
