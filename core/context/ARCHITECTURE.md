@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-08-25T19:44:13+08:00
+- Generated at: 2026-09-08T21:40:03+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -27,7 +27,8 @@
 - Leon respects explicit app choices and preferences, otherwise uses local inventory to choose a suitable specialized app, follows the shortest sufficient interaction path, and verifies the requested outcome.
 ## Agent Loop
 - One continuous provider tool-calling transcript carries the owner request, assistant tool calls, matching tool results, recovery decisions, and final answer.
-- Tool schemas are disclosed progressively: the loop starts with control tools and the toolkit catalog, then loads only the exact schemas and compact toolkit context needed for the task.
+- Tool schemas are disclosed progressively: the loop starts with control tools and the toolkit catalog; it may preload a small toolkit for an exact, unambiguous registry-label match, while ambiguous or expensive matches retain normal model-led toolkit discovery.
+- The baseline prompt keeps stable behavioral instructions before volatile runtime state and exposes one-line context summaries; full context files and Agent Skill instructions load only when relevant.
 - The model-facing transcript has a fixed input budget: large tool results stay in artifact logs with bounded previews, and inactive toolkit schemas plus older completed tool exchanges are compacted progressively only when needed.
 - Earlier-turn artifact manifests have one global size bound, and overlapping reads of the same artifact range are rejected so follow-up turns do not rebuild oversized duplicate context.
 - Tool state is separated: installed tools exist in the registry, enabled tools are not disabled by the owner, and available tools have the required settings to run.
