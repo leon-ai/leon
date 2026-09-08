@@ -96,6 +96,7 @@ const REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS = 5_000
 const RETRYABLE_ERROR_RETRY_DELAY_MS = 1_250
 const EMPTY_COMPLETION_RETRY_DELAY_MS = 750
 const MAX_LOG_SERIALIZED_LENGTH = 4_000
+const LEADING_EMPTY_THINKING_BLOCK_PATTERN = /^(?:\s*<think>\s*<\/think>)+\s*/i
 const DEFAULT_TEMPERATURE = 0 // Disabled
 const DEFAULT_MAX_TOKENS = 8_192
 const LOW_VERBOSITY_DUTIES = new Set<LLMDuties>([
@@ -2733,6 +2734,17 @@ export default class LLMProvider {
       rawResultString = rawResult as string
 
       if (typeof rawResult === 'string') {
+        // Some llama.cpp templates leave empty reasoning blocks with thinking disabled.
+        if (
+          providerName === LLMProviders.LlamaCPP &&
+          completionParams.disableThinking === true
+        ) {
+          rawResultString = rawResultString.replace(
+            LEADING_EMPTY_THINKING_BLOCK_PATTERN,
+            ''
+          )
+        }
+
         rawResultString = this.cleanUpResult(rawResultString)
       }
 
