@@ -180,6 +180,33 @@ describe('continuous agent loop', () => {
     )
   })
 
+  it('detects uncertain actions that leave the same visual state', () => {
+    const executions = [120, 360].map((y) => ({
+      function: 'computer_use.cua.click',
+      status: 'success' as const,
+      observation: JSON.stringify({
+        data: {
+          output: {
+            result: { effect: 'unverifiable' },
+            post_action_state: { visual_state_id: 'same-screen' }
+          }
+        }
+      }),
+      requestedToolInput: JSON.stringify({
+        target: { kind: 'desktop', display_id: 'primary' },
+        x: 500,
+        y
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'multiple uncertain actions produced the same visual state'
+    )
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'call request_clarification'
+    )
+  })
+
   it('remembers unavailable background delivery for the target', () => {
     const executions = [
       {

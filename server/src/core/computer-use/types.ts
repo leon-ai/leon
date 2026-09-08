@@ -71,6 +71,7 @@ export interface PersistedComputerUseImages {
   modelFiles: ToolProviderModelFile[]
   transform: ComputerUseImageTransform | null
   setOfMark: ComputerUseSetOfMarkAnnotation[]
+  visualStateId: string | null
 }
 
 export interface ComputerUseSetOfMarkAnnotation {
@@ -82,6 +83,7 @@ export interface CapturedComputerUseState {
   result: Record<string, unknown>
   artifacts: Array<Record<string, unknown>>
   modelFiles: ToolProviderModelFile[]
+  visualStateId: string | null
 }
 
 export interface CompactedComputerUseResult {

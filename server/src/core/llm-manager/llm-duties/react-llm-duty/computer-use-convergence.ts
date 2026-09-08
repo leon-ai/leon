@@ -4,6 +4,7 @@ import {
   AGENT_COMPUTER_USE_CONVERGENCE_CALL_THRESHOLD,
   AGENT_COMPUTER_USE_POINT_PROXIMITY_PX,
   AGENT_COMPUTER_USE_REPEATED_POINT_THRESHOLD,
+  AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD,
   AGENT_COMPUTER_USE_SCROLL_REVERSAL_THRESHOLD
 } from './constants'
 import type { ExecutionRecord } from './types'
@@ -13,7 +14,9 @@ interface ParsedComputerUseExecution {
   backgroundUnavailable: boolean
   direction?: string
   frameOnlyAccessibility: boolean
+  effectUnverifiable: boolean
   targetKey: string
+  visualStateId?: string
   x?: number
   y?: number
 }
@@ -32,6 +35,23 @@ function hasNestedRecord(
   const record = value as Record<string, unknown>
   return predicate(record) ||
     Object.values(record).some((item) => hasNestedRecord(item, predicate))
+}
+
+function findNestedString(value: unknown, key: string): string | undefined {
+  if (Array.isArray(value)) {
+    return value.map((item) => findNestedString(item, key)).find(Boolean)
+  }
+  if (!value || typeof value !== 'object') {
+    return undefined
+  }
+
+  const record = value as Record<string, unknown>
+  if (typeof record[key] === 'string') {
+    return record[key]
+  }
+  return Object.values(record)
+    .map((item) => findNestedString(item, key))
+    .find(Boolean)
 }
 
 function parseComputerUseExecution(
@@ -63,12 +83,19 @@ function parseComputerUseExecution(
     } catch {
       // Plain-text observations have no structured capability diagnostics.
     }
+    const visualStateId = findNestedString(observation, 'visual_state_id')
 
     return {
       action: execution.function.split('.').at(-1) || '',
       backgroundUnavailable: hasNestedRecord(
         observation,
         (record) => record['code'] === 'background_unavailable'
+      ),
+      effectUnverifiable: hasNestedRecord(
+        observation,
+        (record) => ['unverifiable', 'suspected_noop'].includes(
+          String(record['effect'])
+        )
       ),
       frameOnlyAccessibility: hasNestedRecord(observation, (record) => {
         const elements = record['elements']
@@ -78,6 +105,7 @@ function parseComputerUseExecution(
           elements[0]?.['role'] === 'frame'
       }),
       targetKey: `${String(pid)}:${String(windowId)}:${String(displayId)}`,
+      ...(visualStateId ? { visualStateId } : {}),
       ...(typeof input['direction'] === 'string'
         ? { direction: input['direction'] }
         : {}),
@@ -133,6 +161,14 @@ export function buildComputerUseConvergenceHint(
   const frameOnlyAccessibilityCount = matchingTargetExecutions.filter(
     (execution) => execution.frameOnlyAccessibility
   ).length
+  const repeatedVisualStateCount = current.visualStateId &&
+    current.effectUnverifiable
+    ? matchingTargetExecutions.filter(
+        (execution) =>
+          execution.effectUnverifiable &&
+          execution.visualStateId === current.visualStateId
+      ).length
+    : 0
   const reasons = [
     ...(executions.length >= AGENT_COMPUTER_USE_CONVERGENCE_CALL_THRESHOLD
       ? [`${executions.length} computer-use calls have already run`]
@@ -142,6 +178,10 @@ export function buildComputerUseConvergenceHint(
       : []),
     ...(nearbyPointActions >= AGENT_COMPUTER_USE_REPEATED_POINT_THRESHOLD
       ? ['nearly the same screen point has been used repeatedly']
+      : []),
+    ...(repeatedVisualStateCount >=
+      AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD
+      ? ['multiple uncertain actions produced the same visual state']
       : []),
     ...(backgroundUnavailable
       ? ['background delivery is unavailable for this target']
@@ -155,6 +195,6 @@ export function buildComputerUseConvergenceHint(
   }
 
   return `<computer_use_convergence>
-Visual interaction may be looping because ${reasons.join(' and ')}. Reuse the screenshots and observations already collected. If this is a read-only inspection, answer now unless one specifically named missing fact requires one decisive action. Otherwise choose one forward action and do not revisit an inspected state.
+Visual interaction may be looping because ${reasons.join(' and ')}. Reuse the screenshots and observations already collected. If this is a read-only inspection, answer now unless one specifically named missing fact requires one decisive action. Otherwise choose one forward action and do not revisit an inspected state. If a required field has multiple plausible observed choices, call request_clarification so the owner reply resumes this run.
 </computer_use_convergence>`
 }

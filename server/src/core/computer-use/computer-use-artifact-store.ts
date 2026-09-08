@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { promisify } from 'node:util'
@@ -25,6 +25,7 @@ import type {
 import { ComputerUseSetOfMarkMode } from './types'
 
 const execFileAsync = promisify(execFile)
+const VISUAL_STATE_ID_LENGTH = 16
 
 /** Persists complete evidence while returning only bounded model attachments. */
 export class ComputerUseArtifactStore {
@@ -88,7 +89,8 @@ export class ComputerUseArtifactStore {
         artifacts: [],
         modelFiles: [],
         transform: null,
-        setOfMark: []
+        setOfMark: [],
+        visualStateId: null
       }
     }
 
@@ -135,7 +137,11 @@ export class ComputerUseArtifactStore {
             visualDetail: 'high' as const
           },
           modelDimensions: modelImage.dimensions,
-          setOfMark: modelImage.setOfMark
+          setOfMark: modelImage.setOfMark,
+          visualStateId: createHash('sha256')
+            .update(content)
+            .digest('hex')
+            .slice(0, VISUAL_STATE_ID_LENGTH)
         }
       })
     )
@@ -151,7 +157,8 @@ export class ComputerUseArtifactStore {
         .slice(-COMPUTER_USE_MODEL_IMAGE_LIMIT)
         .map(({ modelFile }) => modelFile),
       transform,
-      setOfMark: latestImage?.setOfMark || []
+      setOfMark: latestImage?.setOfMark || [],
+      visualStateId: latestImage?.visualStateId || null
     }
   }
 

@@ -66,6 +66,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   public readonly id = COMPUTER_USE_PROVIDER_ID
 
   private readonly visualTransforms = new Map<string, ComputerUseImageTransform>()
+  private readonly visualStateIds = new Map<string, string>()
   private readonly artifactStore = new ComputerUseArtifactStore()
   private readonly applicationLauncher = new ComputerUseApplicationLauncher()
   private readonly resultCompactor: ComputerUseResultCompactor
@@ -119,6 +120,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   public async dispose(): Promise<void> {
     await this.executionTail
     this.visualTransforms.clear()
+    this.visualStateIds.clear()
     await this.runtimeManager.dispose()
   }
 
@@ -170,6 +172,9 @@ export class ComputerUseToolProvider implements ToolProvider {
         action,
         coordinateSafeParameters
       )
+      const previousVisualStateId = this.visualStateIds.get(
+        this.getVisualTransformKey(input, actionParameters)
+      )
       const launchWindowBaseline =
         action === 'launch_app'
           ? await this.applicationLauncher.captureWindowBaseline(runtime.driver)
@@ -211,9 +216,20 @@ export class ComputerUseToolProvider implements ToolProvider {
         actionParameters,
         persistedImages.transform
       )
-      const primaryResult = this.describeModelCoordinateSpace(
-        compactedResult?.result || {
-          text: this.artifactStore.buildTextPreview(result.text)
+      this.rememberVisualStateId(
+        input,
+        action,
+        actionParameters,
+        persistedImages.visualStateId
+      )
+      let primaryResult = this.describeModelCoordinateSpace(
+        {
+          ...(compactedResult?.result || {
+            text: this.artifactStore.buildTextPreview(result.text)
+          }),
+          ...(persistedImages.visualStateId
+            ? { visual_state_id: persistedImages.visualStateId }
+            : {})
         },
         persistedImages.transform,
         persistedImages.setOfMark
@@ -223,6 +239,15 @@ export class ComputerUseToolProvider implements ToolProvider {
         !this.resultCompactor.getStructuredFailure(structuredResult)
         ? await this.captureStateAfterAction(runtime, input, actionParameters, action)
         : null
+      const visualStateUnchanged =
+        previousVisualStateId !== undefined &&
+        capturedState?.visualStateId === previousVisualStateId &&
+        ['unverifiable', 'suspected_noop'].includes(
+          String(primaryResult['effect'])
+        )
+      if (visualStateUnchanged) {
+        primaryResult = { ...primaryResult, effect: 'suspected_noop' }
+      }
       await this.artifactStore.persistCaptureMetadata(persistedImages, primaryResult)
       const structuredArtifact =
         structuredResult && compactedResult?.changed
@@ -264,7 +289,9 @@ export class ComputerUseToolProvider implements ToolProvider {
       } else if (succeeded && action === 'stop_recording') {
         delete runtime.recordingSessionId
       }
-      const successMessage = this.getSuccessMessage(primaryResult)
+      const successMessage = visualStateUnchanged
+        ? 'Computer input was delivered, but the captured interface did not change. Treat the intended effect as unverified.'
+        : this.getSuccessMessage(primaryResult)
       const target = asRecord(actionParameters['target'])
       // An unverified dispatch is not a failed click. Let the agent compare
       // the observed result before choosing a different input route.
@@ -290,6 +317,14 @@ export class ComputerUseToolProvider implements ToolProvider {
             post_action_state: capturedState.result,
             next_step: 'Inspect the attached post-action screenshot before another observation or retry. If navigation opened a new app or dialog, inspect that destination rather than bringing the previous window forward. Reuse this screenshot for the next action and tutorial evidence; observe again only when needed information is missing or the interface has changed.'
           } : {}),
+          ...(visualStateUnchanged
+            ? {
+                visual_change: {
+                  status: 'unchanged',
+                  comparison: 'exact_capture'
+                }
+              }
+            : {}),
           ...(result.text && !compactedResult?.changed
             ? { summary: this.artifactStore.buildTextPreview(succeeded ? result.text : failureMessage) }
             : {}),
@@ -475,7 +510,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     parameters: Record<string, unknown>
   ): Promise<CuaToolResult> {
     const serializedParameters = JSON.stringify(parameters)
-    let result = await driver.callTool(action, serializedParameters)
+    let result = await this.callDriverAction(driver, action, parameters)
 
     if (this.shouldRestoreSession(parameters, result)) {
       input.onProgress?.({
@@ -491,7 +526,7 @@ export class ComputerUseToolProvider implements ToolProvider {
         return sessionResult
       }
       await this.runtimeManager.restoreActivityOverlay(driver, input, session)
-      result = await driver.callTool(action, serializedParameters)
+      result = await this.callDriverAction(driver, action, parameters)
     }
 
     if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
@@ -516,6 +551,43 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
 
     return result
+  }
+
+  /** Makes pixel-targeted typing honor the same focus contract on every driver. */
+  private async callDriverAction(
+    driver: ComputerUseDriver,
+    action: string,
+    parameters: Record<string, unknown>
+  ): Promise<CuaToolResult> {
+    const hasPixelTarget =
+      typeof parameters['x'] === 'number' &&
+      typeof parameters['y'] === 'number'
+    if (action !== 'type_text' || !hasPixelTarget) {
+      return driver.callTool(action, JSON.stringify(parameters))
+    }
+
+    // Some native routes type into the existing focus even when x/y are
+    // supplied. Establish focus explicitly so type_text keeps its public API.
+    const clickParameters = { ...parameters }
+    delete clickParameters['text']
+    const clickResult = await driver.callTool(
+      'click',
+      JSON.stringify(clickParameters)
+    )
+    const clickOutput =
+      parseJsonRecord(clickResult.structuredJson) ||
+      parseJsonRecord(clickResult.rawJson)
+    if (
+      hasCuaError(clickResult) ||
+      this.resultCompactor.getStructuredFailure(clickOutput)
+    ) {
+      return clickResult
+    }
+
+    const typeParameters = { ...parameters }
+    delete typeParameters['x']
+    delete typeParameters['y']
+    return driver.callTool('type_text', JSON.stringify(typeParameters))
   }
 
   private shouldRestoreSession(
@@ -627,6 +699,25 @@ export class ComputerUseToolProvider implements ToolProvider {
       this.visualTransforms,
       this.getVisualTransformKey(input, parameters),
       transform
+    )
+  }
+
+  private rememberVisualStateId(
+    input: ToolProviderExecutionInput,
+    action: string,
+    parameters: Record<string, unknown>,
+    visualStateId: string | null
+  ): void {
+    if (
+      !visualStateId ||
+      (action !== 'get_window_state' && action !== 'get_desktop_state')
+    ) {
+      return
+    }
+    this.rememberVisualState(
+      this.visualStateIds,
+      this.getVisualTransformKey(input, parameters),
+      visualStateId
     )
   }
 
@@ -842,9 +933,20 @@ export class ComputerUseToolProvider implements ToolProvider {
       captureParameters,
       persistedImages.transform
     )
+    this.rememberVisualStateId(
+      input,
+      captureAction,
+      captureParameters,
+      persistedImages.visualStateId
+    )
     const observation = this.describeModelCoordinateSpace(
-      compactedResult?.result || {
-        text: this.artifactStore.buildTextPreview(captureResult.text)
+      {
+        ...(compactedResult?.result || {
+          text: this.artifactStore.buildTextPreview(captureResult.text)
+        }),
+        ...(persistedImages.visualStateId
+          ? { visual_state_id: persistedImages.visualStateId }
+          : {})
       },
       persistedImages.transform,
       persistedImages.setOfMark
@@ -861,7 +963,8 @@ export class ComputerUseToolProvider implements ToolProvider {
     return {
       result: observation,
       artifacts: persistedImages.artifacts,
-      modelFiles: persistedImages.modelFiles
+      modelFiles: persistedImages.modelFiles,
+      visualStateId: persistedImages.visualStateId
     }
   }
 

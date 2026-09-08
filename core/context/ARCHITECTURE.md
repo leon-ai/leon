@@ -23,6 +23,7 @@
 - Satellite provides generic transport only. Device-, application-, and company-specific behavior stays in tools and skills instead of Leon Core.
 ## Computer Use
 - Leon loads computer use progressively for graphical application control and visual verification, prefers dedicated tools when available, and attaches screenshots only when an observation returns visual evidence.
+- Pixel-targeted typing establishes focus explicitly across computer-use drivers, while identical captures mark uncertain actions as suspected no-ops so visual loops converge earlier.
 - A persistent profile-scoped driver runs beside the applications it controls, either in the local Leon server or on Leon Satellite; actions stay in the background unless the owner or profile requests visible execution.
 - Leon respects explicit app choices and preferences, otherwise uses local inventory to choose a suitable specialized app, follows the shortest sufficient interaction path, and verifies the requested outcome.
 ## Agent Loop

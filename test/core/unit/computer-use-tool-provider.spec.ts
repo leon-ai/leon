@@ -302,6 +302,79 @@ describe('ComputerUseToolProvider', () => {
     }
   })
 
+  it('focuses a pixel-targeted field before typing into it', async () => {
+    const observationResult = {
+      text: 'Desktop captured.',
+      images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
+      structuredJson: '{"screenshot_width":1,"screenshot_height":1}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    }
+    const actionResult = {
+      text: '',
+      images: [],
+      structuredJson: '{"effect":"confirmed","route":"global_input"}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    }
+    const driver = createDriver(actionResult)
+    driver.callTool.mockImplementation((name) =>
+      Promise.resolve(name === 'get_desktop_state'
+        ? observationResult
+        : actionResult)
+    )
+    const provider = new ComputerUseToolProvider(
+      async () => driver as never
+    )
+    const observation = await provider.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'get_desktop_state',
+      parameters: {},
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'session-pixel-type'
+    })
+
+    await provider.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'type_text',
+      parameters: {
+        target: { kind: 'desktop', display_id: 'primary' },
+        x: 0,
+        y: 0,
+        text: 'OpenRouter',
+        capture_after: false
+      },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'session-pixel-type'
+    })
+
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'get_desktop_state',
+      'click',
+      'type_text'
+    ])
+    expect(JSON.parse(driver.callTool.mock.calls[1]![1])).toEqual({
+      target: { kind: 'desktop', display_id: 'primary' },
+      x: 0,
+      y: 0
+    })
+    expect(JSON.parse(driver.callTool.mock.calls[2]![1])).toEqual({
+      target: { kind: 'desktop', display_id: 'primary' },
+      text: 'OpenRouter'
+    })
+
+    const artifacts = observation.output['artifacts'] as Array<{ path: string }>
+    await Promise.all(
+      artifacts.map((artifact) =>
+        fs.promises.rm(artifact.path, { force: true })
+      )
+    )
+  })
+
   it('adapts a remote owner-device result to the regular Cua observation', async () => {
     const previousUrl = process.env['LEON_COMPUTER_USE_REMOTE_URL']
     process.env['LEON_COMPUTER_USE_REMOTE_URL'] = 'http://owner-device.test/execute'
@@ -368,7 +441,7 @@ describe('ComputerUseToolProvider', () => {
     }
   })
 
-  it('does not nest post-action capture through a remote owner-device bridge', async () => {
+  it('captures resulting state through a remote owner-device bridge', async () => {
     const previousUrl = process.env['LEON_COMPUTER_USE_REMOTE_URL']
     process.env['LEON_COMPUTER_USE_REMOTE_URL'] = 'http://owner-device.test/execute'
     const fetchMock = vi.fn().mockImplementation(
@@ -395,19 +468,22 @@ describe('ComputerUseToolProvider', () => {
         parameters: {
           pid: 42,
           window_id: 7,
-          x: 10,
-          y: 20,
+          element_token: 'button-1',
           capture_after: true
         },
         profileName: PROFILE_NAME,
         conversationSessionId: 'session-remote'
       })
 
-      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock).toHaveBeenCalledTimes(3)
       expect(fetchMock.mock.calls[0]![1]?.body).toContain(
         '"action":"start_session"'
       )
       expect(fetchMock.mock.calls[1]![1]?.body).toContain('"action":"click"')
+      expect(fetchMock.mock.calls[1]![1]?.body).not.toContain('capture_after')
+      expect(fetchMock.mock.calls[2]![1]?.body).toContain(
+        '"action":"get_window_state"'
+      )
       expect(result).toMatchObject({
         success: true,
         output: {
@@ -417,7 +493,7 @@ describe('ComputerUseToolProvider', () => {
           }
         }
       })
-      expect(result.output).not.toHaveProperty('post_action_state')
+      expect(result.output).toHaveProperty('post_action_state')
     } finally {
       await provider.dispose()
       vi.unstubAllGlobals()
@@ -1252,8 +1328,7 @@ describe('ComputerUseToolProvider', () => {
       parameters: {
         pid: 42,
         window_id: 7,
-        x: 10,
-        y: 20,
+        element_token: 'button-1',
         capture_after: true
       },
       profileName: PROFILE_NAME,
@@ -1328,8 +1403,8 @@ describe('ComputerUseToolProvider', () => {
       parameters: {
         pid: 42,
         window_id: 7,
-        x: 10,
-        y: 20,
+        x: 0,
+        y: 0,
         capture_after: true
       },
       profileName: PROFILE_NAME,
