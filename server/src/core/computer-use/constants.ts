@@ -46,9 +46,12 @@ export const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
 export const COMPUTER_USE_ACTION_NAMES = [
   'list_apps',
   'list_windows',
+  'health_report',
   'get_window_state',
+  'zoom',
   'verify_state',
   'get_desktop_state',
+  'move_cursor',
   'launch_app',
   'bring_to_front',
   'invoke_menu',
@@ -79,6 +82,7 @@ export const COMPUTER_USE_ACTIONS = new Set<string>(
 )
 
 export const COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS = new Set<string>([
+  'move_cursor',
   'get_window_state',
   'verify_state',
   'get_desktop_state',
@@ -102,7 +106,11 @@ export const COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS = new Set<string>([
   'browser_set_input_files'
 ])
 
+// These native actions accept Cua's crop coordinates. Keep this host-only.
+export const COMPUTER_USE_REMOTE_ZOOM_CAPABLE_ACTIONS = new Set(['click', 'drag'])
+
 export const COMPUTER_USE_CAPTURE_ACTIONS = new Set([
+  'move_cursor',
   'invoke_menu',
   'click',
   'drag',
@@ -127,6 +135,8 @@ export const COMPUTER_USE_COORDINATE_FIELDS: Record<
   string,
   readonly string[]
 > = {
+  zoom: ['x1', 'y1', 'x2', 'y2'],
+  move_cursor: ['x', 'y'],
   click: ['x', 'y'],
   drag: ['from_x', 'from_y', 'to_x', 'to_y'],
   scroll: ['x', 'y'],

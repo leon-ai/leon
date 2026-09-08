@@ -144,11 +144,26 @@ export class ComputerUseToolProvider implements ToolProvider {
       const recording = runtime.recordingSessionId !== undefined &&
         runtime.recordingSessionId === input.conversationSessionId
       const captureAfter =
-        (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? recording) === true &&
+        (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? (recording || action === 'move_cursor')) === true &&
         COMPUTER_USE_CAPTURE_ACTIONS.has(action) &&
         runtime.driver.supportsPostActionCapture !== false
       const driverParameters = { ...parameters }
       delete driverParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
+      const cursorTarget = asRecord(driverParameters['target'])
+      if (action === 'move_cursor' && (
+        cursorTarget?.['kind'] !== 'desktop' || cursorTarget['display_id'] !== 'primary'
+      )) {
+        throw new Error('move_cursor requires target={kind:"desktop",display_id:"primary"} from a fresh get_desktop_state capture. Cursor overlay controls are host-managed.')
+      }
+      if (action === 'zoom' && (
+        !Number.isInteger(driverParameters['pid']) ||
+        !Number.isInteger(driverParameters['window_id']) ||
+        !['x1', 'x2', 'y1', 'y2'].every((key) => Number.isFinite(driverParameters[key])) ||
+        Number(driverParameters['x1']) >= Number(driverParameters['x2']) ||
+        Number(driverParameters['y1']) >= Number(driverParameters['y2'])
+      )) {
+        throw new Error('zoom requires an exact pid/window_id and a nonempty rectangle with x1 < x2 and y1 < y2 from the latest full-window screenshot.')
+      }
       // Tutorial queries need both handles and capture-bound annotation geometry.
       if (recording && action === 'get_window_state' &&
           driverParameters['include_screenshot'] === undefined) {
@@ -164,7 +179,8 @@ export class ComputerUseToolProvider implements ToolProvider {
         this.mapCoordinatesToSource(
           input,
           action,
-          driverParameters
+          driverParameters,
+          runtime
         )
       )
       const actionParameters = await this.runtimeManager.prepareParameters(
@@ -180,6 +196,13 @@ export class ComputerUseToolProvider implements ToolProvider {
         action === 'launch_app'
           ? await this.applicationLauncher.captureWindowBaseline(runtime.driver)
           : null
+      if (action === 'zoom') {
+        // Native zoom does not accept a session label. A new crop can replace
+        // its shared mapping, so another conversation must not reuse an old one.
+        for (const [key, transform] of this.visualTransforms) {
+          if (transform.fromZoom) this.visualTransforms.delete(key)
+        }
+      }
       const result = await this.callAction(
         runtime.driver,
         input,
@@ -602,6 +625,8 @@ export class ComputerUseToolProvider implements ToolProvider {
     const typeParameters = { ...parameters }
     delete typeParameters['x']
     delete typeParameters['y']
+    // Only the focus click uses Cua's crop translation; text uses that focus.
+    delete typeParameters['from_zoom']
     return driver.callTool('type_text', JSON.stringify(typeParameters))
   }
 
@@ -650,7 +675,8 @@ export class ComputerUseToolProvider implements ToolProvider {
   private mapCoordinatesToSource(
     input: ToolProviderExecutionInput,
     action: string,
-    parameters: Record<string, unknown>
+    parameters: Record<string, unknown>,
+    runtime: ManagedComputerUseRuntime
   ): Record<string, unknown> {
     const fields = COMPUTER_USE_COORDINATE_FIELDS[action]
     if (!fields) {
@@ -668,13 +694,24 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
 
     const mappedParameters = { ...parameters }
+    // Crop padding belongs to the native driver, not to Leon's image scaler.
+    // Never let model-supplied flags reinterpret a full-window observation.
+    delete mappedParameters['from_zoom']
+    const hasPixels = fields.some((field) => typeof parameters[field] === 'number')
+    if (transform.fromZoom && hasPixels) {
+      const nativeAction = action === 'type_text' ? 'click' : action
+      if (!runtime.zoomCapableActions.has(nativeAction)) {
+        throw new Error(`${action} cannot use zoom coordinates. Take a fresh full-window screenshot before this action.`)
+      }
+      mappedParameters['from_zoom'] = true
+    }
     for (const field of fields) {
       const value = mappedParameters[field]
       if (typeof value !== 'number' || !Number.isFinite(value)) {
         continue
       }
 
-      const axis = field.endsWith('x') ? 'x' : 'y'
+      const axis = field.includes('x') ? 'x' : 'y'
       const size = transform.model[axis === 'x' ? 'width' : 'height']
       // Clamping a point outside the observed image can click a different
       // control. Menu-bar actions, for example, need a desktop observation.
@@ -698,7 +735,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     parameters: Record<string, unknown>,
     transform: ComputerUseImageTransform | null
   ): void {
-    if (action !== 'get_window_state' && action !== 'get_desktop_state') return
+    if (action !== 'get_window_state' && action !== 'get_desktop_state' && action !== 'zoom') return
     if (!transform) {
       // A new tree without an image cannot validate an older image's geometry.
       this.visualTransforms.delete(this.getVisualTransformKey(input, parameters))
@@ -867,6 +904,10 @@ export class ComputerUseToolProvider implements ToolProvider {
       source_screenshot_width: transform.source.width,
       source_screenshot_height: transform.source.height,
       coordinate_space: 'attached_model_image',
+      ...(transform.fromZoom ? {
+        zoomed: true,
+        zoom_hint: 'This is a window crop. Click, drag, or type using its image pixels with the same pid/window_id; Leon applies native crop translation. For other pixel actions or another zoom, first get a full-window screenshot. Do not reuse coordinates from the earlier full-window image.'
+      } : {}),
       coordinate_hint: `Use actual image pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}, not a normalized 0–1000 grid. Use pixel_center verbatim when available. To convert a normalized estimate, multiply x by ${(transform.model.width - 1) / 1000} and y by ${(transform.model.height - 1) / 1000}.`
     }
   }

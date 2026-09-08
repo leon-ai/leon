@@ -293,13 +293,14 @@ export class ComputerUseRuntimeManager {
   ): Promise<
     Pick<
       ManagedComputerUseRuntime,
-      'sessionAwareActions' | 'foregroundCapableActions'
+      'sessionAwareActions' | 'foregroundCapableActions' | 'zoomCapableActions'
     >
   > {
     const catalog = asRecord(JSON.parse(await driver.listToolsJson()))
     const tools = Array.isArray(catalog?.['tools']) ? catalog['tools'] : []
     const sessionAwareActions = new Set<string>()
     const foregroundCapableActions = new Set<string>()
+    const zoomCapableActions = new Set<string>()
 
     for (const tool of tools) {
       const toolRecord = asRecord(tool)
@@ -315,8 +316,11 @@ export class ComputerUseRuntimeManager {
       if (properties?.['delivery_mode']) {
         foregroundCapableActions.add(name)
       }
+      if (properties?.['from_zoom']) {
+        zoomCapableActions.add(name)
+      }
     }
 
-    return { sessionAwareActions, foregroundCapableActions }
+    return { sessionAwareActions, foregroundCapableActions, zoomCapableActions }
   }
 }

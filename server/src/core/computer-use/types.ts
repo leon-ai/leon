@@ -50,6 +50,7 @@ export interface ManagedComputerUseRuntime {
   driver: ComputerUseDriver
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
+  zoomCapableActions: Set<string>
   initializedSessions: Set<string>
   activityOverlayStates: Map<string, boolean>
   /** Only the conversation that started recording receives automatic evidence captures. */
@@ -64,6 +65,8 @@ export interface ComputerUseImageDimensions {
 export interface ComputerUseImageTransform {
   source: ComputerUseImageDimensions
   model: ComputerUseImageDimensions
+  /** Cua owns padded crop offsets; supported input must use its zoom mapping. */
+  fromZoom?: boolean
 }
 
 export interface PersistedComputerUseImages {

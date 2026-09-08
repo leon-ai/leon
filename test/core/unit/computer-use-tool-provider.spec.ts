@@ -581,7 +581,7 @@ describe('ComputerUseToolProvider', () => {
     expect(driver.uniffiDestroy).toHaveBeenCalledOnce()
   })
 
-  it.each(['kill_app', 'zoom', 'set_agent_cursor_enabled'])(
+  it.each(['kill_app', 'page', 'set_agent_cursor_enabled'])(
     'rejects %s outside the curated surface before calling Cua',
     async (functionName) => {
     const driver = createDriver({})

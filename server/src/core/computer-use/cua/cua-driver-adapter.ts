@@ -9,6 +9,7 @@ import {
   COMPUTER_USE_REMOTE_DRIVER_URL_ENV,
   COMPUTER_USE_REMOTE_MODEL_FILES_FIELD,
   COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS,
+  COMPUTER_USE_REMOTE_ZOOM_CAPABLE_ACTIONS,
   CUA_TELEMETRY_ENABLED_ENV,
   CUA_X11_UINPUT_SAFETY_ENV
 } from '../constants'
@@ -51,7 +52,9 @@ class RemoteCuaDriverAdapter implements ComputerUseDriver {
     return JSON.stringify({
       tools: Object.entries(functions).map(([name, value]) => {
         const inputSchema = asRecord(asRecord(value)?.['parameters']) || {}
-        if (!COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS.has(name)) {
+        const sessionAware = COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS.has(name)
+        const zoomCapable = COMPUTER_USE_REMOTE_ZOOM_CAPABLE_ACTIONS.has(name)
+        if (!sessionAware && !zoomCapable) {
           return { name, inputSchema }
         }
 
@@ -62,7 +65,8 @@ class RemoteCuaDriverAdapter implements ComputerUseDriver {
             ...inputSchema,
             properties: {
               ...(asRecord(inputSchema['properties']) || {}),
-              session: { type: 'string' }
+              ...(sessionAware ? { session: { type: 'string' } } : {}),
+              ...(zoomCapable ? { from_zoom: { type: 'boolean' } } : {})
             }
           }
         }

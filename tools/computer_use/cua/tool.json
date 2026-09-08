@@ -105,6 +105,34 @@
         "type": "object"
       }
     },
+    "health_report": {
+      "description": "Diagnose driver, permissions, accessibility, and screenshot capabilities after a concrete failure. Read the reported checks and remediation hints; do not run routinely before healthy actions.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "include": {
+            "description": "Only run these checks (canonical names). Wins over `skip`.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "skip": {
+            "description": "Skip these checks (canonical names). Ignored when `include` is set.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
     "get_window_state": {
       "description": "Inspect one native window and return its interface tree plus a screenshot. Use this for visible appearance, colors, or controls after list_windows.",
       "deduplicate_calls": false,
@@ -148,6 +176,51 @@
         "required": [
           "pid",
           "window_id"
+        ],
+        "type": "object"
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "zoom": {
+      "description": "Read a small region of an observed window at higher detail. Select a rectangle from the latest full-window screenshot. The resulting crop becomes the coordinate source for clicks, drags, and pixel-targeted typing on this window; get a fresh full-window screenshot before other pixel actions or another zoom.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "additionalProperties": false,
+        "properties": {
+          "pid": {
+            "description": "Target pid — required for from_zoom click/type translation.",
+            "type": "integer"
+          },
+          "window_id": {
+            "type": "integer"
+          },
+          "x1": {
+            "type": "number",
+            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+          },
+          "x2": {
+            "type": "number",
+            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+          },
+          "y1": {
+            "type": "number",
+            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+          },
+          "y2": {
+            "type": "number",
+            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+          }
+        },
+        "required": [
+          "pid",
+          "window_id",
+          "x1",
+          "y1",
+          "x2",
+          "y2"
         ],
         "type": "object"
       },
@@ -474,6 +547,56 @@
           }
         ],
         "type": "object"
+      }
+    },
+    "move_cursor": {
+      "description": "Move the real desktop pointer to reveal a hover menu or tooltip without clicking. Requires a visible, unobscured target grounded in the latest desktop screenshot and permission for foreground interaction. Use capture_after=true to inspect the hover result.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "desktop"
+                ]
+              },
+              "display_id": {
+                "type": "string",
+                "enum": [
+                  "primary"
+                ]
+              }
+            }
+          },
+          "x": {
+            "type": "number",
+            "description": "Horizontal pixel coordinate in the latest attached desktop image."
+          },
+          "y": {
+            "type": "number",
+            "description": "Vertical pixel coordinate in the latest attached desktop image."
+          },
+          "capture_after": {
+            "type": "boolean",
+            "description": "Capture the resulting desktop state after moving the pointer.",
+            "default": true
+          }
+        },
+        "required": [
+          "target",
+          "x",
+          "y"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
       }
     },
     "launch_app": {

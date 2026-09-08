@@ -148,7 +148,11 @@ export class ComputerUseArtifactStore {
     const latestImage = persistedImages.at(-1)
     const transform =
       sourceDimensions && latestImage?.modelDimensions
-        ? { source: sourceDimensions, model: latestImage.modelDimensions }
+        ? {
+            source: sourceDimensions,
+            model: latestImage.modelDimensions,
+            ...(action === 'zoom' ? { fromZoom: true } : {})
+          }
         : null
 
     return {
@@ -174,12 +178,12 @@ export class ComputerUseArtifactStore {
     action: string,
     result: Record<string, unknown> | null
   ): ComputerUseImageDimensions | null {
-    if (action !== 'get_window_state' && action !== 'get_desktop_state') {
+    if (action !== 'get_window_state' && action !== 'get_desktop_state' && action !== 'zoom') {
       return null
     }
 
-    const width = result?.['screenshot_width']
-    const height = result?.['screenshot_height']
+    const width = result?.[action === 'zoom' ? 'width' : 'screenshot_width']
+    const height = result?.[action === 'zoom' ? 'height' : 'screenshot_height']
     return typeof width === 'number' &&
       Number.isFinite(width) &&
       width > 0 &&

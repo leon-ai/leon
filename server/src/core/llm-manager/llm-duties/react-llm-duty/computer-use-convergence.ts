@@ -26,6 +26,7 @@ interface ParsedComputerUseExecution {
 }
 
 const COMPUTER_USE_OBSERVATION_ACTIONS = new Set([
+  'zoom',
   'get_window_state',
   'get_desktop_state',
   'get_browser_state'
