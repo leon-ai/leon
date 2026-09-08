@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import LLMProvider from '@/core/llm-manager/llm-provider'
-import { LLMDuties } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 
 const celerisTarget = {
   provider: 'celeris',
@@ -15,7 +15,7 @@ const celerisTarget = {
 vi.mock('@/core/config-states/config-state', () => ({
   CONFIG_STATE: {
     getModelState: vi.fn(() => ({
-      getAgentProvider: vi.fn(() => 'celeris'),
+      getAgentProvider: vi.fn(() => celerisTarget.provider),
       getWorkflowProvider: vi.fn(() => 'celeris'),
       getAgentTarget: vi.fn(() => celerisTarget),
       getWorkflowTarget: vi.fn(() => celerisTarget)
@@ -63,6 +63,7 @@ interface LLMProviderTestState {
 describe('LLMProvider', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    celerisTarget.provider = LLMProviders.Celeris
   })
 
   it('normalizes a Celeris OpenAI-compatible completion', async () => {
@@ -109,13 +110,72 @@ describe('LLMProvider', () => {
     })
   })
 
-  it('strips leftover empty thinking blocks from the result', () => {
+  it.each([
+    {
+      name: 'removes the reported empty block',
+      content: '<think>\n\n</think>\n\nage_skill',
+      expected: 'age_skill'
+    },
+    {
+      name: 'removes consecutive empty blocks and surrounding whitespace',
+      content: ' \n<THINK> </THINK>\n<think></think>\nHello',
+      expected: 'Hello'
+    },
+    {
+      name: 'preserves indentation without a thinking block',
+      content: '    return 42'
+    },
+    {
+      name: 'preserves embedded tags',
+      content: 'Example: `<think>reasoning</think>` and `<think></think>`'
+    },
+    {
+      name: 'preserves JSON values',
+      content: '{"example":"<think></think>"}',
+      data: {}
+    },
+    {
+      name: 'preserves non-empty reasoning blocks',
+      content: '<think>reasoning</think>Hello'
+    },
+    {
+      name: 'preserves blocks when thinking is enabled',
+      content: '<think></think>Hello',
+      disableThinking: false
+    },
+    {
+      name: 'preserves blocks for other providers',
+      content: '<think></think>Hello',
+      provider: LLMProviders.Celeris
+    }
+  ])('$name', async ({ content, expected, data, disableThinking, provider }) => {
+    celerisTarget.provider = provider ?? LLMProviders.LlamaCPP
     const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
 
-    expect(manager.cleanUpResult('<think>\n\n</think>\n\nage_skill')).toBe(
-      'age_skill'
+    state.agentLLMProvider = {
+      modelName: 'test-model',
+      runChatCompletion: vi.fn().mockResolvedValue({
+        data: {
+          choices: [{ message: { role: 'assistant', content } }],
+          usage: { prompt_tokens: 12, completion_tokens: 5 }
+        }
+      })
+    }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    const result = await manager.prompt('Hello', {
+      dutyType: LLMDuties.ReAct,
+      systemPrompt: '',
+      data: data ?? null,
+      disableThinking: disableThinking ?? true,
+      shouldStream: false,
+      maxRetries: 0,
+      remoteProviderErrorRetries: 0
+    })
+
+    expect(result?.output).toEqual(
+      data ? JSON.parse(content) : (expected ?? content)
     )
-    expect(manager.cleanUpResult('<think>reasoning</think>Hello')).toBe('Hello')
-    expect(manager.cleanUpResult('Hello there')).toBe('Hello there')
   })
 })
