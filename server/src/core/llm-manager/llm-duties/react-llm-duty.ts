@@ -97,6 +97,7 @@ import {
   createAgentLoopContinuationState,
   buildAgentContinuationTranscript,
   isAgentLoopContinuationStateValid,
+  type AgentContinuityCheckpointInput,
   type AgentLoopContinuationState
 } from './react-llm-duty/agent-loop-continuation'
 import {
@@ -407,7 +408,14 @@ export class ReActLLMDuty extends LLMDuty {
         catalog,
         maxIterations: AGENT_MAX_ITERATIONS,
         finishingIterations: AGENT_FINISHING_ITERATIONS,
-        prepareContinuation: (state) => this.prepareContinuation(state.transcript),
+        prepareContinuation: (state) =>
+          this.prepareContinuation(state.transcript, {
+            originalInput,
+            trackedSteps: state.trackedSteps,
+            executionHistory: state.executionHistory,
+            loadedToolkitIds: catalog.loadedToolkitIds,
+            activeSkillId: caller.agentSkillContext?.id ?? null
+          }),
         ...(continuation
           ? {
               initialExecutionHistory: continuation.executionHistory,
@@ -416,7 +424,7 @@ export class ReActLLMDuty extends LLMDuty {
           : {}),
         allowDirectAnswerHandoff:
           Boolean(this.activeForcedToolName) || this.allowDirectAnswerHandoff,
-        callModel: async (messages, tools, options) => {
+        callModel: async (messages, tools, options, state) => {
           // Loaded guidance and skills must survive compaction and pauses.
           const activeSkill = caller.agentSkillContext
           const progressiveGuidance =
@@ -440,7 +448,14 @@ export class ReActLLMDuty extends LLMDuty {
             messages,
             prompt,
             tools,
-            options
+            options,
+            {
+              originalInput,
+              trackedSteps: state.trackedSteps,
+              executionHistory: state.executionHistory,
+              loadedToolkitIds: catalog.loadedToolkitIds,
+              activeSkillId: caller.agentSkillContext?.id ?? null
+            }
           )
         },
         executeFunction: async (callable, toolInput, toolCallTitle) => {
@@ -529,7 +544,14 @@ export class ReActLLMDuty extends LLMDuty {
             trackedSteps,
             executionHistory,
             loadedToolkitIds: catalog.loadedToolkitIds,
-            transcript: await this.prepareContinuation(result.transcript),
+            transcript: await this.prepareContinuation(result.transcript, {
+              originalInput,
+              clarificationQuestion: result.answer,
+              trackedSteps,
+              executionHistory,
+              loadedToolkitIds: catalog.loadedToolkitIds,
+              activeSkillId: caller.agentSkillContext?.id ?? null
+            }),
             activeSkillId: caller.agentSkillContext?.id ?? null
           })
         )
@@ -703,11 +725,12 @@ export class ReActLLMDuty extends LLMDuty {
 
   /** Uses the configured agent provider for a private, non-tool summary call. */
   private async prepareContinuation(
-    transcript: AgentToolTranscriptMessage[]
+    transcript: AgentToolTranscriptMessage[],
+    checkpointInput?: AgentContinuityCheckpointInput
   ): Promise<AgentToolTranscriptMessage[]> {
-    // A failed summary must not cause an auxiliary retry on every tool turn.
-    if (this.continuationSummaryFailed) return transcript
     return buildAgentContinuationTranscript(transcript, async (history) => {
+      // A failed summary must not cause an auxiliary retry on every tool turn.
+      if (this.continuationSummaryFailed) return null
       const startedAt = Date.now()
       try {
         const result = await LLM_PROVIDER.prompt(history, {
@@ -744,7 +767,7 @@ export class ReActLLMDuty extends LLMDuty {
         LogHelper.warning('Agent continuation summary unavailable; retaining original context')
         return null
       }
-    })
+    }, checkpointInput)
   }
 
   private async callAgentModel(
@@ -757,7 +780,8 @@ export class ReActLLMDuty extends LLMDuty {
       isFinalizationAttempt?: boolean
       isContextRecoveryAttempt?: boolean
       remainingIterations?: number
-    }
+    },
+    checkpointInput?: AgentContinuityCheckpointInput
   ): Promise<{
     toolCalls?: OpenAIToolCall[]
     textContent?: string
@@ -785,19 +809,20 @@ export class ReActLLMDuty extends LLMDuty {
       tools,
       compactionTriggerTokens: contextCompactionTriggerTokens,
       forceCompaction:
-        options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt),
-      preserveToolExchanges: true
+        options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
     if (preparedContext.estimatedInputTokens > contextCompactionTriggerTokens) {
-      const summarized = await this.prepareContinuation(transcript)
+      const summarized = await this.prepareContinuation(
+        transcript,
+        checkpointInput
+      )
       if (summarized !== transcript) {
         transcript.splice(0, transcript.length, ...summarized)
         preparedContext = prepareAgentModelContext({
           transcript,
           systemPrompt: activeSystemPrompt,
           tools,
-          compactionTriggerTokens: contextCompactionTriggerTokens,
-          preserveToolExchanges: true
+          compactionTriggerTokens: contextCompactionTriggerTokens
         })
       }
     }
@@ -863,7 +888,7 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.debug(`callAgentModel: tools=[${toolNames}] | choice=${toolChoice}`)
     if (preparedContext.wasCompacted) {
       LogHelper.debug(
-        `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokens} | exchanges=${preparedContext.compactedToolExchangeCount} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
+        `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokensBeforeToolCompaction}->${preparedContext.estimatedInputTokens} | exchanges=${preparedContext.compactedToolExchangeCount} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
       )
     }
     this.logAgentPromptDispatch({

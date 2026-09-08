@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-09-08T21:40:03+08:00
+- Generated at: 2026-09-08T22:14:36+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -30,10 +30,11 @@
 - Tool schemas are disclosed progressively: the loop starts with control tools and the toolkit catalog; it may preload a small toolkit for an exact, unambiguous registry-label match, while ambiguous or expensive matches retain normal model-led toolkit discovery.
 - The baseline prompt keeps stable behavioral instructions before volatile runtime state and exposes one-line context summaries; full context files and Agent Skill instructions load only when relevant.
 - The model-facing transcript has a fixed input budget: large tool results stay in artifact logs with bounded previews, and inactive toolkit schemas plus older completed tool exchanges are compacted progressively only when needed.
+- Continuity is tiered: short runs keep their raw transcript, medium runs compact completed tool exchanges deterministically, and long or resumed runs add a deterministic state checkpoint before an optional narrative summary.
 - Earlier-turn artifact manifests have one global size bound, and overlapping reads of the same artifact range are rejected so follow-up turns do not rebuild oversized duplicate context.
 - Tool state is separated: installed tools exist in the registry, enabled tools are not disabled by the owner, and available tools have the required settings to run.
 - Deterministic runtime guards validate and repair arguments, block duplicate calls, execute tools, and return every success or failure as a structured observation to the same loop.
-- Human-in-the-loop pause/resume persists the full agent transcript, visible plan state, and clarification question, then appends the owner reply and continues without rebuilding a phase prompt.
+- Human-in-the-loop pause/resume persists the bounded transcript, exact plan and execution state, loaded capabilities, artifact references, and clarification question, then appends the owner reply and continues without rebuilding a phase prompt.
 - Each run has 32 operational iterations. At that checkpoint, a tool-restricted synthesis either answers the original request from verified evidence or explains what remains, offers alternatives, and asks permission to continue with a focused next pass.
 - The final eight iterations add convergence guidance. Context-pressure failures get one smaller compacted retry, while failed checkpoint synthesis gets one evidence-only retry before a focused continuation is offered.
 - Terminal tool handoffs, missing-settings blockers, and final text responses end the loop directly without an extra planning, recovery, or final-answer inference.

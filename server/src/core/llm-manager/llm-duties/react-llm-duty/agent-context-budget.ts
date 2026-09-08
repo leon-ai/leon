@@ -39,12 +39,12 @@ interface AgentModelContextParams {
   tools: OpenAITool[]
   compactionTriggerTokens: number
   forceCompaction?: boolean
-  preserveToolExchanges?: boolean
 }
 
 export interface PreparedAgentModelContext {
   transcript: AgentToolTranscriptMessage[]
   tools: OpenAITool[]
+  estimatedInputTokensBeforeToolCompaction: number
   estimatedInputTokens: number
   wasCompacted: boolean
   compactedToolExchangeCount: number
@@ -190,7 +190,8 @@ function retainRecentComputerUseImages(
   })
 }
 
-function createTextPreview(value: string, maxChars: number): string {
+/** Keeps both the beginning and ending of oversized agent context text. */
+export function createAgentTextPreview(value: string, maxChars: number): string {
   if (value.length <= maxChars) {
     return value
   }
@@ -238,7 +239,7 @@ export function buildBoundedToolObservation(
             'The complete tool result is stored at output_log_path. Read only the needed section if the preview is insufficient.'
         }
       : {}),
-    data_preview: createTextPreview(
+    data_preview: createAgentTextPreview(
       JSON.stringify(observation['data'] ?? null),
       Math.max(Math.floor(maxChars * 0.7), 1)
     ),
@@ -270,7 +271,7 @@ function compactToolMessageContent(content: string): string {
           ? { observed_tool_failure: parsed['observed_tool_failure'] }
           : {}),
         context_compacted: true,
-        preview: createTextPreview(
+        preview: createAgentTextPreview(
           content,
           AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS
         )
@@ -281,7 +282,7 @@ function compactToolMessageContent(content: string): string {
     // head/tail preview and can be explicitly loaded again when needed.
   }
 
-  return createTextPreview(content, AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS)
+  return createAgentTextPreview(content, AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS)
 }
 
 function createBoundedExchangeField(value: unknown): string | undefined {
@@ -291,7 +292,7 @@ function createBoundedExchangeField(value: unknown): string | undefined {
 
   const serialized =
     typeof value === 'string' ? value : JSON.stringify(value)
-  return createTextPreview(
+  return createAgentTextPreview(
     serialized,
     AGENT_COMPACTED_TOOL_EXCHANGE_FIELD_MAX_CHARS
   )
@@ -486,7 +487,7 @@ function buildCompactedToolExchangeMessage(
     0
   )
   if (overflowChars > 0) {
-    summary.preview = createTextPreview(
+    summary.preview = createAgentTextPreview(
       serializedExchange,
       Math.max(serializedExchange.length - overflowChars, 1)
     )
@@ -672,7 +673,7 @@ function mergeCompactedToolExchangeHistory(
   let serializedMerged = JSON.stringify(merged)
   if (serializedMerged.length > maxChars) {
     const overflow = serializedMerged.length - maxChars
-    merged.preview = createTextPreview(
+    merged.preview = createAgentTextPreview(
       combinedContent,
       Math.max(combinedContent.length - overflow, 1)
     )
@@ -799,19 +800,11 @@ export function prepareAgentModelContext(
   const imageBoundedTranscript = retainRecentComputerUseImages(
     params.transcript
   )
-  // Semantic summaries own history reduction on the live agent path. Keep
-  // recent evidence intact; an over-budget request must not silently lose it.
-  if (params.preserveToolExchanges) {
-    return {
-      transcript: imageBoundedTranscript,
-      tools: params.tools,
-      estimatedInputTokens: estimateAgentInputTokens(
-        imageBoundedTranscript, params.systemPrompt, params.tools
-      ),
-      wasCompacted: false,
-      compactedToolExchangeCount: 0
-    }
-  }
+  const estimatedInputTokensBeforeToolCompaction = estimateAgentInputTokens(
+    imageBoundedTranscript,
+    params.systemPrompt,
+    params.tools
+  )
   const computerUseContext = compactOlderComputerUseExchanges(
     imageBoundedTranscript
   )
@@ -828,6 +821,7 @@ export function prepareAgentModelContext(
     return {
       transcript: boundedTranscript,
       tools: params.tools,
+      estimatedInputTokensBeforeToolCompaction,
       estimatedInputTokens: initialEstimate,
       wasCompacted: computerUseContext.compactedCount > 0,
       compactedToolExchangeCount: computerUseContext.compactedCount
@@ -914,6 +908,7 @@ export function prepareAgentModelContext(
   return {
     transcript,
     tools,
+    estimatedInputTokensBeforeToolCompaction,
     estimatedInputTokens,
     wasCompacted: true,
     compactedToolExchangeCount

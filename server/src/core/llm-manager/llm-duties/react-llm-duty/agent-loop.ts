@@ -25,6 +25,7 @@ import {
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
 } from './constants'
 import { buildComputerUseConvergenceHint } from './computer-use-convergence'
+import { createAgentTextPreview } from './agent-context-budget'
 import { validateToolInput } from './utils'
 
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
@@ -33,6 +34,8 @@ export const AGENT_SKILL_TOOL_NAME = 'load_agent_skill'
 export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
 
 const AGENT_TOOL_NAME_SEPARATOR = '__'
+const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
+const AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS = 1_000
 const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: 'word'
 })
@@ -80,11 +83,11 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 export const AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT = `<execution_limit_checkpoint>
 The operational iteration budget is exhausted. Address the original owner request now using the evidence already present in the transcript.
 
-- No tools are available in this checkpoint. Return plain text only.
+- No operational tools are available in this checkpoint.
 - If the evidence is sufficient, return the complete user-facing answer as plain text with no tool call.
 - Do not claim completion when required evidence or work is still missing.
-- If work is still incomplete, state the concrete obstacle and what remains unfinished. Do not claim that an alternative deliverable satisfies the original request.
-- If genuinely missing information or authorization blocks completion, explain it in your answer. An internal execution limit is not a reason to ask the owner to approve the same task again.
+- If work is still incomplete, call request_clarification with the concrete obstacle, practical alternatives, and one question that lets the owner resume this work. Do not claim that an alternative deliverable satisfies the original request.
+- An internal execution limit is not a reason to ask the owner to approve the same task again.
 </execution_limit_checkpoint>`
 
 /** Adds lightweight convergence pressure near the hard iteration boundary. */
@@ -176,7 +179,8 @@ export interface AgentLoopParams {
   callModel: (
     transcript: AgentToolTranscriptMessage[],
     tools: OpenAITool[],
-    options: AgentModelCallOptions
+    options: AgentModelCallOptions,
+    state: Pick<AgentLoopResult, 'executionHistory' | 'trackedSteps'>
   ) => Promise<AgentModelResult | null>
   executeFunction: (
     callable: AgentCallableFunction,
@@ -648,7 +652,8 @@ export async function runAgentLoop(
             ...(remainingIterations <= AGENT_CONVERGENCE_RESERVE_ITERATIONS
               ? { remainingIterations }
               : {})
-          }
+          },
+          { executionHistory, trackedSteps }
         )
       } catch (error) {
         if (
@@ -710,6 +715,7 @@ export async function runAgentLoop(
       // Retry once without appending partial text or incomplete tool arguments.
       // Only an explicit length stop merits more output tokens, not an empty reply.
       hasUsedOutputRecovery = true
+      isRecoveryAttempt = true
       isOutputRecoveryAttempt = Boolean(modelResult.isTruncated)
     }
 
@@ -843,7 +849,9 @@ async function finalizeAgentLoopAtLimit(
 ): Promise<AgentLoopResult> {
   const primaryOutcome = await attemptAgentLimitFinalization(
     params,
-    transcript
+    transcript,
+    executionHistory,
+    trackedSteps
   )
   if (primaryOutcome) {
     transcript.push(...primaryOutcome.messages)
@@ -866,15 +874,86 @@ async function finalizeAgentLoopAtLimit(
 
 interface AgentLimitFinalizationOutcome {
   answer: string
-  intent: 'answer'
+  intent: 'answer' | 'clarification'
   messages: AgentToolTranscriptMessage[]
+}
+
+function buildAgentLimitRecoveryTranscript(
+  transcript: AgentToolTranscriptMessage[],
+  executionHistory: ExecutionRecord[],
+  trackedSteps: TrackedPlanStep[]
+): AgentToolTranscriptMessage[] {
+  const originalRequest = transcript.find(
+    (message) => message.role === 'user'
+  )?.content || ''
+  const checkpoint = {
+    original_owner_request: originalRequest,
+    reported_plan: trackedSteps,
+    recent_execution_evidence: executionHistory
+      .slice(-AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT)
+      .map((execution) => ({
+        function: execution.function,
+        status: execution.status,
+        ...(execution.stepLabel ? { step: execution.stepLabel } : {}),
+        observation: createAgentTextPreview(
+          execution.observation,
+          AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS
+        )
+      }))
+  }
+
+  return [{
+    role: 'assistant',
+    content: [
+      '<original_owner_request>',
+      originalRequest,
+      '</original_owner_request>',
+      '<finalization_recovery_checkpoint>',
+      JSON.stringify(checkpoint),
+      '</finalization_recovery_checkpoint>'
+    ].join('\n')
+  }]
+}
+
+function getClarificationSignal(
+  toolCall: OpenAIToolCall
+): FinalResponseSignal | null {
+  if (toolCall.function.name !== AGENT_CLARIFICATION_TOOL_NAME) return null
+
+  const question = parseStringArgument(toolCall.function.arguments, 'question')
+  if (!question) return null
+
+  const explanation = parseStringArgument(
+    toolCall.function.arguments,
+    'explanation'
+  )
+  const alternatives = parseStringArrayArgument(
+    toolCall.function.arguments,
+    'alternatives'
+  )
+  return {
+    intent: 'clarification',
+    draft: [
+      ...(explanation ? [explanation] : []),
+      ...(alternatives.length > 0
+        ? [[
+            'Alternative options:',
+            ...alternatives.map((alternative) => `- ${alternative}`)
+          ].join('\n')]
+        : []),
+      question
+    ].join('\n\n')
+  }
 }
 
 async function attemptAgentLimitFinalization(
   params: AgentLoopParams,
-  modelTranscript: AgentToolTranscriptMessage[]
+  modelTranscript: AgentToolTranscriptMessage[],
+  executionHistory: ExecutionRecord[],
+  trackedSteps: TrackedPlanStep[]
 ): Promise<AgentLimitFinalizationOutcome | null> {
   let modelResult: AgentModelResult | null = null
+  let currentTranscript = modelTranscript
   const options: AgentModelCallOptions = {
     isRecoveryAttempt: false,
     isFinalizationAttempt: true
@@ -882,7 +961,12 @@ async function attemptAgentLimitFinalization(
   // Final synthesis gets one retry too, using the remedy for the actual failure.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      modelResult = await params.callModel(modelTranscript, [], options)
+      modelResult = await params.callModel(
+        currentTranscript,
+        [createClarificationTool()],
+        options,
+        { executionHistory, trackedSteps }
+      )
     } catch (error) {
       if (!(error instanceof AgentModelProviderError) || !error.canRetryWithCompaction) {
         return null
@@ -891,10 +975,28 @@ async function attemptAgentLimitFinalization(
       options.isContextRecoveryAttempt = true
       continue
     }
-    if (modelResult && !modelResult.isTruncated && modelResult.textContent?.trim()) {
+    const toolCalls = modelResult?.toolCalls || []
+    const hasValidClarification =
+      toolCalls.length === 1 && Boolean(getClarificationSignal(toolCalls[0]!))
+    if (
+      modelResult &&
+      !modelResult.isTruncated &&
+      (modelResult.textContent?.trim() || hasValidClarification)
+    ) {
       break
     }
-    options.isOutputRecoveryAttempt = Boolean(modelResult?.isTruncated)
+    options.isRecoveryAttempt = true
+    options.isContextRecoveryAttempt = true
+    if (modelResult?.isTruncated) {
+      options.isOutputRecoveryAttempt = true
+    } else {
+      delete options.isOutputRecoveryAttempt
+    }
+    currentTranscript = buildAgentLimitRecoveryTranscript(
+      modelTranscript,
+      executionHistory,
+      trackedSteps
+    )
   }
 
   if (!modelResult || modelResult.isTruncated) {
@@ -913,8 +1015,27 @@ async function attemptAgentLimitFinalization(
       : null
   }
 
-  // A provider violating the text-only checkpoint must not execute more tools.
-  return null
+  const clarificationSignal =
+    toolCalls.length === 1 ? getClarificationSignal(toolCalls[0]!) : null
+  if (!clarificationSignal) return null
+
+  return {
+    answer: clarificationSignal.draft,
+    intent: 'clarification',
+    messages: [
+      {
+        role: 'assistant',
+        content: textContent,
+        toolCalls
+      },
+      {
+        role: 'tool',
+        toolCallId: toolCalls[0]!.id,
+        toolName: AGENT_CLARIFICATION_TOOL_NAME,
+        content: 'Clarification requested. Wait for the owner response.'
+      }
+    ]
+  }
 }
 
 function createResumableAgentResult(
@@ -923,10 +1044,15 @@ function createResumableAgentResult(
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
 ): AgentLoopResult {
-  const answer = buildResumableAgentAnswer(failureKind)
+  const answer = buildResumableAgentAnswer(
+    failureKind,
+    transcript,
+    executionHistory,
+    trackedSteps
+  )
   return {
     answer,
-    intent: 'error',
+    intent: 'clarification',
     transcript,
     executionHistory,
     trackedSteps
@@ -934,11 +1060,41 @@ function createResumableAgentResult(
 }
 
 function buildResumableAgentAnswer(
-  failureKind: 'context' | 'synthesis'
+  failureKind: 'context' | 'synthesis',
+  transcript: AgentToolTranscriptMessage[],
+  executionHistory: ExecutionRecord[],
+  trackedSteps: TrackedPlanStep[]
 ): string {
-  return failureKind === 'context'
+  const explanation = failureKind === 'context'
     ? 'I could not finish because the model could not process the collected information. The task is incomplete; the session retains the work done so far.'
     : 'I could not finish because the model failed to produce the final response. I cannot confirm that the task is complete. The session retains the work done so far.'
+  const originalRequest = transcript.find(
+    (message) => message.role === 'user'
+  )?.content
+  const progress = executionHistory
+    .slice(-AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT)
+    .map((execution) => `- ${createAgentTextPreview(
+      execution.observation,
+      AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS
+    )}`)
+  const reportedPlan = trackedSteps.map(
+    (step) => `- ${step.label} (${step.status})`
+  )
+  const nextStep = trackedSteps.find((step) => step.status === 'in_progress') ||
+    trackedSteps.find((step) => step.status === 'pending')
+  const nextAction = nextStep?.label ||
+    'Produce the final answer from the verified findings'
+
+  return [
+    explanation,
+    ...(originalRequest ? [`Original request: ${originalRequest}`] : []),
+    ...(progress.length > 0 ? [['Saved progress:', ...progress].join('\n')] : []),
+    ...(reportedPlan.length > 0
+      ? [['Reported plan:', ...reportedPlan].join('\n')]
+      : []),
+    `Next, I will: ${nextAction}.`,
+    'May I continue with that next step?'
+  ].join('\n\n')
 }
 
 async function executeAgentToolCall(
@@ -1001,45 +1157,18 @@ async function executeAgentToolCall(
   }
 
   if (toolCall.function.name === AGENT_CLARIFICATION_TOOL_NAME) {
-    const question = parseStringArgument(
-      toolCall.function.arguments,
-      'question'
-    )
-    if (!question) {
+    const signal = getClarificationSignal(toolCall)
+    if (!signal) {
       return {
         content: 'Clarification request rejected: question is required.',
         trackedSteps
       }
     }
 
-    const explanation = parseStringArgument(
-      toolCall.function.arguments,
-      'explanation'
-    )
-    const alternatives = parseStringArrayArgument(
-      toolCall.function.arguments,
-      'alternatives'
-    )
-    const draft = [
-      ...(explanation ? [explanation] : []),
-      ...(alternatives.length > 0
-        ? [
-            [
-              'Alternative options:',
-              ...alternatives.map((alternative) => `- ${alternative}`)
-            ].join('\n')
-          ]
-        : []),
-      question
-    ].join('\n\n')
-
     return {
       content: 'Clarification requested. Wait for the owner response.',
       trackedSteps,
-      signal: {
-        intent: 'clarification',
-        draft
-      }
+      signal
     }
   }
 
@@ -1337,7 +1466,7 @@ function createClarificationTool(): OpenAITool {
     function: {
       name: AGENT_CLARIFICATION_TOOL_NAME,
       description:
-        'Pause the current agent run and ask the owner one required clarification question. When work remains incomplete, explain why and offer practical alternatives before asking whether to continue.',
+        'Pause the current agent run and ask the owner one required clarification question. Use this instead of a normal final answer when the owner reply should resume the same work with its current plan, evidence, and artifacts.',
       parameters: {
         type: 'object',
         properties: {

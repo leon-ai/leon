@@ -56,7 +56,7 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
-  it('keeps only the most recent computer-use screenshot', () => {
+  it('keeps only the two most recent computer-use screenshots', () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Operate the app.' }
     ]
@@ -87,7 +87,7 @@ describe('agent context budget', () => {
 
     expect(toolMessages[0]).not.toHaveProperty('files')
     expect(toolMessages[1]).not.toHaveProperty('files')
-    expect(toolMessages[2]).not.toHaveProperty('files')
+    expect(toolMessages[2]).toHaveProperty('files')
     expect(toolMessages[3]).toHaveProperty('files')
     expect(context.wasCompacted).toBe(false)
     expect(context.estimatedInputTokens).toBeLessThan(10_000)

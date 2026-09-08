@@ -535,7 +535,8 @@ describe('continuous agent loop', () => {
 
     expect(callModel).toHaveBeenCalledTimes(2)
     expect(callModel.mock.calls[1]?.[2]).toEqual({
-      isRecoveryAttempt: true
+      isRecoveryAttempt: true,
+      isOutputRecoveryAttempt: true
     })
     expect(executeFunction).not.toHaveBeenCalled()
     expect(result.answer).toBe('Recovered without partial work.')
@@ -1795,7 +1796,11 @@ describe('continuous agent loop', () => {
           observation: 'Recipient lookup complete.'
         }
       ],
-      loadedToolkitIds: ['communication']
+      loadedToolkitIds: ['communication'],
+      transcript: [
+        { role: 'assistant', content: 'Recipient lookup complete.' }
+      ],
+      activeSkillId: null
     })
 
     expect(isAgentLoopContinuationStateValid(state)).toBe(true)
@@ -1807,26 +1812,5 @@ describe('continuous agent loop', () => {
       'Recipient lookup complete.'
     )
     expect(state.transcript[0]?.content).not.toContain('Which recipient?')
-  })
-
-  it('keeps continuation checkpoints bounded after large runs', () => {
-    const executionHistory = Array.from({ length: 100 }, (_, index) => ({
-      function: callable.qualifiedName,
-      status: 'success',
-      observation: `Evidence ${index}: ${'detail '.repeat(500)}`
-    }))
-    const state = createAgentLoopContinuationState({
-      originalInput: 'Complete the investigation.',
-      clarificationQuestion: 'May I continue?',
-      planWidgetId: 'plan-1',
-      trackedSteps: [],
-      executionHistory,
-      loadedToolkitIds: ['test']
-    })
-
-    expect(state.transcript).toHaveLength(1)
-    expect(state.transcript[0]?.content.length).toBeLessThan(9_000)
-    expect(state.transcript[0]?.content).toContain('Evidence 99')
-    expect(state.transcript[0]?.content).not.toContain('Evidence 0')
   })
 })
