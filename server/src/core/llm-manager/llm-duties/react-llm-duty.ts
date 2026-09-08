@@ -197,7 +197,8 @@ export class ReActLLMDuty extends LLMDuty {
     this.systemPrompt = this.appendAdditionalInstructions(
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
         includePersonality: false,
-        includeMood: false
+        includeMood: false,
+        cacheFriendly: true
       })
     )
   }
@@ -364,7 +365,8 @@ export class ReActLLMDuty extends LLMDuty {
           AGENT_SYSTEM_PROMPT,
           {
             includePersonality: true,
-            includeMood: true
+            includeMood: true,
+            cacheFriendly: true
           }
         )
       )

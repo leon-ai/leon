@@ -49,6 +49,7 @@ interface CompactPromptOptions {
   includePersonality?: boolean
   includeMood?: boolean
   profile?: 'full' | 'lean'
+  cacheFriendly?: boolean
 }
 
 /**
@@ -599,8 +600,53 @@ ${dutySystemPrompt}`
     const {
       includePersonality = false,
       includeMood = false,
-      profile = 'full'
+      profile = 'full',
+      cacheFriendly = false
     } = options
+
+    if (cacheFriendly) {
+      const sections = [
+        profile === 'lean'
+          ? LEAN_DUTY_IDENTITY_DIRECTIVES
+          : IDENTITY_DIRECTIVES
+      ]
+
+      if (includePersonality) {
+        sections.push('', YOUR_PERSONALITY, this.personalityRules)
+      }
+
+      sections.push('', COMPACT_STYLE, '', YOUR_DUTY, dutySystemPrompt)
+
+      // Volatile owner, clock, mood, and profile additions follow the stable
+      // behavioral prefix so compatible providers can reuse that prefix.
+      if (profile === 'lean') {
+        sections.push('', this.contextInfo)
+      } else {
+        sections.push(
+          '',
+          this.whoYouAre,
+          '',
+          this.contextInfo,
+          '',
+          this.whatYouDo
+        )
+      }
+
+      if (includePersonality) {
+        sections.push('', this.getExtraPersonalityTraits())
+      }
+
+      if (includeMood) {
+        sections.push(
+          '',
+          YOUR_CURRENT_MOOD,
+          `${this._mood.description}${this.getExtraMood()}`
+        )
+      }
+
+      return sections.join('\n')
+    }
+
     const sections: string[] =
       profile === 'lean'
         ? [
