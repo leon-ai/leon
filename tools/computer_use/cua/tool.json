@@ -4,7 +4,7 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate graphical desktop applications and browser interfaces through Cua Driver.",
-  "progressive_guidance": "Reuse valid target identifiers. Prefer observed native menu paths and current semantic handles; otherwise use screenshot pixels. If accessibility exposes only the outer frame, use the screenshot and retry the tree at most once for a specifically missing control.\nForeground input and menus activate their target and restore focus; bring_to_front is needed only for persistent focus or an exposed desktop target. Background input does not raise windows: X11 uses XTEST/XInput2 without focus stealing; Wayland uses libei/portal compositor focus and cannot address a specific unfocused window. Remember background_unavailable per target; escalate to foreground only when necessary and permitted.\nUse perform_actions only for mechanical steps needing no visual decision, with at most one pixel-targeted click. For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Request capture_after=true when verification is needed and reuse it; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. After a retry block, observe the target afresh and reassess instead of replaying the same guess.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nTreat browser_consent_required as an authorization boundary: explain the required existing-profile consent if semantic access is necessary, or use permitted GUI interaction. Never bypass consent.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.",
+  "progressive_guidance": "For browser work, prefer get_browser_state and browser_* actions. Bind to an observed browser pid/window_id; when setup is required, use browser_prepare with strategy.kind=existing_profile (the host enforces owner permission), then inspect again. Reuse the returned target_id/tab_id and current page refs. First obtain enough page structure to understand the task and relevant collection; then use query/scope_ref to narrow subsequent reads. Query matches and truncated snapshots do not prove enumeration is complete: follow pagination, continuation or scroll to the requested boundary. Use screenshots/native accessibility when direct inspection is unsupported, denied or cannot expose the needed control. Do not repeat a failed setup without changed evidence.\nReuse valid target identifiers. Prefer observed native menu paths and current semantic handles; otherwise use screenshot pixels. For an unfamiliar editor, inspect its instructions or help before trying shortcuts or gestures. If accessibility exposes only the outer frame, use the screenshot and retry the tree at most once for a specifically missing control.\nForeground input and menus activate their target and restore focus; bring_to_front is needed only for persistent focus or an exposed desktop target. Background input does not raise windows: X11 uses XTEST/XInput2 without focus stealing; Wayland uses libei/portal compositor focus and cannot address a specific unfocused window. Remember background_unavailable per target; escalate to foreground only when necessary and permitted.\nPrefer perform_actions for predictable steps such as focusing a known field, typing and pressing Enter, with no intermediate visual decision, with at most one pixel-targeted click (including the focus click for type_text with x/y). For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For an action expected to open a page or dialog, set settle_ms to wait briefly after delivery before capture (on the final step for a batch). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -139,25 +139,17 @@
       "parameters": {
         "additionalProperties": false,
         "properties": {
-          "capture_mode": {
-            "description": "DEPRECATED and ignored. get_window_state always returns BOTH the element tree and a screenshot — ground on both. The modality is chosen at action time by how you address the target: an element ax action (element_index/element_token) or an element px action (x,y). Any value (including the old \"som\"/\"screenshot\" aliases) is accepted but has no effect.",
-            "enum": [
-              "ax",
-              "vision"
-            ],
-            "type": "string"
-          },
           "include_screenshot": {
-            "description": "Default true — returns a grounding screenshot alongside the tree. Set false to skip the grab and return tree only (the cheap path for re-indexing before an element ax action).",
+            "description": "Default true \u2014 returns a grounding screenshot alongside the tree. Set false to skip the grab and return tree only (the cheap path for re-indexing before an element ax action).",
             "type": "boolean"
           },
           "max_depth": {
-            "description": "Cap on accessibility-tree walk depth. Leon defaults to 6. Increase only when a needed control is omitted.",
+            "description": "Optional traversal-depth override. Omit for Leon's bounded default: modern applications can nest useful controls dozens of levels deep. Use a smaller limit only for a deliberately shallow inspection.",
             "minimum": 1,
             "type": "integer"
           },
           "max_elements": {
-            "description": "Cap on total accessibility nodes walked. Leon defaults to 200. Increase only when a needed control is omitted; query filters the result without reducing traversal cost.",
+            "description": "Optional override for the cap on accessibility nodes walked. Omit for Leon's bounded default. Increase only when a needed control is omitted; query filters results without reducing traversal cost.",
             "minimum": 1,
             "type": "integer"
           },
@@ -171,6 +163,12 @@
           "window_id": {
             "description": "Native window identifier from list_windows.",
             "type": "integer"
+          },
+          "settle_ms": {
+            "description": "Optional bounded wait before observing a loading or transitioning interface. Does not repeat input or guarantee readiness. Omit for an immediate observation.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000
           }
         },
         "required": [
@@ -191,7 +189,7 @@
         "additionalProperties": false,
         "properties": {
           "pid": {
-            "description": "Target pid — required for from_zoom click/type translation.",
+            "description": "Target pid \u2014 required for from_zoom click/type translation.",
             "type": "integer"
           },
           "window_id": {
@@ -471,7 +469,14 @@
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
-        "properties": {},
+        "properties": {
+          "settle_ms": {
+            "description": "Optional bounded wait before observing a loading or transitioning interface. Does not repeat input or guarantee readiness. Omit for an immediate observation.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000
+          }
+        },
         "type": "object"
       },
       "output_schema": {
@@ -586,6 +591,12 @@
             "type": "boolean",
             "description": "Capture the resulting desktop state after moving the pointer.",
             "default": true
+          },
+          "settle_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
           }
         },
         "required": [
@@ -617,7 +628,7 @@
             "type": "string"
           },
           "launch_path": {
-            "description": "Round-trip the `launch_path` returned by `list_apps` — the Exec= command from the .desktop file with XDG field codes already stripped. Highest precedence on Linux; spawned directly via the system shell.",
+            "description": "Round-trip the `launch_path` returned by `list_apps` \u2014 the Exec= command from the .desktop file with XDG field codes already stripped. Highest precedence on Linux; spawned directly via the system shell.",
             "type": "string"
           },
           "name": {
@@ -844,7 +855,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action.",
+            "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "button": {
@@ -936,6 +947,12 @@
           },
           "y": {
             "type": "number"
+          },
+          "settle_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
           }
         },
         "type": "object"
@@ -1088,7 +1105,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action.",
+            "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "button": {
@@ -1183,6 +1200,12 @@
           "window_id": {
             "description": "Target window XID. Required.",
             "type": "integer"
+          },
+          "settle_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
           }
         },
         "required": [
@@ -1341,7 +1364,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action.",
+            "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "amount": {
@@ -1437,6 +1460,12 @@
           "y": {
             "description": "Window-local screenshot-pixel Y of the scroll target. Pass with x and without element_index.",
             "type": "number"
+          },
+          "settle_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
           }
         },
         "required": [
@@ -1592,7 +1621,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action.",
+            "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "delivery_mode": {
@@ -1660,12 +1689,18 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X of the field to type into — the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click.",
+            "description": "Screenshot-pixel X of the field to type into \u2014 the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click.",
             "type": "number"
           },
           "y": {
             "description": "Screenshot-pixel Y of the field (see x).",
             "type": "number"
+          },
+          "settle_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
           }
         },
         "required": [
@@ -1821,7 +1856,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action.",
+            "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "delivery_mode": {
@@ -1896,12 +1931,18 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_index.",
+            "description": "Screenshot-pixel X \u2014 the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_index.",
             "type": "number"
           },
           "y": {
             "description": "Screenshot-pixel Y (see x).",
             "type": "number"
+          },
+          "settle_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
           }
         },
         "required": [
@@ -2057,7 +2098,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action.",
+            "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "delivery_mode": {
@@ -2130,12 +2171,18 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the combo (so e.g. Ctrl+V pastes into that field). Pass with y. Use for Chromium/Electron surfaces the background combo can't reach.",
+            "description": "Screenshot-pixel X \u2014 the element px action form: pixel-click there to focus, then send the combo (so e.g. Ctrl+V pastes into that field). Pass with y. Use for Chromium/Electron surfaces the background combo can't reach.",
             "type": "number"
           },
           "y": {
             "description": "Screenshot-pixel Y (see x).",
             "type": "number"
+          },
+          "settle_ms": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2000,
+            "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
           }
         },
         "required": [
@@ -2291,7 +2338,7 @@
         "additionalProperties": false,
         "properties": {
           "capture_after": {
-            "description": "Return a fresh screenshot after the action.",
+            "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "steps": {
@@ -2700,7 +2747,7 @@
           },
           "strategy": {
             "additionalProperties": false,
-            "description": "Existing-profile strategy. Provide kind=existing_profile only with explicit owner authorization.",
+            "description": "Existing-profile strategy: kind=existing_profile. The host checks the owner browser-inspection setting; tool arguments cannot grant access.",
             "properties": {
               "kind": {
                 "enum": [
@@ -2724,7 +2771,7 @@
       }
     },
     "get_browser_state": {
-      "description": "Inspect browser page structure and optionally its viewport. Use this only when browser semantics are needed; visible appearance is simpler with get_window_state. Pass query whenever the target text is known so Leon receives a small, actionable snapshot.",
+      "description": "Primary observation for browser tasks: inspect page structure and current page refs without a screenshot by default. First establish relevant scope, then use query/scope_ref for focused reads. Use continuation for truncated semantic snapshots; a query match is not a full collection.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": true,
@@ -2836,11 +2883,11 @@
             "type": "string"
           },
           "x": {
-            "description": "Viewport x (CSS px) — alternative to ref.",
+            "description": "Viewport x (CSS px) \u2014 alternative to ref.",
             "type": "number"
           },
           "y": {
-            "description": "Viewport y (CSS px) — alternative to ref.",
+            "description": "Viewport y (CSS px) \u2014 alternative to ref.",
             "type": "number"
           }
         },
@@ -3010,7 +3057,7 @@
             "type": "string"
           },
           "replace": {
-            "description": "false (default): insert at the caret, appending to whatever the field already holds. true: select the element's whole content first so the text replaces it — with an empty text this clears the field. Replacement goes through the selection, so beforeinput/input still fire and framework state stays consistent.",
+            "description": "false (default): insert at the caret, appending to whatever the field already holds. true: select the element's whole content first so the text replaces it \u2014 with an empty text this clears the field. Replacement goes through the selection, so beforeinput/input still fire and framework state stays consistent.",
             "type": "boolean"
           },
           "tab_id": {

@@ -325,9 +325,16 @@ async function main(): Promise<void> {
   const {
     ReActLLMDuty
   } = await import('../../../server/src/core/llm-manager/llm-duties/react-llm-duty')
-  const { CONVERSATION_LOGGER, TOOL_EXECUTOR, LLM_PROVIDER } = await import(
+  const { CONVERSATION_LOGGER, TOOL_EXECUTOR, LLM_PROVIDER, TOOL_PROVIDER_REGISTRY } = await import(
     '../../../server/src/core/index'
   )
+  // These subprocesses bypass the server's signal handlers. Dispose native
+  // providers before exiting so an interrupted GUI test cannot orphan overlays.
+  const stop = (): void => {
+    void TOOL_PROVIDER_REGISTRY.dispose().finally(() => process.exit(130))
+  }
+  process.once('SIGINT', stop)
+  process.once('SIGTERM', stop)
   const { CONFIG_STATE } = await import(
     '../../../server/src/core/config-states/config-state'
   )
@@ -502,6 +509,9 @@ async function main(): Promise<void> {
       }
     })
   } finally {
+    await TOOL_PROVIDER_REGISTRY.dispose()
+    process.removeListener('SIGINT', stop)
+    process.removeListener('SIGTERM', stop)
     TOOL_EXECUTOR.executeTool = originalExecuteTool
     await CONVERSATION_LOGGER.clear()
     await fs.rm(tempAssetPath, { force: true })

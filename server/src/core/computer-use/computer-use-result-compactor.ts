@@ -52,12 +52,9 @@ export class ComputerUseResultCompactor {
     if (refusal) {
       return {
         ...(hasText(refusal['code']) ? { code: refusal['code'] } : {}),
-        message: (hasText(refusal['message'])
+        message: hasText(refusal['message'])
           ? refusal['message']
-          : 'Computer-use action was refused.') +
-          (refusal['code'] === 'browser_route_unavailable'
-            ? ' Do not repeat this unsupported browser setup. Use get_window_state and normal window input on the existing browser instead; do not copy profiles or bypass authorization.'
-            : '')
+          : 'Computer-use action was refused.'
       }
     }
 
@@ -84,12 +81,9 @@ export class ComputerUseResultCompactor {
 
     return {
       code: result['code'],
-      message: (hasText(message)
+      message: hasText(message)
         ? message
-        : `Computer-use action failed: ${result['code']}. Correct the target or refresh its snapshot before retrying.`) +
-        (result['code'] === 'delivery_failed'
-          ? ' Refresh the window list and target the actual dialog window if one is open; the parent window cannot receive modal keyboard input.'
-          : '')
+        : `Computer-use action failed: ${result['code']}.`
     }
   }
 

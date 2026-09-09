@@ -75,7 +75,164 @@ afterEach(async () => {
   ARTIFACT_DIRECTORIES.clear()
 })
 
-describe('computer-use diagnostic, hover, and zoom tools', () => {
+describe('computer-use observations and capture recovery', () => {
+  it('waits after delivery and captures a delayed dialog without repeating the action', async () => {
+    const { driver, execute } = createProvider()
+    const nativeCall = driver.callTool.getMockImplementation()!
+    let deliveredAt = 0
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      if (action === 'press_key') deliveredAt = performance.now()
+      if (action === 'get_window_state') {
+        expect(performance.now() - deliveredAt).toBeGreaterThanOrEqual(25)
+        return { images: [], text: 'Dialog covers the source', isError: true,
+          structuredJson: JSON.stringify({ code: 'window_capture_occluded' }) }
+      }
+      return nativeCall(action, args)
+    })
+    const result = await execute('press_key', { ...WINDOW, key: 'return', settle_ms: 30 })
+    expect(result.success).toBe(true)
+    expect(driver.callTool.mock.calls.map(([action]) => action))
+      .toEqual(['press_key', 'get_window_state', 'get_desktop_state'])
+    expect(driver.callTool.mock.calls[0]![1]).not.toContain('settle_ms')
+    expect(result.output).toMatchObject({ post_action_state: { capture_target: { kind: 'desktop' } } })
+    expect(result.modelFiles).toHaveLength(1)
+  })
+
+  it('returns desktop evidence when a delayed window refresh finds an occluding dialog', async () => {
+    const { driver, execute } = createProvider()
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      if (action === 'get_window_state') return { images: [], text: 'Covered', isError: true,
+        structuredJson: JSON.stringify({ code: 'window_capture_occluded' }) }
+      return nativeCall(action, args)
+    })
+    const started = performance.now()
+    const result = await execute('get_window_state', { ...WINDOW, settle_ms: 30 })
+    expect(performance.now() - started).toBeGreaterThanOrEqual(25)
+    expect(result.output).toMatchObject({ post_action_state: { capture_target: { kind: 'desktop' } } })
+    expect(result.modelFiles).toHaveLength(1)
+    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual(['get_window_state', 'get_desktop_state'])
+    expect(driver.callTool.mock.calls[0]![1]).not.toContain('settle_ms')
+  })
+
+  it.each([
+    { capture_after: false, settle_ms: 30 },
+    { settle_ms: 2_001 }
+  ])('rejects unsupported settlement options %j before delivering input', async (options) => {
+    const { driver, execute } = createProvider()
+    const result = await execute('press_key', { ...WINDOW, key: 'return', ...options })
+    expect(result.success).toBe(false)
+    expect(driver.callTool).not.toHaveBeenCalled()
+  })
+
+  it('marks repeated pixels as a suspected no-op while preserving delivered input and visual evidence', async () => {
+    const { driver, execute } = createProvider()
+    await execute('get_window_state', WINDOW)
+    driver.callTool.mockClear()
+    const result = await execute('click', { ...WINDOW, x: 30, y: 40 })
+    expect(result).toMatchObject({
+      success: true,
+      output: {
+        result: { effect: 'suspected_noop' },
+        visual_change: { status: 'unchanged', comparison: 'exact_capture' }
+      }
+    })
+    expect(result.modelFiles).toHaveLength(1)
+    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual(['click', 'get_window_state'])
+    expect(driver.callTool.mock.calls[0]![1]).not.toContain('capture_after')
+  })
+
+  it('observes the actual desktop after input is refused by a modal without replaying input', async () => {
+    const { driver, execute } = createProvider()
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      if (action === 'hotkey') return {
+        images: [], text: 'foreground_unavailable', isError: true,
+        structuredJson: JSON.stringify({ content: [{ text: 'foreground_unavailable' }], isError: true })
+      }
+      return nativeCall(action, args)
+    })
+    const result = await execute('hotkey', { ...WINDOW, keys: ['ctrl', 'w'] })
+    expect(result.success).toBe(false)
+    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual(['hotkey', 'get_desktop_state'])
+    expect(result.output).toMatchObject({ post_action_state: { capture_target: { kind: 'desktop' } } })
+    expect(result.modelFiles).toHaveLength(1)
+    expect((await execute('click', { target: DESKTOP, x: 20, y: 20 })).success).toBe(true)
+  })
+
+  it('observes the destination after successful input closes its source window', async () => {
+    const { driver, execute } = createProvider()
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      if (action === 'get_window_state') throw new Error('Window no longer exists')
+      return nativeCall(action, args)
+    })
+    const result = await execute('press_key', { ...WINDOW, key: 'return' })
+    expect(result.success).toBe(true)
+    expect(result.output).toMatchObject({ post_action_state: {
+      capture_target: { kind: 'desktop' },
+      previous_target_error: { success: false, error_code: 'capture_failed' }
+    } })
+    expect(result.output).not.toHaveProperty('post_action_state.previous_target_error.recovery')
+    expect(result.modelFiles).toHaveLength(1)
+    expect(driver.callTool.mock.calls.map(([action]) => action))
+      .toEqual(['press_key', 'get_window_state', 'get_desktop_state'])
+    expect((await execute('click', { ...WINDOW, x: 30, y: 40 })).success).toBe(false)
+    expect((await execute('click', { target: DESKTOP, x: 30, y: 40 })).success).toBe(true)
+  })
+
+  it.each([
+    { label: 'missing image', frameValid: undefined, images: [] },
+    { label: 'invalid frame', frameValid: false, images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] }
+  ])('rejects post-action evidence with $label', async ({ frameValid, images }) => {
+    const { driver, execute } = createProvider()
+    await execute('get_window_state', WINDOW)
+    driver.callTool.mockClear()
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      if (action === 'get_window_state') return {
+        images, text: '', isError: false,
+        structuredJson: JSON.stringify({
+          ...WINDOW, screenshot_frame_valid: frameValid,
+          elements: [{ role: 'button', label: 'Save', element_token: 'stale-save' }]
+        })
+      }
+      return nativeCall(action, args)
+    })
+    const result = await execute('press_key', { ...WINDOW, key: 'return' })
+    expect(result.success).toBe(true)
+    expect(result.output).toMatchObject({ post_action_state: {
+      capture_target: { kind: 'desktop' },
+      previous_target_error: { success: false, error_code: 'capture_failed' }
+    } })
+    expect(JSON.stringify(result.output)).not.toContain('stale-save')
+    expect(result.modelFiles).toHaveLength(1)
+    expect(driver.callTool.mock.calls.map(([action]) => action))
+      .toEqual(['press_key', 'get_window_state', 'get_desktop_state'])
+    expect(JSON.parse(driver.callTool.mock.calls[1]![1])).toMatchObject({ include_screenshot: true })
+    expect((await execute('click', { ...WINDOW, x: 30, y: 40 })).success).toBe(false)
+  })
+
+  it('preserves delivered input when post-action capture fails and invalidates its pixels', async () => {
+    const { driver, execute } = createProvider()
+    await execute('get_window_state', WINDOW)
+    driver.callTool.mockImplementation(async (action: string) => ({
+      text: 'Window covered.', images: [], isError: action === 'get_window_state' || action === 'get_desktop_state',
+      ...(action === 'get_window_state' ? { errorCode: 'window_capture_occluded' } : {}),
+      structuredJson: JSON.stringify(action === 'get_window_state'
+        ? { code: 'window_capture_occluded' } : { effect: 'unverifiable' })
+    }))
+    const result = await execute('click', { ...WINDOW, x: 30, y: 40, capture_after: true })
+    expect(result.success).toBe(true)
+    expect(result.output).toMatchObject({
+      post_action_state: { success: false, error_code: 'window_capture_occluded' },
+      recovery: expect.stringContaining('bring_to_front'),
+      next_step: expect.stringContaining('do not replay input')
+    })
+    expect((await execute('click', { ...WINDOW, x: 30, y: 40 })).success).toBe(false)
+    expect(driver.callTool).toHaveBeenCalledTimes(4)
+  })
+
   it('returns actionable health checks without taking screenshots', async () => {
     const { driver, execute } = createProvider()
     const result = await execute('health_report', { include: ['ax_capability'] })
@@ -111,7 +268,7 @@ describe('computer-use diagnostic, hover, and zoom tools', () => {
     expect(result.output['result']).toMatchObject({ screenshot_width: 420, screenshot_height: 280, zoomed: true })
     expect(driver.callTool).toHaveBeenCalledWith('zoom', JSON.stringify({ ...WINDOW, x1: 300, y1: 20, x2: 600, y2: 150 }))
     await execute('click', { ...WINDOW, x: 210, y: 140 })
-    expect(driver.callTool).toHaveBeenLastCalledWith('click', JSON.stringify({ ...WINDOW, x: 210, y: 140, from_zoom: true }))
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 210, y: 140, from_zoom: true }))
   })
 
   it('focuses crop-targeted typing through a translated click, not a second translation', async () => {
@@ -120,7 +277,7 @@ describe('computer-use diagnostic, hover, and zoom tools', () => {
     await zoom()
     await execute('type_text', { ...WINDOW, x: 210, y: 140, text: 'Value' })
     expect(driver.callTool).toHaveBeenNthCalledWith(3, 'click', JSON.stringify({ ...WINDOW, x: 210, y: 140, from_zoom: true }))
-    expect(driver.callTool).toHaveBeenLastCalledWith('type_text', JSON.stringify({ ...WINDOW, text: 'Value' }))
+    expect(driver.callTool).toHaveBeenCalledWith('type_text', JSON.stringify({ ...WINDOW, text: 'Value' }))
   })
 
   it('requires full-window grounding for unsupported crop input and nested zoom', async () => {
@@ -132,7 +289,7 @@ describe('computer-use diagnostic, hover, and zoom tools', () => {
     expect(driver.callTool).toHaveBeenCalledTimes(2)
     await execute('get_window_state', WINDOW)
     expect((await execute('click', { ...WINDOW, x: 20, y: 20 })).success).toBe(true)
-    expect(driver.callTool).toHaveBeenLastCalledWith('click', JSON.stringify({ ...WINDOW, x: 20, y: 20 }))
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 20, y: 20 }))
   })
 
   it('invalidates an older conversation crop when a different conversation zooms', async () => {

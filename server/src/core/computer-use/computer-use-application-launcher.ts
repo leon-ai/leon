@@ -43,7 +43,11 @@ export class ComputerUseApplicationLauncher {
       launchResult
     )
     const acceptsExistingWindowMutation =
-      Array.isArray(parameters['urls']) && parameters['urls'].length > 0
+      (Array.isArray(parameters['urls']) && parameters['urls'].length > 0) ||
+      // Launchers may forward a URL to an existing process and exit immediately.
+      (Array.isArray(parameters['additional_arguments']) &&
+        parameters['additional_arguments'].some((argument) =>
+          typeof argument === 'string' && URL.canParse(argument)))
     const reportedWindow = this.findLaunchedWindow(
       launchedWindows,
       baseline,
@@ -55,6 +59,7 @@ export class ComputerUseApplicationLauncher {
       return {
         result: {
           ...launchResult,
+          pid: reportedWindow['pid'] ?? pid,
           window_ready: true,
           windows: [reportedWindow]
         },
@@ -81,6 +86,7 @@ export class ComputerUseApplicationLauncher {
         return {
           result: {
             ...launchResult,
+            pid: window['pid'] ?? pid,
             window_ready: true,
             windows: [window]
           },

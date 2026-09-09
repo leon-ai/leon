@@ -1,5 +1,10 @@
 import type { CuaToolResult } from './types'
 
+/** Input delivery alone does not establish the intended application effect. */
+export function isComputerUseEffectUncertain(effect: unknown): boolean {
+  return effect === 'unverifiable' || effect === 'suspected_noop'
+}
+
 /** Cua also exposes informational activation codes in its errorCode field. */
 export function hasCuaError(result: CuaToolResult): boolean {
   if (result.isError) return true

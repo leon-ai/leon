@@ -1,13 +1,17 @@
+import { setTimeout as delay } from 'node:timers/promises'
+
 import type {
   ToolProvider,
   ToolProviderExecutionInput,
   ToolProviderExecutionResult
 } from '@/core/tool-provider/types'
+import { LogHelper } from '@/helpers/log-helper'
 
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
 import { ComputerUseApplicationLauncher } from './computer-use-application-launcher'
 import {
   COMPUTER_USE_ACTIONS,
+  COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS,
   COMPUTER_USE_ACTION_SEQUENCE_LIMIT,
   COMPUTER_USE_ACTION_SEQUENCE_NAME,
   COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT,
@@ -15,15 +19,18 @@ import {
   COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS,
   COMPUTER_USE_CAPTURE_ACTIONS,
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
+  COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
   COMPUTER_USE_COORDINATE_FIELDS,
   COMPUTER_USE_PROVIDER_ID,
   COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
+  COMPUTER_USE_SCREEN_CAPTURE_ACTIONS,
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
   COMPUTER_USE_WINDOW_MAX_DEPTH,
   CUA_SESSION_ENDED_ERROR_CODE,
-  CUA_BROWSER_CONSENT_ERROR_CODE
+  CUA_BROWSER_CONSENT_ERROR_CODE,
+  CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE
 } from './constants'
 import { mapComputerUseCoordinateToSource } from './computer-use-coordinate-mapper'
 import { ComputerUseResultCompactor } from './computer-use-result-compactor'
@@ -31,11 +38,13 @@ import { ComputerUseRuntimeManager } from './computer-use-runtime-manager'
 import { getComputerUseSetOfMarkKey } from './computer-use-set-of-mark'
 import {
   resolveComputerUseActivityOverlay,
+  resolveComputerUseBrowserInspection,
   resolveComputerUseInteractionMode,
   resolveComputerUseSetOfMarkMode,
   resolvePreferredApplications
 } from './computer-use-settings'
 import { createCuaDriverAdapter } from './cua/cua-driver-adapter'
+import { CuaDesktopSetupPendingError, CuaDesktopSetupState } from './cua/cua-desktop-setup'
 import type {
   CapturedComputerUseState,
   ComputerUseDriver,
@@ -49,7 +58,7 @@ import type {
   ManagedComputerUseRuntime,
   PreferredApplicationsResolver
 } from './types'
-import { asRecord, parseJsonRecord, hasCuaError } from './utils'
+import { asRecord, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
 
 export { COMPUTER_USE_ACTION_NAMES } from './constants'
 export {
@@ -108,9 +117,17 @@ export class ComputerUseToolProvider implements ToolProvider {
 
     // Desktop actions share one cursor and focus, so profile-scoped driver
     // state must still execute serially on a shared physical computer.
-    const execution = this.executionTail.then(() =>
-      this.executeAction(input, action, input.parameters)
-    )
+    const execution = this.executionTail.then(async () => {
+      try {
+        return await this.executeAction(input, action, input.parameters)
+      } catch (error) {
+        return this.executionFailure(error)
+      } finally {
+        // Keep the cursor through a batch, then hide it even on failure or when
+        // the owner stopped the agent while native input was completing.
+        await this.runtimeManager.finishExecution(input.profileName)
+      }
+    })
     this.executionTail = execution.then(
       () => undefined,
       () => undefined
@@ -139,16 +156,39 @@ export class ComputerUseToolProvider implements ToolProvider {
       message: `Running computer-use action ${action}.`
     })
 
+    const startedAt = performance.now()
+    const timings: Record<string, number> = {}
     try {
-      const runtime = await this.runtimeManager.get(input.profileName)
+      const runtime = await this.runtimeManager.get(input)
+      timings['runtime'] = Math.round(performance.now() - startedAt)
       const recording = runtime.recordingSessionId !== undefined &&
         runtime.recordingSessionId === input.conversationSessionId
       const captureAfter =
-        (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? (recording || action === 'move_cursor')) === true &&
+        (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? true) === true &&
         COMPUTER_USE_CAPTURE_ACTIONS.has(action) &&
         runtime.driver.supportsPostActionCapture !== false
       const driverParameters = { ...parameters }
       delete driverParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
+      const settleMs = driverParameters['settle_ms'] ?? 0
+      delete driverParameters['settle_ms']
+      if (!Number.isInteger(settleMs) || Number(settleMs) < 0 ||
+          Number(settleMs) > COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS) {
+        throw new Error(`settle_ms must be an integer between 0 and ${COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS}.`)
+      }
+      const isObservation = action === 'get_window_state' || action === 'get_desktop_state'
+      if (Number(settleMs) > 0 && !isObservation && !captureAfter) {
+        throw new Error('settle_ms requires an observation or an action with capture_after enabled.')
+      }
+      if (isObservation) {
+        // The model can observe a loading destination once after a bounded wait;
+        // do not infer page readiness from colors, titles or inaccessible trees.
+        if (Number(settleMs) > 0) {
+          await delay(Number(settleMs))
+          // A delayed refresh follows a transition; a previous screenshot is
+          // not suitable for the query-only image reuse optimization.
+          if (action === 'get_window_state') driverParameters['include_screenshot'] ??= true
+        }
+      }
       const cursorTarget = asRecord(driverParameters['target'])
       if (action === 'move_cursor' && (
         cursorTarget?.['kind'] !== 'desktop' || cursorTarget['display_id'] !== 'primary'
@@ -203,6 +243,7 @@ export class ComputerUseToolProvider implements ToolProvider {
           if (transform.fromZoom) this.visualTransforms.delete(key)
         }
       }
+      const driverStartedAt = performance.now()
       const result = await this.callAction(
         runtime.driver,
         input,
@@ -211,6 +252,9 @@ export class ComputerUseToolProvider implements ToolProvider {
       )
       let structuredResult =
         parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+      if (hasCuaError(result) && COMPUTER_USE_SCREEN_CAPTURE_ACTIONS.has(action)) {
+        this.forgetVisualState(input, actionParameters)
+      }
       const launchResolution =
         action === 'launch_app' && structuredResult && launchWindowBaseline
           ? await this.applicationLauncher.resolve(
@@ -224,6 +268,10 @@ export class ComputerUseToolProvider implements ToolProvider {
       if (launchResolution) {
         structuredResult = launchResolution.result
       }
+      const structuredFailure = this.resultCompactor.getStructuredFailure(structuredResult)
+      const actionFailed = hasCuaError(result) || structuredFailure !== null
+      timings['driver'] = Math.round(performance.now() - driverStartedAt)
+      const artifactsStartedAt = performance.now()
       const compactedResult = structuredResult
         ? this.resultCompactor.compact(input, action, structuredResult)
         : null
@@ -258,17 +306,49 @@ export class ComputerUseToolProvider implements ToolProvider {
         persistedImages.transform,
         persistedImages.setOfMark
       )
-      const capturedState = captureAfter &&
-        !hasCuaError(result) &&
-        !this.resultCompactor.getStructuredFailure(structuredResult)
-        ? await this.captureStateAfterAction(runtime, input, actionParameters, action)
-        : null
+      timings['artifacts'] = Math.round(performance.now() - artifactsStartedAt)
+      const captureStartedAt = performance.now()
+      // A modal may take focus between input and observation. On delivery
+      // failure, observe the desktop instead of reusing the blocked window.
+      const captureParameters = actionFailed
+        ? { scope: 'desktop', session: actionParameters['session'] }
+        : actionParameters
+      // Hide the input overlay before capturing evidence, not just when the
+      // tool returns; its animation otherwise makes unchanged screens differ.
+      const recoverObservation = actionFailed && action === 'get_window_state' && Number(settleMs) > 0
+      if (captureAfter || recoverObservation) await this.runtimeManager.finishExecution(input.profileName)
+      // Wait after delivery, so an asynchronous destination can replace the
+      // source window before capture. Never replay the input while waiting.
+      if (captureAfter && !actionFailed && Number(settleMs) > 0) await delay(Number(settleMs))
+      const capture = (targetParameters: Record<string, unknown>): Promise<CapturedComputerUseState | null> =>
+        this.captureStateAfterAction(runtime, input, targetParameters, action)
+          .catch((error: unknown) => this.failedCapture(
+            input, action === 'invoke_menu' ? { scope: 'desktop' } : targetParameters,
+            COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
+            error instanceof Error ? error.message : String(error)
+          ))
+      let capturedState = captureAfter || recoverObservation ? await capture(captureParameters) : null
+      const capturedWindowId = captureParameters['window_id'] ?? asRecord(captureParameters['target'])?.['window_id']
+      if (capturedState?.result['success'] === false && typeof capturedWindowId === 'number' && action !== 'invoke_menu') {
+        // Saving or closing a dialog can remove the source window. Return its
+        // destination in the same call instead of encouraging a repeated click.
+        const desktopState = await capture({ scope: 'desktop', session: actionParameters['session'] })
+        if (desktopState?.modelFiles.length && desktopState.result['success'] !== false) {
+          const previousTargetError = { ...capturedState.result }
+          // The fallback resolved the observation gap; retain diagnostics
+          // without an obsolete instruction to capture again.
+          delete previousTargetError['recovery']
+          capturedState = {
+            ...desktopState,
+            result: { ...desktopState.result, previous_target_error: previousTargetError }
+          }
+        }
+      }
       const visualStateUnchanged =
         previousVisualStateId !== undefined &&
         capturedState?.visualStateId === previousVisualStateId &&
-        ['unverifiable', 'suspected_noop'].includes(
-          String(primaryResult['effect'])
-        )
+        isComputerUseEffectUncertain(primaryResult['effect'])
+      timings['post_action_capture'] = Math.round(performance.now() - captureStartedAt)
       if (visualStateUnchanged) {
         primaryResult = { ...primaryResult, effect: 'suspected_noop' }
       }
@@ -295,8 +375,6 @@ export class ComputerUseToolProvider implements ToolProvider {
         ? capturedState.modelFiles
         : persistedImages.modelFiles
 
-      const structuredFailure =
-        this.resultCompactor.getStructuredFailure(structuredResult)
       const failureMessage =
         (launchResolution && !launchResolution.ready
           ? 'The application process started, but no usable window became available.'
@@ -305,18 +383,10 @@ export class ComputerUseToolProvider implements ToolProvider {
         result.errorCode ||
         'Computer-use action failed.'
       const succeeded =
-        !hasCuaError(result) &&
-        structuredFailure === null &&
+        !actionFailed &&
         launchResolution?.ready !== false
       const failureCode = structuredFailure?.code ||
         launchResolution?.errorCode || result.errorCode
-      const failureRecovery = !succeeded && (
-        failureCode === CUA_SESSION_ENDED_ERROR_CODE
-          ? 'Automatic session recovery failed. Report this technical blocker and preserve completed work; do not ask the owner to restart an unspecified computer-use session.'
-          : failureCode === CUA_BROWSER_CONSENT_ERROR_CODE
-            ? 'Existing-profile browser access requires explicit consent. Explain that specific requirement if semantic access is necessary, or continue through permitted GUI interaction. Do not bypass the consent boundary.'
-            : undefined
-      )
       if (succeeded && action === 'start_recording') {
         runtime.recordingSessionId = input.conversationSessionId
       } else if (succeeded && action === 'stop_recording') {
@@ -325,12 +395,8 @@ export class ComputerUseToolProvider implements ToolProvider {
       const successMessage = visualStateUnchanged
         ? 'Computer input was delivered, but the captured interface did not change. Treat the intended effect as unverified.'
         : this.getSuccessMessage(primaryResult)
-      const target = asRecord(actionParameters['target'])
-      // An unverified dispatch is not a failed click. Let the agent compare
-      // the observed result before choosing a different input route.
-      const windowClickNeedsObservation = action === 'click' &&
-        (actionParameters['window_id'] != null || target?.['kind'] === 'window') &&
-        ['unverifiable', 'suspected_noop'].includes(String(primaryResult['effect']))
+      const recovery = capturedState?.result['recovery'] ||
+        this.getActionRecovery(primaryResult, actionParameters, failureCode)
 
       return {
         success: succeeded,
@@ -341,14 +407,14 @@ export class ComputerUseToolProvider implements ToolProvider {
           action,
           ...(!succeeded ? { success: false } : {}),
           result: primaryResult,
-          ...(failureRecovery ? { recovery: failureRecovery } : windowClickNeedsObservation ? {
-            recovery: 'Inspect the post-action state or observe the target before retrying; unverifiable does not mean failure. If the intended change is absent, do not repeat the window click. When foreground interaction is permitted, bring the target to the front, take a fresh get_desktop_state screenshot, and click the visibly exposed control with target={kind:"desktop",display_id:"primary"}. Use only that desktop image\'s coordinates, omit window identifiers and element tokens, then verify the change. If the target is obscured or focus changes, observe again before acting.'
-          } : asRecord(primaryResult['escalation']) ? {
-            recovery: 'Check whether the intended result is already present before retrying. If absent, follow escalation.recommended using a grounded target; do not repeat the same ineffective route. Foreground input requires an available desktop, and browser setup still requires authorization.'
-          } : {}),
+          ...(action === 'get_browser_state' || action === 'browser_prepare'
+            ? { existing_profile_authorized: runtime.browserInspectionAllowed } : {}),
+          ...(recovery ? { recovery } : {}),
           ...(capturedState ? {
             post_action_state: capturedState.result,
-            next_step: 'Inspect the attached post-action screenshot before another observation or retry. If navigation opened a new app or dialog, inspect that destination rather than bringing the previous window forward. Reuse this screenshot for the next action and tutorial evidence; observe again only when needed information is missing or the interface has changed.'
+            next_step: capturedState.result['success'] === false
+              ? 'Input may have landed, but the post-action observation failed. Follow its recovery diagnostics before another pixel action; do not replay input solely because capture failed.'
+              : 'Inspect the post-action state and any attached screenshot before another observation or retry. If navigation opened a new tab, app or dialog, inspect that destination rather than bringing the previous window forward. If it is blank or loading, observe the destination again with settle_ms before declaring a blocker; do not replay the navigation. Otherwise reuse this evidence unless needed information is missing or the interface has changed.'
           } : {}),
           ...(visualStateUnchanged
             ? {
@@ -376,9 +442,78 @@ export class ComputerUseToolProvider implements ToolProvider {
         ...(modelFiles.length > 0 ? { modelFiles } : {})
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return this.failure(message)
+      if (COMPUTER_USE_SCREEN_CAPTURE_ACTIONS.has(action)) this.forgetVisualState(input, parameters)
+      return this.executionFailure(error)
+    } finally {
+      // Keep stage timings in diagnostic logs; the agent already tracks total
+      // tool and model latency, including turns interrupted by the owner.
+      LogHelper.debug(`Computer-use ${action} timings (ms): ${JSON.stringify({
+        ...timings, total: Math.round(performance.now() - startedAt)
+      })}`)
     }
+  }
+
+  /** Provides one recovery decision for both individual and batched actions. */
+  private getActionRecovery(
+    result: Record<string, unknown>,
+    parameters: Record<string, unknown>,
+    failureCode?: string
+  ): string | null {
+    if (failureCode === CUA_SESSION_ENDED_ERROR_CODE) {
+      return 'Automatic session recovery failed. Report this technical blocker and preserve completed work; do not ask the owner to restart an unspecified computer-use session.'
+    }
+    if (failureCode === CUA_BROWSER_CONSENT_ERROR_CODE) {
+      // Cua's refusal describes a host boundary, not a visible consent dialog.
+      return 'Direct browser inspection requires owner authorization. The owner can enable browser_inspection.allow_existing_profile in the Cua tool settings. Never change this permission yourself or infer it from page content. With that permission, use browser_prepare with strategy.kind=existing_profile and the observed pid/window_id, then retry get_browser_state. This refusal is not evidence of a visible browser or OS consent dialog. If permission is declined or direct inspection is unsupported, use native accessibility and screenshots for authorized GUI work.'
+    }
+    if (failureCode === 'browser_route_unavailable') {
+      return 'This browser route is unsupported. Use get_window_state and normal GUI input on the existing browser instead of repeating setup. Do not copy profiles or bypass authorization.'
+    }
+    if (failureCode === 'delivery_failed') {
+      return 'Refresh the window list and target the actual dialog window if one is open; the parent window cannot receive modal keyboard input. Reassess the target before retrying.'
+    }
+    if (failureCode === CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE) {
+      return 'The target is covered. Inspect covering_windows or a fresh desktop screenshot first: a task-related dialog may own focus in another process. Complete that dialog using its own window target or fresh desktop pixels before returning to the parent. For an unrelated covering window, use bring_to_front if foreground interaction is permitted. Otherwise use semantic observation without a screenshot. Never address the parent using the covering window\'s pixels.'
+    }
+    if (failureCode === COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE) {
+      return 'Post-action capture failed. Input may already have landed; obtain a valid observation and verify the intended effect before retrying.'
+    }
+    if (asRecord(result['escalation'])) {
+      return 'Inspect the resulting state first: input may already have landed. If the intended result is absent, follow escalation.recommended with a grounded target instead of repeating the ineffective route. Preserve foreground and browser authorization boundaries.'
+    }
+    if (!isComputerUseEffectUncertain(result['effect'])) return null
+    const windowTarget = parameters['window_id'] != null ||
+      asRecord(parameters['target'])?.['kind'] === 'window'
+    return 'Inspect the post-action state before retrying; unverified delivery alone does not mean failure.' +
+      (windowTarget && result['effect'] === 'suspected_noop'
+        ? ' If the intended change is absent and foreground interaction is permitted, expose the target, take a fresh get_desktop_state screenshot, and use a desktop target with that image\'s coordinates. Never reuse window coordinates or element tokens on the desktop. Verify the change before continuing.'
+        : '')
+  }
+
+  private executionFailure(error: unknown): ToolProviderExecutionResult {
+    if (error instanceof CuaDesktopSetupPendingError) {
+      return {
+        success: false,
+        message: error.message,
+        output: {
+          success: false,
+          error_code: 'computer_use_setup_pending',
+          setup_state: CuaDesktopSetupState.ActivationPending,
+          error: error.message,
+          // Supply setup facts so the LLM can explain the next step naturally.
+          setup: {
+            component: 'GNOME WinRects extension',
+            purpose: 'computer use on Wayland',
+            installed: true,
+            activation_requires: 'a new GNOME desktop session',
+            owner_steps: ['save work', 'log out and back in', 'retry the request'],
+            initial_setup: true
+          },
+          guidance: 'Explain the setup and required owner steps in a friendly message in your own words. Pause computer use until activation is complete.'
+        }
+      }
+    }
+    return this.failure(error instanceof Error ? error.message : String(error))
   }
 
   private async executeActionSequence(
@@ -396,44 +531,44 @@ export class ComputerUseToolProvider implements ToolProvider {
       )
     }
 
-    const runtime = await this.runtimeManager.get(input.profileName)
-    const recording = runtime.recordingSessionId !== undefined &&
-      runtime.recordingSessionId === input.conversationSessionId
-    const captureAfter = (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? recording) === true
     const pixelClickCount = steps.filter((value) => {
       const step = asRecord(value)
       const stepParameters = asRecord(step?.['parameters'])
       return (
-        step?.['action'] === 'click' &&
+        (step?.['action'] === 'click' || step?.['action'] === 'type_text') &&
         typeof stepParameters?.['x'] === 'number' &&
-        typeof stepParameters?.['y'] === 'number' &&
-        stepParameters?.['element_token'] === undefined &&
-        stepParameters?.['element_index'] === undefined
+        typeof stepParameters?.['y'] === 'number'
       )
     }).length
     if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
       return this.failure(
-        'perform_actions accepts at most one pixel-targeted click. Observe between spatial targets or use semantic element handles.'
+        'perform_actions accepts at most one pixel-targeted click, including the focus click for type_text with x/y. Observe between spatial targets or use semantic element handles.'
       )
     }
+    // Reject unsupported actions before setup or input. Their position in a
+    // sequence must not cause an avoidable partial edit.
+    for (const [index, value] of steps.entries()) {
+      const step = asRecord(value)
+      if (typeof step?.['action'] !== 'string' ||
+          !COMPUTER_USE_SEQUENCE_ACTIONS.has(step['action']) ||
+          !asRecord(step['parameters'])) {
+        return this.failure(`Step ${index + 1} must use a supported mechanical action with parameters.`)
+      }
+    }
 
+    const captureAfter = (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? true) === true
     const stepResults: Array<Record<string, unknown>> = []
     const artifacts: Array<Record<string, unknown>> = []
     let modelFiles: ToolProviderExecutionResult['modelFiles'] = []
     let postActionState: unknown
+    let recovery: unknown
+    let nextStep: unknown
+    let failure: ToolProviderExecutionResult | undefined
 
     for (const [index, value] of steps.entries()) {
-      const step = asRecord(value)
-      const stepAction = step?.['action']
-      const stepParameters = asRecord(step?.['parameters']) || {}
-      if (
-        typeof stepAction !== 'string' ||
-        !COMPUTER_USE_SEQUENCE_ACTIONS.has(stepAction)
-      ) {
-        return this.failure(
-          `Step ${index + 1} must use a supported mechanical action.`
-        )
-      }
+      const step = asRecord(value)!
+      const stepAction = step['action'] as string
+      const stepParameters = asRecord(step['parameters'])!
 
       const boundedParameters = { ...stepParameters }
       delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
@@ -472,36 +607,37 @@ export class ComputerUseToolProvider implements ToolProvider {
       }
       // Preserve final visual evidence for convergence checks across batches.
       postActionState = result.output['post_action_state']
+      recovery = result.output['recovery']
+      nextStep = result.output['next_step']
       stepResults.push({
         action: stepAction,
         success: result.success,
-        result: result.output['result'] ?? null
+        result: result.output['result'] ?? null,
+        ...(recovery ? { recovery } : {}),
+        ...(result.output['error_code'] ? { error_code: result.output['error_code'] } : {})
       })
 
       if (!result.success) {
-        return {
-          success: false,
-          message: `Computer-use sequence stopped at step ${index + 1}: ${result.message}`,
-          output: {
-            success: false,
-            completed_action_count: index,
-            steps: stepResults,
-            ...(artifacts.length > 0 ? { artifacts } : {})
-          },
-          ...(modelFiles.length > 0 ? { modelFiles } : {})
-        }
+        failure = result
+        break
       }
     }
 
     return {
-      success: true,
-      message: `Completed ${steps.length} computer-use actions.`,
-      output: {
-        completed_action_count: steps.length,
+      success: !failure,
+      message: failure
+        ? `Computer-use sequence stopped at step ${stepResults.length}: ${failure.message}`
+        : `Completed ${steps.length} computer-use actions.`,
+      output: this.boundWindowObservation({
+        ...(failure ? { success: false } : {}),
+        completed_action_count: stepResults.length - (failure ? 1 : 0),
+        ...(failure?.output['error_code'] ? { error_code: failure.output['error_code'] } : {}),
         steps: stepResults,
+        ...(recovery ? { recovery } : {}),
+        ...(nextStep ? { next_step: nextStep } : {}),
         ...(postActionState ? { post_action_state: postActionState } : {}),
         ...(artifacts.length > 0 ? { artifacts } : {})
-      },
+      }),
       ...(modelFiles.length > 0 ? { modelFiles } : {})
     }
   }
@@ -562,8 +698,29 @@ export class ComputerUseToolProvider implements ToolProvider {
         return sessionResult
       }
       if (typeof session === 'string') {
-        await this.runtimeManager.restoreActivityOverlay(driver, input, session)
+        await this.runtimeManager.restoreActivityOverlay(driver, input, session, action)
       }
+      result = await this.callDriverAction(driver, action, parameters)
+    }
+
+    const failure = this.resultCompactor.getStructuredFailure(
+      parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
+    )
+    if (action === 'get_browser_state' &&
+        (result.errorCode === CUA_BROWSER_CONSENT_ERROR_CODE || failure?.code === CUA_BROWSER_CONSENT_ERROR_CODE) &&
+        resolveComputerUseBrowserInspection(input) &&
+        Number.isInteger(parameters['pid']) && Number(parameters['pid']) > 0 &&
+        Number.isInteger(parameters['window_id']) && Number(parameters['window_id']) > 0) {
+      // An existing owner grant makes setup routine. Keep it in the provider
+      // instead of spending a model turn deciding to repeat Cua's next action.
+      const prepared = await driver.callTool('browser_prepare', JSON.stringify({
+        pid: parameters['pid'], window_id: parameters['window_id'],
+        strategy: { kind: 'existing_profile' },
+        ...(typeof parameters['session'] === 'string' ? { session: parameters['session'] } : {})
+      }))
+      if (hasCuaError(prepared) || this.resultCompactor.getStructuredFailure(
+        parseJsonRecord(prepared.structuredJson) || parseJsonRecord(prepared.rawJson)
+      )) return prepared
       result = await this.callDriverAction(driver, action, parameters)
     }
 
@@ -579,9 +736,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     // Dynamic pages can acknowledge navigation before their accessibility tree
     // exists. A short bounded retry avoids spending another model turn polling.
     for (const delayMs of COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS) {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, delayMs)
-      })
+      await delay(delayMs)
       result = await driver.callTool(action, serializedParameters)
       if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
         break
@@ -805,6 +960,16 @@ export class ComputerUseToolProvider implements ToolProvider {
       : `${sessionKey}:desktop`
   }
 
+  /** A rejected capture cannot justify reusing older coordinates or hashes. */
+  private forgetVisualState(
+    input: ToolProviderExecutionInput,
+    parameters: Record<string, unknown>
+  ): void {
+    const key = this.getVisualTransformKey(input, parameters)
+    this.visualTransforms.delete(key)
+    this.visualStateIds.delete(key)
+  }
+
   private boundWindowObservation(output: Record<string, unknown>): Record<string, unknown> {
     const field = asRecord(output['post_action_state'])?.['elements']
       ? 'post_action_state' : 'result'
@@ -817,7 +982,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       returned_element_count: 0,
       omitted_element_count: elements.length,
       elements_complete: false,
-      hint: 'Use pid and window_id with current element tokens. Observe again after acting; old tokens expire. Increase max_elements/max_depth if a needed control is omitted; query filters results, not traversal cost. If a window click has no effect, bring the target forward when permitted, then use a fresh desktop screenshot and desktop target for the visible control. Never reuse window coordinates on the desktop.'
+      hint: 'Use pid and window_id with current element tokens. Observe again after acting; old tokens expire. Increase max_elements/max_depth only if a needed control is omitted; query filters results, not traversal cost. elements_complete=false alone does not establish that this walk hit a limit.'
     }
     // Include paths, metadata and envelope in the budget, not just AX elements.
     // Reserve the worst-case counter width so counters cannot overflow it.
@@ -942,6 +1107,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       : {
           pid,
           window_id: windowId,
+          include_screenshot: true,
           max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
           max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH
         }
@@ -958,15 +1124,23 @@ export class ComputerUseToolProvider implements ToolProvider {
       captureAction,
       captureParameters
     )
-    if (hasCuaError(captureResult)) {
-      return null
-    }
 
     const structuredResult =
       parseJsonRecord(captureResult.structuredJson) ||
       parseJsonRecord(captureResult.rawJson)
-    if (this.resultCompactor.getStructuredFailure(structuredResult)) {
-      return null
+    const failure = this.resultCompactor.getStructuredFailure(structuredResult)
+    if (hasCuaError(captureResult) || failure) {
+      const code = failure?.code || captureResult.errorCode || COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE
+      return this.failedCapture(input, captureParameters, code,
+        failure?.message || captureResult.text, structuredResult || {})
+    }
+    // A closed dialog can return stale AX elements with a successful envelope.
+    // Post-action evidence always needs a fresh frame; use the same recovery
+    // path as an explicit capture failure instead of reusing those elements.
+    if (structuredResult?.['screenshot_frame_valid'] === false || !captureResult.images.length) {
+      return this.failedCapture(input, captureParameters,
+        COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
+        'The resulting interface has no valid screenshot. Refresh the current target before using its pixels or element tokens.')
     }
     const compactedResult = structuredResult
         ? this.resultCompactor.compact(input, captureAction, structuredResult)
@@ -1019,8 +1193,26 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
   }
 
+  /** Retains capture failures as evidence without reclassifying delivered input. */
+  private failedCapture(
+    input: ToolProviderExecutionInput,
+    parameters: Record<string, unknown>,
+    code: string,
+    message: string,
+    result: Record<string, unknown> = {}
+  ): CapturedComputerUseState {
+    this.forgetVisualState(input, parameters)
+    return {
+      result: {
+        ...result, success: false, error_code: code, message,
+        recovery: this.getActionRecovery(result, parameters, code)
+      },
+      artifacts: [], modelFiles: [], visualStateId: null
+    }
+  }
+
   private getSuccessMessage(result: Record<string, unknown>): string {
-    if (result?.['effect'] === 'unverifiable' || result?.['effect'] === 'suspected_noop') {
+    if (isComputerUseEffectUncertain(result['effect'])) {
       return 'Input was delivered, but its intended effect is unverified. Observe the target before deciding whether to retry.'
     }
     return 'Computer-use action completed.'

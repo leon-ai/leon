@@ -2,10 +2,13 @@ import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import { LogHelper } from '@/helpers/log-helper'
+
 import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
 
+import { resolveComputerUseBrowserInspection } from './computer-use-settings'
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
-import { CUA_FOREGROUND_DELIVERY_MODE } from './constants'
+import { COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_FOREGROUND_DELIVERY_MODE } from './constants'
 import {
   ComputerUseInteractionMode,
   type ComputerUseActivityOverlayResolver,
@@ -30,14 +33,28 @@ export class ComputerUseRuntimeManager {
     private readonly artifactStore: ComputerUseArtifactStore
   ) {}
 
-  public async get(profileName: string): Promise<ManagedComputerUseRuntime> {
+  public async get(
+    input: ToolProviderExecutionInput
+  ): Promise<ManagedComputerUseRuntime> {
+    const { profileName } = input
+    const browserInspectionAllowed = resolveComputerUseBrowserInspection(input)
     const existingRuntime = this.runtimes.get(profileName)
     if (existingRuntime) {
-      return existingRuntime
+      const runtime = await existingRuntime
+      if (runtime.browserInspectionAllowed === browserInspectionAllowed) return runtime
+      // Recreate the runtime when the owner changes permission. Native grants
+      // already issued to the old runtime must not outlive revocation.
+      this.runtimes.delete(profileName)
+      try {
+        await this.hideActivityOverlays(runtime)
+        await runtime.driver.shutdown()
+      } finally {
+        runtime.driver.uniffiDestroy()
+      }
     }
 
     // Keep native loading lazy so Leon starts on unsupported hosts.
-    const runtimePromise = this.driverFactory().then(async (driver) => {
+    const runtimePromise = this.driverFactory(input).then(async (driver) => {
       if (!driver.isAvailable()) {
         await driver.shutdown()
         driver.uniffiDestroy()
@@ -46,8 +63,9 @@ export class ComputerUseRuntimeManager {
 
       return {
         driver,
+        browserInspectionAllowed,
         initializedSessions: new Set<string>(),
-        activityOverlayStates: new Map<string, boolean>(),
+        activityOverlaySessions: new Set<string>(),
         ...(await this.getActionCapabilities(driver))
       }
     })
@@ -70,23 +88,53 @@ export class ComputerUseRuntimeManager {
         if (result.status !== 'fulfilled') {
           return
         }
-        await result.value.driver.shutdown()
-        result.value.driver.uniffiDestroy()
+        try {
+          await this.hideActivityOverlays(result.value)
+          await result.value.driver.shutdown()
+        } finally {
+          result.value.driver.uniffiDestroy()
+        }
       })
     )
+  }
+
+  /** Hides activity after a serialized call without ending reusable Cua sessions. */
+  public async finishExecution(profileName: string): Promise<void> {
+    const pending = this.runtimes.get(profileName)
+    if (!pending) return
+    const runtime = await pending.catch(() => null)
+    if (runtime) await this.hideActivityOverlays(runtime)
+  }
+
+  private async hideActivityOverlays(runtime: ManagedComputerUseRuntime): Promise<void> {
+    // Native input can reveal its cursor even when the owner setting is off.
+    // Hide every touched session instead of trusting cached visibility.
+    for (const session of runtime.activityOverlaySessions) {
+      if (!runtime.driver.setAgentCursorEnabled) continue
+      try {
+        const result = await runtime.driver.setAgentCursorEnabled({ session, enabled: false })
+        if (hasCuaError(result)) throw new Error(result.text || result.errorCode)
+        runtime.activityOverlaySessions.delete(session)
+      } catch (error) {
+        // Cleanup must not turn delivered input into a retryable action failure.
+        // Retain the session so shutdown or the next call retries cleanup.
+        LogHelper.warning(`Computer-use overlay cleanup failed: ${String(error)}`)
+      }
+    }
   }
 
   /** Reapplies owner visibility after Cua revives an expired session. */
   public async restoreActivityOverlay(
     driver: ComputerUseDriver,
     input: ToolProviderExecutionInput,
-    session: string
+    session: string,
+    action: string
   ): Promise<void> {
     await this.setActivityOverlay(
       driver,
       input,
       session,
-      this.activityOverlayResolver(input)
+      action
     )
   }
 
@@ -97,10 +145,10 @@ export class ComputerUseRuntimeManager {
     parameters: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
     let managedParameters = { ...parameters }
-    if (['click', 'type_text', 'press_key', 'hotkey', 'scroll'].includes(action)) {
-      const hasElement = typeof managedParameters['element_index'] === 'number' ||
+    const hasElement = typeof managedParameters['element_index'] === 'number' ||
         (typeof managedParameters['element_token'] === 'string' &&
           managedParameters['element_token'].length > 0)
+    if (['click', 'type_text', 'press_key', 'hotkey', 'scroll'].includes(action)) {
       const hasPixels = managedParameters['x'] != null || managedParameters['y'] != null
       if (hasElement && hasPixels) {
         throw new Error('Choose one target: a current element token/index OR screenshot pixels, not both.')
@@ -111,9 +159,6 @@ export class ComputerUseRuntimeManager {
       }
     }
     const target = asRecord(managedParameters['target'])
-    const hasElement = typeof managedParameters['element_index'] === 'number' ||
-      (typeof managedParameters['element_token'] === 'string' &&
-        managedParameters['element_token'].length > 0)
     if (hasElement) {
       const pid = target?.['pid'] ?? managedParameters['pid']
       const windowId = target?.['window_id'] ?? managedParameters['window_id']
@@ -237,7 +282,7 @@ export class ComputerUseRuntimeManager {
       runtime.initializedSessions.add(session)
     }
 
-    await this.configureActivityOverlay(runtime, input, session)
+    await this.configureActivityOverlay(runtime, input, session, action)
 
     return { ...managedParameters, session }
   }
@@ -245,41 +290,41 @@ export class ComputerUseRuntimeManager {
   private async configureActivityOverlay(
     runtime: ManagedComputerUseRuntime,
     input: ToolProviderExecutionInput,
-    session: string
+    session: string,
+    action: string
   ): Promise<void> {
-    const enabled = this.activityOverlayResolver(input)
     if (
       !runtime.driver.setAgentCursorEnabled ||
-      runtime.activityOverlayStates.get(session) === enabled
+      runtime.activityOverlaySessions.has(session)
     ) {
       return
     }
 
+    // Track intent before the native call so cleanup also runs if it throws.
+    runtime.activityOverlaySessions.add(session)
     await this.setActivityOverlay(
       runtime.driver,
       input,
       session,
-      enabled
+      action
     )
-    // Remember unsupported hosts too so one unavailable overlay does not add a
-    // warning and an SDK round trip to every computer-use action.
-    runtime.activityOverlayStates.set(session, enabled)
   }
 
   private async setActivityOverlay(
     driver: ComputerUseDriver,
     input: ToolProviderExecutionInput,
     session: string,
-    enabled: boolean
+    action: string
   ): Promise<void> {
     if (!driver.setAgentCursorEnabled) {
       return
     }
 
-    const result = await driver.setAgentCursorEnabled({
-      session,
-      enabled
-    })
+    // An animated cursor is useful during input, but pollutes observation
+    // hashes and can cover the control the model needs to read.
+    const enabled = !COMPUTER_USE_SCREEN_CAPTURE_ACTIONS.has(action) &&
+      action !== 'verify_state' && this.activityOverlayResolver(input)
+    const result = await driver.setAgentCursorEnabled({ session, enabled })
     if (hasCuaError(result)) {
       input.onProgress?.({
         source: 'log',

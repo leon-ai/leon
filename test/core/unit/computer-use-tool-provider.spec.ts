@@ -11,6 +11,8 @@ import {
   shouldUseCuaSafeX11Input
 } from '@/core/computer-use/computer-use-tool-provider'
 import { createComputerUseSetOfMarkPlan } from '@/core/computer-use/computer-use-set-of-mark'
+import { createCuaBrowserAuthorizationHost } from '@/core/computer-use/cua/cua-browser-authorization'
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ComputerUseSetOfMarkMode } from '@/core/computer-use/types'
 
 const PROFILE_NAME = 'computer-use-test'
@@ -150,29 +152,6 @@ function findPortableInputSchemaIssues(
 }
 
 describe('ComputerUseToolProvider', () => {
-  it('keeps preferred_apps last in the default computer-use settings', () => {
-    const settings = JSON.parse(
-      fs.readFileSync(
-        path.join(
-          process.cwd(),
-          'tools',
-          'computer_use',
-          'cua',
-          'settings.sample.json'
-        ),
-        'utf8'
-      )
-    ) as Record<string, unknown>
-
-    expect(settings).toEqual({
-      interaction_mode: 'background',
-      activity_overlay: { enabled: true },
-      set_of_mark: { mode: 'auto' },
-      preferred_apps: {}
-    })
-    expect(Object.keys(settings).at(-1)).toBe('preferred_apps')
-  })
-
   it('adds SOM labels automatically only for ambiguous actionable controls', () => {
     const result = {
       window_bounds: { x: 100, y: 200, width: 800, height: 600 },
@@ -445,13 +424,16 @@ describe('ComputerUseToolProvider', () => {
     const previousUrl = process.env['LEON_COMPUTER_USE_REMOTE_URL']
     process.env['LEON_COMPUTER_USE_REMOTE_URL'] = 'http://owner-device.test/execute'
     const fetchMock = vi.fn().mockImplementation(
-      () =>
+      (_url: string, options: { body: string }) =>
         new Response(
         JSON.stringify({
           status: 'ok',
           output: {
             effect: 'unverifiable',
-            route: 'global_input'
+            route: 'global_input',
+            ...(JSON.parse(options.body).action === 'get_window_state' ? {
+              cybopal_model_files: [{ data_base64: 'aW1hZ2U=', media_type: 'image/png' }]
+            } : {})
           }
         }),
         { status: 200, headers: { 'content-type': 'application/json' } }
@@ -766,6 +748,46 @@ describe('ComputerUseToolProvider', () => {
     })
   })
 
+  it('keeps GUI observation available after DevTools consent is refused', async () => {
+    const driver = createDriver({})
+    driver.callTool.mockImplementation(async (action: string) => ({
+      text: '', images: [], isError: false, degraded: false, rawJson: '{}',
+      structuredJson: JSON.stringify(action === 'get_browser_state'
+        ? { status: 'refused', refusal: {
+            code: 'browser_consent_required',
+            detail: { next_action: 'browser_prepare', reason: 'consumer_profile_endpoint_requires_grant' }
+          } }
+        : { pid: 42, window_id: 7, elements: [] })
+    }))
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const input = {
+      toolkitId: 'computer_use', toolId: 'cua', profileName: PROFILE_NAME,
+      parameters: { pid: 42, window_id: 7, include_screenshot: false }
+    }
+    const refusal = await provider.execute({ ...input, functionName: 'get_browser_state' })
+    expect(refusal.success).toBe(false)
+    expect(refusal.output['error_code']).toBe('browser_consent_required')
+    expect(refusal.output['result']).toMatchObject({ refusal: {
+      detail: { reason: 'consumer_profile_endpoint_requires_grant' }
+    } })
+    expect(refusal.output['result']).toHaveProperty('refusal.detail.next_action', 'browser_prepare')
+    expect(refusal.output['recovery']).toContain('Direct browser inspection requires owner authorization')
+    expect(refusal.output['recovery']).toContain('use native accessibility and screenshots')
+    expect(refusal.output['recovery']).toContain('Never change this permission yourself')
+    expect(refusal.output['recovery']).toContain('use browser_prepare')
+    expect(driver.callTool).toHaveBeenCalledTimes(1)
+
+    const observation = await provider.execute({ ...input, functionName: 'get_window_state' })
+    expect(observation.success).toBe(true)
+    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual([
+      'get_browser_state', 'start_session', 'get_window_state'
+    ])
+    await provider.dispose()
+    const artifacts = [...(observation.output['artifacts'] as Array<{ path: string }> || []),
+      ...(refusal.output['artifacts'] as Array<{ path: string }> || [])]
+    await Promise.all(artifacts.map((artifact) => fs.promises.rm(artifact.path, { force: true })))
+  })
+
   it('reports structured Cua retry escalations as tool failures', async () => {
     const driver = createDriver({
       text: '',
@@ -838,16 +860,17 @@ describe('ComputerUseToolProvider', () => {
     expect(driver.callTool.mock.calls[0]![0]).toBe('start_session')
     expect(sessionInput.session.startsWith('leon-')).toBe(true)
     expect(sessionInput.session).toHaveLength(17)
-    expect(driver.setAgentCursorEnabled).toHaveBeenCalledOnce()
+    expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled))
+      .toEqual([false, false, false, false])
     expect(driver.setAgentCursorEnabled).toHaveBeenCalledWith({
       session: sessionInput.session,
-      enabled: true
+      enabled: false
     })
     expect(driver.callTool.mock.calls[1]).toEqual([
       'get_window_state',
       JSON.stringify({
-        max_elements: 200,
-        max_depth: 6,
+        max_elements: 500,
+        max_depth: 32,
         pid: 42,
         window_id: 7,
         session: sessionInput.session
@@ -858,38 +881,41 @@ describe('ComputerUseToolProvider', () => {
     ).toHaveLength(1)
   })
 
-  it('can disable the owner-visible Cua activity overlay', async () => {
-    const driver = createDriver({
-      text: 'Window captured.',
-      images: [],
-      structuredJson: '{}',
-      rawJson: '{}',
-      isError: false,
-      degraded: false
+  it('hides the cursor after a native error and preserves session reuse', async () => {
+    const driver = createDriver({ images: [], text: '', isError: false, structuredJson: '{}' })
+    driver.callTool.mockImplementation(async (action: string) => {
+      if (action === 'click') throw new Error('Native input failed')
+      return { images: [], text: '', isError: false, structuredJson: '{}' }
     })
-    const provider = new ComputerUseToolProvider(
-      async () => driver as never,
-      () => 'background',
-      () => ({}),
-      () => false
-    )
-
-    await provider.execute({
-      toolkitId: 'computer_use',
-      toolId: 'cua',
-      functionName: 'get_window_state',
-      parameters: { pid: 42, window_id: 7 },
-      profileName: PROFILE_NAME,
-      conversationSessionId: 'session-1'
-    })
-
-    const sessionInput = JSON.parse(driver.callTool.mock.calls[0]![1]) as {
-      session: string
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const input = {
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'click',
+      parameters: { pid: 42, window_id: 7, element_token: 'button' },
+      profileName: PROFILE_NAME, conversationSessionId: 'cleanup-error'
     }
-    expect(driver.setAgentCursorEnabled).toHaveBeenCalledWith({
-      session: sessionInput.session,
-      enabled: false
+    expect((await provider.execute(input)).success).toBe(false)
+    expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([true, false])
+    await provider.execute({ ...input, functionName: 'get_window_state', parameters: { pid: 42, window_id: 7 } })
+    expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([true, false, false, false])
+    expect(driver.callTool.mock.calls.filter(([name]) => name === 'start_session')).toHaveLength(1)
+    await provider.dispose()
+    expect(driver.shutdown).toHaveBeenCalledOnce()
+  })
+
+  it('does not fail delivered input when cursor cleanup throws and retries at disposal', async () => {
+    const driver = createDriver({ images: [], text: '', isError: false, structuredJson: '{}' })
+    driver.setAgentCursorEnabled.mockResolvedValueOnce({ images: [], text: '', isError: false })
+      .mockRejectedValueOnce(new Error('Overlay unavailable'))
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const result = await provider.execute({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'get_window_state',
+      parameters: { pid: 42, window_id: 7 }, profileName: PROFILE_NAME, conversationSessionId: 'cleanup-retry'
     })
+    expect(result.success).toBe(true)
+    await provider.dispose()
+    expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([false, false, false])
+    expect(driver.shutdown).toHaveBeenCalledOnce()
+    expect(driver.uniffiDestroy).toHaveBeenCalledOnce()
   })
 
   it('restores an ended hidden Cua session and retries once', async () => {
@@ -1001,7 +1027,7 @@ describe('ComputerUseToolProvider', () => {
       expect(driver.callTool).toHaveBeenCalledTimes(1)
       expect(result.output['error_code']).toBe(code)
       if (code === 'browser_consent_required') {
-        expect(result.output['recovery']).toContain('explicit consent')
+        expect(result.output['recovery']).toContain('owner authorization')
       }
     }
   )
@@ -1023,7 +1049,7 @@ describe('ComputerUseToolProvider', () => {
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual(['list_windows', 'start_session'])
   })
 
-  it('runs a grounded mechanical sequence without intermediate model turns', async () => {
+  it('runs a mechanical sequence with one final capture by default', async () => {
     const successfulResult = {
       text: 'Done.',
       images: [],
@@ -1033,6 +1059,16 @@ describe('ComputerUseToolProvider', () => {
       degraded: false
     }
     const driver = createDriver(successfulResult)
+    driver.callTool.mockImplementation(async (action: string) => ({
+      ...successfulResult,
+      images: action === 'get_window_state'
+        ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] : []
+    }))
+    driver.listToolsJson.mockResolvedValue(JSON.stringify({ tools:
+      ['hotkey', 'type_text', 'press_key', 'get_window_state'].map((name) => ({
+        name, inputSchema: { properties: { session: { type: 'string' } } }
+      }))
+    }))
     const provider = new ComputerUseToolProvider(
       async () => driver as never
     )
@@ -1042,7 +1078,6 @@ describe('ComputerUseToolProvider', () => {
       toolId: 'cua',
       functionName: 'perform_actions',
       parameters: {
-        capture_after: true,
         steps: [
           {
             action: 'hotkey',
@@ -1063,11 +1098,15 @@ describe('ComputerUseToolProvider', () => {
     })
 
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'start_session',
       'hotkey',
       'type_text',
       'press_key',
       'get_window_state'
     ])
+    expect(driver.setAgentCursorEnabled.mock.calls.map(([value]) => value.enabled)).toEqual([true, false])
+    expect(driver.setAgentCursorEnabled.mock.invocationCallOrder[1])
+      .toBeLessThan(driver.callTool.mock.invocationCallOrder.at(-1)!)
     expect(result).toMatchObject({
       success: true,
       output: {
@@ -1082,7 +1121,7 @@ describe('ComputerUseToolProvider', () => {
     })
   })
 
-  it('requires a fresh observation between multiple pixel-targeted clicks', async () => {
+  it.each(['click', 'type_text'])('requires a fresh observation between pixel-targeted %s actions', async (action) => {
     const driver = createDriver({})
     const provider = new ComputerUseToolProvider(
       async () => driver as never
@@ -1094,8 +1133,8 @@ describe('ComputerUseToolProvider', () => {
       functionName: 'perform_actions',
       parameters: {
         steps: [
-          { action: 'click', parameters: { x: 10, y: 20 } },
-          { action: 'click', parameters: { x: 30, y: 40 } }
+          { action, parameters: { x: 10, y: 20, ...(action === 'type_text' ? { text: 'first' } : {}) } },
+          { action, parameters: { x: 30, y: 40, ...(action === 'type_text' ? { text: 'second' } : {}) } }
         ]
       },
       profileName: PROFILE_NAME,
@@ -1107,6 +1146,63 @@ describe('ComputerUseToolProvider', () => {
       message: expect.stringContaining('at most one pixel-targeted click')
     })
     expect(driver.callTool).not.toHaveBeenCalled()
+  })
+
+  it('rejects an unsupported later batch action before delivering any input', async () => {
+    const driver = createDriver({})
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const result = await provider.execute({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
+      profileName: PROFILE_NAME,
+      parameters: { steps: [
+        { action: 'type_text', parameters: { pid: 42, window_id: 7, text: 'first' } },
+        { action: 'launch_app', parameters: {} }
+      ] }
+    })
+    expect(result.success).toBe(false)
+    expect(driver.callTool).not.toHaveBeenCalled()
+  })
+
+  it('preserves batch refusal diagnostics and stops before the next input', async () => {
+    const driver = createDriver({ images: [], text: '', isError: false,
+      structuredJson: JSON.stringify({ status: 'refused', refusal: { code: 'browser_consent_required' } }) })
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const result = await provider.execute({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
+      profileName: PROFILE_NAME,
+      parameters: { steps: [
+        { action: 'type_text', parameters: { pid: 42, window_id: 7, text: 'first' } },
+        { action: 'press_key', parameters: { pid: 42, window_id: 7, key: 'return' } }
+      ] }
+    })
+    expect(result.output).toMatchObject({ completed_action_count: 0,
+      error_code: 'browser_consent_required', recovery: expect.stringContaining('owner authorization'),
+      steps: [{ action: 'type_text', success: false, error_code: 'browser_consent_required' }] })
+    expect(driver.callTool).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns final capture guidance and uncertain effects from a batch', async () => {
+    const driver = createDriver({ images: [], text: '', isError: false,
+      structuredJson: JSON.stringify({ effect: 'unverifiable' }) })
+    driver.callTool.mockImplementation(async (action: string) => ({
+      images: action === 'get_window_state'
+        ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] : [],
+      text: '', isError: false, structuredJson: JSON.stringify({ effect: 'unverifiable' })
+    }))
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const result = await provider.execute({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
+      profileName: PROFILE_NAME,
+      parameters: { capture_after: true, steps: [
+        { action: 'press_key', parameters: { pid: 42, window_id: 7, key: 'return' } }
+      ] }
+    })
+    expect(result.output).toMatchObject({
+      recovery: expect.stringContaining('does not mean failure'),
+      next_step: expect.stringContaining('post-action state'),
+      steps: [{ action: 'press_key', result: { effect: 'unverifiable' }, recovery: expect.any(String) }]
+    })
+    expect(result.output['recovery']).not.toContain('expose the target')
   })
 
   it('waits for a launched application to expose a usable window', async () => {
@@ -1243,7 +1339,10 @@ describe('ComputerUseToolProvider', () => {
     }
   })
 
-  it('resolves a URL launch when the frontmost existing window changes', async () => {
+  it.each([
+    { urls: ['https://example.com'] },
+    { launch_path: '/usr/bin/browser-stable', additional_arguments: ['https://example.com'] }
+  ])('resolves a URL launch into an existing browser: %j', async (parameters) => {
     vi.useFakeTimers()
     const driver = createDriver({})
     const beforeWindows = [
@@ -1272,6 +1371,7 @@ describe('ComputerUseToolProvider', () => {
           images: [],
           structuredJson: JSON.stringify({
             name: 'OS URL handler',
+            pid: 99,
             windows: []
           }),
           rawJson: '{}',
@@ -1306,7 +1406,7 @@ describe('ComputerUseToolProvider', () => {
         toolkitId: 'computer_use',
         toolId: 'cua',
         functionName: 'launch_app',
-        parameters: { urls: ['https://example.com'] },
+        parameters,
         profileName: PROFILE_NAME,
         conversationSessionId: 'session-1'
       })
@@ -1318,6 +1418,7 @@ describe('ComputerUseToolProvider', () => {
         output: {
           result: {
             window_ready: true,
+            pid: 20,
             windows: [{ window_id: 2, title: 'Requested page' }]
           }
         }
@@ -1327,7 +1428,7 @@ describe('ComputerUseToolProvider', () => {
     }
   })
 
-  it('uses foreground delivery while independently enabling the activity overlay', async () => {
+  it.each([true, false])('respects foreground delivery with activity overlay enabled=%s', async (enabled) => {
     const driver = createDriver({
       text: 'Clicked.',
       images: [],
@@ -1338,7 +1439,9 @@ describe('ComputerUseToolProvider', () => {
     })
     const provider = new ComputerUseToolProvider(
       async () => driver as never,
-      () => 'visible'
+      () => 'visible',
+      () => ({}),
+      () => enabled
     )
 
     await provider.execute({
@@ -1363,157 +1466,12 @@ describe('ComputerUseToolProvider', () => {
         session: sessionInput.session
       })
     ])
-    expect(driver.setAgentCursorEnabled).toHaveBeenCalledWith({
+    expect(driver.setAgentCursorEnabled).toHaveBeenNthCalledWith(1, {
       session: sessionInput.session,
-      enabled: true
+      enabled
     })
-  })
-
-  it('can return the resulting visual state with the action', async () => {
-    const driver = createDriver({})
-    driver.callTool
-      .mockResolvedValueOnce({
-        text: 'Session ready.',
-        images: [],
-        structuredJson: '{}',
-        rawJson: '{}',
-        isError: false,
-        degraded: false
-      })
-      .mockResolvedValueOnce({
-        text: 'Clicked.',
-        images: [],
-        structuredJson: '{"effect":"confirmed"}',
-        rawJson: '{}',
-        isError: false,
-        degraded: false
-      })
-      .mockResolvedValueOnce({
-        text: 'Window captured.',
-        images: [],
-        structuredJson: '{"title":"Leon"}',
-        rawJson: '{}',
-        isError: false,
-        degraded: false
-      })
-    const provider = new ComputerUseToolProvider(
-      async () => driver as never
-    )
-
-    const result = await provider.execute({
-      toolkitId: 'computer_use',
-      toolId: 'cua',
-      functionName: 'click',
-      parameters: {
-        pid: 42,
-        window_id: 7,
-        element_token: 'button-1',
-        capture_after: true
-      },
-      profileName: PROFILE_NAME,
-      conversationSessionId: 'session-1'
-    })
-
-    expect(driver.callTool.mock.calls[1]).toEqual([
-      'click',
-      expect.not.stringContaining('capture_after')
-    ])
-    expect(driver.callTool.mock.calls[2]).toEqual([
-      'get_window_state',
-      expect.stringContaining('"window_id":7')
-    ])
-    expect(result).toMatchObject({
-      success: true,
-      output: {
-        result: { effect: 'confirmed' },
-        post_action_state: { title: 'Leon' }
-      }
-    })
-  })
-
-  it('marks an unchanged captured action as a suspected no-op', async () => {
-    const screenshot = Buffer.from('same screenshot').toString('base64')
-    const successfulResult = {
-      images: [],
-      rawJson: '{}',
-      isError: false,
-      degraded: false
-    }
-    const driver = createDriver({})
-    driver.callTool
-      .mockResolvedValueOnce({
-        ...successfulResult,
-        text: 'Session ready.',
-        structuredJson: '{}'
-      })
-      .mockResolvedValueOnce({
-        ...successfulResult,
-        text: 'Window captured.',
-        images: [{ dataBase64: screenshot, mimeType: 'image/png' }],
-        structuredJson: '{"screenshot_width":1,"screenshot_height":1}'
-      })
-      .mockResolvedValueOnce({
-        ...successfulResult,
-        text: 'Clicked.',
-        structuredJson: '{"effect":"unverifiable","route":"global_input"}'
-      })
-      .mockResolvedValueOnce({
-        ...successfulResult,
-        text: 'Window captured.',
-        images: [{ dataBase64: screenshot, mimeType: 'image/png' }],
-        structuredJson: '{"screenshot_width":1,"screenshot_height":1}'
-      })
-    const provider = new ComputerUseToolProvider(
-      async () => driver as never
-    )
-
-    const observation = await provider.execute({
-      toolkitId: 'computer_use',
-      toolId: 'cua',
-      functionName: 'get_window_state',
-      parameters: { pid: 42, window_id: 7 },
-      profileName: PROFILE_NAME,
-      conversationSessionId: 'session-1'
-    })
-    const action = await provider.execute({
-      toolkitId: 'computer_use',
-      toolId: 'cua',
-      functionName: 'click',
-      parameters: {
-        pid: 42,
-        window_id: 7,
-        x: 0,
-        y: 0,
-        capture_after: true
-      },
-      profileName: PROFILE_NAME,
-      conversationSessionId: 'session-1'
-    })
-    const artifacts = [observation, action].flatMap(
-      (result) =>
-        (result.output['artifacts'] as Array<{ path: string }> | undefined) || []
-    )
-
-    try {
-      expect(action).toMatchObject({
-        success: true,
-        message:
-          'Computer input was delivered, but the captured interface did not change. Treat the intended effect as unverified.',
-        output: {
-          result: { effect: 'suspected_noop', route: 'global_input' },
-          visual_change: {
-            status: 'unchanged',
-            comparison: 'exact_capture'
-          }
-        }
-      })
-    } finally {
-      await Promise.all(
-        artifacts.map((artifact) =>
-          fs.promises.rm(artifact.path, { force: true })
-        )
-      )
-    }
+    expect(driver.setAgentCursorEnabled).toHaveBeenLastCalledWith({ session: sessionInput.session, enabled: false })
+    await provider.dispose()
   })
 
   it('retries a browser query while the navigated page has no nodes', async () => {
@@ -1578,6 +1536,95 @@ describe('ComputerUseToolProvider', () => {
       })
     } finally {
       vi.useRealTimers()
+    }
+  })
+})
+
+
+describe('browser inspection authorization', () => {
+  it('allows only the attested existing-profile boundary under an explicit owner grant', async () => {
+    const { DriverAuthorizationAction } = await import('@trycua/cua-driver')
+    let allowed = false
+    const host = await createCuaBrowserAuthorizationHost(() => allowed)
+    const request = {
+      schema: 'cua-driver-authorization-request-v1', nonce: 'test', generation: 1n,
+      daemonInstance: 'test', permissionMode: 'standard', adapterId: 'browser_prepare.existing_profile',
+      riskClass: 'r2', publicSession: 'test', transportSession: 'test',
+      resourceJson: JSON.stringify({ pid: 42, window_id: 7, endpoint_owner_pid: 42 }),
+      humanSummary: 'Inspect this browser', expiresUnixMs: BigInt(Date.now() + 60_000), requestDigest: 'digest'
+    }
+    expect(await host.authorize(request)).toEqual({ action: DriverAuthorizationAction.Deny, requestDigest: 'digest' })
+    allowed = true
+    expect(await host.authorize(request)).toEqual({ action: DriverAuthorizationAction.Allow, requestDigest: 'digest' })
+    for (const override of [
+      { adapterId: 'browser_unbounded_script' }, { permissionMode: 'unrestricted' },
+      { schema: 'unknown' }, { riskClass: 'r3' }, { expiresUnixMs: 0n },
+      { resourceJson: '{broken' },
+      { resourceJson: JSON.stringify({ pid: 42, window_id: 7, endpoint_owner_pid: 99 }) }
+    ]) {
+      expect((await host.authorize({ ...request, ...override })).action).toBe(DriverAuthorizationAction.Deny)
+    }
+    allowed = false
+    expect((await host.authorize(request)).action).toBe(DriverAuthorizationAction.Deny)
+  })
+
+  it('prepares an authorized exact browser once and retries inspection without another model turn', async () => {
+    const settingsPath = path.join(getProfilePaths('browser-setup-test').tools, 'computer_use', 'cua', 'settings.json')
+    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
+    const refused = { images: [], text: '', structuredJson: JSON.stringify({
+      status: 'refused', refusal: { code: 'browser_consent_required' }
+    }), isError: true }
+    const observed = { images: [], text: '', structuredJson: JSON.stringify({ refs: [], content_refs: [] }), isError: false }
+    driver.callTool.mockResolvedValueOnce(refused).mockResolvedValueOnce(observed).mockResolvedValueOnce(observed)
+    const provider = new ComputerUseToolProvider(async () => driver as never)
+    try {
+      await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true })
+      await fs.promises.writeFile(settingsPath, JSON.stringify({ browser_inspection: { allow_existing_profile: true } }))
+      const result = await provider.execute({ toolkitId: 'computer_use', toolId: 'cua',
+        profileName: 'browser-setup-test', functionName: 'get_browser_state',
+        parameters: { pid: 42, window_id: 7 }, conversationSessionId: null })
+      expect(result.success).toBe(true)
+      expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual([
+        'get_browser_state', 'browser_prepare', 'get_browser_state'
+      ])
+      expect(JSON.parse(driver.callTool.mock.calls[1]?.[1])).toEqual({
+        pid: 42, window_id: 7, strategy: { kind: 'existing_profile' }
+      })
+      driver.callTool.mockClear().mockResolvedValue(refused)
+      const failure = await provider.execute({ toolkitId: 'computer_use', toolId: 'cua',
+        profileName: 'browser-setup-test', functionName: 'get_browser_state',
+        parameters: { pid: 42, window_id: 7 }, conversationSessionId: null })
+      expect(failure.success).toBe(false)
+      expect(driver.callTool).toHaveBeenCalledTimes(2)
+    } finally {
+      await provider.dispose()
+      await fs.promises.rm(settingsPath, { force: true })
+    }
+  })
+
+  it('revokes existing runtime grants when the owner changes the profile setting', async () => {
+    const settingsPath = path.join(getProfilePaths('browser-permission-test').tools, 'computer_use', 'cua', 'settings.json')
+    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
+    const factory = vi.fn(async () => driver as never)
+    const provider = new ComputerUseToolProvider(factory)
+    const input = {
+      toolkitId: 'computer_use', toolId: 'cua', profileName: 'browser-permission-test',
+      functionName: 'list_windows', parameters: {}, conversationSessionId: null
+    }
+    try {
+      await provider.execute(input)
+      await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true })
+      await fs.promises.writeFile(settingsPath, JSON.stringify({ browser_inspection: { allow_existing_profile: true } }))
+      await provider.execute(input)
+      expect(factory).toHaveBeenCalledTimes(2)
+      await fs.promises.writeFile(settingsPath, JSON.stringify({ browser_inspection: { allow_existing_profile: false } }))
+      await provider.execute(input)
+      expect(factory).toHaveBeenCalledTimes(3)
+      expect(driver.shutdown).toHaveBeenCalledTimes(2)
+      expect(driver.uniffiDestroy).toHaveBeenCalledTimes(2)
+    } finally {
+      await provider.dispose()
+      await fs.promises.rm(settingsPath, { force: true })
     }
   })
 })

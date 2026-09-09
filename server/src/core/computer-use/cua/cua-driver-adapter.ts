@@ -2,6 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { CODEBASE_PATH } from '@/constants'
+import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
+
+import { CuaDesktopSetup, CuaDesktopSetupPendingError, CuaDesktopSetupState, isCuaWaylandSession } from './cua-desktop-setup'
+import { CuaWaylandCaptureAdapter } from './cua-wayland-capture'
 
 import {
   COMPUTER_USE_REMOTE_DRIVER_TIMEOUT_MS,
@@ -13,6 +17,8 @@ import {
   CUA_TELEMETRY_ENABLED_ENV,
   CUA_X11_UINPUT_SAFETY_ENV
 } from '../constants'
+import { resolveComputerUseBrowserInspection } from '../computer-use-settings'
+import { createCuaBrowserAuthorizationHost } from './cua-browser-authorization'
 import { shouldUseCuaSafeX11Input } from '../computer-use-coordinate-mapper'
 import type {
   ComputerUseDriver,
@@ -20,6 +26,11 @@ import type {
   RemoteComputerUseResponse
 } from '../types'
 import { asRecord, parseJsonRecord } from '../utils'
+
+const CUA_MAX_SESSION_TTL_SECONDS = 28_800n
+const CUA_MAX_IDLE_TTL_SECONDS = 1_800n
+
+const desktopSetup = new CuaDesktopSetup()
 
 /** Adapts an owner-device host bridge to the computer-use driver contract. */
 class RemoteCuaDriverAdapter implements ComputerUseDriver {
@@ -128,7 +139,9 @@ class RemoteCuaDriverAdapter implements ComputerUseDriver {
 }
 
 /** Creates the configured Cua adapter without exposing it to the provider. */
-export async function createCuaDriverAdapter(): Promise<ComputerUseDriver> {
+export async function createCuaDriverAdapter(
+  input: ToolProviderExecutionInput
+): Promise<ComputerUseDriver> {
   const remoteUrl = process.env[COMPUTER_USE_REMOTE_DRIVER_URL_ENV]?.trim()
   if (remoteUrl) {
     return new RemoteCuaDriverAdapter(
@@ -137,12 +150,34 @@ export async function createCuaDriverAdapter(): Promise<ComputerUseDriver> {
     )
   }
 
+  if (await desktopSetup.ensure(input.onProgress) === CuaDesktopSetupState.ActivationPending) {
+    throw new CuaDesktopSetupPendingError()
+  }
   process.env[CUA_TELEMETRY_ENABLED_ENV] ??= 'false'
   if (shouldUseCuaSafeX11Input(process.platform, process.env)) {
     // Cua currently keys its MPX/uinput crash guard to KDE; apply its XTEST
     // fallback to every local X11 session because the X server is shared.
     process.env[CUA_X11_UINPUT_SAFETY_ENV] = 'true'
   }
-  const { CuaDriver } = await import('@trycua/cua-driver')
-  return CuaDriver.create(undefined) as unknown as ComputerUseDriver
+  const { CuaDriver, SessionPermissionMode } = await import('@trycua/cua-driver')
+  const options = {
+    claudeCodeCompatibility: false,
+    authorization: {
+      allowedModes: [SessionPermissionMode.Standard],
+      compatibilityMode: SessionPermissionMode.Standard,
+      unrestrictedAcknowledged: false,
+      maxSessionTtlSeconds: CUA_MAX_SESSION_TTL_SECONDS,
+      maxIdleTtlSeconds: CUA_MAX_IDLE_TTL_SECONDS
+    }
+  }
+  // Without an owner grant, do not install a host: Cua may prepare the browser
+  // endpoint before invoking it. Permission must precede that setup as well.
+  const driver = (resolveComputerUseBrowserInspection(input)
+    ? CuaDriver.createConfiguredWithAuthorizationHost(options,
+      await createCuaBrowserAuthorizationHost(() => resolveComputerUseBrowserInspection(input)))
+    : CuaDriver.createConfigured(options)) as unknown as ComputerUseDriver
+  const gnomeWayland = isCuaWaylandSession(process.platform, process.env) &&
+    process.env['XDG_CURRENT_DESKTOP']?.toLowerCase().split(':').includes('gnome') &&
+    process.env['CUA_DRIVER_RS_ENABLE_WAYLAND'] === '1'
+  return gnomeWayland ? new CuaWaylandCaptureAdapter(driver) : driver
 }

@@ -17,7 +17,9 @@ export interface ComputerUseDriver extends Pick<
   uniffiDestroy(): void
 }
 
-export type ComputerUseDriverFactory = () => Promise<ComputerUseDriver>
+export type ComputerUseDriverFactory = (
+  input: ToolProviderExecutionInput
+) => Promise<ComputerUseDriver>
 
 export enum ComputerUseInteractionMode {
   Background = 'background',
@@ -48,11 +50,12 @@ export type PreferredApplicationsResolver = (
 
 export interface ManagedComputerUseRuntime {
   driver: ComputerUseDriver
+  browserInspectionAllowed: boolean
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
   zoomCapableActions: Set<string>
   initializedSessions: Set<string>
-  activityOverlayStates: Map<string, boolean>
+  activityOverlaySessions: Set<string>
   /** Only the conversation that started recording receives automatic evidence captures. */
   recordingSessionId?: string | null
 }
