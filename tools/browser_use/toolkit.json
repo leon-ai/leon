@@ -1,0 +1,15 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Browser Use",
+  "description": "Inspect and operate websites directly in the owner\u2019s connected browser, including tabs, forms, collections, and authenticated file downloads. Prefer this toolkit for browser tasks.",
+  "progressive_guidance": "Use direct browser inspection first for website tasks. Continue in the relevant existing tab and preserve the owner\u2019s chosen browser. Use computer_use for native dialogs or controls that browser inspection cannot expose. Before processing a collection, establish its scope and source identities through pagination or scrolling; a current DOM snapshot does not prove that the full collection has been enumerated. Keep progress and remaining work in the shared task plan.",
+  "icon_name": "seo-line",
+  "context_files": [
+    "LEON.md",
+    "ARCHITECTURE.md",
+    "HOST_SYSTEM.md"
+  ],
+  "tools": [
+    "cli"
+  ]
+}
