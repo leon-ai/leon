@@ -3,6 +3,7 @@ import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 import { command } from 'execa'
+import ts from 'typescript'
 
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -52,7 +53,61 @@ async function movePath(sourcePath, destinationPath) {
   }
 }
 
+/**
+ * Preserve module links when server/src moves beside compiled tools and bridges.
+ * Parse imports so ordinary strings and comments are never rewritten as paths.
+ */
+async function relocateDistImports() {
+  const relocatedPath = (filePath) => {
+    if (filePath.startsWith(`${SERVER_DIST_SRC_PATH}${path.sep}`)) {
+      return path.join(SERVER_DIST_PATH, path.relative(SERVER_DIST_SRC_PATH, filePath))
+    }
+    // Reshaping discards these copies; they remain codebase-owned runtime assets.
+    if (filePath.startsWith(`${path.join(SERVER_DIST_PATH, 'core')}${path.sep}`) ||
+        filePath === path.join(SERVER_DIST_PATH, 'package.json')) {
+      return path.join(process.cwd(), path.relative(SERVER_DIST_PATH, filePath))
+    }
+    return filePath
+  }
+  const entries = await fs.promises.readdir(SERVER_DIST_PATH, {
+    recursive: true,
+    withFileTypes: true
+  })
+  await Promise.all(entries.filter((entry) => entry.isFile() &&
+    (entry.name.endsWith('.js') || entry.name.endsWith('.d.ts'))).map(async (entry) => {
+    const filePath = path.join(entry.parentPath, entry.name)
+    const source = await fs.promises.readFile(filePath, 'utf8')
+    const tree = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true)
+    const edits = []
+    const visit = (node) => {
+      const specifier = ts.isImportDeclaration(node) || ts.isExportDeclaration(node)
+        ? node.moduleSpecifier
+        : ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword
+          ? node.arguments[0] : undefined
+      if (specifier && ts.isStringLiteral(specifier) &&
+          (specifier.text.startsWith('./') || specifier.text.startsWith('../'))) {
+        const target = path.resolve(path.dirname(filePath), specifier.text)
+        let relative = path.relative(path.dirname(relocatedPath(filePath)), relocatedPath(target))
+          .split(path.sep).join('/')
+        if (!relative.startsWith('../')) relative = `./${relative}`
+        if (relative !== specifier.text) {
+          edits.push({ start: specifier.getStart(tree) + 1, end: specifier.end - 1, text: relative })
+        }
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(tree)
+    if (!edits.length) return
+    let output = source
+    for (const edit of edits.sort((a, b) => b.start - a.start)) {
+      output = output.slice(0, edit.start) + edit.text + output.slice(edit.end)
+    }
+    await fs.promises.writeFile(filePath, output)
+  }))
+}
+
 async function reshapeServerDist() {
+  await relocateDistImports()
   await Promise.all([
     fs.promises.rm(path.join(SERVER_DIST_PATH, 'core'), {
       recursive: true,
