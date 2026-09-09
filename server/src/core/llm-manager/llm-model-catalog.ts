@@ -1,5 +1,18 @@
 import { LLMProviders } from '@/core/llm-manager/types'
 
+// Keep setup choices stable when providers or models are added to the catalog.
+const SETUP_PROVIDER_ORDER = [
+  LLMProviders.OpenAI,
+  LLMProviders.Anthropic,
+  LLMProviders.OpenRouter,
+  LLMProviders.DeepSeek,
+  LLMProviders.ZAI,
+  LLMProviders.MoonshotAI,
+  LLMProviders.MiniMax,
+  LLMProviders.Celeris,
+  LLMProviders.HuggingFace
+]
+
 export const LLM_MODEL_REASONING_VALUES = [
   'auto',
   'on',
@@ -449,5 +462,7 @@ export function canDisableLLMModelReasoning(
  * Returns catalog providers in their curated setup order.
  */
 export function getLLMModelCatalogProviders(): LLMProviders[] {
-  return [...new Set(LLM_MODEL_CATALOG.map((entry) => entry.provider))]
+  return SETUP_PROVIDER_ORDER.filter((provider) =>
+    LLM_MODEL_CATALOG.some((entry) => entry.provider === provider)
+  )
 }

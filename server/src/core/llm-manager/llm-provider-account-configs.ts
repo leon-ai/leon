@@ -40,7 +40,7 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: 'https://platform.deepseek.com/api_keys'
     },
     {
-      label: 'Z.AI',
+      label: 'Z.ai',
       value: LLMProviders.ZAI,
       apiKeyEnv: 'LEON_ZAI_API_KEY',
       apiKeyURL: 'https://z.ai/manage-apikey/apikey-list'
@@ -52,7 +52,7 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: 'https://platform.minimax.io/user-center/basic-information/interface-key'
     },
     {
-      label: 'Moonshot AI',
+      label: 'MoonShot AI',
       value: LLMProviders.MoonshotAI,
       apiKeyEnv: 'LEON_MOONSHOTAI_API_KEY',
       apiKeyURL: 'https://platform.moonshot.ai/console/api-keys'
