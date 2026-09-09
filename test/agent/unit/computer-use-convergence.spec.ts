@@ -42,6 +42,40 @@ function batch(): ExecutionRecord {
 }
 
 describe('computer-use retry guard', () => {
+  it('uses CLI batch outcomes in the shared guard even when scripts catch failures', () => {
+    const target = { selector: '#download', text: 'Download' }
+    const action = { action: 'download', target, tab_id: 'tab-a', success: false,
+      effect: 'unverifiable', state_id: 'same', error_code: 'outcome_timeout' }
+    const input = JSON.stringify({ tab_id: 'tab-a', action: 'download', target })
+    const batch: ExecutionRecord = {
+      function: 'browser_use.cli.run', status: 'success', requestedToolInput: '{"code":"caught_error()"}',
+      observation: JSON.stringify({ output: { result: { success: false, browser_actions: [action, action, action] } } })
+    }
+    expect(buildComputerUseConvergenceHint([batch])).toContain('multiple uncertain actions')
+    expect(getComputerUseRetryBlocker([batch], 'browser_use.cli.act', input)).toContain('retry blocked')
+    const inspect: ExecutionRecord = { function: 'browser_use.cli.inspect', status: 'success',
+      requestedToolInput: '{"tab_id":"tab-a"}', observation: '{"observation":{"state_id":"changed"}}' }
+    expect(getComputerUseRetryBlocker([batch, inspect], 'browser_use.cli.act', input)).toBeNull()
+    expect(getComputerUseRetryBlocker([batch], 'browser_use.cli.act', JSON.stringify({
+      tab_id: 'tab-b', action: 'download', target
+    }))).toBeNull()
+  })
+
+  it('shares browser DOM retry detection and resets it only when the observed state changes', () => {
+    const name = 'browser_use.playwright.act'
+    const input = JSON.stringify({ tab_id: 'tab-a', action: 'click', ref: 'e1' })
+    const action: ExecutionRecord = {
+      function: name, requestedToolInput: input, status: 'success',
+      observation: JSON.stringify({ output: { state_id: 'same', effect: 'unverifiable' } })
+    }
+    const inspection = { ...action, function: 'browser_use.playwright.inspect',
+      observation: JSON.stringify({ output: { state_id: 'same' } }) }
+    expect(getComputerUseRetryBlocker([action, action, inspection], name, input)).toContain('retry blocked')
+    const changed = { ...inspection, observation: JSON.stringify({ output: { state_id: 'changed' } }) }
+    expect(getComputerUseRetryBlocker([action, action, changed], name, input)).toBeNull()
+    expect(getComputerUseRetryBlocker([action, action], name, JSON.stringify({ tab_id: 'tab-b', action: 'click', ref: 'e1' }))).toBeNull()
+  })
+
   it('blocks nearby clicks only after repeated uncertain unchanged results', () => {
     const next = JSON.stringify({ ...INPUT, x: 503 })
     expect(getComputerUseRetryBlocker([click()], CLICK, next)).toBeNull()
