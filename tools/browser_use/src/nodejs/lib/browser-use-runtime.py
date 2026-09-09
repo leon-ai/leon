@@ -9,6 +9,8 @@ import uuid
 from functools import wraps
 from pathlib import Path
 
+from browser_harness import helpers as _leon_helpers
+
 
 _LEON_WAIT_SECONDS = 10
 _LEON_MAX_WAIT_SECONDS = 30
@@ -29,6 +31,64 @@ class BrowserWorkflowError(RuntimeError):
     def __init__(self, code, message):
         super().__init__(message)
         self.code = code
+
+
+# Keep upstream helpers, but never let their implicit-session recovery choose
+# another page. This adapter lives only in this tool's CLI subprocess.
+_leon_native_send = _leon_helpers._send
+_LEON_TARGET_ID = None
+_LEON_SESSION_ID = None
+
+
+def switch_tab(target, activate=False):
+    """Bind page commands to this exact target without querying the old renderer."""
+    global _LEON_TARGET_ID, _LEON_SESSION_ID
+    target_id = _leon_helpers._target_id(target)
+    # Clear the previous binding before attach: a failed switch must not leave
+    # subsequent commands able to edit the previous page accidentally.
+    _LEON_TARGET_ID, _LEON_SESSION_ID = target_id if isinstance(target_id, str) else '', None
+    if not _LEON_TARGET_ID:
+        raise BrowserWorkflowError('invalid_tab', 'Use an observed, nonempty tab ID. No page command sent.')
+    response = _leon_native_send({'method': 'Target.attachToTarget',
+                                 'params': {'targetId': target_id, 'flatten': True}})
+    session_id = response['result']['sessionId']
+    _leon_native_send({'meta': 'set_session', 'session_id': session_id, 'target_id': target_id})
+    _LEON_SESSION_ID = session_id
+    if activate:
+        activate_tab(target_id)
+    return session_id
+
+
+def _leon_send(request, **kwargs):
+    """Use explicit sessions so daemon recovery cannot replay input on another tab."""
+    if _LEON_TARGET_ID == '':
+        raise BrowserWorkflowError('invalid_tab', 'Select an observed tab before continuing.')
+    if request.get('meta') == 'current_tab' and _LEON_TARGET_ID is not None:
+        return _leon_native_send({'method': 'Target.getTargetInfo',
+                                 'params': {'targetId': _LEON_TARGET_ID}}, **kwargs)['result']['targetInfo']
+    if request.get('meta') == 'session' and _LEON_SESSION_ID is not None:
+        return {'session_id': _LEON_SESSION_ID}
+    method = request.get('method')
+    if method and not method.startswith('Target.') and not request.get('session_id'):
+        if _LEON_SESSION_ID is None:
+            target = _LEON_TARGET_ID or _leon_native_send({'meta': 'current_tab'})['targetId']
+            switch_tab(target)
+        request = {**request, 'session_id': _LEON_SESSION_ID}
+    return _leon_native_send(request, **kwargs)
+
+
+def new_tab(url='about:blank'):
+    """Create a distinct tab and navigate once, preserving its identity on failure."""
+    target_id = cdp('Target.createTarget', url='about:blank', background=True)['targetId']
+    switch_tab(target_id)
+    if url != 'about:blank':
+        goto_url(url)
+    return target_id
+
+
+_leon_helpers._send = _leon_send
+_leon_helpers.switch_tab = switch_tab
+_leon_helpers.new_tab = new_tab
 
 
 def _leon_save_actions():
