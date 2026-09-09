@@ -29,6 +29,8 @@ const DOWNLOAD_PROGRESS_SPINNER_INTERVAL_MS = 80
 const SETUP_DOWNLOAD_PROGRESS_START_EVENT = 'leon:setup-download-progress:start'
 const SETUP_DOWNLOAD_PROGRESS_END_EVENT = 'leon:setup-download-progress:end'
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
+// Fetch decodes compressed bodies; keep lengths and resume offsets in file bytes.
+const DOWNLOAD_REQUEST_HEADERS = { 'accept-encoding': 'identity' }
 
 export interface DownloadFileOptions {
   cliProgress?: boolean
@@ -529,6 +531,7 @@ export class NetworkHelper {
       try {
         const headResponse = await fetch(fileURL, {
           method: 'HEAD',
+          headers: DOWNLOAD_REQUEST_HEADERS,
           ...(signal ? { signal } : {})
         })
 
@@ -559,6 +562,7 @@ export class NetworkHelper {
       try {
         const rangeResponse = await fetch(fileURL, {
           headers: {
+            ...DOWNLOAD_REQUEST_HEADERS,
             range: 'bytes=0-0'
           },
           ...(signal ? { signal } : {})
@@ -650,7 +654,7 @@ export class NetworkHelper {
 
       try {
         response = await fetch(fileURL, {
-          ...(headers ? { headers } : {}),
+          headers: { ...DOWNLOAD_REQUEST_HEADERS, ...headers },
           signal: inactivityController.signal
         })
       } catch (error) {
@@ -912,6 +916,7 @@ export class NetworkHelper {
             this.throwIfAborted(rangeAbortController.signal)
             const response = await fetch(fileURL, {
               headers: {
+                ...DOWNLOAD_REQUEST_HEADERS,
                 range: `bytes=${writePosition}-${range.end}`
               },
               signal: inactivityController.signal
