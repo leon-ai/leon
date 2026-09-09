@@ -114,6 +114,7 @@ export const configSchemaObject = strictObject({
     ])
   }),
   runtime: strictObject({
+    agent_max_iterations: Type.Optional(Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER })),
     pulse_enabled: Type.Boolean(),
     private_diary_enabled: Type.Boolean(),
     progressive_toolkit_loading: Type.Boolean()

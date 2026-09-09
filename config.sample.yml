@@ -92,6 +92,8 @@ mood:
   mode: auto
 
 runtime:
+  # Optional total agent iteration limit, including the finishing pass (default: 256).
+  agent_max_iterations: 256
   # Enable Leon's autonomous pulse mechanism.
   pulse_enabled: true
   # Enable Leon's private diary/self-model mechanism.

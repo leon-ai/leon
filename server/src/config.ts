@@ -7,6 +7,7 @@ import dotenv from 'dotenv'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { AGENT_MAX_ITERATIONS } from '@/core/llm-manager/llm-duties/react-llm-duty/constants'
 import type {
   LLMProviderConfigSchema,
   LeonConfigSchema,
@@ -51,6 +52,7 @@ const DEFAULT_CONFIG: LeonConfig = {
     mode: 'auto'
   },
   runtime: {
+    agent_max_iterations: AGENT_MAX_ITERATIONS,
     pulse_enabled: true,
     private_diary_enabled: true,
     progressive_toolkit_loading: true
@@ -315,6 +317,12 @@ class ConfigManager {
       cloneConfig(DEFAULT_CONFIG),
       parsedConfig
     )
+
+    // Validate on profile load/reload too, since profiles can change after startup.
+    const iterationLimit = mergedConfig.runtime.agent_max_iterations
+    if (typeof iterationLimit !== 'number' || !Number.isSafeInteger(iterationLimit) || iterationLimit < 1) {
+      throw new Error('runtime.agent_max_iterations must be a positive safe integer.')
+    }
 
     return mergedConfig
   }

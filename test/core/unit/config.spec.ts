@@ -82,6 +82,25 @@ describe('ConfigManager', () => {
     })
   })
 
+  it('defaults an omitted iteration limit and reloads an owner override', async () => {
+    fs.writeFileSync(profilePaths.configPath, 'runtime:\n  pulse_enabled: false\n')
+    const configManager = await loadConfigManager()
+    expect(configManager.getConfig().runtime.agent_max_iterations).toBe(256)
+    expect(configManager.getConfig().runtime.pulse_enabled).toBe(false)
+
+    fs.writeFileSync(profilePaths.configPath, 'runtime:\n  agent_max_iterations: 1\n')
+    expect(configManager.reload().runtime.agent_max_iterations).toBe(1)
+  })
+
+  it.each([0, -1, 1.5, '256', null, Number.MAX_SAFE_INTEGER + 1])(
+    'rejects invalid iteration limit %s', async (limit) => {
+      fs.writeFileSync(profilePaths.configPath, YAML.stringify({
+        runtime: { agent_max_iterations: limit }
+      }))
+      await expect(loadConfigManager()).rejects.toThrow('runtime.agent_max_iterations')
+    }
+  )
+
   it('returns profile config values and syncs runtime env mappings', async () => {
     process.env['LEON_PROFILE_TOKEN'] = 'client-secret'
     process.env['LEON_OPENAI_API_KEY'] = 'openai-secret'
@@ -191,6 +210,7 @@ describe('ConfigManager', () => {
         mode: 'tired'
       },
       runtime: {
+        agent_max_iterations: 128,
         pulse_enabled: false,
         private_diary_enabled: false,
         progressive_toolkit_loading: false

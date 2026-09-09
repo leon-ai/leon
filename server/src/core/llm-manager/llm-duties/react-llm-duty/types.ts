@@ -72,9 +72,19 @@ export interface ExecutionRecord {
 
 export type PlanStepStatus = 'pending' | 'in_progress' | 'completed' | 'error'
 
+export interface TrackedPlanCollection {
+  scope: string
+  enumeration: 'in_progress' | 'completed'
+  evidence: string
+  cursor?: string
+  items: Array<{ id: string, status: PlanStepStatus, details?: string }>
+}
+
 export interface TrackedPlanStep {
   label: string
   status: PlanStepStatus
+  details?: string
+  collection?: TrackedPlanCollection
 }
 
 export type FinalPhaseIntent =

@@ -49,6 +49,52 @@ describe('computer-use retry guard', () => {
     expect(getComputerUseRetryBlocker([click(), click('changed')], CLICK, next)).toBeNull()
   })
 
+  it('blocks repeated structured failures without inventing a visual outcome', () => {
+    const failed = { ...click(), status: 'error', observation: JSON.stringify({
+      data: { output: { error_code: 'foreground_unavailable' } }
+    }) }
+    expect(getComputerUseRetryBlocker([failed], CLICK, JSON.stringify(INPUT))).toBeNull()
+    expect(getComputerUseRetryBlocker([failed, failed], CLICK, JSON.stringify(INPUT)))
+      .toContain('foreground_unavailable')
+    expect(getComputerUseRetryBlocker([failed, failed], CLICK,
+      JSON.stringify({ ...INPUT, delivery_mode: 'background' }))).toBeNull()
+    expect(getComputerUseRetryBlocker([failed, failed, click('recovered')], CLICK, JSON.stringify(INPUT))).toBeNull()
+    const differentFailure = { ...failed, observation: JSON.stringify({ error_code: 'stale_element' }) }
+    expect(getComputerUseRetryBlocker([failed, differentFailure], CLICK, JSON.stringify(INPUT))).toBeNull()
+  })
+
+  it('allows a retry after successful focus recovery on the same window', () => {
+    const input = JSON.stringify({ pid: 42, window_id: 7, x: 100, y: 100 })
+    const failed = { ...click(), requestedToolInput: input, status: 'error',
+      observation: JSON.stringify({ error_code: 'foreground_unavailable' }) }
+    const focus = { ...failed, function: 'computer_use.cua.bring_to_front',
+      status: 'success', observation: '{}' }
+    expect(getComputerUseRetryBlocker([failed, failed, focus], CLICK, input)).toBeNull()
+    expect(getComputerUseRetryBlocker([failed, failed, { ...focus, status: 'error' }], CLICK, input))
+      .toContain('foreground_unavailable')
+    expect(getComputerUseRetryBlocker([failed, failed, {
+      ...focus, requestedToolInput: JSON.stringify({ pid: 42, window_id: 8 })
+    }], CLICK, input)).toContain('foreground_unavailable')
+  })
+
+  it('includes the attempted failed batch step but ignores unexecuted steps', () => {
+    const failed = { ...batch(), status: 'error', observation: JSON.stringify({ steps: [
+      { action: 'click', success: false, error_code: 'foreground_unavailable' }
+    ] }) }
+    expect(getComputerUseRetryBlocker([failed, failed], CLICK, JSON.stringify(INPUT)))
+      .toContain('foreground_unavailable')
+    expect(getComputerUseRetryBlocker([failed, failed], 'computer_use.cua.press_key',
+      JSON.stringify({ target: TARGET, key: 'space' }))).toBeNull()
+  })
+
+  it('does not attach desktop fallback evidence to a window input', () => {
+    const action = { ...click(), requestedToolInput: JSON.stringify({ pid: 42, window_id: 7, x: 500, y: 300 }),
+      observation: JSON.stringify({ result: { effect: 'unverifiable' }, post_action_state: {
+        visual_state_id: 'desktop', capture_target: { kind: 'desktop' }
+      } }) }
+    expect(getComputerUseRetryBlocker([action, action], CLICK, action.requestedToolInput)).toBeNull()
+  })
+
   it('allows different points, targets, and tools', () => {
     const history = [click(), click()]
     for (const input of [
@@ -60,12 +106,15 @@ describe('computer-use retry guard', () => {
     expect(getComputerUseRetryBlocker(history, 'other.tool.click', JSON.stringify(INPUT))).toBeNull()
   })
 
-  it('requires successful fresh evidence on the affected target to reset', () => {
+  it('requires changed evidence on the affected target to reset', () => {
     const observation = {
       ...click(), function: 'computer_use.cua.get_desktop_state',
       requestedToolInput: '{}'
     }
-    expect(getComputerUseRetryBlocker([click(), click(), observation], CLICK, JSON.stringify(INPUT))).toBeNull()
+    expect(getComputerUseRetryBlocker([click(), click(), observation], CLICK, JSON.stringify(INPUT))).toContain('retry blocked')
+    expect(getComputerUseRetryBlocker([click(), click(), {
+      ...observation, observation: JSON.stringify({ result: { visual_state_id: 'changed' } })
+    }], CLICK, JSON.stringify(INPUT))).toBeNull()
     for (const invalid of [
       { ...observation, status: 'error' },
       { ...observation, observation: '{}' },
@@ -110,4 +159,168 @@ describe('computer-use retry guard', () => {
     })
     expect(getComputerUseRetryBlocker([action, action], CLICK, JSON.stringify(INPUT))).toBeNull()
   })
+
+  it('ignores unexecuted steps in a stopped batch', () => {
+    const stopped = { ...batch(), status: 'error', observation: JSON.stringify({
+      steps: [], post_action_state: { visual_state_id: 'unchanged' }
+    }) }
+    expect(getComputerUseRetryBlocker([stopped, stopped], CLICK, JSON.stringify(INPUT))).toBeNull()
+  })
+
+  it('uses final evidence instead of an intermediate batch capture', () => {
+    const action = batch()
+    action.observation = JSON.stringify({ steps: [
+      { action: 'click', success: true, result: { effect: 'unverifiable', visual_state_id: 'old' } },
+      { action: 'press_key', success: true, result: { effect: 'unverifiable' } }
+    ], post_action_state: { visual_state_id: 'changed' } })
+    expect(getComputerUseRetryBlocker([click('old'), action], CLICK, JSON.stringify(INPUT))).toBeNull()
+  })
+
+  it.each(['scroll', 'hotkey', 'press_key', 'type_text'])(
+    'also guards repeated ineffective %s input', (action) => {
+      const input = JSON.stringify({ ...INPUT, direction: 'down', key: 'space', keys: ['ctrl', 'l'], text: 'example' })
+      const execution = { ...click(), function: `computer_use.cua.${action}`, requestedToolInput: input }
+      expect(getComputerUseRetryBlocker([execution, execution], execution.function, input)).toContain('retry blocked')
+    }
+  )
+
+  it('allows a different delivery route and confirmed effects to end a streak', () => {
+    const history = [click(), click()]
+    expect(getComputerUseRetryBlocker(history, CLICK, JSON.stringify({ ...INPUT, delivery_mode: 'foreground' }))).toBeNull()
+    const confirmed = { ...click(), observation: JSON.stringify({
+      result: { effect: 'confirmed' }, post_action_state: { visual_state_id: 'unchanged' }
+    }) }
+    expect(getComputerUseRetryBlocker([...history, confirmed], CLICK, JSON.stringify(INPUT))).toBeNull()
+  })
+})
+
+describe('computer-use convergence hints', () => {
+  it('does not classify a long successful inspection as ineffective', () => {
+    const executions = Array.from({ length: 8 }, (_, index) => ({
+      function: 'computer_use.cua.scroll',
+      status: 'success',
+      observation: `Captured viewport ${index + 1}.`,
+      requestedToolInput: JSON.stringify({
+        pid: 42,
+        window_id: 7,
+        direction: 'down',
+        by: 'page',
+        amount: 1
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toBeNull()
+  })
+
+  it('detects recent scroll oscillation', () => {
+    const executions = ['down', 'up', 'down'].map((direction) => ({
+      function: 'computer_use.cua.scroll',
+      status: 'success',
+      observation: 'Captured viewport.',
+      requestedToolInput: JSON.stringify({
+        pid: 42,
+        window_id: 7,
+        direction
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'scrolled back and forth repeatedly'
+    )
+  })
+
+  it('requests verification after several uncertain inputs on the same target', () => {
+    const executions = [
+      [560, 160],
+      [563, 163],
+      [568, 167]
+    ].map(([x, y]) => ({
+      function: 'computer_use.cua.click',
+      status: 'success',
+      observation: JSON.stringify({ result: { effect: 'unverifiable' } }),
+      requestedToolInput: JSON.stringify({
+        pid: 42,
+        window_id: 7,
+        x,
+        y
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'several recent inputs lack driver verification'
+    )
+  })
+
+  it('detects uncertain actions that leave the same visual state', () => {
+    const executions = [120, 360].map((y) => ({
+      function: 'computer_use.cua.click',
+      status: 'success' as const,
+      observation: JSON.stringify({
+        data: {
+          output: {
+            result: { effect: 'unverifiable' },
+            post_action_state: { visual_state_id: 'same-screen' }
+          }
+        }
+      }),
+      requestedToolInput: JSON.stringify({
+        target: { kind: 'desktop', display_id: 'primary' },
+        x: 500,
+        y
+      })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'multiple uncertain actions produced the same visual state'
+    )
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'not routine internal recovery'
+    )
+  })
+
+  it('remembers unavailable background delivery for the target', () => {
+    const executions = [
+      {
+        function: 'computer_use.cua.click',
+        status: 'error',
+        observation: JSON.stringify({
+          data: { output: { code: 'background_unavailable' } }
+        }),
+        requestedToolInput: JSON.stringify({
+          pid: 42,
+          window_id: 7,
+          delivery_mode: 'background',
+          x: 100,
+          y: 100
+        })
+      }
+    ]
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'background delivery is unavailable for this target'
+    )
+  })
+
+  it('stops retrying accessibility when only the app frame is exposed', () => {
+    const executions = Array.from({ length: 2 }, () => ({
+      function: 'computer_use.cua.get_window_state',
+      status: 'success',
+      observation: JSON.stringify({
+        data: {
+          output: {
+            result: {
+              total_element_count: 1,
+              elements: [{ role: 'frame', label: 'Feishu' }]
+            }
+          }
+        }
+      }),
+      requestedToolInput: JSON.stringify({ pid: 42, window_id: 7 })
+    }))
+
+    expect(buildComputerUseConvergenceHint(executions)).toContain(
+      'accessibility snapshots exposed only the outer application frame'
+    )
+  })
+
 })

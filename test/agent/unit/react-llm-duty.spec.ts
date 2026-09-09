@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type {
   AgentCallableFunction,
-  AgentToolCatalog
+  AgentToolCatalog,
+  AgentLoopParams
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
 import {
   AGENT_CLARIFICATION_TOOL_NAME,
@@ -15,9 +16,9 @@ import {
   buildAgentToolCatalog,
   evaluateAgentToolkitPreloadCost,
   findHighConfidenceAgentToolkitId,
-  runAgentLoop
+  runAgentLoop as runAgentLoopWithCompletionReview
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
-import { buildComputerUseConvergenceHint } from '@/core/llm-manager/llm-duties/react-llm-duty/computer-use-convergence'
+import { parseAgentPlan, isAgentPlanComplete } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-plan'
 import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import {
   createAgentLoopContinuationState,
@@ -105,6 +106,17 @@ function toolCall(
   }
 }
 
+// Existing protocol tests assume their final answers have passed review.
+// Completion-specific tests below exercise the unwrapped loop and reviewer.
+function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWithCompletionReview> {
+  return runAgentLoopWithCompletionReview({
+    ...params,
+    callModel: (messages, tools, options, state) => options.isCompletionReview
+      ? Promise.resolve({ textContent: JSON.stringify({ status: 'complete', reason: 'The fixture task is complete.' }) })
+      : params.callModel(messages, tools, options, state)
+  })
+}
+
 describe('continuous agent loop', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -113,143 +125,183 @@ describe('continuous agent loop', () => {
     coreMocks.getToolFunctions.mockReturnValue(null)
   })
 
-  it('uses a 32-iteration operational budget', () => {
-    expect(AGENT_MAX_ITERATIONS).toBe(32)
+  it('emits tool-accompanying progress and retains collection details through continuation', async () => {
+    const steps = [{ label: 'Retrieve requested documents', status: 'in_progress',
+      details: 'Verified item A; next list page 2. Enumeration is not complete.' }]
+    const onProgressMessage = vi.fn()
+    const prepareContinuation = vi.fn(async (state) => {
+      expect(state.trackedSteps).toEqual(steps)
+      return state.transcript
+    })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Retrieve all documents.' }], catalog: createCatalog(),
+      maxIterations: 2, finishingIterations: 1, prepareContinuation, onProgressMessage,
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ textContent: 'Item A is verified. I am checking the next page.',
+          toolCalls: [toolCall('plan', AGENT_PLAN_TOOL_NAME, { steps })] })
+        .mockResolvedValueOnce({ textContent: 'The next page is unavailable.' })
+        .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'blocked', reason: 'The service is offline.' }) }),
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    expect(onProgressMessage).toHaveBeenCalledExactlyOnceWith('Item A is verified. I am checking the next page.')
+    expect(prepareContinuation).toHaveBeenCalledOnce()
+    expect(result.trackedSteps).toEqual(steps)
+    expect(result.transcript).toContainEqual(expect.objectContaining({
+      role: 'assistant', content: 'Item A is verified. I am checking the next page.'
+    }))
+  })
+
+  it('continues an incomplete invoice answer without replaying the downloaded item', async () => {
+    const initialExecutionHistory = [{
+      function: callable.qualifiedName, status: 'success',
+      observation: 'Verified invoice-0003.pdf. Other requested invoices remain.',
+      requestedToolInput: JSON.stringify({ query: 'invoice-0003' })
+    }]
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: 'I downloaded one invoice. The remaining invoices are not downloaded yet.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'continue', reason: 'Invoice 0003 is verified. Download the remaining August and September invoices.' }) })
+      .mockResolvedValueOnce({ toolCalls: [toolCall('remaining', CALLABLE_TOOL_NAME, { query: 'remaining-invoices' })] })
+      .mockResolvedValueOnce({ textContent: 'All requested invoices are downloaded and verified.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'All requested invoices have verified files.' }) })
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName, status: 'success',
+      observation: 'Remaining August and September invoice files verified.',
+      requestedToolInput: JSON.stringify({ query: 'remaining-invoices' })
+    } }))
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Download all August and September invoices.' }],
+      catalog: createCatalog(), initialExecutionHistory, callModel, executeFunction,
+      loadAgentSkill: async () => null
+    })
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('All requested invoices are downloaded and verified.')
+    expect(executeFunction).toHaveBeenCalledExactlyOnceWith(callable, JSON.stringify({ query: 'remaining-invoices' }), undefined)
+    expect(callModel.mock.calls[1]?.[1]).toEqual([])
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
+    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ requiresToolAction: true })
+    expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
+    expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')
+  })
+
+  it('returns a genuine blocker without replaying input', async () => {
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Retrieve the documents.' }],
+      catalog: createCatalog(),
+      initialExecutionHistory: [{ function: callable.qualifiedName, status: 'error', observation: 'The document service is unavailable.' }],
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ textContent: 'The document service is unavailable.' })
+        .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'blocked', reason: 'The service is offline and no accessible copy exists.' }) }),
+      executeFunction, loadAgentSkill: async () => null
+    })
+    expect(result.intent).toBe('blocked')
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('preserves unfinished work at the hard limit instead of returning a successful answer', async () => {
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [toolCall('first', CALLABLE_TOOL_NAME, { query: 'first-item' })] })
+      .mockResolvedValueOnce({ textContent: 'Only one requested file is downloaded.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'continue', reason: 'The remaining requested files have not been downloaded.' }) })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Download all requested files.' }], catalog: createCatalog(),
+      maxIterations: 1, callModel,
+      executeFunction: vi.fn(async () => ({ execution: {
+        function: callable.qualifiedName, status: 'success', observation: 'First file exists; others remain.'
+      } })), loadAgentSkill: async () => null
+    })
+    expect(result.intent).toBe('blocked')
+    expect(result.answer).toBe('The remaining requested files have not been downloaded.')
+    expect(result.executionHistory).toHaveLength(1)
+    expect(JSON.parse(callModel.mock.calls[2]?.[0].at(-1).content)).toMatchObject({ remaining_operational_iterations: 0 })
+  })
+
+  it.each([
+    null,
+    { textContent: 'not valid JSON' },
+    { textContent: '{"status":"complete","reason":"ok"}', isTruncated: true },
+    { toolCalls: [toolCall('unexpected', CALLABLE_TOOL_NAME, { query: 'unexpected' })] }
+  ])('does not accept an unavailable or invalid completion review: %j', async (review) => {
+    const executeFunction = vi.fn()
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Do the task.' }], catalog: createCatalog(),
+      initialExecutionHistory: [{ function: callable.qualifiedName, status: 'success', observation: 'Evidence.' }],
+      callModel: vi.fn().mockResolvedValueOnce({ textContent: 'Done.' }).mockResolvedValueOnce(review),
+      executeFunction, loadAgentSkill: async () => null
+    })
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('completion check failed')
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('checks unfinished plans and enters the finishing pass after rejected completion', async () => {
+    const prepareContinuation = vi.fn(async (state) => state.transcript)
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: 'Done.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The task is complete.' }) })
+      .mockResolvedValueOnce({ toolCalls: [toolCall('finish-plan', AGENT_PLAN_TOOL_NAME, {
+        steps: [{ label: 'Verify the files', status: 'completed' }]
+      })] })
+      .mockResolvedValueOnce({ textContent: 'Files verified.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Files and plan verified.' }) })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Verify the files.' }], catalog: createCatalog(),
+      initialTrackedSteps: [{ label: 'Verify the files', status: 'pending' }],
+      maxIterations: 3, finishingIterations: 2, callModel, prepareContinuation,
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    expect(prepareContinuation).toHaveBeenCalledOnce()
+    expect(JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)).toMatchObject({
+      remaining_operational_iterations: 2
+    })
+    expect(JSON.parse(callModel.mock.calls[4]?.[0].at(-1).content)).toMatchObject({
+      remaining_operational_iterations: 0
+    })
+    expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
+    expect(result.intent).toBe('answer')
+    expect(result.trackedSteps).toEqual([{ label: 'Verify the files', status: 'completed' }])
+  })
+
+  it('keeps direct answers without tools on the fast path', async () => {
+    const callModel = vi.fn().mockResolvedValue({ textContent: 'Pong.' })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Ping.' }], catalog: createCatalog(),
+      callModel, executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    expect(result.answer).toBe('Pong.')
+    expect(callModel).toHaveBeenCalledOnce()
+  })
+
+  it('uses a 256-iteration total budget by default', () => {
+    expect(AGENT_MAX_ITERATIONS).toBe(256)
+  })
+
+  it.each([1, 3])('keeps the finishing pass inside a %i-turn owner limit', async (limit) => {
+    let operationalTurns = 0
+    const prepareContinuation = vi.fn(async (state) => state.transcript)
+    const executeFunction = vi.fn(async () => ({ execution: {
+      function: callable.qualifiedName, status: 'success', observation: 'Observed result.'
+    } }))
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Inspect the sources.' }],
+      catalog: createCatalog(), maxIterations: limit, finishingIterations: 16,
+      prepareContinuation, executeFunction, loadAgentSkill: async () => null,
+      callModel: async (_messages, _tools, options) => {
+        if (options.isFinalizationAttempt) return { textContent: 'Results collected.' }
+        operationalTurns += 1
+        return { toolCalls: [toolCall(`lookup-${operationalTurns}`, CALLABLE_TOOL_NAME, {
+          query: `source-${operationalTurns}`
+        })] }
+      }
+    })
+    expect(operationalTurns).toBe(limit)
+    expect(executeFunction).toHaveBeenCalledTimes(limit)
+    expect(prepareContinuation).toHaveBeenCalledTimes(limit > 1 ? 1 : 0)
   })
 
   it('keeps computer-use guidance out of the global prompt', () => {
     expect(AGENT_SYSTEM_PROMPT).not.toContain('<visual_inspection>')
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Survey long pages')
-  })
-
-  it('requests early convergence after excessive visual inspection', () => {
-    const executions = Array.from({ length: 8 }, (_, index) => ({
-      function: 'computer_use.cua.scroll',
-      status: 'success',
-      observation: `Captured viewport ${index + 1}.`,
-      requestedToolInput: JSON.stringify({
-        pid: 42,
-        window_id: 7,
-        direction: 'down',
-        by: 'page',
-        amount: 1
-      })
-    }))
-
-    expect(buildComputerUseConvergenceHint(executions)).toContain(
-      '8 computer-use calls have already run'
-    )
-  })
-
-  it('detects scroll oscillation before the inspection call threshold', () => {
-    const executions = ['down', 'up', 'down'].map((direction) => ({
-      function: 'computer_use.cua.scroll',
-      status: 'success',
-      observation: 'Captured viewport.',
-      requestedToolInput: JSON.stringify({
-        pid: 42,
-        window_id: 7,
-        direction
-      })
-    }))
-
-    expect(buildComputerUseConvergenceHint(executions)).toContain(
-      'scrolled back and forth repeatedly'
-    )
-  })
-
-  it('detects repeated point actions on the same target', () => {
-    const executions = [
-      [560, 160],
-      [563, 163],
-      [568, 167]
-    ].map(([x, y]) => ({
-      function: 'computer_use.cua.click',
-      status: 'success',
-      observation: 'Clicked.',
-      requestedToolInput: JSON.stringify({
-        pid: 42,
-        window_id: 7,
-        x,
-        y
-      })
-    }))
-
-    expect(buildComputerUseConvergenceHint(executions)).toContain(
-      'nearly the same screen point has been used repeatedly'
-    )
-  })
-
-  it('detects uncertain actions that leave the same visual state', () => {
-    const executions = [120, 360].map((y) => ({
-      function: 'computer_use.cua.click',
-      status: 'success' as const,
-      observation: JSON.stringify({
-        data: {
-          output: {
-            result: { effect: 'unverifiable' },
-            post_action_state: { visual_state_id: 'same-screen' }
-          }
-        }
-      }),
-      requestedToolInput: JSON.stringify({
-        target: { kind: 'desktop', display_id: 'primary' },
-        x: 500,
-        y
-      })
-    }))
-
-    expect(buildComputerUseConvergenceHint(executions)).toContain(
-      'multiple uncertain actions produced the same visual state'
-    )
-    expect(buildComputerUseConvergenceHint(executions)).toContain(
-      'call request_clarification'
-    )
-  })
-
-  it('remembers unavailable background delivery for the target', () => {
-    const executions = [
-      {
-        function: 'computer_use.cua.click',
-        status: 'error',
-        observation: JSON.stringify({
-          data: { output: { code: 'background_unavailable' } }
-        }),
-        requestedToolInput: JSON.stringify({
-          pid: 42,
-          window_id: 7,
-          delivery_mode: 'background',
-          x: 100,
-          y: 100
-        })
-      }
-    ]
-
-    expect(buildComputerUseConvergenceHint(executions)).toContain(
-      'background delivery is unavailable for this target'
-    )
-  })
-
-  it('stops retrying accessibility when only the app frame is exposed', () => {
-    const executions = Array.from({ length: 2 }, () => ({
-      function: 'computer_use.cua.get_window_state',
-      status: 'success',
-      observation: JSON.stringify({
-        data: {
-          output: {
-            result: {
-              total_element_count: 1,
-              elements: [{ role: 'frame', label: 'Feishu' }]
-            }
-          }
-        }
-      }),
-      requestedToolInput: JSON.stringify({ pid: 42, window_id: 7 })
-    }))
-
-    expect(buildComputerUseConvergenceHint(executions)).toContain(
-      'accessibility snapshots exposed only the outer application frame'
-    )
   })
 
   it('blocks an ineffective computer-use retry before executing the tool', async () => {
@@ -509,15 +561,54 @@ describe('continuous agent loop', () => {
     expect(result.answer).toBe('Recovered answer.')
   })
 
-  it('adds convergence guidance for the final eight operational iterations', async () => {
+  it('keeps a warned computer-use failure parseable under context pressure', async () => {
+    const name = 'computer_use__cua__click'
+    const cuaCallable: AgentCallableFunction = {
+      ...callable, qualifiedName: 'computer_use.cua.click',
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'click'
+    }
+    const catalog = createCatalog()
+    catalog.functionsByToolName = new Map([[name, cuaCallable]])
+    const observation = JSON.stringify({
+      status: 'error', message: 'Background delivery unavailable.',
+      data: { output: { error_code: 'background_unavailable' } },
+      output_log_path: '/tmp/cua-refusal.log'
+    })
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Operate the app.' }],
+      catalog,
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ toolCalls: [toolCall('failed-click', name, { query: 'target' })] })
+        .mockResolvedValueOnce({ textContent: 'The target refused background input.' }),
+      executeFunction: async () => ({ execution: {
+        function: cuaCallable.qualifiedName, status: 'error', observation,
+        requestedToolInput: JSON.stringify({ query: 'target' })
+      } }),
+      loadAgentSkill: async () => null
+    })
+    const toolResult = result.transcript.find((message) => message.role === 'tool')!
+    expect(JSON.parse(toolResult.content)).toMatchObject({
+      status: 'error', data: { output: { error_code: 'background_unavailable' } },
+      computer_use_convergence: expect.stringContaining('background delivery is unavailable')
+    })
+    const context = prepareAgentModelContext({
+      transcript: result.transcript, systemPrompt: '', tools: [],
+      compactionTriggerTokens: 1, forceCompaction: true
+    })
+    const history = JSON.stringify(context.transcript)
+    expect(history).toContain('error')
+    expect(history).toContain('/tmp/cua-refusal.log')
+  })
+
+  it('keeps operational model options unchanged near the iteration limit', async () => {
     const callModel = vi
       .fn()
       .mockResolvedValueOnce({
         toolCalls: [
-          toolCall('before-convergence', CALLABLE_TOOL_NAME, { query: 'Leon' })
+          toolCall('collect-evidence', CALLABLE_TOOL_NAME, { query: 'Leon' })
         ]
       })
-      .mockResolvedValueOnce({ textContent: 'Converged answer.' })
+      .mockResolvedValueOnce({ textContent: 'Supported answer.' })
 
     await runAgentLoop({
       transcript: [{ role: 'user', content: 'Finish this request.' }],
@@ -539,8 +630,7 @@ describe('continuous agent loop', () => {
       isRecoveryAttempt: false
     })
     expect(callModel.mock.calls[1]?.[2]).toEqual({
-      isRecoveryAttempt: false,
-      remainingIterations: 8
+      isRecoveryAttempt: false
     })
   })
 
@@ -1091,6 +1181,9 @@ describe('continuous agent loop', () => {
             ]
           }
         }
+        if (modelTurn === 3) return { toolCalls: [toolCall('plan-2', AGENT_PLAN_TOOL_NAME, {
+          steps: [{ label: 'Inspect source', status: 'completed' }]
+        })] }
         return { textContent: 'Workflow complete.' }
       },
       executeFunction: async () => {
@@ -1814,14 +1907,9 @@ describe('continuous agent loop', () => {
     expect(context.wasCompacted).toBe(true)
     expect(context.tools).toEqual([loaderTool, recentToolkitTool])
     expect(context.transcript.at(-1)).toMatchObject({
-      role: 'assistant',
-      content: expect.stringContaining(
-        'earlier_completed_tool_exchange_compacted'
-      )
+      role: 'tool', content: largeObservation
     })
-    expect(context.transcript.at(-1)?.content).toContain(
-      '/tmp/tool-output.log'
-    )
+    expect(context.transcript.at(-1)?.content).toContain('/tmp/tool-output.log')
   })
 
   it('restores loaded toolkit schemas after clarification', () => {
@@ -1884,5 +1972,64 @@ describe('continuous agent loop', () => {
       'Recipient lookup complete.'
     )
     expect(state.transcript[0]?.content).not.toContain('Which recipient?')
+  })
+})
+
+
+describe('collection plan state', () => {
+  const collection = {
+    scope: 'Requested documents from the authoritative list', enumeration: 'completed' as const,
+    evidence: 'All pages inspected. Range A has two documents; range B is empty.', cursor: '',
+    items: [
+      { id: 'A', status: 'completed' as const, details: 'Verified /tmp/A.pdf against document A' },
+      { id: 'B', status: 'pending' as const }
+    ]
+  }
+  const plan = [{ label: 'Retrieve documents', status: 'in_progress' as const, collection }]
+
+  it('merges item deltas and preserves coverage and verified outcomes across plan replacement', () => {
+    const updated = parseAgentPlan(JSON.stringify({ steps: [{ ...plan[0],
+      status: 'completed', collection: { ...collection, items: [
+        { id: 'B', status: 'completed', details: 'Verified /tmp/B.pdf against document B' }
+      ] }
+    }] }), plan)
+    expect(updated?.[0]?.collection?.items.map((item) => item.id)).toEqual(['A', 'B'])
+    expect(updated?.[0]?.collection?.items[0]).toEqual(collection.items[0])
+    expect(isAgentPlanComplete(updated!)).toBe(true)
+    expect(parseAgentPlan(JSON.stringify({ steps: [{ label: 'Retrieve documents', status: 'completed' }] }), updated!)).toEqual(updated)
+    expect(plan[0]?.collection.items[1]?.status).toBe('pending')
+    expect(parseAgentPlan(JSON.stringify({ steps: [{ ...plan[0], collection: {
+      ...collection, items: [{ id: 'A', status: 'pending' }]
+    } }] }), plan)).toBeNull()
+    expect(parseAgentPlan(JSON.stringify({ steps: [{ ...plan[0], collection: {
+      ...collection, items: [{ id: 'A', status: 'pending', details: 'Source version changed; the saved copy is outdated.' }]
+    } }] }), plan)?.[0]?.collection?.items[0]?.status).toBe('pending')
+  })
+
+  it('rejects lost ledgers, premature completion and execution before enumeration', () => {
+    for (const steps of [
+      [{ label: 'Renamed step', status: 'completed' }],
+      [{ ...plan[0], status: 'completed' }],
+      [{ ...plan[0], collection: { ...collection, enumeration: 'in_progress', items: [
+        { id: 'B', status: 'in_progress' }
+      ] } }],
+      [{ ...plan[0], collection: { ...collection, items: [
+        { id: 'B', status: 'completed' }
+      ] } }],
+      [{ ...plan[0], collection: { ...collection, items: [collection.items[0], collection.items[0]] } }]
+    ]) expect(parseAgentPlan(JSON.stringify({ steps }), plan)).toBeNull()
+  })
+
+  it('keeps an unfinished collection blocked at the limit even if the reviewer says complete', async () => {
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Retrieve the requested documents.' }], catalog: createCatalog(),
+      initialTrackedSteps: plan, maxIterations: 0,
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ textContent: 'All done.' })
+        .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Done.' }) }),
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    expect(result.intent).toBe('blocked')
+    expect(result.trackedSteps).toEqual(plan)
   })
 })

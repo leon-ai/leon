@@ -5,6 +5,7 @@ import {
   buildAgentContinuityCheckpoint,
   type AgentContinuityCheckpointInput
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
+import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 
 function createCheckpointInput(): AgentContinuityCheckpointInput {
@@ -118,6 +119,35 @@ describe('agent loop continuation', () => {
     expect(result.some((message) =>
       message.role === 'tool' && message.toolCallId === 'call-1'
     )).toBe(false)
+  })
+
+  it('hands exact older outcomes and failures to the summary before reducing text', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Download all requested documents.' }
+    ]
+    for (let index = 1; index <= 20; index += 1) appendToolExchange(transcript, index)
+    transcript[2]!.content = JSON.stringify({ status: 'success', data: {
+      controls: 'Historical controls. '.repeat(300),
+      completed_document: '35D87BB7-0003', verified_path: '/tmp/invoice-0003.pdf'
+    } })
+    transcript[4]!.content = JSON.stringify({ status: 'error', data: {
+      error_code: 'browser_consent_required', recovery: 'Use the existing GUI route.'
+    } })
+    const prepared = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 2_000
+    })
+    expect(prepared.estimatedInputTokens).toBeGreaterThan(2_000)
+    const summarize = vi.fn(async (history: string) => {
+      expect(history).toContain('35D87BB7-0003')
+      expect(history).toContain('/tmp/invoice-0003.pdf')
+      expect(history).toContain('browser_consent_required')
+      expect(history).not.toContain('content compacted')
+      return 'Verified 35D87BB7-0003 at /tmp/invoice-0003.pdf. Browser inspection refused: browser_consent_required. Use the GUI route for remaining documents.'
+    })
+    const result = await buildAgentContinuationTranscript(prepared.transcript, summarize)
+    expect(summarize).toHaveBeenCalledOnce()
+    expect(JSON.stringify(result)).toContain('/tmp/invoice-0003.pdf')
+    expect(result.slice(-16)).toEqual(transcript.slice(-16))
   })
 
   it('replaces an earlier deterministic checkpoint instead of stacking it', async () => {

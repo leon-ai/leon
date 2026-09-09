@@ -1,13 +1,14 @@
 import {
   COMPUTER_USE_ACTION_SEQUENCE_NAME,
-  COMPUTER_USE_PROVIDER_ID
+  COMPUTER_USE_PROVIDER_ID,
+  COMPUTER_USE_CAPTURE_ACTIONS
 } from '@/core/computer-use/constants'
-import { asRecord, parseJsonRecord } from '@/core/computer-use/utils'
+import { asRecord, isComputerUseEffectUncertain, parseJsonRecord } from '@/core/computer-use/utils'
 
 import {
-  AGENT_COMPUTER_USE_CONVERGENCE_CALL_THRESHOLD,
+  AGENT_COMPUTER_USE_RECENT_ACTION_LIMIT,
   AGENT_COMPUTER_USE_POINT_PROXIMITY_PX,
-  AGENT_COMPUTER_USE_REPEATED_POINT_THRESHOLD,
+  AGENT_COMPUTER_USE_UNVERIFIED_ACTION_THRESHOLD,
   AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD,
   AGENT_COMPUTER_USE_SCROLL_REVERSAL_THRESHOLD
 } from './constants'
@@ -19,22 +20,26 @@ interface ParsedComputerUseExecution {
   direction?: string
   frameOnlyAccessibility: boolean
   effectUnverifiable: boolean
+  failureCode?: string
+  focusRecovered: boolean
+  inputKey: string
   targetKey: string
   visualStateId?: string
   x?: number
   y?: number
 }
 
-const COMPUTER_USE_OBSERVATION_ACTIONS = new Set([
-  'zoom',
-  'get_window_state',
-  'get_desktop_state',
-  'get_browser_state'
+const TARGET_AND_CAPTURE_FIELDS = new Set([
+  'target', 'pid', 'window_id', 'display_id', 'scope', 'x', 'y', 'capture_after'
 ])
+const COMPUTER_USE_RETRY_ACTIONS = new Set(
+  [...COMPUTER_USE_CAPTURE_ACTIONS].filter((action) => action !== 'move_cursor')
+)
 
 /** Includes mechanical batch actions without inventing intermediate captures. */
 function parseComputerUseExecutions(
-  execution: ExecutionRecord
+  execution: ExecutionRecord,
+  proposed = false
 ): ParsedComputerUseExecution[] {
   const parsed = parseComputerUseExecution(execution)
   if (!parsed) return []
@@ -51,11 +56,15 @@ function parseComputerUseExecutions(
     const step = asRecord(value)
     const parameters = asRecord(step?.['parameters'])
     if (typeof step?.['action'] !== 'string' || !parameters) return []
+    const result = Array.isArray(results) ? asRecord(results[index]) : null
+    // A stopped batch did not execute the remaining requested steps.
+    if (!proposed && typeof result?.['success'] !== 'boolean') return []
     const action = parseComputerUseExecution({
       ...execution,
+      status: proposed || result?.['success'] === true ? 'success' : 'error',
       function: `${COMPUTER_USE_PROVIDER_ID}.cua.${step['action']}`,
       requestedToolInput: JSON.stringify(parameters),
-      observation: JSON.stringify(Array.isArray(results) ? results[index] ?? {} : {})
+      observation: JSON.stringify(result ?? {})
     })
     return action ? [action] : []
   })
@@ -141,19 +150,36 @@ function parseComputerUseExecution(
     } catch {
       // Plain-text observations have no structured capability diagnostics.
     }
-    const visualStateId = findNestedString(observation, 'visual_state_id')
+    // Post-action evidence takes precedence over input or intermediate metadata.
+    const postActionState = findNestedRecord(observation, (record) =>
+      asRecord(record['post_action_state']) !== null
+    )?.['post_action_state']
+    const captureTarget = asRecord(asRecord(postActionState)?.['capture_target'])
+    // A desktop fallback cannot establish that the original window is unchanged.
+    const captureMatchesTarget = !captureTarget || (
+      captureTarget['kind'] === 'desktop'
+        ? desktop && (captureTarget['display_id'] ?? 'primary') === displayId
+        : captureTarget['pid'] === pid && captureTarget['window_id'] === windowId
+    )
+    const visualStateId = captureMatchesTarget &&
+      (execution.status === 'success' || postActionState)
+      ? findNestedString(postActionState ?? observation, 'visual_state_id')
+      : undefined
+    const failureCode = execution.status !== 'success'
+      ? findNestedString(observation, 'error_code') || findNestedString(observation, 'code')
+      : undefined
 
     return {
       action: execution.function.split('.').at(-1) || '',
+      focusRecovered: execution.status === 'success' && execution.function.endsWith('.bring_to_front'),
       backgroundUnavailable: hasNestedRecord(
         observation,
-        (record) => record['code'] === 'background_unavailable'
+        (record) => record['code'] === 'background_unavailable' ||
+          record['error_code'] === 'background_unavailable'
       ),
       effectUnverifiable: hasNestedRecord(
         observation,
-        (record) => ['unverifiable', 'suspected_noop'].includes(
-          String(record['effect'])
-        )
+        (record) => isComputerUseEffectUncertain(record['effect'])
       ),
       frameOnlyAccessibility: hasNestedRecord(observation, (record) => {
         const elements = record['elements']
@@ -163,7 +189,11 @@ function parseComputerUseExecution(
           elements[0]?.['role'] === 'frame'
       }),
       targetKey: `${String(pid)}:${String(windowId)}:${String(displayId)}`,
+      inputKey: JSON.stringify(Object.entries(input)
+        .filter(([key]) => !TARGET_AND_CAPTURE_FIELDS.has(key))
+        .sort(([left], [right]) => left.localeCompare(right))),
       ...(visualStateId ? { visualStateId } : {}),
+      ...(failureCode ? { failureCode } : {}),
       ...(typeof input['direction'] === 'string'
         ? { direction: input['direction'] }
         : {}),
@@ -175,21 +205,57 @@ function parseComputerUseExecution(
   }
 }
 
+/** Shares action equivalence between the advisory and the enforced retry guard. */
+function isEquivalentAction(
+  previous: ParsedComputerUseExecution,
+  candidate: ParsedComputerUseExecution
+): boolean {
+  if (previous.targetKey !== candidate.targetKey ||
+      previous.action !== candidate.action || previous.inputKey !== candidate.inputKey) return false
+  if (candidate.x === undefined || candidate.y === undefined) {
+    return previous.x === candidate.x && previous.y === candidate.y
+  }
+  return previous.x !== undefined && previous.y !== undefined &&
+    Math.abs(previous.x - candidate.x) <= AGENT_COMPUTER_USE_POINT_PROXIMITY_PX &&
+    Math.abs(previous.y - candidate.y) <= AGENT_COMPUTER_USE_POINT_PROXIMITY_PX
+}
+
+/** An unchanged refresh is evidence of the same state, not permission to retry. */
+function getUnchangedStateExecutions(
+  executions: ParsedComputerUseExecution[],
+  targetKey: string
+): ParsedComputerUseExecution[] {
+  const streak: ParsedComputerUseExecution[] = []
+  let visualStateId: string | undefined
+  for (const previous of [...executions].reverse()) {
+    if (previous.targetKey !== targetKey) continue
+    if (previous.focusRecovered) break
+    if (!previous.visualStateId) {
+      // Unobserved input may have changed the interface; do not infer a no-op.
+      if (COMPUTER_USE_RETRY_ACTIONS.has(previous.action)) break
+      continue
+    }
+    visualStateId ??= previous.visualStateId
+    if (previous.visualStateId !== visualStateId) break
+    if (COMPUTER_USE_RETRY_ACTIONS.has(previous.action) && !previous.effectUnverifiable) break
+    streak.push(previous)
+  }
+  return streak
+}
+
 /** Detects visual interaction loops that should converge before the hard limit. */
 export function buildComputerUseConvergenceHint(
   executionHistory: ExecutionRecord[]
 ): string | null {
+  if (!executionHistory.at(-1)?.function.startsWith(`${COMPUTER_USE_PROVIDER_ID}.`)) return null
   const executions = executionHistory
-    .flatMap(parseComputerUseExecutions)
-  const callCount = executionHistory.filter((execution) =>
-    execution.function.startsWith(`${COMPUTER_USE_PROVIDER_ID}.`)
-  ).length
+    .flatMap((execution) => parseComputerUseExecutions(execution))
   const current = executions.at(-1)
   if (!current) {
     return null
   }
 
-  const matchingTargetExecutions = executions.filter(
+  const matchingTargetExecutions = executions.slice(-AGENT_COMPUTER_USE_RECENT_ACTION_LIMIT).filter(
     (execution) => execution.targetKey === current.targetKey
   )
   const scrollDirections = matchingTargetExecutions
@@ -202,19 +268,12 @@ export function buildComputerUseConvergenceHint(
         : count,
     0
   )
-  const nearbyPointActions =
-    current.x === undefined || current.y === undefined
-      ? 0
-      : matchingTargetExecutions.filter(
-          (execution) =>
-            execution.action === current.action &&
-            execution.x !== undefined &&
-            execution.y !== undefined &&
-            Math.abs(execution.x - current.x!) <=
-              AGENT_COMPUTER_USE_POINT_PROXIMITY_PX &&
-            Math.abs(execution.y - current.y!) <=
-              AGENT_COMPUTER_USE_POINT_PROXIMITY_PX
-        ).length
+  // This is advisory only: native Wayland delivery often cannot verify an
+  // effect. It catches changing guesses without declaring them failed input.
+  const unverifiedActions = current.effectUnverifiable
+    ? matchingTargetExecutions.filter((execution) => execution.effectUnverifiable &&
+        COMPUTER_USE_RETRY_ACTIONS.has(execution.action)).length
+    : 0
   const backgroundUnavailable = matchingTargetExecutions.some(
     (execution) => execution.backgroundUnavailable
   )
@@ -223,21 +282,18 @@ export function buildComputerUseConvergenceHint(
   ).length
   const repeatedVisualStateCount = current.visualStateId &&
     current.effectUnverifiable
-    ? matchingTargetExecutions.filter(
+    ? getUnchangedStateExecutions(executions, current.targetKey).filter(
         (execution) =>
           execution.effectUnverifiable &&
           execution.visualStateId === current.visualStateId
       ).length
     : 0
   const reasons = [
-    ...(callCount >= AGENT_COMPUTER_USE_CONVERGENCE_CALL_THRESHOLD
-      ? [`${callCount} computer-use calls have already run`]
-      : []),
     ...(scrollReversals >= AGENT_COMPUTER_USE_SCROLL_REVERSAL_THRESHOLD
       ? ['the same target has been scrolled back and forth repeatedly']
       : []),
-    ...(nearbyPointActions >= AGENT_COMPUTER_USE_REPEATED_POINT_THRESHOLD
-      ? ['nearly the same screen point has been used repeatedly']
+    ...(unverifiedActions >= AGENT_COMPUTER_USE_UNVERIFIED_ACTION_THRESHOLD
+      ? ['several recent inputs lack driver verification; their intended effects need checking in the observed state']
       : []),
     ...(repeatedVisualStateCount >=
       AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD
@@ -255,11 +311,11 @@ export function buildComputerUseConvergenceHint(
   }
 
   return `<computer_use_convergence>
-Visual interaction may be looping because ${reasons.join(' and ')}. Reuse existing captures first. For read-only inspection, answer unless one specific missing fact requires a decisive action. For edits, verify the intended effect before continuing; take a fresh observation when recovery requires new grounding, and do not repeat an ineffective action without new evidence. If required information or choices remain unresolved after available tools and the request are considered, call request_clarification; internal recovery alone does not require renewed permission.
+Visual interaction may be looping because ${reasons.join(' and ')}. Inspect existing evidence and the tool's recovery diagnostics before another action. An unchanged refresh does not reset an ineffective-action streak. Prefer an available dedicated tool or documented application API/CLI when it can perform and verify the requested operation. For read-only inspection, answer once the needed facts are available. For edits, verify the intended effect before continuing. Ask the owner only for genuinely missing information or authorization, not routine internal recovery.
 </computer_use_convergence>`
 }
 
-/** Blocks another equivalent click after repeated unchanged, uncertain results. */
+/** Blocks equivalent input after repeated refusals or unchanged uncertain results. */
 export function getComputerUseRetryBlocker(
   executionHistory: ExecutionRecord[],
   qualifiedName: string,
@@ -270,34 +326,39 @@ export function getComputerUseRetryBlocker(
     requestedToolInput,
     status: 'success',
     observation: '{}'
-  }).filter((action) => action.action === 'click' &&
-    action.x !== undefined && action.y !== undefined)
+  }, true).filter((action) => COMPUTER_USE_RETRY_ACTIONS.has(action.action))
   if (candidates.length === 0) return null
 
   const history = executionHistory
-    .filter((execution) => execution.status === 'success')
-    .flatMap(parseComputerUseExecutions)
-    .reverse()
+    .flatMap((execution) => parseComputerUseExecutions(execution))
   for (const candidate of candidates) {
-    let visualStateId: string | undefined
-    let repeats = 0
-    for (const previous of history) {
+    let failedAttempts = 0
+    let failureCode: string | undefined
+    let latestVisualStateId: string | undefined
+    for (const previous of [...history].reverse()) {
       if (previous.targetKey !== candidate.targetKey) continue
-      // A fresh explicit observation permits a newly grounded attempt. Any
-      // visible progress also invalidates the previous no-progress streak.
-      if (COMPUTER_USE_OBSERVATION_ACTIONS.has(previous.action) && previous.visualStateId) break
-      if (!previous.visualStateId) continue
-      visualStateId ??= previous.visualStateId
-      if (previous.visualStateId !== visualStateId) break
-      if (previous.action === 'click' && previous.effectUnverifiable &&
-          previous.x !== undefined && previous.y !== undefined &&
-          Math.abs(previous.x - candidate.x!) <= AGENT_COMPUTER_USE_POINT_PROXIMITY_PX &&
-          Math.abs(previous.y - candidate.y!) <= AGENT_COMPUTER_USE_POINT_PROXIMITY_PX) {
-        repeats++
+      // Refocusing can resolve a delivery refusal without changing pixels.
+      if (previous.focusRecovered) break
+      if (previous.visualStateId) {
+        latestVisualStateId ??= previous.visualStateId
+        if (latestVisualStateId !== previous.visualStateId) break
       }
-      if (repeats >= AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD) {
-        return 'Computer-use retry blocked: repeated clicks near this point produced the same unverified visual state. Take a fresh observation of this target and reassess the control before another click, or choose a different grounded approach. This is not a request for renewed user permission.'
-      }
+      if (!COMPUTER_USE_RETRY_ACTIONS.has(previous.action)) continue
+      // A different input is a recovery attempt. A repeated structured refusal
+      // needs a new route or evidence, even when the driver supplies no image.
+      if (!previous.failureCode || !isEquivalentAction(previous, candidate)) break
+      failureCode ??= previous.failureCode
+      if (previous.failureCode !== failureCode) break
+      failedAttempts += 1
+    }
+    if (failedAttempts >= AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD) {
+      return `Computer-use retry blocked: equivalent input repeatedly failed with ${failureCode}. Inspect the failure diagnostics and current target, then resolve the cause or use a different grounded control or input route. Do not replay the same failed input. This is not a request for renewed user permission.`
+    }
+    const repeats = getUnchangedStateExecutions(history, candidate.targetKey)
+      .filter((previous) => previous.effectUnverifiable &&
+        isEquivalentAction(previous, candidate)).length
+    if (repeats >= AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD) {
+      return 'Computer-use retry blocked: equivalent input repeatedly produced the same unverified visual state. Inspect the existing capture and recovery diagnostics, then use a different grounded control or input route. Another unchanged screenshot does not justify replaying this action. This is not a request for renewed user permission.'
     }
   }
   return null

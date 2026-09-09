@@ -75,9 +75,9 @@ import {
 import { runToolExecution } from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
+  AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
-  buildAgentConvergenceSystemPrompt,
   buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
@@ -406,7 +406,7 @@ export class ReActLLMDuty extends LLMDuty {
       const result = await runAgentLoop({
         transcript,
         catalog,
-        maxIterations: AGENT_MAX_ITERATIONS,
+        maxIterations: CONFIG_MANAGER.getConfig().runtime.agent_max_iterations ?? AGENT_MAX_ITERATIONS,
         finishingIterations: AGENT_FINISHING_ITERATIONS,
         prepareContinuation: (state) =>
           this.prepareContinuation(state.transcript, {
@@ -432,6 +432,12 @@ export class ReActLLMDuty extends LLMDuty {
           const prompt = [
             agentSystemPrompt,
             progressiveGuidance,
+            ...(state.trackedSteps.length ? [
+              '<current_plan>',
+              JSON.stringify(state.trackedSteps),
+              'This is the latest reported plan, not proof of completion. Reconcile it with tool evidence as milestones change; use collection scope, coverage and item outcomes to choose remaining work. Do not reopen verified items or infer missing items in an observed empty range.',
+              '</current_plan>'
+            ] : []),
             ...(activeSkill
               ? [
                   '<active_agent_skill>',
@@ -495,6 +501,11 @@ export class ReActLLMDuty extends LLMDuty {
         onAgentSkillLoaded: (context) => {
           caller.setAgentSkillContext(context)
           emitActiveAgentSkillActivity()
+        },
+        onProgressMessage: async (message) => {
+          // Existing hosts display reasoning_summary as a public activity summary.
+          this.reportProgressEvent({ type: 'reasoning_summary', summary: message })
+          await this.emitProgress(message)
         },
         onPlanUpdated: (steps) => {
           trackedSteps = steps.map((step) => ({ ...step }))
@@ -778,8 +789,9 @@ export class ReActLLMDuty extends LLMDuty {
       isRecoveryAttempt: boolean
       isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
+      isCompletionReview?: boolean
+      requiresToolAction?: boolean
       isContextRecoveryAttempt?: boolean
-      remainingIterations?: number
     },
     checkpointInput?: AgentContinuityCheckpointInput
   ): Promise<{
@@ -792,12 +804,10 @@ export class ReActLLMDuty extends LLMDuty {
       : 'agent'
     const activeSystemPrompt = [
       systemPrompt,
-      ...(options.remainingIterations !== undefined
-        ? [buildAgentConvergenceSystemPrompt(options.remainingIterations)]
-        : []),
       ...(options.isFinalizationAttempt
         ? [AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT]
-        : [])
+        : []),
+      ...(options.isCompletionReview ? [AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT] : [])
     ].join('\n\n')
     const providerName = getLLMProviderName()
     const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
@@ -836,7 +846,9 @@ export class ReActLLMDuty extends LLMDuty {
     }
     const preparedTranscript = preparedContext.transcript
     const preparedTools = preparedContext.tools
-    const toolChoice = options.isFinalizationAttempt ? 'none' : 'auto'
+    const toolChoice = options.isFinalizationAttempt || options.isCompletionReview
+      ? 'none'
+      : options.requiresToolAction ? 'required' : 'auto'
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
@@ -874,7 +886,7 @@ export class ReActLLMDuty extends LLMDuty {
       )
     }
     const shouldEmitReasoning =
-      reasoningMode !== 'off' && inferencePolicy.emitReasoning
+      !options.isCompletionReview && reasoningMode !== 'off' && inferencePolicy.emitReasoning
 
     const toolNames = preparedTools.map((t) => t.function.name).join(', ')
     const reasoningGenerationId = shouldEmitReasoning
@@ -888,7 +900,7 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.debug(`callAgentModel: tools=[${toolNames}] | choice=${toolChoice}`)
     if (preparedContext.wasCompacted) {
       LogHelper.debug(
-        `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokensBeforeToolCompaction}->${preparedContext.estimatedInputTokens} | exchanges=${preparedContext.compactedToolExchangeCount} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
+        `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokensBeforePreparation}->${preparedContext.estimatedInputTokens} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
       )
     }
     this.logAgentPromptDispatch({
@@ -1034,7 +1046,7 @@ export class ReActLLMDuty extends LLMDuty {
       completionResult as unknown as { toolCalls?: OpenAIToolCall[] }
     ).toolCalls
     const observedPhase: AgentPhase =
-      !toolCalls || toolCalls.length === 0 ? 'final_answer' : phase
+      !options.isCompletionReview && (!toolCalls || toolCalls.length === 0) ? 'final_answer' : phase
     this.observeCompletionMetrics({
       phase: observedPhase,
       completionStartedAt,
@@ -1192,7 +1204,7 @@ export class ReActLLMDuty extends LLMDuty {
     systemPrompt: string
     prompt: string
     tools: OpenAITool[]
-    toolChoice: 'auto' | 'none'
+    toolChoice: 'auto' | 'none' | 'required'
     phasePolicySummary?: string
     shouldStream?: boolean
   }): void {
@@ -1252,7 +1264,7 @@ export class ReActLLMDuty extends LLMDuty {
     systemPrompt: string
     phasePolicySummary?: string
     tools: OpenAITool[]
-    toolChoice: 'auto' | 'none'
+    toolChoice: 'auto' | 'none' | 'required'
     shouldStream?: boolean
   }): void {
     const promptTokens = this.estimateTokensFromText(params.prompt)
