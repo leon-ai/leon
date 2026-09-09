@@ -40,9 +40,13 @@ interface BrowserSetupFacts {
   owner_steps: string[]
 }
 
-/** Setup facts are returned to the agent so it can explain the next step naturally. */
+/**
+ * Setup facts are returned to the agent so it can explain the next step naturally.
+ */
 class BrowserSetupRequiredError extends Error {
-  /** Keep machine-readable readiness separate from the LLM's owner-facing explanation. */
+  /**
+   * Keep machine-readable readiness separate from the LLM's owner-facing explanation.
+   */
   public constructor(
     message: string,
     public readonly setupState: BrowserSetupState,
@@ -53,7 +57,9 @@ class BrowserSetupRequiredError extends Error {
   }
 }
 
-/** Runs upstream's CLI while Leon retains planning, model calls, and tool logging. */
+/**
+ * Runs upstream's CLI while Leon retains planning, model calls, and tool logging.
+ */
 export class BrowserUseTool extends Tool {
   private readonly config = ToolkitConfig.load(this.toolkit, this.toolName)
   private canceled = false
@@ -69,27 +75,37 @@ export class BrowserUseTool extends Tool {
     this.checkRequiredSettings()
   }
 
-  /** Run a bounded script using the CLI's persistent browser connection. */
+  /**
+   * Run a bounded script using the CLI's persistent browser connection.
+   */
   public run(code: string): Promise<Record<string, unknown>> { return this.invoke('run', { code }) }
 
-  /** Inspect visible controls in an observed tab. */
+  /**
+   * Inspect visible controls in an observed tab.
+   */
   public inspect(tab_id: string, selector?: string, offset?: number, limit?: number): Promise<Record<string, unknown>> {
     return this.invoke('inspect', { tab_id, selector, offset, limit })
   }
 
-  /** Apply an observed action and verify its outcome. */
+  /**
+   * Apply an observed action and verify its outcome.
+   */
   public act(tab_id: string, action: string, target: Record<string, unknown>, value?: string, expect?: string, expected_text?: string[], timeout?: number): Promise<Record<string, unknown>> {
     return this.invoke('act', { tab_id, action, target, value, expect, expected_text, timeout })
   }
 
-  /** Attach the current tab's screenshot to the model. */
+  /**
+   * Attach the current tab's screenshot to the model.
+   */
   public screenshot(): Promise<Record<string, unknown>> { return this.invoke('screenshot', {}) }
 
   public get toolName(): string { return 'cli' }
   public get toolkit(): string { return 'browser_use' }
   public get description(): string { return this.config.description }
 
-  /** Keep enablement instructions available even when a stale endpoint looks configured. */
+  /**
+   * Keep enablement instructions available even when a stale endpoint looks configured.
+   */
   private createBrowserConnectionError(
     message: string,
     setupState = BrowserSetupState.ConnectionUnavailable,
@@ -110,7 +126,9 @@ export class BrowserUseTool extends Tool {
     })
   }
 
-  /** Resolve only the configured browser; never launch or copy an owner's profile. */
+  /**
+   * Resolve only the configured browser; never launch or copy an owner's profile.
+   */
   private async resolveBrowserEndpoint(): Promise<string> {
     const settings = this.settings
     const settingsPath = this.getSettingsPath()
@@ -286,6 +304,9 @@ export class BrowserUseTool extends Tool {
     }
     process.on('SIGTERM', cancel)
     process.on('SIGINT', cancel)
+    const signal = this.executionContext?.signal
+    signal?.addEventListener('abort', cancel, { once: true })
+    if (signal?.aborted) cancel()
     try {
       // Positional bridge arguments use null for omitted optional values.
       const supplied = Object.fromEntries(Object.entries(parameters).filter(([, value]) => value != null))
@@ -312,6 +333,7 @@ export class BrowserUseTool extends Tool {
     } finally {
       process.off('SIGTERM', cancel)
       process.off('SIGINT', cancel)
+      signal?.removeEventListener('abort', cancel)
     }
   }
 

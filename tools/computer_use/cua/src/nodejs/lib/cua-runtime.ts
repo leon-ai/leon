@@ -1,10 +1,19 @@
+import type { CuaExecutionContext as ToolExecutionContext,
+  CapturedComputerUseState,
+  ComputerUseDriver,
+  ComputerUseDriverFactory,
+  ComputerUseImageTransform,
+  ComputerUseActivityOverlayResolver,
+  ComputerUseInteractionModeResolver,
+  ComputerUseSetOfMarkAnnotation,
+  ComputerUseSetOfMarkModeResolver,
+  CuaToolResult,
+  ManagedComputerUseRuntime,
+  PreferredApplicationsResolver
+} from './types'
 import { setTimeout as delay } from 'node:timers/promises'
 
-import type {
-  ToolProvider,
-  ToolProviderExecutionInput,
-  ToolProviderExecutionResult
-} from '@/core/tool-provider/types'
+import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { LogHelper } from '@/helpers/log-helper'
 
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
@@ -21,7 +30,6 @@ import {
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
   COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
   COMPUTER_USE_COORDINATE_FIELDS,
-  COMPUTER_USE_PROVIDER_ID,
   COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
   COMPUTER_USE_SCREEN_CAPTURE_ACTIONS,
@@ -45,19 +53,6 @@ import {
 } from './computer-use-settings'
 import { createCuaDriverAdapter } from './cua/cua-driver-adapter'
 import { CuaDesktopSetupPendingError, CuaDesktopSetupState } from './cua/cua-desktop-setup'
-import type {
-  CapturedComputerUseState,
-  ComputerUseDriver,
-  ComputerUseDriverFactory,
-  ComputerUseImageTransform,
-  ComputerUseActivityOverlayResolver,
-  ComputerUseInteractionModeResolver,
-  ComputerUseSetOfMarkAnnotation,
-  ComputerUseSetOfMarkModeResolver,
-  CuaToolResult,
-  ManagedComputerUseRuntime,
-  PreferredApplicationsResolver
-} from './types'
 import { asRecord, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
 
 export { COMPUTER_USE_ACTION_NAMES } from './constants'
@@ -71,10 +66,10 @@ export type {
   ComputerUseImageTransform
 } from './types'
 
-/** Executes Cua actions in persistent profile runtimes and retains visual artifacts. */
-export class ComputerUseToolProvider implements ToolProvider {
-  public readonly id = COMPUTER_USE_PROVIDER_ID
-
+/**
+ * Executes Cua actions in persistent profile runtimes and retains visual artifacts.
+ */
+export class CuaRuntime {
   private readonly visualTransforms = new Map<string, ComputerUseImageTransform>()
   private readonly visualStateIds = new Map<string, string>()
   private readonly artifactStore = new ComputerUseArtifactStore()
@@ -108,8 +103,8 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   public async execute(
-    input: ToolProviderExecutionInput
-  ): Promise<ToolProviderExecutionResult> {
+    input: ToolExecutionContext
+  ): Promise<ToolRuntimeResult> {
     const action = input.functionName
     if (!COMPUTER_USE_ACTIONS.has(action)) {
       return this.failure('The requested computer-use action is not supported.')
@@ -143,10 +138,11 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private async executeAction(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
-  ): Promise<ToolProviderExecutionResult> {
+  ): Promise<ToolRuntimeResult> {
+    if (input.signal?.aborted) return this.failure('Computer-use execution canceled before this action.')
     if (action === COMPUTER_USE_ACTION_SEQUENCE_NAME) {
       return this.executeActionSequence(input, parameters)
     }
@@ -453,7 +449,9 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
   }
 
-  /** Provides one recovery decision for both individual and batched actions. */
+  /**
+   * Provides one recovery decision for both individual and batched actions.
+   */
   private getActionRecovery(
     result: Record<string, unknown>,
     parameters: Record<string, unknown>,
@@ -490,7 +488,7 @@ export class ComputerUseToolProvider implements ToolProvider {
         : '')
   }
 
-  private executionFailure(error: unknown): ToolProviderExecutionResult {
+  private executionFailure(error: unknown): ToolRuntimeResult {
     if (error instanceof CuaDesktopSetupPendingError) {
       return {
         success: false,
@@ -517,9 +515,9 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private async executeActionSequence(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>
-  ): Promise<ToolProviderExecutionResult> {
+  ): Promise<ToolRuntimeResult> {
     const steps = parameters['steps']
     if (
       !Array.isArray(steps) ||
@@ -559,11 +557,11 @@ export class ComputerUseToolProvider implements ToolProvider {
     const captureAfter = (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? true) === true
     const stepResults: Array<Record<string, unknown>> = []
     const artifacts: Array<Record<string, unknown>> = []
-    let modelFiles: ToolProviderExecutionResult['modelFiles'] = []
+    let modelFiles: ToolRuntimeResult['modelFiles'] = []
     let postActionState: unknown
     let recovery: unknown
     let nextStep: unknown
-    let failure: ToolProviderExecutionResult | undefined
+    let failure: ToolRuntimeResult | undefined
 
     for (const [index, value] of steps.entries()) {
       const step = asRecord(value)!
@@ -643,7 +641,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private applyObservationDefaults(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
   ): Record<string, unknown> {
@@ -673,13 +671,15 @@ export class ComputerUseToolProvider implements ToolProvider {
 
   private async callAction(
     driver: ComputerUseDriver,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
   ): Promise<CuaToolResult> {
+    input.signal?.throwIfAborted()
     const serializedParameters = JSON.stringify(parameters)
-    let result = await this.callDriverAction(driver, action, parameters)
+    let result = await this.callDriverAction(driver, action, parameters, input.signal)
 
+    input.signal?.throwIfAborted()
     if (this.shouldRestoreSession(result)) {
       input.onProgress?.({
         source: 'log',
@@ -700,7 +700,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       if (typeof session === 'string') {
         await this.runtimeManager.restoreActivityOverlay(driver, input, session, action)
       }
-      result = await this.callDriverAction(driver, action, parameters)
+      result = await this.callDriverAction(driver, action, parameters, input.signal)
     }
 
     const failure = this.resultCompactor.getStructuredFailure(
@@ -711,7 +711,7 @@ export class ComputerUseToolProvider implements ToolProvider {
         resolveComputerUseBrowserInspection(input) &&
         Number.isInteger(parameters['pid']) && Number(parameters['pid']) > 0 &&
         Number.isInteger(parameters['window_id']) && Number(parameters['window_id']) > 0) {
-      // An existing owner grant makes setup routine. Keep it in the provider
+      // An existing owner grant makes setup routine. Keep it in the tool
       // instead of spending a model turn deciding to repeat Cua's next action.
       const prepared = await driver.callTool('browser_prepare', JSON.stringify({
         pid: parameters['pid'], window_id: parameters['window_id'],
@@ -721,7 +721,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       if (hasCuaError(prepared) || this.resultCompactor.getStructuredFailure(
         parseJsonRecord(prepared.structuredJson) || parseJsonRecord(prepared.rawJson)
       )) return prepared
-      result = await this.callDriverAction(driver, action, parameters)
+      result = await this.callDriverAction(driver, action, parameters, input.signal)
     }
 
     if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
@@ -737,6 +737,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     // exists. A short bounded retry avoids spending another model turn polling.
     for (const delayMs of COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS) {
       await delay(delayMs)
+      input.signal?.throwIfAborted()
       result = await driver.callTool(action, serializedParameters)
       if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
         break
@@ -746,12 +747,16 @@ export class ComputerUseToolProvider implements ToolProvider {
     return result
   }
 
-  /** Makes pixel-targeted typing honor the same focus contract on every driver. */
+  /**
+   * Makes pixel-targeted typing honor the same focus contract on every driver.
+   */
   private async callDriverAction(
     driver: ComputerUseDriver,
     action: string,
-    parameters: Record<string, unknown>
+    parameters: Record<string, unknown>,
+    signal?: AbortSignal
   ): Promise<CuaToolResult> {
+    signal?.throwIfAborted()
     const hasPixelTarget =
       typeof parameters['x'] === 'number' &&
       typeof parameters['y'] === 'number'
@@ -777,6 +782,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       return clickResult
     }
 
+    signal?.throwIfAborted()
     const typeParameters = { ...parameters }
     delete typeParameters['x']
     delete typeParameters['y']
@@ -828,7 +834,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private mapCoordinatesToSource(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>,
     runtime: ManagedComputerUseRuntime
@@ -885,7 +891,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private rememberVisualTransform(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>,
     transform: ComputerUseImageTransform | null
@@ -905,7 +911,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private rememberVisualStateId(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>,
     visualStateId: string | null
@@ -941,7 +947,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private getVisualTransformKey(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>
   ): string {
     const target = asRecord(parameters['target'])
@@ -960,9 +966,11 @@ export class ComputerUseToolProvider implements ToolProvider {
       : `${sessionKey}:desktop`
   }
 
-  /** A rejected capture cannot justify reusing older coordinates or hashes. */
+  /**
+   * A rejected capture cannot justify reusing older coordinates or hashes.
+   */
   private forgetVisualState(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>
   ): void {
     const key = this.getVisualTransformKey(input, parameters)
@@ -1079,7 +1087,7 @@ export class ComputerUseToolProvider implements ToolProvider {
 
   private async captureStateAfterAction(
     runtime: ManagedComputerUseRuntime,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     actionParameters: Record<string, unknown>,
     action: string
   ): Promise<CapturedComputerUseState | null> {
@@ -1193,9 +1201,11 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
   }
 
-  /** Retains capture failures as evidence without reclassifying delivered input. */
+  /**
+   * Retains capture failures as evidence without reclassifying delivered input.
+   */
   private failedCapture(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>,
     code: string,
     message: string,
@@ -1218,7 +1228,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     return 'Computer-use action completed.'
   }
 
-  private failure(message: string): ToolProviderExecutionResult {
+  private failure(message: string): ToolRuntimeResult {
     return {
       success: false,
       message,

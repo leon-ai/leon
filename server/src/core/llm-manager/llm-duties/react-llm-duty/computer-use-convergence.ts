@@ -1,11 +1,7 @@
+import { COMPUTER_USE_CAPTURE_ACTIONS, isComputerUseEffectUncertain } from '../../../../../../tools/computer_use/cua/src/nodejs/lib/action-contract'
 import { createHash } from 'node:crypto'
 
-import {
-  COMPUTER_USE_ACTION_SEQUENCE_NAME,
-  COMPUTER_USE_PROVIDER_ID,
-  COMPUTER_USE_CAPTURE_ACTIONS
-} from '@/core/computer-use/constants'
-import { asRecord, isComputerUseEffectUncertain, parseJsonRecord } from '@/core/computer-use/utils'
+import { asRecord, parseJsonRecord } from '../../../../../../tools/computer_use/cua/src/nodejs/lib/utils'
 
 import {
   AGENT_COMPUTER_USE_RECENT_ACTION_LIMIT,
@@ -31,6 +27,12 @@ interface ParsedComputerUseExecution {
   y?: number
 }
 
+const COMPUTER_USE_PROVIDER_ID = 'computer_use'
+
+const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
+
+
+
 const BROWSER_USE_FUNCTION_PREFIX = 'browser_use.playwright.'
 const BROWSER_CLI_FUNCTION_PREFIX = 'browser_use.cli.'
 const TARGET_AND_CAPTURE_FIELDS = new Set([
@@ -41,13 +43,16 @@ const COMPUTER_USE_RETRY_ACTIONS = new Set(
     .filter((action) => action !== 'move_cursor')
 )
 
+
 function isInterfaceExecution(functionName: string): boolean {
   return functionName.startsWith(`${COMPUTER_USE_PROVIDER_ID}.`) ||
     functionName.startsWith(BROWSER_USE_FUNCTION_PREFIX) ||
     functionName.startsWith(BROWSER_CLI_FUNCTION_PREFIX)
 }
 
-/** Normalize CLI outcomes into the same browser action contract used by the guard. */
+/**
+ * Normalize CLI outcomes into the same browser action contract used by the guard.
+ */
 function cliActionInput(input: Record<string, unknown>): Record<string, unknown> {
   const target = asRecord(input['target']) ?? { selector: input['target'] }
   return {
@@ -59,7 +64,9 @@ function cliActionInput(input: Record<string, unknown>): Record<string, unknown>
   }
 }
 
-/** Includes mechanical batch actions without inventing intermediate captures. */
+/**
+ * Includes mechanical batch actions without inventing intermediate captures.
+ */
 function parseComputerUseExecutions(
   execution: ExecutionRecord,
   proposed = false
@@ -255,7 +262,9 @@ function parseComputerUseExecution(
   }
 }
 
-/** Shares action equivalence between the advisory and the enforced retry guard. */
+/**
+ * Shares action equivalence between the advisory and the enforced retry guard.
+ */
 function isEquivalentAction(
   previous: ParsedComputerUseExecution,
   candidate: ParsedComputerUseExecution
@@ -270,7 +279,9 @@ function isEquivalentAction(
     Math.abs(previous.y - candidate.y) <= AGENT_COMPUTER_USE_POINT_PROXIMITY_PX
 }
 
-/** An unchanged refresh is evidence of the same state, not permission to retry. */
+/**
+ * An unchanged refresh is evidence of the same state, not permission to retry.
+ */
 function getUnchangedStateExecutions(
   executions: ParsedComputerUseExecution[],
   targetKey: string
@@ -293,7 +304,9 @@ function getUnchangedStateExecutions(
   return streak
 }
 
-/** Detects visual interaction loops that should converge before the hard limit. */
+/**
+ * Detects visual interaction loops that should converge before the hard limit.
+ */
 export function buildComputerUseConvergenceHint(
   executionHistory: ExecutionRecord[]
 ): string | null {
@@ -365,7 +378,9 @@ Visual interaction may be looping because ${reasons.join(' and ')}. Inspect exis
 </computer_use_convergence>`
 }
 
-/** Blocks equivalent input after repeated refusals or unchanged uncertain results. */
+/**
+ * Blocks equivalent input after repeated refusals or unchanged uncertain results.
+ */
 export function getComputerUseRetryBlocker(
   executionHistory: ExecutionRecord[],
   qualifiedName: string,

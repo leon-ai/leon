@@ -5,7 +5,7 @@ import { io } from 'socket.io-client'
 import {
   TOOLKIT_REGISTRY,
   TOOL_EXECUTOR,
-  TOOL_PROVIDER_REGISTRY
+  TOOL_WORKER_MANAGER
 } from '@/core'
 import {
   SATELLITE_EVENTS,
@@ -199,7 +199,7 @@ const shutDown = async (): Promise<void> => {
   }
 
   isShuttingDown = true
-  await TOOL_PROVIDER_REGISTRY.dispose()
+  await TOOL_WORKER_MANAGER.dispose()
   process.exit(0)
 }
 

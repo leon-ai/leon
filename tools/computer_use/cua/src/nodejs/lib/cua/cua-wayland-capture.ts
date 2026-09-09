@@ -21,7 +21,9 @@ export interface GnomeCaptureLayout {
   serial: number
 }
 
-/** Reads logical stage dimensions from Mutter's typed D-Bus response. */
+/**
+ * Reads logical stage dimensions from Mutter's typed D-Bus response.
+ */
 export function parseGnomeCaptureLayout(response: unknown): GnomeCaptureLayout {
   const data = asRecord(response)?.['data'] as unknown[] | undefined
   const monitors = data?.[1] as unknown[][] | undefined
@@ -59,7 +61,9 @@ async function readLayout(): Promise<GnomeCaptureLayout> {
   return parseGnomeCaptureLayout(JSON.parse(result.stdout))
 }
 
-/** Normalizes the compositor stage before cropping, so pixels match input points. */
+/**
+ * Normalizes the compositor stage before cropping, so pixels match input points.
+ */
 export async function normalizeGnomeCapture(
   image: Buffer,
   layout: GnomeCaptureLayout,
@@ -93,7 +97,9 @@ export async function normalizeGnomeCapture(
   return result.stdout
 }
 
-/** Corrects Cua's GNOME stage crops without changing native input or consent. */
+/**
+ * Corrects Cua's GNOME stage crops without changing native input or consent.
+ */
 export class CuaWaylandCaptureAdapter implements ComputerUseDriver {
   public readonly setAgentCursorEnabled?: NonNullable<ComputerUseDriver['setAgentCursorEnabled']>
   private readonly observedLayouts = new Map<string, GnomeCaptureLayout>()

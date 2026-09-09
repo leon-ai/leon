@@ -26,7 +26,9 @@ function getFiniteNumber(value: unknown): number | null {
   return Number.isFinite(number) ? number : null
 }
 
-/** Builds a stable key shared by raw and compacted accessibility elements. */
+/**
+ * Builds a stable key shared by raw and compacted accessibility elements.
+ */
 export function getComputerUseSetOfMarkKey(
   element: Record<string, unknown>
 ): string | null {
@@ -39,7 +41,9 @@ export function getComputerUseSetOfMarkKey(
   return Number.isInteger(index) ? `index:${index}` : null
 }
 
-/** Creates model-only visual markers for actionable accessibility elements. */
+/**
+ * Creates model-only visual markers for actionable accessibility elements.
+ */
 export function createComputerUseSetOfMarkPlan(
   result: Record<string, unknown> | null,
   mode: ComputerUseSetOfMarkMode,

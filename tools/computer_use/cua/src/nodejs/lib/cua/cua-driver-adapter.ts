@@ -1,8 +1,12 @@
+import type { CuaExecutionContext as ToolExecutionContext,
+  ComputerUseDriver,
+  CuaToolResult,
+  RemoteComputerUseResponse
+} from '../types'
 import fs from 'node:fs'
 import path from 'node:path'
 
 import { CODEBASE_PATH } from '@/constants'
-import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
 
 import { CuaDesktopSetup, CuaDesktopSetupPendingError, CuaDesktopSetupState, isCuaWaylandSession } from './cua-desktop-setup'
 import { CuaWaylandCaptureAdapter } from './cua-wayland-capture'
@@ -20,19 +24,14 @@ import {
 import { resolveComputerUseBrowserInspection } from '../computer-use-settings'
 import { createCuaBrowserAuthorizationHost } from './cua-browser-authorization'
 import { shouldUseCuaSafeX11Input } from '../computer-use-coordinate-mapper'
-import type {
-  ComputerUseDriver,
-  CuaToolResult,
-  RemoteComputerUseResponse
-} from '../types'
 import { asRecord, parseJsonRecord } from '../utils'
 
 const CUA_MAX_SESSION_TTL_SECONDS = 28_800n
 const CUA_MAX_IDLE_TTL_SECONDS = 1_800n
 
-const desktopSetup = new CuaDesktopSetup()
-
-/** Adapts an owner-device host bridge to the computer-use driver contract. */
+/**
+ * Adapts an owner-device host bridge to the computer-use driver contract.
+ */
 class RemoteCuaDriverAdapter implements ComputerUseDriver {
   // The host bridge exposes the same observation actions and image payloads.
   // Keep verification in this layer so remote agents also see action effects.
@@ -138,9 +137,12 @@ class RemoteCuaDriverAdapter implements ComputerUseDriver {
   public uniffiDestroy(): void {}
 }
 
-/** Creates the configured Cua adapter without exposing it to the provider. */
+/**
+ * Creates the configured Cua adapter without exposing it to the provider.
+ */
 export async function createCuaDriverAdapter(
-  input: ToolProviderExecutionInput
+  input: ToolExecutionContext,
+  desktopSetup = new CuaDesktopSetup()
 ): Promise<ComputerUseDriver> {
   const remoteUrl = process.env[COMPUTER_USE_REMOTE_DRIVER_URL_ENV]?.trim()
   if (remoteUrl) {

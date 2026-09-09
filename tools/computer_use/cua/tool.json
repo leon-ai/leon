@@ -11,9 +11,6 @@
     "email": "louis@getleon.ai",
     "url": "https://x.com/grenlouis"
   },
-  "execution": {
-    "provider": "computer_use"
-  },
   "functions": {
     "list_apps": {
       "description": "List installed desktop applications and configured preferred_apps. Use it to choose a launch target when the owner did not name one.",
@@ -3559,5 +3556,11 @@
         "additionalProperties": true
       }
     }
+  },
+  "resources": {
+    "gnome_wayland_0_25_0": [
+      "https://raw.githubusercontent.com/trycua/cua/cua-driver-rs-v0.25.0/libs/cua-driver/wayland-helper/winrects@cua/metadata.json",
+      "https://raw.githubusercontent.com/trycua/cua/cua-driver-rs-v0.25.0/libs/cua-driver/wayland-helper/winrects@cua/extension.js"
+    ]
   }
 }

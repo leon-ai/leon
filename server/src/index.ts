@@ -37,7 +37,7 @@ import {
   LLM_PROVIDER,
   LLM_MANAGER,
   TOOLKIT_REGISTRY,
-  TOOL_PROVIDER_REGISTRY,
+  TOOL_WORKER_MANAGER,
   CONTEXT_MANAGER,
   PULSE_MANAGER
 } from '@/core'
@@ -53,7 +53,9 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 
 const SHUTDOWN_FORCE_TIMEOUT_MS = 5_000
 
-/** List processes when the host provides the platform process utility. */
+/**
+ * List processes when the host provides the platform process utility.
+ */
 async function listRunningProcesses(): Promise<
   Awaited<ReturnType<typeof psList>>
 > {
@@ -285,10 +287,10 @@ async function bootstrap(): Promise<void> {
     }, SHUTDOWN_FORCE_TIMEOUT_MS)
     forceExitTimeout.unref()
 
-    void TOOL_PROVIDER_REGISTRY.dispose()
+    void TOOL_WORKER_MANAGER.dispose()
       .catch((error: unknown) => {
         LogHelper.error(
-          `Tool provider shutdown failed: ${error instanceof Error ? error.message : String(error)}`
+          `Tool worker shutdown failed: ${error instanceof Error ? error.message : String(error)}`
         )
       })
       .finally(() => {

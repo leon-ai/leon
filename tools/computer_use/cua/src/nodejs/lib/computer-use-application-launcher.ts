@@ -1,9 +1,7 @@
+import type { CuaExecutionContext as ToolExecutionContext, ComputerUseDriver, CuaToolResult  } from './types'
 import path from 'node:path'
 
-import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
-
 import { COMPUTER_USE_LAUNCH_WINDOW_RETRY_DELAYS_MS } from './constants'
-import type { ComputerUseDriver, CuaToolResult } from './types'
 import { asRecord, hasText, parseJsonRecord } from './utils'
 
 const APPLICATION_WINDOW_UNAVAILABLE_CODE = 'application_window_unavailable'
@@ -14,7 +12,9 @@ export interface ComputerUseLaunchResolution {
   ready: boolean
 }
 
-/** Waits for a launched desktop application to expose a usable window. */
+/**
+ * Waits for a launched desktop application to expose a usable window.
+ */
 export class ComputerUseApplicationLauncher {
   public async captureWindowBaseline(
     driver: ComputerUseDriver
@@ -27,7 +27,7 @@ export class ComputerUseApplicationLauncher {
 
   public async resolve(
     driver: ComputerUseDriver,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>,
     launchResult: Record<string, unknown>,
     baseline: Map<string, Record<string, unknown>>
