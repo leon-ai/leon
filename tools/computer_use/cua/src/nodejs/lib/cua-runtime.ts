@@ -1,3 +1,4 @@
+import { ComputerUseTextInputMode } from './types'
 import type { CuaExecutionContext as ToolExecutionContext,
   CapturedComputerUseState,
   ComputerUseDriver,
@@ -32,6 +33,7 @@ import {
   COMPUTER_USE_COORDINATE_FIELDS,
   COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
+  COMPUTER_USE_SELECT_ALL_KEYS,
   COMPUTER_USE_SCREEN_CAPTURE_ACTIONS,
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
@@ -529,20 +531,6 @@ export class CuaRuntime {
       )
     }
 
-    const pixelClickCount = steps.filter((value) => {
-      const step = asRecord(value)
-      const stepParameters = asRecord(step?.['parameters'])
-      return (
-        (step?.['action'] === 'click' || step?.['action'] === 'type_text') &&
-        typeof stepParameters?.['x'] === 'number' &&
-        typeof stepParameters?.['y'] === 'number'
-      )
-    }).length
-    if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
-      return this.failure(
-        'perform_actions accepts at most one pixel-targeted click, including the focus click for type_text with x/y. Observe between spatial targets or use semantic element handles.'
-      )
-    }
     // Reject unsupported actions before setup or input. Their position in a
     // sequence must not cause an avoidable partial edit.
     for (const [index, value] of steps.entries()) {
@@ -554,6 +542,44 @@ export class CuaRuntime {
       }
     }
 
+    // Reuse one established field through select-all and typing. Repeated
+    // coordinates for that same field must not click again and clear selection.
+    let focusedField: Record<string, unknown> | undefined
+    const normalizedSteps = steps.map((value) => {
+      const step = asRecord(value)!
+      const action = step['action'] as string
+      const parameters = { ...asRecord(step['parameters'])! }
+      const hasPixels = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
+      const sameWindow = focusedField &&
+        this.getVisualTransformKey(input, parameters) === this.getVisualTransformKey(input, focusedField) &&
+        asRecord(parameters['target'])?.['display_id'] === asRecord(focusedField['target'])?.['display_id'] &&
+        parameters['delivery_mode'] === focusedField['delivery_mode']
+      const sameField = sameWindow && focusedField && parameters['x'] === focusedField['x'] &&
+        parameters['y'] === focusedField['y'] &&
+        parameters['element_token'] == null && parameters['element_index'] == null
+      if (action === 'type_text' && hasPixels && sameField) {
+        delete parameters['x']
+        delete parameters['y']
+      } else if (action === 'click' && hasPixels) {
+        focusedField = parameters
+      } else if (!(action === 'hotkey' && sameWindow &&
+          (!hasPixels || sameField) &&
+          JSON.stringify(parameters['keys']) === JSON.stringify(COMPUTER_USE_SELECT_ALL_KEYS))) {
+        // Tab, Enter, scrolling or another target can change focus or layout.
+        focusedField = undefined
+      }
+      return { action, parameters }
+    })
+    const pixelClickCount = normalizedSteps.filter(({ action, parameters }) =>
+      (action === 'click' || action === 'type_text') &&
+      typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
+    ).length
+    if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
+      return this.failure(
+        'perform_actions accepts at most one pixel-targeted click. For one field, batch click, select-all and type_text; repeated typing coordinates must identify that same field. Observe between different spatial targets.'
+      )
+    }
+
     const captureAfter = (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? true) === true
     const stepResults: Array<Record<string, unknown>> = []
     const artifacts: Array<Record<string, unknown>> = []
@@ -563,7 +589,7 @@ export class CuaRuntime {
     let nextStep: unknown
     let failure: ToolRuntimeResult | undefined
 
-    for (const [index, value] of steps.entries()) {
+    for (const [index, value] of normalizedSteps.entries()) {
       const step = asRecord(value)!
       const stepAction = step['action'] as string
       const stepParameters = asRecord(step['parameters'])!
@@ -757,37 +783,38 @@ export class CuaRuntime {
     signal?: AbortSignal
   ): Promise<CuaToolResult> {
     signal?.throwIfAborted()
-    const hasPixelTarget =
-      typeof parameters['x'] === 'number' &&
-      typeof parameters['y'] === 'number'
-    if (action !== 'type_text' || !hasPixelTarget) {
+    if (action !== 'type_text') {
       return driver.callTool(action, JSON.stringify(parameters))
     }
-
-    // Some native routes type into the existing focus even when x/y are
-    // supplied. Establish focus explicitly so type_text keeps its public API.
-    const clickParameters = { ...parameters }
-    delete clickParameters['text']
-    const clickResult = await driver.callTool(
-      'click',
-      JSON.stringify(clickParameters)
-    )
-    const clickOutput =
-      parseJsonRecord(clickResult.structuredJson) ||
-      parseJsonRecord(clickResult.rawJson)
-    if (
-      hasCuaError(clickResult) ||
-      this.resultCompactor.getStructuredFailure(clickOutput)
-    ) {
-      return clickResult
+    const mode = parameters['mode'] ?? ComputerUseTextInputMode.Insert
+    if (!Object.values(ComputerUseTextInputMode).includes(mode as ComputerUseTextInputMode)) {
+      throw new Error('type_text mode must be insert or replace.')
     }
-
-    signal?.throwIfAborted()
+    const hasPixelTarget = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
+    const hasElementTarget = parameters['element_token'] != null || parameters['element_index'] != null
     const typeParameters = { ...parameters }
-    delete typeParameters['x']
-    delete typeParameters['y']
-    // Only the focus click uses Cua's crop translation; text uses that focus.
-    delete typeParameters['from_zoom']
+    delete typeParameters['mode']
+    if (hasPixelTarget || (mode === ComputerUseTextInputMode.Replace && hasElementTarget)) {
+      // Focus once before selection. Clicking again after select-all would
+      // collapse the selection and append instead of replacing the value.
+      const clickParameters = { ...typeParameters }
+      delete clickParameters['text']
+      const clickResult = await driver.callTool('click', JSON.stringify(clickParameters))
+      const clickOutput = parseJsonRecord(clickResult.structuredJson) || parseJsonRecord(clickResult.rawJson)
+      if (hasCuaError(clickResult) || this.resultCompactor.getStructuredFailure(clickOutput)) return clickResult
+      for (const key of ['x', 'y', 'element_token', 'element_index', 'snapshot_id', 'from_zoom']) {
+        delete typeParameters[key]
+      }
+    }
+    if (mode === ComputerUseTextInputMode.Replace) {
+      signal?.throwIfAborted()
+      const selectionParameters: Record<string, unknown> = { ...typeParameters, keys: COMPUTER_USE_SELECT_ALL_KEYS }
+      delete selectionParameters['text']
+      const selected = await driver.callTool('hotkey', JSON.stringify(selectionParameters))
+      const selectionOutput = parseJsonRecord(selected.structuredJson) || parseJsonRecord(selected.rawJson)
+      if (hasCuaError(selected) || this.resultCompactor.getStructuredFailure(selectionOutput)) return selected
+    }
+    signal?.throwIfAborted()
     return driver.callTool('type_text', JSON.stringify(typeParameters))
   }
 

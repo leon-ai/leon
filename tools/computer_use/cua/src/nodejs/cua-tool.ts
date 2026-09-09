@@ -154,8 +154,8 @@ export default class CuaTool extends Tool {
   /**
    * Execute type text through the retained Cua runtime.
    */
-  public async type_text(capture_after?: unknown, delivery_mode?: unknown, element_index?: unknown, element_token?: unknown, pid?: unknown, scope?: unknown, snapshot_id?: unknown, target?: unknown, text?: unknown, window_id?: unknown, x?: unknown, y?: unknown, settle_ms?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('type_text', { capture_after, delivery_mode, element_index, element_token, pid, scope, snapshot_id, target, text, window_id, x, y, settle_ms })
+  public async type_text(capture_after?: unknown, delivery_mode?: unknown, element_index?: unknown, element_token?: unknown, pid?: unknown, scope?: unknown, snapshot_id?: unknown, target?: unknown, text?: unknown, window_id?: unknown, x?: unknown, y?: unknown, settle_ms?: unknown, mode?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('type_text', { capture_after, delivery_mode, element_index, element_token, pid, scope, snapshot_id, target, text, window_id, x, y, settle_ms, mode })
   }
 
   /**

@@ -150,3 +150,6 @@ export const IMAGE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp'
 }
+
+// The tool executes on the controlling device, including through Satellite.
+export const COMPUTER_USE_SELECT_ALL_KEYS = [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'a']

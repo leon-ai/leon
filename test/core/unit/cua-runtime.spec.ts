@@ -282,7 +282,7 @@ describe('CuaRuntime', () => {
     }
   })
 
-  it('focuses a pixel-targeted field before typing into it', async () => {
+  it.each(['insert', 'replace'])('focuses once before typing with mode=%s', async (mode) => {
     const observationResult = {
       text: 'Desktop captured.',
       images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
@@ -326,6 +326,7 @@ describe('CuaRuntime', () => {
         x: 0,
         y: 0,
         text: 'OpenRouter',
+        mode,
         capture_after: false
       },
       profileName: PROFILE_NAME,
@@ -335,6 +336,7 @@ describe('CuaRuntime', () => {
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
       'get_desktop_state',
       'click',
+      ...(mode === 'replace' ? ['hotkey'] : []),
       'type_text'
     ])
     expect(JSON.parse(driver.callTool.mock.calls[1]![1])).toEqual({
@@ -342,10 +344,17 @@ describe('CuaRuntime', () => {
       x: 0,
       y: 0
     })
-    expect(JSON.parse(driver.callTool.mock.calls[2]![1])).toEqual({
+    expect(JSON.parse(driver.callTool.mock.calls.at(-1)![1])).toEqual({
       target: { kind: 'desktop', display_id: 'primary' },
       text: 'OpenRouter'
     })
+
+    if (mode === 'replace') {
+      expect(JSON.parse(driver.callTool.mock.calls[2]![1])).toEqual({
+        target: { kind: 'desktop', display_id: 'primary' },
+        keys: [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'a']
+      })
+    }
 
     const artifacts = observation.output['artifacts'] as Array<{ path: string }>
     await Promise.all(
@@ -1120,6 +1129,34 @@ describe('CuaRuntime', () => {
         ]
       }
     })
+  })
+
+  it.each([false, true])('reuses field focus only until a focus-changing key (tab=%s)', async (tab) => {
+    const observed = { text: '', images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
+      structuredJson: '{"screenshot_width":1,"screenshot_height":1}', rawJson: '{}', isError: false, degraded: false }
+    const driver = createDriver({ text: '', images: [], structuredJson: '{"effect":"confirmed"}', isError: false })
+    driver.callTool.mockImplementation(async (name) => name === 'get_desktop_state' ? observed :
+      { text: '', images: [], structuredJson: '{"effect":"confirmed"}', isError: false })
+    const runtime = new CuaRuntime(async () => driver as never)
+    const context = { toolkitId: 'computer_use', toolId: 'cua', profileName: PROFILE_NAME,
+      conversationSessionId: 'single-field' }
+    const observation = await runtime.execute({ ...context, functionName: 'get_desktop_state', parameters: {} })
+    driver.callTool.mockClear()
+    const target = { kind: 'desktop', display_id: 'primary' }
+    const result = await runtime.execute({ ...context, functionName: 'perform_actions', parameters: { steps: [
+      { action: 'click', parameters: { target, x: 0, y: 0 } },
+      tab ? { action: 'press_key', parameters: { target, key: 'tab' } } :
+        { action: 'hotkey', parameters: { target, keys: [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'a'] } },
+      { action: 'type_text', parameters: { target, x: 0, y: 0, text: '86.94' } }
+    ] } })
+    expect(result.success).toBe(!tab)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual(tab ? [] :
+      ['start_session', 'click', 'hotkey', 'type_text', 'get_desktop_state'])
+    if (!tab) expect(JSON.parse(driver.callTool.mock.calls[3]![1])).toEqual({ target, text: '86.94' })
+    for (const artifact of [...observation.output['artifacts'] as Array<{ path: string }>,
+      ...(result.output['artifacts'] as Array<{ path: string }> || [])]) {
+      await fs.promises.rm(artifact.path, { force: true })
+    }
   })
 
   it.each(['click', 'type_text'])('requires a fresh observation between pixel-targeted %s actions', async (action) => {

@@ -28,6 +28,11 @@ export type ComputerUseDriverFactory = (
   input: CuaExecutionContext
 ) => Promise<ComputerUseDriver>
 
+export enum ComputerUseTextInputMode {
+  Insert = 'insert',
+  Replace = 'replace'
+}
+
 export enum ComputerUseInteractionMode {
   Background = 'background',
   Visible = 'visible'
