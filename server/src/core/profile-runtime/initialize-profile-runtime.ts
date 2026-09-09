@@ -1,7 +1,9 @@
 import { PROFILE_RUNTIME_MANAGER } from '@/core/profile-runtime/profile-runtime-manager'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 
-/** Initialize only the services required to accept agent turns for a profile. */
+/**
+ * Initialize only the services required to accept agent turns for a profile.
+ */
 export async function ensureActiveProfileRuntime(): Promise<void> {
   await PROFILE_RUNTIME_MANAGER.ensureInitialized(async () => {
     const { LLM_MANAGER, LLM_PROVIDER, PULSE_MANAGER } = await import('@/core')

@@ -588,13 +588,17 @@ export class ReActLLMDuty extends LLMDuty {
     return this.safeJSONStringify(input)
   }
 
-  /** Records user-visible progress before forwarding it to an optional host. */
+  /**
+   * Records user-visible progress before forwarding it to an optional host.
+   */
   private reportProgressEvent(event: AgentRunProgressEvent): void {
     this.responseTraceCollector.record(event)
     this.onProgressEvent?.(event)
   }
 
-  /** Appends trusted integration guidance without changing the shared loop. */
+  /**
+   * Appends trusted integration guidance without changing the shared loop.
+   */
   private appendAdditionalInstructions(systemPrompt: string): string {
     if (!this.additionalInstructions) {
       return systemPrompt
@@ -709,7 +713,9 @@ export class ReActLLMDuty extends LLMDuty {
   // LLM calling helpers
   // ---------------------------------------------------------------------------
 
-  /** Provides the stable context and skill callbacks used by the agent loop. */
+  /**
+   * Provides the stable context and skill callbacks used by the agent loop.
+   */
   private createLLMCaller(): LLMCaller {
     const getActiveAgentSkillContext = (): AgentSkillContext | null =>
       this.activeAgentSkillContext
@@ -734,7 +740,9 @@ export class ReActLLMDuty extends LLMDuty {
     }
   }
 
-  /** Uses the configured agent provider for a private, non-tool summary call. */
+  /**
+   * Uses the configured agent provider for a private, non-tool summary call.
+   */
   private async prepareContinuation(
     transcript: AgentToolTranscriptMessage[],
     checkpointInput?: AgentContinuityCheckpointInput

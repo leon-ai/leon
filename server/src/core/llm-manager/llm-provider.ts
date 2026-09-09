@@ -126,7 +126,9 @@ export default class LLMProvider {
       : undefined
   }
 
-  /** Applies per-model user overrides without defeating duty safety settings. */
+  /**
+   * Applies per-model user overrides without defeating duty safety settings.
+   */
   private applyConfiguredModelSettings(
     completionParams: CompletionParams
   ): void {

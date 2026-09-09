@@ -6,30 +6,46 @@ import axios from 'axios'
 import { LEON_VERSION, NODEJS_BRIDGE_VERSION } from '@bridge/constants'
 
 interface NetworkOptions {
-  /** `baseURL` will be prepended to `url`. It can be convenient to set `baseURL` for an instance of `Network` to pass relative URLs. */
+  /**
+   * `baseURL` will be prepended to `url`. It can be convenient to set `baseURL` for an instance of `Network` to pass relative URLs.
+   */
   baseURL?: string
 }
 
 interface NetworkRequestOptions {
-  /** Server URL that will be used for the request. */
+  /**
+   * Server URL that will be used for the request.
+   */
   url: string
 
-  /** Request method to be used when making the request. */
+  /**
+   * Request method to be used when making the request.
+   */
   method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
 
-  /** Data to be sent as the request body. */
+  /**
+   * Data to be sent as the request body.
+   */
   data?: unknown
 
-  /** Custom headers to be sent. */
+  /**
+   * Custom headers to be sent.
+   */
   headers?: Record<string, string>
 
-  /** Optional files for multipart/form-data requests (parity with Python SDK). */
+  /**
+   * Optional files for multipart/form-data requests (parity with Python SDK).
+   */
   files?: Record<string, unknown>
 
-  /** Whether to send JSON body (true by default). If false, send form data. */
+  /**
+   * Whether to send JSON body (true by default). If false, send form data.
+   */
   useJson?: boolean
 
-  /** Response type (defaults to 'json'). Use 'arraybuffer' for binary data like audio/video files. */
+  /**
+   * Response type (defaults to 'json'). Use 'arraybuffer' for binary data like audio/video files.
+   */
   responseType?:
     | 'json'
     | 'text'
@@ -40,13 +56,19 @@ interface NetworkRequestOptions {
 }
 
 interface NetworkResponse<ResponseData> {
-  /** Data provided by the server. */
+  /**
+   * Data provided by the server.
+   */
   data: ResponseData
 
-  /** HTTP status code from the server response. */
+  /**
+   * HTTP status code from the server response.
+   */
   statusCode: number
 
-  /** Options that was provided for the request. */
+  /**
+   * Options that was provided for the request.
+   */
   options: NetworkRequestOptions & NetworkOptions
 }
 

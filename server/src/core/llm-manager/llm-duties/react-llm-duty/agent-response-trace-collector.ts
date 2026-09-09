@@ -6,7 +6,9 @@ import type {
 
 import type { AgentRunProgressEvent } from './types'
 
-/** Accumulates live agent progress into the compact trace persisted with a turn. */
+/**
+ * Accumulates live agent progress into the compact trace persisted with a turn.
+ */
 export class AgentResponseTraceCollector {
   private reasoningSummary = ''
   private readonly planSteps = new Map<string, AgentResponsePlanStep>()

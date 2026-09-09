@@ -76,7 +76,9 @@ export function resolveAgentContextCompactionTriggerTokens(
   )
 }
 
-/** Returns the smaller target used for one provider context-pressure retry. */
+/**
+ * Returns the smaller target used for one provider context-pressure retry.
+ */
 export function resolveAgentContextRecoveryTriggerTokens(
   provider: LLMProviders
 ): number {
@@ -121,7 +123,9 @@ function estimateTokens(value: string): number {
   return value ? Math.ceil(value.length / CHARS_PER_TOKEN) : 0
 }
 
-/** Estimates the complete request, excluding encoded image bytes. */
+/**
+ * Estimates the complete request, excluding encoded image bytes.
+ */
 function estimateAgentInputTokens(
   transcript: AgentToolTranscriptMessage[],
   systemPrompt: string,
@@ -144,7 +148,9 @@ function estimateAgentInputTokens(
   )
 }
 
-/** Keeps only recent Cua screenshots while retaining every textual result. */
+/**
+ * Keeps only recent Cua screenshots while retaining every textual result.
+ */
 function retainRecentComputerUseImages(
   transcript: AgentToolTranscriptMessage[]
 ): AgentToolTranscriptMessage[] {
@@ -183,7 +189,9 @@ function retainRecentComputerUseImages(
   })
 }
 
-/** Keeps both the beginning and ending of oversized agent context text. */
+/**
+ * Keeps both the beginning and ending of oversized agent context text.
+ */
 export function createAgentTextPreview(value: string, maxChars: number): string {
   if (value.length <= maxChars) {
     return value

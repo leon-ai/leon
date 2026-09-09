@@ -40,7 +40,9 @@ export const LEON_PROFILE_PATH = path.join(
 export const PROFILE_DOT_ENV_PATH = path.join(LEON_PROFILE_PATH, '.env')
 export const PROFILE_CONFIG_PATH = path.join(LEON_PROFILE_PATH, 'config.yml')
 
-/** Prefer the usual nested layout; single-tool toolkits may keep sources at their root. */
+/**
+ * Prefer the usual nested layout; single-tool toolkits may keep sources at their root.
+ */
 export function resolveToolDirectory(root: string, toolkitId: string, toolId: string): string {
   const nested = path.join(root, toolkitId, toolId)
   if (fs.existsSync(path.join(nested, 'tool.json'))) return nested

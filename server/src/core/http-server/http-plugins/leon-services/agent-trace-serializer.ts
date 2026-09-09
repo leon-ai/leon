@@ -2,7 +2,9 @@ import type { AgentResponseTrace } from '@/types'
 
 import type { HTTPPluginAgentTrace } from '../types'
 
-/** Converts persisted trace fields to the HTTP plugin schema. */
+/**
+ * Converts persisted trace fields to the HTTP plugin schema.
+ */
 export function serializeAgentTrace(
   trace: AgentResponseTrace,
   includeDeveloperProvenance: boolean
@@ -37,7 +39,9 @@ export function serializeAgentTrace(
   }
 }
 
-/** Converts an HTTP plugin trace to Leon's persisted conversation schema. */
+/**
+ * Converts an HTTP plugin trace to Leon's persisted conversation schema.
+ */
 export function deserializeAgentTrace(
   trace: HTTPPluginAgentTrace
 ): AgentResponseTrace {

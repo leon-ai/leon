@@ -48,7 +48,9 @@ export {
   selectConversationSession
 } from './leon-services/conversation-session-service'
 
-/** Reads persisted, user-visible conversation messages for one profile session. */
+/**
+ * Reads persisted, user-visible conversation messages for one profile session.
+ */
 export async function getConversationHistory(
   input: HTTPPluginGetConversationHistoryInput
 ): Promise<HTTPPluginGetConversationHistoryResult> {

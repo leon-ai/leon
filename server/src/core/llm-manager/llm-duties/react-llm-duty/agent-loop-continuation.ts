@@ -129,7 +129,9 @@ function compactExecution(execution: ExecutionRecord): Record<string, unknown> {
   }
 }
 
-/** Builds compact deterministic runtime state to accompany any narrative summary. */
+/**
+ * Builds compact deterministic runtime state to accompany any narrative summary.
+ */
 export function buildAgentContinuityCheckpoint(
   params: AgentContinuityCheckpointInput
 ): AgentToolTranscriptMessage {
@@ -241,7 +243,9 @@ export async function buildAgentContinuationTranscript(
   return [...replacement, ...parts.recent]
 }
 
-/** Creates the persisted state needed to resume after a pause. */
+/**
+ * Creates the persisted state needed to resume after a pause.
+ */
 export function createAgentLoopContinuationState(
   params: ContinuationInput & {
     clarificationQuestion: string
@@ -263,7 +267,9 @@ export function createAgentLoopContinuationState(
   }
 }
 
-/** Rejects stale or incompatible continuation payloads before resuming. */
+/**
+ * Rejects stale or incompatible continuation payloads before resuming.
+ */
 export function isAgentLoopContinuationStateValid(
   state: AgentLoopContinuationState
 ): boolean {

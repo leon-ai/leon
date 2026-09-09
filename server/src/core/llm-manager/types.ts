@@ -156,9 +156,13 @@ export interface CompletionParams {
    * This is more expressive than the legacy disableThinking boolean.
    */
   reasoningMode?: LLMReasoningMode
-  /** Exact provider-normalized reasoning effort, when the model supports it. */
+  /**
+   * Exact provider-normalized reasoning effort, when the model supports it.
+   */
   reasoningEffort?: LLMReasoningEffort
-  /** Enable reasoning while leaving the effort at the provider's model default. */
+  /**
+   * Enable reasoning while leaving the effort at the provider's model default.
+   */
   reasoningUseDefaultEffort?: boolean
   reasoningSummary?: LLMReasoningSummary | undefined
   textVerbosity?: LLMTextVerbosity | undefined

@@ -21,7 +21,9 @@ export const PROVIDER_SCENARIOS = [
 export type ProviderScenario = (typeof PROVIDER_SCENARIOS)[number]
 export type ProviderScenarioId = ProviderScenario['id']
 
-/** Resolves a CLI scenario identifier to its shared E2E definition. */
+/**
+ * Resolves a CLI scenario identifier to its shared E2E definition.
+ */
 export function getProviderScenario(
   scenarioId: string | undefined
 ): ProviderScenario | null {

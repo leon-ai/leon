@@ -24,7 +24,9 @@ function getTargetKey(target: ResolvedLLMTarget): string {
   return target.label
 }
 
-/** Manages persisted reasoning and speed overrides for each model target. */
+/**
+ * Manages persisted reasoning and speed overrides for each model target.
+ */
 export class ModelSettingsState {
   public getSettings(target: ResolvedLLMTarget): LLMModelSettings {
     if (!target.isEnabled || !target.isResolved || !target.provider || !target.model) {

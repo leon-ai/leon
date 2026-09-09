@@ -4,7 +4,9 @@ import type { PlanStepStatus, TrackedPlanCollection, TrackedPlanStep } from './t
 
 const PLAN_STATUSES = ['pending', 'in_progress', 'completed', 'error'] as const
 
-/** Checks recorded coverage and outcomes as well as visible step statuses. */
+/**
+ * Checks recorded coverage and outcomes as well as visible step statuses.
+ */
 export function isAgentPlanComplete(steps: TrackedPlanStep[]): boolean {
   return steps.every((step) => step.status === 'completed' &&
     (!step.collection || (step.collection.enumeration === 'completed' &&
@@ -55,7 +57,9 @@ function readCollection(value: unknown, previous?: TrackedPlanCollection): Track
   }
 }
 
-/** Merges item deltas without losing recorded outcomes when a plan is replaced. */
+/**
+ * Merges item deltas without losing recorded outcomes when a plan is replaced.
+ */
 export function parseAgentPlan(input: string, previous: TrackedPlanStep[]): TrackedPlanStep[] | null {
   try {
     const parsed = JSON.parse(input)
@@ -86,7 +90,9 @@ export function parseAgentPlan(input: string, previous: TrackedPlanStep[]): Trac
   }
 }
 
-/** Uses the existing plan tool for both visible milestones and durable collection state. */
+/**
+ * Uses the existing plan tool for both visible milestones and durable collection state.
+ */
 export function createAgentPlanTool(name: string): OpenAITool {
   return {
     type: 'function',

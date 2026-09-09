@@ -63,7 +63,9 @@ function getAgentEventChannel(profileId: string): AgentEventChannel {
   return channel
 }
 
-/** Publishes a profile-local event with monotonically increasing sequencing. */
+/**
+ * Publishes a profile-local event with monotonically increasing sequencing.
+ */
 export function publishAgentEvent(
   profileId: string,
   event: Omit<
@@ -88,7 +90,9 @@ export function publishAgentEvent(
   return published
 }
 
-/** Replays buffered events and then subscribes to live owner-scoped events. */
+/**
+ * Replays buffered events and then subscribes to live owner-scoped events.
+ */
 export async function subscribeAgentEvents(
   input: HTTPPluginSubscribeAgentEventsInput,
   listener: (event: HTTPPluginAgentEvent) => void

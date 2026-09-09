@@ -25,7 +25,9 @@ import {
   resolveSessionId
 } from './normalizers'
 
-/** Runs one ReAct turn inside the requested profile and conversation session. */
+/**
+ * Runs one ReAct turn inside the requested profile and conversation session.
+ */
 export async function runAgent(
   input: HTTPPluginRunAgentInput
 ): Promise<HTTPPluginRunAgentResult> {

@@ -59,7 +59,9 @@ function clipManifestText(value: string, maxLength: number): string {
   return `${normalized.slice(0, Math.max(maxLength - 3, 0)).trimEnd()}...`
 }
 
-/** Builds a newest-first artifact manifest with one global input-size bound. */
+/**
+ * Builds a newest-first artifact manifest with one global input-size bound.
+ */
 export function buildRecentArtifactManifest(
   records: OwnerQueryToolCallRecord[],
   maxChars = RECENT_ARTIFACT_MANIFEST_MAX_CHARS

@@ -204,7 +204,9 @@ export interface AgentLoopParams {
   initialExecutionHistory?: ExecutionRecord[]
   initialTrackedSteps?: TrackedPlanStep[]
   allowDirectAnswerHandoff?: boolean
-  /** Total operational turns, including any finishing pass. */
+  /**
+   * Total operational turns, including any finishing pass.
+   */
   maxIterations?: number
   finishingIterations?: number
   prepareContinuation?: (
@@ -544,7 +546,9 @@ function loadToolkitFunctions(
   return loadedFunctionCount
 }
 
-/** Builds the operational guidance for toolkits loaded in the current run. */
+/**
+ * Builds the operational guidance for toolkits loaded in the current run.
+ */
 export function buildAgentProgressiveGuidanceSystemPrompt(
   catalog: AgentToolCatalog
 ): string {
@@ -561,7 +565,9 @@ export function buildAgentProgressiveGuidanceSystemPrompt(
   )
 }
 
-/** Adds Leon-owned display metadata without changing the tool's input schema. */
+/**
+ * Adds Leon-owned display metadata without changing the tool's input schema.
+ */
 function addToolCallTitleParameter(
   parameters: Record<string, unknown>
 ): Record<string, unknown> {
@@ -895,7 +901,9 @@ export async function runAgentLoop(
   )
 }
 
-/** Reviews proposed endings through one path, including the hard budget boundary. */
+/**
+ * Reviews proposed endings through one path, including the hard budget boundary.
+ */
 async function reviewAgentCompletion(
   params: AgentLoopParams,
   transcript: AgentToolTranscriptMessage[],
@@ -1441,7 +1449,9 @@ async function executeAgentToolCall(
   }
 }
 
-/** Separates Leon-owned display metadata from arguments sent to a tool. */
+/**
+ * Separates Leon-owned display metadata from arguments sent to a tool.
+ */
 function extractToolCallInput(input: string): {
   toolInput: string
   title?: string
