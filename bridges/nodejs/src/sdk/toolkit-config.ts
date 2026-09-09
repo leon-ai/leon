@@ -1,5 +1,6 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { resolveToolDirectory } from '@/leon-roots'
 
 import { getPlatformName } from '@sdk/utils'
 import {
@@ -78,7 +79,7 @@ export class ToolkitConfig {
     }
 
     const toolkitConfig = this.configCache.get(cacheKey)!
-    const toolConfigPath = join(TOOLS_PATH, toolkitName, toolName, 'tool.json')
+    const toolConfigPath = join(resolveToolDirectory(TOOLS_PATH, toolkitName, toolName), 'tool.json')
 
     if (!toolkitConfig.tools.includes(toolName) && !existsSync(toolConfigPath)) {
       throw new Error(
@@ -115,9 +116,7 @@ export class ToolkitConfig {
       'settings.json'
     )
     const settingsSamplePath = join(
-      TOOLS_PATH,
-      toolkitName,
-      toolName,
+      resolveToolDirectory(TOOLS_PATH, toolkitName, toolName),
       'settings.sample.json'
     )
     const settingsDir = dirname(settingsPath)

@@ -7,6 +7,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { resolveToolDirectory } from '@/leon-roots'
 
 import type { Tool } from '@sdk/base-tool'
 import {
@@ -65,9 +66,7 @@ const resolveToolModulePath = (
 ): string | null => {
   for (const toolsPath of [PROFILE_TOOLS_PATH, TOOLS_PATH]) {
     const toolModulePath = path.join(
-      toolsPath,
-      toolkitId,
-      toolId,
+      resolveToolDirectory(toolsPath, toolkitId, toolId),
       'src',
       'nodejs',
       'index.ts'
@@ -154,7 +153,8 @@ const run = async (): Promise<void> => {
       JSON.stringify({
         success: true,
         message: 'Tool executed successfully.',
-        output: { result }
+        output: { result },
+        ...(toolInstance.getModelFiles().length ? { modelFiles: toolInstance.getModelFiles() } : {})
       })
     )
   } catch (error) {

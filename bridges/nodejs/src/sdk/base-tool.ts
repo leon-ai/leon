@@ -31,6 +31,14 @@ import {
 const COMMAND_OUTPUT_PROGRESS_INTERVAL_MS = 2_000
 const COMMAND_OUTPUT_MAX_CHARS = 4_000
 
+/** A tool-produced attachment made available to the agent model. */
+export interface ToolModelFile {
+  dataBase64: string
+  mediaType: string
+  filename?: string
+  visualDetail?: 'auto' | 'low' | 'high'
+}
+
 // Progress callback type for reporting tool progress
 export type ProgressCallback = (progress: {
   percentage?: number
@@ -58,6 +66,22 @@ export interface ExecuteCommandOptions {
 }
 
 export abstract class Tool {
+  private readonly modelFiles: ToolModelFile[] = []
+
+  /** Attach evidence without embedding base64 data in ordinary tool observations. */
+  protected async attachModelFile(filePath: string, mediaType: string): Promise<void> {
+    this.modelFiles.push({
+      dataBase64: (await fs.promises.readFile(filePath)).toString('base64'),
+      mediaType,
+      filename: path.basename(filePath)
+    })
+  }
+
+  /** Read attachments after a standard tool method has completed. */
+  public getModelFiles(): ToolModelFile[] {
+    return this.modelFiles
+  }
+
   private static isToolRuntime: boolean = ((): boolean => {
     const args = process.argv
     const runtimeIndex = args.indexOf('--runtime')
@@ -231,7 +255,7 @@ export abstract class Tool {
       return arg
     }
 
-    return `'${arg.replace(/'/g, `'\\''`)}'`
+    return `'${arg.replace(/'/g, '\'\\\'\'')}'`
   }
 
   /**

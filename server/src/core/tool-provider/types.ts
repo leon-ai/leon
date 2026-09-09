@@ -1,3 +1,4 @@
+import type { ToolModelFile } from '@sdk/base-tool'
 import type { ToolRuntimeProgress } from '@/core/tool-executor'
 
 export interface ToolProviderExecutionInput {
@@ -14,16 +15,10 @@ export interface ToolProviderExecutionResult {
   success: boolean
   message: string
   output: Record<string, unknown>
-  modelFiles?: ToolProviderModelFile[]
+  modelFiles?: ToolModelFile[]
 }
 
-/** A provider-produced file that should be visible to the model for this turn. */
-export interface ToolProviderModelFile {
-  dataBase64: string
-  mediaType: string
-  filename?: string
-  visualDetail?: 'auto' | 'low' | 'high'
-}
+export type { ToolModelFile as ToolProviderModelFile } from '@sdk/base-tool'
 
 /** A long-lived runtime used by tools whose state must span agent actions. */
 export interface ToolProvider {

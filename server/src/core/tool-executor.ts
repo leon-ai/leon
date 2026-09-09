@@ -982,12 +982,14 @@ export default class ToolExecutor {
             success: boolean
             message: string
             output?: Record<string, unknown>
+            modelFiles?: ToolProviderModelFile[]
           }
           const parsedOutput = parsed.output || {}
 
           resolve({
             success: Boolean(parsed.success),
             message: parsed.message || 'Tool runtime error.',
+            ...(parsed.modelFiles ? { modelFiles: parsed.modelFiles } : {}),
             output:
               exitCode && runtimeStderr
                 ? {

@@ -5,6 +5,7 @@ import { TOOLS_PATH } from '@/constants'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
+import { resolveToolDirectory } from '@/leon-roots'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type {
@@ -608,7 +609,7 @@ export default class ToolkitRegistry {
             await this.loadToolConfig(
               toolkit,
               toolId,
-              path.join(toolkitPath, toolId, 'tool.json')
+              path.join(resolveToolDirectory(toolsPath, toolkitId, toolId), 'tool.json')
             )
           }
 
