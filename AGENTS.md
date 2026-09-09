@@ -20,6 +20,11 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - `tool.json` owns function schemas, descriptions, progressive guidance, and binary/resource declarations. Avoid separate instruction-fetching functions and duplicated guidance.
 - Expose ordinary SDK tool methods. Do not introduce a Core provider or `execution` override to implement a tool; propose changes to shared runtime contracts first if something is missing.
 
+## Bridge SDKs
+
+- Add to a bridge SDK only when the capability is used across several skills or tools. Otherwise keep it in the specific skill or tool; avoid speculative shared APIs.
+- Any shared SDK change must have equivalent behavior in both Node.js and Python, following each language's conventions. Keep host-specific transport internals outside the public SDK.
+
 ## Skills
 
 - Native skills: `skills/native/<skill>/`, with `skill.json`, `locales/`, and action entry points in `src/actions/`. Follow the selected bridge's SDK conventions. Put reusable code in `src/lib/`, widgets in `src/widgets/`, and use SDK settings/memory APIs and declared tools. Examples: `timer_skill` (Node.js), `random_number_skill` (Python).
@@ -34,5 +39,13 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 
 - Avoid hardcoded behavioral keywords, regex rules, paths, and configuration when existing schemas/settings/utilities provide them.
 - Put file-local constants near the top; shared server constants belong in `server/src/constants.ts`. Use numeric separators (`3_600`) and enums for meaningful states.
-- Comment non-trivial decisions and edge cases, not obvious assignments. Use `//` for JS/TS implementation comments and `/** ... */` JSDoc for exported APIs and reusable helpers. Use Python comments/docstrings where appropriate.
+- Comment non-trivial decisions and edge cases, not obvious assignments. Use `//` for JS/TS implementation comments, including multiline implementation comments; preserve existing double-slash comments. Use multiline JSDoc for exported APIs and reusable helpers, never single-line `/** ... */`. Use Python comments/docstrings where appropriate.
 - In `web-app/`, inspect installed TanStack packages first: Router for routing, Query for server state, Virtual for long lists. Propose a missing package before adding it; avoid custom replacements when an installed package fits.
+
+JSDoc format:
+
+```ts
+/**
+ * The comment
+ */
+```
