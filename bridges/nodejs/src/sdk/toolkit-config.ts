@@ -1,10 +1,10 @@
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { LEON_PROFILE_NAME, resolveToolDirectory } from '@/leon-roots'
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { resolveToolDirectory } from '@/leon-roots'
 
 import { getPlatformName } from '@sdk/utils'
 import {
-  PROFILE_TOOLS_PATH,
   TOOLS_PATH
 } from '@bridge/constants'
 
@@ -98,19 +98,23 @@ export class ToolkitConfig {
    * @param toolkitName - The toolkit name (e.g., 'video_streaming')
    * @param toolName - Name of the tool (e.g., 'ffmpeg')
    * @param defaults - Default tool settings to apply when missing
+   * @param refresh - Reload settings after owner edits
+   * @param profileName - Owning profile, independent of the active conversation
    */
   static loadToolSettings(
     toolkitName: string,
     toolName: string,
-    defaults: Record<string, unknown> = {}
+    defaults: Record<string, unknown> = {},
+    refresh = false,
+    profileName = LEON_PROFILE_NAME
   ): Record<string, unknown> {
-    const cacheKey = `${toolkitName}:${toolName}`
-    if (this.settingsCache.has(cacheKey)) {
+    const cacheKey = `${profileName}:${toolkitName}:${toolName}`
+    if (!refresh && this.settingsCache.has(cacheKey)) {
       return this.settingsCache.get(cacheKey) || {}
     }
 
     const settingsPath = join(
-      PROFILE_TOOLS_PATH,
+      getProfilePaths(profileName).tools,
       toolkitName,
       toolName,
       'settings.json'

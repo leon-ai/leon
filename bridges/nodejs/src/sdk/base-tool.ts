@@ -1,3 +1,4 @@
+import type { ToolExecutionContext } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -31,7 +32,9 @@ import {
 const COMMAND_OUTPUT_PROGRESS_INTERVAL_MS = 2_000
 const COMMAND_OUTPUT_MAX_CHARS = 4_000
 
-/** A tool-produced attachment made available to the agent model. */
+/**
+ * A tool-produced attachment made available to the agent model.
+ */
 export interface ToolModelFile {
   dataBase64: string
   mediaType: string
@@ -66,9 +69,28 @@ export interface ExecuteCommandOptions {
 }
 
 export abstract class Tool {
+  protected executionContext: ToolExecutionContext | null = null
+
+  /**
+   * Reset per-call evidence even when the tool instance survives between requests.
+   */
+  public async prepareExecution(context: ToolExecutionContext): Promise<void> {
+    this.executionContext = context
+    this.modelFiles.length = 0
+  }
+
+  /**
+   * Attach already encoded evidence without writing and reading another file.
+   */
+  protected attachModelFiles(files: ToolModelFile[]): void {
+    this.modelFiles.push(...files)
+  }
+
   private readonly modelFiles: ToolModelFile[] = []
 
-  /** Attach evidence without embedding base64 data in ordinary tool observations. */
+  /**
+   * Attach evidence without embedding base64 data in ordinary tool observations.
+   */
   protected async attachModelFile(filePath: string, mediaType: string): Promise<void> {
     this.modelFiles.push({
       dataBase64: (await fs.promises.readFile(filePath)).toString('base64'),
@@ -77,7 +99,9 @@ export abstract class Tool {
     })
   }
 
-  /** Read attachments after a standard tool method has completed. */
+  /**
+   * Read attachments after a standard tool method has completed.
+   */
   public getModelFiles(): ToolModelFile[] {
     return this.modelFiles
   }
