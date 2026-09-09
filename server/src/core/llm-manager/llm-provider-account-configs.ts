@@ -34,6 +34,12 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: 'https://console.anthropic.com/settings/keys'
     },
     {
+      label: 'DeepSeek',
+      value: LLMProviders.DeepSeek,
+      apiKeyEnv: 'LEON_DEEPSEEK_API_KEY',
+      apiKeyURL: 'https://platform.deepseek.com/api_keys'
+    },
+    {
       label: 'Z.AI',
       value: LLMProviders.ZAI,
       apiKeyEnv: 'LEON_ZAI_API_KEY',

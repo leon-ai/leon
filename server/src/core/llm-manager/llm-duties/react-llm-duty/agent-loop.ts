@@ -167,6 +167,7 @@ interface AgentProgressiveGuidance {
 
 interface AgentModelResult {
   textContent?: string
+  reasoning?: string
   toolCalls?: OpenAIToolCall[]
   isTruncated?: boolean
 }
@@ -758,6 +759,8 @@ export async function runAgentLoop(
       AGENT_MAX_PARALLEL_TOOL_CALLS
     )
     const deferredToolCallCount = emittedToolCalls.length - toolCalls.length
+    // Preserve provider reasoning with its response across tool calls and resumes.
+    const reasoning = modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}
     const textContent = modelResult.textContent?.trim() || ''
     if (modelResult.isTruncated) {
       return {
@@ -797,11 +800,11 @@ export async function runAgentLoop(
           }
           if (status === AgentCompletionStatus.Blocked) {
             const answer = `${textContent}\n\n${reason}`
-            transcript.push({ role: 'assistant', content: answer })
+            transcript.push({ role: 'assistant', content: answer, ...reasoning })
             return { answer, intent: 'blocked', transcript, executionHistory, trackedSteps }
           }
         }
-        transcript.push({ role: 'assistant', content: textContent })
+        transcript.push({ role: 'assistant', content: textContent, ...reasoning })
         return {
           answer: textContent,
           intent: 'answer',
@@ -840,6 +843,7 @@ export async function runAgentLoop(
       ]
         .filter(Boolean)
         .join('\n'),
+      ...reasoning,
       toolCalls
     })
 
@@ -1116,13 +1120,14 @@ async function attemptAgentLimitFinalization(
   }
 
   const toolCalls = modelResult.toolCalls || []
+  const reasoning = modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}
   const textContent = modelResult.textContent?.trim() || ''
   if (toolCalls.length === 0) {
     return textContent
       ? {
           answer: textContent,
           intent: 'answer',
-          messages: [{ role: 'assistant', content: textContent }]
+          messages: [{ role: 'assistant', content: textContent, ...reasoning }]
         }
       : null
   }
@@ -1138,6 +1143,7 @@ async function attemptAgentLimitFinalization(
       {
         role: 'assistant',
         content: textContent,
+        ...reasoning,
         toolCalls
       },
       {

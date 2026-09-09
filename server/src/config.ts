@@ -111,6 +111,11 @@ const DEFAULT_CONFIG: LeonConfig = {
           env: 'LEON_OPENROUTER_API_KEY'
         }
       },
+      deepseek: {
+        api_key: {
+          env: 'LEON_DEEPSEEK_API_KEY'
+        }
+      },
       zai: {
         api_key: {
           env: 'LEON_ZAI_API_KEY'

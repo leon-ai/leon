@@ -36,6 +36,12 @@ export const PROVIDER_MATRIX = [
     reasoning: 'none'
   },
   {
+    provider: 'deepseek',
+    requiredEnv: 'LEON_DEEPSEEK_API_KEY',
+    llmTarget: 'deepseek/deepseek-flash',
+    reasoning: 'low'
+  },
+  {
     provider: 'zai',
     requiredEnv: 'LEON_ZAI_API_KEY',
     llmTarget: 'zai/glm-5-turbo',

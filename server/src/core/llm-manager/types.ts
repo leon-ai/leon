@@ -25,6 +25,7 @@ export enum LLMProviders {
   Groq = 'groq',
   OpenRouter = 'openrouter',
   ZAI = 'zai',
+  DeepSeek = 'deepseek',
   MiniMax = 'minimax',
   OpenAI = 'openai',
   Anthropic = 'anthropic',
@@ -57,6 +58,7 @@ export type AgentToolTranscriptMessage =
   | {
       role: 'assistant'
       content: string
+      reasoning?: string
       toolCalls?: OpenAIToolCall[]
     }
   | {

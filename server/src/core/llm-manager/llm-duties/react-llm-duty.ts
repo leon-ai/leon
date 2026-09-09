@@ -805,6 +805,7 @@ export class ReActLLMDuty extends LLMDuty {
   ): Promise<{
     toolCalls?: OpenAIToolCall[]
     textContent?: string
+    reasoning?: string
     isTruncated?: boolean
   } | null> {
     const phase: AgentPhase = options.isFinalizationAttempt
@@ -1101,6 +1102,9 @@ export class ReActLLMDuty extends LLMDuty {
       return {
         toolCalls: normalizedToolCalls,
         textContent,
+        ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
+          ? { reasoning: completionResult.reasoning }
+          : {}),
         ...(completionResult.finishReason !== undefined
           ? {
               isTruncated: this.isTruncatedFinishReason(
@@ -1121,6 +1125,9 @@ export class ReActLLMDuty extends LLMDuty {
     )
     return {
       textContent,
+      ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
+        ? { reasoning: completionResult.reasoning }
+        : {}),
       ...(completionResult.finishReason !== undefined
         ? {
             isTruncated: this.isTruncatedFinishReason(

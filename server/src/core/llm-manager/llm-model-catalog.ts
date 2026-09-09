@@ -99,6 +99,7 @@ const OPENROUTER_KIMI_K3_REASONING = [
   'high',
   'max'
 ] as const satisfies readonly LLMModelReasoning[]
+const DEEPSEEK_REASONING = ['auto', 'none', 'low', 'high', 'max'] as const satisfies readonly LLMModelReasoning[]
 const MOONSHOT_KIMI_K3_REASONING = [
   'auto',
   'low',
@@ -121,6 +122,12 @@ const ROUTABLE_SPEED = [
  * setup and command autocomplete remain deterministic and work offline.
  */
 export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
+  /**
+   * @see https://api-docs.deepseek.com/quick_start/pricing/
+   * @see https://api-docs.deepseek.com/guides/thinking_mode/
+   */
+  { provider: LLMProviders.DeepSeek, model: 'deepseek-flash', label: 'DeepSeek-V4.1-Flash', recommended: true, reasoning: DEEPSEEK_REASONING, speed: AUTO_SPEED },
+
   /**
    * @see https://docs.celeris.ai/models Fast diffusion model for short agentic calls.
    */

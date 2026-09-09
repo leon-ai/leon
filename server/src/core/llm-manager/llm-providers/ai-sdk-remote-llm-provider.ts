@@ -459,6 +459,10 @@ export default class AISDKRemoteLLMProvider {
         LanguageModelV4Prompt[number],
         { role: 'assistant' }
       >['content'] = []
+      // DeepSeek requires the original reasoning when replaying tool exchanges.
+      if (this.config.providerName === LLMProviders.DeepSeek && message.reasoning) {
+        content.push({ type: 'reasoning', text: message.reasoning })
+      }
       if (message.content.trim()) {
         content.push({ type: 'text', text: message.content })
       }
