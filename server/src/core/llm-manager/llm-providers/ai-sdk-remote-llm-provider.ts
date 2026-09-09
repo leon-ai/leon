@@ -763,25 +763,16 @@ export default class AISDKRemoteLLMProvider {
       }
 
       if (reasoningMode === 'on') {
-        const reasoningBudget = this.getReasoningBudget(
-          completionParams,
-          1024
-        )
         return {
           moonshotai: {
-            thinking: {
-              type: 'enabled',
-              ...(typeof reasoningBudget === 'number'
-                ? { budgetTokens: reasoningBudget }
-                : {})
-            },
+            thinking: { type: 'enabled' },
             reasoningHistory: 'interleaved'
           }
         }
       }
 
-      // K2's explicit thinking budget starts at 1,024 tokens, so guarded mode
-      // falls back to disabled instead of forcing a large reasoning block.
+      // K2 has no thinking-token budget control. Disable thinking for short
+      // guarded calls rather than sending an unsupported budget parameter.
       return {
         moonshotai: {
           thinking: { type: 'disabled' },
