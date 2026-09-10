@@ -1131,6 +1131,59 @@ describe('CuaRuntime', () => {
     })
   })
 
+  it('settles between batch actions without an intermediate capture', async () => {
+    const successfulResult = {
+      text: 'Done.',
+      images: [],
+      structuredJson: '{"effect":"confirmed"}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    }
+    const driver = createDriver(successfulResult)
+    driver.callTool.mockImplementation(async (action: string) => ({
+      ...successfulResult,
+      images: action === 'get_window_state'
+        ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] : []
+    }))
+    const runtime = new CuaRuntime(async () => driver as never)
+
+    const result = await runtime.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'perform_actions',
+      parameters: {
+        steps: [
+          {
+            action: 'press_key',
+            parameters: {
+              pid: 42,
+              window_id: 7,
+              key: 'down',
+              settle_ms: 1
+            }
+          },
+          {
+            action: 'press_key',
+            parameters: { pid: 42, window_id: 7, key: 'return' }
+          }
+        ]
+      },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'settled-sequence'
+    })
+
+    expect(result.success).toBe(true)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'press_key',
+      'press_key',
+      'get_window_state'
+    ])
+    expect(JSON.parse(driver.callTool.mock.calls[0]![1])).not.toHaveProperty(
+      'settle_ms'
+    )
+  })
+
   it.each([false, true])('reuses field focus only until a focus-changing key (tab=%s)', async (tab) => {
     const observed = { text: '', images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
       structuredJson: '{"screenshot_width":1,"screenshot_height":1}', rawJson: '{}', isError: false, degraded: false }

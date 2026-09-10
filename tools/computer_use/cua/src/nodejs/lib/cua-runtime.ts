@@ -167,21 +167,17 @@ export class CuaRuntime {
         runtime.driver.supportsPostActionCapture !== false
       const driverParameters = { ...parameters }
       delete driverParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
-      const settleMs = driverParameters['settle_ms'] ?? 0
+      const settleMs = this.resolveSettleMs(driverParameters['settle_ms'])
       delete driverParameters['settle_ms']
-      if (!Number.isInteger(settleMs) || Number(settleMs) < 0 ||
-          Number(settleMs) > COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS) {
-        throw new Error(`settle_ms must be an integer between 0 and ${COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS}.`)
-      }
       const isObservation = action === 'get_window_state' || action === 'get_desktop_state'
-      if (Number(settleMs) > 0 && !isObservation && !captureAfter) {
+      if (settleMs > 0 && !isObservation && !captureAfter) {
         throw new Error('settle_ms requires an observation or an action with capture_after enabled.')
       }
       if (isObservation) {
         // The model can observe a loading destination once after a bounded wait;
         // do not infer page readiness from colors, titles or inaccessible trees.
-        if (Number(settleMs) > 0) {
-          await delay(Number(settleMs))
+        if (settleMs > 0) {
+          await delay(settleMs)
           // A delayed refresh follows a transition; a previous screenshot is
           // not suitable for the query-only image reuse optimization.
           if (action === 'get_window_state') driverParameters['include_screenshot'] ??= true
@@ -516,6 +512,16 @@ export class CuaRuntime {
     return this.failure(error instanceof Error ? error.message : String(error))
   }
 
+  private resolveSettleMs(value: unknown): number {
+    const settleMs = value ?? 0
+    if (!Number.isInteger(settleMs) || Number(settleMs) < 0 ||
+        Number(settleMs) > COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS) {
+      throw new Error(`settle_ms must be an integer between 0 and ${COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS}.`)
+    }
+
+    return Number(settleMs)
+  }
+
   private async executeActionSequence(
     input: ToolExecutionContext,
     parameters: Record<string, unknown>
@@ -535,10 +541,17 @@ export class CuaRuntime {
     // sequence must not cause an avoidable partial edit.
     for (const [index, value] of steps.entries()) {
       const step = asRecord(value)
+      const stepParameters = asRecord(step?.['parameters'])
       if (typeof step?.['action'] !== 'string' ||
           !COMPUTER_USE_SEQUENCE_ACTIONS.has(step['action']) ||
-          !asRecord(step['parameters'])) {
+          !stepParameters) {
         return this.failure(`Step ${index + 1} must use a supported mechanical action with parameters.`)
+      }
+
+      try {
+        this.resolveSettleMs(stepParameters['settle_ms'])
+      } catch (error) {
+        return this.failure(`Step ${index + 1}: ${error instanceof Error ? error.message : String(error)}`)
       }
     }
 
@@ -593,6 +606,7 @@ export class CuaRuntime {
       const step = asRecord(value)!
       const stepAction = step['action'] as string
       const stepParameters = asRecord(step['parameters'])!
+      const settleMs = this.resolveSettleMs(stepParameters['settle_ms'])
 
       const boundedParameters = { ...stepParameters }
       delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
@@ -600,6 +614,8 @@ export class CuaRuntime {
       // handles of a mechanical sequence until its final action.
       if (index < steps.length - 1) {
         boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = false
+        // Inside a batch, settle before the next input without minting handles.
+        delete boundedParameters['settle_ms']
       }
       if (
         index === steps.length - 1 &&
@@ -644,6 +660,10 @@ export class CuaRuntime {
       if (!result.success) {
         failure = result
         break
+      }
+
+      if (index < steps.length - 1 && settleMs > 0) {
+        await delay(settleMs)
       }
     }
 

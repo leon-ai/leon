@@ -121,6 +121,33 @@ describe('agent loop continuation', () => {
     )).toBe(false)
   })
 
+  it('uses deterministic state when semantic summarization fails', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+    for (let index = 1; index <= 16; index += 1) {
+      appendToolExchange(transcript, index)
+    }
+
+    const result = await buildAgentContinuationTranscript(
+      transcript,
+      vi.fn().mockResolvedValue(null),
+      createCheckpointInput()
+    )
+
+    expect(JSON.stringify(result)).toContain('Semantic summary unavailable')
+    expect(JSON.stringify(result)).toContain('<continuity_checkpoint>')
+    expect(result.some((message) =>
+      message.role === 'tool' && message.toolCallId === 'call-16'
+    )).toBe(true)
+    expect(result.some((message) =>
+      message.role === 'tool' && message.toolCallId === 'call-1'
+    )).toBe(false)
+    expect(JSON.stringify(result).length).toBeLessThan(
+      JSON.stringify(transcript).length
+    )
+  })
+
   it('hands exact older outcomes and failures to the summary before reducing text', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Download all requested documents.' }

@@ -761,6 +761,7 @@ export class ReActLLMDuty extends LLMDuty {
           maxRetries: 0,
           remoteProviderErrorRetries: 0,
           shouldStream: false,
+          disableThinking: true,
           trackProviderErrors: false
         })
         if (result) {

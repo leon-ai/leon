@@ -2338,7 +2338,7 @@
       }
     },
     "perform_actions": {
-      "description": "Perform up to eight grounded input actions in order and stop on the first failure. Use it for a predictable sequence with no intermediate visual decision; observe between spatial targets.",
+      "description": "Perform up to eight grounded input actions in order and stop on the first failure. Use it for a predictable sequence with no intermediate visual decision; observe between spatial targets. An intermediate step's settle_ms waits before the next input without capturing; a final settle_ms waits before the batch's final capture.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,

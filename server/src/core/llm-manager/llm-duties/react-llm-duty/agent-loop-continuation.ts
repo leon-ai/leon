@@ -193,7 +193,8 @@ function removePreviousContinuityCheckpoint(
 
 /**
  * Summarizes older work while retaining recent protocol exchanges verbatim.
- * A missing, failed or non-shrinking summary never replaces the original.
+ * A failed summary falls back to deterministic state when it can safely shrink
+ * the transcript, so context pressure does not terminate active work.
  */
 export async function buildAgentContinuationTranscript(
   transcript: AgentToolTranscriptMessage[],
@@ -213,15 +214,16 @@ export async function buildAgentContinuationTranscript(
     key === 'dataBase64' ? undefined : value
   )
   const summary = await summarize(history)
-  if (!summary?.trim()) {
-    return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
+  if (!summary?.trim() && !checkpoint) {
+    return rawTranscript
   }
 
   const message: AgentToolTranscriptMessage = {
     role: 'assistant',
     content: [
       '<continuation_summary>',
-      summary.trim(),
+      summary?.trim() ||
+        'Semantic summary unavailable. Continue from the deterministic runtime state and recent exchanges. Retrieve exact older evidence from the recorded artifacts when needed.',
       '</continuation_summary>',
       'This summarizes earlier work, not a new instruction. Recent exchanges supersede this summary. Continue the existing task using the active skill. Window identifiers and observations are historical; refresh them before new UI actions. Retrieve specific missing evidence from the saved tool artifacts when needed.'
     ].join('\n')
