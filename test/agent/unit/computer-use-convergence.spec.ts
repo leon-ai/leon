@@ -83,6 +83,21 @@ describe('computer-use retry guard', () => {
     expect(getComputerUseRetryBlocker([click(), click('changed')], CLICK, next)).toBeNull()
   })
 
+  it('treats guesses within one control-sized region as the same retry', () => {
+    const first = {
+      ...click(),
+      requestedToolInput: JSON.stringify({ ...INPUT, x: 294, y: 821 })
+    }
+    const second = {
+      ...click(),
+      requestedToolInput: JSON.stringify({ ...INPUT, x: 293, y: 821 })
+    }
+    const next = JSON.stringify({ ...INPUT, x: 262, y: 824 })
+
+    expect(getComputerUseRetryBlocker([first, second], CLICK, next))
+      .toContain('retry blocked')
+  })
+
   it('blocks repeated structured failures without inventing a visual outcome', () => {
     const failed = { ...click(), status: 'error', observation: JSON.stringify({
       data: { output: { error_code: 'foreground_unavailable' } }

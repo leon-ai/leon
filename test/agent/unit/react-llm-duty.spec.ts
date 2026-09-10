@@ -328,6 +328,12 @@ describe('continuous agent loop', () => {
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Survey long pages')
   })
 
+  it('preserves source meaning without use-case-specific rules', () => {
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      'Preserve source meaning; never guess or silently convert incompatible values.'
+    )
+  })
+
   it('blocks an ineffective computer-use retry before executing the tool', async () => {
     const catalog = createCatalog()
     const input = { pid: 42, window_id: 7, x: 500, y: 300 }
