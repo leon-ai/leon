@@ -1,3 +1,13 @@
+import type { FinalResponseSignal } from './types'
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  return value as Record<string, unknown>
+}
+
 export const formatFilePath = (filePath: string): string => {
   return `[FILE_PATH]${filePath}[/FILE_PATH]`
 }
@@ -100,6 +110,35 @@ export function extractFinalAnswerFromToolResult(toolExecutionResult: {
       const answer = candidate[key]
       if (typeof answer === 'string' && answer.trim()) {
         return answer
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Converts an explicit owner-action request into a terminal clarification.
+ */
+export function extractOwnerActionHandoffFromToolResult(toolExecutionResult: {
+  data?: {
+    output?: Record<string, unknown>
+  }
+}): FinalResponseSignal | null {
+  const output = toolExecutionResult.data?.output || {}
+  const candidates = [output, asRecord(output['result'])]
+
+  for (const candidate of candidates) {
+    if (candidate?.['status'] !== 'owner_action_required') {
+      continue
+    }
+
+    const ownerAction = asRecord(candidate['owner_action'])
+    const message = ownerAction?.['message']
+    if (typeof message === 'string' && message.trim()) {
+      return {
+        intent: 'clarification',
+        draft: message.trim()
       }
     }
   }

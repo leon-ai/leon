@@ -1092,6 +1092,38 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('answer')
   })
 
+  it('stops immediately when a tool requires owner action', async () => {
+    const callModel = vi.fn().mockResolvedValue({
+      toolCalls: [
+        toolCall('owner-action-1', CALLABLE_TOOL_NAME, { query: 'Leon' })
+      ]
+    })
+
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Open the browser.' }],
+      catalog: createCatalog(),
+      callModel,
+      executeFunction: async () => ({
+        execution: {
+          function: callable.qualifiedName,
+          status: 'error',
+          observation: 'Browser authorization is required.'
+        },
+        handoffSignal: {
+          intent: 'clarification',
+          draft: 'Enable browser authorization, then tell me to retry.'
+        }
+      }),
+      loadAgentSkill: async () => null
+    })
+
+    expect(callModel).toHaveBeenCalledOnce()
+    expect(result.intent).toBe('clarification')
+    expect(result.answer).toBe(
+      'Enable browser authorization, then tell me to retry.'
+    )
+  })
+
   it('keeps ordinary tool answers as observations until the model finishes', async () => {
     let modelTurn = 0
 

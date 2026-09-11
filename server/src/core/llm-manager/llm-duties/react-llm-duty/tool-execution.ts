@@ -18,6 +18,7 @@ import { buildBoundedToolObservation } from './agent-context-budget'
 import type { AgentRunProgressEvent, ToolExecutionResult } from './types'
 import {
   extractFinalAnswerFromToolResult,
+  extractOwnerActionHandoffFromToolResult,
   formatFilePath
 } from './utils'
 
@@ -593,6 +594,21 @@ export async function runToolExecution(
       ? { errorMessage: effectiveMessage }
       : {})
   })
+
+  const ownerActionHandoff =
+    extractOwnerActionHandoffFromToolResult(toolExecutionResult)
+  if (ownerActionHandoff) {
+    return {
+      execution: {
+        function: qualifiedName,
+        status: 'error',
+        observation: ownerActionHandoff.draft,
+        requestedToolInput,
+        ...(stepLabel ? { stepLabel } : {})
+      },
+      handoffSignal: ownerActionHandoff
+    }
+  }
 
   // Check for final_answer in tool result
   const finalAnswer =
