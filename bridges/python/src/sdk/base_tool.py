@@ -3,7 +3,7 @@ import base64
 import re
 import shlex
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Optional, Union, List, Any
+from typing import Callable, Dict, Optional, Union, List, Any, cast
 from pypdl import Pypdl
 from urllib.parse import urlparse
 from .tool_runtime_types import ToolExecutionContext, ToolModelFile
