@@ -3,15 +3,15 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ComputerUseToolProvider } from '@/core/computer-use/computer-use-tool-provider'
-import type { ComputerUseDriver } from '@/core/computer-use/types'
-import type { ToolProviderExecutionInput, ToolProviderExecutionResult } from '@/core/tool-provider/types'
+import { CuaRuntime } from '@@/tools/computer_use/cua/src/nodejs/lib/cua-runtime'
+import type { ComputerUseDriver } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
+import type { ToolExecutionContext, ToolRuntimeResult } from '@sdk/tool-runtime-types'
 
 const PROFILE_NAME = 'computer-use-test'
 const WINDOW = { pid: 42, window_id: 7 }
 const DESKTOP = { kind: 'desktop', display_id: 'primary' }
 const ARTIFACT_DIRECTORIES = new Set<string>()
-const PROVIDERS: ComputerUseToolProvider[] = []
+const PROVIDERS: CuaRuntime[] = []
 
 interface ObservationToolsHarness {
   driver: ComputerUseDriver & { callTool: ReturnType<typeof vi.fn> }
@@ -19,8 +19,8 @@ interface ObservationToolsHarness {
     action: string,
     parameters: Record<string, unknown>,
     session?: string
-  ) => Promise<ToolProviderExecutionResult>
-  zoom: () => Promise<ToolProviderExecutionResult>
+  ) => Promise<ToolRuntimeResult>
+  zoom: () => Promise<ToolRuntimeResult>
 }
 
 function createProvider(): ObservationToolsHarness {
@@ -46,15 +46,15 @@ function createProvider(): ObservationToolsHarness {
     shutdown: async () => undefined,
     uniffiDestroy: () => undefined
   }
-  const provider = new ComputerUseToolProvider(async () => driver)
+  const provider = new CuaRuntime(async () => driver)
   PROVIDERS.push(provider)
   const sessionId = `observation-tools-${crypto.randomUUID()}`
   const execute = async (
     functionName: string,
     parameters: Record<string, unknown>,
     conversationSessionId = sessionId
-  ): Promise<ToolProviderExecutionResult> => {
-    const input: ToolProviderExecutionInput = {
+  ): Promise<ToolRuntimeResult> => {
+    const input: ToolExecutionContext = {
       toolkitId: 'computer_use', toolId: 'cua', functionName, parameters,
       profileName: PROFILE_NAME, conversationSessionId
     }
@@ -64,7 +64,7 @@ function createProvider(): ObservationToolsHarness {
     }
     return result
   }
-  const zoom = (): Promise<ToolProviderExecutionResult> =>
+  const zoom = (): Promise<ToolRuntimeResult> =>
     execute('zoom', { ...WINDOW, x1: 300, y1: 20, x2: 600, y2: 150 })
   return { driver, execute, zoom }
 }

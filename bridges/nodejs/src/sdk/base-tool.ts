@@ -1,3 +1,4 @@
+import type { ToolExecutionContext } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
@@ -31,6 +32,16 @@ import {
 const COMMAND_OUTPUT_PROGRESS_INTERVAL_MS = 2_000
 const COMMAND_OUTPUT_MAX_CHARS = 4_000
 
+/**
+ * A tool-produced attachment made available to the agent model.
+ */
+export interface ToolModelFile {
+  dataBase64: string
+  mediaType: string
+  filename?: string
+  visualDetail?: 'auto' | 'low' | 'high'
+}
+
 // Progress callback type for reporting tool progress
 export type ProgressCallback = (progress: {
   percentage?: number
@@ -58,6 +69,43 @@ export interface ExecuteCommandOptions {
 }
 
 export abstract class Tool {
+  protected executionContext: ToolExecutionContext | null = null
+
+  /**
+   * Reset per-call evidence even when the tool instance survives between requests.
+   */
+  public async prepareExecution(context: ToolExecutionContext): Promise<void> {
+    this.executionContext = context
+    this.modelFiles.length = 0
+  }
+
+  /**
+   * Attach already encoded evidence without writing and reading another file.
+   */
+  protected attachModelFiles(files: ToolModelFile[]): void {
+    this.modelFiles.push(...files)
+  }
+
+  private readonly modelFiles: ToolModelFile[] = []
+
+  /**
+   * Attach evidence without embedding base64 data in ordinary tool observations.
+   */
+  protected async attachModelFile(filePath: string, mediaType: string): Promise<void> {
+    this.modelFiles.push({
+      dataBase64: (await fs.promises.readFile(filePath)).toString('base64'),
+      mediaType,
+      filename: path.basename(filePath)
+    })
+  }
+
+  /**
+   * Read attachments after a standard tool method has completed.
+   */
+  public getModelFiles(): ToolModelFile[] {
+    return this.modelFiles
+  }
+
   private static isToolRuntime: boolean = ((): boolean => {
     const args = process.argv
     const runtimeIndex = args.indexOf('--runtime')
@@ -231,7 +279,7 @@ export abstract class Tool {
       return arg
     }
 
-    return `'${arg.replace(/'/g, `'\\''`)}'`
+    return `'${arg.replace(/'/g, '\'\\\'\'')}'`
   }
 
   /**

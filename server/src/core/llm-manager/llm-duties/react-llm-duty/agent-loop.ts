@@ -72,6 +72,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 
 <safety>
 - Verify required paths, identifiers, accepted values, and prerequisites before side effects.
+- Preserve source meaning; never guess or silently convert incompatible values.
 - Do not invent current, exact, mutable, environment-specific, or tool-produced facts.
 - Explain genuine blockers and complete independent authorized work; never fabricate results.
 - Never use computer or browser automation to hide automation, spoof identity, bypass CAPTCHA or anti-bot controls, or evade a service's usage policy.
@@ -167,6 +168,7 @@ interface AgentProgressiveGuidance {
 
 interface AgentModelResult {
   textContent?: string
+  reasoning?: string
   toolCalls?: OpenAIToolCall[]
   isTruncated?: boolean
 }
@@ -204,7 +206,9 @@ export interface AgentLoopParams {
   initialExecutionHistory?: ExecutionRecord[]
   initialTrackedSteps?: TrackedPlanStep[]
   allowDirectAnswerHandoff?: boolean
-  /** Total operational turns, including any finishing pass. */
+  /**
+   * Total operational turns, including any finishing pass.
+   */
   maxIterations?: number
   finishingIterations?: number
   prepareContinuation?: (
@@ -544,7 +548,9 @@ function loadToolkitFunctions(
   return loadedFunctionCount
 }
 
-/** Builds the operational guidance for toolkits loaded in the current run. */
+/**
+ * Builds the operational guidance for toolkits loaded in the current run.
+ */
 export function buildAgentProgressiveGuidanceSystemPrompt(
   catalog: AgentToolCatalog
 ): string {
@@ -561,7 +567,9 @@ export function buildAgentProgressiveGuidanceSystemPrompt(
   )
 }
 
-/** Adds Leon-owned display metadata without changing the tool's input schema. */
+/**
+ * Adds Leon-owned display metadata without changing the tool's input schema.
+ */
 function addToolCallTitleParameter(
   parameters: Record<string, unknown>
 ): Record<string, unknown> {
@@ -752,6 +760,8 @@ export async function runAgentLoop(
       AGENT_MAX_PARALLEL_TOOL_CALLS
     )
     const deferredToolCallCount = emittedToolCalls.length - toolCalls.length
+    // Preserve provider reasoning with its response across tool calls and resumes.
+    const reasoning = modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}
     const textContent = modelResult.textContent?.trim() || ''
     if (modelResult.isTruncated) {
       return {
@@ -791,11 +801,11 @@ export async function runAgentLoop(
           }
           if (status === AgentCompletionStatus.Blocked) {
             const answer = `${textContent}\n\n${reason}`
-            transcript.push({ role: 'assistant', content: answer })
+            transcript.push({ role: 'assistant', content: answer, ...reasoning })
             return { answer, intent: 'blocked', transcript, executionHistory, trackedSteps }
           }
         }
-        transcript.push({ role: 'assistant', content: textContent })
+        transcript.push({ role: 'assistant', content: textContent, ...reasoning })
         return {
           answer: textContent,
           intent: 'answer',
@@ -834,6 +844,7 @@ export async function runAgentLoop(
       ]
         .filter(Boolean)
         .join('\n'),
+      ...reasoning,
       toolCalls
     })
 
@@ -895,7 +906,9 @@ export async function runAgentLoop(
   )
 }
 
-/** Reviews proposed endings through one path, including the hard budget boundary. */
+/**
+ * Reviews proposed endings through one path, including the hard budget boundary.
+ */
 async function reviewAgentCompletion(
   params: AgentLoopParams,
   transcript: AgentToolTranscriptMessage[],
@@ -1108,13 +1121,14 @@ async function attemptAgentLimitFinalization(
   }
 
   const toolCalls = modelResult.toolCalls || []
+  const reasoning = modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}
   const textContent = modelResult.textContent?.trim() || ''
   if (toolCalls.length === 0) {
     return textContent
       ? {
           answer: textContent,
           intent: 'answer',
-          messages: [{ role: 'assistant', content: textContent }]
+          messages: [{ role: 'assistant', content: textContent, ...reasoning }]
         }
       : null
   }
@@ -1130,6 +1144,7 @@ async function attemptAgentLimitFinalization(
       {
         role: 'assistant',
         content: textContent,
+        ...reasoning,
         toolCalls
       },
       {
@@ -1441,7 +1456,9 @@ async function executeAgentToolCall(
   }
 }
 
-/** Separates Leon-owned display metadata from arguments sent to a tool. */
+/**
+ * Separates Leon-owned display metadata from arguments sent to a tool.
+ */
 function extractToolCallInput(input: string): {
   toolInput: string
   title?: string

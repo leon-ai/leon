@@ -1,10 +1,20 @@
+import { ComputerUseTextInputMode } from './types'
+import type { CuaExecutionContext as ToolExecutionContext,
+  CapturedComputerUseState,
+  ComputerUseDriver,
+  ComputerUseDriverFactory,
+  ComputerUseImageTransform,
+  ComputerUseActivityOverlayResolver,
+  ComputerUseInteractionModeResolver,
+  ComputerUseSetOfMarkAnnotation,
+  ComputerUseSetOfMarkModeResolver,
+  CuaToolResult,
+  ManagedComputerUseRuntime,
+  PreferredApplicationsResolver
+} from './types'
 import { setTimeout as delay } from 'node:timers/promises'
 
-import type {
-  ToolProvider,
-  ToolProviderExecutionInput,
-  ToolProviderExecutionResult
-} from '@/core/tool-provider/types'
+import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { LogHelper } from '@/helpers/log-helper'
 
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
@@ -21,9 +31,9 @@ import {
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
   COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
   COMPUTER_USE_COORDINATE_FIELDS,
-  COMPUTER_USE_PROVIDER_ID,
   COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
+  COMPUTER_USE_SELECT_ALL_KEYS,
   COMPUTER_USE_SCREEN_CAPTURE_ACTIONS,
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
@@ -45,19 +55,6 @@ import {
 } from './computer-use-settings'
 import { createCuaDriverAdapter } from './cua/cua-driver-adapter'
 import { CuaDesktopSetupPendingError, CuaDesktopSetupState } from './cua/cua-desktop-setup'
-import type {
-  CapturedComputerUseState,
-  ComputerUseDriver,
-  ComputerUseDriverFactory,
-  ComputerUseImageTransform,
-  ComputerUseActivityOverlayResolver,
-  ComputerUseInteractionModeResolver,
-  ComputerUseSetOfMarkAnnotation,
-  ComputerUseSetOfMarkModeResolver,
-  CuaToolResult,
-  ManagedComputerUseRuntime,
-  PreferredApplicationsResolver
-} from './types'
 import { asRecord, parseJsonRecord, hasCuaError, isComputerUseEffectUncertain } from './utils'
 
 export { COMPUTER_USE_ACTION_NAMES } from './constants'
@@ -71,10 +68,10 @@ export type {
   ComputerUseImageTransform
 } from './types'
 
-/** Executes Cua actions in persistent profile runtimes and retains visual artifacts. */
-export class ComputerUseToolProvider implements ToolProvider {
-  public readonly id = COMPUTER_USE_PROVIDER_ID
-
+/**
+ * Executes Cua actions in persistent profile runtimes and retains visual artifacts.
+ */
+export class CuaRuntime {
   private readonly visualTransforms = new Map<string, ComputerUseImageTransform>()
   private readonly visualStateIds = new Map<string, string>()
   private readonly artifactStore = new ComputerUseArtifactStore()
@@ -108,8 +105,8 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   public async execute(
-    input: ToolProviderExecutionInput
-  ): Promise<ToolProviderExecutionResult> {
+    input: ToolExecutionContext
+  ): Promise<ToolRuntimeResult> {
     const action = input.functionName
     if (!COMPUTER_USE_ACTIONS.has(action)) {
       return this.failure('The requested computer-use action is not supported.')
@@ -143,10 +140,11 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private async executeAction(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
-  ): Promise<ToolProviderExecutionResult> {
+  ): Promise<ToolRuntimeResult> {
+    if (input.signal?.aborted) return this.failure('Computer-use execution canceled before this action.')
     if (action === COMPUTER_USE_ACTION_SEQUENCE_NAME) {
       return this.executeActionSequence(input, parameters)
     }
@@ -169,21 +167,17 @@ export class ComputerUseToolProvider implements ToolProvider {
         runtime.driver.supportsPostActionCapture !== false
       const driverParameters = { ...parameters }
       delete driverParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
-      const settleMs = driverParameters['settle_ms'] ?? 0
+      const settleMs = this.resolveSettleMs(driverParameters['settle_ms'])
       delete driverParameters['settle_ms']
-      if (!Number.isInteger(settleMs) || Number(settleMs) < 0 ||
-          Number(settleMs) > COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS) {
-        throw new Error(`settle_ms must be an integer between 0 and ${COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS}.`)
-      }
       const isObservation = action === 'get_window_state' || action === 'get_desktop_state'
-      if (Number(settleMs) > 0 && !isObservation && !captureAfter) {
+      if (settleMs > 0 && !isObservation && !captureAfter) {
         throw new Error('settle_ms requires an observation or an action with capture_after enabled.')
       }
       if (isObservation) {
         // The model can observe a loading destination once after a bounded wait;
         // do not infer page readiness from colors, titles or inaccessible trees.
-        if (Number(settleMs) > 0) {
-          await delay(Number(settleMs))
+        if (settleMs > 0) {
+          await delay(settleMs)
           // A delayed refresh follows a transition; a previous screenshot is
           // not suitable for the query-only image reuse optimization.
           if (action === 'get_window_state') driverParameters['include_screenshot'] ??= true
@@ -453,7 +447,9 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
   }
 
-  /** Provides one recovery decision for both individual and batched actions. */
+  /**
+   * Provides one recovery decision for both individual and batched actions.
+   */
   private getActionRecovery(
     result: Record<string, unknown>,
     parameters: Record<string, unknown>,
@@ -490,7 +486,7 @@ export class ComputerUseToolProvider implements ToolProvider {
         : '')
   }
 
-  private executionFailure(error: unknown): ToolProviderExecutionResult {
+  private executionFailure(error: unknown): ToolRuntimeResult {
     if (error instanceof CuaDesktopSetupPendingError) {
       return {
         success: false,
@@ -516,10 +512,20 @@ export class ComputerUseToolProvider implements ToolProvider {
     return this.failure(error instanceof Error ? error.message : String(error))
   }
 
+  private resolveSettleMs(value: unknown): number {
+    const settleMs = value ?? 0
+    if (!Number.isInteger(settleMs) || Number(settleMs) < 0 ||
+        Number(settleMs) > COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS) {
+      throw new Error(`settle_ms must be an integer between 0 and ${COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS}.`)
+    }
+
+    return Number(settleMs)
+  }
+
   private async executeActionSequence(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>
-  ): Promise<ToolProviderExecutionResult> {
+  ): Promise<ToolRuntimeResult> {
     const steps = parameters['steps']
     if (
       !Array.isArray(steps) ||
@@ -531,44 +537,76 @@ export class ComputerUseToolProvider implements ToolProvider {
       )
     }
 
-    const pixelClickCount = steps.filter((value) => {
-      const step = asRecord(value)
-      const stepParameters = asRecord(step?.['parameters'])
-      return (
-        (step?.['action'] === 'click' || step?.['action'] === 'type_text') &&
-        typeof stepParameters?.['x'] === 'number' &&
-        typeof stepParameters?.['y'] === 'number'
-      )
-    }).length
-    if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
-      return this.failure(
-        'perform_actions accepts at most one pixel-targeted click, including the focus click for type_text with x/y. Observe between spatial targets or use semantic element handles.'
-      )
-    }
     // Reject unsupported actions before setup or input. Their position in a
     // sequence must not cause an avoidable partial edit.
     for (const [index, value] of steps.entries()) {
       const step = asRecord(value)
+      const stepParameters = asRecord(step?.['parameters'])
       if (typeof step?.['action'] !== 'string' ||
           !COMPUTER_USE_SEQUENCE_ACTIONS.has(step['action']) ||
-          !asRecord(step['parameters'])) {
+          !stepParameters) {
         return this.failure(`Step ${index + 1} must use a supported mechanical action with parameters.`)
       }
+
+      try {
+        this.resolveSettleMs(stepParameters['settle_ms'])
+      } catch (error) {
+        return this.failure(`Step ${index + 1}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+
+    // Reuse one established field through select-all and typing. Repeated
+    // coordinates for that same field must not click again and clear selection.
+    let focusedField: Record<string, unknown> | undefined
+    const normalizedSteps = steps.map((value) => {
+      const step = asRecord(value)!
+      const action = step['action'] as string
+      const parameters = { ...asRecord(step['parameters'])! }
+      const hasPixels = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
+      const sameWindow = focusedField &&
+        this.getVisualTransformKey(input, parameters) === this.getVisualTransformKey(input, focusedField) &&
+        asRecord(parameters['target'])?.['display_id'] === asRecord(focusedField['target'])?.['display_id'] &&
+        parameters['delivery_mode'] === focusedField['delivery_mode']
+      const sameField = sameWindow && focusedField && parameters['x'] === focusedField['x'] &&
+        parameters['y'] === focusedField['y'] &&
+        parameters['element_token'] == null && parameters['element_index'] == null
+      if (action === 'type_text' && hasPixels && sameField) {
+        delete parameters['x']
+        delete parameters['y']
+      } else if (action === 'click' && hasPixels) {
+        focusedField = parameters
+      } else if (!(action === 'hotkey' && sameWindow &&
+          (!hasPixels || sameField) &&
+          JSON.stringify(parameters['keys']) === JSON.stringify(COMPUTER_USE_SELECT_ALL_KEYS))) {
+        // Tab, Enter, scrolling or another target can change focus or layout.
+        focusedField = undefined
+      }
+      return { action, parameters }
+    })
+    const pixelClickCount = normalizedSteps.filter(({ action, parameters }) =>
+      (action === 'click' || action === 'type_text') &&
+      typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
+    ).length
+    if (pixelClickCount > COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT) {
+      return this.failure(
+        'perform_actions accepts at most one pixel-targeted click. For one field, batch click, select-all and type_text; repeated typing coordinates must identify that same field. Observe between different spatial targets.'
+      )
     }
 
     const captureAfter = (parameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] ?? true) === true
     const stepResults: Array<Record<string, unknown>> = []
     const artifacts: Array<Record<string, unknown>> = []
-    let modelFiles: ToolProviderExecutionResult['modelFiles'] = []
+    let modelFiles: ToolRuntimeResult['modelFiles'] = []
     let postActionState: unknown
     let recovery: unknown
     let nextStep: unknown
-    let failure: ToolProviderExecutionResult | undefined
+    let failure: ToolRuntimeResult | undefined
 
-    for (const [index, value] of steps.entries()) {
+    for (const [index, value] of normalizedSteps.entries()) {
       const step = asRecord(value)!
       const stepAction = step['action'] as string
       const stepParameters = asRecord(step['parameters'])!
+      const settleMs = this.resolveSettleMs(stepParameters['settle_ms'])
 
       const boundedParameters = { ...stepParameters }
       delete boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
@@ -576,6 +614,8 @@ export class ComputerUseToolProvider implements ToolProvider {
       // handles of a mechanical sequence until its final action.
       if (index < steps.length - 1) {
         boundedParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER] = false
+        // Inside a batch, settle before the next input without minting handles.
+        delete boundedParameters['settle_ms']
       }
       if (
         index === steps.length - 1 &&
@@ -621,6 +661,10 @@ export class ComputerUseToolProvider implements ToolProvider {
         failure = result
         break
       }
+
+      if (index < steps.length - 1 && settleMs > 0) {
+        await delay(settleMs)
+      }
     }
 
     return {
@@ -643,7 +687,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private applyObservationDefaults(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
   ): Record<string, unknown> {
@@ -673,13 +717,15 @@ export class ComputerUseToolProvider implements ToolProvider {
 
   private async callAction(
     driver: ComputerUseDriver,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
   ): Promise<CuaToolResult> {
+    input.signal?.throwIfAborted()
     const serializedParameters = JSON.stringify(parameters)
-    let result = await this.callDriverAction(driver, action, parameters)
+    let result = await this.callDriverAction(driver, action, parameters, input.signal)
 
+    input.signal?.throwIfAborted()
     if (this.shouldRestoreSession(result)) {
       input.onProgress?.({
         source: 'log',
@@ -700,7 +746,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       if (typeof session === 'string') {
         await this.runtimeManager.restoreActivityOverlay(driver, input, session, action)
       }
-      result = await this.callDriverAction(driver, action, parameters)
+      result = await this.callDriverAction(driver, action, parameters, input.signal)
     }
 
     const failure = this.resultCompactor.getStructuredFailure(
@@ -711,7 +757,7 @@ export class ComputerUseToolProvider implements ToolProvider {
         resolveComputerUseBrowserInspection(input) &&
         Number.isInteger(parameters['pid']) && Number(parameters['pid']) > 0 &&
         Number.isInteger(parameters['window_id']) && Number(parameters['window_id']) > 0) {
-      // An existing owner grant makes setup routine. Keep it in the provider
+      // An existing owner grant makes setup routine. Keep it in the tool
       // instead of spending a model turn deciding to repeat Cua's next action.
       const prepared = await driver.callTool('browser_prepare', JSON.stringify({
         pid: parameters['pid'], window_id: parameters['window_id'],
@@ -721,7 +767,7 @@ export class ComputerUseToolProvider implements ToolProvider {
       if (hasCuaError(prepared) || this.resultCompactor.getStructuredFailure(
         parseJsonRecord(prepared.structuredJson) || parseJsonRecord(prepared.rawJson)
       )) return prepared
-      result = await this.callDriverAction(driver, action, parameters)
+      result = await this.callDriverAction(driver, action, parameters, input.signal)
     }
 
     if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
@@ -737,6 +783,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     // exists. A short bounded retry avoids spending another model turn polling.
     for (const delayMs of COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS) {
       await delay(delayMs)
+      input.signal?.throwIfAborted()
       result = await driver.callTool(action, serializedParameters)
       if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
         break
@@ -746,42 +793,48 @@ export class ComputerUseToolProvider implements ToolProvider {
     return result
   }
 
-  /** Makes pixel-targeted typing honor the same focus contract on every driver. */
+  /**
+   * Makes pixel-targeted typing honor the same focus contract on every driver.
+   */
   private async callDriverAction(
     driver: ComputerUseDriver,
     action: string,
-    parameters: Record<string, unknown>
+    parameters: Record<string, unknown>,
+    signal?: AbortSignal
   ): Promise<CuaToolResult> {
-    const hasPixelTarget =
-      typeof parameters['x'] === 'number' &&
-      typeof parameters['y'] === 'number'
-    if (action !== 'type_text' || !hasPixelTarget) {
+    signal?.throwIfAborted()
+    if (action !== 'type_text') {
       return driver.callTool(action, JSON.stringify(parameters))
     }
-
-    // Some native routes type into the existing focus even when x/y are
-    // supplied. Establish focus explicitly so type_text keeps its public API.
-    const clickParameters = { ...parameters }
-    delete clickParameters['text']
-    const clickResult = await driver.callTool(
-      'click',
-      JSON.stringify(clickParameters)
-    )
-    const clickOutput =
-      parseJsonRecord(clickResult.structuredJson) ||
-      parseJsonRecord(clickResult.rawJson)
-    if (
-      hasCuaError(clickResult) ||
-      this.resultCompactor.getStructuredFailure(clickOutput)
-    ) {
-      return clickResult
+    const mode = parameters['mode'] ?? ComputerUseTextInputMode.Insert
+    if (!Object.values(ComputerUseTextInputMode).includes(mode as ComputerUseTextInputMode)) {
+      throw new Error('type_text mode must be insert or replace.')
     }
-
+    const hasPixelTarget = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
+    const hasElementTarget = parameters['element_token'] != null || parameters['element_index'] != null
     const typeParameters = { ...parameters }
-    delete typeParameters['x']
-    delete typeParameters['y']
-    // Only the focus click uses Cua's crop translation; text uses that focus.
-    delete typeParameters['from_zoom']
+    delete typeParameters['mode']
+    if (hasPixelTarget || (mode === ComputerUseTextInputMode.Replace && hasElementTarget)) {
+      // Focus once before selection. Clicking again after select-all would
+      // collapse the selection and append instead of replacing the value.
+      const clickParameters = { ...typeParameters }
+      delete clickParameters['text']
+      const clickResult = await driver.callTool('click', JSON.stringify(clickParameters))
+      const clickOutput = parseJsonRecord(clickResult.structuredJson) || parseJsonRecord(clickResult.rawJson)
+      if (hasCuaError(clickResult) || this.resultCompactor.getStructuredFailure(clickOutput)) return clickResult
+      for (const key of ['x', 'y', 'element_token', 'element_index', 'snapshot_id', 'from_zoom']) {
+        delete typeParameters[key]
+      }
+    }
+    if (mode === ComputerUseTextInputMode.Replace) {
+      signal?.throwIfAborted()
+      const selectionParameters: Record<string, unknown> = { ...typeParameters, keys: COMPUTER_USE_SELECT_ALL_KEYS }
+      delete selectionParameters['text']
+      const selected = await driver.callTool('hotkey', JSON.stringify(selectionParameters))
+      const selectionOutput = parseJsonRecord(selected.structuredJson) || parseJsonRecord(selected.rawJson)
+      if (hasCuaError(selected) || this.resultCompactor.getStructuredFailure(selectionOutput)) return selected
+    }
+    signal?.throwIfAborted()
     return driver.callTool('type_text', JSON.stringify(typeParameters))
   }
 
@@ -828,7 +881,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private mapCoordinatesToSource(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>,
     runtime: ManagedComputerUseRuntime
@@ -885,7 +938,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private rememberVisualTransform(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>,
     transform: ComputerUseImageTransform | null
@@ -905,7 +958,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private rememberVisualStateId(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>,
     visualStateId: string | null
@@ -941,7 +994,7 @@ export class ComputerUseToolProvider implements ToolProvider {
   }
 
   private getVisualTransformKey(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>
   ): string {
     const target = asRecord(parameters['target'])
@@ -960,9 +1013,11 @@ export class ComputerUseToolProvider implements ToolProvider {
       : `${sessionKey}:desktop`
   }
 
-  /** A rejected capture cannot justify reusing older coordinates or hashes. */
+  /**
+   * A rejected capture cannot justify reusing older coordinates or hashes.
+   */
   private forgetVisualState(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>
   ): void {
     const key = this.getVisualTransformKey(input, parameters)
@@ -1079,7 +1134,7 @@ export class ComputerUseToolProvider implements ToolProvider {
 
   private async captureStateAfterAction(
     runtime: ManagedComputerUseRuntime,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     actionParameters: Record<string, unknown>,
     action: string
   ): Promise<CapturedComputerUseState | null> {
@@ -1193,9 +1248,11 @@ export class ComputerUseToolProvider implements ToolProvider {
     }
   }
 
-  /** Retains capture failures as evidence without reclassifying delivered input. */
+  /**
+   * Retains capture failures as evidence without reclassifying delivered input.
+   */
   private failedCapture(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     parameters: Record<string, unknown>,
     code: string,
     message: string,
@@ -1218,7 +1275,7 @@ export class ComputerUseToolProvider implements ToolProvider {
     return 'Computer-use action completed.'
   }
 
-  private failure(message: string): ToolProviderExecutionResult {
+  private failure(message: string): ToolRuntimeResult {
     return {
       success: false,
       message,

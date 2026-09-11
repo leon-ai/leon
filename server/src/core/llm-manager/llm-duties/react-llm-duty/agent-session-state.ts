@@ -46,7 +46,9 @@ const AGENT_HISTORY_COMPACTION_STATE_FALLBACK: AgentHistoryCompactionState = {
   remote: createEmptyHistoryCompactionProviderState()
 }
 
-/** Owns the profile- and session-scoped state stores used by the agent loop. */
+/**
+ * Owns the profile- and session-scoped state stores used by the agent loop.
+ */
 export class AgentSessionState {
   private readonly continuationStores =
     new Map<string, ContextStateStore<AgentLoopContinuationState | null>>()

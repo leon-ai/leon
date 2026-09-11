@@ -6,8 +6,8 @@ import {
   CuaWaylandCaptureAdapter,
   normalizeGnomeCapture,
   parseGnomeCaptureLayout
-} from '@/core/computer-use/cua/cua-wayland-capture'
-import type { ComputerUseDriver, CuaToolResult } from '@/core/computer-use/types'
+} from '@@/tools/computer_use/cua/src/nodejs/lib/cua/cua-wayland-capture'
+import type { ComputerUseDriver, CuaToolResult } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
 
 const LAYOUT = { width: 600, height: 450, serial: 1 }
 const BOUNDS = { x: 300, y: 150, width: 150, height: 150 }

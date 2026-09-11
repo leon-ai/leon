@@ -1,4 +1,8 @@
-import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
+import type { CuaExecutionContext as ToolExecutionContext,
+  CompactedComputerUseResult,
+  PreferredApplicationsResolver,
+  StructuredComputerUseFailure
+} from './types'
 
 import {
   COMPUTER_USE_APP_QUERY_PARAMETER,
@@ -7,21 +11,18 @@ import {
   COMPUTER_USE_BROWSER_REF_LIMIT,
   COMPUTER_USE_WINDOW_RESULT_LIMIT
 } from './constants'
-import type {
-  CompactedComputerUseResult,
-  PreferredApplicationsResolver,
-  StructuredComputerUseFailure
-} from './types'
 import { asRecord, hasText } from './utils'
 
-/** Compacts driver payloads into bounded, model-facing observations. */
+/**
+ * Compacts driver payloads into bounded, model-facing observations.
+ */
 export class ComputerUseResultCompactor {
   public constructor(
     private readonly preferredApplicationsResolver: PreferredApplicationsResolver
   ) {}
 
   public compact(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     result: Record<string, unknown>
   ): CompactedComputerUseResult {
@@ -133,7 +134,7 @@ export class ComputerUseResultCompactor {
   }
 
   private compactWindowState(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     result: Record<string, unknown>
   ): CompactedComputerUseResult {
     const allElements = (result['elements'] as unknown[])
@@ -210,7 +211,7 @@ export class ComputerUseResultCompactor {
   }
 
   private compactApplicationResult(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     result: Record<string, unknown>
   ): CompactedComputerUseResult {
     const allApps = (result['apps'] as unknown[])

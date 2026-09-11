@@ -366,7 +366,9 @@ Rules:
         }
   }
 
-  /** Normalize provider output against the declared action parameter schema. */
+  /**
+   * Normalize provider output against the declared action parameter schema.
+   */
   private normalizeActionOutput(
     functionName: string,
     rawParams: unknown,

@@ -127,7 +127,9 @@ export interface AgentResponseToolCall {
   nativeSkillPath?: string
 }
 
-/** Persisted, user-visible trace for replaying an agent turn. */
+/**
+ * Persisted, user-visible trace for replaying an agent turn.
+ */
 export interface AgentResponseTrace {
   reasoningSummary?: string
   planSteps: AgentResponsePlanStep[]

@@ -1,21 +1,16 @@
+import type { CuaExecutionContext as ToolExecutionContext } from '../types'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
 import execa from 'execa'
-
-import { NetworkHelper } from '@/helpers/network-helper'
-import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
 
 const WAYLAND_ENV = 'CUA_DRIVER_RS_ENABLE_WAYLAND'
 const GNOME_DESKTOP = 'gnome'
 const EXTENSION_UUID = 'winrects@cua'
 const EXTENSION_FILES = ['metadata.json', 'extension.js'] as const
-const EXTENSION_SOURCE = 'https://raw.githubusercontent.com/trycua/cua'
 const COMMAND_TIMEOUT_MS = 5_000
 const ACTIVE_EXTENSION_PATTERN = /State: (?:ACTIVE|ENABLED)\b/
-const VERSION_PATTERN = /^\d+\.\d+\.\d+$/
 const GNOME_VERSION_PATTERN = /\b(\d+)\.\d+/
 const SETTINGS_SCHEMA = 'org.gnome.shell'
 const ENABLED_EXTENSIONS_KEY = 'enabled-extensions'
@@ -26,7 +21,9 @@ export enum CuaDesktopSetupState {
   ActivationPending = 'activation_pending'
 }
 
-/** Detects Wayland without mistaking its XWayland DISPLAY for an X11 session. */
+/**
+ * Detects Wayland without mistaking its XWayland DISPLAY for an X11 session.
+ */
 export function isCuaWaylandSession(
   platform: NodeJS.Platform,
   environment: NodeJS.ProcessEnv
@@ -38,20 +35,27 @@ export function isCuaWaylandSession(
   )
 }
 
-/** Prepares local Cua dependencies on demand; remote drivers own their setup. */
+/**
+ * Prepares local Cua dependencies on demand; remote drivers own their setup.
+ */
 export class CuaDesktopSetup {
   private installation: Promise<void> | undefined
 
   public constructor(
+    private readonly getResources: () => Promise<string> = async () => {
+      throw new Error('GNOME support resources require the Cua tool setup.')
+    },
     private readonly platform: NodeJS.Platform = process.platform,
     private readonly environment: NodeJS.ProcessEnv = process.env,
     private readonly dataHome: string = environment['XDG_DATA_HOME'] ||
       path.join(os.homedir(), '.local', 'share')
   ) {}
 
-  /** Installs missing GNOME support and checks activation independently of files. */
+  /**
+   * Installs missing GNOME support and checks activation independently of files.
+   */
   public async ensure(
-    onProgress?: ToolProviderExecutionInput['onProgress']
+    onProgress?: ToolExecutionContext['onProgress']
   ): Promise<CuaDesktopSetupState> {
     if (!isCuaWaylandSession(this.platform, this.environment)) {
       return CuaDesktopSetupState.Ready
@@ -93,7 +97,7 @@ export class CuaDesktopSetup {
     return result.stdout
   }
 
-  private async install(onProgress?: ToolProviderExecutionInput['onProgress']): Promise<void> {
+  private async install(onProgress?: ToolExecutionContext['onProgress']): Promise<void> {
     const extensionsPath = path.join(this.dataHome, 'gnome-shell', 'extensions')
     const destination = path.join(extensionsPath, EXTENSION_UUID)
     const metadataPath = path.join(destination, EXTENSION_FILES[0])
@@ -106,20 +110,13 @@ export class CuaDesktopSetup {
     }
 
     onProgress?.({ source: 'log', message: 'Installing Cua support for GNOME Wayland.' })
-    const entryPath = fileURLToPath(import.meta.resolve('@trycua/cua-driver'))
-    const packagePath = path.resolve(path.dirname(entryPath), '..', 'package.json')
-    const { version } = JSON.parse(await fs.promises.readFile(packagePath, 'utf8')) as { version: string }
-    if (!VERSION_PATTERN.test(version)) throw new Error('Cannot resolve a version-pinned Cua desktop helper.')
+    const resources = await this.getResources()
 
     await fs.promises.mkdir(extensionsPath, { recursive: true })
     const staging = await fs.promises.mkdtemp(path.join(extensionsPath, '.cua-setup-'))
     try {
       for (const filename of EXTENSION_FILES) {
-        await NetworkHelper.downloadFile(
-          `${EXTENSION_SOURCE}/cua-driver-rs-v${version}/libs/cua-driver/wayland-helper/${EXTENSION_UUID}/${filename}`,
-          path.join(staging, filename),
-          { cliProgress: false, parallelStreams: 1 }
-        )
+        await fs.promises.copyFile(path.join(resources, filename), path.join(staging, filename))
       }
       await this.checkCompatibility(path.join(staging, EXTENSION_FILES[0]))
       // Publish only a complete, compatible extension, never half a download.
@@ -160,7 +157,9 @@ export class CuaDesktopSetup {
   }
 }
 
-/** Identifies setup that needs activation without confusing it with app failure. */
+/**
+ * Identifies setup that needs activation without confusing it with app failure.
+ */
 export class CuaDesktopSetupPendingError extends Error {
   public constructor() {
     super('GNOME WinRects is installed but not active in the current desktop session.')

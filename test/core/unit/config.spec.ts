@@ -162,6 +162,11 @@ describe('ConfigManager', () => {
               env: 'LEON_ZAI_API_KEY'
             }
           },
+          deepseek: {
+            api_key: {
+              env: 'LEON_DEEPSEEK_API_KEY'
+            }
+          },
           minimax: {
             base_url: 'https://api.minimaxi.com/anthropic',
             api_key: {

@@ -980,7 +980,9 @@ export default class ToolUIHandler {
     return messageString && messageString.startsWith('[TOOL_OUTPUT:')
   }
 
-  /** Recreates completed activity cards from a persisted agent trace. */
+  /**
+   * Recreates completed activity cards from a persisted agent trace.
+   */
   replayAgentResponseTrace(trace) {
     if (!trace || !Array.isArray(trace.toolCalls)) {
       return

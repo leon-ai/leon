@@ -81,6 +81,7 @@ const LLM_PROVIDERS_MAP = {
   [LLMProviders.Groq]: 'groq-llm-provider',
   [LLMProviders.OpenRouter]: 'openrouter-llm-provider',
   [LLMProviders.ZAI]: 'z-ai-llm-provider',
+  [LLMProviders.DeepSeek]: 'deepseek-llm-provider',
   [LLMProviders.MiniMax]: 'minimax-llm-provider',
   [LLMProviders.OpenAI]: 'openai-llm-provider',
   [LLMProviders.Anthropic]: 'anthropic-llm-provider',
@@ -126,7 +127,9 @@ export default class LLMProvider {
       : undefined
   }
 
-  /** Applies per-model user overrides without defeating duty safety settings. */
+  /**
+   * Applies per-model user overrides without defeating duty safety settings.
+   */
   private applyConfiguredModelSettings(
     completionParams: CompletionParams
   ): void {
@@ -2674,6 +2677,7 @@ export default class LLMProvider {
           LLMProviders.LlamaCPP,
           LLMProviders.SGLang,
           LLMProviders.ZAI,
+          LLMProviders.DeepSeek,
           LLMProviders.MiniMax,
           LLMProviders.Anthropic,
           LLMProviders.MoonshotAI,

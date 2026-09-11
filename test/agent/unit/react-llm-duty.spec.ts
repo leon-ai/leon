@@ -125,6 +125,30 @@ describe('continuous agent loop', () => {
     coreMocks.getToolFunctions.mockReturnValue(null)
   })
 
+  it('retains provider reasoning through tool exchanges and continuation', async () => {
+    const reasoning = 'The lookup is needed to answer the question.'
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ reasoning, toolCalls: [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })] })
+      .mockImplementationOnce(async (messages) => {
+        expect(messages).toContainEqual(expect.objectContaining({ role: 'assistant', reasoning }))
+        return { textContent: 'It is sunny.', reasoning: 'The lookup confirms sunny weather.' }
+      })
+    const prepareContinuation = vi.fn(async (state) => structuredClone(state.transcript))
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Check the weather.' }],
+      catalog: createCatalog(), callModel, prepareContinuation,
+      maxIterations: 2, finishingIterations: 1,
+      executeFunction: async () => ({ execution: {
+        function: callable.qualifiedName, status: 'success', observation: 'Sunny.'
+      } }),
+      loadAgentSkill: async () => null
+    })
+    expect(prepareContinuation).toHaveBeenCalledOnce()
+    expect(result.transcript.at(-1)).toMatchObject({
+      role: 'assistant', content: 'It is sunny.', reasoning: 'The lookup confirms sunny weather.'
+    })
+  })
+
   it('emits tool-accompanying progress and retains collection details through continuation', async () => {
     const steps = [{ label: 'Retrieve requested documents', status: 'in_progress',
       details: 'Verified item A; next list page 2. Enumeration is not complete.' }]
@@ -302,6 +326,12 @@ describe('continuous agent loop', () => {
   it('keeps computer-use guidance out of the global prompt', () => {
     expect(AGENT_SYSTEM_PROMPT).not.toContain('<visual_inspection>')
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Survey long pages')
+  })
+
+  it('preserves source meaning without use-case-specific rules', () => {
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      'Preserve source meaning; never guess or silently convert incompatible values.'
+    )
   })
 
   it('blocks an ineffective computer-use retry before executing the tool', async () => {

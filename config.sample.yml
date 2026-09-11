@@ -68,6 +68,10 @@ llm:
       api_key:
         # The value is read from LEON_MOONSHOTAI_API_KEY in your profile .env file.
         env: LEON_MOONSHOTAI_API_KEY
+    deepseek:
+      api_key:
+        # The value is read from LEON_DEEPSEEK_API_KEY in your profile .env file.
+        env: LEON_DEEPSEEK_API_KEY
     huggingface:
       api_key:
         # The value is read from LEON_HUGGINGFACE_API_KEY in your profile .env file.

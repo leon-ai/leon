@@ -4,9 +4,16 @@ import type {
 } from '@trycua/cua-driver'
 
 import type {
-  ToolProviderExecutionInput,
-  ToolProviderModelFile
-} from '@/core/tool-provider/types'
+  ToolExecutionContext,
+  ToolModelFile
+} from '@sdk/tool-runtime-types'
+
+/**
+ * Supplies live owner settings from the tool instance to retained native sessions.
+ */
+export interface CuaExecutionContext extends ToolExecutionContext {
+  getSettings?: () => Record<string, unknown>
+}
 
 export interface ComputerUseDriver extends Pick<
   CuaDriverLike,
@@ -18,8 +25,13 @@ export interface ComputerUseDriver extends Pick<
 }
 
 export type ComputerUseDriverFactory = (
-  input: ToolProviderExecutionInput
+  input: CuaExecutionContext
 ) => Promise<ComputerUseDriver>
+
+export enum ComputerUseTextInputMode {
+  Insert = 'insert',
+  Replace = 'replace'
+}
 
 export enum ComputerUseInteractionMode {
   Background = 'background',
@@ -33,19 +45,19 @@ export enum ComputerUseSetOfMarkMode {
 }
 
 export type ComputerUseInteractionModeResolver = (
-  input: ToolProviderExecutionInput
+  input: CuaExecutionContext
 ) => ComputerUseInteractionMode
 
 export type ComputerUseActivityOverlayResolver = (
-  input: ToolProviderExecutionInput
+  input: CuaExecutionContext
 ) => boolean
 
 export type ComputerUseSetOfMarkModeResolver = (
-  input: ToolProviderExecutionInput
+  input: CuaExecutionContext
 ) => ComputerUseSetOfMarkMode
 
 export type PreferredApplicationsResolver = (
-  input: ToolProviderExecutionInput
+  input: CuaExecutionContext
 ) => Record<string, string>
 
 export interface ManagedComputerUseRuntime {
@@ -56,7 +68,9 @@ export interface ManagedComputerUseRuntime {
   zoomCapableActions: Set<string>
   initializedSessions: Set<string>
   activityOverlaySessions: Set<string>
-  /** Only the conversation that started recording receives automatic evidence captures. */
+  /**
+   * Only the conversation that started recording receives automatic evidence captures.
+   */
   recordingSessionId?: string | null
 }
 
@@ -68,13 +82,15 @@ export interface ComputerUseImageDimensions {
 export interface ComputerUseImageTransform {
   source: ComputerUseImageDimensions
   model: ComputerUseImageDimensions
-  /** Cua owns padded crop offsets; supported input must use its zoom mapping. */
+  /**
+   * Cua owns padded crop offsets; supported input must use its zoom mapping.
+   */
   fromZoom?: boolean
 }
 
 export interface PersistedComputerUseImages {
   artifacts: Array<Record<string, unknown>>
-  modelFiles: ToolProviderModelFile[]
+  modelFiles: ToolModelFile[]
   transform: ComputerUseImageTransform | null
   setOfMark: ComputerUseSetOfMarkAnnotation[]
   visualStateId: string | null
@@ -88,7 +104,7 @@ export interface ComputerUseSetOfMarkAnnotation {
 export interface CapturedComputerUseState {
   result: Record<string, unknown>
   artifacts: Array<Record<string, unknown>>
-  modelFiles: ToolProviderModelFile[]
+  modelFiles: ToolModelFile[]
   visualStateId: string | null
 }
 

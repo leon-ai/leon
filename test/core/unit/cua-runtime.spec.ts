@@ -1,3 +1,4 @@
+import { pathToFileURL } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -5,15 +6,15 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   COMPUTER_USE_ACTION_NAMES,
-  ComputerUseToolProvider,
+  CuaRuntime,
   calculateComputerUseModelImageDimensions,
   mapComputerUsePointToSource,
   shouldUseCuaSafeX11Input
-} from '@/core/computer-use/computer-use-tool-provider'
-import { createComputerUseSetOfMarkPlan } from '@/core/computer-use/computer-use-set-of-mark'
-import { createCuaBrowserAuthorizationHost } from '@/core/computer-use/cua/cua-browser-authorization'
+} from '@@/tools/computer_use/cua/src/nodejs/lib/cua-runtime'
+import { createComputerUseSetOfMarkPlan } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-set-of-mark'
+import { createCuaBrowserAuthorizationHost } from '@@/tools/computer_use/cua/src/nodejs/lib/cua/cua-browser-authorization'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { ComputerUseSetOfMarkMode } from '@/core/computer-use/types'
+import { ComputerUseSetOfMarkMode } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
 
 const PROFILE_NAME = 'computer-use-test'
 const PORTABLE_INPUT_SCHEMA_UNSUPPORTED_KEYWORDS = new Set([
@@ -151,7 +152,7 @@ function findPortableInputSchemaIssues(
   return issues
 }
 
-describe('ComputerUseToolProvider', () => {
+describe('CuaRuntime', () => {
   it('adds SOM labels automatically only for ambiguous actionable controls', () => {
     const result = {
       window_bounds: { x: 100, y: 200, width: 800, height: 600 },
@@ -259,7 +260,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
     const result = await provider.execute({
@@ -281,7 +282,7 @@ describe('ComputerUseToolProvider', () => {
     }
   })
 
-  it('focuses a pixel-targeted field before typing into it', async () => {
+  it.each(['insert', 'replace'])('focuses once before typing with mode=%s', async (mode) => {
     const observationResult = {
       text: 'Desktop captured.',
       images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
@@ -304,7 +305,7 @@ describe('ComputerUseToolProvider', () => {
         ? observationResult
         : actionResult)
     )
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
     const observation = await provider.execute({
@@ -325,6 +326,7 @@ describe('ComputerUseToolProvider', () => {
         x: 0,
         y: 0,
         text: 'OpenRouter',
+        mode,
         capture_after: false
       },
       profileName: PROFILE_NAME,
@@ -334,6 +336,7 @@ describe('ComputerUseToolProvider', () => {
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
       'get_desktop_state',
       'click',
+      ...(mode === 'replace' ? ['hotkey'] : []),
       'type_text'
     ])
     expect(JSON.parse(driver.callTool.mock.calls[1]![1])).toEqual({
@@ -341,10 +344,17 @@ describe('ComputerUseToolProvider', () => {
       x: 0,
       y: 0
     })
-    expect(JSON.parse(driver.callTool.mock.calls[2]![1])).toEqual({
+    expect(JSON.parse(driver.callTool.mock.calls.at(-1)![1])).toEqual({
       target: { kind: 'desktop', display_id: 'primary' },
       text: 'OpenRouter'
     })
+
+    if (mode === 'replace') {
+      expect(JSON.parse(driver.callTool.mock.calls[2]![1])).toEqual({
+        target: { kind: 'desktop', display_id: 'primary' },
+        keys: [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'a']
+      })
+    }
 
     const artifacts = observation.output['artifacts'] as Array<{ path: string }>
     await Promise.all(
@@ -375,7 +385,7 @@ describe('ComputerUseToolProvider', () => {
         )
       )
     vi.stubGlobal('fetch', fetchMock)
-    const provider = new ComputerUseToolProvider()
+    const provider = new CuaRuntime()
 
     try {
       const result = await provider.execute({
@@ -440,7 +450,7 @@ describe('ComputerUseToolProvider', () => {
       )
     )
     vi.stubGlobal('fetch', fetchMock)
-    const provider = new ComputerUseToolProvider()
+    const provider = new CuaRuntime()
 
     try {
       const result = await provider.execute({
@@ -487,7 +497,7 @@ describe('ComputerUseToolProvider', () => {
     }
   })
 
-  it('keeps the manifest action inventory aligned with the provider', () => {
+  it('keeps the manifest action inventory aligned with the tool runtime', () => {
     const manifest = readComputerUseManifest()
 
     expect(Object.keys(manifest.functions)).toEqual(COMPUTER_USE_ACTION_NAMES)
@@ -525,7 +535,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
     const input = {
@@ -567,7 +577,7 @@ describe('ComputerUseToolProvider', () => {
     'rejects %s outside the curated surface before calling Cua',
     async (functionName) => {
     const driver = createDriver({})
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -609,7 +619,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never,
       () => 'background',
       () => ({ music: 'Spotify' })
@@ -669,7 +679,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -725,7 +735,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -759,7 +769,7 @@ describe('ComputerUseToolProvider', () => {
           } }
         : { pid: 42, window_id: 7, elements: [] })
     }))
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const input = {
       toolkitId: 'computer_use', toolId: 'cua', profileName: PROFILE_NAME,
       parameters: { pid: 42, window_id: 7, include_screenshot: false }
@@ -801,7 +811,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -833,7 +843,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -887,7 +897,7 @@ describe('ComputerUseToolProvider', () => {
       if (action === 'click') throw new Error('Native input failed')
       return { images: [], text: '', isError: false, structuredJson: '{}' }
     })
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const input = {
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'click',
       parameters: { pid: 42, window_id: 7, element_token: 'button' },
@@ -906,7 +916,7 @@ describe('ComputerUseToolProvider', () => {
     const driver = createDriver({ images: [], text: '', isError: false, structuredJson: '{}' })
     driver.setAgentCursorEnabled.mockResolvedValueOnce({ images: [], text: '', isError: false })
       .mockRejectedValueOnce(new Error('Overlay unavailable'))
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'get_window_state',
       parameters: { pid: 42, window_id: 7 }, profileName: PROFILE_NAME, conversationSessionId: 'cleanup-retry'
@@ -949,7 +959,7 @@ describe('ComputerUseToolProvider', () => {
       }
       return Promise.resolve(successfulResult)
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -978,7 +988,7 @@ describe('ComputerUseToolProvider', () => {
       ...success,
       structuredJson: JSON.stringify({ status: 'refused', refusal: { code: 'session_ended' } })
     })
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
       parameters: { pid: 42 }, profileName: PROFILE_NAME,
@@ -1000,7 +1010,7 @@ describe('ComputerUseToolProvider', () => {
       isError: action !== 'start_session',
       ...(action !== 'start_session' ? { errorCode: 'session_ended' } : {})
     }))
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
       parameters: {}, profileName: PROFILE_NAME
@@ -1018,7 +1028,7 @@ describe('ComputerUseToolProvider', () => {
         images: [], text: '', isError: true, errorCode: code,
         structuredJson: JSON.stringify({ status: 'refused', refusal: { code } })
       })
-      const provider = new ComputerUseToolProvider(async () => driver as never)
+      const provider = new CuaRuntime(async () => driver as never)
       const result = await provider.execute({
         toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
         parameters: {}, profileName: PROFILE_NAME
@@ -1040,7 +1050,7 @@ describe('ComputerUseToolProvider', () => {
         code: action === 'start_session' ? 'permission_denied' : 'session_ended'
       } })
     }))
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
       parameters: {}, profileName: PROFILE_NAME
@@ -1069,7 +1079,7 @@ describe('ComputerUseToolProvider', () => {
         name, inputSchema: { properties: { session: { type: 'string' } } }
       }))
     }))
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -1121,9 +1131,90 @@ describe('ComputerUseToolProvider', () => {
     })
   })
 
+  it('settles between batch actions without an intermediate capture', async () => {
+    const successfulResult = {
+      text: 'Done.',
+      images: [],
+      structuredJson: '{"effect":"confirmed"}',
+      rawJson: '{}',
+      isError: false,
+      degraded: false
+    }
+    const driver = createDriver(successfulResult)
+    driver.callTool.mockImplementation(async (action: string) => ({
+      ...successfulResult,
+      images: action === 'get_window_state'
+        ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] : []
+    }))
+    const runtime = new CuaRuntime(async () => driver as never)
+
+    const result = await runtime.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'perform_actions',
+      parameters: {
+        steps: [
+          {
+            action: 'press_key',
+            parameters: {
+              pid: 42,
+              window_id: 7,
+              key: 'down',
+              settle_ms: 1
+            }
+          },
+          {
+            action: 'press_key',
+            parameters: { pid: 42, window_id: 7, key: 'return' }
+          }
+        ]
+      },
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'settled-sequence'
+    })
+
+    expect(result.success).toBe(true)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'press_key',
+      'press_key',
+      'get_window_state'
+    ])
+    expect(JSON.parse(driver.callTool.mock.calls[0]![1])).not.toHaveProperty(
+      'settle_ms'
+    )
+  })
+
+  it.each([false, true])('reuses field focus only until a focus-changing key (tab=%s)', async (tab) => {
+    const observed = { text: '', images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
+      structuredJson: '{"screenshot_width":1,"screenshot_height":1}', rawJson: '{}', isError: false, degraded: false }
+    const driver = createDriver({ text: '', images: [], structuredJson: '{"effect":"confirmed"}', isError: false })
+    driver.callTool.mockImplementation(async (name) => name === 'get_desktop_state' ? observed :
+      { text: '', images: [], structuredJson: '{"effect":"confirmed"}', isError: false })
+    const runtime = new CuaRuntime(async () => driver as never)
+    const context = { toolkitId: 'computer_use', toolId: 'cua', profileName: PROFILE_NAME,
+      conversationSessionId: 'single-field' }
+    const observation = await runtime.execute({ ...context, functionName: 'get_desktop_state', parameters: {} })
+    driver.callTool.mockClear()
+    const target = { kind: 'desktop', display_id: 'primary' }
+    const result = await runtime.execute({ ...context, functionName: 'perform_actions', parameters: { steps: [
+      { action: 'click', parameters: { target, x: 0, y: 0 } },
+      tab ? { action: 'press_key', parameters: { target, key: 'tab' } } :
+        { action: 'hotkey', parameters: { target, keys: [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'a'] } },
+      { action: 'type_text', parameters: { target, x: 0, y: 0, text: '86.94' } }
+    ] } })
+    expect(result.success).toBe(!tab)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual(tab ? [] :
+      ['start_session', 'click', 'hotkey', 'type_text', 'get_desktop_state'])
+    if (!tab) expect(JSON.parse(driver.callTool.mock.calls[3]![1])).toEqual({ target, text: '86.94' })
+    for (const artifact of [...observation.output['artifacts'] as Array<{ path: string }>,
+      ...(result.output['artifacts'] as Array<{ path: string }> || [])]) {
+      await fs.promises.rm(artifact.path, { force: true })
+    }
+  })
+
   it.each(['click', 'type_text'])('requires a fresh observation between pixel-targeted %s actions', async (action) => {
     const driver = createDriver({})
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -1150,7 +1241,7 @@ describe('ComputerUseToolProvider', () => {
 
   it('rejects an unsupported later batch action before delivering any input', async () => {
     const driver = createDriver({})
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
@@ -1166,7 +1257,7 @@ describe('ComputerUseToolProvider', () => {
   it('preserves batch refusal diagnostics and stops before the next input', async () => {
     const driver = createDriver({ images: [], text: '', isError: false,
       structuredJson: JSON.stringify({ status: 'refused', refusal: { code: 'browser_consent_required' } }) })
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
@@ -1189,7 +1280,7 @@ describe('ComputerUseToolProvider', () => {
         ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] : [],
       text: '', isError: false, structuredJson: JSON.stringify({ effect: 'unverifiable' })
     }))
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
@@ -1247,7 +1338,7 @@ describe('ComputerUseToolProvider', () => {
         degraded: false
       })
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -1312,7 +1403,7 @@ describe('ComputerUseToolProvider', () => {
         degraded: false
       })
     )
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -1397,7 +1488,7 @@ describe('ComputerUseToolProvider', () => {
         degraded: false
       })
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -1437,7 +1528,7 @@ describe('ComputerUseToolProvider', () => {
       isError: false,
       degraded: false
     })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never,
       () => 'visible',
       () => ({}),
@@ -1509,7 +1600,7 @@ describe('ComputerUseToolProvider', () => {
         isError: false,
         degraded: false
       })
-    const provider = new ComputerUseToolProvider(
+    const provider = new CuaRuntime(
       async () => driver as never
     )
 
@@ -1543,7 +1634,9 @@ describe('ComputerUseToolProvider', () => {
 
 describe('browser inspection authorization', () => {
   it('allows only the attested existing-profile boundary under an explicit owner grant', async () => {
-    const { DriverAuthorizationAction } = await import('@trycua/cua-driver')
+    const packageDirectory = path.resolve('tools/computer_use/cua/src/nodejs/node_modules/@trycua/cua-driver')
+    const packageDefinition = JSON.parse(await fs.promises.readFile(path.join(packageDirectory, 'package.json'), 'utf8'))
+    const { DriverAuthorizationAction } = await import(pathToFileURL(path.join(packageDirectory, packageDefinition.exports['.'].import)).href)
     let allowed = false
     const host = await createCuaBrowserAuthorizationHost(() => allowed)
     const request = {
@@ -1576,7 +1669,7 @@ describe('browser inspection authorization', () => {
     }), isError: true }
     const observed = { images: [], text: '', structuredJson: JSON.stringify({ refs: [], content_refs: [] }), isError: false }
     driver.callTool.mockResolvedValueOnce(refused).mockResolvedValueOnce(observed).mockResolvedValueOnce(observed)
-    const provider = new ComputerUseToolProvider(async () => driver as never)
+    const provider = new CuaRuntime(async () => driver as never)
     try {
       await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true })
       await fs.promises.writeFile(settingsPath, JSON.stringify({ browser_inspection: { allow_existing_profile: true } }))
@@ -1606,7 +1699,7 @@ describe('browser inspection authorization', () => {
     const settingsPath = path.join(getProfilePaths('browser-permission-test').tools, 'computer_use', 'cua', 'settings.json')
     const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
     const factory = vi.fn(async () => driver as never)
-    const provider = new ComputerUseToolProvider(factory)
+    const provider = new CuaRuntime(factory)
     const input = {
       toolkitId: 'computer_use', toolId: 'cua', profileName: 'browser-permission-test',
       functionName: 'list_windows', parameters: {}, conversationSessionId: null

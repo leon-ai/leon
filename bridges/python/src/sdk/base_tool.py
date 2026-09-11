@@ -1,10 +1,12 @@
 import os
+import base64
 import re
 import shlex
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Optional, Union, List, Any, cast
 from pypdl import Pypdl
 from urllib.parse import urlparse
+from .tool_runtime_types import ToolExecutionContext, ToolModelFile
 from .toolkit_config import ToolkitConfig
 from .leon import leon
 from .utils import (
@@ -73,10 +75,34 @@ class BaseTool(ABC):
 
     def __init__(self):
         """Initialize the tool with default settings"""
+        self.execution_context: ToolExecutionContext | None = None
+        self._model_files: list[ToolModelFile] = []
         self.cli_progress = True
         self.settings: Dict[str, Any] = {}
         self.required_settings: List[str] = []
         self.missing_settings: Optional[Dict[str, Any]] = None
+
+    def prepare_execution(self, context: ToolExecutionContext) -> None:
+        """Reset per-call evidence when a host prepares this tool for execution."""
+        self.execution_context = context
+        self._model_files.clear()
+
+    def _attach_model_files(self, files: list[ToolModelFile]) -> None:
+        """Attach already encoded evidence without an extra filesystem roundtrip."""
+        self._model_files.extend(files)
+
+    def _attach_model_file(self, file_path: str, media_type: str) -> None:
+        """Attach a file without embedding its bytes in ordinary observations."""
+        with open(file_path, "rb") as evidence:
+            self._model_files.append({
+                "dataBase64": base64.b64encode(evidence.read()).decode("ascii"),
+                "mediaType": media_type,
+                "filename": os.path.basename(file_path),
+            })
+
+    def get_model_files(self) -> list[ToolModelFile]:
+        """Read attachments after a standard tool method has completed."""
+        return self._model_files
 
     @property
     @abstractmethod

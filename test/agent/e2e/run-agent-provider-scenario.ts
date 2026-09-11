@@ -168,7 +168,9 @@ async function prepareTestProfilePath(
   )
 }
 
-/** Seeds an isolated profile from the active profile configuration. */
+/**
+ * Seeds an isolated profile from the active profile configuration.
+ */
 async function prepareTestProfileConfig(
   sourceConfigPath: string,
   targetConfigPath: string,
@@ -325,13 +327,13 @@ async function main(): Promise<void> {
   const {
     ReActLLMDuty
   } = await import('../../../server/src/core/llm-manager/llm-duties/react-llm-duty')
-  const { CONVERSATION_LOGGER, TOOL_EXECUTOR, LLM_PROVIDER, TOOL_PROVIDER_REGISTRY } = await import(
+  const { CONVERSATION_LOGGER, TOOL_EXECUTOR, LLM_PROVIDER, TOOL_WORKER_MANAGER } = await import(
     '../../../server/src/core/index'
   )
   // These subprocesses bypass the server's signal handlers. Dispose native
   // providers before exiting so an interrupted GUI test cannot orphan overlays.
   const stop = (): void => {
-    void TOOL_PROVIDER_REGISTRY.dispose().finally(() => process.exit(130))
+    void TOOL_WORKER_MANAGER.dispose().finally(() => process.exit(130))
   }
   process.once('SIGINT', stop)
   process.once('SIGTERM', stop)
@@ -509,7 +511,7 @@ async function main(): Promise<void> {
       }
     })
   } finally {
-    await TOOL_PROVIDER_REGISTRY.dispose()
+    await TOOL_WORKER_MANAGER.dispose()
     process.removeListener('SIGINT', stop)
     process.removeListener('SIGTERM', stop)
     TOOL_EXECUTOR.executeTool = originalExecuteTool

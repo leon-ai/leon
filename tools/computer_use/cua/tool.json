@@ -4,15 +4,12 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate graphical desktop applications and browser interfaces through Cua Driver.",
-  "progressive_guidance": "For browser work, prefer get_browser_state and browser_* actions. Bind to an observed browser pid/window_id; when setup is required, use browser_prepare with strategy.kind=existing_profile (the host enforces owner permission), then inspect again. Reuse the returned target_id/tab_id and current page refs. First obtain enough page structure to understand the task and relevant collection; then use query/scope_ref to narrow subsequent reads. Query matches and truncated snapshots do not prove enumeration is complete: follow pagination, continuation or scroll to the requested boundary. Use screenshots/native accessibility when direct inspection is unsupported, denied or cannot expose the needed control. Do not repeat a failed setup without changed evidence.\nReuse valid target identifiers. Prefer observed native menu paths and current semantic handles; otherwise use screenshot pixels. For an unfamiliar editor, inspect its instructions or help before trying shortcuts or gestures. If accessibility exposes only the outer frame, use the screenshot and retry the tree at most once for a specifically missing control.\nForeground input and menus activate their target and restore focus; bring_to_front is needed only for persistent focus or an exposed desktop target. Background input does not raise windows: X11 uses XTEST/XInput2 without focus stealing; Wayland uses libei/portal compositor focus and cannot address a specific unfocused window. Remember background_unavailable per target; escalate to foreground only when necessary and permitted.\nPrefer perform_actions for predictable steps such as focusing a known field, typing and pressing Enter, with no intermediate visual decision, with at most one pixel-targeted click (including the focus click for type_text with x/y). For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For an action expected to open a page or dialog, set settle_ms to wait briefly after delivery before capture (on the final step for a batch). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.",
+  "progressive_guidance": "For browser work, prefer the browser_use toolkit. When it is unavailable or cannot expose the needed interface, use get_browser_state and browser_* actions. Bind to an observed browser pid/window_id; when setup is required, use browser_prepare with strategy.kind=existing_profile (the host enforces owner permission), then inspect again. Reuse the returned target_id/tab_id and current page refs. First obtain enough page structure to understand the task and relevant collection; then use query/scope_ref to narrow subsequent reads. Query matches and truncated snapshots do not prove enumeration is complete: follow pagination, continuation or scroll to the requested boundary. Use screenshots/native accessibility when direct inspection is unsupported, denied or cannot expose the needed control. Do not repeat a failed setup without changed evidence.\nReuse valid target identifiers. Prefer observed native menu paths and current semantic handles; otherwise use screenshot pixels. For an unfamiliar editor, inspect its instructions or help before trying shortcuts or gestures. If accessibility exposes only the outer frame, use the screenshot and retry the tree at most once for a specifically missing control.\nForeground input and menus activate their target and restore focus; bring_to_front is needed only for persistent focus or an exposed desktop target. Background input does not raise windows: X11 uses XTEST/XInput2 without focus stealing; Wayland uses libei/portal compositor focus and cannot address a specific unfocused window. Remember background_unavailable per target; escalate to foreground only when necessary and permitted.\nPrefer perform_actions for predictable steps such as focusing a known field, typing and pressing Enter, with no intermediate visual decision, with at most one pixel-targeted click. Within one field, perform_actions can combine click, select-all and type_text; repeated typing coordinates for the same field reuse its focus. For replacing a field, prefer type_text with mode=replace to focus once, select all and type, then inspect the final observation. Do not batch different spatial fields. For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For an action expected to open a page or dialog, set settle_ms to wait briefly after delivery before capture (on the final step for a batch). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
     "url": "https://x.com/grenlouis"
-  },
-  "execution": {
-    "provider": "computer_use"
   },
   "functions": {
     "list_apps": {
@@ -1615,7 +1612,7 @@
       }
     },
     "type_text": {
-      "description": "Type text into a target window or UI element.",
+      "description": "Type into a field; use mode=replace to focus once, select all and replace its value. Inspect the returned observation to verify the result.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -1689,7 +1686,7 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X of the field to type into \u2014 the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click.",
+            "description": "Screenshot-pixel X of the field to type into \u2014 the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click. For replacement use mode=replace. After a separate focus/select-all sequence, omit x/y to preserve selection.",
             "type": "number"
           },
           "y": {
@@ -1701,6 +1698,15 @@
             "minimum": 0,
             "maximum": 2000,
             "description": "Optional wait after input and before the post-action capture, in milliseconds. Use for expected navigation or delayed dialogs. Requires capture_after=true; input is delivered only once."
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "insert",
+              "replace"
+            ],
+            "default": "insert",
+            "description": "insert types at the caret. replace selects all in the established field before typing; x/y or a current element handle focuses it once. Without a field selector, uses the already focused field."
           }
         },
         "required": [
@@ -2332,7 +2338,7 @@
       }
     },
     "perform_actions": {
-      "description": "Perform up to eight grounded input actions in order and stop on the first failure. Use it for a predictable sequence with no intermediate visual decision; observe between spatial targets.",
+      "description": "Perform up to eight grounded input actions in order and stop on the first failure. Use it for a predictable sequence with no intermediate visual decision; observe between spatial targets. An intermediate step's settle_ms waits before the next input without capturing; a final settle_ms waits before the batch's final capture.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -3559,5 +3565,11 @@
         "additionalProperties": true
       }
     }
+  },
+  "resources": {
+    "gnome_wayland": [
+      "https://raw.githubusercontent.com/trycua/cua/1b50c02e2d34734f64d2d22f54eb76cc97b4a663/libs/cua-driver/wayland-helper/winrects@cua/metadata.json",
+      "https://raw.githubusercontent.com/trycua/cua/1b50c02e2d34734f64d2d22f54eb76cc97b4a663/libs/cua-driver/wayland-helper/winrects@cua/extension.js"
+    ]
   }
 }

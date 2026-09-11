@@ -39,6 +39,7 @@ const TITLE_REASONING_MODE_OFF_PROVIDERS = [
   LLMProviders.OpenAI,
   LLMProviders.OpenRouter,
   LLMProviders.ZAI,
+  LLMProviders.DeepSeek,
   LLMProviders.MiniMax,
   LLMProviders.Anthropic,
   LLMProviders.MoonshotAI,
@@ -649,7 +650,9 @@ function getConversationSessionManager(): ConversationSessionManager {
   return manager
 }
 
-/** Keep the existing API while routing state to the active profile runtime. */
+/**
+ * Keep the existing API while routing state to the active profile runtime.
+ */
 export const CONVERSATION_SESSION_MANAGER = new Proxy(
   {} as ConversationSessionManager,
   {

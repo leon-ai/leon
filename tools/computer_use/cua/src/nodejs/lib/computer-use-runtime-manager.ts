@@ -1,15 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
-import fs from 'node:fs'
-import path from 'node:path'
-
-import { LogHelper } from '@/helpers/log-helper'
-
-import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
-
-import { resolveComputerUseBrowserInspection } from './computer-use-settings'
-import { ComputerUseArtifactStore } from './computer-use-artifact-store'
-import { COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_FOREGROUND_DELIVERY_MODE } from './constants'
-import {
+import { type CuaExecutionContext as ToolExecutionContext,
   ComputerUseInteractionMode,
   type ComputerUseActivityOverlayResolver,
   type ComputerUseDriver,
@@ -17,9 +6,20 @@ import {
   type ComputerUseInteractionModeResolver,
   type ManagedComputerUseRuntime
 } from './types'
+import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+
+import { LogHelper } from '@/helpers/log-helper'
+
+import { resolveComputerUseBrowserInspection } from './computer-use-settings'
+import { ComputerUseArtifactStore } from './computer-use-artifact-store'
+import { COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_FOREGROUND_DELIVERY_MODE } from './constants'
 import { asRecord, hasCuaError } from './utils'
 
-/** Owns persistent driver instances and host-managed runtime parameters. */
+/**
+ * Owns persistent driver instances and host-managed runtime parameters.
+ */
 export class ComputerUseRuntimeManager {
   private readonly runtimes = new Map<
     string,
@@ -34,7 +34,7 @@ export class ComputerUseRuntimeManager {
   ) {}
 
   public async get(
-    input: ToolProviderExecutionInput
+    input: ToolExecutionContext
   ): Promise<ManagedComputerUseRuntime> {
     const { profileName } = input
     const browserInspectionAllowed = resolveComputerUseBrowserInspection(input)
@@ -98,7 +98,9 @@ export class ComputerUseRuntimeManager {
     )
   }
 
-  /** Hides activity after a serialized call without ending reusable Cua sessions. */
+  /**
+   * Hides activity after a serialized call without ending reusable Cua sessions.
+   */
   public async finishExecution(profileName: string): Promise<void> {
     const pending = this.runtimes.get(profileName)
     if (!pending) return
@@ -123,10 +125,12 @@ export class ComputerUseRuntimeManager {
     }
   }
 
-  /** Reapplies owner visibility after Cua revives an expired session. */
+  /**
+   * Reapplies owner visibility after Cua revives an expired session.
+   */
   public async restoreActivityOverlay(
     driver: ComputerUseDriver,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     session: string,
     action: string
   ): Promise<void> {
@@ -140,7 +144,7 @@ export class ComputerUseRuntimeManager {
 
   public async prepareParameters(
     runtime: ManagedComputerUseRuntime,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
@@ -289,7 +293,7 @@ export class ComputerUseRuntimeManager {
 
   private async configureActivityOverlay(
     runtime: ManagedComputerUseRuntime,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     session: string,
     action: string
   ): Promise<void> {
@@ -312,7 +316,7 @@ export class ComputerUseRuntimeManager {
 
   private async setActivityOverlay(
     driver: ComputerUseDriver,
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     session: string,
     action: string
   ): Promise<void> {

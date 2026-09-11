@@ -118,16 +118,7 @@ export const COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS = new Set<string>([
 // These native actions accept Cua's crop coordinates. Keep this host-only.
 export const COMPUTER_USE_REMOTE_ZOOM_CAPABLE_ACTIONS = new Set(['click', 'drag'])
 
-export const COMPUTER_USE_CAPTURE_ACTIONS = new Set([
-  'move_cursor',
-  'invoke_menu',
-  'click',
-  'drag',
-  'scroll',
-  'type_text',
-  'press_key',
-  'hotkey'
-])
+export { COMPUTER_USE_CAPTURE_ACTIONS } from './action-contract'
 
 // Sequences are intentionally limited to mechanical input whose next target
 // does not need a fresh observation. Semantic browser actions can invalidate
@@ -159,3 +150,6 @@ export const IMAGE_EXTENSION_BY_MIME_TYPE: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp'
 }
+
+// The tool executes on the controlling device, including through Satellite.
+export const COMPUTER_USE_SELECT_ALL_KEYS = [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'a']

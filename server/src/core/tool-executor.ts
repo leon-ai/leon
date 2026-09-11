@@ -1,26 +1,19 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { spawn } from 'node:child_process'
 
 import jq from 'node-jq'
 import type { Json as NodeJQJson } from 'node-jq/lib/options'
 
 import { LogHelper } from '@/helpers/log-helper'
 import {
-  CODEBASE_PATH,
-  GLOBAL_DATA_PATH,
-  NODE_RUNTIME_BIN_PATH,
-  NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
-  NODEJS_BRIDGE_ROOT_PATH,
-  TSX_CLI_PATH
+  GLOBAL_DATA_PATH
 } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
-import { RuntimeHelper } from '@/helpers/runtime-helper'
 import {
   TOOLKIT_REGISTRY,
   TOOL_CALL_LOGGER,
-  TOOL_PROVIDER_REGISTRY
+  TOOL_WORKER_MANAGER
 } from '@/core'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import { StringHelper } from '@/helpers/string-helper'
@@ -30,9 +23,9 @@ import { getActiveConversationSessionId } from '@/core/session-manager/session-c
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import type { LongLanguageCode } from '@/types'
 import type {
-  ToolProviderExecutionResult,
-  ToolProviderModelFile
-} from '@/core/tool-provider/types'
+  ToolModelFile,
+  ToolRuntimeProgress
+} from '@sdk/tool-runtime-types'
 
 const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
 const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
@@ -47,6 +40,7 @@ export interface ToolExecutionInput {
   toolInput?: string
   parsedInput?: Record<string, unknown>
   executionTarget?: 'any' | 'satellite'
+  signal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
 }
 
@@ -61,17 +55,12 @@ export interface ToolExecutionResult {
     parsed_input: Record<string, unknown> | null
     output_log_path?: string | null
     output: Record<string, unknown>
-    model_files?: ToolProviderModelFile[]
+    model_files?: ToolModelFile[]
   }
   toolLabel?: string | undefined
 }
 
-export interface ToolRuntimeProgress {
-  source: 'log' | 'report'
-  message: string
-  key?: string
-  data?: Record<string, unknown>
-}
+export type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
 
 export default class ToolExecutor {
   private readonly globalAnswersCache = new Map<
@@ -370,26 +359,9 @@ export default class ToolExecutor {
       unknown
     >
     const responseJQ = this.getResponseJQ(functionConfig)
-    const executionProvider = TOOLKIT_REGISTRY.getToolExecutionProvider(
-      resolvedTool.toolkitId,
-      resolvedTool.toolId
-    )
-
     let argsArray: unknown[] = []
     try {
-      if (executionProvider) {
-        // Providers consume the named JSON object directly, so positional bridge
-        // ordering must not reject otherwise valid provider parameters.
-        this.validateRequiredParameters(
-          normalizedParsedInput,
-          functionConfig.parameters
-        )
-      } else {
-        argsArray = this.mapArgs(
-          normalizedParsedInput,
-          functionConfig.parameters
-        )
-      }
+      argsArray = this.mapArgs(normalizedParsedInput, functionConfig.parameters)
     } catch (error) {
       return this.buildResult({
         status: 'invalid_input',
@@ -401,23 +373,15 @@ export default class ToolExecutor {
         output: {}
       })
     }
-    const runtimeResult = executionProvider
-      ? await TOOL_PROVIDER_REGISTRY.execute(executionProvider, {
-          toolkitId: resolvedTool.toolkitId,
-          toolId: resolvedTool.toolId,
-          functionName,
-          parameters: normalizedParsedInput,
-          profileName: getActiveProfileName(),
-          conversationSessionId: getActiveConversationSessionId(),
-          ...(input.onProgress ? { onProgress: input.onProgress } : {})
-        })
-      : await this.runToolRuntime({
-          toolkitId: resolvedTool.toolkitId,
-          toolId: resolvedTool.toolId,
-          functionName,
-          args: argsArray,
-          ...(input.onProgress ? { onProgress: input.onProgress } : {})
-        })
+    const runtimeResult = await TOOL_WORKER_MANAGER.execute({
+      toolkitId: resolvedTool.toolkitId, toolId: resolvedTool.toolId, functionName,
+      parameters: normalizedParsedInput, profileName: getActiveProfileName(),
+      conversationSessionId: getActiveConversationSessionId(),
+      ...(input.signal ? { signal: input.signal } : {})
+    }, argsArray, (line) => {
+      this.emitToolRuntimeProgress(line, input.onProgress)
+      this.logMemoryToolRuntimeMessages(resolvedTool.toolkitId, resolvedTool.toolId, line)
+    })
     let runtimeOutput = this.normalizeFilesystemValues(
       runtimeResult.output
     ) as Record<string, unknown>
@@ -471,7 +435,7 @@ export default class ToolExecutor {
     functionName?: string | null
     parsedInput?: Record<string, unknown> | null
     output?: Record<string, unknown>
-    modelFiles?: ToolProviderModelFile[]
+    modelFiles?: ToolModelFile[]
   }): Promise<ToolExecutionResult> {
     const result: ToolExecutionResult = {
       status: params.status,
@@ -826,28 +790,8 @@ export default class ToolExecutor {
       return Object.values(argsObject)
     }
 
-    const requiredList = Array.isArray(parameters?.['required'])
-      ? (parameters?.['required'] as string[])
-      : []
     const orderedKeys = Object.keys(properties)
     this.validateRequiredParameters(argsObject, parameters)
-
-    if (requiredList.length > 0) {
-      const lastRequiredIndex = Math.max(
-        ...requiredList.map((key) => orderedKeys.indexOf(key))
-      )
-      const optionalBeforeRequired = orderedKeys
-        .slice(0, lastRequiredIndex)
-        .filter((key) => !requiredList.includes(key))
-
-      if (optionalBeforeRequired.length > 0) {
-        throw new Error(
-          `Optional parameters must be trailing: ${optionalBeforeRequired.join(
-            ', '
-          )}`
-        )
-      }
-    }
 
     const orderedArgs = orderedKeys.map((key) => argsObject[key])
     while (orderedArgs.length > 0) {
@@ -878,139 +822,4 @@ export default class ToolExecutor {
     }
   }
 
-  private async runToolRuntime(params: {
-    toolkitId: string
-    toolId: string
-    functionName: string
-    args: unknown[]
-    onProgress?: (progress: ToolRuntimeProgress) => void
-  }): Promise<ToolProviderExecutionResult> {
-    const nodeArgs = [
-      TSX_CLI_PATH,
-      '--tsconfig',
-      path.join(NODEJS_BRIDGE_ROOT_PATH, 'tsconfig.json'),
-      NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH
-    ]
-
-    const cliArgs = [
-      ...nodeArgs,
-      '--runtime',
-      'tool',
-      '--toolkit',
-      params.toolkitId,
-      '--tool',
-      params.toolId,
-      '--function',
-      params.functionName,
-      '--args',
-      JSON.stringify(params.args)
-    ]
-
-    return new Promise((resolve) => {
-      let stdout = ''
-      let runtimeStderr = ''
-      let stderrLineBuffer = ''
-
-      const processRuntimeStderrChunk = (chunk: string): void => {
-        runtimeStderr += chunk
-        stderrLineBuffer += chunk
-
-        const lines = stderrLineBuffer.split('\n')
-        stderrLineBuffer = lines.pop() || ''
-
-        for (const line of lines) {
-          this.emitToolRuntimeProgress(line, params.onProgress)
-        }
-      }
-
-      const childProcess = spawn(NODE_RUNTIME_BIN_PATH, cliArgs, {
-        cwd: NODEJS_BRIDGE_ROOT_PATH,
-        env: {
-          ...RuntimeHelper.getManagedNodeEnvironment(),
-          LEON_CODEBASE_PATH: CODEBASE_PATH,
-          LEON_PROFILE: getActiveProfileName(),
-          LEON_SESSION_ID: getActiveConversationSessionId() || ''
-        },
-        windowsHide: true
-      })
-
-      childProcess.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString()
-      })
-
-      childProcess.stderr.on('data', (data: Buffer) => {
-        processRuntimeStderrChunk(data.toString())
-      })
-
-      childProcess.on('error', (error: Error) => {
-        resolve({
-          success: false,
-          message: `Tool runtime error: ${error.message}`,
-          output: {
-            runtime_stdout: stdout,
-            runtime_stderr: runtimeStderr
-          }
-        })
-      })
-
-      childProcess.on('close', (exitCode) => {
-        if (stderrLineBuffer.trim()) {
-          this.emitToolRuntimeProgress(stderrLineBuffer, params.onProgress)
-        }
-
-        const output = stdout.trim()
-        this.logMemoryToolRuntimeMessages(
-          params.toolkitId,
-          params.toolId,
-          runtimeStderr
-        )
-
-        if (!output) {
-          resolve({
-            success: false,
-            message: 'Tool runtime returned empty output.',
-            output: {
-              runtime_stdout: stdout,
-              runtime_stderr: runtimeStderr
-            }
-          })
-          return
-        }
-
-        try {
-          const parsed = JSON.parse(output) as {
-            success: boolean
-            message: string
-            output?: Record<string, unknown>
-          }
-          const parsedOutput = parsed.output || {}
-
-          resolve({
-            success: Boolean(parsed.success),
-            message: parsed.message || 'Tool runtime error.',
-            output:
-              exitCode && runtimeStderr
-                ? {
-                    ...parsedOutput,
-                    runtime_stderr: runtimeStderr
-                  }
-                : parsedOutput
-          })
-          return
-        } catch (parseError) {
-          resolve({
-            success: false,
-            message: `Tool runtime returned invalid JSON: ${
-              (parseError as Error).message
-            }`,
-            output: {
-              runtime_stdout: stdout,
-              runtime_stderr: runtimeStderr
-            }
-          })
-          return
-        }
-      })
-    })
-  }
 }

@@ -44,7 +44,9 @@ function getLLMProviderName(): LLMProviders {
   return provider
 }
 
-/** Owns rolling conversation history, compaction state, and maintenance work. */
+/**
+ * Owns rolling conversation history, compaction state, and maintenance work.
+ */
 export class AgentHistoryManager {
   public constructor(
     private readonly name: string,

@@ -25,6 +25,7 @@ export enum LLMProviders {
   Groq = 'groq',
   OpenRouter = 'openrouter',
   ZAI = 'zai',
+  DeepSeek = 'deepseek',
   MiniMax = 'minimax',
   OpenAI = 'openai',
   Anthropic = 'anthropic',
@@ -57,6 +58,7 @@ export type AgentToolTranscriptMessage =
   | {
       role: 'assistant'
       content: string
+      reasoning?: string
       toolCalls?: OpenAIToolCall[]
     }
   | {
@@ -156,9 +158,13 @@ export interface CompletionParams {
    * This is more expressive than the legacy disableThinking boolean.
    */
   reasoningMode?: LLMReasoningMode
-  /** Exact provider-normalized reasoning effort, when the model supports it. */
+  /**
+   * Exact provider-normalized reasoning effort, when the model supports it.
+   */
   reasoningEffort?: LLMReasoningEffort
-  /** Enable reasoning while leaving the effort at the provider's model default. */
+  /**
+   * Enable reasoning while leaving the effort at the provider's model default.
+   */
   reasoningUseDefaultEffort?: boolean
   reasoningSummary?: LLMReasoningSummary | undefined
   textVerbosity?: LLMTextVerbosity | undefined

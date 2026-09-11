@@ -1,9 +1,7 @@
-import {
-  COMPUTER_USE_ACTION_SEQUENCE_NAME,
-  COMPUTER_USE_PROVIDER_ID,
-  COMPUTER_USE_CAPTURE_ACTIONS
-} from '@/core/computer-use/constants'
-import { asRecord, isComputerUseEffectUncertain, parseJsonRecord } from '@/core/computer-use/utils'
+import { COMPUTER_USE_CAPTURE_ACTIONS, isComputerUseEffectUncertain } from '../../../../../../tools/computer_use/cua/src/nodejs/lib/action-contract'
+import { createHash } from 'node:crypto'
+
+import { asRecord, parseJsonRecord } from '../../../../../../tools/computer_use/cua/src/nodejs/lib/utils'
 
 import {
   AGENT_COMPUTER_USE_RECENT_ACTION_LIMIT,
@@ -29,18 +27,76 @@ interface ParsedComputerUseExecution {
   y?: number
 }
 
+const COMPUTER_USE_PROVIDER_ID = 'computer_use'
+
+const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
+
+
+
+const BROWSER_USE_FUNCTION_PREFIX = 'browser_use.playwright.'
+const BROWSER_CLI_FUNCTION_PREFIX = 'browser_use.cli.'
 const TARGET_AND_CAPTURE_FIELDS = new Set([
-  'target', 'pid', 'window_id', 'display_id', 'scope', 'x', 'y', 'capture_after'
+  'target', 'pid', 'window_id', 'display_id', 'scope', 'x', 'y', 'capture_after', 'tab_id'
 ])
 const COMPUTER_USE_RETRY_ACTIONS = new Set(
-  [...COMPUTER_USE_CAPTURE_ACTIONS].filter((action) => action !== 'move_cursor')
+  [...COMPUTER_USE_CAPTURE_ACTIONS, 'browser_act', 'browser_navigate', 'browser_evaluate']
+    .filter((action) => action !== 'move_cursor')
 )
 
-/** Includes mechanical batch actions without inventing intermediate captures. */
+
+function isInterfaceExecution(functionName: string): boolean {
+  return functionName.startsWith(`${COMPUTER_USE_PROVIDER_ID}.`) ||
+    functionName.startsWith(BROWSER_USE_FUNCTION_PREFIX) ||
+    functionName.startsWith(BROWSER_CLI_FUNCTION_PREFIX)
+}
+
+/**
+ * Normalize CLI outcomes into the same browser action contract used by the guard.
+ */
+function cliActionInput(input: Record<string, unknown>): Record<string, unknown> {
+  const target = asRecord(input['target']) ?? { selector: input['target'] }
+  return {
+    tab_id: input['tab_id'], action: input['action'],
+    ref: JSON.stringify(['selector', 'text', 'tag', 'label', 'context'].map((key) => target[key] ?? '')),
+    ...(input['action'] === 'fill' ? {
+      value_hash: input['value_hash'] ?? createHash('sha256').update(String(input['value'] ?? '')).digest('hex')
+    } : {})
+  }
+}
+
+/**
+ * Includes mechanical batch actions without inventing intermediate captures.
+ */
 function parseComputerUseExecutions(
   execution: ExecutionRecord,
   proposed = false
 ): ParsedComputerUseExecution[] {
+  if (execution.function.startsWith(BROWSER_CLI_FUNCTION_PREFIX)) {
+    const input = parseJsonRecord(execution.requestedToolInput)
+    if (proposed && execution.function.endsWith('.act') && input) {
+      return parseComputerUseExecutions({ ...execution, function: `${BROWSER_USE_FUNCTION_PREFIX}act`,
+        requestedToolInput: JSON.stringify(cliActionInput(input)) })
+    }
+    const output = parseJsonRecord(execution.observation)
+    const actions = findNestedRecord(output, (record) => Array.isArray(record['browser_actions']))?.['browser_actions']
+    if (Array.isArray(actions)) {
+      return actions.flatMap((value) => {
+        const action = asRecord(value)
+        if (!action) return []
+        return parseComputerUseExecutions({
+          ...execution, function: `${BROWSER_USE_FUNCTION_PREFIX}act`,
+          status: action['success'] === true ? 'success' : 'error',
+          requestedToolInput: JSON.stringify(cliActionInput(action)),
+          observation: JSON.stringify({ ...action,
+            ...(action['state_id'] ? { post_action_state: { state_id: action['state_id'] } } : {}) })
+        })
+      })
+    }
+    if (execution.function.endsWith('.inspect')) {
+      return parseComputerUseExecutions({ ...execution, function: `${BROWSER_USE_FUNCTION_PREFIX}inspect` })
+    }
+    return []
+  }
   const parsed = parseComputerUseExecution(execution)
   if (!parsed) return []
   if (parsed.action !== COMPUTER_USE_ACTION_SEQUENCE_NAME) return [parsed]
@@ -122,7 +178,7 @@ function parseComputerUseExecution(
   execution: ExecutionRecord
 ): ParsedComputerUseExecution | null {
   if (
-    !execution.function.startsWith(`${COMPUTER_USE_PROVIDER_ID}.`) ||
+    !isInterfaceExecution(execution.function) ||
     !execution.requestedToolInput
   ) {
     return null
@@ -133,6 +189,7 @@ function parseComputerUseExecution(
       string,
       unknown
     >
+    const browserUse = execution.function.startsWith(BROWSER_USE_FUNCTION_PREFIX)
     const target = input['target']
     const targetRecord =
       target && typeof target === 'object' && !Array.isArray(target)
@@ -163,14 +220,14 @@ function parseComputerUseExecution(
     )
     const visualStateId = captureMatchesTarget &&
       (execution.status === 'success' || postActionState)
-      ? findNestedString(postActionState ?? observation, 'visual_state_id')
+      ? findNestedString(postActionState ?? observation, browserUse ? 'state_id' : 'visual_state_id')
       : undefined
     const failureCode = execution.status !== 'success'
       ? findNestedString(observation, 'error_code') || findNestedString(observation, 'code')
       : undefined
 
     return {
-      action: execution.function.split('.').at(-1) || '',
+      action: `${browserUse ? 'browser_' : ''}${execution.function.split('.').at(-1) || ''}`,
       focusRecovered: execution.status === 'success' && execution.function.endsWith('.bring_to_front'),
       backgroundUnavailable: hasNestedRecord(
         observation,
@@ -188,7 +245,7 @@ function parseComputerUseExecution(
           elements.length === 1 &&
           elements[0]?.['role'] === 'frame'
       }),
-      targetKey: `${String(pid)}:${String(windowId)}:${String(displayId)}`,
+      targetKey: browserUse ? `browser:${String(input['tab_id'] ?? '')}` : `${String(pid)}:${String(windowId)}:${String(displayId)}`,
       inputKey: JSON.stringify(Object.entries(input)
         .filter(([key]) => !TARGET_AND_CAPTURE_FIELDS.has(key))
         .sort(([left], [right]) => left.localeCompare(right))),
@@ -205,7 +262,9 @@ function parseComputerUseExecution(
   }
 }
 
-/** Shares action equivalence between the advisory and the enforced retry guard. */
+/**
+ * Shares action equivalence between the advisory and the enforced retry guard.
+ */
 function isEquivalentAction(
   previous: ParsedComputerUseExecution,
   candidate: ParsedComputerUseExecution
@@ -220,7 +279,9 @@ function isEquivalentAction(
     Math.abs(previous.y - candidate.y) <= AGENT_COMPUTER_USE_POINT_PROXIMITY_PX
 }
 
-/** An unchanged refresh is evidence of the same state, not permission to retry. */
+/**
+ * An unchanged refresh is evidence of the same state, not permission to retry.
+ */
 function getUnchangedStateExecutions(
   executions: ParsedComputerUseExecution[],
   targetKey: string
@@ -243,11 +304,13 @@ function getUnchangedStateExecutions(
   return streak
 }
 
-/** Detects visual interaction loops that should converge before the hard limit. */
+/**
+ * Detects visual interaction loops that should converge before the hard limit.
+ */
 export function buildComputerUseConvergenceHint(
   executionHistory: ExecutionRecord[]
 ): string | null {
-  if (!executionHistory.at(-1)?.function.startsWith(`${COMPUTER_USE_PROVIDER_ID}.`)) return null
+  if (!isInterfaceExecution(executionHistory.at(-1)?.function || '')) return null
   const executions = executionHistory
     .flatMap((execution) => parseComputerUseExecutions(execution))
   const current = executions.at(-1)
@@ -315,7 +378,9 @@ Visual interaction may be looping because ${reasons.join(' and ')}. Inspect exis
 </computer_use_convergence>`
 }
 
-/** Blocks equivalent input after repeated refusals or unchanged uncertain results. */
+/**
+ * Blocks equivalent input after repeated refusals or unchanged uncertain results.
+ */
 export function getComputerUseRetryBlocker(
   executionHistory: ExecutionRecord[],
   qualifiedName: string,

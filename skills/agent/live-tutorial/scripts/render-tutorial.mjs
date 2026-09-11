@@ -40,7 +40,9 @@ function wrapCaption(text, columns) {
     lines.push(line.trim())
   return lines
 }
-/** Render captured evidence only, without shell scripts or Python packages. */
+/**
+ * Render captured evidence only, without shell scripts or Python packages.
+ */
 export async function renderTutorial(binary, sessionRoot, outputDir, steps) {
   if (!Array.isArray(steps) || steps.length < 2 || steps.length > 6) {
     throw new Error('A tutorial needs 2–6 verified screenshots and instructions.')

@@ -318,7 +318,9 @@ function expectProviderScenarioResult(
 describe('agent e2e', () => {
   for (const { provider, requiredEnv } of ACTIVE_PROVIDER_MATRIX) {
     for (const scenario of PROVIDER_SCENARIOS) {
-      /** Missing credentials skip each independently reported scenario. */
+      /**
+       * Missing credentials skip each independently reported scenario.
+       */
       it.skipIf(!process.env[requiredEnv])(
         `${scenario.testName} on ${provider}`,
         async () => {

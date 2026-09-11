@@ -63,7 +63,9 @@ function readCookie(cookieHeader: string | undefined, name: string): string {
   return ''
 }
 
-/** Parse the public `profile:secret` credential without touching the filesystem. */
+/**
+ * Parse the public `profile:secret` credential without touching the filesystem.
+ */
 export function parseProfileCredential(
   value: string | null | undefined
 ): ProfileCredential | null {
@@ -88,7 +90,9 @@ export function parseProfileCredential(
   }
 }
 
-/** Read a profile token without loading its other secrets into process.env. */
+/**
+ * Read a profile token without loading its other secrets into process.env.
+ */
 export function readStoredProfileToken(profileName: string): string {
   const dotEnvPath = getProfilePaths(profileName).dotEnv
 
@@ -101,7 +105,9 @@ export function readStoredProfileToken(profileName: string): string {
   return String(values[PROFILE_TOKEN_ENV_NAME] || '').trim()
 }
 
-/** Validate a profile credential and return its profile only when it matches. */
+/**
+ * Validate a profile credential and return its profile only when it matches.
+ */
 export function authenticateProfileCredential(
   value: string | null | undefined
 ): ProfileCredential | null {
@@ -118,7 +124,9 @@ export function authenticateProfileCredential(
     : null
 }
 
-/** Read the profile credential accepted by HTTP and Socket.IO transports. */
+/**
+ * Read the profile credential accepted by HTTP and Socket.IO transports.
+ */
 export function readProfileCredentialFromHeaders(headers: {
   authorization?: string | undefined
   cookie?: string | undefined
@@ -131,7 +139,9 @@ export function readProfileCredentialFromHeaders(headers: {
   )
 }
 
-/** Build the browser cookie shared by same-origin HTTP and Socket.IO requests. */
+/**
+ * Build the browser cookie shared by same-origin HTTP and Socket.IO requests.
+ */
 export function buildProfileAuthCookie(
   credential: string,
   options?: { clear?: boolean, secure?: boolean }

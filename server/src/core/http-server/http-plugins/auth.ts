@@ -5,7 +5,9 @@ import {
 } from '@/core/profile-auth'
 import { enterProfileContext } from '@/core/profile-runtime/profile-context'
 
-/** Checks the supported authentication headers for a dynamically loaded HTTP plugin. */
+/**
+ * Checks the supported authentication headers for a dynamically loaded HTTP plugin.
+ */
 export function isHTTPPluginRequestAuthorized(
   request: HTTPPluginRequest
 ): boolean {
@@ -28,7 +30,9 @@ export function isHTTPPluginRequestAuthorized(
   return true
 }
 
-/** Sends the standard unauthorized response from a dynamically loaded HTTP plugin. */
+/**
+ * Sends the standard unauthorized response from a dynamically loaded HTTP plugin.
+ */
 export function rejectUnauthorizedHTTPPluginRequest(
   reply: HTTPPluginReply
 ): HTTPPluginReply {

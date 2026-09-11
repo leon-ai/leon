@@ -1,4 +1,5 @@
 import os from 'node:os'
+import fs from 'node:fs'
 import path from 'node:path'
 
 /**
@@ -38,3 +39,20 @@ export const LEON_PROFILE_PATH = path.join(
 )
 export const PROFILE_DOT_ENV_PATH = path.join(LEON_PROFILE_PATH, '.env')
 export const PROFILE_CONFIG_PATH = path.join(LEON_PROFILE_PATH, 'config.yml')
+
+/**
+ * Prefer the usual nested layout; single-tool toolkits may keep sources at their root.
+ */
+export function resolveToolDirectory(root: string, toolkitId: string, toolId: string): string {
+  const nested = path.join(root, toolkitId, toolId)
+  if (fs.existsSync(path.join(nested, 'tool.json'))) return nested
+
+  const flat = path.join(root, toolkitId)
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(flat, 'tool.json'), 'utf8'))
+    if (manifest.toolkit_id === toolkitId && manifest.tool_id === toolId) return flat
+  } catch {
+    // Missing or invalid manifests remain the caller's discovery/configuration error.
+  }
+  return nested
+}

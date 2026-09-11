@@ -66,7 +66,8 @@ describe('LLMProvider', () => {
     celerisTarget.provider = LLMProviders.Celeris
   })
 
-  it('normalizes a Celeris OpenAI-compatible completion', async () => {
+  it.each([LLMProviders.Celeris, LLMProviders.DeepSeek])('normalizes a %s OpenAI-compatible completion', async (provider) => {
+    celerisTarget.provider = provider
     const runChatCompletion = vi.fn().mockResolvedValue({
       data: {
         choices: [

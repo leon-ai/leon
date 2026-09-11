@@ -43,7 +43,9 @@ export const DEFAULT_NLU_PROCESS_RESULT: NLUProcessResult = {
 }
 
 export class NLUProcessResultUpdater {
-  /** Resolve skill-local answers for this update without changing the profile language. */
+  /**
+   * Resolve skill-local answers for this update without changing the profile language.
+   */
   public static async update(
     newResult: Partial<NLUProcessResult>,
     skillLocale: string = BRAIN.lang

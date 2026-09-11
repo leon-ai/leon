@@ -24,7 +24,9 @@ function resolveProfileName(profileId?: string): string {
   return profileName
 }
 
-/** Lists conversation sessions inside one trusted profile runtime. */
+/**
+ * Lists conversation sessions inside one trusted profile runtime.
+ */
 export async function listConversationSessions(
   input: HTTPPluginListConversationSessionsInput
 ): Promise<HTTPPluginListConversationSessionsResult> {
@@ -43,7 +45,9 @@ export async function listConversationSessions(
   })
 }
 
-/** Creates and activates an owner-scoped conversation session. */
+/**
+ * Creates and activates an owner-scoped conversation session.
+ */
 export async function createConversationSession(
   input: HTTPPluginCreateConversationSessionInput
 ): Promise<HTTPPluginConversationSessionMutationResult> {
@@ -69,7 +73,9 @@ export async function createConversationSession(
   })
 }
 
-/** Selects an existing owner-scoped conversation session. */
+/**
+ * Selects an existing owner-scoped conversation session.
+ */
 export async function selectConversationSession(
   input: HTTPPluginSelectConversationSessionInput
 ): Promise<HTTPPluginConversationSessionMutationResult> {
@@ -97,7 +103,9 @@ export async function selectConversationSession(
   })
 }
 
-/** Publishes a trusted integration event into an existing session stream. */
+/**
+ * Publishes a trusted integration event into an existing session stream.
+ */
 export async function publishConversationEvent(
   input: HTTPPluginPublishConversationEventInput
 ): Promise<HTTPPluginAgentEvent> {

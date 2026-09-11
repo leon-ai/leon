@@ -1,5 +1,18 @@
 import { LLMProviders } from '@/core/llm-manager/types'
 
+// Keep setup choices stable when providers or models are added to the catalog.
+const SETUP_PROVIDER_ORDER = [
+  LLMProviders.OpenAI,
+  LLMProviders.Anthropic,
+  LLMProviders.OpenRouter,
+  LLMProviders.DeepSeek,
+  LLMProviders.ZAI,
+  LLMProviders.MoonshotAI,
+  LLMProviders.MiniMax,
+  LLMProviders.Celeris,
+  LLMProviders.HuggingFace
+]
+
 export const LLM_MODEL_REASONING_VALUES = [
   'auto',
   'on',
@@ -99,6 +112,7 @@ const OPENROUTER_KIMI_K3_REASONING = [
   'high',
   'max'
 ] as const satisfies readonly LLMModelReasoning[]
+const DEEPSEEK_REASONING = ['auto', 'none', 'low', 'high', 'max'] as const satisfies readonly LLMModelReasoning[]
 const MOONSHOT_KIMI_K3_REASONING = [
   'auto',
   'low',
@@ -122,15 +136,27 @@ const ROUTABLE_SPEED = [
  */
 export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
+   * @see https://api-docs.deepseek.com/quick_start/pricing/
+   * @see https://api-docs.deepseek.com/guides/thinking_mode/
+   */
+  { provider: LLMProviders.DeepSeek, model: 'deepseek-flash', label: 'DeepSeek-V4.1-Flash', recommended: true, reasoning: DEEPSEEK_REASONING, speed: AUTO_SPEED },
+
+  /**
    * @see https://docs.celeris.ai/models Fast diffusion model for short agentic calls.
    */
   { provider: LLMProviders.Celeris, model: 'celeris-1', label: 'Celeris 1', recommended: true, reasoning: AUTO_REASONING, speed: AUTO_SPEED },
-  /** @see https://docs.celeris.ai/making-requests#reasoning */
+  /**
+   * @see https://docs.celeris.ai/making-requests#reasoning
+   */
   { provider: LLMProviders.Celeris, model: 'celeris-1-magnus', label: 'Celeris 1 Magnus', reasoning: MAGNUS_REASONING, speed: AUTO_SPEED },
 
-  /** @see https://openrouter.ai/openai/gpt-6-astra */
+  /**
+   * @see https://openrouter.ai/openai/gpt-6-astra
+   */
   { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-astra', label: 'openai/gpt-6-astra', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false },
-  /** @see https://openrouter.ai/openai/gpt-6-astra-pro */
+  /**
+   * @see https://openrouter.ai/openai/gpt-6-astra-pro
+   */
   { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-astra-pro', label: 'openai/gpt-6-astra-pro', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false },
   /**
    * @see https://openrouter.ai/openai/gpt-5.6-sol Model-specific reasoning support.
@@ -162,7 +188,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
   { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.4-mini', label: 'openai/gpt-5.4-mini', reasoning: OPENAI_GPT_54_REASONING, speed: ROUTABLE_SPEED },
-  /** @see https://openrouter.ai/anthropic/claude-fable-5.1 */
+  /**
+   * @see https://openrouter.ai/anthropic/claude-fable-5.1
+   */
   { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-fable-5.1', label: 'anthropic/claude-fable-5.1', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsForcedToolChoice: false, supportsTemperature: false },
   /**
    * @see https://openrouter.ai/anthropic/claude-fable-5 Model-specific reasoning support.
@@ -194,24 +222,34 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
   { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-sonnet-4.6', label: 'anthropic/claude-sonnet-4.6', reasoning: OPTIONAL_MAX_REASONING, speed: ROUTABLE_SPEED },
-  /** @see https://openrouter.ai/google/gemini-3.8-flash */
+  /**
+   * @see https://openrouter.ai/google/gemini-3.8-flash
+   */
   { provider: LLMProviders.OpenRouter, model: 'google/gemini-3.8-flash', label: 'google/gemini-3.8-flash', reasoning: GEMINI_38_REASONING, speed: ROUTABLE_SPEED },
   /**
    * @see https://openrouter.ai/google/gemini-3.5-flash-lite Reasoning is mandatory for this endpoint.
    */
   { provider: LLMProviders.OpenRouter, model: 'google/gemini-3.5-flash-lite', label: 'google/gemini-3.5-flash-lite', reasoning: AUTO_REASONING, speed: ROUTABLE_SPEED },
-  /** @see https://openrouter.ai/meta/muse-spark-1.3 */
+  /**
+   * @see https://openrouter.ai/meta/muse-spark-1.3
+   */
   { provider: LLMProviders.OpenRouter, model: 'meta/muse-spark-1.3', label: 'meta/muse-spark-1.3', reasoning: MUSE_13_REASONING, speed: ROUTABLE_SPEED },
-  /** @see https://openrouter.ai/qwen/qwen3.8-flash */
+  /**
+   * @see https://openrouter.ai/qwen/qwen3.8-flash
+   */
   { provider: LLMProviders.OpenRouter, model: 'qwen/qwen3.8-flash', label: 'qwen/qwen3.8-flash', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
   /**
    * @see https://openrouter.ai/xiaomi/mimo-v2.5-pro Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
   { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.5-pro', label: 'xiaomi/mimo-v2.5-pro', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
-  /** @see https://openrouter.ai/z-ai/glm-5.3 */
+  /**
+   * @see https://openrouter.ai/z-ai/glm-5.3
+   */
   { provider: LLMProviders.OpenRouter, model: 'z-ai/glm-5.3', label: 'z-ai/glm-5.3', reasoning: GLM_53_REASONING, speed: ROUTABLE_SPEED },
-  /** @see https://openrouter.ai/z-ai/glm-5.3-flash */
+  /**
+   * @see https://openrouter.ai/z-ai/glm-5.3-flash
+   */
   { provider: LLMProviders.OpenRouter, model: 'z-ai/glm-5.3-flash', label: 'z-ai/glm-5.3-flash', reasoning: GLM_53_REASONING, speed: ROUTABLE_SPEED },
   /**
    * @see https://openrouter.ai/z-ai/glm-5.2 Model-specific reasoning support.
@@ -244,7 +282,9 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.OpenRouter, model: 'minimax/minimax-m3', label: 'minimax/minimax-m3', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
 
-  /** @see https://developers.openai.com/api/docs/models/gpt-6-astra */
+  /**
+   * @see https://developers.openai.com/api/docs/models/gpt-6-astra
+   */
   { provider: LLMProviders.OpenAI, model: 'gpt-6-astra', label: 'GPT-6 Astra', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.6-sol Model-specific reasoning support.
@@ -280,9 +320,13 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.OpenAI, model: 'gpt-5.4-nano', label: 'GPT-5.4 nano', reasoning: OPENAI_GPT_54_REASONING, speed: AUTO_SPEED },
 
-  /** @see https://platform.claude.com/docs/en/models/fable-5-1/overview */
+  /**
+   * @see https://platform.claude.com/docs/en/models/fable-5-1/overview
+   */
   { provider: LLMProviders.Anthropic, model: 'claude-fable-5-1', label: 'Claude Fable 5.1', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false },
-  /** @see https://platform.claude.com/docs/en/models/mythos-5-1/overview */
+  /**
+   * @see https://platform.claude.com/docs/en/models/mythos-5-1/overview
+   */
   { provider: LLMProviders.Anthropic, model: 'claude-mythos-5-1', label: 'Claude Mythos 5.1 (invite only)', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
@@ -315,9 +359,13 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.Anthropic, model: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED },
 
-  /** @see https://docs.z.ai/guides/llm/glm-5.3 */
+  /**
+   * @see https://docs.z.ai/guides/llm/glm-5.3
+   */
   { provider: LLMProviders.ZAI, model: 'glm-5.3', label: 'GLM-5.3', recommended: true, reasoning: GLM_53_REASONING, speed: AUTO_SPEED },
-  /** @see https://docs.z.ai/guides/vlm/glm-5.3-flash */
+  /**
+   * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
+   */
   { provider: LLMProviders.ZAI, model: 'glm-5.3-flash', label: 'GLM-5.3-Flash', reasoning: GLM_53_REASONING, speed: AUTO_SPEED },
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.2 Model-specific reasoning support.
@@ -361,13 +409,19 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.MoonshotAI, model: 'kimi-k2.5', label: 'Kimi K2.5', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED },
 
-  /** @see https://router.huggingface.co/v1/models */
+  /**
+   * @see https://router.huggingface.co/v1/models
+   */
   { provider: LLMProviders.HuggingFace, model: 'zai-org/GLM-5.3', label: 'GLM-5.3', reasoning: AUTO_REASONING, speed: AUTO_SPEED },
-  /** @see https://router.huggingface.co/v1/models */
+  /**
+   * @see https://router.huggingface.co/v1/models
+   */
   { provider: LLMProviders.HuggingFace, model: 'zai-org/GLM-5.3-Flash', label: 'GLM-5.3-Flash', reasoning: AUTO_REASONING, speed: AUTO_SPEED }
 ]
 
-/** Returns the catalog entry for an exact provider/model pair. */
+/**
+ * Returns the catalog entry for an exact provider/model pair.
+ */
 export function getLLMModelCatalogEntry(
   provider: LLMProviders | null,
   model: string
@@ -381,7 +435,9 @@ export function getLLMModelCatalogEntry(
   ) || null
 }
 
-/** Returns setup and autocomplete model suggestions for a provider. */
+/**
+ * Returns setup and autocomplete model suggestions for a provider.
+ */
 export function getLLMModelCatalogEntries(
   provider: LLMProviders
 ): readonly LLMModelCatalogEntry[] {
@@ -390,7 +446,9 @@ export function getLLMModelCatalogEntries(
     .sort((first, second) => Number(Boolean(second.recommended)) - Number(Boolean(first.recommended)))
 }
 
-/** Returns whether the cataloged model accepts an explicit reasoning-off mode. */
+/**
+ * Returns whether the cataloged model accepts an explicit reasoning-off mode.
+ */
 export function canDisableLLMModelReasoning(
   provider: LLMProviders,
   model: string
@@ -400,7 +458,11 @@ export function canDisableLLMModelReasoning(
   return !entry || entry.reasoning.includes('none')
 }
 
-/** Returns catalog providers in their curated setup order. */
+/**
+ * Returns catalog providers in their curated setup order.
+ */
 export function getLLMModelCatalogProviders(): LLMProviders[] {
-  return [...new Set(LLM_MODEL_CATALOG.map((entry) => entry.provider))]
+  return SETUP_PROVIDER_ORDER.filter((provider) =>
+    LLM_MODEL_CATALOG.some((entry) => entry.provider === provider)
+  )
 }

@@ -9,6 +9,7 @@ import { createListResult } from '@/built-in-command/built-in-command-renderer'
 import { TOOLS_PATH } from '@/constants'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ProfileHelper } from '@/helpers/profile-helper'
+import { resolveToolDirectory } from '@/leon-roots'
 
 export const TOOL_COMMAND_NAME = 'tool'
 export const TOOL_COMMAND_ALIAS = 't'
@@ -139,7 +140,7 @@ export function getSortedToolAutocompleteEntries(
       }
 
       for (const toolId of toolkitConfig.tools || []) {
-        const toolConfigPath = path.join(toolkitPath, toolId, 'tool.json')
+        const toolConfigPath = path.join(resolveToolDirectory(toolsPath, toolkitId, toolId), 'tool.json')
         const toolConfig = readJSONFile<ToolConfig>(toolConfigPath)
 
         if (!toolConfig) {

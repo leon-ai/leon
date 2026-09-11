@@ -1,9 +1,30 @@
 import json
 import os
+import ntpath
+import posixpath
 from typing import Dict, Any, Optional
 
-from ..constants import PROFILE_TOOLS_PATH, TOOLS_PATH
+from ..constants import LEON_PROFILES_PATH, LEON_PROFILE_NAME, TOOLS_PATH
 from .utils import get_platform_name
+
+
+def resolve_tool_directory(root: str, toolkit_id: str, tool_id: str) -> str:
+    """Prefer nested tools, accepting flat layouts only for matching manifests."""
+    nested = os.path.join(root, toolkit_id, tool_id)
+    if os.path.exists(os.path.join(nested, "tool.json")):
+        return nested
+    flat = os.path.join(root, toolkit_id)
+    try:
+        with open(os.path.join(flat, "tool.json"), encoding="utf-8") as source:
+            manifest = json.load(source)
+        if (isinstance(manifest, dict)
+                and manifest.get("toolkit_id") == toolkit_id
+                and manifest.get("tool_id") == tool_id):
+            return flat
+    except (OSError, ValueError):
+        # Leave invalid or missing manifests to the caller's configuration error.
+        pass
+    return nested
 
 
 def merge_missing_settings(
@@ -59,7 +80,9 @@ class ToolkitConfig:
         toolkit_config = cls._config_cache[cache_key]
         tools_list = toolkit_config.get("tools", [])
 
-        tool_config_path = os.path.join(TOOLS_PATH, toolkit_name, tool_name, "tool.json")
+        tool_config_path = os.path.join(
+            resolve_tool_directory(TOOLS_PATH, toolkit_name, tool_name), "tool.json"
+        )
 
         if tool_name not in tools_list and not os.path.exists(tool_config_path):
             toolkit_name_display = toolkit_config.get("name", "unknown")
@@ -83,6 +106,8 @@ class ToolkitConfig:
         toolkit_name: str,
         tool_name: str,
         defaults: Optional[Dict[str, Any]] = None,
+        refresh: bool = False,
+        profile_name: str = LEON_PROFILE_NAME,
     ) -> Dict[str, Any]:
         """
         Load tool-specific settings from toolkit settings file
@@ -91,16 +116,24 @@ class ToolkitConfig:
             toolkit_name: The toolkit name (e.g., 'video_streaming')
             tool_name: Name of the tool (e.g., 'ffmpeg')
             defaults: Default tool settings to apply when missing
+            refresh: Reload settings after owner edits
+            profile_name: Owning profile, independent of the active conversation
         """
-        cache_key = f"{toolkit_name}:{tool_name}"
-        if cache_key in cls._settings_cache:
+        profile_name = profile_name.strip()
+        if (not profile_name or profile_name in (".", "..")
+                or ":" in profile_name
+                or posixpath.basename(profile_name) != profile_name
+                or ntpath.basename(profile_name) != profile_name):
+            raise ValueError(f'Invalid Leon profile name "{profile_name}".')
+        cache_key = f"{profile_name}:{toolkit_name}:{tool_name}"
+        if not refresh and cache_key in cls._settings_cache:
             return cls._settings_cache[cache_key]
 
         settings_path = os.path.join(
-            PROFILE_TOOLS_PATH, toolkit_name, tool_name, "settings.json"
+            LEON_PROFILES_PATH, profile_name, "tools", toolkit_name, tool_name, "settings.json"
         )
         settings_sample_path = os.path.join(
-            TOOLS_PATH, toolkit_name, tool_name, "settings.sample.json"
+            resolve_tool_directory(TOOLS_PATH, toolkit_name, tool_name), "settings.sample.json"
         )
         settings_dir = os.path.dirname(settings_path)
         os.makedirs(settings_dir, exist_ok=True)

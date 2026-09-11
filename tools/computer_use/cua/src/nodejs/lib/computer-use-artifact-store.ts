@@ -1,3 +1,8 @@
+import type { CuaExecutionContext as ToolExecutionContext,
+  ComputerUseImageDimensions,
+  CuaToolResult,
+  PersistedComputerUseImages
+} from './types'
 import { execFile } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs'
@@ -7,7 +12,6 @@ import { promisify } from 'node:util'
 import ffmpegStatic from 'ffmpeg-static'
 
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import type { ToolProviderExecutionInput } from '@/core/tool-provider/types'
 
 import {
   COMPUTER_USE_ARTIFACT_DIRECTORY,
@@ -17,17 +21,14 @@ import {
 } from './constants'
 import { calculateComputerUseModelImageDimensions } from './computer-use-coordinate-mapper'
 import { createComputerUseSetOfMarkPlan } from './computer-use-set-of-mark'
-import type {
-  ComputerUseImageDimensions,
-  CuaToolResult,
-  PersistedComputerUseImages
-} from './types'
 import { ComputerUseSetOfMarkMode } from './types'
 
 const execFileAsync = promisify(execFile)
 const VISUAL_STATE_ID_LENGTH = 16
 
-/** Persists complete evidence while returning only bounded model attachments. */
+/**
+ * Persists complete evidence while returning only bounded model attachments.
+ */
 export class ComputerUseArtifactStore {
   public async persistCaptureMetadata(
     images: PersistedComputerUseImages,
@@ -44,7 +45,7 @@ export class ComputerUseArtifactStore {
     }))
   }
 
-  public getArtifactDirectory(input: ToolProviderExecutionInput): string {
+  public getArtifactDirectory(input: ToolExecutionContext): string {
     const sessionDirectory = encodeURIComponent(
       input.conversationSessionId || 'unscoped'
     )
@@ -57,7 +58,7 @@ export class ComputerUseArtifactStore {
   }
 
   public async persistStructuredResult(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     result: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
@@ -78,7 +79,7 @@ export class ComputerUseArtifactStore {
   }
 
   public async persistImages(
-    input: ToolProviderExecutionInput,
+    input: ToolExecutionContext,
     action: string,
     structuredResult: Record<string, unknown> | null,
     result: CuaToolResult,

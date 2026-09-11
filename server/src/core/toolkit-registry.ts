@@ -5,6 +5,7 @@ import { TOOLS_PATH } from '@/constants'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
+import { resolveToolDirectory } from '@/leon-roots'
 import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type {
@@ -28,9 +29,6 @@ interface ToolkitToolDefinition {
   icon_name?: string
   binaries?: Record<string, string>
   resources?: Record<string, string[]>
-  execution?: {
-    provider: string
-  }
   functions: Record<
     string,
     {
@@ -351,20 +349,14 @@ export default class ToolkitRegistry {
     return tool.functions || null
   }
 
-  public getToolExecutionProvider(
-    toolkitId: string,
-    toolId: string
-  ): string | null {
-    const toolkit = this._toolkits.find((item) => item.id === toolkitId)
-    return toolkit?.tools?.[toolId]?.execution?.provider || null
-  }
-
   public getToolkitContextFiles(toolkitId: string): string[] {
     const toolkit = this._toolkits.find((item) => item.id === toolkitId)
     return toolkit?.contextFiles || []
   }
 
-  /** Export enabled local tools so Satellite can advertise them remotely. */
+  /**
+   * Export enabled local tools so Satellite can advertise them remotely.
+   */
   public getSatelliteManifest(): SatelliteToolkitDefinition[] {
     return this._localToolkits.map((toolkit) => ({
       id: toolkit.id,
@@ -383,7 +375,9 @@ export default class ToolkitRegistry {
     }))
   }
 
-  /** Add the tool inventory advertised by one connected Satellite. */
+  /**
+   * Add the tool inventory advertised by one connected Satellite.
+   */
   public registerSatelliteTools(
     deviceId: string,
     toolkits: SatelliteToolkitDefinition[]
@@ -608,7 +602,7 @@ export default class ToolkitRegistry {
             await this.loadToolConfig(
               toolkit,
               toolId,
-              path.join(toolkitPath, toolId, 'tool.json')
+              path.join(resolveToolDirectory(toolsPath, toolkitId, toolId), 'tool.json')
             )
           }
 

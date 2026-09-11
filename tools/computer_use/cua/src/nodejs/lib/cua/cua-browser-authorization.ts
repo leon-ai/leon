@@ -5,7 +5,9 @@ import { parseJsonRecord } from '../utils'
 const CUA_AUTHORIZATION_SCHEMA = 'cua-driver-authorization-request-v1'
 const CUA_EXISTING_PROFILE_ADAPTER = 'browser_prepare.existing_profile'
 
-/** Applies the owner's profile-inspection grant only to Cua's attested browser boundary. */
+/**
+ * Applies the owner's profile-inspection grant only to Cua's attested browser boundary.
+ */
 export async function createCuaBrowserAuthorizationHost(
   isAllowed: () => boolean
 ): Promise<DriverAuthorizationHost> {

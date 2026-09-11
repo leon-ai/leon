@@ -4,7 +4,9 @@ import type {
   ComputerUseImageTransform
 } from './types'
 
-/** Returns whether local Cua must avoid ephemeral MPX/uinput devices. */
+/**
+ * Returns whether local Cua must avoid ephemeral MPX/uinput devices.
+ */
 export function shouldUseCuaSafeX11Input(
   platform: NodeJS.Platform,
   environment: NodeJS.ProcessEnv
@@ -26,7 +28,9 @@ export function shouldUseCuaSafeX11Input(
   )
 }
 
-/** Fits captures to a model-friendly pixel area without assuming a display. */
+/**
+ * Fits captures to a model-friendly pixel area without assuming a display.
+ */
 export function calculateComputerUseModelImageDimensions(
   source: ComputerUseImageDimensions,
   pixelBudget = COMPUTER_USE_MODEL_IMAGE_PIXEL_BUDGET
@@ -43,7 +47,9 @@ export function calculateComputerUseModelImageDimensions(
   }
 }
 
-/** Maps one point from Leon's attached model image to the source capture. */
+/**
+ * Maps one point from Leon's attached model image to the source capture.
+ */
 export function mapComputerUsePointToSource(
   point: { x: number, y: number },
   transform: ComputerUseImageTransform
@@ -54,7 +60,9 @@ export function mapComputerUsePointToSource(
   }
 }
 
-/** Maps one coordinate axis from a model image to the source capture. */
+/**
+ * Maps one coordinate axis from a model image to the source capture.
+ */
 export function mapComputerUseCoordinateToSource(
   value: number,
   axis: 'x' | 'y',

@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-09-10T00:23:06+08:00
+- Generated at: 2026-09-10T02:23:41+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -8,6 +8,7 @@
 - Explicit tools over implicit behavior: Leon calls declared tools/functions instead of free-form shell logic whenever possible.
 - Progressive grounding: Leon prefers context and memory tools first, then shell only when no dedicated tool can satisfy the request.
 - Auditable steps: Leon keeps plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
+- Tools own their dependencies, settings and device behavior. Core and bridge hosts manage execution and transport; shared SDK capabilities stay equivalent across Node.js and Python.
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
 - HTTP APIs remain request/response support surfaces; live profile-scoped utterances should use the Socket.IO client interface.
@@ -21,8 +22,8 @@
 - Leon Satellite is an optional process on a user device that connects its enabled and available profile tools to a remote Leon server.
 - Eligible tool calls are routed through Satellite and executed on that device; those tools become unavailable when Satellite disconnects.
 - Satellite provides generic transport only. Device-, application-, and company-specific behavior stays in tools and skills instead of Leon Core.
-## Computer Use
-- Cua provides graphical application control on the local machine or through Leon Satellite. Dedicated tools and supported direct browser inspection take priority, with screenshots for visual evidence and fallback.
+## Browser & Computer Use
+- The browser_use toolkit uses Browser Use CLI for direct browser inspection and actions in the configured browser session. Cua handles graphical application control locally or through Leon Satellite, retaining its session and cleaning up native resources through the worker host.
 - Computer use respects owner app preferences and permissions, adapts to platform capabilities, and uses observed results to verify actions and recover from ineffective attempts.
 ## Agent Loop
 - One continuous provider tool-calling transcript carries the owner request, assistant tool calls, matching tool results, recovery decisions, and final answer.

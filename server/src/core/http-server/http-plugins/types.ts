@@ -15,14 +15,18 @@ export interface HTTPPluginRuntimeConfig {
 
 export interface HTTPPluginRunAgentInput {
   query: string
-  /** Trusted turn-level guidance supplied by the installed HTTP plugin. */
+  /**
+   * Trusted turn-level guidance supplied by the installed HTTP plugin.
+   */
   additionalInstructions?: string
   profile_id?: string
   session_id?: string
   create_session?: boolean
   allow_direct_answer_handoff?: boolean
   request_id?: string
-  /** Time spent by the host integration choosing this agent path. */
+  /**
+   * Time spent by the host integration choosing this agent path.
+   */
   router_response_ms?: number
   metadata?: Record<string, unknown>
 }
@@ -73,9 +77,13 @@ export interface HTTPPluginRunAgentResult {
 export interface HTTPPluginRunControlledSkillInput {
   query: string
   skill_name: string
-  /** An explicit native action that hands the request back to the caller. */
+  /**
+   * An explicit native action that hands the request back to the caller.
+   */
   fallback_action_name?: string
-  /** Declared action parameter selecting a skill-local reply locale, not a device argument. */
+  /**
+   * Declared action parameter selecting a skill-local reply locale, not a device argument.
+   */
   response_locale_parameter?: string
   profile_id?: string
   session_id?: string

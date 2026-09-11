@@ -1,0 +1,159 @@
+{
+  "$schema": "../../schemas/tool-schemas/tool.json",
+  "tool_id": "cli",
+  "toolkit_id": "browser_use",
+  "name": "Browser Use CLI",
+  "description": "Operate the configured signed-in browser through the upstream Browser Use CLI and its persistent Browser Harness session.",
+  "progressive_guidance": "Prefer inspect/act for individual steps and run for predictable batches. Reuse observed targets. Helpers activate the working tab and record outcomes for shared recovery. A changed page does not establish task completion; inspect failure evidence before retrying or switching tools.\n\nrun(code) executes Python with the helpers below pre-imported. Browser state persists across calls; Python variables do not. Keep batches below 60 seconds and print compact JSON for each verified item. The working directory is the session artifact directory. Use screenshot to attach visual evidence.\n\nTab helpers: list_tabs(), current_tab(), switch_tab(target), new_tab(url), goto_url(url), close_tab(target). Obtain target IDs from observed targetId fields.\nWorkflow helpers use the same target descriptors as act:\n- leon_observe(offset=0, limit=40): optional selector selects returned elements; exposes targets, state_id, total and next_offset. Page through results as needed.\n- leon_click(target, expect=None, timeout=10): clicks once, then returns new_tabs or changed-page evidence. expect can be a read-only JS expression or Python predicate. Inspect a newly opened tab before looking for its download control.\n- leon_fill(target, value): verifies the entered value; submission needs a separate action.\n- leon_download(target, expected_text=None, timeout=20): waits for a native download, returns its path, SHA256, size, PDF text and page count. expected_text is a list of document identifiers observed on its page. identity_verified is false when omitted.\n- leon_wait(condition, timeout=10): polls a read-only JS expression or Python predicate without repeating input.\nOther helpers: js(expression), cdp(method, **params), press_key(key), scroll(x, y, dy=-300, dx=0), wait_for_element(selector, timeout=10, visible=False), wait_for_load(timeout=15). Use visible=True when waiting for visible controls; DOM presence alone is insufficient. Inspect iframe/shadow content explicitly. Verify lower-level action outcomes and avoid synthetic DOM clicks.\n\nAfter failure, not_sent means no input was delivered; unverifiable means it may have taken effect. Reinspect instead of replaying blindly. Use the configured browser and installed CLI; leave dependency installation and daemon management to Leon.",
+  "icon_name": "seo-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "run": {
+      "description": "Execute a bounded Python script through Browser Use CLI. Helpers are pre-imported and the browser session persists across calls. Print relevant observations and verified outcomes.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Python code using the pre-imported helpers listed in progressive guidance. Print compact JSON observations and verified outcomes; do not wrap in shell syntax."
+          }
+        },
+        "required": [
+          "code"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "screenshot": {
+      "description": "Capture the current browser tab through the CLI and attach its screenshot to the model. Use run to switch to an observed tab first.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {}
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "inspect": {
+      "deduplicate_calls": false,
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Inspect a tab after making it ready. Returns compact visible controls with reusable target descriptors. Prefer this to writing inspection scripts.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "type": "string"
+          },
+          "selector": {
+            "type": "string",
+            "description": "CSS selector for elements to return, such as table button or tbody tr. This is not a container scope. Defaults to controls and rows."
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 80
+          }
+        },
+        "required": [
+          "tab_id"
+        ]
+      }
+    },
+    "act": {
+      "deduplicate_calls": false,
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Use an observed target to click, fill or download. Handles readiness and trusted input; returns verified changes or structured failure evidence without replaying input. Click automatically observes new tabs or page changes.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "tab_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "click",
+              "fill",
+              "download"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "selector": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "tag": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "context": {
+                "type": "string",
+                "description": "Observed row or list-item context; preserves identity when repeated controls share a label."
+              }
+            },
+            "required": [
+              "selector"
+            ]
+          },
+          "value": {
+            "type": "string",
+            "description": "Only for fill."
+          },
+          "expect": {
+            "type": "string",
+            "description": "Optional read-only JS postcondition for click; omit to observe page changes/new tabs automatically."
+          },
+          "expected_text": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Only for download. Document identity such as an invoice number observed on its page; do not substitute ledger dates or amounts."
+          },
+          "timeout": {
+            "type": "number",
+            "minimum": 0.1,
+            "maximum": 30
+          }
+        },
+        "required": [
+          "tab_id",
+          "action",
+          "target"
+        ]
+      }
+    }
+  }
+}

@@ -32,20 +32,13 @@ const getToolSourcePaths = async (toolsPath) => {
       withFileTypes: true
     })
 
-    for (const toolEntry of toolEntries) {
-      if (!toolEntry.isDirectory()) {
-        continue
-      }
-
-      const toolPath = path.join(toolkitPath, toolEntry.name)
-      sourcePaths.push({
-        bridge: 'nodejs',
-        path: path.join(toolPath, NODEJS_SOURCE_PATH)
-      })
-      sourcePaths.push({
-        bridge: 'python',
-        path: path.join(toolPath, PYTHON_SOURCE_PATH)
-      })
+    const toolPaths = [
+      toolkitPath,
+      ...toolEntries.filter((entry) => entry.isDirectory()).map((entry) => path.join(toolkitPath, entry.name))
+    ]
+    for (const toolPath of toolPaths) {
+      if (!fs.existsSync(path.join(toolPath, 'tool.json'))) continue
+      sourcePaths.push(path.join(toolPath, NODEJS_SOURCE_PATH), path.join(toolPath, PYTHON_SOURCE_PATH))
     }
   }
 
@@ -65,11 +58,9 @@ export default async function setupToolsDependencies() {
     ]
 
     for (const sourcePath of sourcePaths) {
-      if (sourcePath.bridge === 'nodejs') {
-        await syncNodejsSourceDependencies(sourcePath.path)
-      } else {
-        await syncPythonSourceDependencies(sourcePath.path)
-      }
+      // A Node.js wrapper may depend on a Python CLI; manifests determine what to install.
+      await syncNodejsSourceDependencies(sourcePath)
+      await syncPythonSourceDependencies(sourcePath)
     }
 
     status.succeed('Tool dependencies: ready')

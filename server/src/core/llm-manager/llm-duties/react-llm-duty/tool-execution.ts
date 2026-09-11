@@ -8,7 +8,6 @@ import {
   TOOL_EXECUTOR,
   TOOLKIT_REGISTRY
 } from '@/core'
-import { COMPUTER_USE_PROVIDER_ID } from '@/core/computer-use/constants'
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
@@ -664,7 +663,7 @@ export async function runToolExecution(
     // query path. Keeping the full-log pointer encourages expensive reads of
     // stale snapshots; retain it only for failures where diagnostics matter.
     ...(outputLogPath &&
-      (toolkitId !== COMPUTER_USE_PROVIDER_ID ||
+      (toolkitId !== 'computer_use' ||
         effectiveStatus === 'error')
       ? { output_log_path: outputLogPath }
       : {}),
