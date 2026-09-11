@@ -3,6 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@trycua/cua-driver": "0.25.0"
+    "@trycua/cua-driver": "0.28.0"
   }
 }

@@ -6,7 +6,7 @@ import { CuaRuntime } from './lib/cua-runtime'
 import { CuaDesktopSetup } from './lib/cua/cua-desktop-setup'
 import { createCuaDriverAdapter } from './lib/cua/cua-driver-adapter'
 
-const GNOME_RESOURCE = 'gnome_wayland_0_25_0'
+const GNOME_RESOURCE = 'gnome_wayland'
 
 /**
  * Owns desktop setup, native sessions and Cua actions inside the standard tool runtime.

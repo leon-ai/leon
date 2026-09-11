@@ -3567,9 +3567,9 @@
     }
   },
   "resources": {
-    "gnome_wayland_0_25_0": [
-      "https://raw.githubusercontent.com/trycua/cua/cua-driver-rs-v0.25.0/libs/cua-driver/wayland-helper/winrects@cua/metadata.json",
-      "https://raw.githubusercontent.com/trycua/cua/cua-driver-rs-v0.25.0/libs/cua-driver/wayland-helper/winrects@cua/extension.js"
+    "gnome_wayland": [
+      "https://raw.githubusercontent.com/trycua/cua/1b50c02e2d34734f64d2d22f54eb76cc97b4a663/libs/cua-driver/wayland-helper/winrects@cua/metadata.json",
+      "https://raw.githubusercontent.com/trycua/cua/1b50c02e2d34734f64d2d22f54eb76cc97b4a663/libs/cua-driver/wayland-helper/winrects@cua/extension.js"
     ]
   }
 }
