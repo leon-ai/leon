@@ -119,11 +119,22 @@ export class BrowserUseTool extends Tool {
         'Keep the chosen browser open with the usual signed-in profile.',
         `Enter ${REMOTE_DEBUGGING_SETTINGS_URL} in that browser’s address bar and open it.`,
         'Enable the checkbox labeled "Allow remote debugging for this browser instance" if it is off.',
-        'Tell Leon when it is enabled so the connection can be retried.',
+        'Tell me when it is enabled so I can retry the connection.',
         'When the browser then shows "Allow remote debugging?", click "Allow" promptly to approve the new connection.',
-        'If the checkbox is already enabled, leave it enabled and approve the connection prompt when retrying. If the option is missing, tell Leon.'
+        'If the checkbox is already enabled, leave it enabled and approve the connection prompt when retrying. If the option is missing, tell me.'
       ]
     })
+  }
+
+  /**
+   * Formats the exact browser setup steps for a terminal owner handoff.
+   */
+  private createOwnerActionMessage(error: BrowserSetupRequiredError): string {
+    return [
+      'Browser Use needs access to your existing signed-in browser before I can continue.',
+      '',
+      ...error.setup.owner_steps.map((step, index) => `${index + 1}. ${step}`)
+    ].join('\n')
   }
 
   /**
@@ -313,6 +324,8 @@ export class BrowserUseTool extends Tool {
       return await this.perform(functionName, supplied)
     } catch (error) {
       if (error instanceof BrowserSetupRequiredError) {
+        const requiresOwnerAction =
+          error.setupState !== BrowserSetupState.ConfigurationRequired
         return {
           success: false, error: error.message, status: 'owner_action_required',
           error_code: 'browser_use_setup_pending', setup_state: error.setupState,
@@ -323,6 +336,13 @@ export class BrowserUseTool extends Tool {
             requires_logout: false,
             requires_browser_restart: false
           },
+          ...(requiresOwnerAction
+            ? {
+                owner_action: {
+                  message: this.createOwnerActionMessage(error)
+                }
+              }
+            : {}),
           guidance: error.setupState === BrowserSetupState.ConfigurationRequired
             ? 'Resolve and configure the owner’s chosen browser using existing tools and known preferences. Ask only if the choice or profile is unclear. Do not ask the owner to edit JSON when Leon can configure it.'
             : 'Explain why browser access is needed and the reported owner steps in a friendly message in your own words. Include the exact settings_url, the checkbox label, and the later Allow approval step; do not assume the owner already knows how to enable remote debugging. A discovered endpoint does not prove the checkbox is still enabled. Pause browser use until the owner completes the steps; do not repeat setup while waiting. Preserve the current browser session. Recheck readiness when the owner retries.'
