@@ -28,7 +28,8 @@ const globs = [
 
   try {
     await buildAurora({ quiet: true })
-    await execa('eslint', [...globs, '--fix', '--ignore-pattern', '.gitignore'], {
+    // Reuse unchanged files while still running both full TypeScript checks below.
+    await execa('eslint', [...globs, '--fix', '--cache', '--cache-strategy', 'content', '--ignore-pattern', '.gitignore'], {
       stdio: 'inherit'
     })
     await execa('tsc', ['--noEmit', '-p', 'tsconfig.json'], {
