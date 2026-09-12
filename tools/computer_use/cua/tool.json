@@ -4,7 +4,7 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate graphical desktop applications and browser interfaces through Cua Driver.",
-  "progressive_guidance": "For browser work, prefer the browser_use toolkit. When it is unavailable or cannot expose the needed interface, use get_browser_state and browser_* actions. Bind to an observed browser pid/window_id; when setup is required, use browser_prepare with strategy.kind=existing_profile (the host enforces owner permission), then inspect again. Reuse the returned target_id/tab_id and current page refs. First obtain enough page structure to understand the task and relevant collection; then use query/scope_ref to narrow subsequent reads. Query matches and truncated snapshots do not prove enumeration is complete: follow pagination, continuation or scroll to the requested boundary. Use screenshots/native accessibility when direct inspection is unsupported, denied or cannot expose the needed control. Do not repeat a failed setup without changed evidence.\nReuse valid target identifiers. Prefer observed native menu paths and current semantic handles; otherwise use screenshot pixels. For an unfamiliar editor, inspect its instructions or help before trying shortcuts or gestures. If accessibility exposes only the outer frame, use the screenshot and retry the tree at most once for a specifically missing control.\nForeground input and menus activate their target and restore focus; bring_to_front is needed only for persistent focus or an exposed desktop target. Background input does not raise windows: X11 uses XTEST/XInput2 without focus stealing; Wayland uses libei/portal compositor focus and cannot address a specific unfocused window. Remember background_unavailable per target; escalate to foreground only when necessary and permitted.\nPrefer perform_actions for predictable steps such as focusing a known field, typing and pressing Enter, with no intermediate visual decision, with at most one pixel-targeted click. Within one field, perform_actions can combine click, select-all and type_text; repeated typing coordinates for the same field reuse its focus. For replacing a field, prefer type_text with mode=replace to focus once, select all and type, then inspect the final observation. Do not batch different spatial fields. For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For an action expected to open a page or dialog, set settle_ms to wait briefly after delivery before capture (on the final step for a batch). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.",
+  "progressive_guidance": "Prefer browser_use for websites; if unavailable or missing the needed interface, use get_browser_state and browser_* actions. Bind to an observed browser pid/window_id; when setup is required, use browser_prepare with strategy.kind=existing_profile (the host enforces owner permission), then inspect again. Reuse the returned target_id/tab_id and current page refs. Read page structure before narrowing with query/scope_ref. Matches or truncated snapshots do not prove complete enumeration: follow pagination, continuation or scroll to the requested boundary. Use screenshots/native accessibility when direct inspection is unsupported, denied or cannot expose the needed control. Do not repeat a failed setup without changed evidence.\nPrefer current semantic handles or observed menu paths. If only pixels are available, locate the control and label in the latest matching image. Before an uncertain or small-target click, zoom its surrounding window region, inspect the crop, then act using crop pixels with the same pid/window_id. Never batch zoom with its dependent action or reuse earlier coordinates. If accessibility exposes only the outer frame, retry the tree at most once for a missing control. Inspect unfamiliar editor help before trying shortcuts.\nVisible interaction mode forces foreground input; Cua validates and activates the target and restores focus. Use bring_to_front only for persistent focus or an exposed desktop target. Background support depends on the target: XTest-only input requires foreground. Remember background_unavailable; retry foreground only when permitted.\nUse perform_actions for predictable steps without intermediate visual decisions, with at most one pixel-targeted click. Within one field, combine click, select-all and type_text; repeated typing reuses focus. Prefer type_text mode=replace to replace a field, then inspect the final observation. Do not batch different spatial fields. For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For page/dialog navigation, set settle_ms before capture (on the last batch step). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.\nControls offer actions: play starts playback; pause stops it. If current state is ambiguous, compare fresh observations over time. A track title or stationary progress position does not prove active playback.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -109,7 +109,7 @@
         "additionalProperties": false,
         "properties": {
           "include": {
-            "description": "Only run these checks (canonical names). Wins over `skip`.",
+        "description": "Omit on the first diagnostic call to run all checks. To filter later, copy exact checks[].name values from a previous report; do not invent category names. Wins over skip.",
             "items": {
               "type": "string"
             },
@@ -180,7 +180,7 @@
       }
     },
     "zoom": {
-      "description": "Read a small region of an observed window at higher detail. Select a rectangle from the latest full-window screenshot. The resulting crop becomes the coordinate source for clicks, drags, and pixel-targeted typing on this window; get a fresh full-window screenshot before other pixel actions or another zoom.",
+      "description": "Before an uncertain pixel action, inspect its region in the latest full-window screenshot. Read the returned crop before acting; use crop pixels with the same pid/window_id. Get a full-window screenshot before other pixel actions or another zoom.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -231,7 +231,7 @@
         "additionalProperties": false,
         "properties": {
           "expect": {
-            "description": "One to eight predicates, combined with logical AND.",
+            "description": "One to eight predicates, combined with AND. Example: {\"element\":{\"selector\":{\"role\":\"button\",\"label_contains\":\"Play\"},\"exists\":true}}. Put role/label_contains inside selector, not beside exists.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -846,7 +846,7 @@
       }
     },
     "click": {
-      "description": "Click a UI element from the latest window state, or use screenshot coordinates when no semantic element exists.",
+      "description": "Click a current semantic element or a control located in the latest matching screenshot. If its pixel center is uncertain, inspect the region with zoom first; do not guess or reuse coordinates from an earlier image.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -872,7 +872,7 @@
             "type": "string"
           },
           "delivery_mode": {
-            "default": "background",
+            "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
@@ -1119,7 +1119,7 @@
             "type": "string"
           },
           "delivery_mode": {
-            "default": "background",
+            "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
@@ -1381,7 +1381,7 @@
             "type": "string"
           },
           "delivery_mode": {
-            "default": "background",
+            "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
@@ -1622,7 +1622,7 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "background",
+            "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
@@ -1710,7 +1710,8 @@
           }
         },
         "required": [
-          "text"
+          "text",
+          "target"
         ],
         "type": "object"
       },
@@ -1866,7 +1867,7 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "background",
+            "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
@@ -1952,7 +1953,8 @@
           }
         },
         "required": [
-          "key"
+          "key",
+          "target"
         ],
         "type": "object"
       },
@@ -2108,7 +2110,7 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "background",
+            "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",
@@ -2192,7 +2194,8 @@
           }
         },
         "required": [
-          "keys"
+          "keys",
+          "target"
         ],
         "type": "object"
       },
@@ -2338,7 +2341,7 @@
       }
     },
     "perform_actions": {
-      "description": "Perform up to eight grounded input actions in order and stop on the first failure. Use it for a predictable sequence with no intermediate visual decision; observe between spatial targets. An intermediate step's settle_ms waits before the next input without capturing; a final settle_ms waits before the batch's final capture.",
+      "description": "Run up to eight grounded inputs in order, stopping on failure. Use predictable steps without intervening visual decisions; observe between spatial targets. settle_ms delays the next input, or the final capture on the last step.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2348,7 +2351,7 @@
             "type": "boolean"
           },
           "steps": {
-            "description": "Ordered mechanical actions. Each parameters object uses the regular schema of its selected action.",
+            "description": "Ordered mechanical actions. Each parameters object uses its action's schema. Include an explicit target on every keyboard step, even when reusing an already focused field; targets are not inherited from previous steps.",
             "items": {
               "additionalProperties": false,
               "properties": {
@@ -2777,7 +2780,7 @@
       }
     },
     "get_browser_state": {
-      "description": "Primary observation for browser tasks: inspect page structure and current page refs without a screenshot by default. First establish relevant scope, then use query/scope_ref for focused reads. Use continuation for truncated semantic snapshots; a query match is not a full collection.",
+      "description": "Inspect page structure and current refs without screenshots by default. Establish scope, then use query/scope_ref for focused reads. Use continuation for truncated snapshots; query matches do not prove full enumeration.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": true,
@@ -3456,7 +3459,7 @@
             "type": "string"
           },
           "delivery_mode": {
-            "default": "background",
+            "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
             "enum": [
               "background",

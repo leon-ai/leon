@@ -264,6 +264,11 @@ export class CuaRuntime {
       }
       const structuredFailure = this.resultCompactor.getStructuredFailure(structuredResult)
       const actionFailed = hasCuaError(result) || structuredFailure !== null
+      if (structuredResult?.['screenshot_frame_valid'] === false) {
+        // Never establish a pixel transform from a frame the backend rejected.
+        result.images = []
+        this.forgetVisualState(input, actionParameters)
+      }
       timings['driver'] = Math.round(performance.now() - driverStartedAt)
       const artifactsStartedAt = performance.now()
       const compactedResult = structuredResult
@@ -514,12 +519,13 @@ export class CuaRuntime {
 
   private resolveSettleMs(value: unknown): number {
     const settleMs = value ?? 0
-    if (!Number.isInteger(settleMs) || Number(settleMs) < 0 ||
-        Number(settleMs) > COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS) {
-      throw new Error(`settle_ms must be an integer between 0 and ${COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS}.`)
+    if (!Number.isInteger(settleMs) || Number(settleMs) < 0) {
+      throw new Error('settle_ms must be a nonnegative integer.')
     }
 
-    return Number(settleMs)
+    // Settlement is a bounded observation delay, not a readiness guarantee.
+    // An oversized request should not discard otherwise valid input.
+    return Math.min(Number(settleMs), COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS)
   }
 
   private async executeActionSequence(
@@ -896,7 +902,7 @@ export class CuaRuntime {
     )
     if (!transform) {
       if (fields.some((field) => typeof parameters[field] === 'number')) {
-        throw new Error('Observe this target with a fresh screenshot before using pixel coordinates; otherwise use its current element token.')
+        throw new Error('Observe this target with a fresh screenshot before using pixel coordinates; otherwise use its current element token. A desktop screenshot does not establish window coordinates. If the window capture failed, refresh list_windows and use its current pid/window_id; do not retry the same window click after another desktop capture.')
       }
       return parameters
     }
@@ -1126,9 +1132,14 @@ export class CuaRuntime {
       coordinate_space: 'attached_model_image',
       ...(transform.fromZoom ? {
         zoomed: true,
-        zoom_hint: 'This is a window crop. Click, drag, or type using its image pixels with the same pid/window_id; Leon applies native crop translation. For other pixel actions or another zoom, first get a full-window screenshot. Do not reuse coordinates from the earlier full-window image.'
+        zoom_hint: 'This is a window crop. When present, yellow x/y guides label actual crop pixels, not controls. Locate the target center against these guides before clicking; do not guess from the earlier image. Click, drag, or type using crop pixels with the same pid/window_id; Leon translates them. For other pixel actions or another zoom, first get a full-window screenshot.'
       } : {}),
-      coordinate_hint: `Use actual image pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}, not a normalized 0–1000 grid. Use pixel_center verbatim when available. To convert a normalized estimate, multiply x by ${(transform.model.width - 1) / 1000} and y by ${(transform.model.height - 1) / 1000}.`
+      coordinate_hint: `Use only this attached image's pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}. Prefer a current semantic element or its pixel_center. Do not use source-image dimensions, earlier screenshots or a normalized grid.`,
+      // Ground uncertain positions before delivery rather than relying on
+      // post-action no-op detection to correct a guessed click.
+      ...(!transform.fromZoom && bounds ? {
+        grounding_hint: 'Before a pixel action, locate the intended control and its label in this image. If it is small, ambiguous or its center is uncertain, call zoom on the surrounding region with this exact pid/window_id first. Then use the crop pixels for click, drag or targeted typing; Leon handles translation. Do not batch zoom and its dependent action: inspect the returned crop first.'
+      } : {})
     }
   }
 
@@ -1187,7 +1198,10 @@ export class CuaRuntime {
     if (hasCuaError(captureResult) || failure) {
       const code = failure?.code || captureResult.errorCode || COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE
       return this.failedCapture(input, captureParameters, code,
-        failure?.message || captureResult.text, structuredResult || {})
+        failure?.message || captureResult.text,
+        structuredResult?.['screenshot_frame_valid'] === false
+          ? { screenshot_error: structuredResult['screenshot_error'] }
+          : structuredResult || {})
     }
     // A closed dialog can return stale AX elements with a successful envelope.
     // Post-action evidence always needs a fresh frame; use the same recovery

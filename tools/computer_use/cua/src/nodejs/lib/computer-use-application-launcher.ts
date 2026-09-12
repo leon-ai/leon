@@ -36,7 +36,9 @@ export class ComputerUseApplicationLauncher {
       return { result: launchResult, ready: true }
     }
 
-    const launchedWindows = this.getWindows(launchResult)
+    // Launch can report XWayland IDs while capture/input use compositor IDs.
+    // Resolve against the control backend, never publish the launcher's IDs.
+    const launchedWindows = await this.listWindows(driver, {})
     const pid = launchResult['pid']
     const identityTerms = this.getApplicationIdentityTerms(
       parameters,
@@ -97,7 +99,7 @@ export class ComputerUseApplicationLauncher {
 
     return {
       errorCode: APPLICATION_WINDOW_UNAVAILABLE_CODE,
-      result: { ...launchResult, window_ready: false },
+      result: { ...launchResult, windows: [], window_ready: false },
       ready: false
     }
   }

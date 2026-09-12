@@ -15,6 +15,7 @@ import { createComputerUseSetOfMarkPlan } from '@@/tools/computer_use/cua/src/no
 import { createCuaBrowserAuthorizationHost } from '@@/tools/computer_use/cua/src/nodejs/lib/cua/cua-browser-authorization'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ComputerUseSetOfMarkMode } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
+import { resolveComputerUseInteractionMode } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-settings'
 
 const PROFILE_NAME = 'computer-use-test'
 const PORTABLE_INPUT_SCHEMA_UNSUPPORTED_KEYWORDS = new Set([
@@ -153,6 +154,23 @@ function findPortableInputSchemaIssues(
 }
 
 describe('CuaRuntime', () => {
+  it.each([
+    [{}, 'visible'],
+    [{ interaction_mode: 'visible' }, 'visible'],
+    [{ interaction_mode: 'background' }, 'background']
+  ])('resolves interaction settings %j to %s', (settings, expected) => {
+    expect(resolveComputerUseInteractionMode({
+      toolkitId: 'computer_use', toolId: 'cua', functionName: 'click', parameters: {},
+      getSettings: () => settings as Record<string, unknown>
+    })).toBe(expected)
+  })
+
+  it('requires a model-facing target for keyboard actions', () => {
+    const manifest = readComputerUseManifest()
+    for (const action of ['type_text', 'press_key', 'hotkey']) {
+      expect(manifest.functions[action]!.parameters['required']).toContain('target')
+    }
+  })
   it('adds SOM labels automatically only for ambiguous actionable controls', () => {
     const result = {
       window_bounds: { x: 100, y: 200, width: 800, height: 600 },
@@ -819,7 +837,7 @@ describe('CuaRuntime', () => {
       toolkitId: 'computer_use',
       toolId: 'cua',
       functionName: 'type_text',
-      parameters: { text: 'Hello' },
+      parameters: { text: 'Hello', pid: 42, window_id: 7 },
       profileName: PROFILE_NAME,
       conversationSessionId: 'session-1'
     })
@@ -1296,7 +1314,7 @@ describe('CuaRuntime', () => {
     expect(result.output['recovery']).not.toContain('expose the target')
   })
 
-  it('waits for a launched application to expose a usable window', async () => {
+  it.each([{ launchWindows: [] }, { launchWindows: [{ pid: 42, window_id: 1_069_285_376 }] }])('resolves launcher windows $launchWindows through the control backend', async ({ launchWindows }) => {
     vi.useFakeTimers()
     const driver = createDriver({})
     let windowObservationCount = 0
@@ -1308,7 +1326,7 @@ describe('CuaRuntime', () => {
           structuredJson: JSON.stringify({
             name: 'Example Editor',
             pid: 42,
-            windows: []
+            windows: launchWindows
           }),
           rawJson: '{}',
           isError: false,
@@ -1539,7 +1557,7 @@ describe('CuaRuntime', () => {
       toolkitId: 'computer_use',
       toolId: 'cua',
       functionName: 'click',
-      parameters: { pid: 42, window_id: 7, element_token: 'element-1' },
+      parameters: { pid: 42, window_id: 7, element_token: 'element-1', delivery_mode: 'background' },
       profileName: PROFILE_NAME,
       conversationSessionId: 'session-1'
     })

@@ -149,6 +149,26 @@ export class ComputerUseRuntimeManager {
     parameters: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
     let managedParameters = { ...parameters }
+    if (action === 'verify_state' && Array.isArray(managedParameters['expect'])) {
+      // Preserve the predicate's meaning when the model flattens its selector.
+      // Conflicting selectors must never be silently overwritten.
+      managedParameters['expect'] = managedParameters['expect'].map((value: unknown) => {
+        const predicate = asRecord(value)
+        const element = asRecord(predicate?.['element'])
+        if (!element) return value
+        const normalized = { ...element }
+        const selector = { ...asRecord(element['selector']) }
+        for (const key of ['role', 'label_contains']) {
+          if (element[key] === undefined) continue
+          if (selector[key] !== undefined && selector[key] !== element[key]) {
+            throw new Error(`Conflicting verify_state selector ${key}.`)
+          }
+          selector[key] = element[key]
+          delete normalized[key]
+        }
+        return { ...predicate, element: { ...normalized, selector } }
+      })
+    }
     const hasElement = typeof managedParameters['element_index'] === 'number' ||
         (typeof managedParameters['element_token'] === 'string' &&
           managedParameters['element_token'].length > 0)
@@ -163,6 +183,20 @@ export class ComputerUseRuntimeManager {
       }
     }
     const target = asRecord(managedParameters['target'])
+    if (['type_text', 'press_key', 'hotkey'].includes(action)) {
+      const pid = target?.['pid'] ?? managedParameters['pid']
+      const windowId = target?.['window_id'] ?? managedParameters['window_id']
+      const validPid = Number.isInteger(pid) && Number(pid) > 0
+      const validWindow = Number.isInteger(windowId) && Number(windowId) > 0
+      const validTarget = target
+        ? (target['kind'] === 'window' && validPid && validWindow) ||
+          (target['kind'] === 'desktop' && typeof target['display_id'] === 'string' && Boolean(target['display_id']))
+        : managedParameters['scope'] === 'desktop' ||
+          ((validPid || validWindow) && (pid === undefined || validPid) && (windowId === undefined || validWindow))
+      if (!validTarget) {
+        throw new Error('Keyboard input requires an explicit target from the latest observation. Supply target={kind:"window",pid,window_id}; do not rely on global focus or pid 0.')
+      }
+    }
     if (hasElement) {
       const pid = target?.['pid'] ?? managedParameters['pid']
       const windowId = target?.['window_id'] ?? managedParameters['window_id']

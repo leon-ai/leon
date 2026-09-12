@@ -25,9 +25,9 @@ function readComputerUseSettings(input: ToolExecutionContext): Record<string, un
 export const resolveComputerUseInteractionMode: ComputerUseInteractionModeResolver =
   (input) =>
     readComputerUseSettings(input)[COMPUTER_USE_INTERACTION_MODE_SETTING] ===
-    ComputerUseInteractionMode.Visible
-      ? ComputerUseInteractionMode.Visible
-      : ComputerUseInteractionMode.Background
+    ComputerUseInteractionMode.Background
+      ? ComputerUseInteractionMode.Background
+      : ComputerUseInteractionMode.Visible
 
 export const resolveComputerUseActivityOverlay: ComputerUseActivityOverlayResolver =
   (input) =>

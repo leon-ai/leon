@@ -49,6 +49,13 @@ export class ComputerUseResultCompactor {
     result: Record<string, unknown> | null
   ): StructuredComputerUseFailure | null {
     if (!result) return null
+    if (result['screenshot_frame_valid'] === false) {
+      const captureError = asRecord(result['screenshot_error'])
+      return {
+        code: hasText(captureError?.['code']) ? captureError['code'] : 'capture_failed',
+        message: hasText(captureError?.['reason']) ? captureError['reason'] : 'The requested window screenshot is unavailable. Refresh list_windows and observe the current pid/window_id before pixel input.'
+      }
+    }
     const refusal = asRecord(result['refusal'])
     if (refusal) {
       return {
@@ -182,7 +189,7 @@ export class ComputerUseResultCompactor {
     const metadata = Object.fromEntries(
       Object.entries(result).filter(([key]) =>
         ['pid', 'window_id', 'snapshot_id', 'window_bounds', 'screenshot_width',
-          'screenshot_height', 'screenshot_scale', 'screenshot_frame_valid',
+          'screenshot_height', 'screenshot_scale', 'screenshot_frame_valid', 'screenshot_error',
           'elements_complete', 'total_element_count', 'background_input',
           'capture_coverage', 'degraded', 'effect', 'escalation', 'off_space'].includes(key)
       )
