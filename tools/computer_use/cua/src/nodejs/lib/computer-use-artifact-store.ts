@@ -20,7 +20,7 @@ import {
   IMAGE_EXTENSION_BY_MIME_TYPE
 } from './constants'
 import { calculateComputerUseModelImageDimensions } from './computer-use-coordinate-mapper'
-import { createComputerUseSetOfMarkPlan } from './computer-use-set-of-mark'
+import { createComputerUseCoordinateGuide, createComputerUseSetOfMarkPlan } from './computer-use-set-of-mark'
 import { ComputerUseSetOfMarkMode } from './types'
 
 const execFileAsync = promisify(execFile)
@@ -117,7 +117,8 @@ export class ComputerUseArtifactStore {
                 content,
                 sourceDimensions,
                 action === 'get_window_state' ? structuredResult : null,
-                setOfMarkMode
+                setOfMarkMode,
+                action === 'zoom'
               )
             : {
                 dataBase64: image.dataBase64,
@@ -201,7 +202,8 @@ export class ComputerUseArtifactStore {
     originalContent: Buffer,
     sourceDimensions: ComputerUseImageDimensions,
     structuredResult: Record<string, unknown> | null,
-    setOfMarkMode: ComputerUseSetOfMarkMode
+    setOfMarkMode: ComputerUseSetOfMarkMode,
+    zoomed: boolean
   ): Promise<{
     dataBase64: string
     dimensions: ComputerUseImageDimensions
@@ -215,13 +217,16 @@ export class ComputerUseArtifactStore {
       setOfMarkMode,
       modelDimensions
     )
+    // Zoom is also used when AX exposes no controls. Give the model actual
+    // pixel references rather than asking it to estimate an unlabelled crop.
+    const coordinateGuide = zoomed ? createComputerUseCoordinateGuide(modelDimensions) : ''
     const needsResize =
       modelDimensions.width !== sourceDimensions.width ||
       modelDimensions.height !== sourceDimensions.height
     if (
       !ffmpegStatic ||
       extension === 'bin' ||
-      (!needsResize && !setOfMark.filter)
+      (!needsResize && !setOfMark.filter && !coordinateGuide)
     ) {
       return {
         dataBase64: originalContent.toString('base64'),
@@ -236,7 +241,8 @@ export class ComputerUseArtifactStore {
         ...(needsResize
           ? [`scale=${modelDimensions.width}:${modelDimensions.height}:flags=lanczos`]
           : []),
-        ...(setOfMark.filter ? [setOfMark.filter] : [])
+        ...(setOfMark.filter ? [setOfMark.filter] : []),
+        ...(coordinateGuide ? [coordinateGuide] : [])
       ].join(',')
       await execFileAsync(ffmpegStatic, [
         '-nostdin',

@@ -11,7 +11,7 @@ const COMMAND_TIMEOUT_MS = 5_000
 const IMAGE_BUFFER_LIMIT = 32 * 1_024 * 1_024
 const LOGICAL_LAYOUT_MODE = 1
 const PNG_HEADER = Buffer.from('89504e470d0a1a0a', 'hex')
-// Matches Cua 0.25's native zoom registry; its input translation owns this padding.
+// Matches Cua's native zoom registry; its input translation owns this padding.
 const ZOOM_PADDING = 0.2
 
 interface Rectangle { x: number, y: number, width: number, height: number }
@@ -103,6 +103,7 @@ export async function normalizeGnomeCapture(
 export class CuaWaylandCaptureAdapter implements ComputerUseDriver {
   public readonly setAgentCursorEnabled?: NonNullable<ComputerUseDriver['setAgentCursorEnabled']>
   private readonly observedLayouts = new Map<string, GnomeCaptureLayout>()
+  private readonly windowCaptures = new Map<string, { bounds: Rectangle, width: number, height: number, layout: GnomeCaptureLayout }>()
 
   public constructor(
     private readonly driver: ComputerUseDriver,
@@ -117,6 +118,7 @@ export class CuaWaylandCaptureAdapter implements ComputerUseDriver {
   public listToolsJson(): Promise<string> { return this.driver.listToolsJson() }
   public shutdown(): Promise<void> {
     this.observedLayouts.clear()
+    this.windowCaptures.clear()
     return this.driver.shutdown()
   }
   public uniffiDestroy(): void { this.driver.uniffiDestroy() }
@@ -124,16 +126,48 @@ export class CuaWaylandCaptureAdapter implements ComputerUseDriver {
   public async callTool(name: string, argumentsJson: string): Promise<CuaToolResult> {
     const args = parseJsonRecord(argumentsJson) || {}
     const session = String(args['session'] || '')
+    const target = JSON.stringify([session, args['pid'], args['window_id']])
     if (!COMPUTER_USE_SCREEN_CAPTURE_ACTIONS.has(name)) {
       const previous = this.observedLayouts.get(session)
       const hasPixels = COMPUTER_USE_COORDINATE_FIELDS[name]?.some((key) => typeof args[key] === 'number')
       if (previous && hasPixels && JSON.stringify(await this.getLayout()) !== JSON.stringify(previous)) {
         throw new Error('The display layout changed since the last screenshot. Observe again before input.')
       }
-      if (name === 'end_session') this.observedLayouts.delete(session)
+      if (name === 'end_session') {
+        this.observedLayouts.delete(session)
+        for (const key of this.windowCaptures.keys()) {
+          if (JSON.parse(key)[0] === session) this.windowCaptures.delete(key)
+        }
+      }
       return this.driver.callTool(name, argumentsJson)
     }
     const layout = await this.getLayout()
+    // Some native versions omit session support from zoom. Only borrow a
+    // matching observation when its owner is unambiguous; never guess between
+    // two conversations' differently resized screenshots of the same window.
+    const matchingCaptures = args['session'] === undefined
+      ? [...this.windowCaptures].filter(([key]) => {
+          const [, pid, windowId] = JSON.parse(key)
+          return pid === args['pid'] && windowId === args['window_id']
+        }).map(([, capture]) => capture)
+      : []
+    const previousCapture = args['session'] === undefined
+      ? matchingCaptures.length === 1 ? matchingCaptures[0] : undefined
+      : this.windowCaptures.get(target)
+    if (name === 'zoom') {
+      if (!previousCapture || JSON.stringify(previousCapture.layout) !== JSON.stringify(layout)) {
+        throw new Error('Observe the full window before zooming with its screenshot coordinates.')
+      }
+      // Native zoom crops the unresized window, unlike native click, which
+      // applies the screenshot resize registry. Undo that resize exactly once.
+      for (const key of COMPUTER_USE_COORDINATE_FIELDS['zoom']!) {
+        const horizontal = key.startsWith('x')
+        args[key] = Number(args[key]) * (horizontal
+          ? previousCapture.bounds.width / previousCapture.width
+          : previousCapture.bounds.height / previousCapture.height)
+      }
+      argumentsJson = JSON.stringify(args)
+    }
     const result = await this.driver.callTool(name, argumentsJson)
     if (hasCuaError(result) || !result.images.length) return result
     const state = parseJsonRecord(result.structuredJson)
@@ -150,6 +184,9 @@ export class CuaWaylandCaptureAdapter implements ComputerUseDriver {
       const window = windows?.find((entry) => entry['window_id'] === args['window_id'] && entry['pid'] === args['pid'])
       const bounds = asRecord(window?.['bounds'])
       if (!bounds || window?.['is_on_screen'] !== true ||
+          (name === 'zoom' && previousCapture && ['x', 'y', 'width', 'height'].some(
+            (key) => previousCapture.bounds[key as keyof Rectangle] !== bounds[key]
+          )) ||
           (name === 'get_window_state' && ['x', 'y', 'width', 'height'].some(
             (key) => asRecord(state['window_bounds'])?.[key] !== bounds[key]
           ))) {
@@ -211,6 +248,9 @@ export class CuaWaylandCaptureAdapter implements ComputerUseDriver {
     }
     const png = await normalizeGnomeCapture(Buffer.from(image.dataBase64, 'base64'), layout, crop, output)
     this.observedLayouts.set(session, current)
+    if (name === 'get_window_state' && crop && output) {
+      this.windowCaptures.set(target, { bounds: crop, ...output, layout: current })
+    }
     const corrected = {
       ...state,
       ...(crop ? {} : {

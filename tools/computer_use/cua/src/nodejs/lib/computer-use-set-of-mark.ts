@@ -21,6 +21,27 @@ interface ComputerUseSetOfMarkPlan {
   filter: string | null
 }
 
+const COORDINATE_GUIDE_STEP = 50
+const COORDINATE_GUIDE_FONT_SIZE = 12
+
+/**
+ * Labels actual crop pixels without adding margins or changing its origin.
+ */
+export function createComputerUseCoordinateGuide(dimensions: ComputerUseImageDimensions): string {
+  const filters: string[] = []
+  for (const axis of ['x', 'y'] as const) {
+    const size = axis === 'x' ? dimensions.width : dimensions.height
+    for (let point = COORDINATE_GUIDE_STEP; point < size; point += COORDINATE_GUIDE_STEP) {
+      const horizontal = axis === 'x'
+      filters.push(
+        `drawbox=x=${horizontal ? point : 0}:y=${horizontal ? 0 : point}:w=${horizontal ? 1 : dimensions.width}:h=${horizontal ? dimensions.height : 1}:color=yellow@0.25:t=fill`,
+        `drawtext=font=Sans:text='${axis}=${point}':x=${horizontal ? Math.max(0, Math.min(point + 2, dimensions.width - COORDINATE_GUIDE_STEP)) : 2}:y=${horizontal ? 2 : Math.min(point + 2, dimensions.height - COORDINATE_GUIDE_FONT_SIZE)}:fontsize=${COORDINATE_GUIDE_FONT_SIZE}:fontcolor=yellow:box=1:boxcolor=black@0.8`
+      )
+    }
+  }
+  return filters.join(',')
+}
+
 function getFiniteNumber(value: unknown): number | null {
   const number = Number(value)
   return Number.isFinite(number) ? number : null
