@@ -55,9 +55,14 @@ export interface HTTPPluginPlanStep {
   status: 'pending' | 'in_progress' | 'completed' | 'error'
 }
 
+export interface HTTPPluginPlanTransition extends HTTPPluginPlanStep {
+  changed_at: number
+}
+
 export interface HTTPPluginAgentTrace {
   reasoning_summary?: string
   plan_steps: HTTPPluginPlanStep[]
+  plan_transitions?: HTTPPluginPlanTransition[]
   tool_calls: HTTPPluginToolCall[]
   metrics?: Record<string, unknown>
 }

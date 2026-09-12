@@ -45,6 +45,9 @@ export async function runAgent(
       string,
       HTTPPluginAgentTrace['plan_steps'][number]
     >()
+    const planTransitions: NonNullable<
+      HTTPPluginAgentTrace['plan_transitions']
+    > = []
     const toolCalls = new Map<string, HTTPPluginToolCall>()
     const toolStartedAt = new Map<string, number>()
     let actionExecutionMs = 0
@@ -104,6 +107,15 @@ export async function runAgent(
                 label: event.step.label,
                 status: event.step.status
               }
+              const previousStep = planSteps.get(step.id)
+
+              if (
+                previousStep?.label !== step.label ||
+                previousStep.status !== step.status
+              ) {
+                planTransitions.push({ ...step, changed_at: Date.now() })
+              }
+
               planSteps.set(step.id, step)
               emit('plan_step', { step })
               return
@@ -183,6 +195,9 @@ export async function runAgent(
         const trace: HTTPPluginAgentTrace = {
           reasoning_summary: reasoningSummary,
           plan_steps: [...planSteps.values()],
+          ...(planTransitions.length > 0
+            ? { plan_transitions: planTransitions }
+            : {}),
           tool_calls: [...toolCalls.values()],
           metrics
         }

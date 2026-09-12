@@ -14,6 +14,16 @@ export function serializeAgentTrace(
       ? { reasoning_summary: trace.reasoningSummary }
       : {}),
     plan_steps: trace.planSteps.map((step) => ({ ...step })),
+    ...(trace.planTransitions
+      ? {
+          plan_transitions: trace.planTransitions.map((transition) => ({
+            id: transition.id,
+            label: transition.label,
+            status: transition.status,
+            changed_at: transition.changedAt
+          }))
+        }
+      : {}),
     tool_calls: trace.toolCalls.map((toolCall) => ({
       id: toolCall.id,
       name: toolCall.name,
@@ -48,6 +58,16 @@ export function deserializeAgentTrace(
   return {
     reasoningSummary: trace.reasoning_summary || '',
     planSteps: trace.plan_steps.map((step) => ({ ...step })),
+    ...(trace.plan_transitions
+      ? {
+          planTransitions: trace.plan_transitions.map((transition) => ({
+            id: transition.id,
+            label: transition.label,
+            status: transition.status,
+            changedAt: transition.changed_at
+          }))
+        }
+      : {}),
     toolCalls: trace.tool_calls.map((toolCall) => ({
       id: toolCall.id || toolCall.name,
       name: toolCall.name,
