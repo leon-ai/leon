@@ -56,7 +56,7 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
-  it('keeps only the two most recent computer-use screenshots', () => {
+  it.each(['computer_use__cua__get_window_state', 'browser_use__cli__screenshot'])('keeps only the two most recent %s screenshots', (toolName) => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Operate the app.' }
     ]
@@ -64,7 +64,7 @@ describe('agent context budget', () => {
       transcript.push({
         role: 'tool',
         toolCallId: `cua-${index}`,
-        toolName: 'computer_use__cua__get_window_state',
+        toolName,
         content: `Capture ${index}`,
         files: [
           {

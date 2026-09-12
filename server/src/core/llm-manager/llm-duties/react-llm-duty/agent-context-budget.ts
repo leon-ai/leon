@@ -24,6 +24,7 @@ import {
 } from './constants'
 
 const TOOL_NAME_SEPARATOR = '__'
+const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
 const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
 
@@ -149,7 +150,7 @@ function estimateAgentInputTokens(
 }
 
 /**
- * Keeps only recent Cua screenshots while retaining every textual result.
+ * Keeps recent browser and desktop screenshots while retaining textual results.
  */
 function retainRecentComputerUseImages(
   transcript: AgentToolTranscriptMessage[]
@@ -163,7 +164,7 @@ function retainRecentComputerUseImages(
     const message = transcript[index]
     if (
       message?.role === 'tool' &&
-      message.toolName.startsWith('computer_use__') &&
+      UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) &&
       message.files?.length
     ) {
       retainedImageIndexes.add(index)
@@ -173,7 +174,7 @@ function retainRecentComputerUseImages(
   return transcript.map((message, index) => {
     if (
       message.role !== 'tool' ||
-      !message.toolName.startsWith('computer_use__') ||
+      !UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) ||
       !message.files?.length ||
       retainedImageIndexes.has(index)
     ) {
@@ -324,7 +325,7 @@ export function splitAgentTranscriptForSummary(
   const visual = findCompletedToolExchanges(boundedTranscript)
     .filter((exchange) =>
       exchange.endIndex < boundary && exchange.toolMessages.some((message) =>
-        message.toolName.startsWith('computer_use__') && message.files?.length
+        UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) && message.files?.length
       )
     )
     .flatMap((exchange) =>
