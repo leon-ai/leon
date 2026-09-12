@@ -38,7 +38,8 @@
   "scripts": {
     "pre-commit": "lint-staged",
     "lint": "tsx scripts/lint.js",
-    "test": "pnpm run test:core:unit && pnpm run test:agent:unit && pnpm run test:controlled:unit && pnpm run test:controlled:e2e",
+    "test": "pnpm run test:unit && pnpm run test:controlled:e2e",
+    "test:unit": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/core/unit test/agent/unit test/controlled/unit --fileParallelism --maxWorkers=4",
     "test:agent:unit": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts unit",
     "test:agent:e2e": "cross-env LEON_NODE_ENV=testing tsx scripts/run-agent-vitest.ts e2e",
     "test:core:unit": "cross-env LEON_NODE_ENV=testing vitest run --config vitest.config.ts test/core/unit",

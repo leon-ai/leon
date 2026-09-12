@@ -63,6 +63,9 @@ describe('NetworkHelper', () => {
       })
       response.end(content)
     })
+    // Allow partial bytes to flush without waiting for Node's multi-second default.
+    server.keepAliveTimeout = 100
+    server.keepAliveTimeoutBuffer = 0
 
     await new Promise<void>((resolve) => {
       server.listen(0, '127.0.0.1', resolve)
