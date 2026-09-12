@@ -113,6 +113,10 @@ export interface AgentResponsePlanStep {
   status: 'pending' | 'in_progress' | 'completed' | 'error'
 }
 
+export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
+  changedAt: number
+}
+
 export interface AgentResponseToolCall {
   id: string
   name: string
@@ -133,6 +137,7 @@ export interface AgentResponseToolCall {
 export interface AgentResponseTrace {
   reasoningSummary?: string
   planSteps: AgentResponsePlanStep[]
+  planTransitions?: AgentResponsePlanTransition[]
   toolCalls: AgentResponseToolCall[]
   metrics?: Record<string, unknown>
 }
