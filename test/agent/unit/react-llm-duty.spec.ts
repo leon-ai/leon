@@ -334,6 +334,15 @@ describe('continuous agent loop', () => {
     )
   })
 
+  it('requires plan steps to advance when milestones are verified', () => {
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      'Immediately after a milestone is verified, call update_plan'
+    )
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      'never defer multiple historical completions until final reconciliation'
+    )
+  })
+
   it('blocks an ineffective computer-use retry before executing the tool', async () => {
     const catalog = createCatalog()
     const input = { pid: 42, window_id: 7, x: 500, y: 300 }

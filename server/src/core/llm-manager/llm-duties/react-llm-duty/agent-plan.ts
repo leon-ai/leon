@@ -98,7 +98,7 @@ export function createAgentPlanTool(name: string): OpenAITool {
     type: 'function',
     function: {
       name,
-      description: 'Track a multi-step task. For collection work, establish scope and enumerate the relevant source before processing items. Keep collection step labels stable. Item updates merge by id; send only changed items. No work is executed by this tool.',
+      description: 'Track a multi-step task progressively. Start with one step in_progress and later steps pending. Immediately after verifying a milestone, complete its step and set the next step in_progress alongside the next operational call; never batch historical completions at the end. For collection work, establish scope and enumerate the relevant source before processing items. Keep collection step labels stable. Item updates merge by id; send only changed items. No work is executed by this tool.',
       parameters: {
         type: 'object',
         properties: {
