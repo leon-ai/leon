@@ -65,6 +65,8 @@ export interface LeonClientInterfaceTokenPayload {
   token: string
   generationId: string
   phase?: string
+  // Discard provisional text from a rejected response or provider retry.
+  reset?: boolean
 }
 
 export interface LeonClientInterfaceToolProgressPayload {

@@ -267,7 +267,9 @@ export default class Client {
        * Otherwise, create a new bubble
        */
       const streamGenerationId =
-        this._activeStreamGenerationId || this._answerGenerationId
+        data && typeof data === 'object' && 'generationId' in data
+          ? data.generationId
+          : this._activeStreamGenerationId || this._answerGenerationId
       const streamedBubbleContainerElement = streamGenerationId
         ? document.querySelector(
             `.bubble-container.leon.${streamGenerationId}`
@@ -276,16 +278,18 @@ export default class Client {
       const isBubbleFromStreaming = Boolean(streamedBubbleContainerElement)
 
       if (isBubbleFromStreaming && streamedBubbleContainerElement) {
-        this.chatbot.saveBubble(
-          'leon',
-          answerText,
-          answerText,
-          null,
-          llmMetrics,
-          data && typeof data === 'object' && typeof data.sentAt === 'number'
-            ? data.sentAt
-            : Date.now()
-        )
+        if (data.historyMode !== 'system_widget') {
+          this.chatbot.saveBubble(
+            'leon',
+            answerText,
+            answerText,
+            null,
+            llmMetrics,
+            data && typeof data === 'object' && typeof data.sentAt === 'number'
+              ? data.sentAt
+              : Date.now()
+          )
+        }
 
         // Slightly delay the update to avoid the stream animation to be interrupted
         setTimeout(() => {
@@ -320,8 +324,11 @@ export default class Client {
       }
       this.chatbot.scrollDown({ force: true })
 
-      this._activeStreamGenerationId = null
-      this._answerGenerationId = 'xxx'
+      // Independent status notices must not consume an in-flight answer.
+      if (streamGenerationId) {
+        this._activeStreamGenerationId = null
+        this._answerGenerationId = 'xxx'
+      }
       void this.sessionPanel?.refresh()
     })
 
@@ -371,6 +378,17 @@ export default class Client {
     })
 
     this.socket.on(LEON_EVENTS.llmToken, (data) => {
+      if (data.reset) {
+        document.querySelector(
+          `.bubble-container.leon.${data.generationId}`
+        )?.remove()
+        if (this._activeStreamGenerationId === data.generationId) {
+          this._activeStreamGenerationId = null
+          this._answerGenerationId = 'xxx'
+        }
+        return
+      }
+
       if (this._isVoiceModeEnabled) {
         this.voiceEnergy.status = 'processing'
       }

@@ -418,13 +418,15 @@ export default class SocketServer {
           ? tokenData['generationId']
           : null
 
-      if (!token || !generationId) {
+      const reset = eventName === 'llm-token' && tokenData?.['reset'] === true
+      if (token === null || (!token && !reset) || !generationId) {
         return
       }
 
       const tokenPayload: LeonClientInterfaceTokenPayload = {
         token,
         generationId,
+        ...(reset ? { reset: true } : {}),
         ...(typeof tokenData?.['phase'] === 'string'
           ? { phase: tokenData['phase'] }
           : {})

@@ -7,6 +7,7 @@ import type {
 } from '@/core/llm-manager/types'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
+import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 
 const openRouterMocks = vi.hoisted(() => {
   const languageModel = {
@@ -389,6 +390,37 @@ describe('AISDKRemoteLLMProvider', () => {
         }
       }
     ])
+  })
+
+  it('forwards answer text before the provider finishes its response', async () => {
+    const emit = vi.fn()
+    const answerStream = new AgentAnswerStream(emit)
+    const onReasoningToken = vi.fn()
+    openRouterMocks.languageModel.doStream.mockResolvedValue({
+      stream: (async function* (): AsyncGenerator<Record<string, unknown>> {
+        yield { type: 'reasoning-delta', delta: 'Thinking' }
+        expect(emit).not.toHaveBeenCalled()
+        yield { type: 'text-delta', delta: 'Hello' }
+        expect(emit).toHaveBeenCalledExactlyOnceWith({
+          token: 'Hello', generationId: expect.any(String)
+        })
+        yield { type: 'text-delta', delta: ' world' }
+        expect(emit).toHaveBeenCalledTimes(2)
+        yield { type: 'finish', finishReason: { unified: 'stop' } }
+      })()
+    })
+
+    await createOpenRouterProvider().runChatCompletion('Hello.', {
+      ...createCompletionParams(null),
+      shouldStream: true,
+      onToken: (token) => {
+        if (typeof token === 'string') answerStream.push(token)
+      },
+      onReasoningToken
+    })
+
+    expect(onReasoningToken).toHaveBeenCalledExactlyOnceWith('Thinking')
+    expect(emit.mock.calls.map(([payload]) => payload.token)).toEqual(['Hello', ' world'])
   })
 
   it('preserves streaming length finishes for agent recovery', async () => {

@@ -68,6 +68,7 @@ import type {
   AgentRunProgressEvent
 } from './react-llm-duty/types'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
+import { AgentAnswerStream } from './react-llm-duty/agent-answer-stream'
 import {
   getAgentInferencePolicy,
   formatAgentInferencePolicyForLog
@@ -169,6 +170,9 @@ export class ReActLLMDuty extends LLMDuty {
   private hasExplicitMemoryWrite = false
   private reasoningGenerationId: string | null = null
   private hasFinalizedAnswer = false
+  private readonly answerStream = new AgentAnswerStream((payload) => {
+    SOCKET_SERVER.emitToChatClients('llm-token', payload)
+  })
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
   private readonly responseTraceCollector = new AgentResponseTraceCollector()
@@ -505,7 +509,7 @@ export class ReActLLMDuty extends LLMDuty {
         onProgressMessage: async (message) => {
           // Existing hosts display reasoning_summary as a public activity summary.
           this.reportProgressEvent({ type: 'reasoning_summary', summary: message })
-          await this.emitProgress(message)
+          await this.emitProgress(message, this.answerStream.finish())
         },
         onPlanUpdated: (steps) => {
           trackedSteps = steps.map((step) => ({ ...step }))
@@ -570,6 +574,7 @@ export class ReActLLMDuty extends LLMDuty {
 
       return finalize(result.answer, result.intent)
     } catch (error) {
+      this.answerStream.discard()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
@@ -989,6 +994,11 @@ export class ReActLLMDuty extends LLMDuty {
     }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
 
     try {
+      // Reviews must neither expose their text nor replace the proposed answer.
+      // A subsequent operational call discards any ending rejected by review.
+      if (!options.isCompletionReview) {
+        this.answerStream.discard()
+      }
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         systemPrompt: activeSystemPrompt,
@@ -997,6 +1007,13 @@ export class ReActLLMDuty extends LLMDuty {
         maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
+        ...(!options.isCompletionReview
+          ? {
+              onToken: (token: unknown): void => {
+                if (typeof token === 'string') this.answerStream.push(token)
+              }
+            }
+          : {}),
         promptCacheKey: AGENT_PROMPT_CACHE_KEY,
         ...(inferencePolicy.textVerbosity
           ? { textVerbosity: inferencePolicy.textVerbosity }
@@ -1447,7 +1464,10 @@ export class ReActLLMDuty extends LLMDuty {
     await this.emitProgress(diagnosisMessage)
   }
 
-  private async emitProgress(message: string): Promise<void> {
+  private async emitProgress(
+    message: string,
+    generationId: string | null = null
+  ): Promise<void> {
     if (!message) {
       return
     }
@@ -1456,6 +1476,7 @@ export class ReActLLMDuty extends LLMDuty {
       SOCKET_SERVER.emitAnswerToChatClients({
         id: `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`,
         answer: message,
+        generationId,
         fallbackText: message,
         historyMode: 'system_widget'
       })
@@ -1476,9 +1497,9 @@ export class ReActLLMDuty extends LLMDuty {
 
     const normalizedOutput = StringHelper.normalizeUserFacingText(output)
 
-    if (normalizedOutput?.trim()) {
-      this.emitSyntheticTokenStream(normalizedOutput)
-    }
+    // The normal answer event finalizes streamed text, including review edits
+    // and runtime-generated endings. Never replay the answer as synthetic tokens.
+    this.answerStream.finish()
 
     this.logTitle('final_answer')
     LogHelper.success('Duty executed')
@@ -1558,18 +1579,6 @@ export class ReActLLMDuty extends LLMDuty {
         token: chunk,
         generationId,
         phase
-      })
-    }
-  }
-
-  private emitSyntheticTokenStream(output: string): void {
-    const generationId = StringHelper.random(6, { onlyLetters: true })
-    const chunks = output.match(/(\s+|[^\s]+)/g) || [output]
-
-    for (const token of chunks) {
-      SOCKET_SERVER.emitToChatClients('llm-token', {
-        token,
-        generationId
       })
     }
   }
