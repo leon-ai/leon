@@ -86,43 +86,6 @@ it('keeps ordinary calls isolated and does not replay a crashed persistent call'
   expect((await next('a', 'one')).output['result']).toMatchObject({ count: 1 })
 })
 
-it('runs the actual Cua tool across workers with session continuity and native evidence', async () => {
-  const { createServer } = await import('node:http')
-  const calls: Array<{ action: string, arguments: Record<string, unknown> }> = []
-  const server = createServer(async (request, response) => {
-    let body = ''
-    for await (const chunk of request) body += chunk
-    const call = JSON.parse(body)
-    calls.push(call)
-    response.setHeader('content-type', 'application/json')
-    response.end(JSON.stringify({ status: 'ok', output: call.action === 'get_desktop_state' ? {
-      screenshot_width: 1, screenshot_height: 1,
-      cybopal_model_files: [{ data_base64: 'aW1hZ2U=', media_type: 'image/png' }]
-    } : { effect: 'confirmed' } }))
-  })
-  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-  const address = server.address() as { port: number }
-  await fixture(true)
-  vi.stubEnv('LEON_COMPUTER_USE_REMOTE_URL', `http://127.0.0.1:${address.port}`)
-  const context = { toolkitId: 'computer_use', toolId: 'cua', profileName: 'a', conversationSessionId: 'desktop' }
-  try {
-    const capture = await manager.execute({ ...context, functionName: 'get_desktop_state', parameters: {} }, [], () => {})
-    expect(capture.success).toBe(true)
-    expect(capture.output['result']).toMatchObject({ success: true })
-    expect(capture.modelFiles).toMatchObject([{ mediaType: 'image/png', visualDetail: 'high' }])
-    const click = await manager.execute({ ...context, functionName: 'click', parameters: {
-      target: { kind: 'desktop', display_id: 'primary' }, x: 0, y: 0, capture_after: false
-    } }, [], () => {})
-    expect(click.output['result']).toMatchObject({ success: true })
-    expect(click.modelFiles).toBeUndefined()
-    expect(calls.filter((call) => call.action === 'start_session')).toHaveLength(1)
-    expect(calls.find((call) => call.action === 'click')?.arguments).toMatchObject({ x: 0, y: 0 })
-  } finally {
-    await manager.dispose()
-    await new Promise<void>((resolve) => server.close(() => resolve()))
-  }
-})
-
 it('cancels an active call cooperatively and releases its worker before another call', async () => {
   await fixture(true)
   const controller = new AbortController()

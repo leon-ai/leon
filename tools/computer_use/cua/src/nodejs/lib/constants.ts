@@ -31,11 +31,6 @@ export const COMPUTER_USE_LAUNCH_WINDOW_RETRY_DELAYS_MS = [
 ] as const
 export const CUA_TELEMETRY_ENABLED_ENV = 'CUA_TELEMETRY_ENABLED'
 export const CUA_X11_UINPUT_SAFETY_ENV = 'KDE_FULL_SESSION'
-export const COMPUTER_USE_REMOTE_DRIVER_URL_ENV =
-  'LEON_COMPUTER_USE_REMOTE_URL'
-export const COMPUTER_USE_REMOTE_DRIVER_TOKEN_ENV = 'LEON_PROFILE_TOKEN'
-export const COMPUTER_USE_REMOTE_DRIVER_TIMEOUT_MS = 90_000
-export const COMPUTER_USE_REMOTE_MODEL_FILES_FIELD = 'cybopal_model_files'
 export const COMPUTER_USE_BROWSER_INSPECTION_SETTING = 'browser_inspection'
 export const COMPUTER_USE_INTERACTION_MODE_SETTING = 'interaction_mode'
 export const COMPUTER_USE_ACTIVITY_OVERLAY_SETTING = 'activity_overlay'
@@ -89,34 +84,6 @@ export const COMPUTER_USE_ACTION_NAMES = [
 export const COMPUTER_USE_ACTIONS = new Set<string>(
   COMPUTER_USE_ACTION_NAMES
 )
-
-export const COMPUTER_USE_REMOTE_SESSION_AWARE_ACTIONS = new Set<string>([
-  'move_cursor',
-  'get_window_state',
-  'verify_state',
-  'get_desktop_state',
-  'invoke_menu',
-  'click',
-  'drag',
-  'scroll',
-  'type_text',
-  'press_key',
-  'hotkey',
-  'set_value',
-  'clipboard_read',
-  'clipboard_write',
-  'browser_prepare',
-  'get_browser_state',
-  'browser_navigate',
-  'browser_click',
-  'browser_type',
-  'browser_pointer',
-  'browser_dialog',
-  'browser_set_input_files'
-])
-
-// These native actions accept Cua's crop coordinates. Keep this host-only.
-export const COMPUTER_USE_REMOTE_ZOOM_CAPABLE_ACTIONS = new Set(['click', 'drag'])
 
 export { COMPUTER_USE_CAPTURE_ACTIONS } from './action-contract'
 

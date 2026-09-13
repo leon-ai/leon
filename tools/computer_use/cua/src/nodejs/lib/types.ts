@@ -118,11 +118,4 @@ export interface StructuredComputerUseFailure {
   message: string
 }
 
-export interface RemoteComputerUseResponse {
-  status?: string
-  output?: unknown
-  error_code?: string
-  error_message?: string
-}
-
 export type { CuaToolResult }
