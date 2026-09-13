@@ -22,7 +22,8 @@ import {
   BRAIN,
   LLM_PROVIDER,
   CONVERSATION_LOGGER,
-  TOOLKIT_REGISTRY
+  TOOLKIT_REGISTRY,
+  PERSONA
 } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
@@ -74,6 +75,7 @@ const DEFAULT_CLIENT_CAPABILITIES = {
   supportsVoice: true
 }
 const HOTWORD_NODE_CLIENT = 'hotword-node'
+const NEW_MOOD_EVENT = 'new-mood'
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
 const CLIENT_ID_RANDOM_LENGTH = 6
 const OWNER_MESSAGE_ID_RANDOM_LENGTH = 6
@@ -218,6 +220,11 @@ export default class SocketServer {
 
     if (initData.client !== HOTWORD_NODE_CLIENT) {
       this.chatClients.set(socket.id, chatClient)
+      // Refresh the HTTP snapshot on initial connection and reconnection.
+      socket.emit(NEW_MOOD_EVENT, {
+        type: PERSONA.mood.type,
+        emoji: PERSONA.mood.emoji
+      })
     }
 
     return chatClient
@@ -245,6 +252,12 @@ export default class SocketServer {
     }
 
     this.chatClients.set(socket.id, chatClient)
+
+    // Registration runs in the authenticated profile's context.
+    socket.emit(NEW_MOOD_EVENT, {
+      type: PERSONA.mood.type,
+      emoji: PERSONA.mood.emoji
+    })
 
     return chatClient
   }
@@ -347,6 +360,12 @@ export default class SocketServer {
     payload?: unknown,
     options?: { sessionId?: string | null }
   ): void {
+    // The web client still consumes this shared event under the newer protocol.
+    if (eventName === NEW_MOOD_EVENT) {
+      this.emitSocketEvent(chatClient.socket, eventName, payload)
+      return
+    }
+
     if (eventName === 'is-typing') {
       const typingPayload: LeonClientInterfaceTypingPayload = payload === true
 
