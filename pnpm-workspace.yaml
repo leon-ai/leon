@@ -19,3 +19,7 @@ reporter: append-only
 
 # Always run install lifecycle scripts, even when dependencies are up to date
 optimisticRepeatInstall: false
+
+# pnpm 12 also skips lifecycle scripts on unchanged headless installs.
+# Run setup after pulls that only change Leon's setup scripts.
+preferFrozenLockfile: false
