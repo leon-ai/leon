@@ -20,7 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         pnpm-version:
-          - latest-10
+          - '11'
           - latest
 
     steps:
