@@ -13,7 +13,6 @@ import { pickAutomaticMood } from '@/core/config-states/mood-state'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { DateHelper } from '@/helpers/date-helper'
-import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
 import { Moods } from '@/types'
@@ -240,30 +239,20 @@ export default class Persona {
     LogHelper.info(`Context info set to: ${this.contextInfo}`)
   }
 
-  private async setOwnerInfo(): Promise<void> {
+  private setOwnerInfo(): void {
     const ownerProfile = readOwnerProfileSync()
-    const ownerInfo = await SkillDomainHelper.getSkillMemory(
-      'leon',
-      'introduction',
-      'owner'
-    )
 
     this.ownerName =
       ownerProfile.owner_first_name ||
-      ownerProfile.owner_full_name ||
-      (ownerInfo
-        ? StringHelper.ucFirst(ownerInfo['name'] as string)
-        : null)
-    this.ownerBirthDate =
-      ownerProfile.owner_birth_date ||
-      (ownerInfo ? (ownerInfo['birth_date'] as string) : null)
+      ownerProfile.owner_full_name
+    this.ownerBirthDate = ownerProfile.owner_birth_date
 
     this.whoYouAre = StringHelper.findAndMap(WHO_YOU_ARE, {
       '%OWNER_NAME%': this.ownerName || 'the user'
     })
 
     this.whatYouDo = StringHelper.findAndMap(WHAT_YOU_DO, {
-      '%WHAT_YOU_DO%': ownerInfo
+      '%WHAT_YOU_DO%': this.ownerName
         ? `You serve a person named ${this.ownerName} and adapt to ${this.ownerName}'s preferences over time`
         : 'You serve a specific person or family (user) and adapt to their preferences over time'
     })
@@ -531,6 +520,7 @@ export default class Persona {
 
   public refreshContextInfo(): void {
     this.setContextInfo()
+    this.setOwnerInfo()
   }
 
   public getContextInfo(): string {
