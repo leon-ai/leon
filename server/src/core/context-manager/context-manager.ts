@@ -137,6 +137,7 @@ export default class ContextManager {
       this.cleanupDisabledContextFiles()
       this.cleanupRetiredContextFiles()
       this.cleanupProfileCopiesOfCodebaseContextFiles()
+      this.refreshOwnerContext()
       this.refreshContextFilesAtBootInBackground()
 
       await this.syncContextReadFilenameEnum()
@@ -208,6 +209,17 @@ export default class ContextManager {
     }
 
     scheduleBootRefresh(this.getAdaptiveBootInitialDelayMs())
+  }
+
+  /**
+   * Refresh the curated owner summary and its cached prompt manifest after changes.
+   */
+  public refreshOwnerContext(): void {
+    const definition = this.resolveDefinition('OWNER.md')
+    if (definition) {
+      this.refreshContextFile(definition, true)
+      this.manifest = this.buildManifest()
+    }
   }
 
   public getManifest(): string {

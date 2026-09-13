@@ -625,7 +625,9 @@ async function writeOwnerArtifacts(
     nextProfile
   )
   const contextChanged =
-    !documentProfilesEqual || !fs.existsSync(getOwnerContextPath())
+    !documentProfilesEqual ||
+    currentDocument.split('\n')[0] !== nextDocument.split('\n')[0] ||
+    !fs.existsSync(getOwnerContextPath())
   const profileChanged = !profilesEqual || !fs.existsSync(getOwnerProfilePath())
 
   if (!profileChanged && !contextChanged) {
@@ -642,6 +644,9 @@ async function writeOwnerArtifacts(
     await fs.promises.writeFile(ownerContextPath, `${nextDocument}\n`, 'utf8')
   }
   await writeOwnerProfile(nextProfile)
+  const { CONTEXT_MANAGER, PERSONA } = await import('@/core')
+  CONTEXT_MANAGER.refreshOwnerContext()
+  PERSONA.refreshContextInfo()
 
   return {
     profileChanged,
