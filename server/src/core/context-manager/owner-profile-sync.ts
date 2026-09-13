@@ -5,7 +5,7 @@ import {
   buildOwnerDocument,
   getOwnerContextPath,
   getOwnerProfilePath,
-  getOwnerProfileLineCount,
+  OWNER_PROFILE_SECTIONS,
   normalizeOwnerProfile,
   parseOwnerDocument,
   readOwnerDocumentSync,
@@ -13,21 +13,32 @@ import {
   type OwnerProfile,
   writeOwnerProfile
 } from '@/core/context-manager/owner-profile'
-import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
-import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { LLMDuties } from '@/core/llm-manager/types'
+import { LogHelper } from '@/helpers/log-helper'
 
 const OWNER_DOCUMENT_TOKEN_BUDGET = 2_000
 const OWNER_DOCUMENT_UPDATE_TIMEOUT_MS = 30_000
 const OWNER_DOCUMENT_COMPACT_TIMEOUT_MS = 30_000
 const OWNER_DOCUMENT_VERIFY_TIMEOUT_MS = 15_000
 const OWNER_DOCUMENT_MAX_RETRIES = 1
-const OWNER_DOCUMENT_UPDATE_MAX_TOKENS = 2_000
-const OWNER_DOCUMENT_COMPACT_MAX_TOKENS = 2_000
-const OWNER_DOCUMENT_VERIFY_MAX_TOKENS = 500
+const OWNER_DOCUMENT_UPDATE_MIN_TOKENS = 4_096
+const OWNER_DOCUMENT_UPDATE_MAX_TOKENS = 16_384
+const OWNER_DOCUMENT_COMPACT_MAX_TOKENS = 4_096
+const OWNER_DOCUMENT_VERIFY_MAX_TOKENS = 1_024
+const OWNER_STATIC_FIELDS_MAX_TOKENS = 1_024
+const OWNER_DOCUMENT_OUTPUT_HEADROOM = 2
 const OWNER_TURN_MAX_USER_CHARS = 1_200
 const OWNER_TURN_MAX_ASSISTANT_CHARS = 600
 const OWNER_MEMORY_ITEM_MAX_TITLE_CHARS = 120
 const OWNER_MEMORY_ITEM_MAX_CONTENT_CHARS = 240
+const OWNER_PROFILE_CURATION_RULES = [
+  'OWNER.md is a curated personal profile, not a transcript, task log, or machine inventory.',
+  'Keep durable identity, meaningful places, relationships, background, current career, explicit lasting preferences, and important personal dates.',
+  'Exclude credentials and secrets, temporary files and paths, file counts, tool output, debugging findings, vulnerability reports, market snapshots, and one-off task instructions.',
+  'Remove existing out-of-scope material and duplicates instead of preserving them as owner facts.',
+  'Do not turn a single task request into a lasting preference or infer personal facts from assistant text or tool output.',
+  'Keep ongoing personal projects distinct from current employment.'
+].join('\n')
 
 interface OwnerTurnToolExecution {
   functionName: string
@@ -123,6 +134,16 @@ function estimateTokenCount(value: string): number {
   return Math.ceil(value.length / 4)
 }
 
+/**
+ * Leave room to rewrite a large existing profile before attempting compaction.
+ */
+function getOwnerDocumentOutputBudget(document: string): number {
+  return Math.min(OWNER_DOCUMENT_UPDATE_MAX_TOKENS, Math.max(
+    OWNER_DOCUMENT_UPDATE_MIN_TOKENS,
+    estimateTokenCount(document) * OWNER_DOCUMENT_OUTPUT_HEADROOM
+  ))
+}
+
 function areOwnerProfilesEquivalent(
   profileA: OwnerProfile,
   profileB: OwnerProfile
@@ -173,6 +194,11 @@ function extractOwnerStaticFieldsFromOutput(output: unknown): OwnerStaticFields 
   }
 
   const raw = output as Record<string, unknown>
+  if (!OWNER_STATIC_FIELDS_SCHEMA.required.every((field) =>
+    raw[field] === null || typeof raw[field] === 'string'
+  )) {
+    return null
+  }
   const normalized = normalizeOwnerProfile({
     owner_first_name: raw['owner_first_name'],
     owner_last_name: raw['owner_last_name'],
@@ -289,10 +315,7 @@ function parsedInputLike(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
-function parseOwnerDocumentCandidate(
-  value: unknown,
-  currentProfile: OwnerProfile
-): OwnerProfile | null {
+function parseOwnerDocumentCandidate(value: unknown): OwnerProfile | null {
   if (typeof value !== 'string') {
     return null
   }
@@ -302,15 +325,20 @@ function parseOwnerDocumentCandidate(
     return null
   }
 
-  const parsedProfile = parseOwnerDocument(cleaned)
-  if (
-    getOwnerProfileLineCount(parsedProfile) === 0 &&
-    getOwnerProfileLineCount(currentProfile) > 0
-  ) {
+  // A truncated response can contain valid bullets while missing whole sections.
+  // Empty sections are valid, including when the owner explicitly removes facts.
+  const headings = cleaned.split('\n').map((line) => line.trim())
+    .filter((line) => line.startsWith('#'))
+  const expectedHeadings = [
+    '# OWNER',
+    ...OWNER_PROFILE_SECTIONS.map((section) => `## ${section.title}`),
+    '## To Learn'
+  ]
+  if (JSON.stringify(headings) !== JSON.stringify(expectedHeadings)) {
     return null
   }
 
-  return parsedProfile
+  return parseOwnerDocument(cleaned)
 }
 
 async function promptForOwnerDocument(
@@ -321,21 +349,20 @@ async function promptForOwnerDocument(
   data?: Record<string, unknown>
 ): Promise<unknown> {
   const { LLM_PROVIDER } = await import('@/core')
-  const completion = await LLM_PROVIDER.prompt(prompt, {
+  // Some compatible providers support JSON mode but do not enforce its schema.
+  // Ground the exact field names in the prompt as well as the request metadata.
+  const groundedPrompt = data
+    ? `${prompt}\n\nRequired JSON schema (include every required field):\n${JSON.stringify(data)}`
+    : prompt
+  const completion = await LLM_PROVIDER.prompt(groundedPrompt, {
     dutyType: LLMDuties.Inference,
     systemPrompt,
     timeout,
     maxRetries: OWNER_DOCUMENT_MAX_RETRIES,
     maxTokens,
     trackProviderErrors: false,
-        /**
-         * Disable thinking when Llama.cpp since local models tend
-         * to loop overthink
-         */
-        ...(CONFIG_STATE.getModelState().getWorkflowProvider() ===
-        LLMProviders.LlamaCPP
-          ? { disableThinking: true }
-          : {}),
+    // These bounded editing/extraction calls need their output budget for data.
+    disableThinking: true,
     ...(data ? { data } : {})
   })
 
@@ -344,7 +371,8 @@ async function promptForOwnerDocument(
 
 async function repairOwnerDocumentCandidate(
   currentDocument: string,
-  candidate: string
+  candidate: string,
+  userMessage = ''
 ): Promise<string | null> {
   const prompt = [
     'Rewrite this into a valid OWNER.md document.',
@@ -362,7 +390,9 @@ async function repairOwnerDocumentCandidate(
     '## Interaction Preferences',
     '## Important Dates',
     '## To Learn',
-    'Keep every durable owner fact from the draft unless it clearly conflicts with the current document.',
+    OWNER_PROFILE_CURATION_RULES,
+    'Repair structure without undoing corrections or deletions explicitly requested by the owner.',
+    `Latest owner message: ${userMessage}`,
     'No code fences. Markdown only.',
     '',
     'Current OWNER.md:',
@@ -376,7 +406,7 @@ async function repairOwnerDocumentCandidate(
     const output = await promptForOwnerDocument(
       prompt,
       'Repair an OWNER.md markdown document without dropping durable owner facts.',
-      OWNER_DOCUMENT_UPDATE_MAX_TOKENS,
+      getOwnerDocumentOutputBudget(currentDocument),
       OWNER_DOCUMENT_UPDATE_TIMEOUT_MS
     )
 
@@ -388,7 +418,6 @@ async function repairOwnerDocumentCandidate(
 
 async function rewriteOwnerDocumentFromTurn(
   currentDocument: string,
-  currentProfile: OwnerProfile,
   userMessage: string,
   assistantMessage: string,
   memoryItems: OwnerMemoryItem[]
@@ -396,10 +425,11 @@ async function rewriteOwnerDocumentFromTurn(
   const prompt = [
     'Update this OWNER.md document from the latest conversation turn.',
     'Return the full revised OWNER.md document.',
-    'If the latest turn does not add, correct, or remove durable owner-profile information, return the current OWNER.md unchanged.',
+    'If neither the latest turn nor profile curation requires any change, return the current OWNER.md unchanged.',
+    OWNER_PROFILE_CURATION_RULES,
     'Do not use task details, temporary instructions, transient project context, or assistant wording as owner-profile facts.',
     'You may add, replace, move, merge, or delete lines.',
-    'Never drop an existing durable owner fact unless the user clearly corrected it in this turn or you merged it into an equivalent clearer line.',
+    'Preserve valid in-scope facts unless the owner explicitly corrects or removes them. Merge equivalent facts and remove out-of-scope material.',
     'Keep one durable fact per bullet line.',
     'Keep the most important current fact first within each section when possible.',
     'The manifest one-liner should prioritize: full name, home/location, birth date, current work/career, then family and other durable facts.',
@@ -429,11 +459,11 @@ async function rewriteOwnerDocumentFromTurn(
     const output = await promptForOwnerDocument(
       prompt,
       'Maintain a compact durable OWNER.md profile for Leon. Edit the whole document conservatively and accurately.',
-      OWNER_DOCUMENT_UPDATE_MAX_TOKENS,
+      getOwnerDocumentOutputBudget(currentDocument),
       OWNER_DOCUMENT_UPDATE_TIMEOUT_MS
     )
 
-    const parsedProfile = parseOwnerDocumentCandidate(output, currentProfile)
+    const parsedProfile = parseOwnerDocumentCandidate(output)
     if (parsedProfile) {
       return parsedProfile
     }
@@ -441,10 +471,11 @@ async function rewriteOwnerDocumentFromTurn(
     if (typeof output === 'string') {
       const repaired = await repairOwnerDocumentCandidate(
         currentDocument,
-        output
+        output,
+        userMessage
       )
       if (repaired) {
-        return parseOwnerDocumentCandidate(repaired, currentProfile)
+        return parseOwnerDocumentCandidate(repaired)
       }
     }
   } catch {
@@ -456,13 +487,12 @@ async function rewriteOwnerDocumentFromTurn(
 
 async function compactOwnerDocument(
   document: string,
-  currentProfile: OwnerProfile,
   missingFacts: string[] = []
 ): Promise<OwnerProfile | null> {
   const prompt = [
     `Compact this OWNER.md document to approximately ${OWNER_DOCUMENT_TOKEN_BUDGET} tokens or less.`,
-    'Preserve every durable owner fact.',
-    'You may combine, tighten, reorder, or rewrite lines, but do not weaken, omit, or contradict any durable fact.',
+    OWNER_PROFILE_CURATION_RULES,
+    'Preserve all valid in-scope facts. Combine, tighten, reorder, or rewrite lines without weakening them.',
     'Keep the same top-level structure and section order.',
     'Keep the most important current fact first within each section when possible.',
     'The manifest one-liner should prioritize: full name, home/location, birth date, current work/career, then family and other durable facts.',
@@ -483,7 +513,7 @@ async function compactOwnerDocument(
       OWNER_DOCUMENT_COMPACT_TIMEOUT_MS
     )
 
-    const parsedProfile = parseOwnerDocumentCandidate(output, currentProfile)
+    const parsedProfile = parseOwnerDocumentCandidate(output)
     if (parsedProfile) {
       return parsedProfile
     }
@@ -491,7 +521,7 @@ async function compactOwnerDocument(
     if (typeof output === 'string') {
       const repaired = await repairOwnerDocumentCandidate(document, output)
       if (repaired) {
-        return parseOwnerDocumentCandidate(repaired, currentProfile)
+        return parseOwnerDocumentCandidate(repaired)
       }
     }
   } catch {
@@ -503,13 +533,18 @@ async function compactOwnerDocument(
 
 async function verifyOwnerDocumentPreservesFacts(
   previousDocument: string,
-  nextDocument: string
+  nextDocument: string,
+  userMessage = ''
 ): Promise<OwnerDocumentVerification | null> {
   const prompt = [
     'Compare the original OWNER.md and the revised OWNER.md.',
-    'Decide whether every durable owner fact from the original is still preserved in the revised version.',
+    OWNER_PROFILE_CURATION_RULES,
+    'Verify that the revision preserves valid in-scope facts, applies the latest owner corrections/removals, and introduces no unsupported facts.',
+    'Explicit owner corrections and removals override the original document. Do not require superseded claims or removed facts to remain.',
+    'Removing out-of-scope material or duplicate facts is safe and desirable.',
     'A fact is preserved if it is still present explicitly or is clearly merged into an equivalent stronger line.',
-    'If anything durable was dropped, weakened, or contradicted, set safe=false and list the missing facts.',
+    'Set safe=false for unexplained loss of valid facts, missed owner corrections, unsupported additions, or retained/new out-of-scope content. List the issues in missingFacts.',
+    `Latest owner message: ${userMessage}`,
     'JSON only.',
     '',
     'Original OWNER.md:',
@@ -522,7 +557,7 @@ async function verifyOwnerDocumentPreservesFacts(
   try {
     const output = await promptForOwnerDocument(
       prompt,
-      'Verify whether a revised OWNER.md still preserves every durable owner fact from the original.',
+      'Verify owner profile curation and corrections against the original document and latest owner message.',
       OWNER_DOCUMENT_VERIFY_MAX_TOKENS,
       OWNER_DOCUMENT_VERIFY_TIMEOUT_MS,
       OWNER_DOCUMENT_VERIFICATION_SCHEMA
@@ -530,13 +565,13 @@ async function verifyOwnerDocumentPreservesFacts(
 
     if (output && typeof output === 'object' && !Array.isArray(output)) {
       const raw = output as Record<string, unknown>
+      if (typeof raw['safe'] !== 'boolean' || !Array.isArray(raw['missingFacts']) ||
+          !raw['missingFacts'].every((item) => typeof item === 'string')) {
+        return null
+      }
       return {
-        safe: raw['safe'] === true,
-        missingFacts: Array.isArray(raw['missingFacts'])
-          ? raw['missingFacts']
-              .map((item) => (typeof item === 'string' ? normalizeText(item) : ''))
-              .filter(Boolean)
-          : []
+        safe: raw['safe'] === true && raw['missingFacts'].length === 0,
+        missingFacts: raw['missingFacts'].map(normalizeText).filter(Boolean)
       }
     }
   } catch {
@@ -547,26 +582,14 @@ async function verifyOwnerDocumentPreservesFacts(
 }
 
 async function extractOwnerStaticFields(
-  ownerDocument: string,
-  currentProfile: OwnerProfile
+  ownerDocument: string
 ): Promise<OwnerStaticFields | null> {
   const prompt = [
     'Extract only these stable owner cache fields from OWNER.md.',
     'Use null when a field is missing, unclear, inferred, or no longer current.',
     'For current company and current role, only return values that are still current now, not past employment.',
+    'Use the document as the only source of truth. Personal projects are not employers unless explicitly described as employment.',
     'JSON only.',
-    '',
-    `Current static cache JSON: ${JSON.stringify({
-      owner_first_name: currentProfile.owner_first_name,
-      owner_last_name: currentProfile.owner_last_name,
-      owner_full_name: currentProfile.owner_full_name,
-      owner_birth_date: currentProfile.owner_birth_date,
-      owner_current_city: currentProfile.owner_current_city,
-      owner_current_country: currentProfile.owner_current_country,
-      owner_nationality: currentProfile.owner_nationality,
-      owner_current_company: currentProfile.owner_current_company,
-      owner_current_role: currentProfile.owner_current_role
-    })}`,
     '',
     'OWNER.md:',
     ownerDocument
@@ -576,7 +599,7 @@ async function extractOwnerStaticFields(
     const output = await promptForOwnerDocument(
       prompt,
       'Extract a tiny stable owner cache from OWNER.md without guessing.',
-      250,
+      OWNER_STATIC_FIELDS_MAX_TOKENS,
       OWNER_DOCUMENT_VERIFY_TIMEOUT_MS,
       OWNER_STATIC_FIELDS_SCHEMA
     )
@@ -588,7 +611,8 @@ async function extractOwnerStaticFields(
 }
 
 async function writeOwnerArtifacts(
-  profile: OwnerProfile
+  profile: OwnerProfile,
+  expectedDocument: string
 ): Promise<{ profileChanged: boolean, contextChanged: boolean }> {
   const currentProfile = readOwnerProfileSync()
   const normalizedProfile = normalizeOwnerProfile(profile)
@@ -600,22 +624,20 @@ async function writeOwnerArtifacts(
     updatedAt
   })
   const extractedStaticFields = await extractOwnerStaticFields(
-    nextDocumentDraft,
-    currentProfile
+    nextDocumentDraft
   )
+  if (!extractedStaticFields) {
+    LogHelper.error('Owner profile sync: structured extraction failed; neither artifact was updated')
+    return { profileChanged: false, contextChanged: false }
+  }
+  // A background update must not overwrite a manual edit or another completed turn.
+  if (readOwnerDocumentSync().trimEnd() !== expectedDocument.trimEnd()) {
+    LogHelper.error('Owner profile sync: document changed during generation; update discarded')
+    return { profileChanged: false, contextChanged: false }
+  }
   const nextProfile = normalizeOwnerProfile({
     ...normalizedProfile,
-    ...(extractedStaticFields || {
-      owner_first_name: currentProfile.owner_first_name,
-      owner_last_name: currentProfile.owner_last_name,
-      owner_full_name: currentProfile.owner_full_name,
-      owner_birth_date: currentProfile.owner_birth_date,
-      owner_current_city: currentProfile.owner_current_city,
-      owner_current_country: currentProfile.owner_current_country,
-      owner_nationality: currentProfile.owner_nationality,
-      owner_current_company: currentProfile.owner_current_company,
-      owner_current_role: currentProfile.owner_current_role
-    }),
+    ...extractedStaticFields,
     updatedAt
   })
   const profilesEqual = areOwnerProfilesEquivalent(currentProfile, nextProfile)
@@ -631,6 +653,7 @@ async function writeOwnerArtifacts(
   const profileChanged = !profilesEqual || !fs.existsSync(getOwnerProfilePath())
 
   if (!profileChanged && !contextChanged) {
+    LogHelper.debug('Owner profile sync: no changes')
     return {
       profileChanged: false,
       contextChanged: false
@@ -647,6 +670,7 @@ async function writeOwnerArtifacts(
   const { CONTEXT_MANAGER, PERSONA } = await import('@/core')
   CONTEXT_MANAGER.refreshOwnerContext()
   PERSONA.refreshContextInfo()
+  LogHelper.info('Owner profile sync: OWNER.md and structured profile synchronized')
 
   return {
     profileChanged,
@@ -654,6 +678,9 @@ async function writeOwnerArtifacts(
   }
 }
 
+/**
+ * Curate owner facts from a completed turn and publish matching profile artifacts.
+ */
 export async function syncOwnerProfileFromTurn(
   userMessage: string,
   assistantMessage: string,
@@ -677,13 +704,13 @@ export async function syncOwnerProfileFromTurn(
   const currentDocument = readOwnerDocumentSync().trimEnd()
   const updatedProfile = await rewriteOwnerDocumentFromTurn(
     currentDocument,
-    currentProfile,
     normalizedUserMessage,
     normalizedAssistantMessage,
     memoryItems
   )
 
   if (!updatedProfile) {
+    LogHelper.error('Owner profile sync: rewrite/repair failed or returned an incomplete document')
     return {
       profileChanged: false,
       contextChanged: false
@@ -696,14 +723,18 @@ export async function syncOwnerProfileFromTurn(
     updatedAt: currentProfile.updatedAt
   })
 
-  const updatedLineCount = getOwnerProfileLineCount(updatedProfile)
-  const currentLineCount = getOwnerProfileLineCount(currentProfile)
-  if (updatedLineCount < currentLineCount) {
+  // Replacing a fact or adding unsupported content need not change the bullet count.
+  if (!areOwnerDocumentProfilesEquivalent(currentProfile, updatedProfile)) {
     const verification = await verifyOwnerDocumentPreservesFacts(
       currentDocument,
-      finalDocument
+      finalDocument,
+      normalizedUserMessage
     )
     if (!verification?.safe) {
+      // Log the failing stage, not personal facts or credentials echoed by a model.
+      LogHelper.error(verification
+        ? 'Owner profile sync: revision rejected by curation/correction verification'
+        : 'Owner profile sync: revision verification failed or returned invalid output')
       return {
         profileChanged: false,
         contextChanged: false
@@ -713,8 +744,7 @@ export async function syncOwnerProfileFromTurn(
 
   if (estimateTokenCount(finalDocument) > OWNER_DOCUMENT_TOKEN_BUDGET) {
     const compactedProfile = await compactOwnerDocument(
-      finalDocument,
-      finalProfile
+      finalDocument
     )
     if (compactedProfile) {
       const compactedDocument = buildOwnerDocument({
@@ -729,7 +759,6 @@ export async function syncOwnerProfileFromTurn(
       if (!verification?.safe) {
         const retriedCompaction = await compactOwnerDocument(
           finalDocument,
-          finalProfile,
           verification?.missingFacts || []
         )
         if (retriedCompaction) {
@@ -752,14 +781,18 @@ export async function syncOwnerProfileFromTurn(
         finalDocument = compactedDocument
       }
     }
+    if (estimateTokenCount(finalDocument) > OWNER_DOCUMENT_TOKEN_BUDGET) {
+      LogHelper.warning('Owner profile sync: compaction did not reach the target size; preserving the verified revision')
+    }
   }
 
   if (areOwnerProfilesEquivalent(currentProfile, finalProfile)) {
+    LogHelper.debug('Owner profile sync: no changes')
     return {
       profileChanged: false,
       contextChanged: false
     }
   }
 
-  return writeOwnerArtifacts(finalProfile)
+  return writeOwnerArtifacts(finalProfile, currentDocument)
 }
