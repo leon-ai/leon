@@ -190,12 +190,13 @@ export default async function buildServer(options = {}) {
   )
   await runBuildStep(
     'Compiling TypeScript...',
-    () => command('tsc --project tsconfig.json', { stdio: quiet ? 'ignore' : 'inherit' }),
+    // Capture output in quiet mode so execa includes compiler diagnostics on failure.
+    () => command('tsc --project tsconfig.json', { stdio: quiet ? 'pipe' : 'inherit' }),
     quiet
   )
   await runBuildStep(
     'Resolving TS paths...',
-    () => command('resolve-tspaths', { stdio: quiet ? 'ignore' : 'inherit' }),
+    () => command('resolve-tspaths', { stdio: quiet ? 'pipe' : 'inherit' }),
     quiet
   )
   await runBuildStep('Reshaping server dist...', () => reshapeServerDist(), quiet)

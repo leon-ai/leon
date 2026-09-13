@@ -54,6 +54,16 @@ const markSourceDependenciesAsSynced = async (sourcePath) => {
 }
 
 /**
+ * Check direct dependency links instead of trusting an install's exit code.
+ */
+const getMissingNodejsDependencies = (manifest, nodeModulesPath) => {
+  // Optional dependencies may be intentionally absent on this platform.
+  return Object.keys({ ...manifest.dependencies, ...manifest.devDependencies })
+    .filter((name) => !Object.hasOwn(manifest.optionalDependencies || {}, name))
+    .filter((name) => !fs.existsSync(path.join(nodeModulesPath, name, PACKAGE_JSON_FILE_NAME)))
+}
+
+/**
  * Sync Node.js dependencies next to the source that declares them.
  */
 export const syncNodejsSourceDependencies = async (sourcePath) => {
@@ -65,10 +75,17 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
     return
   }
 
-  if (await isSyncCurrent(packageJSONPath, stampPath, nodeModulesPath)) {
+  const manifest = JSON.parse(await fs.promises.readFile(packageJSONPath, 'utf8'))
+
+  if (
+    await isSyncCurrent(packageJSONPath, stampPath, nodeModulesPath) &&
+    getMissingNodejsDependencies(manifest, nodeModulesPath).length === 0
+  ) {
     return
   }
 
+  // A failed repair must not leave an earlier success stamp behind.
+  await fs.promises.rm(stampPath, { force: true })
   await fs.promises.rm(nodeModulesPath, { recursive: true, force: true })
 
   const hasSourceWorkspaceConfig = fs.existsSync(
@@ -78,7 +95,8 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
     'install',
     // A source-local workspace config both isolates the install and carries
     // explicit native dependency build approvals such as node-pty.
-    ...(hasSourceWorkspaceConfig ? [] : ['--ignore-workspace']),
+    // pnpm 12 otherwise uses the parent root even with --ignore-workspace.
+    ...(hasSourceWorkspaceConfig ? [] : ['--ignore-workspace', '--lockfile-dir', sourcePath]),
     '--lockfile=false'
   ]
 
@@ -86,6 +104,11 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
     cwd: sourcePath,
     env: RuntimeHelper.getManagedNodeEnvironment()
   })
+
+  const missingDependencies = getMissingNodejsDependencies(manifest, nodeModulesPath)
+  if (missingDependencies.length > 0) {
+    throw new Error(`Dependency installation in "${sourcePath}" did not link: ${missingDependencies.join(', ')}`)
+  }
 
   await markSourceDependenciesAsSynced(sourcePath)
 }
