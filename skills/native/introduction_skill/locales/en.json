@@ -12,28 +12,6 @@
           "{{ leon_introduction_1 }}",
           "{{ leon_introduction_2 }}",
           "{{ leon_introduction_3 }}"
-        ],
-        "leon_introduction_with_question": [
-          "{{ leon_introduction_1 }} How about you, what's your name?",
-          "{{ leon_introduction_2 }} How about you, how should I call you?",
-          "{{ leon_introduction_3 }} How about you, may I know your name?"
-        ]
-      }
-    },
-    "remember": {
-      "answers": {
-        "remembered": [
-          "I'm going to remember that {{ owner_name }}.",
-          "Good to know a bit more about you {{ owner_name }}."
-        ]
-      },
-      "missing_param_follow_ups": {
-        "owner_name": [
-          "May I know how should I call you?",
-          "May I know your name?"
-        ],
-        "owner_birth_date": [
-          "What's your birth date?"
         ]
       }
     }
