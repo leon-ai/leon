@@ -40,6 +40,11 @@ const SUBTITLE_METADATA_LANGUAGE_FIELDS = [
   'original_language'
 ]
 const IGNORED_SUBTITLE_LANGUAGE_CODES = new Set(['live_chat'])
+const VIDEO_METADATA_FIELDS = [
+  'id', 'webpage_url', 'title', 'description', 'duration', 'chapters',
+  'channel', 'uploader', 'upload_date', 'language', 'availability',
+  'track', 'artist', 'artists', 'album', 'release_date'
+] as const
 
 interface OutputTarget {
   directoryPath: string
@@ -47,7 +52,7 @@ interface OutputTarget {
   predictedFilePath?: string
 }
 
-interface VideoMetadata {
+interface VideoMetadata extends Record<string, unknown> {
   language?: unknown
   language_code?: unknown
   original_language?: unknown
@@ -432,16 +437,33 @@ export default class YtdlpTool extends Tool {
   }
 
   /**
-   * Loads video metadata to select the best available subtitle language.
+   * Loads one video's metadata for inspection or subtitle language selection.
    */
-  private async getVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
+  private async fetchVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
     const output = await this.executeCommand({
       binaryName: 'yt-dlp',
-      args: [...this.getConfigArgs(), videoUrl, '--dump-single-json', '--skip-download'],
+      // Simulation prevents sidecar writes too; bound extraction for playlist-only URLs.
+      args: [...this.getConfigArgs(), '--dump-single-json', '--skip-download',
+        '--simulate', '--no-cache-dir', '--no-playlist', '--playlist-end', '1', '--', videoUrl],
       options: { sync: true }
     })
 
-    return JSON.parse(output.trim()) as VideoMetadata
+    const metadata: unknown = JSON.parse(output.trim())
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata) || 'entries' in metadata) {
+      throw new Error('Expected metadata for a single video; provide a video URL, not a playlist URL.')
+    }
+    return metadata as VideoMetadata
+  }
+
+  /**
+   * Returns source-provided video metadata without downloading media.
+   */
+  async getVideoMetadata(videoUrl: string): Promise<Record<string, unknown>> {
+    const metadata = await this.fetchVideoMetadata(videoUrl)
+    // Exclude large format lists, request headers and temporary media URLs.
+    return Object.fromEntries(VIDEO_METADATA_FIELDS
+      .filter((field) => metadata[field] != null)
+      .map((field) => [field, metadata[field]]))
   }
 
   /**
@@ -658,7 +680,7 @@ export default class YtdlpTool extends Tool {
   ): Promise<string> {
     try {
       const resolvedLanguageCode = YtdlpTool.selectSubtitleLanguage(
-        await this.getVideoMetadata(videoUrl),
+        await this.fetchVideoMetadata(videoUrl),
         languageCode
       )
       const target = YtdlpTool.resolveSubtitleOutputTarget(

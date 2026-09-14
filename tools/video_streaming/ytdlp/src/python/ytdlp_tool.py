@@ -52,6 +52,11 @@ SUBTITLE_METADATA_LANGUAGE_FIELDS = [
     "original_language",
 ]
 IGNORED_SUBTITLE_LANGUAGE_CODES = {"live_chat"}
+VIDEO_METADATA_FIELDS = (
+    "id", "webpage_url", "title", "description", "duration", "chapters",
+    "channel", "uploader", "upload_date", "language", "availability",
+    "track", "artist", "artists", "album", "release_date",
+)
 
 
 class OutputTarget(TypedDict, total=False):
@@ -435,12 +440,17 @@ class YtdlpTool(BaseTool):
 
     def _get_video_metadata(self, video_url: str) -> VideoMetadata:
         """
-        Load video metadata to select the best available subtitle language.
+        Load one video's metadata for inspection or subtitle language selection.
         """
         args = self._get_config_args() + [
-            video_url,
             "--dump-single-json",
             "--skip-download",
+            # Simulation prevents sidecar writes too; bound playlist-only URLs.
+            "--simulate",
+            "--no-cache-dir",
+            "--no-playlist",
+            "--playlist-end", "1",
+            "--", video_url,
         ]
         output = self.execute_command(
             ExecuteCommandOptions(
@@ -448,7 +458,24 @@ class YtdlpTool(BaseTool):
             )
         )
 
-        return json.loads(output.strip())
+        metadata = json.loads(output.strip())
+        if not isinstance(metadata, dict) or "entries" in metadata:
+            raise ValueError(
+                "Expected metadata for a single video; provide a video URL, not a playlist URL."
+            )
+        return metadata
+
+    def get_video_metadata(self, video_url: str) -> dict[str, Any]:
+        """
+        Return source-provided video metadata without downloading media.
+        """
+        metadata = self._get_video_metadata(video_url)
+        # Exclude large format lists, request headers and temporary media URLs.
+        return {
+            field: metadata[field]
+            for field in VIDEO_METADATA_FIELDS
+            if metadata.get(field) is not None
+        }
 
     def download_video(self, video_url: str, output_path: str) -> str:
         """
