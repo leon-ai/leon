@@ -73,6 +73,10 @@ export class ActivityContextFile extends ContextFile {
     const observedAppLines = this.formatObservedAppLines(
       updatedTrackingState.observedSecondsByApp
     )
+    const terminalLines = processSnapshot.entries
+      .filter((entry) => entry.terminal && entry.ancestors?.length)
+      .slice(0, MAX_APP_LINES)
+      .map((entry) => `- ${path.basename(entry.name)} | terminal: ${entry.terminal} | ancestry (parent first): ${entry.ancestors?.join(' ← ')}`)
 
     const summary =
       appActivity.length > 0
@@ -107,6 +111,9 @@ export class ActivityContextFile extends ContextFile {
       '- Note: observed app time below is cumulative from periodic snapshots.',
       '## Active Apps',
       ...appLines,
+      '## Terminal Applications',
+      '- Ancestry identifies a host, not a window/tab or proof of active attention. Inspect the terminal before typing; never interrupt an active task.',
+      ...(terminalLines.length ? terminalLines : ['- No terminal-associated applications in this sample']),
       '## Observed App Time',
       `- Tracking started at: ${this.formatDateTime(updatedTrackingState.trackingStartedAt)}`,
       ...observedAppLines,
