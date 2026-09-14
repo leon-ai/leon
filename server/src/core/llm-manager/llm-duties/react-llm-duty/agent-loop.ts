@@ -39,6 +39,7 @@ export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
 const AGENT_TOOL_NAME_SEPARATOR = '__'
 const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
 const AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS = 1_000
+const AGENT_PLAN_REMINDER_INTERVAL = 4
 const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: 'word'
 })
@@ -187,6 +188,7 @@ interface AgentModelCallOptions {
   isFinalizationAttempt?: boolean
   isCompletionReview?: boolean
   requiresToolAction?: boolean
+  requiresPlanReconciliation?: boolean
   isContextRecoveryAttempt?: boolean
 }
 
@@ -658,6 +660,7 @@ export async function runAgentLoop(
   let hasUsedOutputRecovery = false
   let hasUsedContextRecovery = false
   let requiresToolAction = false
+  let operationalTurnsSincePlanUpdate = 0
 
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
@@ -685,6 +688,11 @@ export async function runAgentLoop(
     // the rest of the run instead of allowing the prompt to grow back.
     let isContextRecoveryAttempt = hasUsedContextRecovery
     const remainingIterations = iterationLimit - iteration
+    // A stale plan is a cue to reconcile evidence, never proof that work finished.
+    // Keep the reminder transient so long runs do not accumulate bookkeeping text.
+    const remindPlan = trackedSteps.length > 0 && !isAgentPlanComplete(trackedSteps) &&
+      operationalTurnsSincePlanUpdate >= AGENT_PLAN_REMINDER_INTERVAL
+    if (remindPlan) operationalTurnsSincePlanUpdate = 0
 
     while (true) {
       try {
@@ -695,6 +703,7 @@ export async function runAgentLoop(
           {
             isRecoveryAttempt,
             ...(requiresToolAction ? { requiresToolAction: true } : {}),
+            ...(remindPlan ? { requiresPlanReconciliation: true } : {}),
             ...(isOutputRecoveryAttempt ? { isOutputRecoveryAttempt: true } : {}),
             ...(isContextRecoveryAttempt
               ? { isContextRecoveryAttempt: true }
@@ -863,6 +872,7 @@ export async function runAgentLoop(
     })
 
     let terminalSignal: FinalResponseSignal | undefined
+    let planUpdated = false
     for (const toolCall of toolCalls) {
       if (terminalSignal) {
         // Providers require one result for every emitted tool call. Complete
@@ -882,6 +892,8 @@ export async function runAgentLoop(
         executionHistory,
         trackedSteps
       )
+      if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
+          toolResult.trackedSteps !== trackedSteps) planUpdated = true
       trackedSteps = toolResult.trackedSteps
       if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
           trackedSteps.length > 0 && isAgentPlanComplete(trackedSteps)) {
@@ -897,6 +909,12 @@ export async function runAgentLoop(
         ...(toolResult.files ? { files: toolResult.files } : {})
       })
       terminalSignal = toolResult.signal
+    }
+
+    if (planUpdated) operationalTurnsSincePlanUpdate = 0
+    else if (trackedSteps.length > 0 && toolCalls.some((call) =>
+      params.catalog.functionsByToolName.has(call.function.name))) {
+      operationalTurnsSincePlanUpdate += 1
     }
 
     if (terminalSignal) {

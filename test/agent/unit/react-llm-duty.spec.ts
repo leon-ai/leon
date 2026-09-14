@@ -378,6 +378,69 @@ describe('continuous agent loop', () => {
     )
   })
 
+  it.each(['active', 'completed', 'absent'] as const)(
+    'reminds only stale active plans without changing evidence or blocking tools (%s)',
+    async (state) => {
+      const steps = state === 'absent' ? [] : [{
+        label: 'Resolve source items',
+        status: state === 'active' ? 'in_progress' as const : 'completed' as const
+      }]
+      const onPlanUpdated = vi.fn()
+      const reminders: number[] = []
+      let turn = 0
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Resolve these items.' }],
+        catalog: createCatalog(), initialTrackedSteps: steps,
+        callModel: async (_messages, _tools, options) => {
+          turn += 1
+          if (options.requiresPlanReconciliation) reminders.push(turn)
+          if (turn === 10) return { toolCalls: [toolCall('clarify', AGENT_CLARIFICATION_TOOL_NAME, {
+            question: 'Which of the two matching editions do you want?'
+          })] }
+          return { toolCalls: [toolCall(`lookup-${turn}`, CALLABLE_TOOL_NAME, { query: `item-${turn}` })] }
+        },
+        executeFunction: async (_callable, toolInput) => ({ execution: {
+          function: callable.qualifiedName, status: 'success',
+          requestedToolInput: toolInput, observation: 'Input delivered; outcome not yet verified.'
+        } }),
+        loadAgentSkill: async () => null, onPlanUpdated
+      })
+      expect(reminders).toEqual(state === 'active' ? [5, 9] : [])
+      expect(result.trackedSteps).toEqual(steps)
+      expect(onPlanUpdated).not.toHaveBeenCalled()
+      expect(result.executionHistory).toHaveLength(9)
+    }
+  )
+
+  it('resets plan reminders on accepted updates but not rejected updates', async () => {
+    const steps = [{ label: 'Resolve source items', status: 'in_progress' as const }]
+    const reminders: number[] = []
+    let turn = 0
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Resolve these items.' }],
+      catalog: createCatalog(), initialTrackedSteps: steps,
+      callModel: async (_messages, _tools, options) => {
+        turn += 1
+        if (options.requiresPlanReconciliation) reminders.push(turn)
+        if (turn === 4) return { toolCalls: [toolCall('accepted', AGENT_PLAN_TOOL_NAME, {
+          steps: [{ ...steps[0], details: 'Still resolving the final source item.' }]
+        })] }
+        if (turn === 8) return { toolCalls: [toolCall('rejected', AGENT_PLAN_TOOL_NAME, { steps: [] })] }
+        if (turn === 10) return { toolCalls: [toolCall('clarify', AGENT_CLARIFICATION_TOOL_NAME, {
+          question: 'Which edition do you want?'
+        })] }
+        return { toolCalls: [toolCall(`lookup-${turn}`, CALLABLE_TOOL_NAME, { query: `item-${turn}` })] }
+      },
+      executeFunction: async (_callable, toolInput) => ({ execution: {
+        function: callable.qualifiedName, status: 'success',
+        requestedToolInput: toolInput, observation: 'Inspected source.'
+      } }),
+      loadAgentSkill: async () => null
+    })
+    expect(reminders).toEqual([10])
+    expect(result.trackedSteps).toEqual([{ ...steps[0], details: 'Still resolving the final source item.' }])
+  })
+
   it('blocks an ineffective computer-use retry before executing the tool', async () => {
     const catalog = createCatalog()
     const input = { pid: 42, window_id: 7, x: 500, y: 300 }

@@ -445,6 +445,9 @@ export class ReActLLMDuty extends LLMDuty {
               '<current_plan>',
               JSON.stringify(state.trackedSteps),
               'This is the latest reported plan, not proof of completion. Reconcile it with tool evidence as milestones change; use collection scope, coverage and item outcomes to choose remaining work. Do not reopen verified items or infer missing items in an observed empty range.',
+              ...(options.requiresPlanReconciliation ? [
+                'Several operational turns have passed without an accepted plan update. Compare this plan with existing tool evidence now. Use update_plan to record verified milestones and item outcomes, the actual active step, and unresolved mappings or blockers. Do not infer completion from successful input, repeat completed work, or mark work complete merely to satisfy this reminder. If the same step is genuinely still active, retain it and briefly record why; ask the owner only for missing information or access.'
+              ] : []),
               '</current_plan>'
             ] : []),
             ...(activeSkill
