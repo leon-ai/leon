@@ -38,11 +38,19 @@ export class ComputerUseArtifactStore {
     const artifact = images.artifacts.at(-1)
     if (typeof artifact?.['path'] !== 'string') return
     // Bind tutorial targets to the exact image, not a later window snapshot.
-    await fs.promises.writeFile(`${artifact['path']}.json`, JSON.stringify({
+    const metadataPath = `${artifact['path']}.json`
+    const content = JSON.stringify({
       screenshot_width: images.transform.model.width,
       screenshot_height: images.transform.model.height,
       elements: observation['elements'] || []
-    }))
+    })
+    await fs.promises.writeFile(metadataPath, content)
+    // Metadata is evidence too; Satellite must carry it with the original PNG.
+    images.artifacts.push({
+      path: metadataPath,
+      mime_type: 'application/json',
+      size_bytes: Buffer.byteLength(content)
+    })
   }
 
   public getArtifactDirectory(input: ToolExecutionContext): string {
