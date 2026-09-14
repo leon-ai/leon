@@ -101,6 +101,15 @@ describe('ConfigManager', () => {
     }
   )
 
+  it('loads device bindings and rejects empty bindings instead of falling back locally', async () => {
+    const tools = { 'computer_use.cua': 'owner-laptop' }
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({ satellite: { tools } }))
+    const manager = await loadConfigManager()
+    expect(manager.getConfig().satellite?.tools).toEqual(tools)
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({ satellite: { tools: { 'computer_use.cua': '' } } }))
+    expect(() => manager.reload()).toThrow('satellite.tools')
+  })
+
   it('returns profile config values and syncs runtime env mappings', async () => {
     process.env['LEON_PROFILE_TOKEN'] = 'client-secret'
     process.env['LEON_OPENAI_API_KEY'] = 'openai-secret'

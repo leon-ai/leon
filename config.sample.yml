@@ -110,6 +110,13 @@ context:
   # context files added by future Leon versions.
   disabled_files: []
 
+# Bind remote tools explicitly to an authenticated Satellite device ID.
+# Bound tools stay unavailable while that device is offline; no local fallback.
+# satellite:
+#   tools:
+#     computer_use.cua: my-laptop
+#     browser_use.cli: my-laptop
+
 availability:
   skills:
     # When this list contains at least one skill, only these skills are enabled.

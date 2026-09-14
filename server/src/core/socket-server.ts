@@ -953,7 +953,11 @@ export default class SocketServer {
       socket.on(
         SATELLITE_EVENTS.init,
         async (data: SatelliteInitPayload) => {
-          const profileName = this.isLeonClientInterfaceAuthorized(socket, data)
+          // Advertising executable tools always requires a profile credential,
+          // even when anonymous chat is enabled for the local web app.
+          const profileName = authenticateProfileCredential(
+            this.getSocketAuthToken(socket, data)
+          )?.profileName
 
           if (
             !profileName ||

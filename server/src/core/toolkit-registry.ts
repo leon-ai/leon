@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { TOOLS_PATH } from '@/constants'
+import { CONFIG_MANAGER } from '@/config'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
@@ -201,6 +202,15 @@ export default class ToolkitRegistry {
     toolkitId: string,
     toolId: string
   ): ToolAvailability {
+    const deviceId = this.getToolSatelliteDevice(toolkitId, toolId)
+    if (deviceId && !this.satelliteToolkits.get(deviceId)?.some((toolkit) =>
+      toolkit.id === toolkitId && Boolean(toolkit.tools[toolId]))) {
+      return {
+        available: false,
+        requiredSettings: [], missingSettings: [], settingsPath: null,
+        reason: `Satellite "${deviceId}" is offline or does not provide this tool.`
+      }
+    }
     const availability = this._toolAvailability.get(
       this.getQualifiedToolId(toolkitId, toolId)
     )
@@ -396,6 +406,9 @@ export default class ToolkitRegistry {
     toolId: string
   ): string | null {
     return (
+      CONFIG_MANAGER.getConfig(this.profilePaths.name).satellite?.tools[
+        this.getQualifiedToolId(toolkitId, toolId)
+      ] ||
       this.satelliteToolTargets.get(
         this.getQualifiedToolId(toolkitId, toolId)
       ) ||
@@ -475,7 +488,7 @@ export default class ToolkitRegistry {
   private refreshCombinedToolkits(): void {
     const toolkitsById = new Map<string, ToolkitDefinition>()
 
-    this.satelliteToolTargets.clear()
+    // Retain device ownership across disconnects; never fall back to server tools.
     this._toolAvailability = new Map(this._localToolAvailability)
 
     for (const toolkit of this._localToolkits) {
@@ -504,6 +517,8 @@ export default class ToolkitRegistry {
         }
 
         for (const [toolId, tool] of Object.entries(satelliteToolkit.tools)) {
+          const boundDevice = this.getToolSatelliteDevice(satelliteToolkit.id, toolId)
+          if (boundDevice && boundDevice !== deviceId) continue
           if (ProfileHelper.isToolDisabled(toolId, satelliteToolkit.id)) {
             continue
           }

@@ -323,6 +323,16 @@ class ConfigManager {
       parsedConfig
     )
 
+    // Invalid device bindings must not silently turn into local execution.
+    if (mergedConfig.satellite !== undefined) {
+      const bindings = mergedConfig.satellite?.tools
+      if (!isPlainObject(bindings) || Object.entries(bindings).some(
+        ([toolId, deviceId]) => !toolId.trim() || typeof deviceId !== 'string' || !deviceId.trim()
+      )) {
+        throw new Error('satellite.tools must map qualified tool IDs to non-empty device IDs.')
+      }
+    }
+
     // Validate on profile load/reload too, since profiles can change after startup.
     const iterationLimit = mergedConfig.runtime.agent_max_iterations
     if (typeof iterationLimit !== 'number' || !Number.isSafeInteger(iterationLimit) || iterationLimit < 1) {

@@ -129,6 +129,9 @@ export const configSchemaObject = strictObject({
     skills: accessList,
     tools: accessList
   }),
+  satellite: Type.Optional(strictObject({
+    tools: Type.Record(Type.String({ minLength: 1 }), Type.String({ minLength: 1 }))
+  })),
   python_tcp_server: strictObject({
     host: Type.String({ minLength: 1 }),
     port: Type.Integer({ minimum: 1, maximum: 65_535 })
