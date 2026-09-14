@@ -301,7 +301,7 @@ export default class ToolExecutor {
 
     if (satelliteDeviceId) {
       try {
-        const { onProgress, ...serializableInput } = input
+        const { onProgress, signal, ...serializableInput } = input
 
         return await SATELLITE_REGISTRY.invokeTool({
           profileName: getActiveProfileName(),
@@ -311,7 +311,8 @@ export default class ToolExecutor {
             ...serializableInput,
             executionTarget: 'any'
           },
-          ...(onProgress ? { onProgress } : {})
+          ...(onProgress ? { onProgress } : {}),
+          ...(signal ? { signal } : {})
         })
       } catch (error) {
         return this.buildResult({

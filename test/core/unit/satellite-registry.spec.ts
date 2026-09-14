@@ -32,6 +32,58 @@ const TOOL_RESULT: ToolExecutionResult = {
 describe('SatelliteRegistry', () => {
   afterEach(() => {
     SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
+    vi.useRealTimers()
+  })
+
+  it.each(['abort', 'timeout', 'disconnect'] as const)('cancels device work on %s and ignores late results', async (cause) => {
+    vi.useFakeTimers()
+    const transport = { emit: vi.fn() }
+    const controller = new AbortController()
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME,
+      device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    const execution = SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID,
+      toolInput: TOOL_INPUT, signal: controller.signal
+    })
+    const rejection = expect(execution).rejects.toThrow()
+    const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
+    if (cause === 'abort') controller.abort()
+    else if (cause === 'timeout') await vi.advanceTimersByTimeAsync(15 * 60 * 1_000)
+    else SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
+
+    expect(transport.emit).toHaveBeenCalledWith(SATELLITE_EVENTS.cancelTool, { invocationId: invocation.invocationId })
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, { invocationId: invocation.invocationId, result: TOOL_RESULT }, transport)
+    await rejection
+  })
+
+  it('does not dispatch aborted work or accept another owner or transport result', async () => {
+    const transport = { emit: vi.fn() }
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME,
+      device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    await expect(SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID, toolInput: TOOL_INPUT,
+      signal: AbortSignal.abort()
+    })).rejects.toThrow()
+    expect(transport.emit).not.toHaveBeenCalled()
+    const execution = SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID, toolInput: TOOL_INPUT
+    })
+    const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
+    const payload = { invocationId: invocation.invocationId, result: TOOL_RESULT }
+    const resolved = vi.fn()
+    void execution.then(resolved)
+    SATELLITE_REGISTRY.handleResult('different-owner', DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, { emit: vi.fn() })
+    await Promise.resolve()
+    expect(resolved).not.toHaveBeenCalled()
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, transport)
+    await expect(execution).resolves.toEqual(TOOL_RESULT)
   })
 
   it('routes a tool call to the registered profile device', async () => {

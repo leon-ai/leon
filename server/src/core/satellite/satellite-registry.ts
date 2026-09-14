@@ -35,6 +35,8 @@ interface PendingInvocation {
   reject: (error: Error) => void
   onProgress?: (progress: ToolRuntimeProgress) => void
   timeout: NodeJS.Timeout
+  transport: SatelliteTransport
+  removeAbortListener: () => void
 }
 
 class SatelliteRegistry {
@@ -42,6 +44,8 @@ class SatelliteRegistry {
   private readonly pendingInvocations = new Map<string, PendingInvocation>()
 
   public register(input: SatelliteConnection): void {
+    // Reconnection does not transfer in-flight native actions to a new process.
+    this.unregister(input.profileName, input.device.id)
     this.connections.set(
       this.getConnectionKey(input.profileName, input.device.id),
       input
@@ -71,9 +75,7 @@ class SatelliteRegistry {
         continue
       }
 
-      clearTimeout(pending.timeout)
-      pending.reject(new Error(`Satellite "${deviceId}" disconnected.`))
-      this.pendingInvocations.delete(invocationId)
+      this.cancelInvocation(invocationId, new Error(`Satellite "${deviceId}" disconnected.`))
     }
 
     return true
@@ -95,7 +97,9 @@ class SatelliteRegistry {
     conversationSessionId?: string | null
     toolInput: ToolExecutionInput
     onProgress?: (progress: ToolRuntimeProgress) => void
+    signal?: AbortSignal
   }): Promise<ToolExecutionResult> {
+    input.signal?.throwIfAborted()
     const connection = this.getConnection(input.profileName, input.deviceId)
 
     if (!connection) {
@@ -112,12 +116,12 @@ class SatelliteRegistry {
     }
 
     return new Promise<ToolExecutionResult>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingInvocations.delete(invocationId)
-        reject(
-          new Error(`Satellite tool call timed out on "${input.deviceId}".`)
-        )
-      }, SATELLITE_TOOL_TIMEOUT_MS)
+      const timeout = setTimeout(() => this.cancelInvocation(invocationId,
+        new Error(`Satellite tool call timed out on "${input.deviceId}".`)
+      ), SATELLITE_TOOL_TIMEOUT_MS)
+      const onAbort = (): void => this.cancelInvocation(invocationId,
+        new Error('Satellite tool call canceled; already-delivered input may have executed.')
+      )
 
       timeout.unref?.()
       this.pendingInvocations.set(invocationId, {
@@ -126,23 +130,32 @@ class SatelliteRegistry {
         resolve,
         reject,
         ...(input.onProgress ? { onProgress: input.onProgress } : {}),
-        timeout
+        timeout,
+        transport: connection.transport,
+        removeAbortListener: () => input.signal?.removeEventListener('abort', onAbort)
       })
-      connection.transport.emit(SATELLITE_EVENTS.invokeTool, invocation)
+      input.signal?.addEventListener('abort', onAbort, { once: true })
+      try {
+        connection.transport.emit(SATELLITE_EVENTS.invokeTool, invocation)
+      } catch (error) {
+        this.cancelInvocation(invocationId, error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
   public handleProgress(
     profileName: string,
     deviceId: string,
-    payload: SatelliteToolProgressPayload
+    payload: SatelliteToolProgressPayload,
+    transport?: SatelliteTransport
   ): void {
     const pending = this.pendingInvocations.get(payload.invocationId)
 
     if (
       !pending ||
       pending.profileName !== profileName ||
-      pending.deviceId !== deviceId
+      pending.deviceId !== deviceId ||
+      (transport && pending.transport !== transport)
     ) {
       return
     }
@@ -157,25 +170,42 @@ class SatelliteRegistry {
   public handleResult(
     profileName: string,
     deviceId: string,
-    payload: SatelliteToolResultPayload
+    payload: SatelliteToolResultPayload,
+    transport?: SatelliteTransport
   ): void {
     const pending = this.pendingInvocations.get(payload.invocationId)
 
     if (
       !pending ||
       pending.profileName !== profileName ||
-      pending.deviceId !== deviceId
+      pending.deviceId !== deviceId ||
+      (transport && pending.transport !== transport)
     ) {
       return
     }
 
     clearTimeout(pending.timeout)
+    pending.removeAbortListener()
     this.pendingInvocations.delete(payload.invocationId)
     pending.resolve(payload.result)
   }
 
   private getConnectionKey(profileName: string, deviceId: string): string {
     return `${profileName}:${deviceId}`
+  }
+
+  private cancelInvocation(invocationId: string, error: Error): void {
+    const pending = this.pendingInvocations.get(invocationId)
+    if (!pending) return
+    this.pendingInvocations.delete(invocationId)
+    clearTimeout(pending.timeout)
+    pending.removeAbortListener()
+    try {
+      pending.transport.emit(SATELLITE_EVENTS.cancelTool, { invocationId })
+    } catch {
+      // The disconnected device also aborts its workers; local rejection must complete.
+    }
+    pending.reject(error)
   }
 }
 

@@ -12,6 +12,7 @@ import {
   SATELLITE_PROTOCOL_VERSION,
   type SatelliteErrorPayload,
   type SatelliteToolInvocation,
+  type SatelliteToolCancellation,
   type SatelliteToolResultPayload
 } from '@/core/satellite/types'
 import {
@@ -29,6 +30,7 @@ const REMOTE_URL_ARGUMENT = '--url'
 const PROFILE_TOKEN_ARGUMENT = '--token'
 const DEVICE_ID_ARGUMENT = '--device-id'
 const DEFAULT_SATELLITE_NAME = 'Leon Satellite'
+const activeInvocations = new Map<string, AbortController>()
 
 function buildSatelliteToolError(
   invocation: SatelliteToolInvocation,
@@ -112,6 +114,14 @@ async function startSatellite(): Promise<void> {
     reconnection: true
   })
 
+  socket.on(SATELLITE_EVENTS.cancelTool, ({ invocationId }: SatelliteToolCancellation) => {
+    activeInvocations.get(invocationId)?.abort()
+  })
+  socket.on('disconnect', () => {
+    // A reconnect must not resume desktop work whose caller has disconnected.
+    for (const controller of activeInvocations.values()) controller.abort()
+  })
+
   socket.on('connect', () => {
     void runWithProfileContext(
       { profileName: credential.profileName },
@@ -140,6 +150,9 @@ async function startSatellite(): Promise<void> {
   socket.on(
     SATELLITE_EVENTS.invokeTool,
     async (invocation: SatelliteToolInvocation) => {
+      if (activeInvocations.has(invocation.invocationId)) return
+      const controller = new AbortController()
+      activeInvocations.set(invocation.invocationId, controller)
       let result: ToolExecutionResult
 
       try {
@@ -149,8 +162,9 @@ async function startSatellite(): Promise<void> {
             const execute = (): Promise<ToolExecutionResult> =>
               TOOL_EXECUTOR.executeTool({
                 ...invocation.input,
+                signal: controller.signal,
                 onProgress: (progress) => {
-                  socket.emit(SATELLITE_EVENTS.toolProgress, {
+                  socket.volatile.emit(SATELLITE_EVENTS.toolProgress, {
                     invocationId: invocation.invocationId,
                     progress
                   })
@@ -167,6 +181,8 @@ async function startSatellite(): Promise<void> {
         )
       } catch (error) {
         result = buildSatelliteToolError(invocation, error)
+      } finally {
+        activeInvocations.delete(invocation.invocationId)
       }
 
       const payload: SatelliteToolResultPayload = {
@@ -174,7 +190,9 @@ async function startSatellite(): Promise<void> {
         result
       }
 
-      socket.emit(SATELLITE_EVENTS.toolResult, payload)
+      if (socket.connected && !controller.signal.aborted) {
+        socket.emit(SATELLITE_EVENTS.toolResult, payload)
+      }
     }
   )
 
@@ -199,6 +217,7 @@ const shutDown = async (): Promise<void> => {
   }
 
   isShuttingDown = true
+  for (const controller of activeInvocations.values()) controller.abort()
   await TOOL_WORKER_MANAGER.dispose()
   process.exit(0)
 }

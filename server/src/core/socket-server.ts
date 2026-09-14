@@ -998,7 +998,8 @@ export default class SocketServer {
               SATELLITE_REGISTRY.handleProgress(
                 profileName,
                 data.device.id,
-                payload
+                payload,
+                socket
               )
             }
           )
@@ -1008,7 +1009,8 @@ export default class SocketServer {
               SATELLITE_REGISTRY.handleResult(
                 profileName,
                 data.device.id,
-                payload
+                payload,
+                socket
               )
             }
           )

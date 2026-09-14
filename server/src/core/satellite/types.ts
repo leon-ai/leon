@@ -4,12 +4,13 @@ import type {
   ToolRuntimeProgress
 } from '@/core/tool-executor'
 
-export const SATELLITE_PROTOCOL_VERSION = 1
+export const SATELLITE_PROTOCOL_VERSION = 2
 
 export const SATELLITE_EVENTS = {
   init: 'leon:satellite:init',
   ready: 'leon:satellite:ready',
   invokeTool: 'leon:satellite:invoke-tool',
+  cancelTool: 'leon:satellite:cancel-tool',
   toolProgress: 'leon:satellite:tool-progress',
   toolResult: 'leon:satellite:tool-result',
   error: 'leon:satellite:error'
@@ -63,6 +64,10 @@ export interface SatelliteToolInvocation {
   invocationId: string
   input: ToolExecutionInput
   conversationSessionId?: string
+}
+
+export interface SatelliteToolCancellation {
+  invocationId: string
 }
 
 export interface SatelliteToolProgressPayload {
