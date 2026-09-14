@@ -1341,19 +1341,20 @@ console.log(JSON.stringify(results))
   }
 
   private probeRunningProcessesUnix(limit: number): RunningProcessSnapshot {
+    // macOS truncates comm in an intermediate column; keep it last and unlimited.
     const commandPlans: Array<{
       args: string[]
       source: string
       elapsedMode: 'seconds' | 'duration'
     }> = [
       {
-        args: ['-eo', 'pid=,comm=,%cpu=,rss=,etimes='],
-        source: 'ps -eo pid=,comm=,%cpu=,rss=,etimes=',
+        args: ['-ww', '-eo', 'pid=,%cpu=,rss=,etimes=,comm='],
+        source: 'ps -ww -eo pid=,%cpu=,rss=,etimes=,comm=',
         elapsedMode: 'seconds'
       },
       {
-        args: ['-A', '-o', 'pid=,comm=,%cpu=,rss=,etime='],
-        source: 'ps -A -o pid=,comm=,%cpu=,rss=,etime=',
+        args: ['-ww', '-A', '-o', 'pid=,%cpu=,rss=,etime=,comm='],
+        source: 'ps -ww -A -o pid=,%cpu=,rss=,etime=,comm=',
         elapsedMode: 'duration'
       }
     ]
@@ -1518,23 +1519,24 @@ Get-Process | ForEach-Object {
     line: string,
     elapsedMode: 'seconds' | 'duration'
   ): RunningProcessEntry | null {
-    const normalizedLine = line.trim().replace(/\s+/g, ' ')
+    const normalizedLine = line.trim()
     if (!normalizedLine) {
       return null
     }
 
+    // Only split the fixed columns so spaces inside executable names survive.
     const matchedLine = normalizedLine.match(
-      /^(\d+)\s+(\S+)\s+(-?\d+(?:\.\d+)?)\s+(\d+)\s+(\S+)$/
+      /^(\d+)\s+(-?\d+(?:\.\d+)?)\s+(\d+)\s+(\S+)\s+(.+)$/
     )
     if (!matchedLine) {
       return null
     }
 
     const pid = Number(matchedLine[1] || 0)
-    const name = matchedLine[2] || ''
-    const cpuPercent = Number(matchedLine[3] || 0)
-    const rssKb = Number(matchedLine[4] || 0)
-    const elapsedValue = matchedLine[5] || '0'
+    const name = matchedLine[5] || ''
+    const cpuPercent = Number(matchedLine[2] || 0)
+    const rssKb = Number(matchedLine[3] || 0)
+    const elapsedValue = matchedLine[4] || '0'
     const runtimeSeconds =
       elapsedMode === 'seconds'
         ? Number(elapsedValue || 0)
