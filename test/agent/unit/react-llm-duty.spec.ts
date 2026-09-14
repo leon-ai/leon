@@ -351,6 +351,18 @@ describe('continuous agent loop', () => {
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Survey long pages')
   })
 
+  it('requires coding delegation before toolkit selection without choosing a product', () => {
+    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding_delegation>')).toBeLessThan(
+      AGENT_SYSTEM_PROMPT.indexOf('<tool_policy>')
+    )
+    expect(AGENT_SYSTEM_PROMPT).toContain('Always delegate coding tasks, including repository investigation')
+    expect(AGENT_SYSTEM_PROMPT).toContain('Do not perform the coding work yourself')
+    expect(AGENT_SYSTEM_PROMPT).toContain('submitting a prompt is not completion')
+    expect(AGENT_SYSTEM_PROMPT).toContain('Never silently take over the coding task')
+    expect(AGENT_SYSTEM_PROMPT).not.toContain('Codex')
+    expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')
+  })
+
   it('preserves source meaning without use-case-specific rules', () => {
     expect(AGENT_SYSTEM_PROMPT).toContain(
       'Preserve source meaning; never guess or silently convert incompatible values.'
