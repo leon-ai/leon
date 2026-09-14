@@ -63,6 +63,7 @@ import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-pr
 import {
   SATELLITE_EVENTS,
   SATELLITE_PROTOCOL_VERSION,
+  SATELLITE_MAX_MESSAGE_BYTES,
   type SatelliteInitPayload,
   type SatelliteToolProgressPayload,
   type SatelliteToolResultPayload
@@ -918,6 +919,7 @@ export default class SocketServer {
 
   public async init(): Promise<void> {
     const io = new SocketIOServer(HTTP_SERVER.httpServer, {
+      maxHttpBufferSize: SATELLITE_MAX_MESSAGE_BYTES,
       cors: {
         origin: (origin, callback): void => {
           callback(null, this.isSocketOriginAllowed(origin))

@@ -5,6 +5,8 @@ import type {
 } from '@/core/tool-executor'
 
 export const SATELLITE_PROTOCOL_VERSION = 2
+// Visual tool results include base64 screenshots, unlike ordinary chat events.
+export const SATELLITE_MAX_MESSAGE_BYTES = 16 * 1_024 * 1_024
 
 export const SATELLITE_EVENTS = {
   init: 'leon:satellite:init',

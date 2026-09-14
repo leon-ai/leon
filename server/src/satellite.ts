@@ -10,6 +10,7 @@ import {
 import {
   SATELLITE_EVENTS,
   SATELLITE_PROTOCOL_VERSION,
+  SATELLITE_MAX_MESSAGE_BYTES,
   type SatelliteErrorPayload,
   type SatelliteToolInvocation,
   type SatelliteToolCancellation,
@@ -188,6 +189,12 @@ async function startSatellite(): Promise<void> {
       const payload: SatelliteToolResultPayload = {
         invocationId: invocation.invocationId,
         result
+      }
+
+      if (Buffer.byteLength(JSON.stringify(payload)) > SATELLITE_MAX_MESSAGE_BYTES) {
+        // Report the limit without dropping the connection or retrying the input.
+        payload.result = buildSatelliteToolError(invocation,
+          new Error('Satellite result exceeds the transport limit. The action may have executed; do not replay it blindly.'))
       }
 
       if (socket.connected && !controller.signal.aborted) {
