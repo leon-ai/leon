@@ -14,6 +14,7 @@ import {
   type SatelliteErrorPayload,
   type SatelliteToolInvocation,
   type SatelliteToolCancellation,
+  type SatelliteArtifactBundle,
   type SatelliteToolResultPayload
 } from '@/core/satellite/types'
 import {
@@ -26,6 +27,7 @@ import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { LogHelper } from '@/helpers/log-helper'
 import type { ToolExecutionResult } from '@/core/tool-executor'
 import { buildSatelliteProcessTitle } from '@/core/satellite/satellite-process-title'
+import { collectSatelliteArtifacts, getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
 
 const REMOTE_URL_ARGUMENT = '--url'
 const PROFILE_TOKEN_ARGUMENT = '--token'
@@ -155,6 +157,7 @@ async function startSatellite(): Promise<void> {
       const controller = new AbortController()
       activeInvocations.set(invocation.invocationId, controller)
       let result: ToolExecutionResult
+      let artifacts: SatelliteArtifactBundle | undefined
 
       try {
         result = await runWithProfileContext(
@@ -180,6 +183,13 @@ async function startSatellite(): Promise<void> {
               : execute()
           }
         )
+        if (invocation.conversationSessionId && !controller.signal.aborted) {
+          artifacts = await collectSatelliteArtifacts(
+            getSatelliteArtifactRoot(credential.profileName, invocation.conversationSessionId), result
+          ).catch((error: unknown) => {
+            throw new Error(`Satellite artifact transfer failed; the action may have executed, do not replay it blindly: ${String(error)}`)
+          })
+        }
       } catch (error) {
         result = buildSatelliteToolError(invocation, error)
       } finally {
@@ -188,13 +198,15 @@ async function startSatellite(): Promise<void> {
 
       const payload: SatelliteToolResultPayload = {
         invocationId: invocation.invocationId,
-        result
+        result,
+        ...(artifacts ? { artifacts } : {})
       }
 
       if (Buffer.byteLength(JSON.stringify(payload)) > SATELLITE_MAX_MESSAGE_BYTES) {
         // Report the limit without dropping the connection or retrying the input.
         payload.result = buildSatelliteToolError(invocation,
           new Error('Satellite result exceeds the transport limit. The action may have executed; do not replay it blindly.'))
+        delete payload.artifacts
       }
 
       if (socket.connected && !controller.signal.aborted) {

@@ -80,6 +80,16 @@ export interface SatelliteToolProgressPayload {
 export interface SatelliteToolResultPayload {
   invocationId: string
   result: ToolExecutionResult
+  artifacts?: SatelliteArtifactBundle
+}
+
+export interface SatelliteArtifactBundle {
+  root: string
+  entries: Array<{
+    path: string
+    // Omitted for a directory; directories never imply recursive transfer.
+    dataBase64?: string
+  }>
 }
 
 export interface SatelliteErrorPayload {

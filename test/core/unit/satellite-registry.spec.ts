@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import { SATELLITE_EVENTS } from '@/core/satellite/types'
+import * as artifactTransfer from '@/core/satellite/satellite-artifacts'
 import type { SatelliteToolInvocation } from '@/core/satellite/types'
 import type { ToolExecutionResult } from '@/core/tool-executor'
 import {
@@ -33,6 +34,36 @@ describe('SatelliteRegistry', () => {
   afterEach(() => {
     SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
     vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('imports artifacts only for the authenticated invocation and preserves cancellation during import', async () => {
+    const destination = vi.spyOn(artifactTransfer, 'getSatelliteArtifactRoot').mockReturnValue('/server/session/artifacts')
+    let finishImport!: (result: ToolExecutionResult) => void
+    const receive = vi.spyOn(artifactTransfer, 'receiveSatelliteArtifacts').mockImplementation(() =>
+      new Promise((resolve) => { finishImport = resolve }))
+    const transport = { emit: vi.fn() }
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME, device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    const controller = new AbortController()
+    const execution = SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID, conversationSessionId: 'session',
+      toolInput: TOOL_INPUT, signal: controller.signal
+    })
+    const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
+    const payload = { invocationId: invocation.invocationId, result: TOOL_RESULT, artifacts: { root: '/device/artifacts', entries: [] } }
+    SATELLITE_REGISTRY.handleResult('another-owner', DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, { emit: vi.fn() })
+    expect(receive).not.toHaveBeenCalled()
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, transport)
+    expect(destination).toHaveBeenCalledWith(PROFILE_NAME, 'session')
+    expect(receive).toHaveBeenCalledWith('/server/session/artifacts', TOOL_RESULT, payload.artifacts)
+    const rejection = expect(execution).rejects.toThrow('canceled')
+    controller.abort()
+    finishImport(TOOL_RESULT)
+    await rejection
   })
 
   it.each(['abort', 'timeout', 'disconnect'] as const)('cancels device work on %s and ignores late results', async (cause) => {

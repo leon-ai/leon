@@ -14,6 +14,7 @@ import type {
   ToolRuntimeProgress
 } from '@/core/tool-executor'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { getSatelliteArtifactRoot, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
 
 const SATELLITE_TOOL_TIMEOUT_MS = 15 * 60 * 1_000
 
@@ -37,6 +38,8 @@ interface PendingInvocation {
   timeout: NodeJS.Timeout
   transport: SatelliteTransport
   removeAbortListener: () => void
+  conversationSessionId?: string
+  receivingResult?: boolean
 }
 
 class SatelliteRegistry {
@@ -132,6 +135,7 @@ class SatelliteRegistry {
         ...(input.onProgress ? { onProgress: input.onProgress } : {}),
         timeout,
         transport: connection.transport,
+        ...(input.conversationSessionId ? { conversationSessionId: input.conversationSessionId } : {}),
         removeAbortListener: () => input.signal?.removeEventListener('abort', onAbort)
       })
       input.signal?.addEventListener('abort', onAbort, { once: true })
@@ -177,6 +181,7 @@ class SatelliteRegistry {
 
     if (
       !pending ||
+      pending.receivingResult ||
       pending.profileName !== profileName ||
       pending.deviceId !== deviceId ||
       (transport && pending.transport !== transport)
@@ -184,10 +189,27 @@ class SatelliteRegistry {
       return
     }
 
-    clearTimeout(pending.timeout)
-    pending.removeAbortListener()
-    this.pendingInvocations.delete(payload.invocationId)
-    pending.resolve(payload.result)
+    pending.receivingResult = true
+    const receive = async (): Promise<ToolExecutionResult> => {
+      if (!payload.artifacts) return payload.result
+      if (!pending.conversationSessionId) throw new Error('Satellite artifacts require a conversation session.')
+      return receiveSatelliteArtifacts(
+        getSatelliteArtifactRoot(pending.profileName, pending.conversationSessionId),
+        payload.result, payload.artifacts
+      )
+    }
+    void receive().then((result) => {
+      // Cancellation or replacement can win while files are being saved.
+      if (this.pendingInvocations.get(payload.invocationId) !== pending) return
+      clearTimeout(pending.timeout)
+      pending.removeAbortListener()
+      this.pendingInvocations.delete(payload.invocationId)
+      pending.resolve(result)
+    }).catch((error: unknown) => {
+      this.cancelInvocation(payload.invocationId, new Error(
+        `Satellite artifact transfer failed; the action may have executed, do not replay it blindly: ${String(error)}`
+      ))
+    })
   }
 
   private getConnectionKey(profileName: string, deviceId: string): string {
