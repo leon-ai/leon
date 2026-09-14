@@ -2,9 +2,13 @@ import type {
   CuaExecutionContext as ToolExecutionContext,
   ComputerUseDriver
 } from '../types'
+import path from 'node:path'
+
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 import { CuaDesktopSetup, CuaDesktopSetupPendingError, CuaDesktopSetupState, isCuaWaylandSession } from './cua-desktop-setup'
 import { CuaWaylandCaptureAdapter } from './cua-wayland-capture'
+import { CuaLinuxLaunchAdapter } from './cua-linux-launch'
 
 import {
   CUA_TELEMETRY_ENABLED_ENV,
@@ -42,7 +46,11 @@ export async function createCuaDriverAdapter(
       maxIdleTtlSeconds: CUA_MAX_IDLE_TTL_SECONDS
     }
   }
-  const driver = CuaDriver.createConfigured(options) as unknown as ComputerUseDriver
+  const nativeDriver = CuaDriver.createConfigured(options) as unknown as ComputerUseDriver
+  // A driver is retained across conversations; application logs belong to its profile.
+  const driver = process.platform === 'linux'
+    ? new CuaLinuxLaunchAdapter(nativeDriver, path.join(getProfilePaths(input.profileName).logs, 'applications'))
+    : nativeDriver
   const gnomeWayland = isCuaWaylandSession(process.platform, process.env) &&
     process.env['XDG_CURRENT_DESKTOP']?.toLowerCase().split(':').includes('gnome') &&
     process.env['CUA_DRIVER_RS_ENABLE_WAYLAND'] === '1'
