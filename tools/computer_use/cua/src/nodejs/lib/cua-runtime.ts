@@ -1,4 +1,4 @@
-import { ComputerUseTextInputMode } from './types'
+import { ComputerUseTextInputMode, ComputerUseZoomPurpose } from './types'
 import type { CuaExecutionContext as ToolExecutionContext,
   CapturedComputerUseState,
   ComputerUseDriver,
@@ -30,6 +30,8 @@ import {
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
   COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
   COMPUTER_USE_COORDINATE_FIELDS,
+  COMPUTER_USE_COPY_ACTIONS,
+  COMPUTER_USE_COPY_SETTLE_MS,
   COMPUTER_USE_MODEL_OUTPUT_MAX_CHARS,
   COMPUTER_USE_SEQUENCE_ACTIONS,
   COMPUTER_USE_SELECT_ALL_KEYS,
@@ -37,6 +39,7 @@ import {
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
   COMPUTER_USE_WINDOW_MAX_DEPTH,
+  CUA_FOREGROUND_DELIVERY_MODE,
   CUA_SESSION_ENDED_ERROR_CODE,
   CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE
 } from './constants'
@@ -145,6 +148,7 @@ export class CuaRuntime {
     if (action === COMPUTER_USE_ACTION_SEQUENCE_NAME) {
       return this.executeActionSequence(input, parameters)
     }
+    if (action === 'copy_text') return this.copyText(input, parameters)
 
     input.onProgress?.({
       source: 'log',
@@ -163,6 +167,14 @@ export class CuaRuntime {
         COMPUTER_USE_CAPTURE_ACTIONS.has(action) &&
         runtime.driver.supportsPostActionCapture !== false
       const driverParameters = { ...parameters }
+      const zoomPurpose = action === 'zoom' ? parameters['purpose'] ?? ComputerUseZoomPurpose.Act : null
+      const desktopZoom = action === 'zoom' && parameters['scope'] === 'desktop'
+      if (action === 'zoom') {
+        if (zoomPurpose !== ComputerUseZoomPurpose.Act && zoomPurpose !== ComputerUseZoomPurpose.Read) {
+          throw new Error('zoom purpose must be act or read.')
+        }
+        delete driverParameters['purpose']
+      }
       delete driverParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
       const settleMs = this.resolveSettleMs(driverParameters['settle_ms'])
       delete driverParameters['settle_ms']
@@ -175,9 +187,6 @@ export class CuaRuntime {
         // do not infer page readiness from colors, titles or inaccessible trees.
         if (settleMs > 0) {
           await delay(settleMs)
-          // A delayed refresh follows a transition; a previous screenshot is
-          // not suitable for the query-only image reuse optimization.
-          if (action === 'get_window_state') driverParameters['include_screenshot'] ??= true
         }
       }
       const cursorTarget = asRecord(driverParameters['target'])
@@ -187,13 +196,29 @@ export class CuaRuntime {
         throw new Error('move_cursor requires target={kind:"desktop",display_id:"primary"} from a fresh get_desktop_state capture. Cursor overlay controls are host-managed.')
       }
       if (action === 'zoom' && (
-        !Number.isInteger(driverParameters['pid']) ||
-        !Number.isInteger(driverParameters['window_id']) ||
+        (desktopZoom
+          ? driverParameters['pid'] != null || driverParameters['window_id'] != null
+          : !Number.isInteger(driverParameters['pid']) || !Number.isInteger(driverParameters['window_id'])) ||
         !['x1', 'x2', 'y1', 'y2'].every((key) => Number.isFinite(driverParameters[key])) ||
+        Number(driverParameters['x1']) < 0 || Number(driverParameters['y1']) < 0 ||
         Number(driverParameters['x1']) >= Number(driverParameters['x2']) ||
         Number(driverParameters['y1']) >= Number(driverParameters['y2'])
       )) {
-        throw new Error('zoom requires an exact pid/window_id and a nonempty rectangle with x1 < x2 and y1 < y2 from the latest full-window screenshot.')
+        return this.failure('zoom requires scope=desktop without window identifiers, or an exact pid/window_id, and a nonnegative, nonempty rectangle from that target’s latest screenshot.')
+      }
+      if (action === 'zoom') {
+        const transform = this.visualTransforms.get(this.getVisualTransformKey(input, driverParameters))
+        if (!transform || transform.fromZoom || transform.sourceOffset) {
+          // A desktop or previous crop uses different axes. Return the missing
+          // full-window observation, but never reinterpret the requested rectangle.
+          const observation = await this.executeAction(input, desktopZoom ? 'get_desktop_state' : 'get_window_state', desktopZoom ? {} : {
+            pid: driverParameters['pid'], window_id: driverParameters['window_id'], include_screenshot: true
+          })
+          if (!observation.success) return observation
+          const message = `Full-${desktopZoom ? 'desktop' : 'window'} screenshot supplied; select a rectangle in this image. For a desktop image use scope=desktop without pid/window_id; for a window image use its pid/window_id.`
+          return { ...observation, success: false, message,
+            output: { ...observation.output, action: 'zoom', success: false, zoom_applied: false, next_step: message } }
+        }
       }
       // Tutorial queries need both handles and capture-bound annotation geometry.
       if (recording && action === 'get_window_state' &&
@@ -205,7 +230,6 @@ export class CuaRuntime {
         delete driverParameters[COMPUTER_USE_APP_QUERY_PARAMETER]
       }
       const coordinateSafeParameters = this.applyObservationDefaults(
-        input,
         action,
         this.mapCoordinatesToSource(
           input,
@@ -214,6 +238,38 @@ export class CuaRuntime {
           runtime
         )
       )
+      if (zoomPurpose === ComputerUseZoomPurpose.Read || desktopZoom) {
+        const key = this.getVisualTransformKey(input, driverParameters)
+        const crop = await this.artifactStore.createReadingCrop(
+          input, coordinateSafeParameters, this.visualTransforms.get(key)!
+        )
+        // Reading changes the image, not the target. Keep its exact offset so
+        // the next click uses this crop rather than stale full-image pixels.
+        this.rememberVisualState(this.visualTransforms, key, {
+          source: crop.source, model: { width: crop.width, height: crop.height },
+          sourceOffset: crop.sourceOffset
+        })
+        return {
+          success: true,
+          message: 'Zoomed region from the last observed screenshot.',
+          output: {
+            action: 'zoom',
+            result: {
+              purpose: zoomPurpose,
+              screenshot_width: crop.width,
+              screenshot_height: crop.height,
+              coordinate_space: 'attached_model_image',
+              image_kind: 'zoom_crop',
+              capture_target: desktopZoom
+                ? { kind: 'desktop', display_id: 'primary' }
+                : { kind: 'window', pid: driverParameters['pid'], window_id: driverParameters['window_id'] },
+              hint: 'Use this crop’s pixels and capture_target for input; Leon translates the crop offset. Do not reuse full-image coordinates. For exact text missing from accessibility, right-click the source and use copy_text on its Copy action before transcription. This is not a fresh capture; observe the full target before another zoom.'
+            },
+            artifacts: crop.artifacts
+          },
+          modelFiles: crop.modelFiles
+        }
+      }
       const actionParameters = await this.runtimeManager.prepareParameters(
         runtime,
         input,
@@ -235,6 +291,18 @@ export class CuaRuntime {
         }
       }
       const driverStartedAt = performance.now()
+      if (action === 'click' && actionParameters['button'] === 'right' &&
+          actionParameters['delivery_mode'] === CUA_FOREGROUND_DELIVERY_MODE) {
+        const target = asRecord(actionParameters['target']) ?? actionParameters
+        if (Number.isInteger(target['pid']) && Number.isInteger(target['window_id'])) {
+          // Foreground input normally restores the previous app, dismissing
+          // context menus before capture. Keep this multi-step UI in front.
+          const activation = await this.executeAction(input, 'bring_to_front', {
+            pid: target['pid'], window_id: target['window_id']
+          })
+          if (!activation.success) return activation
+        }
+      }
       const result = await this.callAction(
         runtime.driver,
         input,
@@ -316,10 +384,13 @@ export class CuaRuntime {
       // Wait after delivery, so an asynchronous destination can replace the
       // source window before capture. Never replay the input while waiting.
       if (captureAfter && !actionFailed && Number(settleMs) > 0) await delay(Number(settleMs))
+      // A popup can extend beyond its parent window or own a separate surface.
+      const menuAction = action === 'invoke_menu' || (action === 'click' && actionParameters['button'] === 'right')
       const capture = (targetParameters: Record<string, unknown>): Promise<CapturedComputerUseState | null> =>
-        this.captureStateAfterAction(runtime, input, targetParameters, action)
+        this.captureStateAfterAction(runtime, input,
+          menuAction ? { scope: 'desktop', session: actionParameters['session'] } : targetParameters, action)
           .catch((error: unknown) => this.failedCapture(
-            input, action === 'invoke_menu' ? { scope: 'desktop' } : targetParameters,
+            input, menuAction ? { scope: 'desktop' } : targetParameters,
             COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
             error instanceof Error ? error.message : String(error)
           ))
@@ -516,6 +587,45 @@ export class CuaRuntime {
     return Math.min(Number(settleMs), COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS)
   }
 
+  /**
+   * Couples an observed Copy action with clipboard verification, without
+   * clearing the owner's clipboard or silently retrying potentially delivered input.
+   */
+  private async copyText(input: ToolExecutionContext, parameters: Record<string, unknown>): Promise<ToolRuntimeResult> {
+    const action = parameters['action']
+    const actionParameters = asRecord(parameters['parameters'])
+    if (typeof action !== 'string' || !COMPUTER_USE_COPY_ACTIONS.has(action) || !actionParameters ||
+        !Number.isInteger(parameters['pid']) || !Number.isInteger(parameters['window_id'])) {
+      return this.failure('copy_text requires the source pid/window_id and an observed Copy action (click, hotkey or invoke_menu) with its usual parameters.')
+    }
+    const before = await this.executeAction(input, 'clipboard_read', { include_text: true })
+    if (!before.success) return before
+    const delivered = await this.executeAction(input, action, {
+      ...actionParameters, capture_after: true,
+      settle_ms: actionParameters['settle_ms'] ?? COMPUTER_USE_COPY_SETTLE_MS
+    })
+    if (input.signal?.aborted) return delivered
+    const after = await this.executeAction(input, 'clipboard_read', { include_text: true })
+    const previousText = asRecord(before.output['result'])?.['text']
+    const text = asRecord(after.output['result'])?.['text']
+    const changed = after.success && typeof text === 'string' && text.trim().length > 0 && text !== previousText
+    const success = delivered.success && changed
+    // An unchanged clipboard may already contain the desired text, but does
+    // not prove this action copied it. Leave the decision visible to the agent.
+    const message = changed
+      ? 'Clipboard text changed after the Copy attempt. Verify it matches the intended source before using it.'
+      : 'Copy is unverified: the clipboard is unchanged, empty or unreadable. Inspect the returned observation before retrying; do not treat stale text as copied source content.'
+    return {
+      ...delivered, success, message,
+      output: {
+        ...delivered.output, action: 'copy_text', success,
+        input_result: delivered.output['result'],
+        result: { clipboard_changed: changed, input_success: delivered.success,
+          ...(changed ? { text } : {}), message }
+      }
+    }
+  }
+
   private async executeActionSequence(
     input: ToolExecutionContext,
     parameters: Record<string, unknown>
@@ -681,7 +791,6 @@ export class CuaRuntime {
   }
 
   private applyObservationDefaults(
-    input: ToolExecutionContext,
     action: string,
     parameters: Record<string, unknown>
   ): Record<string, unknown> {
@@ -689,24 +798,14 @@ export class CuaRuntime {
 
     // Bound the driver walk itself, not just the text sent to the model.
     // Callers can request deeper observations when a needed control is omitted.
-    parameters = {
+    // A filtered tree is still a new observation. Return its matching image
+    // by default so the next pixel action never loses its coordinate frame.
+    return {
       max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
       max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH,
+      include_screenshot: true,
       ...parameters
     }
-    if (
-      parameters['include_screenshot'] !== undefined ||
-      typeof parameters['query'] !== 'string' ||
-      parameters['query'].trim().length === 0 ||
-      !this.visualTransforms.has(this.getVisualTransformKey(input, parameters))
-    ) {
-      return parameters
-    }
-
-    // A filtered accessibility refresh can reuse the latest image coordinate
-    // space. This avoids attaching another screenshot just to mint fresh
-    // semantic element handles.
-    return { ...parameters, include_screenshot: false }
   }
 
   private async callAction(
@@ -819,7 +918,7 @@ export class CuaRuntime {
     )
     if (!transform) {
       if (fields.some((field) => typeof parameters[field] === 'number')) {
-        throw new Error('Observe this target with a fresh screenshot before using pixel coordinates; otherwise use its current element token. A desktop screenshot does not establish window coordinates. If the window capture failed, refresh list_windows and use its current pid/window_id; do not retry the same window click after another desktop capture.')
+        throw new Error('These window coordinates have no matching screenshot. If you observed a desktop image, locate the control in that image and use its desktop pixels with target={kind:"desktop",display_id:"primary"}, without pid/window_id. Otherwise capture the window or use a current element token. A failed window capture does not prevent copying through the visible desktop; do not convert desktop pixels into guessed window coordinates.')
       }
       return parameters
     }
@@ -854,7 +953,7 @@ export class CuaRuntime {
         value,
         field.includes('x') ? 'x' : 'y',
         transform
-      )
+      ) + (transform.sourceOffset?.[axis] ?? 0)
     }
 
     return mappedParameters
@@ -957,7 +1056,7 @@ export class CuaRuntime {
       returned_element_count: 0,
       omitted_element_count: elements.length,
       elements_complete: false,
-      hint: 'Use pid and window_id with current element tokens. Observe again after acting; old tokens expire. Increase max_elements/max_depth only if a needed control is omitted; query filters results, not traversal cost. elements_complete=false alone does not establish that this walk hit a limit.'
+      hint: 'For exact text absent from these elements, the next extraction step is Copy: right-click the source in the existing screenshot, inspect the menu, then call copy_text. Do not switch to reading zoom, OCR, or guessed URLs until you have tried the source’s Copy action; empty accessibility does not establish that Copy is unavailable. Use current element tokens with their pid/window_id. Observe after acting; old tokens expire. Increase max_elements/max_depth only for an omitted control; query filters results, not traversal cost. elements_complete=false alone does not prove a traversal limit.'
     }
     // Include paths, metadata and envelope in the budget, not just AX elements.
     // Reserve the worst-case counter width so counters cannot overflow it.
@@ -1044,6 +1143,11 @@ export class CuaRuntime {
       source_screenshot_width: transform.source.width,
       source_screenshot_height: transform.source.height,
       coordinate_space: 'attached_model_image',
+      image_kind: transform.fromZoom ? 'zoom_crop' : bounds ? 'full_window' : 'desktop',
+      ...(!transform.fromZoom && !bounds ? {
+        capture_target: { kind: 'desktop', display_id: 'primary' },
+        text_extraction_hint: 'Use this desktop image to locate the source, not to transcribe exact text or URLs. Next inspect accessibility with get_window_state(include_screenshot=false), then if the text is missing right-click the source using these desktop pixels and target={kind:"desktop",display_id:"primary"}; inspect the menu and use copy_text on Copy. A failed window capture does not prevent this desktop Copy path. OCR is the fallback after accessibility and copying fail, not the next step after this screenshot.'
+      } : {}),
       ...(transform.fromZoom ? {
         zoomed: true,
         zoom_hint: 'This is a window crop. When present, yellow x/y guides label actual crop pixels, not controls. Locate the target center against these guides before clicking; do not guess from the earlier image. Click, drag, or type using crop pixels with the same pid/window_id; Leon translates them. For other pixel actions or another zoom, first get a full-window screenshot.'
@@ -1052,7 +1156,7 @@ export class CuaRuntime {
       // Ground uncertain positions before delivery rather than relying on
       // post-action no-op detection to correct a guessed click.
       ...(!transform.fromZoom && bounds ? {
-        grounding_hint: 'Before a pixel action, locate the intended control and its label in this image. If it is small, ambiguous or its center is uncertain, call zoom on the surrounding region with this exact pid/window_id first. Then use the crop pixels for click, drag or targeted typing; Leon handles translation. Do not batch zoom and its dependent action: inspect the returned crop first.'
+        grounding_hint: 'Locate the source or control in this image before clicking. Use zoom to locate a small control when needed, not as the default text-extraction step. After zoom, use only the crop’s pixels and capture_target.'
       } : {})
     }
   }
@@ -1163,7 +1267,7 @@ export class CuaRuntime {
       // Native menus are composited outside a window capture on macOS.
       // Label the new coordinate space so it cannot be used as window pixels.
       observation['capture_target'] = { kind: 'desktop' }
-      observation['hint'] = 'This is a desktop observation. Use a desktop target for its pixels; window-local coordinates and old element tokens do not apply. A highlighted menu item alone does not prove the command ran.'
+      observation['hint'] = 'Use target={kind:"desktop",display_id:"primary"} for these image pixels, not window coordinates. For a small menu row, use zoom(scope="desktop",purpose="act") first, then click its centre with copy_text if copying. A highlighted row alone does not prove execution.'
     }
     // Post-action captures are tutorial evidence too; bind annotation geometry
     // to their own screenshot rather than the pre-action snapshot.

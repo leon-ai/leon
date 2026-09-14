@@ -77,6 +77,7 @@ describe('GNOME coordinate normalization', () => {
       expect((await centerPixel(model, '50', '30'))[1]).toBeGreaterThan(40)
       expect(await fs.readFile(String(images.artifacts[0]!['path']))).toEqual(desktop)
       expect(images.transform).toEqual({
+        artifactPath: images.artifacts[0]!['path'],
         source: { width: 800, height: 600 }, model: { width: 800, height: 600 }, fromZoom: true
       })
     } finally {

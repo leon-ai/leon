@@ -1,5 +1,6 @@
 import type { CuaExecutionContext as ToolExecutionContext,
   ComputerUseImageDimensions,
+  ComputerUseImageTransform,
   CuaToolResult,
   PersistedComputerUseImages
 } from './types'
@@ -25,11 +26,74 @@ import { ComputerUseSetOfMarkMode } from './types'
 
 const execFileAsync = promisify(execFile)
 const VISUAL_STATE_ID_LENGTH = 16
+const READING_IMAGE_PIXEL_BUDGET = 1_600_000
+const READING_IMAGE_SCALE = 2
+const READING_CROP_MARGIN_RATIO = 0.1
 
 /**
  * Persists complete evidence while returning only bounded model attachments.
  */
 export class ComputerUseArtifactStore {
+  /**
+   * Read the original capture without action markers or the native zoom cap.
+   * This is evidence from the last observation, not a fresh desktop capture.
+   */
+  public async createReadingCrop(
+    input: ToolExecutionContext,
+    region: Record<string, unknown>,
+    transform: ComputerUseImageTransform
+  ): Promise<{
+    width: number
+    height: number
+    source: ComputerUseImageDimensions
+    sourceOffset: { x: number, y: number }
+    artifacts: PersistedComputerUseImages['artifacts']
+    modelFiles: PersistedComputerUseImages['modelFiles']
+  }> {
+    if (!ffmpegStatic || !transform.artifactPath || transform.fromZoom || transform.sourceOffset) {
+      throw new Error('Zoom requires an original window or desktop capture and FFmpeg. Observe the target again.')
+    }
+    let x = Number(region['x1']), y = Number(region['y1'])
+    let width = Number(region['x2']) - x, height = Number(region['y2']) - y
+    if (![x, y, width, height].every(Number.isInteger) || x < 0 || y < 0 ||
+        width <= 0 || height <= 0 || x + width > transform.source.width ||
+        y + height > transform.source.height) {
+      throw new Error('The zoom region must be inside the observed image.')
+    }
+    // Preserve nearby line endings when the selected rectangle is too tight.
+    // Only expand within the source image; never introduce blank border pixels.
+    const marginX = Math.ceil(width * READING_CROP_MARGIN_RATIO)
+    const marginY = Math.ceil(height * READING_CROP_MARGIN_RATIO)
+    const right = Math.min(transform.source.width, x + width + marginX)
+    const bottom = Math.min(transform.source.height, y + height + marginY)
+    x = Math.max(0, x - marginX)
+    y = Math.max(0, y - marginY)
+    width = right - x
+    height = bottom - y
+    const pixels = width * height
+    if (pixels > READING_IMAGE_PIXEL_BUDGET) {
+      throw new Error('Select a smaller reading region so the original text detail can be preserved.')
+    }
+    // Enlarge small text for inspection, but never downsample a reading crop.
+    const scale = Math.min(READING_IMAGE_SCALE, Math.sqrt(READING_IMAGE_PIXEL_BUDGET / pixels))
+    const outputWidth = Math.floor(width * scale), outputHeight = Math.floor(height * scale)
+    const artifactPath = path.join(this.getArtifactDirectory(input), `${Date.now()}-${randomUUID()}-read.png`)
+    await execFileAsync(ffmpegStatic, [
+      '-nostdin', '-hide_banner', '-loglevel', 'error', '-i', transform.artifactPath,
+      '-vf', `crop=${width}:${height}:${x}:${y}:exact=1,scale=${outputWidth}:${outputHeight}:flags=lanczos`,
+      '-frames:v', '1', '-y', artifactPath
+    ])
+    const image = await fs.promises.readFile(artifactPath)
+    return {
+      width: outputWidth,
+      height: outputHeight,
+      source: { width, height },
+      sourceOffset: { x, y },
+      artifacts: [{ path: artifactPath, mime_type: 'image/png', size_bytes: image.byteLength }],
+      modelFiles: [{ dataBase64: image.toString('base64'), mediaType: 'image/png', filename: path.basename(artifactPath), visualDetail: 'high' }]
+    }
+  }
+
   public async persistCaptureMetadata(
     images: PersistedComputerUseImages,
     observation: Record<string, unknown>
@@ -161,6 +225,7 @@ export class ComputerUseArtifactStore {
         ? {
             source: sourceDimensions,
             model: latestImage.modelDimensions,
+            artifactPath: latestImage.artifact.path,
             ...(action === 'zoom' ? { fromZoom: true } : {})
           }
         : null

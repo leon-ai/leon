@@ -2,6 +2,7 @@
  * Cua input names shared by its evidence capture and the agent repetition guard.
  */
 export const COMPUTER_USE_CAPTURE_ACTIONS = new Set([
+  'copy_text',
   'move_cursor',
   'invoke_menu',
   'click',

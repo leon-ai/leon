@@ -84,8 +84,15 @@ export default class CuaTool extends Tool {
   /**
    * Execute zoom through the retained Cua runtime.
    */
-  public async zoom(pid?: unknown, window_id?: unknown, x1?: unknown, x2?: unknown, y1?: unknown, y2?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('zoom', { pid, window_id, x1, x2, y1, y2 })
+  public async zoom(pid?: unknown, window_id?: unknown, x1?: unknown, x2?: unknown, y1?: unknown, y2?: unknown, purpose?: unknown, scope?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('zoom', { pid, window_id, x1, x2, y1, y2, purpose, scope })
+  }
+
+  /**
+   * Invoke an observed Copy control and verify the clipboard in one serialized operation.
+   */
+  public async copy_text(pid?: unknown, window_id?: unknown, action?: unknown, parameters?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('copy_text', { pid, window_id, action, parameters })
   }
 
   /**

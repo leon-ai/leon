@@ -724,6 +724,7 @@ describe('CuaRuntime', () => {
       JSON.stringify({
         max_elements: 500,
         max_depth: 32,
+        include_screenshot: true,
         pid: 42,
         window_id: 7,
         session: sessionInput.session
@@ -1356,6 +1357,36 @@ describe('CuaRuntime', () => {
       })
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it.each(['foreground', 'background', 'activation_failed'])('preserves context-menu focus without escalating background input (%s)', async (mode) => {
+    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      if (action === 'bring_to_front' && mode === 'activation_failed') {
+        return { images: [], text: 'Activation unavailable', isError: true }
+      }
+      if (action === 'get_desktop_state') {
+        return { images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }], text: '',
+          structuredJson: JSON.stringify({ screenshot_width: 800, screenshot_height: 200 }), isError: false }
+      }
+      return nativeCall(action, args)
+    })
+    const provider = new CuaRuntime(async () => driver as never, () => 'background')
+    try {
+      const result = await provider.execute({
+        toolkitId: 'computer_use', toolId: 'cua', functionName: 'click',
+        parameters: { target: { kind: 'window', pid: 42, window_id: 7 }, element_token: 'element-1',
+          button: 'right', delivery_mode: mode === 'background' ? mode : 'foreground' },
+        profileName: PROFILE_NAME, conversationSessionId: 'menu-focus'
+      })
+      const actions = driver.callTool.mock.calls.map(([action]) => action).filter((action) => action !== 'start_session')
+      expect(actions).toEqual(mode === 'background' ? ['click', 'get_desktop_state']
+        : mode === 'activation_failed' ? ['bring_to_front'] : ['bring_to_front', 'click', 'get_desktop_state'])
+      expect(result.success).toBe(mode !== 'activation_failed')
+    } finally {
+      await provider.dispose()
     }
   })
 

@@ -4,7 +4,7 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
-  "progressive_guidance": "Use browser_use for webpages, tabs, navigation, forms, downloads, and browser screenshots. Browser Use already supports direct file uploads, downloads, and JavaScript dialogs; do not default to Cua for these. Cua handles native applications, browser chrome, and genuine OS controls that browser helpers cannot handle; return to browser_use after completing the native step. If browser access requires permission or setup, pause and explain the owner action; do not use Cua to bypass that boundary or switch browsers.\nPrefer current semantic handles or observed menu paths. If only pixels are available, locate the control and label in the latest matching image. Before an uncertain or small-target click, zoom its surrounding window region, inspect the crop, then act using crop pixels with the same pid/window_id. Never batch zoom with its dependent action or reuse earlier coordinates. If accessibility exposes only the outer frame, retry the tree at most once for a missing control. Inspect unfamiliar editor help before trying shortcuts.\nVisible interaction mode forces foreground input; Cua validates and activates the target and restores focus. Use bring_to_front only for persistent focus or an exposed desktop target. Background support depends on the target: XTest-only input requires foreground. Remember background_unavailable; retry foreground only when permitted.\nUse perform_actions for predictable steps without intermediate visual decisions, with at most one pixel-targeted click. Within one field, combine click, select-all and type_text; repeated typing reuses focus. Prefer type_text mode=replace to replace a field, then inspect the final observation. Do not batch different spatial fields. For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For page/dialog navigation, set settle_ms before capture (on the last batch step). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.\nControls offer actions: play starts playback; pause stops it. If current state is ambiguous, compare fresh observations over time. A track title or stationary progress position does not prove active playback.",
+  "progressive_guidance": "Extract exact text in this order: accessibility text, then the source app’s Copy action with copy_text, then OCR only if neither works. After a screenshot identifies the source, inspect accessibility or right-click it and inspect Copy; do not transcribe links and try them in another tool first. An empty accessibility query is not a failed Copy attempt. Zoom may help target a small Copy control, but is not the first text-extraction step. Match screenshot scope: desktop for desktop/menu images, window for window images. Inspect a zoom before acting with its crop pixels and capture_target. Never batch zoom with its dependent click. If accessibility exposes only the outer frame, retry the tree at most once for a missing control. Inspect unfamiliar editor help before trying shortcuts.\nUse browser_use for webpages, tabs, navigation, forms, downloads, and browser screenshots. Browser Use already supports direct file uploads, downloads, and JavaScript dialogs; do not default to Cua for these. Cua handles native applications, browser chrome, and genuine OS controls that browser helpers cannot handle; return to browser_use after completing the native step. If browser access requires permission or setup, pause and explain the owner action; do not use Cua to bypass that boundary or switch browsers.\nVisible interaction mode forces foreground input; Cua normally restores focus after input; foreground right-clicks keep the target in front so its context menu remains available. Use bring_to_front only for persistent focus or an exposed desktop target. Background support depends on the target: XTest-only input requires foreground. Remember background_unavailable; retry foreground only when permitted.\nUse perform_actions for predictable steps without intermediate visual decisions, with at most one pixel-targeted click. Within one field, combine click, select-all and type_text; repeated typing reuses focus. Prefer type_text mode=replace to replace a field, then inspect the final observation. Do not batch different spatial fields. For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For page/dialog navigation, set settle_ms before capture (on the last batch step). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.\nControls offer actions: play starts playback; pause stops it. If current state is ambiguous, compare fresh observations over time. A track title or stationary progress position does not prove active playback.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -180,13 +180,13 @@
       }
     },
     "zoom": {
-      "description": "Before an uncertain pixel action, inspect its region in the latest full-window screenshot. Read the returned crop before acting; use crop pixels with the same pid/window_id. Get a full-window screenshot before other pixel actions or another zoom.",
+      "description": "Enlarge a region of the screenshot you just observed. For exact source text, use reading zoom only after accessibility and an actual Copy attempt cannot provide it. Empty accessibility alone is not a reason to choose reading zoom. Control-targeting zoom remains available to help click Copy. For desktop images set scope=desktop and omit pid/window_id; for window images supply pid/window_id. Both purposes return mapped input coordinates: inspect the crop before acting with its pixels and capture_target. Observe the full target before another zoom.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "pid": {
-            "description": "Target pid — required for from_zoom click/type translation.",
+            "description": "Process owning the observed window. Omit for desktop zoom.",
             "type": "integer"
           },
           "window_id": {
@@ -194,24 +194,34 @@
           },
           "x1": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
           },
           "x2": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
           },
           "y1": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
           },
           "y2": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
+          },
+          "purpose": {
+            "type": "string",
+            "enum": ["act", "read"],
+            "default": "act",
+            "description": "act: crop for controls. read: clean PNG crop for reading, enlarged up to 2x. Both support input in crop pixels with the returned capture_target. Neither is a fresh capture."
+          },
+          "scope": {
+            "type": "string",
+            "enum": ["window", "desktop"],
+            "default": "window",
+            "description": "Match the observed image: desktop for get_desktop_state or a context-menu screenshot (omit pid/window_id), window for get_window_state (supply pid/window_id)."
           }
         },
         "required": [
-          "pid",
-          "window_id",
           "x1",
           "y1",
           "x2",
@@ -462,7 +472,7 @@
       }
     },
     "get_desktop_state": {
-      "description": "Capture the visible desktop without an accessibility-tree walk. Use it for controls outside one window, multi-window context, or recovery after an ineffective window action.",
+      "description": "Capture the visible desktop to locate apps and controls, without an accessibility-tree walk. To extract exact text or URLs, next inspect accessibility or the source’s Copy action; use OCR only if both fail. Also use for controls outside one window or recovery after an ineffective window action.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2564,8 +2574,28 @@
         "type": "object"
       }
     },
+    "copy_text": {
+      "description": "Copy exact source text through an already observed Copy/Copy link control or selection shortcut, then check whether the clipboard changed. Use this instead of separate input and clipboard_read calls when extracting text. Open and inspect a context menu first if needed. Prefer a current semantic handle or observed menu path; pixel input must target the center of the Copy row in the latest matching screenshot. Unchanged text is unverified, not success. Changed text still needs comparison with the intended source. Never use this to invoke an unrelated action.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pid": { "type": "integer", "description": "Process owning the source text." },
+          "window_id": { "type": "integer", "description": "Window owning the source text, even when its Copy menu needs a desktop-targeted click." },
+          "action": { "type": "string", "enum": ["click", "hotkey", "invoke_menu"] },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The observed Copy action's normal parameters, including its explicit target and fresh semantic handle or image coordinates. A popup may require a desktop target distinct from the source window."
+          }
+        },
+        "required": ["pid", "window_id", "action", "parameters"]
+      },
+      "output_schema": { "type": "object", "additionalProperties": true }
+    },
     "clipboard_read": {
-      "description": "Read the current desktop clipboard.",
+      "description": "Read the current desktop clipboard. For exact source text, invoke an observed Copy action first, then set include_text=true. Successful reading does not prove copying succeeded: unrelated text may be stale clipboard content.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,

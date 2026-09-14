@@ -81,10 +81,18 @@ export interface ComputerUseImageDimensions {
 export interface ComputerUseImageTransform {
   source: ComputerUseImageDimensions
   model: ComputerUseImageDimensions
+  artifactPath?: string
+  // Local desktop crops map back to the full desktop without native zoom state.
+  sourceOffset?: { x: number, y: number }
   /**
    * Cua owns padded crop offsets; supported input must use its zoom mapping.
    */
   fromZoom?: boolean
+}
+
+export enum ComputerUseZoomPurpose {
+  Act = 'act',
+  Read = 'read'
 }
 
 export interface PersistedComputerUseImages {

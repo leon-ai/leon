@@ -39,6 +39,8 @@ export const CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE = 'window_capture_occluded'
 export const COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE = 'capture_failed'
 export const COMPUTER_USE_CAPTURE_AFTER_PARAMETER = 'capture_after'
 export const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
+export const COMPUTER_USE_COPY_SETTLE_MS = 250
+export const COMPUTER_USE_COPY_ACTIONS = new Set(['click', 'hotkey', 'invoke_menu'])
 export const COMPUTER_USE_SCREEN_CAPTURE_ACTIONS = new Set([
   'get_window_state', 'get_desktop_state', 'zoom'
 ])
@@ -63,6 +65,7 @@ export const COMPUTER_USE_ACTION_NAMES = [
   'hotkey',
   COMPUTER_USE_ACTION_SEQUENCE_NAME,
   'set_value',
+  'copy_text',
   'clipboard_read',
   'clipboard_write',
   'start_recording',
