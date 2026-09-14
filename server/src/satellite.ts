@@ -5,6 +5,7 @@ import { io } from 'socket.io-client'
 import {
   TOOLKIT_REGISTRY,
   TOOL_EXECUTOR,
+  CONTEXT_MANAGER,
   TOOL_WORKER_MANAGER
 } from '@/core'
 import {
@@ -28,6 +29,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import type { ToolExecutionResult } from '@/core/tool-executor'
 import { buildSatelliteProcessTitle } from '@/core/satellite/satellite-process-title'
 import { collectSatelliteArtifacts, getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
+import { SATELLITE_CONTEXT_REFRESH_MS } from '@/core/satellite/satellite-context'
 
 const REMOTE_URL_ARGUMENT = '--url'
 const PROFILE_TOKEN_ARGUMENT = '--token'
@@ -117,6 +119,27 @@ async function startSatellite(): Promise<void> {
     reconnection: true
   })
 
+  let refreshingContext = false
+  const publishContext = async (): Promise<void> => {
+    if (!socket.connected || refreshingContext) return
+    refreshingContext = true
+    const connectionId = socket.id
+    try {
+      await runWithProfileContext({ profileName: credential.profileName }, async () => {
+        const filenames = TOOLKIT_REGISTRY.getSatelliteManifest()
+          .flatMap((toolkit) => toolkit.context_files || [])
+        const snapshot = await CONTEXT_MANAGER.getDeviceDiscoverySnapshot(filenames)
+        if (socket.connected && socket.id === connectionId) socket.emit(SATELLITE_EVENTS.context, snapshot)
+      })
+    } catch (error) {
+      LogHelper.warning(`Device discovery context unavailable: ${String(error)}`)
+    } finally {
+      refreshingContext = false
+    }
+  }
+  const contextTimer = setInterval(() => void publishContext(), SATELLITE_CONTEXT_REFRESH_MS)
+  contextTimer.unref()
+
   socket.on(SATELLITE_EVENTS.cancelTool, ({ invocationId }: SatelliteToolCancellation) => {
     activeInvocations.get(invocationId)?.abort()
   })
@@ -144,6 +167,7 @@ async function startSatellite(): Promise<void> {
   })
 
   socket.on(SATELLITE_EVENTS.ready, () => {
+    void publishContext()
     LogHelper.title('Satellite')
     LogHelper.success(
       `Connected device ${deviceId} to profile ${credential.profileName}`

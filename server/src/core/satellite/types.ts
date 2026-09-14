@@ -15,6 +15,7 @@ export const SATELLITE_EVENTS = {
   cancelTool: 'leon:satellite:cancel-tool',
   toolProgress: 'leon:satellite:tool-progress',
   toolResult: 'leon:satellite:tool-result',
+  context: 'leon:satellite:context',
   error: 'leon:satellite:error'
 } as const
 

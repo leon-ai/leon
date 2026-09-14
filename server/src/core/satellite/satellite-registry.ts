@@ -15,6 +15,7 @@ import type {
 } from '@/core/tool-executor'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { getSatelliteArtifactRoot, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
+import { parseSatelliteContext, SATELLITE_CONTEXT_MAX_AGE_MS, type SatelliteContextSnapshot } from '@/core/satellite/satellite-context'
 
 const SATELLITE_TOOL_TIMEOUT_MS = 15 * 60 * 1_000
 
@@ -27,6 +28,7 @@ export interface SatelliteConnection {
   device: SatelliteDescriptor
   toolkits: SatelliteToolkitDefinition[]
   transport: SatelliteTransport
+  context?: { receivedAt: number, snapshot: SatelliteContextSnapshot }
 }
 
 interface PendingInvocation {
@@ -45,6 +47,25 @@ interface PendingInvocation {
 class SatelliteRegistry {
   private readonly connections = new Map<string, SatelliteConnection>()
   private readonly pendingInvocations = new Map<string, PendingInvocation>()
+
+  /**
+   * Context inherits the authenticated socket's owner and device, never payload IDs.
+   */
+  public updateContext(profileName: string, deviceId: string, payload: unknown, transport: SatelliteTransport): void {
+    const connection = this.getConnection(profileName, deviceId)
+    if (!connection || connection.transport !== transport) return
+    const snapshot = parseSatelliteContext(payload)
+    if (snapshot) connection.context = { receivedAt: Date.now(), snapshot }
+  }
+
+  /**
+   * Missing, expired and disconnected snapshots stay unavailable, not server-local.
+   */
+  public getContext(profileName: string, deviceId: string): SatelliteContextSnapshot | null {
+    const context = this.getConnection(profileName, deviceId)?.context
+    return context && Date.now() - context.receivedAt < SATELLITE_CONTEXT_MAX_AGE_MS
+      ? context.snapshot : null
+  }
 
   public register(input: SatelliteConnection): void {
     // Reconnection does not transfer in-flight native actions to a new process.

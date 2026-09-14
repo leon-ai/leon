@@ -994,6 +994,9 @@ export default class SocketServer {
             profileName,
             deviceId: data.device.id
           })
+          socket.on(SATELLITE_EVENTS.context, (payload: unknown) => {
+            SATELLITE_REGISTRY.updateContext(profileName, data.device.id, payload, socket)
+          })
           socket.on(
             SATELLITE_EVENTS.toolProgress,
             (payload: SatelliteToolProgressPayload) => {

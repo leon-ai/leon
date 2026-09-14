@@ -4,6 +4,7 @@ import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import { SATELLITE_EVENTS } from '@/core/satellite/types'
 import * as artifactTransfer from '@/core/satellite/satellite-artifacts'
 import type { SatelliteToolInvocation } from '@/core/satellite/types'
+import { SATELLITE_CONTEXT_MAX_AGE_MS } from '@/core/satellite/satellite-context'
 import type { ToolExecutionResult } from '@/core/tool-executor'
 import {
   getActiveProfileName,
@@ -31,6 +32,31 @@ const TOOL_RESULT: ToolExecutionResult = {
 }
 
 describe('SatelliteRegistry', () => {
+  it('isolates discovery snapshots by owner, transport and lifetime and rejects arbitrary files', () => {
+    vi.useFakeTimers()
+    const transport = { emit: vi.fn() }
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME, device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    const payload = { files: { 'ACTIVITY.md': '> Device apps' } }
+    SATELLITE_REGISTRY.updateContext('other-owner', DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, payload, { emit: vi.fn() })
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+    for (const files of [{ '../OWNER.md': 'private' }, { 'ACTIVITY.md': 'x'.repeat(32_001) }, { 'ACTIVITY.md': 42 }]) {
+      SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, { files }, transport)
+      expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+    }
+    SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, payload, transport)
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toEqual(payload)
+    expect(SATELLITE_REGISTRY.getContext('other-owner', DEVICE_ID)).toBeNull()
+    vi.advanceTimersByTime(SATELLITE_CONTEXT_MAX_AGE_MS)
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+    SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+  })
+
   afterEach(() => {
     SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
     vi.useRealTimers()

@@ -13,6 +13,7 @@ import { LangHelper } from '@/helpers/lang-helper'
 import {
   TOOLKIT_REGISTRY,
   TOOL_CALL_LOGGER,
+  CONTEXT_MANAGER,
   TOOL_WORKER_MANAGER
 } from '@/core'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
@@ -286,6 +287,12 @@ export default class ToolExecutor {
       resolvedTool.toolkitId,
       resolvedTool.toolId
     )
+
+    // Context's SDK tool reads profile files directly. Refresh device provenance
+    // here as well as in prompt context, including after a disconnect.
+    if (resolvedTool.toolkitId === 'structured_knowledge' && resolvedTool.toolId === 'context') {
+      CONTEXT_MANAGER.synchronizeDeviceContext()
+    }
 
     if (input.executionTarget === 'satellite' && !satelliteDeviceId) {
       return this.buildResult({
