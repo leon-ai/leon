@@ -201,62 +201,6 @@ export default class CuaTool extends Tool {
   }
 
   /**
-   * Execute browser prepare through the retained Cua runtime.
-   */
-  public async browser_prepare(allow_launch?: unknown, pid?: unknown, profile?: unknown, strategy?: unknown, window_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_prepare', { allow_launch, pid, profile, strategy, window_id })
-  }
-
-  /**
-   * Execute get browser state through the retained Cua runtime.
-   */
-  public async get_browser_state(continuation?: unknown, include_screenshot?: unknown, pid?: unknown, query?: unknown, scope_ref?: unknown, snapshot_format?: unknown, tab_id?: unknown, target_id?: unknown, window_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('get_browser_state', { continuation, include_screenshot, pid, query, scope_ref, snapshot_format, tab_id, target_id, window_id })
-  }
-
-  /**
-   * Execute browser navigate through the retained Cua runtime.
-   */
-  public async browser_navigate(tab_id?: unknown, target_id?: unknown, url?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_navigate', { tab_id, target_id, url })
-  }
-
-  /**
-   * Execute browser click through the retained Cua runtime.
-   */
-  public async browser_click(input_route?: unknown, ref?: unknown, tab_id?: unknown, target_id?: unknown, x?: unknown, y?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_click', { input_route, ref, tab_id, target_id, x, y })
-  }
-
-  /**
-   * Execute browser type through the retained Cua runtime.
-   */
-  public async browser_type(mode?: unknown, ref?: unknown, replace?: unknown, tab_id?: unknown, target_id?: unknown, text?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_type', { mode, ref, replace, tab_id, target_id, text })
-  }
-
-  /**
-   * Execute browser pointer through the retained Cua runtime.
-   */
-  public async browser_pointer(action?: unknown, delta_x?: unknown, delta_y?: unknown, destination_ref?: unknown, input_route?: unknown, ref?: unknown, tab_id?: unknown, target_id?: unknown, to_x?: unknown, to_y?: unknown, x?: unknown, y?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_pointer', { action, delta_x, delta_y, destination_ref, input_route, ref, tab_id, target_id, to_x, to_y, x, y })
-  }
-
-  /**
-   * Execute browser dialog through the retained Cua runtime.
-   */
-  public async browser_dialog(action?: unknown, delivery_mode?: unknown, dialog_id?: unknown, prompt_text?: unknown, tab_id?: unknown, target_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_dialog', { action, delivery_mode, dialog_id, prompt_text, tab_id, target_id })
-  }
-
-  /**
-   * Execute browser set input files through the retained Cua runtime.
-   */
-  public async browser_set_input_files(files?: unknown, ref?: unknown, tab_id?: unknown, target_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_set_input_files', { files, ref, tab_id, target_id })
-  }
-
-  /**
    * Execute start recording through the retained Cua runtime.
    */
   public async start_recording(record_video?: unknown): Promise<Record<string, unknown>> {

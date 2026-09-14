@@ -9,7 +9,6 @@ export const COMPUTER_USE_APP_RESULT_LIMIT = 24
 export const COMPUTER_USE_APP_WINDOW_LIMIT = 3
 export const COMPUTER_USE_APP_QUERY_PARAMETER = 'query'
 export const COMPUTER_USE_WINDOW_RESULT_LIMIT = 24
-export const COMPUTER_USE_BROWSER_REF_LIMIT = 120
 export const COMPUTER_USE_VISUAL_STATE_LIMIT = 512
 // Layout containers can put useful GTK controls dozens of levels deep. Bound
 // visited nodes independently so the initial observation still reaches them.
@@ -22,7 +21,6 @@ export const COMPUTER_USE_SET_OF_MARK_BADGE_HEIGHT = 20
 export const COMPUTER_USE_ACTION_SEQUENCE_LIMIT = 8
 export const COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT = 1
 export const COMPUTER_USE_OBSERVATION_SETTLE_MAX_MS = 2_000
-export const COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS = [500, 1_000] as const
 export const COMPUTER_USE_LAUNCH_WINDOW_RETRY_DELAYS_MS = [
   250,
   500,
@@ -31,14 +29,12 @@ export const COMPUTER_USE_LAUNCH_WINDOW_RETRY_DELAYS_MS = [
 ] as const
 export const CUA_TELEMETRY_ENABLED_ENV = 'CUA_TELEMETRY_ENABLED'
 export const CUA_X11_UINPUT_SAFETY_ENV = 'KDE_FULL_SESSION'
-export const COMPUTER_USE_BROWSER_INSPECTION_SETTING = 'browser_inspection'
 export const COMPUTER_USE_INTERACTION_MODE_SETTING = 'interaction_mode'
 export const COMPUTER_USE_ACTIVITY_OVERLAY_SETTING = 'activity_overlay'
 export const COMPUTER_USE_SET_OF_MARK_SETTING = 'set_of_mark'
 export const COMPUTER_USE_PREFERRED_APPS_SETTING = 'preferred_apps'
 export const CUA_FOREGROUND_DELIVERY_MODE = 'foreground'
 export const CUA_SESSION_ENDED_ERROR_CODE = 'session_ended'
-export const CUA_BROWSER_CONSENT_ERROR_CODE = 'browser_consent_required'
 export const CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE = 'window_capture_occluded'
 export const COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE = 'capture_failed'
 export const COMPUTER_USE_CAPTURE_AFTER_PARAMETER = 'capture_after'
@@ -69,14 +65,6 @@ export const COMPUTER_USE_ACTION_NAMES = [
   'set_value',
   'clipboard_read',
   'clipboard_write',
-  'browser_prepare',
-  'get_browser_state',
-  'browser_navigate',
-  'browser_click',
-  'browser_type',
-  'browser_pointer',
-  'browser_dialog',
-  'browser_set_input_files',
   'start_recording',
   'stop_recording'
 ] as const
@@ -88,8 +76,8 @@ export const COMPUTER_USE_ACTIONS = new Set<string>(
 export { COMPUTER_USE_CAPTURE_ACTIONS } from './action-contract'
 
 // Sequences are intentionally limited to mechanical input whose next target
-// does not need a fresh observation. Semantic browser actions can invalidate
-// references and therefore remain separate model-visible steps.
+// does not need a fresh observation. Observation and verification remain
+// separate steps so later inputs cannot depend on unseen results.
 export const COMPUTER_USE_SEQUENCE_ACTIONS = new Set([
   'click',
   'scroll',

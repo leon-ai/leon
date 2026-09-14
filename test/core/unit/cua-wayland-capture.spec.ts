@@ -107,11 +107,11 @@ describe('GNOME coordinate normalization', () => {
     expect(png.readUInt32BE(20)).toBe(450)
   })
 
-  it('does not reinterpret input coordinates or browser consent calls', async () => {
+  it('does not reinterpret native input coordinates or clipboard calls', async () => {
     const native = driver()
     const read = vi.fn(async () => LAYOUT)
     const adapter = new CuaWaylandCaptureAdapter(native, read)
-    for (const name of ['click', 'browser_prepare', 'get_browser_state']) {
+    for (const name of ['click', 'type_text', 'clipboard_read']) {
       const args = JSON.stringify({ x: 350, y: 200, session: 'test' })
       await adapter.callTool(name, args)
       expect(native.callTool).toHaveBeenLastCalledWith(name, args)

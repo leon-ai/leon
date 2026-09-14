@@ -10,8 +10,6 @@ import {
   CUA_TELEMETRY_ENABLED_ENV,
   CUA_X11_UINPUT_SAFETY_ENV
 } from '../constants'
-import { resolveComputerUseBrowserInspection } from '../computer-use-settings'
-import { createCuaBrowserAuthorizationHost } from './cua-browser-authorization'
 import { shouldUseCuaSafeX11Input } from '../computer-use-coordinate-mapper'
 
 const CUA_MAX_SESSION_TTL_SECONDS = 28_800n
@@ -44,12 +42,7 @@ export async function createCuaDriverAdapter(
       maxIdleTtlSeconds: CUA_MAX_IDLE_TTL_SECONDS
     }
   }
-  // Without an owner grant, do not install a host: Cua may prepare the browser
-  // endpoint before invoking it. Permission must precede that setup as well.
-  const driver = (resolveComputerUseBrowserInspection(input)
-    ? CuaDriver.createConfiguredWithAuthorizationHost(options,
-      await createCuaBrowserAuthorizationHost(() => resolveComputerUseBrowserInspection(input)))
-    : CuaDriver.createConfigured(options)) as unknown as ComputerUseDriver
+  const driver = CuaDriver.createConfigured(options) as unknown as ComputerUseDriver
   const gnomeWayland = isCuaWaylandSession(process.platform, process.env) &&
     process.env['XDG_CURRENT_DESKTOP']?.toLowerCase().split(':').includes('gnome') &&
     process.env['CUA_DRIVER_RS_ENABLE_WAYLAND'] === '1'

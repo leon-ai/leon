@@ -6,8 +6,5 @@
   "set_of_mark": {
     "mode": "auto"
   },
-  "browser_inspection": {
-    "allow_existing_profile": false
-  },
   "preferred_apps": {}
 }

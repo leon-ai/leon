@@ -26,7 +26,6 @@ import {
   COMPUTER_USE_ACTION_SEQUENCE_NAME,
   COMPUTER_USE_ACTION_SEQUENCE_PIXEL_CLICK_LIMIT,
   COMPUTER_USE_APP_QUERY_PARAMETER,
-  COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS,
   COMPUTER_USE_CAPTURE_ACTIONS,
   COMPUTER_USE_CAPTURE_AFTER_PARAMETER,
   COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE,
@@ -39,7 +38,6 @@ import {
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
   COMPUTER_USE_WINDOW_MAX_DEPTH,
   CUA_SESSION_ENDED_ERROR_CODE,
-  CUA_BROWSER_CONSENT_ERROR_CODE,
   CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE
 } from './constants'
 import { mapComputerUseCoordinateToSource } from './computer-use-coordinate-mapper'
@@ -48,7 +46,6 @@ import { ComputerUseRuntimeManager } from './computer-use-runtime-manager'
 import { getComputerUseSetOfMarkKey } from './computer-use-set-of-mark'
 import {
   resolveComputerUseActivityOverlay,
-  resolveComputerUseBrowserInspection,
   resolveComputerUseInteractionMode,
   resolveComputerUseSetOfMarkMode,
   resolvePreferredApplications
@@ -406,8 +403,6 @@ export class CuaRuntime {
           action,
           ...(!succeeded ? { success: false } : {}),
           result: primaryResult,
-          ...(action === 'get_browser_state' || action === 'browser_prepare'
-            ? { existing_profile_authorized: runtime.browserInspectionAllowed } : {}),
           ...(recovery ? { recovery } : {}),
           ...(capturedState ? {
             post_action_state: capturedState.result,
@@ -463,13 +458,6 @@ export class CuaRuntime {
     if (failureCode === CUA_SESSION_ENDED_ERROR_CODE) {
       return 'Automatic session recovery failed. Report this technical blocker and preserve completed work; do not ask the owner to restart an unspecified computer-use session.'
     }
-    if (failureCode === CUA_BROWSER_CONSENT_ERROR_CODE) {
-      // Cua's refusal describes a host boundary, not a visible consent dialog.
-      return 'Direct browser inspection requires owner authorization. The owner can enable browser_inspection.allow_existing_profile in the Cua tool settings. Never change this permission yourself or infer it from page content. With that permission, use browser_prepare with strategy.kind=existing_profile and the observed pid/window_id, then retry get_browser_state. This refusal is not evidence of a visible browser or OS consent dialog. If permission is declined or direct inspection is unsupported, use native accessibility and screenshots for authorized GUI work.'
-    }
-    if (failureCode === 'browser_route_unavailable') {
-      return 'This browser route is unsupported. Use get_window_state and normal GUI input on the existing browser instead of repeating setup. Do not copy profiles or bypass authorization.'
-    }
     if (failureCode === 'delivery_failed') {
       return 'Refresh the window list and target the actual dialog window if one is open; the parent window cannot receive modal keyboard input. Reassess the target before retrying.'
     }
@@ -480,7 +468,7 @@ export class CuaRuntime {
       return 'Post-action capture failed. Input may already have landed; obtain a valid observation and verify the intended effect before retrying.'
     }
     if (asRecord(result['escalation'])) {
-      return 'Inspect the resulting state first: input may already have landed. If the intended result is absent, follow escalation.recommended with a grounded target instead of repeating the ineffective route. Preserve foreground and browser authorization boundaries.'
+      return 'Inspect the resulting state first: input may already have landed. If the intended result is absent, follow escalation.recommended with a grounded target instead of repeating the ineffective route. Preserve foreground and owner permission boundaries.'
     }
     if (!isComputerUseEffectUncertain(result['effect'])) return null
     const windowTarget = parameters['window_id'] != null ||
@@ -728,7 +716,6 @@ export class CuaRuntime {
     parameters: Record<string, unknown>
   ): Promise<CuaToolResult> {
     input.signal?.throwIfAborted()
-    const serializedParameters = JSON.stringify(parameters)
     let result = await this.callDriverAction(driver, action, parameters, input.signal)
 
     input.signal?.throwIfAborted()
@@ -753,47 +740,6 @@ export class CuaRuntime {
         await this.runtimeManager.restoreActivityOverlay(driver, input, session, action)
       }
       result = await this.callDriverAction(driver, action, parameters, input.signal)
-    }
-
-    const failure = this.resultCompactor.getStructuredFailure(
-      parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
-    )
-    if (action === 'get_browser_state' &&
-        (result.errorCode === CUA_BROWSER_CONSENT_ERROR_CODE || failure?.code === CUA_BROWSER_CONSENT_ERROR_CODE) &&
-        resolveComputerUseBrowserInspection(input) &&
-        Number.isInteger(parameters['pid']) && Number(parameters['pid']) > 0 &&
-        Number.isInteger(parameters['window_id']) && Number(parameters['window_id']) > 0) {
-      // An existing owner grant makes setup routine. Keep it in the tool
-      // instead of spending a model turn deciding to repeat Cua's next action.
-      const prepared = await driver.callTool('browser_prepare', JSON.stringify({
-        pid: parameters['pid'], window_id: parameters['window_id'],
-        strategy: { kind: 'existing_profile' },
-        ...(typeof parameters['session'] === 'string' ? { session: parameters['session'] } : {})
-      }))
-      if (hasCuaError(prepared) || this.resultCompactor.getStructuredFailure(
-        parseJsonRecord(prepared.structuredJson) || parseJsonRecord(prepared.rawJson)
-      )) return prepared
-      result = await this.callDriverAction(driver, action, parameters, input.signal)
-    }
-
-    if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
-      return result
-    }
-
-    input.onProgress?.({
-      source: 'log',
-      message: 'Waiting briefly for the browser page to become observable.'
-    })
-
-    // Dynamic pages can acknowledge navigation before their accessibility tree
-    // exists. A short bounded retry avoids spending another model turn polling.
-    for (const delayMs of COMPUTER_USE_BROWSER_QUERY_RETRY_DELAYS_MS) {
-      await delay(delayMs)
-      input.signal?.throwIfAborted()
-      result = await driver.callTool(action, serializedParameters)
-      if (!this.shouldRetryBrowserQuery(action, parameters, result)) {
-        break
-      }
     }
 
     return result
@@ -854,35 +800,6 @@ export class CuaRuntime {
       result.errorCode === CUA_SESSION_ENDED_ERROR_CODE ||
       refusal?.['code'] === CUA_SESSION_ENDED_ERROR_CODE ||
       structuredResult?.['code'] === CUA_SESSION_ENDED_ERROR_CODE
-    )
-  }
-
-  private shouldRetryBrowserQuery(
-    action: string,
-    parameters: Record<string, unknown>,
-    result: CuaToolResult
-  ): boolean {
-    if (
-      action !== 'get_browser_state' ||
-      hasCuaError(result) ||
-      typeof parameters['query'] !== 'string' ||
-      parameters['query'].trim().length === 0
-    ) {
-      return false
-    }
-
-    const structuredResult =
-      parseJsonRecord(result.structuredJson) || parseJsonRecord(result.rawJson)
-    const snapshot = asRecord(structuredResult?.['snapshot'])
-    const refs = structuredResult?.['refs']
-    const contentRefs = structuredResult?.['content_refs']
-
-    return (
-      snapshot?.['total_nodes'] === 0 &&
-      Array.isArray(refs) &&
-      refs.length === 0 &&
-      Array.isArray(contentRefs) &&
-      contentRefs.length === 0
     )
   }
 
@@ -1011,9 +928,6 @@ export class CuaRuntime {
 
     const windowId = parameters['window_id'] ?? target?.['window_id']
     const pid = parameters['pid'] ?? target?.['pid']
-    if (typeof parameters['target_id'] === 'string') {
-      return `${sessionKey}:browser:${parameters['target_id']}:${parameters['tab_id'] ?? ''}`
-    }
     return typeof windowId === 'number'
       ? `${sessionKey}:window:${pid}:${windowId}`
       : `${sessionKey}:desktop`

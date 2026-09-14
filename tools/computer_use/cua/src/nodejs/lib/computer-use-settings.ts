@@ -10,7 +10,6 @@ import { ToolkitConfig } from '@sdk/toolkit-config'
 
 import {
   COMPUTER_USE_ACTIVITY_OVERLAY_SETTING,
-  COMPUTER_USE_BROWSER_INSPECTION_SETTING,
   COMPUTER_USE_INTERACTION_MODE_SETTING,
   COMPUTER_USE_PREFERRED_APPS_SETTING,
   COMPUTER_USE_SET_OF_MARK_SETTING
@@ -68,10 +67,3 @@ export const resolvePreferredApplications: PreferredApplicationsResolver =
       })
     )
   }
-
-/**
- * Reads the owner's explicit grant; model tool arguments cannot grant profile access.
- */
-export function resolveComputerUseBrowserInspection(input: ToolExecutionContext): boolean {
-  return asRecord(readComputerUseSettings(input)[COMPUTER_USE_BROWSER_INSPECTION_SETTING])?.['allow_existing_profile'] === true
-}

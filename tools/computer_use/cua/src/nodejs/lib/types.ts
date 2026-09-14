@@ -62,7 +62,6 @@ export type PreferredApplicationsResolver = (
 
 export interface ManagedComputerUseRuntime {
   driver: ComputerUseDriver
-  browserInspectionAllowed: boolean
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
   zoomCapableActions: Set<string>

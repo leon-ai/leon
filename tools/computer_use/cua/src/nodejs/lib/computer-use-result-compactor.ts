@@ -8,7 +8,6 @@ import {
   COMPUTER_USE_APP_QUERY_PARAMETER,
   COMPUTER_USE_APP_RESULT_LIMIT,
   COMPUTER_USE_APP_WINDOW_LIMIT,
-  COMPUTER_USE_BROWSER_REF_LIMIT,
   COMPUTER_USE_WINDOW_RESULT_LIMIT
 } from './constants'
 import { asRecord, hasText } from './utils'
@@ -35,13 +34,6 @@ export class ComputerUseResultCompactor {
     if (action === 'get_window_state' && Array.isArray(result['elements'])) {
       return this.compactWindowState(input, result)
     }
-    if (
-      action === 'get_browser_state' &&
-      (Array.isArray(result['refs']) || Array.isArray(result['content_refs']))
-    ) {
-      return this.compactBrowserResult(result)
-    }
-
     return { result, changed: false }
   }
 
@@ -346,62 +338,5 @@ export class ComputerUseResultCompactor {
       ([activity, appName]) =>
         appIdentities.includes(appName.toLocaleLowerCase()) ? [activity] : []
     )
-  }
-
-  private compactBrowserResult(
-    result: Record<string, unknown>
-  ): CompactedComputerUseResult {
-    const refs = Array.isArray(result['refs']) ? result['refs'] : []
-    const contentRefs = Array.isArray(result['content_refs'])
-      ? result['content_refs']
-      : []
-    const compactedRefs = this.compactBrowserReferences(refs)
-    const compactedContentRefs = this.compactBrowserReferences(contentRefs)
-    const outline = result['outline']
-    const hasOutline = typeof outline === 'string' && outline.length > 0
-
-    const browserState = { ...result }
-    delete browserState['refs']
-    delete browserState['content_refs']
-    delete browserState['outline']
-
-    return {
-      result: {
-        ...browserState,
-        refs: compactedRefs,
-        content_refs: compactedContentRefs,
-        omitted_ref_count: refs.length - compactedRefs.length,
-        omitted_content_ref_count:
-          contentRefs.length - compactedContentRefs.length
-      },
-      changed:
-        hasOutline ||
-        compactedRefs.length !== refs.length ||
-        compactedContentRefs.length !== contentRefs.length
-    }
-  }
-
-  private compactBrowserReferences(
-    values: unknown[]
-  ): Record<string, unknown>[] {
-    return values
-      .map(asRecord)
-      .filter((reference): reference is Record<string, unknown> => {
-        if (!reference || !hasText(reference['ref'])) {
-          return false
-        }
-        return hasText(reference['name']) || hasText(reference['value'])
-      })
-      .slice(0, COMPUTER_USE_BROWSER_REF_LIMIT)
-      .map((reference) => ({
-        ref: reference['ref'],
-        role: reference['role'],
-        name: reference['name'],
-        value: reference['value'],
-        actions: reference['actions'],
-        states: reference['states'],
-        visibility: reference['visibility'],
-        frame: reference['frame']
-      }))
   }
 }
