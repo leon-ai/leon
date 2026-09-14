@@ -2130,9 +2130,11 @@ export default class LLMProvider {
     promptOrChatHistory: PromptOrChatHistory,
     completionParams: CompletionParams
   ): Promise<CompletionResult | null> {
+    completionParams.cancellationSignal?.throwIfAborted()
     completionParams.dutyType = completionParams.dutyType ?? null
     const providerName = this.getProviderNameForDuty(completionParams.dutyType)
     const provider = await this.resolveProviderForDuty(completionParams.dutyType)
+    completionParams.cancellationSignal?.throwIfAborted()
     const trackProviderErrors = completionParams.trackProviderErrors !== false
     if (trackProviderErrors) {
       this.lastProviderErrorMessage = null
@@ -2231,7 +2233,13 @@ export default class LLMProvider {
     let hasStartedStreaming = false
     const completionStartedAt = Date.now()
     let generationStartedAt: number | null = null
-    const callerAbortSignal = completionParams.signal
+    // Attempt-level diagnosis can retry, but owner cancellation must survive it.
+    const callerAbortSignal = completionParams.cancellationSignal
+      ? AbortSignal.any([
+          completionParams.cancellationSignal,
+          ...(completionParams.signal ? [completionParams.signal] : [])
+        ])
+      : completionParams.signal
     const userOnToken = completionParams.onToken
     const userOnReasoningToken = completionParams.onReasoningToken
 
@@ -2367,6 +2375,7 @@ export default class LLMProvider {
       )
     } catch (e) {
       removeCallerAbortListener()
+      completionParams.cancellationSignal?.throwIfAborted()
       LogHelper.title('LLM Provider')
       LogHelper.error(
         `Error to complete prompt: ${this.formatPromptErrorForLog(e)}`
@@ -2427,6 +2436,7 @@ export default class LLMProvider {
       }
       clearStreamStallTimeout()
       rejectStreamStall = null
+      completionParams.cancellationSignal?.throwIfAborted()
 
       LogHelper.title('LLM Provider')
       LogHelper.error(

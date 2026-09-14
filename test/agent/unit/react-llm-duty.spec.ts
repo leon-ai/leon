@@ -118,6 +118,29 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it.each(['model', 'tool'])('does not recover or verify after cancellation during %s execution', async (phase) => {
+    const controller = new AbortController()
+    const reason = new Error('Owner canceled')
+    const callModel = vi.fn(async () => {
+      if (phase === 'model') {
+        controller.abort(reason)
+        throw new AgentModelProviderError('Interrupted inference', true)
+      }
+      return { toolCalls: [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })] }
+    })
+    const executeFunction = vi.fn(async () => {
+      controller.abort(reason)
+      throw reason
+    })
+    await expect(runAgentLoopWithCompletionReview({
+      signal: controller.signal, transcript: [{ role: 'user', content: 'Check the weather.' }],
+      catalog: createCatalog(), callModel, executeFunction,
+      loadAgentSkill: async () => null
+    })).rejects.toBe(reason)
+    expect(callModel).toHaveBeenCalledTimes(1)
+    expect(executeFunction).toHaveBeenCalledTimes(phase === 'tool' ? 1 : 0)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     coreMocks.getFlattenedTools.mockReturnValue([])

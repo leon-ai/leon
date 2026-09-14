@@ -31,6 +31,7 @@ import {
 export async function runAgent(
   input: HTTPPluginRunAgentInput
 ): Promise<HTTPPluginRunAgentResult> {
+  input.signal?.throwIfAborted()
   const profileName = input.profile_id?.trim() || getActiveProfileName()
   if (!isValidProfileName(profileName)) {
     throw new Error(`Invalid Leon profile name "${profileName}".`)
@@ -39,6 +40,7 @@ export async function runAgent(
   return runWithProfileContext({ profileName }, async () => {
     const totalStartedAt = performance.now()
     await ensureActiveProfileRuntime()
+    input.signal?.throwIfAborted()
     const query = input.query.trim()
     const sessionId = resolveSessionId(input)
     const planSteps = new Map<
@@ -91,6 +93,7 @@ export async function runAgent(
 
         const duty = new ReActLLMDuty({
           input: query,
+          ...(input.signal ? { signal: input.signal } : {}),
           ...(input.additionalInstructions
             ? { additionalInstructions: input.additionalInstructions }
             : {}),
@@ -167,7 +170,9 @@ export async function runAgent(
         })
 
         await duty.init()
+        input.signal?.throwIfAborted()
         const dutyResult = await duty.execute()
+        input.signal?.throwIfAborted()
         const output = dutyResult?.output as unknown
         const data = dutyResult?.data || {}
         const llmMetrics =

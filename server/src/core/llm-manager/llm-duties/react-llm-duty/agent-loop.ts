@@ -185,6 +185,7 @@ interface AgentModelCallOptions {
 type AgentFunctionExecutionResult = ToolExecutionResult
 
 export interface AgentLoopParams {
+  signal?: AbortSignal
   transcript: AgentToolTranscriptMessage[]
   catalog: AgentToolCatalog
   callModel: (
@@ -635,6 +636,7 @@ export function buildAgentTranscriptHistory(
 export async function runAgentLoop(
   params: AgentLoopParams
 ): Promise<AgentLoopResult> {
+  params.signal?.throwIfAborted()
   const transcript = params.transcript
   const executionHistory = (params.initialExecutionHistory || []).map(
     (execution) => ({ ...execution })
@@ -650,6 +652,7 @@ export async function runAgentLoop(
   let requiresToolAction = false
 
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
+    params.signal?.throwIfAborted()
     // Continue an unfinished authorized run once, with bounded resume context.
     // This is a bounded finishing pass, not a new task or a renewed permission.
     if (iteration === mainIterations && finishingIterations > 0) {
@@ -677,6 +680,7 @@ export async function runAgentLoop(
 
     while (true) {
       try {
+        params.signal?.throwIfAborted()
         modelResult = await params.callModel(
           transcript,
           params.catalog.tools,
@@ -690,7 +694,9 @@ export async function runAgentLoop(
           },
           { executionHistory, trackedSteps }
         )
+        params.signal?.throwIfAborted()
       } catch (error) {
+        params.signal?.throwIfAborted()
         if (
           error instanceof AgentModelProviderError &&
           error.canRetryWithCompaction &&
@@ -918,6 +924,7 @@ async function reviewAgentCompletion(
   isContextRecoveryAttempt = false
 ): Promise<{ status: AgentCompletionStatus, reason: string } | null> {
   try {
+    params.signal?.throwIfAborted()
     const response = await params.callModel([
       ...transcript,
       { role: 'assistant', content: answer },
@@ -930,6 +937,7 @@ async function reviewAgentCompletion(
       isRecoveryAttempt: false, isCompletionReview: true,
       ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
     }, state)
+    params.signal?.throwIfAborted()
     if (!response || response.isTruncated || response.toolCalls?.length) return null
     const review = parseToolCallArguments(response.textContent || '')
     const status = review?.['status'] as AgentCompletionStatus
@@ -939,6 +947,7 @@ async function reviewAgentCompletion(
     LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
     return { status, reason }
   } catch {
+    params.signal?.throwIfAborted()
     // An unavailable verifier must not turn unverified work into success.
     return null
   }
@@ -1078,13 +1087,16 @@ async function attemptAgentLimitFinalization(
   // Final synthesis gets one retry too, using the remedy for the actual failure.
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
+      params.signal?.throwIfAborted()
       modelResult = await params.callModel(
         currentTranscript,
         [createClarificationTool()],
         options,
         { executionHistory, trackedSteps }
       )
+      params.signal?.throwIfAborted()
     } catch (error) {
+      params.signal?.throwIfAborted()
       if (!(error instanceof AgentModelProviderError) || !error.canRetryWithCompaction) {
         return null
       }
@@ -1397,11 +1409,13 @@ async function executeAgentToolCall(
   let handoffSignal: FinalResponseSignal | undefined
   const executionStartedAt = Date.now()
   try {
+    params.signal?.throwIfAborted()
     const result = await params.executeFunction(
       callable,
       validatedInput,
       toolCallInput.title
     )
+    params.signal?.throwIfAborted()
     const executionCompletedAt = Date.now()
     execution = {
       ...result.execution,
@@ -1415,6 +1429,7 @@ async function executeAgentToolCall(
     modelFiles = result.modelFiles
     handoffSignal = result.handoffSignal
   } catch (error) {
+    params.signal?.throwIfAborted()
     // Tool failures stay inside the protocol so the model can recover using
     // the same transcript instead of aborting the whole agent turn.
     const executionCompletedAt = Date.now()

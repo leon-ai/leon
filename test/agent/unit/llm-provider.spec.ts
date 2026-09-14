@@ -61,6 +61,33 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('preserves owner cancellation across an attempt-level retry', async () => {
+    const owner = new AbortController()
+    const attempt = new AbortController()
+    const reason = new Error('Owner canceled')
+    const signals: AbortSignal[] = []
+    const runChatCompletion = vi.fn((_prompt, params) => {
+      signals.push(params.signal)
+      queueMicrotask(() => {
+        if (signals.length === 1) {
+          attempt.abort({ shouldRetry: true, retryStrategy: 'timeout', source: 'agent_tool_call_diagnosis', delayMs: 1 })
+        } else owner.abort(reason)
+      })
+      return new Promise((_resolve, reject) => params.signal.addEventListener('abort', () => reject(params.signal.reason), { once: true }))
+    })
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+    await expect(manager.prompt('Hello', {
+      dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: false,
+      signal: attempt.signal, cancellationSignal: owner.signal,
+      maxRetries: 2, remoteProviderErrorRetries: 2
+    })).rejects.toBe(reason)
+    expect(runChatCompletion).toHaveBeenCalledTimes(2)
+    expect(signals.every((signal) => signal.aborted)).toBe(true)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     celerisTarget.provider = LLMProviders.Celeris

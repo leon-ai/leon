@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   nextSessionId: 0,
   sessions: new Map<string, Set<string>>(),
   agentDutyParams: [] as Array<Record<string, unknown>>,
+  executeAgent: vi.fn(),
   controlledDutyParams: [] as Array<Record<string, unknown>>,
   controlledDutyOutputs: [] as Array<Array<Record<string, unknown>>>,
   agentDutyResult: {
@@ -262,6 +263,7 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
     async init(): Promise<void> {}
 
     async execute(): Promise<Record<string, unknown>> {
+      await mocks.executeAgent()
       return structuredClone(mocks.agentDutyResult)
     }
   }
@@ -392,6 +394,22 @@ describe('HTTP plugin Leon services', () => {
         onProgressEvent: expect.any(Function)
       }
     ])
+  })
+
+  it('rejects canceled HTTP turns without persisting a final answer', async () => {
+    const controller = new AbortController()
+    const reason = new Error('Owner canceled the turn')
+    mocks.executeAgent.mockImplementationOnce(async () => controller.abort(reason))
+    await expect(runAgent({
+      query: 'Check the weather.', profile_id: 'owner-a',
+      create_session: true, signal: controller.signal
+    })).rejects.toBe(reason)
+    expect(mocks.agentDutyParams[0]?.['signal']).toBe(controller.signal)
+    expect(mocks.persistedMessages).toHaveLength(1)
+    expect(mocks.maintenanceTasks).toHaveLength(0)
+
+    await expect(runAgent({ query: 'Must not start', signal: controller.signal })).rejects.toBe(reason)
+    expect(mocks.agentDutyParams).toHaveLength(1)
   })
 
   it('persists coherent turns inside the requested profile and session', async () => {

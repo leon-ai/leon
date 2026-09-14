@@ -180,6 +180,7 @@ export class ReActLLMDuty extends LLMDuty {
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
+  private readonly signal: AbortSignal | undefined
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
 
@@ -194,6 +195,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     this.input = params.input
+    this.signal = params.signal
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
@@ -211,6 +213,7 @@ export class ReActLLMDuty extends LLMDuty {
   public async init(
     params: LLMDutyInitParams = DEFAULT_INIT_PARAMS
   ): Promise<void> {
+    this.signal?.throwIfAborted()
     if (!TOOLKIT_REGISTRY.isLoaded) {
       await TOOLKIT_REGISTRY.load()
     }
@@ -221,6 +224,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   public async execute(): Promise<LLMDutyResult | null> {
+    this.signal?.throwIfAborted()
     LogHelper.title(this.name)
     LogHelper.info('Executing...')
 
@@ -408,6 +412,7 @@ export class ReActLLMDuty extends LLMDuty {
       )
 
       const result = await runAgentLoop({
+        ...(this.signal ? { signal: this.signal } : {}),
         transcript,
         catalog,
         maxIterations: CONFIG_MANAGER.getConfig().runtime.agent_max_iterations ?? AGENT_MAX_ITERATIONS,
@@ -491,7 +496,8 @@ export class ReActLLMDuty extends LLMDuty {
                     : {})
                 }
               })
-            }
+            },
+            this.signal
           )
 
           return toolResult
@@ -572,9 +578,11 @@ export class ReActLLMDuty extends LLMDuty {
         )
       }
 
+      this.signal?.throwIfAborted()
       return finalize(result.answer, result.intent)
     } catch (error) {
       this.answerStream.discard()
+      this.signal?.throwIfAborted()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
@@ -752,12 +760,14 @@ export class ReActLLMDuty extends LLMDuty {
     transcript: AgentToolTranscriptMessage[],
     checkpointInput?: AgentContinuityCheckpointInput
   ): Promise<AgentToolTranscriptMessage[]> {
+    this.signal?.throwIfAborted()
     return buildAgentContinuationTranscript(transcript, async (history) => {
       // A failed summary must not cause an auxiliary retry on every tool turn.
       if (this.continuationSummaryFailed) return null
       const startedAt = Date.now()
       try {
         const result = await LLM_PROVIDER.prompt(history, {
+          ...(this.signal ? { cancellationSignal: this.signal } : {}),
           dutyType: LLMDuties.ReAct,
           systemPrompt: AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT,
           temperature: 0,
@@ -769,6 +779,7 @@ export class ReActLLMDuty extends LLMDuty {
           disableThinking: true,
           trackProviderErrors: false
         })
+        this.signal?.throwIfAborted()
         if (result) {
           this.observeCompletionMetrics({
             phase: 'agent',
@@ -788,6 +799,7 @@ export class ReActLLMDuty extends LLMDuty {
         )
         return summary
       } catch {
+        this.signal?.throwIfAborted()
         this.continuationSummaryFailed = true
         LogHelper.warning('Agent continuation summary unavailable; retaining original context')
         return null
@@ -814,6 +826,7 @@ export class ReActLLMDuty extends LLMDuty {
     reasoning?: string
     isTruncated?: boolean
   } | null> {
+    this.signal?.throwIfAborted()
     const phase: AgentPhase = options.isFinalizationAttempt
       ? 'final_answer'
       : 'agent'
@@ -1039,7 +1052,8 @@ export class ReActLLMDuty extends LLMDuty {
         ...(disableThinking ? { disableThinking: true } : {}),
         tools: preparedTools,
         toolChoice,
-        signal: toolCallAbortController.signal
+        signal: toolCallAbortController.signal,
+        ...(this.signal ? { cancellationSignal: this.signal } : {})
       })
     } finally {
       completed = true
@@ -1054,6 +1068,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
 
+    this.signal?.throwIfAborted()
     if (!completionResult) {
       LogHelper.debug('callAgentModel: no completion result returned')
       const providerError = LLM_PROVIDER.consumeLastProviderErrorMessage()

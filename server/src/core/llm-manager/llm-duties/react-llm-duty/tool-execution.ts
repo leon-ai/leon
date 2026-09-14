@@ -294,12 +294,15 @@ export async function runToolExecution(
   toolCallTitle?: string,
   onProgressEvent?: (
     event: Extract<AgentRunProgressEvent, { type: 'tool_call' }>['toolCall']
-  ) => void
+  ) => void,
+  signal?: AbortSignal
 ): Promise<ToolExecutionResult> {
+  signal?.throwIfAborted()
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
   const requestedToolInput = toolInput
 
   const toolExecutionInput: {
+    signal?: AbortSignal
     toolId: string
     toolkitId: string
     functionName: string
@@ -311,6 +314,7 @@ export async function runToolExecution(
       data?: Record<string, unknown>
     }) => void
   } = {
+    ...(signal ? { signal } : {}),
     toolId,
     toolkitId,
     functionName,
@@ -515,6 +519,7 @@ export async function runToolExecution(
 
   const toolExecutionResult =
     await TOOL_EXECUTOR.executeTool(toolExecutionInput)
+  signal?.throwIfAborted()
   const modelFiles = toolExecutionResult.data.model_files
   const observationData: Partial<typeof toolExecutionResult.data> = {
     ...toolExecutionResult.data

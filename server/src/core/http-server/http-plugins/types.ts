@@ -16,6 +16,10 @@ export interface HTTPPluginRuntimeConfig {
 export interface HTTPPluginRunAgentInput {
   query: string
   /**
+   * Cancels this turn and its active tools; supplied in-process by the plugin.
+   */
+  signal?: AbortSignal
+  /**
    * Trusted turn-level guidance supplied by the installed HTTP plugin.
    */
   additionalInstructions?: string

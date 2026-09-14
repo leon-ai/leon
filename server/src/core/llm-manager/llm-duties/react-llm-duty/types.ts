@@ -39,6 +39,7 @@ export type AgentRunProgressEvent =
     }
 
 export interface ReactLLMDutyParams extends LLMDutyParams {
+  signal?: AbortSignal
   agentSkill?: AgentSkillContext | null
   forcedToolName?: string | null
   allowDirectAnswerHandoff?: boolean

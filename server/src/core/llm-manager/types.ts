@@ -141,6 +141,10 @@ export interface CompletionParams {
   seed?: number | undefined
   timeout?: number
   signal?: AbortSignal
+  /**
+   * Cancels the whole request, including retries after an attempt-level abort.
+   */
+  cancellationSignal?: AbortSignal
   maxRetries?: number
   data?: Record<string, unknown> | null
   history?: MessageLog[]
