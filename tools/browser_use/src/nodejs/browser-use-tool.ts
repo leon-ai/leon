@@ -12,6 +12,8 @@ import { isWindows } from '@sdk/utils'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
+import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from './lib/browser-use-environment'
+
 const MAX_PORT = 65_535
 const REMOTE_DEBUGGING_SETTINGS_URL = 'chrome://inspect/#remote-debugging'
 
@@ -194,11 +196,11 @@ export class BrowserUseTool extends Tool {
     const endpoint = await this.resolveBrowserEndpoint()
     const environment: NodeJS.ProcessEnv = {
       ...CLI_ENVIRONMENT,
-      BH_HOME: path.join(path.dirname(this.getSettingsPath()), 'runtime'),
+      ...await prepareBrowserUseEnvironment(this.getSettingsPath()),
       BU_CDP_WS: endpoint.startsWith('ws') ? endpoint : '',
       BU_CDP_URL: endpoint.startsWith('http') ? endpoint : ''
     }
-    const endpointPath = path.join(environment['BH_HOME']!, 'endpoint')
+    const endpointPath = path.join(environment['BH_RUNTIME_DIR']!, 'endpoint')
     let previousEndpoint = ''
     try { previousEndpoint = await fs.readFile(endpointPath, 'utf8') } catch {
       // The first standard worker also replaces any daemon from the previous implementation.
@@ -219,7 +221,9 @@ export class BrowserUseTool extends Tool {
       input: 'list_tabs()', env: environment, timeout: COMMAND_TIMEOUT_MS, reject: false
     })
     if (readiness.exitCode !== 0 || readiness.timedOut) {
-      throw this.createBrowserConnectionError('Browser Use CLI could not attach to the configured browser.')
+      const failure = describeBrowserUseReadinessFailure(readiness, path.join(environment['BH_TMP_DIR']!, 'bu.log'))
+      if (failure.requiresOwnerAction) throw this.createBrowserConnectionError(failure.message)
+      throw new Error(failure.message)
     }
     return environment
   }
