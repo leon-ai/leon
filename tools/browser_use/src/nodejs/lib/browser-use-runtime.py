@@ -23,14 +23,23 @@ _LEON_ITEM_TEXT_LIMIT = 300
 _LEON_LABEL_LIMIT = 200
 _LEON_HREF_LIMIT = 1_000
 _LEON_ACTIONS = []
+_LEON_DIALOG_PENDING = 'browser_dialog_pending'
+_LEON_DIALOG_RECOVERY = (
+    'Inspect the dialog message and confirm its tab before responding through '
+    'Browser Use run with Page.handleJavaScriptDialog. Accept or dismiss only '
+    'as authorized by the task; ask the owner if the choice is unclear. '
+    'Do not replay the triggering action or use Cua as a workaround. '
+    'Browser access and OS permission approvals require owner action.'
+)
 
 
 class BrowserWorkflowError(RuntimeError):
     """A recoverable browser state, distinct from a failed Python program."""
 
-    def __init__(self, code, message):
+    def __init__(self, code, message, observation=None):
         super().__init__(message)
         self.code = code
+        self.observation = observation
 
 
 # Keep upstream helpers, but never let their implicit-session recovery choose
@@ -177,8 +186,25 @@ const selectorFor = e => {
 """
 
 
+def _leon_dialog_observation():
+    """Read the harness's buffered dialog without evaluating frozen page JS."""
+    dialog = _leon_helpers._send({'meta': 'pending_dialog'}).get('dialog')
+    if not dialog:
+        return None
+    # The upstream cache is browser-wide, not attributed to our selected tab.
+    # Surface it as evidence only; never automatically accept it.
+    return {
+        'ready': False, 'error_code': _LEON_DIALOG_PENDING,
+        'dialog': dialog, 'dialog_scope': 'browser',
+        'state_id': hashlib.sha256(json.dumps(dialog, sort_keys=True).encode()).hexdigest()[:16],
+        'recovery': _LEON_DIALOG_RECOVERY
+    }
+
+
 def _leon_ready():
     """Give interactive pages a live renderer before checking their DOM state."""
+    if dialog := _leon_dialog_observation():
+        raise BrowserWorkflowError(_LEON_DIALOG_PENDING, _LEON_DIALOG_RECOVERY, dialog)
     # Background tabs may pause animation and leave real controls at opacity zero.
     # Upstream attachment alone does not activate the tab.
     activate_tab(current_tab())
@@ -189,6 +215,8 @@ def _leon_snapshot(selector, offset, limit):
     """Extract only bounded, rendered evidence; no action or navigation retry."""
     if offset < 0 or not 1 <= limit <= _LEON_MAX_ITEMS:
         raise ValueError(f"Use offset >= 0 and limit between 1 and {_LEON_MAX_ITEMS}.")
+    if dialog := _leon_dialog_observation():
+        return dialog
     result = js("(() => {" + _LEON_DOM + f"""
       const nodes = Array.from(document.querySelectorAll({json.dumps(selector)})).filter(visible);
       const items = nodes.slice({offset}, {offset + limit}).map(e => ({{
@@ -211,13 +239,24 @@ def _leon_snapshot(selector, offset, limit):
 
 def leon_observe(selector='a,button,input,textarea,select,[role="button"],[role="dialog"],dialog,tr,[role="row"]', offset=0, limit=_LEON_DEFAULT_ITEMS):
     """Return a ready, compact page inventory with reusable target descriptors."""
-    _leon_ready()
+    try:
+        _leon_ready()
+    except BrowserWorkflowError as error:
+        if error.code != _LEON_DIALOG_PENDING:
+            raise
+        return error.observation
     result = _leon_snapshot(selector, offset, limit)
+    if result.get('dialog'):
+        return result
     if not result['text']:
         # Hydration can start after document readiness; do not return an empty
         # application shell as though its inventory were complete.
         try:
-            result = leon_wait(lambda: (r if r['text'] else None) if (r := _leon_snapshot(selector, offset, limit)) else None, timeout=2)
+            result = leon_wait(lambda: (r if r.get('dialog') or r['text'] else None) if (r := _leon_snapshot(selector, offset, limit)) else None, timeout=2)
+        except BrowserWorkflowError as error:
+            if error.code != _LEON_DIALOG_PENDING:
+                raise
+            return error.observation
         except TimeoutError:
             result['ready'] = False
     return result
@@ -229,6 +268,8 @@ def leon_wait(condition, timeout=_LEON_WAIT_SECONDS):
         raise ValueError(f"Wait timeout must be between 0 and {_LEON_MAX_WAIT_SECONDS} seconds.")
     deadline = time.monotonic() + timeout
     while True:
+        if dialog := _leon_dialog_observation():
+            raise BrowserWorkflowError(_LEON_DIALOG_PENDING, _LEON_DIALOG_RECOVERY, dialog)
         result = condition() if callable(condition) else js(condition)
         if result:
             return result
@@ -418,7 +459,10 @@ def _leon_execute(code):
     try:
         exec(compile(code, '<browser-script>', 'exec'), globals())
     except BaseException as error:
-        print(json.dumps({'error_code': getattr(error, 'code', 'script_failed'), 'message': str(error)}))
+        result = {'error_code': getattr(error, 'code', 'script_failed'), 'message': str(error)}
+        if observation := getattr(error, 'observation', None):
+            result['observation'] = observation
+        print(json.dumps(result))
         raise SystemExit(1)
     finally:
         _leon_save_actions()
