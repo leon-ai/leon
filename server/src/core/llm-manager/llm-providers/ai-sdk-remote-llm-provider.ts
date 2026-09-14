@@ -1431,17 +1431,33 @@ export default class AISDKRemoteLLMProvider {
     return this.buildOpenAICompatiblePayload(state)
   }
 
-  public runChatCompletion(
+  public async runChatCompletion(
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
   ): Promise<AxiosResponse> {
+    completionParams.signal?.throwIfAborted()
     this.checkAPIKey()
-
-    return (completionParams.shouldStream === true
-      ? this.runStreamingCompletion(prompt, completionParams)
-      : this.runNonStreamingCompletion(prompt, completionParams)
-    ).then((responseData) => ({
-      data: responseData
-    })) as Promise<AxiosResponse>
+    const transport = this.openAIWebSocketFetch
+    const abort = (): void => {
+      // The WebSocket fetch adapter stops reading on abort but leaves the
+      // response in flight. Never reuse that socket for the next owner's turn.
+      transport?.close()
+      if (transport && this.openAIWebSocketFetch === transport) {
+        this.openAIWebSocketFetch = undefined
+        this.languageModel = this.createLanguageModel()
+      }
+    }
+    completionParams.signal?.addEventListener('abort', abort, { once: true })
+    try {
+      const responseData = await (completionParams.shouldStream === true
+        ? this.runStreamingCompletion(prompt, completionParams)
+        : this.runNonStreamingCompletion(prompt, completionParams))
+      completionParams.signal?.throwIfAborted()
+      return { data: responseData } as AxiosResponse
+    } finally {
+      completionParams.signal?.removeEventListener('abort', abort)
+      // Also close a connection that finished opening after cancellation.
+      if (completionParams.signal?.aborted) transport?.close()
+    }
   }
 }

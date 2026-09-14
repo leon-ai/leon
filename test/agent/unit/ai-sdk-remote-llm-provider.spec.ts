@@ -84,6 +84,32 @@ function createCompletionParams(
 }
 
 describe('AISDKRemoteLLMProvider', () => {
+  it('retires an aborted websocket before another completion can reuse it', async () => {
+    const controller = new AbortController()
+    const transport = { close: vi.fn() }
+    const freshModel = { doStream: vi.fn() }
+    const provider = createOpenRouterProvider() as unknown as {
+      openAIWebSocketFetch: typeof transport | undefined
+      languageModel: unknown
+      createLanguageModel: () => unknown
+      runStreamingCompletion: () => Promise<unknown>
+      runChatCompletion: ProviderWithPrivateCallOptions['runChatCompletion']
+    }
+    provider.openAIWebSocketFetch = transport
+    provider.createLanguageModel = vi.fn(() => freshModel)
+    provider.runStreamingCompletion = async (): Promise<unknown> => {
+      controller.abort(new Error('Canceled'))
+      expect(transport.close).toHaveBeenCalled()
+      expect(provider.languageModel).toBe(freshModel)
+      expect(provider.openAIWebSocketFetch).toBeUndefined()
+      throw controller.signal.reason
+    }
+    await expect(provider.runChatCompletion('Old turn', {
+      ...createCompletionParams(null), shouldStream: true, signal: controller.signal
+    })).rejects.toThrow('Canceled')
+    expect(provider.createLanguageModel).toHaveBeenCalledTimes(1)
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('LEON_OPENROUTER_API_KEY', 'test-openrouter-key')
