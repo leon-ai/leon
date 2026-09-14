@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import {
   DEFAULT_INIT_PARAMS,
@@ -17,6 +18,7 @@ import {
   CONTEXT_MANAGER,
   SELF_MODEL_MANAGER,
   BRAIN,
+  CONVERSATION_LOGGER,
   SOCKET_SERVER,
   TOOL_CALL_LOGGER,
   POST_TURN_MAINTENANCE_QUEUE
@@ -33,6 +35,9 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { CONFIG_MANAGER } from '@/config'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+
+const TRACE_SAVE_INTERVAL_MS = 1_000
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentProvider()
@@ -176,6 +181,8 @@ export class ReActLLMDuty extends LLMDuty {
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
   private readonly responseTraceCollector = new AgentResponseTraceCollector()
+  private traceSaveTimer: ReturnType<typeof setTimeout> | null = null
+  private persistResponseTrace: (() => Promise<void>) | null = null
   private activeAgentSkillContext: AgentSkillContext | null
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
@@ -246,7 +253,18 @@ export class ReActLLMDuty extends LLMDuty {
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
-    this.responseTraceCollector.reset()
+    const traceId = randomUUID()
+    this.responseTraceCollector.reset(traceId)
+    // Capture the session and profile-bound writer before any deferred saves.
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    const upsert = CONVERSATION_LOGGER.upsert
+    this.persistResponseTrace = (): Promise<void> => upsert({
+      who: 'leon',
+      message: '',
+      messageId: traceId,
+      isAddedToHistory: false,
+      agentResponseTrace: this.responseTraceCollector.snapshot({})
+    }, { sessionId })
     this.reportProgressEvent({
       type: 'reasoning_summary',
       summary: 'Understanding your request'
@@ -585,10 +603,19 @@ export class ReActLLMDuty extends LLMDuty {
       return finalize(result.answer, result.intent)
     } catch (error) {
       this.answerStream.discard()
+      this.responseTraceCollector.interrupt()
       this.signal?.throwIfAborted()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
+    } finally {
+      if (this.traceSaveTimer) {
+        clearTimeout(this.traceSaveTimer)
+        this.traceSaveTimer = null
+      }
+      // Drain snapshots before the caller persists the final answer, including aborts.
+      await this.persistResponseTrace?.()
+      this.persistResponseTrace = null
     }
   }
 
@@ -609,7 +636,19 @@ export class ReActLLMDuty extends LLMDuty {
    */
   private reportProgressEvent(event: AgentRunProgressEvent): void {
     this.responseTraceCollector.record(event)
+    this.scheduleTraceSave()
     this.onProgressEvent?.(event)
+  }
+
+  private scheduleTraceSave(): void {
+    if (!this.persistResponseTrace || this.traceSaveTimer) {
+      return
+    }
+    // Coalesce streamed tokens instead of rewriting history for every token.
+    this.traceSaveTimer = setTimeout(() => {
+      this.traceSaveTimer = null
+      void this.persistResponseTrace?.()
+    }, TRACE_SAVE_INTERVAL_MS)
   }
 
   /**
@@ -1591,6 +1630,8 @@ export class ReActLLMDuty extends LLMDuty {
       return
     }
 
+    this.responseTraceCollector.recordReasoning(generationId, token, phase)
+    this.scheduleTraceSave()
     const chunks = token.match(/(\s+|[^\s]+)/g) || [token]
     for (const chunk of chunks) {
       SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {

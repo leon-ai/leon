@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import type { AgentResponseTrace } from '@/types'
 
 import { CONVERSATION_LOGGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
@@ -218,7 +219,8 @@ export async function runAgent(
               message: output,
               isAddedToHistory: true,
               ...(messageId ? { messageId } : {}),
-              agentResponseTrace: deserializeAgentTrace(trace)
+              agentResponseTrace: (data['agentResponseTrace'] as AgentResponseTrace | undefined) ||
+                deserializeAgentTrace(trace)
             },
             { sessionId }
           )

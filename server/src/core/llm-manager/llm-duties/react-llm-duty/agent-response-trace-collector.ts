@@ -11,12 +11,19 @@ import type { AgentRunProgressEvent } from './types'
  * Accumulates live agent progress into the compact trace persisted with a turn.
  */
 export class AgentResponseTraceCollector {
+  private id: string | undefined
+  private readonly reasoning = new Map<
+    string,
+    NonNullable<AgentResponseTrace['reasoning']>[number]
+  >()
   private reasoningSummary = ''
   private readonly planSteps = new Map<string, AgentResponsePlanStep>()
   private readonly planTransitions: AgentResponsePlanTransition[] = []
   private readonly toolCalls = new Map<string, AgentResponseToolCall>()
 
-  public reset(): void {
+  public reset(id?: string): void {
+    this.id = id
+    this.reasoning.clear()
     this.reasoningSummary = ''
     this.planSteps.clear()
     this.planTransitions.length = 0
@@ -49,12 +56,42 @@ export class AgentResponseTraceCollector {
     const existingToolCall = this.toolCalls.get(event.toolCall.id)
     this.toolCalls.set(event.toolCall.id, {
       ...existingToolCall,
-      ...event.toolCall
+      ...event.toolCall,
+      startedAt: existingToolCall?.startedAt ?? Date.now()
     })
+  }
+
+  /**
+   * Keep only reasoning tokens that were actually displayed to the owner.
+   */
+  public recordReasoning(id: string, text: string, phase: string): void {
+    const existing = this.reasoning.get(id)
+    this.reasoning.set(id, {
+      id,
+      text: (existing?.text || '') + text,
+      phase,
+      startedAt: existing?.startedAt ?? Date.now()
+    })
+  }
+
+  /**
+   * An interrupted turn must not replay unfinished calls as successful.
+   */
+  public interrupt(): void {
+    for (const toolCall of this.toolCalls.values()) {
+      if (toolCall.status === 'running') {
+        toolCall.status = 'error'
+        toolCall.errorMessage = 'The turn ended before this function completed.'
+      }
+    }
   }
 
   public snapshot(metrics: Record<string, unknown>): AgentResponseTrace {
     return {
+      ...(this.id ? { id: this.id } : {}),
+      ...(this.reasoning.size > 0
+        ? { reasoning: [...this.reasoning.values()].map((block) => ({ ...block })) }
+        : {}),
       ...(this.reasoningSummary
         ? { reasoningSummary: this.reasoningSummary }
         : {}),

@@ -6,6 +6,7 @@ import { WidgetWrapper, Flexbox, Loader, Text } from '@aurora'
 
 import renderAuroraComponent from './render-aurora-component'
 import ToolUIHandler from './tool-ui-handler'
+import { expandConversationTimeline } from './conversation-timeline'
 
 const WIDGETS_TO_FETCH = []
 const WIDGETS_FETCH_CACHE = new Map()
@@ -363,7 +364,7 @@ export default class Chatbot {
       ? systemWidgetsResponse.data.widgets
       : []
 
-    const timelineItems = [...history, ...systemWidgets]
+    const timelineItems = expandConversationTimeline([...history, ...systemWidgets])
       .map((item, index) => ({
         ...item,
         sortIndex: index
@@ -400,10 +401,14 @@ export default class Chatbot {
         continue
       }
 
-      if (bubble.who === 'leon' && bubble.agentResponseTrace) {
-        this.toolUIHandler.replayAgentResponseTrace(
-          bubble.agentResponseTrace
-        )
+      if (bubble.reasoning) {
+        const { id, text, phase } = bubble.reasoning
+        this.createOrUpdateReasoningBlock(id, text, phase)
+        continue
+      }
+      if (bubble.toolCall) {
+        this.toolUIHandler.replayAgentResponseTrace({ toolCalls: [bubble.toolCall] })
+        continue
       }
 
       this.createBubble({

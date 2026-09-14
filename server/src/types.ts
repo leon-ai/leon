@@ -119,6 +119,7 @@ export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
 
 export interface AgentResponseToolCall {
   id: string
+  startedAt?: number
   name: string
   status: 'running' | 'success' | 'error'
   toolkitIconName?: string
@@ -135,6 +136,13 @@ export interface AgentResponseToolCall {
  * Persisted, user-visible trace for replaying an agent turn.
  */
 export interface AgentResponseTrace {
+  id?: string
+  reasoning?: {
+    id: string
+    text: string
+    phase: string
+    startedAt: number
+  }[]
   reasoningSummary?: string
   planSteps: AgentResponsePlanStep[]
   planTransitions?: AgentResponsePlanTransition[]

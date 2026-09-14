@@ -1024,6 +1024,9 @@ export default class ToolUIHandler {
         toolInput: serializedInput,
         answer: serializedInput
       })
+      if (toolCall.status === 'running') {
+        continue
+      }
       this.handleToolOutput({
         ...sharedData,
         toolPhase: 'output',

@@ -213,11 +213,14 @@ export class ConversationLogger {
       try {
         const conversationLogs = await this.getAllLogs(params?.sessionId)
         const targetMessageId =
-          params?.replaceMessageId || newRecord.messageId || null
+          params?.replaceMessageId || newRecord.messageId || newRecord.agentResponseTrace?.id || null
 
         if (targetMessageId) {
           const existingConversationLogIndex = conversationLogs.findIndex(
-            (conversationLog) => conversationLog.messageId === targetMessageId
+            (conversationLog) => conversationLog.messageId === targetMessageId || (
+              newRecord.agentResponseTrace?.id !== undefined &&
+              conversationLog.agentResponseTrace?.id === newRecord.agentResponseTrace.id
+            )
           )
 
           if (existingConversationLogIndex !== -1) {
@@ -229,7 +232,10 @@ export class ConversationLogger {
                 ...existingConversationLog,
                 ...newRecord,
                 messageId: targetMessageId,
-                sentAt: params?.refreshSentAt
+                // The final answer replaces the draft trace, at its actual answer time.
+                sentAt: params?.refreshSentAt || (
+                  !existingConversationLog.isAddedToHistory && newRecord.isAddedToHistory
+                )
                   ? Date.now()
                   : existingConversationLog.sentAt
               }
