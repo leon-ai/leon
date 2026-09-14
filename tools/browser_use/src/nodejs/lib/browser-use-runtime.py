@@ -132,7 +132,7 @@ def _leon_operation(name):
                 raise
             finally:
                 try:
-                    observation = _leon_snapshot('button,a,input,[role="dialog"]', 0, 20)
+                    observation = _leon_snapshot('button,a,input,textarea,select,[role="dialog"]', 0, 20)
                     record['state_id'] = observation['state_id']
                     if not record['success']:
                         record['observation'] = observation
@@ -225,7 +225,11 @@ def _leon_snapshot(selector, offset, limit):
         context: context(e, {_LEON_ITEM_TEXT_LIMIT}),
         href: e.getAttribute('href')?.length <= {_LEON_HREF_LIMIT} ? e.getAttribute('href') : null,
         href_omitted: e.getAttribute('href')?.length > {_LEON_HREF_LIMIT},
-        disabled: e.matches(':disabled,[aria-disabled="true"]')
+        disabled: e.matches(':disabled,[aria-disabled="true"]'),
+        ...(e.localName === 'select' ? {{multiple:e.multiple, options_total:e.options.length,
+          options:Array.from(e.options).slice(0, {_LEON_MAX_ITEMS}).map(o => ({{
+            value:o.value, label:o.label, selected:o.selected, disabled:o.matches(':disabled')
+          }}))}} : {{}})
       }}));
       return {{url: location.href, title: document.title, text: text(document.body, {_LEON_TEXT_LIMIT}),
         items, total: nodes.length, next_offset: nodes.length > {offset + limit} ? {offset + limit} : null}};
@@ -304,7 +308,7 @@ def _leon_target(target, filling=False):
       const y = (Math.max(0, r.top) + Math.min(innerHeight, r.bottom)) / 2;
       const hit = document.elementFromPoint(x, y);
       if (!hit || !e.contains(hit)) return {{code:'target_covered'}};
-      return {{point:[x, y], selector:selectorFor(e)}};
+      return {{point:[x, y], selector:selectorFor(e), tag:e.localName}};
     }})()""")
     result = resolve()
     if result.get('code') in ('target_not_ready', 'target_covered'):
@@ -341,6 +345,12 @@ def leon_click(target, expect=None, timeout=_LEON_WAIT_SECONDS):
     if expect is not None:
         return leon_wait(expect, timeout)
 
+    # Focusing a form control need not navigate or change the page's text.
+    # Report focus only; selecting a value and submitting are separate actions.
+    if resolved['tag'] in ('select', 'input', 'textarea'):
+        leon_wait(f"document.activeElement === document.querySelector({json.dumps(resolved['selector'])})", timeout)
+        return {'control_focused': True, 'observation': leon_observe()}
+
     def changed():
         new_tabs = [t for t in list_tabs() if t['targetId'] not in tabs]
         if new_tabs:
@@ -363,6 +373,38 @@ def leon_fill(target, value):
     leon_wait(f"document.querySelector({json.dumps(selector)})?.value === {json.dumps(value)}")
     # Do not echo potentially sensitive input such as authentication codes.
     return {"value_verified": True}
+
+
+@_leon_operation('select')
+def leon_select(target, value):
+    """Select an observed HTML option using trusted keys, then verify its identity."""
+    resolved = _leon_target(target)
+    selector = json.dumps(resolved['selector'])
+    if resolved['tag'] != 'select':
+        raise BrowserWorkflowError('not_select', 'Use click and inspect for a custom combobox; select requires an HTML select control.')
+    state = js(f"""(() => {{
+      const e = document.querySelector({selector});
+      return {{multiple:e.multiple, options:Array.from(e.options).map((o,index) => ({{
+        index, value:o.value, disabled:o.matches(':disabled') || o.hidden || o.parentElement.hidden
+      }}))}};
+    }})()""")
+    if state['multiple']:
+        raise BrowserWorkflowError('multiple_select', 'This helper selects one option. Inspect and handle multi-select controls explicitly in Browser Use.')
+    matches = [o for o in state['options'] if o['value'] == value]
+    if len(matches) != 1 or matches[0]['disabled']:
+        raise BrowserWorkflowError('option_unavailable', 'Use a unique, enabled option value from inspect. No input sent.')
+    enabled = [o for o in state['options'] if not o['disabled']]
+    option = matches[0]
+    _leon_dispatch(resolved['point'])
+    leon_wait(f"document.activeElement === document.querySelector({selector})")
+    # Navigate the real picker; never assign .value or synthesize change events.
+    press_key('Home')
+    for _ in range(enabled.index(option)):
+        press_key('ArrowDown')
+    press_key('Enter')
+    leon_wait(f"""(() => {{const e=document.querySelector({selector});
+      return e?.selectedIndex === {option['index']} && e.value === {json.dumps(value)};}})()""")
+    return {'selection_verified': True, 'selected_index': option['index']}
 
 
 @_leon_operation('download')

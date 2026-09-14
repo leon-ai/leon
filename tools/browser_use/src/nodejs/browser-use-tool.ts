@@ -248,7 +248,7 @@ export class BrowserUseTool extends Tool {
       if (functionName === 'inspect') {
         code += 'print(json.dumps(leon_observe(**{k:v for k,v in p.items() if k!=\'tab_id\'})))'
       } else {
-        code += 'operation={\'click\':leon_click,\'fill\':leon_fill,\'download\':leon_download}[p.pop(\'action\')]\np.pop(\'tab_id\')\nprint(json.dumps(operation(**p)))'
+        code += 'operation={\'click\':leon_click,\'fill\':leon_fill,\'select\':leon_select,\'download\':leon_download}[p.pop(\'action\')]\np.pop(\'tab_id\')\nprint(json.dumps(operation(**p)))'
       }
     }
     // This support script runs inside the CLI, where upstream browser helpers are available.
