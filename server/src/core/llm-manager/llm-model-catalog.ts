@@ -10,7 +10,8 @@ const SETUP_PROVIDER_ORDER = [
   LLMProviders.MoonshotAI,
   LLMProviders.MiniMax,
   LLMProviders.Celeris,
-  LLMProviders.HuggingFace
+  LLMProviders.HuggingFace,
+  LLMProviders.AIMLAPI
 ]
 
 export const LLM_MODEL_REASONING_VALUES = [
@@ -416,7 +417,40 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://router.huggingface.co/v1/models
    */
-  { provider: LLMProviders.HuggingFace, model: 'zai-org/GLM-5.3-Flash', label: 'GLM-5.3-Flash', reasoning: AUTO_REASONING, speed: AUTO_SPEED }
+  { provider: LLMProviders.HuggingFace, model: 'zai-org/GLM-5.3-Flash', label: 'GLM-5.3-Flash', reasoning: AUTO_REASONING, speed: AUTO_SPEED },
+
+  /**
+   * aimlapi.com is an aggregator, so the model id is the label, as for
+   * OpenRouter. Every id below was checked against the live catalog
+   * (`GET /v1/models?include=all`, type `openai/chat-completions`) and
+   * answered a real completion. The dotted spelling is deliberate: the dashed
+   * `anthropic/claude-*` variants publish only `streaming` capabilities.
+   * Reasoning is left on `auto` because the gateway rejects the
+   * vendor-specific reasoning fields Leon would otherwise attach.
+   *
+   * @see https://docs.aimlapi.com/api-references/model-database
+   */
+  { provider: LLMProviders.AIMLAPI, model: 'openai/gpt-5.6-sol', label: 'openai/gpt-5.6-sol', recommended: true, reasoning: AUTO_REASONING, speed: AUTO_SPEED },
+  /**
+   * @see https://docs.aimlapi.com/api-references/model-database
+   */
+  { provider: LLMProviders.AIMLAPI, model: 'anthropic/claude-opus-4.8', label: 'anthropic/claude-opus-4.8', reasoning: AUTO_REASONING, speed: AUTO_SPEED },
+  /**
+   * @see https://docs.aimlapi.com/api-references/model-database
+   */
+  { provider: LLMProviders.AIMLAPI, model: 'anthropic/claude-sonnet-4.6', label: 'anthropic/claude-sonnet-4.6', reasoning: AUTO_REASONING, speed: AUTO_SPEED },
+  /**
+   * @see https://docs.aimlapi.com/api-references/model-database
+   */
+  { provider: LLMProviders.AIMLAPI, model: 'google/gemini-3.8-flash', label: 'google/gemini-3.8-flash', reasoning: AUTO_REASONING, speed: AUTO_SPEED },
+  /**
+   * @see https://docs.aimlapi.com/api-references/model-database
+   */
+  { provider: LLMProviders.AIMLAPI, model: 'deepseek/deepseek-v4-pro', label: 'deepseek/deepseek-v4-pro', reasoning: AUTO_REASONING, speed: AUTO_SPEED },
+  /**
+   * @see https://docs.aimlapi.com/api-references/model-database
+   */
+  { provider: LLMProviders.AIMLAPI, model: 'moonshot/kimi-k3', label: 'moonshot/kimi-k3', reasoning: AUTO_REASONING, speed: AUTO_SPEED }
 ]
 
 /**

@@ -52,6 +52,14 @@ export const PROVIDER_MATRIX = [
     requiredEnv: 'LEON_MINIMAX_API_KEY',
     llmTarget: 'minimax/MiniMax-M3',
     reasoning: 'none'
+  },
+  {
+    provider: 'aimlapi',
+    requiredEnv: 'LEON_AIMLAPI_API_KEY',
+    llmTarget: 'aimlapi/openai/gpt-5.6-sol',
+    // The gateway rejects the vendor reasoning fields Leon would attach, so
+    // the curated catalog exposes auto only.
+    reasoning: null
   }
 ] as const
 
