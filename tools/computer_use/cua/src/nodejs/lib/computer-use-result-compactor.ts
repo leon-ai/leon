@@ -240,7 +240,12 @@ export class ComputerUseResultCompactor {
         )
       : candidates
     const preferredApplications = this.preferredApplicationsResolver(input)
-    const availablePreferredActivities = new Set<string>()
+    // Query filtering must not make another saved app look absent from inventory.
+    const inventoriedPreferredActivities = new Set(
+      candidates.flatMap((app) =>
+        this.getPreferredActivities(app, preferredApplications)
+      )
+    )
     const seenApps = new Set<string>()
     const uniqueApps = matchingCandidates
       .map((app) => {
@@ -248,9 +253,6 @@ export class ComputerUseResultCompactor {
           app,
           preferredApplications
         )
-        for (const activity of preferredFor) {
-          availablePreferredActivities.add(activity)
-        }
         return preferredFor.length > 0
           ? { ...app, preferred_for: preferredFor }
           : app
@@ -279,7 +281,7 @@ export class ComputerUseResultCompactor {
       ([activity, appName]) => ({
         activity,
         app_name: appName,
-        available: availablePreferredActivities.has(activity)
+        found_in_desktop_inventory: inventoriedPreferredActivities.has(activity)
       })
     )
 

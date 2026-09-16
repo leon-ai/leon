@@ -14,7 +14,7 @@
   "functions": {
     "list_apps": {
       "description": "List installed desktop applications and configured preferred_apps. Use it to choose a launch target when the owner did not name one.",
-      "progressive_guidance": "When the owner has not chosen an app, consult ACTIVITY.md and LOCAL_INVENTORY.md, then confirm availability here. Prefer explicit choice, saved preferred_apps, then device activity hints. Running time is not proof of preference. Remote context must describe the target device, not the server. Save a new preference only with owner confirmation.",
+      "progressive_guidance": "preferred_apps includes saved choices even when query filters the app list. found_in_desktop_inventory=false means no desktop entry matched, not that the app is absent: for a terminal-hosted app, consult ACTIVITY.md process ancestry and inspect the host's correct idle session. The terminal is its host, not a replacement for the selected app. Running time is not proof of preference. Remote context must describe the target device, not the server. Save a new preference only with owner confirmation.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,

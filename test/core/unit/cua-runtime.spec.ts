@@ -505,7 +505,7 @@ describe('CuaRuntime', () => {
     const provider = new CuaRuntime(
       async () => driver as never,
       () => 'background',
-      () => ({ music: 'Spotify' })
+      () => ({ music: 'Spotify', coding: 'Codex' })
     )
 
     const result = await provider.execute({
@@ -529,7 +529,8 @@ describe('CuaRuntime', () => {
             { name: 'Brave' }
           ],
           preferred_apps: [
-            { activity: 'music', app_name: 'Spotify', available: true }
+            { activity: 'music', app_name: 'Spotify', found_in_desktop_inventory: true },
+            { activity: 'coding', app_name: 'Codex', found_in_desktop_inventory: false }
           ]
         }
       }
@@ -563,7 +564,9 @@ describe('CuaRuntime', () => {
       degraded: false
     })
     const provider = new CuaRuntime(
-      async () => driver as never
+      async () => driver as never,
+      () => 'background',
+      () => ({ browser: 'Brave' })
     )
 
     const result = await provider.execute({
@@ -588,6 +591,9 @@ describe('CuaRuntime', () => {
           }
         ],
         total_app_count: 2,
+        preferred_apps: [
+          { activity: 'browser', app_name: 'Brave', found_in_desktop_inventory: true }
+        ],
         matched_app_count: 1,
         returned_app_count: 1,
         omitted_app_count: 0
