@@ -341,7 +341,9 @@ export class ReActLLMDuty extends LLMDuty {
       let catalog = buildAgentToolCatalog(
         this.activeForcedToolName,
         continuation?.loadedToolkitIds,
-        progressiveToolkitLoading
+        progressiveToolkitLoading,
+        continuation?.loadedFunctionNames,
+        continuation?.loadedToolNames
       )
 
       let preloadedToolkitContext = ''
@@ -353,7 +355,7 @@ export class ReActLLMDuty extends LLMDuty {
         )
         const candidateToolkitContext = [
           `<preloaded_toolkit toolkit_id="${matchedToolkitId}">`,
-          'Its function schemas are already available. Use them directly.',
+          'Use available function schemas directly. For functions still listed in load_toolkit, select their schemas before constructing calls.',
           buildToolkitContextSection(caller, matchedToolkitId),
           '</preloaded_toolkit>'
         ].join('\n')
@@ -441,6 +443,8 @@ export class ReActLLMDuty extends LLMDuty {
             trackedSteps: state.trackedSteps,
             executionHistory: state.executionHistory,
             loadedToolkitIds: catalog.loadedToolkitIds,
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
             activeSkillId: caller.agentSkillContext?.id ?? null
           }),
         ...(continuation
@@ -490,6 +494,8 @@ export class ReActLLMDuty extends LLMDuty {
               trackedSteps: state.trackedSteps,
               executionHistory: state.executionHistory,
               loadedToolkitIds: catalog.loadedToolkitIds,
+              loadedToolNames: catalog.loadedToolNames,
+              loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
               activeSkillId: caller.agentSkillContext?.id ?? null
             }
           )
@@ -586,12 +592,16 @@ export class ReActLLMDuty extends LLMDuty {
             trackedSteps,
             executionHistory,
             loadedToolkitIds: catalog.loadedToolkitIds,
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
             transcript: await this.prepareContinuation(result.transcript, {
               originalInput,
               clarificationQuestion: result.answer,
               trackedSteps,
               executionHistory,
               loadedToolkitIds: catalog.loadedToolkitIds,
+              loadedToolNames: catalog.loadedToolNames,
+              loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
               activeSkillId: caller.agentSkillContext?.id ?? null
             }),
             activeSkillId: caller.agentSkillContext?.id ?? null

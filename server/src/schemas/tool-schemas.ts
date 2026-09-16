@@ -36,6 +36,14 @@ const toolFunctionSchemaObject = Type.Strict(
       maxLength: 256,
       description: 'Human-readable description of what the function does.'
     }),
+    progressive_guidance: Type.Optional(
+      Type.String({
+        minLength: 8,
+        maxLength: PROGRESSIVE_GUIDANCE_MAX_LENGTH,
+        description:
+          'Operational guidance loaded with this function schema before the agent constructs a call.'
+      })
+    ),
     parameters: Type.Object(
       {},
       {

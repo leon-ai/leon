@@ -87,6 +87,7 @@ function createCatalog(): AgentToolCatalog {
     functionsByToolName: new Map([[CALLABLE_TOOL_NAME, callable]]),
     availableToolkitsById: new Map(),
     loadedToolkitIds: new Set(['test']),
+    loadedToolNames: new Set(['test.lookup']),
     loadedProgressiveGuidance: new Map()
   }
 }
@@ -1641,6 +1642,79 @@ describe('continuous agent loop', () => {
     )
   })
 
+  it('discovers function summaries before selectively loading guidance and preserves the selection on resume', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue(['first', 'other'].map((toolId) => ({
+      toolkitId: 'test', toolkitName: 'Test', toolkitDescription: 'Test discovery.',
+      toolkitProgressiveGuidance: 'Shared toolkit instructions.', toolId,
+      toolName: toolId, toolDescription: 'Tool routing summary.',
+      toolProgressiveGuidance: `Shared ${toolId} instructions.`
+    })))
+    coreMocks.getToolFunctions.mockReturnValue(Object.fromEntries(['read', 'write', 'inspect'].map((name) => [name, {
+      description: `Summary for ${name}.`,
+      progressive_guidance: `Detailed ${name} instructions.`,
+      parameters: { type: 'object', properties: {}, additionalProperties: false }
+    }])))
+    const catalog = buildAgentToolCatalog()
+    expect(JSON.stringify(catalog.tools)).not.toContain('Detailed')
+    expect(JSON.stringify(catalog.tools)).not.toContain('Summary for read')
+    let turn = 0
+    const loadToolkitContext = vi.fn(() => 'Toolkit context files.')
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Read something.' }], catalog,
+      callModel: async (messages, tools) => {
+        turn += 1
+        if (turn === 1) return { toolCalls: [toolCall('discover', AGENT_TOOLKIT_LOADER_NAME, {
+          toolkit_id: 'test', tool_id: 'first'
+        })] }
+        if (turn === 2) {
+          expect(catalog.functionsByToolName.size).toBe(0)
+          expect(JSON.stringify(tools)).toContain('first.read: Summary for read.')
+          expect(JSON.stringify(tools)).not.toContain('Detailed')
+          expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain('Shared first instructions.')
+          expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Shared other instructions.')
+          const discoveryResume = buildAgentToolCatalog(null, catalog.loadedToolkitIds, true, [], catalog.loadedToolNames)
+          expect(discoveryResume.functionsByToolName.size).toBe(0)
+          expect(buildAgentProgressiveGuidanceSystemPrompt(discoveryResume)).toBe(buildAgentProgressiveGuidanceSystemPrompt(catalog))
+          return { toolCalls: [toolCall('invalid', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test', functions: ['first.read', 'missing.write']
+          })] }
+        }
+        if (turn === 3) {
+          expect(messages.at(-1)?.content).toContain('rejected')
+          expect(catalog.functionsByToolName.size).toBe(0)
+          return { toolCalls: [toolCall('select', AGENT_TOOLKIT_LOADER_NAME, {
+            toolkit_id: 'test', functions: ['first.read', 'first.inspect']
+          })] }
+        }
+        expect(catalog.functionsByToolName.size).toBe(2)
+        expect(JSON.stringify(tools)).toContain('Detailed read instructions.')
+        expect(JSON.stringify(tools)).toContain('Detailed inspect instructions.')
+        expect(JSON.stringify(tools)).not.toContain('Detailed write instructions.')
+        expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Detailed read instructions.')
+        expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).not.toContain('Shared other instructions.')
+        if (turn === 4) return { toolCalls: [toolCall('reuse', AGENT_TOOLKIT_LOADER_NAME, {
+          toolkit_id: 'test', functions: ['first.read']
+        })] }
+        expect(tools.filter((tool) => tool.function.name === 'test__first__read')).toHaveLength(1)
+        return { textContent: 'Ready.' }
+      },
+      executeFunction: async () => { throw new Error('Discovery must not execute functions') },
+      loadToolkitContext,
+      loadAgentSkill: async () => null
+    })
+    expect(turn).toBe(5)
+    expect(loadToolkitContext).toHaveBeenCalledTimes(1)
+    const selected = [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName)
+    const resumed = buildAgentToolCatalog(null, catalog.loadedToolkitIds, true, selected, catalog.loadedToolNames)
+    expect([...resumed.functionsByToolName.keys()]).toEqual([...catalog.functionsByToolName.keys()])
+    expect(buildAgentProgressiveGuidanceSystemPrompt(resumed)).toBe(buildAgentProgressiveGuidanceSystemPrompt(catalog))
+    expect(JSON.stringify(resumed.tools)).not.toContain('Detailed write instructions.')
+    const eager = buildAgentToolCatalog(null, [], false)
+    expect(eager.functionsByToolName.size).toBe(6)
+    expect(JSON.stringify(eager.tools)).toContain('Detailed write instructions.')
+    expect(eager.tools.some((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)).toBe(false)
+  })
+
   it('preloads a toolkit when its registry label is an unambiguous match', () => {
     coreMocks.getFlattenedTools.mockReturnValue([
       {
@@ -2126,6 +2200,8 @@ describe('continuous agent loop', () => {
         }
       ],
       loadedToolkitIds: ['communication'],
+      loadedFunctionNames: ['communication.mail.send'],
+      loadedToolNames: ['communication.mail'],
       transcript: [
         { role: 'assistant', content: 'Recipient lookup complete.' }
       ],
@@ -2136,6 +2212,9 @@ describe('continuous agent loop', () => {
     expect(state.transcript).not.toBe(undefined)
     expect(state.executionHistory).toHaveLength(1)
     expect(state.loadedToolkitIds).toEqual(['communication'])
+    expect(state.loadedFunctionNames).toEqual(['communication.mail.send'])
+    expect(state.loadedToolNames).toEqual(['communication.mail'])
+    expect(isAgentLoopContinuationStateValid({ ...state, loadedFunctionNames: undefined })).toBe(true)
     expect(state.transcript).toHaveLength(1)
     expect(state.transcript[0]?.content).toContain(
       'Recipient lookup complete.'

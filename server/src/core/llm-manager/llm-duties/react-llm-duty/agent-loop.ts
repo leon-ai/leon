@@ -145,6 +145,7 @@ export interface AgentToolCatalog {
   functionsByToolName: Map<string, AgentCallableFunction>
   availableToolkitsById: Map<string, AgentToolkitSummary>
   loadedToolkitIds: Set<string>
+  loadedToolNames: Set<string>
   loadedProgressiveGuidance: Map<string, AgentProgressiveGuidance>
 }
 
@@ -242,7 +243,9 @@ export interface AgentLoopResult {
 export function buildAgentToolCatalog(
   forcedToolName?: string | null,
   initiallyLoadedToolkitIds: Iterable<string> = [],
-  progressiveToolkitLoading = true
+  progressiveToolkitLoading = true,
+  initiallyLoadedFunctionNames?: Iterable<string>,
+  initiallyLoadedToolNames?: Iterable<string>
 ): AgentToolCatalog {
   const tools: OpenAITool[] = []
   const functionsByToolName = new Map<string, AgentCallableFunction>()
@@ -257,6 +260,7 @@ export function buildAgentToolCatalog(
     functionsByToolName,
     availableToolkitsById,
     loadedToolkitIds,
+    loadedToolNames: new Set(),
     loadedProgressiveGuidance
   }
   const forcedTool = forcedToolName
@@ -284,17 +288,28 @@ export function buildAgentToolCatalog(
   const toolkitIdsToLoad = progressiveToolkitLoading
     ? initiallyLoadedToolkitIds
     : availableToolkitsById.keys()
+  const restoredFunctions = initiallyLoadedFunctionNames
+    ? new Set(initiallyLoadedFunctionNames)
+    : undefined
+  const restoredTools = initiallyLoadedToolNames
+    ? new Set(initiallyLoadedToolNames)
+    : undefined
   for (const toolkitId of toolkitIdsToLoad) {
-    loadToolkitFunctions(catalog, toolkitId)
+    loadToolkitFunctions(catalog, toolkitId, undefined, {
+      ...(progressiveToolkitLoading && restoredFunctions
+        ? { functionNames: restoredFunctions }
+        : {}),
+      ...(progressiveToolkitLoading && restoredTools ? { toolNames: restoredTools } : {}),
+      discover: progressiveToolkitLoading && !restoredFunctions
+    })
   }
 
-  const unloadedToolkits = new Map(
-    [...availableToolkitsById].filter(
-      ([toolkitId]) => !loadedToolkitIds.has(toolkitId)
-    )
-  )
-  if (progressiveToolkitLoading && unloadedToolkits.size > 0) {
-    tools.unshift(createToolkitLoaderTool(unloadedToolkits))
+  const discoverableToolkits = new Map([...availableToolkitsById].filter(
+    ([toolkitId, toolkit]) => !loadedToolkitIds.has(toolkitId) ||
+      toolkit.tools.some((tool) => Boolean(describeToolkitFunctions(toolkitId, tool.id, catalog)))
+  ))
+  if (progressiveToolkitLoading && discoverableToolkits.size > 0) {
+    tools.unshift(createToolkitLoaderTool(discoverableToolkits, catalog))
   }
   tools.push(
     createAgentPlanTool(AGENT_PLAN_TOOL_NAME),
@@ -484,7 +499,8 @@ function getAvailableToolkitSummaries(): Map<string, AgentToolkitSummary> {
 function loadToolkitFunctions(
   catalog: AgentToolCatalog,
   toolkitId: string,
-  onlyToolId?: string
+  onlyToolId?: string,
+  options: { discover?: boolean, functionNames?: Set<string>, toolNames?: Set<string> } = {}
 ): number {
   let loadedFunctionCount = 0
   const loadedToolIds = new Set<string>()
@@ -505,7 +521,26 @@ function loadToolkitFunctions(
       continue
     }
 
+    if (options.toolNames && !options.toolNames.has(`${toolkitId}.${tool.toolId}`)) {
+      continue
+    }
+    if (!options.toolNames && options.functionNames && !Object.keys(functions).some((name) =>
+      options.functionNames!.has(`${toolkitId}.${tool.toolId}.${name}`)
+    )) {
+      continue
+    }
+    loadedToolIds.add(tool.toolId)
+    catalog.loadedToolNames.add(`${toolkitId}.${tool.toolId}`)
+    // Function guidance opts a tool into selective discovery. Legacy manifests
+    // retain their existing behavior; eager/forced loading still loads all.
+    const discoverOnly = options.discover && Object.values(functions).some(
+      (config) => Boolean(config.progressive_guidance)
+    )
     for (const [functionName, functionConfig] of Object.entries(functions)) {
+      const qualifiedName = `${tool.toolkitId}.${tool.toolId}.${functionName}`
+      if (discoverOnly || (options.functionNames && !options.functionNames.has(qualifiedName))) {
+        continue
+      }
       const toolName = [tool.toolkitId, tool.toolId, functionName].join(
         AGENT_TOOL_NAME_SEPARATOR
       )
@@ -513,7 +548,6 @@ function loadToolkitFunctions(
         continue
       }
 
-      const qualifiedName = `${tool.toolkitId}.${tool.toolId}.${functionName}`
       catalog.functionsByToolName.set(toolName, {
         qualifiedName,
         toolkitId: tool.toolkitId,
@@ -525,16 +559,20 @@ function loadToolkitFunctions(
         type: 'function',
         function: {
           name: toolName,
-          description: `${qualifiedName}: ${functionConfig.description}`,
+          // Keep function guidance with its schema so context pruning drops both.
+          description: [
+            `${qualifiedName}: ${functionConfig.description}`,
+            functionConfig.progressive_guidance
+          ].filter(Boolean).join('\n\n'),
           parameters: addToolCallTitleParameter(functionConfig.parameters)
         }
       })
       loadedFunctionCount += 1
-      loadedToolIds.add(tool.toolId)
     }
   }
 
-  if (loadedFunctionCount > 0) {
+  // A discovery-only continuation can have no selected functions yet.
+  if (catalog.availableToolkitsById.has(toolkitId)) {
     catalog.loadedToolkitIds.add(toolkitId)
     const toolkit = catalog.availableToolkitsById.get(toolkitId)
     if (toolkit?.progressiveGuidance) {
@@ -1285,28 +1323,56 @@ async function executeAgentToolCall(
       }
     }
 
-    if (params.catalog.loadedToolkitIds.has(toolkitId)) {
+    const args = parseToolCallArguments(toolCall.function.arguments)
+    const toolId = args?.['tool_id']
+    const names = args?.['functions']
+    if (toolId !== undefined && (typeof toolId !== 'string' || !toolkit.tools.some((tool) => tool.id === toolId))) {
       return {
-        content: `Toolkit already loaded: ${toolkit.name}. Reuse its available functions.`,
+        content: `Toolkit load rejected: tool_id must identify an available tool in "${toolkitId}".`,
+        trackedSteps
+      }
+    }
+    const selectedTools = toolkit.tools.filter((tool) => !toolId || tool.id === toolId)
+    const availableFunctions = new Set(selectedTools.flatMap((tool) =>
+      Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkitId, tool.id) || {})
+        .map((name) => `${tool.id}.${name}`)
+    ))
+    if (availableFunctions.size === 0) {
+      return {
+        content: `Toolkit "${toolkit.name}" has no callable functions in the selected scope.`,
+        trackedSteps
+      }
+    }
+    if (names !== undefined && (!Array.isArray(names) || names.length === 0 ||
+      !names.every((name) => typeof name === 'string' && availableFunctions.has(name)))) {
+      return {
+        content: 'Toolkit load rejected: functions must be a non-empty array of exact tool_id.function_name entries from this toolkit.',
         trackedSteps
       }
     }
 
+    const wasToolkitLoaded = params.catalog.loadedToolkitIds.has(toolkitId)
     const loadedFunctionCount = loadToolkitFunctions(
       params.catalog,
-      toolkitId
+      toolkitId,
+      typeof toolId === 'string' ? toolId : undefined,
+      names === undefined
+        ? { discover: true }
+        : { functionNames: new Set((names as string[]).map((name) => `${toolkitId}.${name}`)) }
     )
-    if (loadedFunctionCount === 0) {
-      return {
-        content: `Toolkit "${toolkit.name}" has no callable functions in the current runtime.`,
-        trackedSteps
-      }
+    const loader = params.catalog.tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)
+    if (loader) {
+      loader.function = createToolkitLoaderTool(params.catalog.availableToolkitsById, params.catalog).function
     }
 
-    const toolkitContext = params.loadToolkitContext?.(toolkitId).trim()
+    // Selecting more functions must not repeatedly append full context files.
+    const toolkitContext = !wasToolkitLoaded
+      ? params.loadToolkitContext?.(toolkitId).trim()
+      : undefined
     return {
       content: [
-        `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} function schema(s) are available on the next model turn.`,
+        `Toolkit loaded: ${toolkit.name}. ${loadedFunctionCount} new function schema(s) are available on the next model turn.`,
+        'Reuse loaded functions. Remaining function summaries are in load_toolkit; select needed functions together before constructing their calls.',
         ...(toolkitContext ? ['', toolkitContext] : [])
       ].join('\n'),
       trackedSteps
@@ -1596,14 +1662,34 @@ function createClarificationTool(): OpenAITool {
   }
 }
 
+function describeToolkitFunctions(
+  toolkitId: string,
+  toolId: string,
+  catalog: AgentToolCatalog
+): string {
+  const functions = TOOLKIT_REGISTRY.getToolFunctions(toolkitId, toolId) || {}
+  return Object.entries(functions)
+    .filter(([name]) => !catalog.functionsByToolName.has([toolkitId, toolId, name].join(AGENT_TOOL_NAME_SEPARATOR)))
+    .map(([name, config]) => `${toolId}.${name}: ${config.description}`)
+    .join('\n')
+}
+
 function createToolkitLoaderTool(
-  toolkitsById: Map<string, AgentToolkitSummary>
+  toolkitsById: Map<string, AgentToolkitSummary>,
+  catalog: AgentToolCatalog
 ): OpenAITool {
+  // Keep loaded toolkits addressable: context compaction can hide their schemas
+  // temporarily, and a loader call makes that toolkit recent again.
   const toolkits = [...toolkitsById.values()]
   const toolkitCatalog = toolkits
     .map((toolkit) => {
       const tools = toolkit.tools
-        .map((tool) => `${tool.id}: ${tool.description}`)
+        .map((tool) => [
+          `${tool.id}: ${tool.description}`,
+          ...(catalog.loadedToolkitIds.has(toolkit.id)
+            ? [describeToolkitFunctions(toolkit.id, tool.id, catalog)]
+            : [])
+        ].filter(Boolean).join('\n'))
         .join('; ')
       return `${toolkit.id}: ${toolkit.name} - ${toolkit.description} Tools: ${tools}`
     })
@@ -1614,7 +1700,7 @@ function createToolkitLoaderTool(
     function: {
       name: AGENT_TOOLKIT_LOADER_NAME,
       description: [
-        'Load the real function schemas for one relevant toolkit.',
+        'Discover a relevant toolkit, then select needed functions together using their exact tool_id.function_name identifiers. Their schemas and guidance become available on the next turn, before constructing calls. Tools without function guidance load directly.',
         'Choose the most specific toolkit for the requested capability; use a general operating-system toolkit only when no dedicated toolkit fits.',
         'Available toolkits:',
         toolkitCatalog
@@ -1626,6 +1712,17 @@ function createToolkitLoaderTool(
             type: 'string',
             enum: toolkits.map((toolkit) => toolkit.id),
             description: 'Exact toolkit id from the available toolkit catalog.'
+          },
+          tool_id: {
+            type: 'string',
+            description: 'Optional tool id to limit discovery to one tool in the toolkit.'
+          },
+          functions: {
+            type: 'array',
+            minItems: 1,
+            uniqueItems: true,
+            items: { type: 'string' },
+            description: 'Exact tool_id.function_name entries to load together. Omit to discover short summaries before choosing.'
           }
         },
         required: ['toolkit_id'],

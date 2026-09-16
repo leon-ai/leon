@@ -15,7 +15,9 @@ vi.mock('@/core/profile-runtime/profile-paths', () => ({ getProfilePaths: (): { 
 
 const TOOLKIT: SatelliteToolkitDefinition = {
   id: 'computer_use', name: 'Computer', description: 'Device tools', icon_name: 'computer',
-  tools: { cua: { tool_id: 'cua', toolkit_id: 'computer_use', name: 'Cua', description: 'Native tools', functions: {} } }
+  tools: { cua: { tool_id: 'cua', toolkit_id: 'computer_use', name: 'Cua', description: 'Native tools', functions: {
+    click: { description: 'Click a target.', progressive_guidance: 'Use the latest observed target.', parameters: {} }
+  } } }
 }
 
 describe('Satellite tool ownership', () => {
@@ -27,6 +29,8 @@ describe('Satellite tool ownership', () => {
     expect(registry.isToolAvailable('computer_use', 'cua')).toBe(false)
     registry.registerSatelliteTools('owner-device', [TOOLKIT])
     expect(registry.isToolAvailable('computer_use', 'cua')).toBe(true)
+    expect(registry.getToolFunctions('computer_use', 'cua')?.['click']?.progressive_guidance)
+      .toBe('Use the latest observed target.')
     registry.removeSatelliteTools('owner-device')
     expect(registry.getToolSatelliteDevice('computer_use', 'cua')).toBe('owner-device')
     expect(registry.isToolAvailable('computer_use', 'cua')).toBe(false)

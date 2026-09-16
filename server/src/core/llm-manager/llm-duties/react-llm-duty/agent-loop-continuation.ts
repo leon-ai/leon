@@ -26,6 +26,8 @@ export interface AgentLoopContinuationState {
   trackedSteps: TrackedPlanStep[]
   executionHistory: ExecutionRecord[]
   loadedToolkitIds: string[]
+  loadedFunctionNames?: string[]
+  loadedToolNames?: string[]
   transcript: AgentToolTranscriptMessage[]
   activeSkillId: string | null
 }
@@ -35,6 +37,8 @@ export interface AgentContinuityCheckpointInput {
   trackedSteps: TrackedPlanStep[]
   executionHistory: ExecutionRecord[]
   loadedToolkitIds: Iterable<string>
+  loadedFunctionNames?: Iterable<string>
+  loadedToolNames?: Iterable<string>
   activeSkillId: string | null
   clarificationQuestion?: string
 }
@@ -164,6 +168,10 @@ export function buildAgentContinuityCheckpoint(
       recent: recentExecutions
     },
     loaded_toolkits: [...params.loadedToolkitIds],
+    ...(params.loadedToolNames ? { loaded_tools: [...params.loadedToolNames] } : {}),
+    ...(params.loadedFunctionNames
+      ? { loaded_functions: [...params.loadedFunctionNames] }
+      : {}),
     active_skill_id: params.activeSkillId,
     artifact_paths: getArtifactPaths(params.executionHistory),
     ...(params.clarificationQuestion
@@ -264,6 +272,10 @@ export function createAgentLoopContinuationState(
     trackedSteps: structuredClone(params.trackedSteps),
     executionHistory: structuredClone(params.executionHistory),
     loadedToolkitIds,
+    ...(params.loadedToolNames ? { loadedToolNames: [...params.loadedToolNames] } : {}),
+    ...(params.loadedFunctionNames
+      ? { loadedFunctionNames: [...params.loadedFunctionNames] }
+      : {}),
     activeSkillId: params.activeSkillId,
     transcript: structuredClone(params.transcript)
   }
@@ -286,6 +298,12 @@ export function isAgentLoopContinuationStateValid(
     Array.isArray(state.executionHistory) &&
     Array.isArray(state.loadedToolkitIds) &&
     state.loadedToolkitIds.every((toolkitId) => typeof toolkitId === 'string') &&
+    (state.loadedToolNames === undefined ||
+      (Array.isArray(state.loadedToolNames) &&
+        state.loadedToolNames.every((name) => typeof name === 'string'))) &&
+    (state.loadedFunctionNames === undefined ||
+      (Array.isArray(state.loadedFunctionNames) &&
+        state.loadedFunctionNames.every((name) => typeof name === 'string'))) &&
     (state.activeSkillId === null || typeof state.activeSkillId === 'string') &&
     Array.isArray(state.transcript) &&
     state.transcript.length > 0
