@@ -260,6 +260,7 @@ export class CuaRuntime {
               screenshot_height: crop.height,
               coordinate_space: 'attached_model_image',
               image_kind: 'zoom_crop',
+              coordinate_hint: `Use only this attached crop's pixels: x=0..${crop.width - 1}, y=0..${crop.height - 1}. Pass them directly to input actions, including copy_text. Do not convert to desktop/window coordinates or calculate scale/offset; Leon already maps the crop.`,
               capture_target: desktopZoom
                 ? { kind: 'desktop', display_id: 'primary' }
                 : { kind: 'window', pid: driverParameters['pid'], window_id: driverParameters['window_id'] },
@@ -604,7 +605,9 @@ export class CuaRuntime {
       ...actionParameters, capture_after: true,
       settle_ms: actionParameters['settle_ms'] ?? COMPUTER_USE_COPY_SETTLE_MS
     })
-    if (input.signal?.aborted) return delivered
+    // Preserve the input failure (for example, out-of-crop coordinates).
+    // A clipboard check cannot diagnose an action that failed to execute.
+    if (input.signal?.aborted || !delivered.success) return delivered
     const after = await this.executeAction(input, 'clipboard_read', { include_text: true })
     const previousText = asRecord(before.output['result'])?.['text']
     const text = asRecord(after.output['result'])?.['text']
@@ -1150,13 +1153,13 @@ export class CuaRuntime {
       } : {}),
       ...(transform.fromZoom ? {
         zoomed: true,
-        zoom_hint: 'This is a window crop. When present, yellow x/y guides label actual crop pixels, not controls. Locate the target center against these guides before clicking; do not guess from the earlier image. Click, drag, or type using crop pixels with the same pid/window_id; Leon translates them. For other pixel actions or another zoom, first get a full-window screenshot.'
+        zoom_hint: 'This is a window crop. When present, yellow x/y guides label actual crop pixels, not controls. Locate the target center against these guides before clicking; do not guess from the earlier image. Pass crop pixels directly with the same pid/window_id, including inside copy_text. Do not calculate scale/offset or convert to window coordinates; Leon already maps the crop. For unsupported pixel actions or another zoom, first get a full-window screenshot.'
       } : {}),
       coordinate_hint: `Use only this attached image's pixels: x=0..${transform.model.width - 1}, y=0..${transform.model.height - 1}. Prefer a current semantic element or its pixel_center. Do not use source-image dimensions, earlier screenshots or a normalized grid.`,
       // Ground uncertain positions before delivery rather than relying on
       // post-action no-op detection to correct a guessed click.
       ...(!transform.fromZoom && bounds ? {
-        grounding_hint: 'Locate the source or control in this image before clicking. Use zoom to locate a small control when needed, not as the default text-extraction step. After zoom, use only the crop’s pixels and capture_target.'
+        grounding_hint: 'Locate the source or control in this image before clicking; additions and removals may have moved it. If typing did not change a field, re-locate the field here before retrying. Use zoom for a small control when needed, not as the default text-extraction step, then pass crop pixels directly with capture_target, without converting coordinates.'
       } : {})
     }
   }

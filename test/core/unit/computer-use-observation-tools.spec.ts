@@ -437,7 +437,8 @@ describe('computer-use observations and capture recovery', () => {
     const crop = await execute('zoom', { ...region, purpose })
     expect(crop.success).toBe(true)
     expect(crop.output['result']).toMatchObject({ screenshot_width: 1_420, screenshot_height: 240,
-      capture_target: DESKTOP, coordinate_space: 'attached_model_image' })
+      capture_target: DESKTOP, coordinate_space: 'attached_model_image',
+      coordinate_hint: expect.stringContaining('x=0..1419, y=0..239') })
     expect((await execute('click', { ...WINDOW, x: 710, y: 120 })).success).toBe(false)
     const copied = await execute('copy_text', { ...WINDOW, action: 'click', parameters: {
       target: DESKTOP, x: 710, y: 120, settle_ms: 0
@@ -446,6 +447,23 @@ describe('computer-use observations and capture recovery', () => {
     expect(copied.output['result']).toMatchObject({ text: 'Copied source', clipboard_changed: true })
     expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ target: DESKTOP, x: 355, y: 70 }))
     expect(driver.callTool.mock.calls.some(([action]) => action === 'zoom')).toBe(false)
+  })
+
+  it('preserves a failed Copy input diagnostic instead of blaming the clipboard', async () => {
+    const { driver, execute, zoom } = createProvider()
+    await execute('get_window_state', WINDOW)
+    await zoom()
+    driver.callTool.mockClear()
+    const failed = await execute('copy_text', { ...WINDOW, action: 'click', parameters: {
+      ...WINDOW, x: 666, y: 187, settle_ms: 0
+    } })
+    expect(failed.success).toBe(false)
+    expect(failed.message).toContain('Coordinate x=666 is outside this screenshot (0..419)')
+    expect(failed.message).not.toContain('clipboard')
+    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual(['clipboard_read'])
+    // The failed call did not consume the crop; retry its actual pixel center.
+    expect((await execute('click', { ...WINDOW, x: 210, y: 140 })).success).toBe(true)
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 210, y: 140, from_zoom: true }))
   })
 
   it.each([false, true])('verifies Copy against the previous clipboard without replaying input (changed=%s)', async (changed) => {
