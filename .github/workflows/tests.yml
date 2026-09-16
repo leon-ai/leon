@@ -32,11 +32,11 @@ jobs:
       - name: Install
         run: pnpm install
 
-      - name: Run agent unit tests
-        run: pnpm run test:agent:unit
+      - name: Run unit tests
+        run: pnpm run test:unit
 
-      - name: Run workflow unit tests
-        run: pnpm run test:workflow:unit
+      - name: Run integration tests
+        run: pnpm run test:integration
 
-      - name: Run workflow e2e tests
-        run: pnpm run test:workflow:e2e
+      - name: Run controlled e2e tests
+        run: pnpm run test:controlled:e2e

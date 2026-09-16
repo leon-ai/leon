@@ -31,7 +31,7 @@ afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
 })
 
-describe('Satellite session artifacts', () => {
+describe('Satellite session artifact integration', () => {
   it('renders from transferred PNGs and capture metadata after the device files are removed', async () => {
     const temporary = await temporaryRoot()
     const device = path.join(temporary, 'device', 'artifacts')

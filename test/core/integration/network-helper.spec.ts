@@ -8,7 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LogHelper } from '@/helpers/log-helper'
 import { NetworkHelper } from '@/helpers/network-helper'
 
-describe('NetworkHelper', () => {
+describe('NetworkHelper download integration', () => {
   const temporaryPaths: string[] = []
 
   afterEach(() => {

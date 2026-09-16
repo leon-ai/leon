@@ -15,7 +15,7 @@ afterEach(async () => {
 })
 
 /**
- * Run real bridge processes with a harmless profile tool, never the owner's desktop.
+ * Exercise real bridge processes with a harmless profile tool, never the owner's desktop.
  */
 async function fixture(persistent: boolean): Promise<void> {
   home = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-worker-'))

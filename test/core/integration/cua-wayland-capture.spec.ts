@@ -19,7 +19,7 @@ const BOUNDS = { x: 300, y: 150, width: 150, height: 150 }
 let desktop: Buffer
 
 beforeAll(async () => {
-  // The green window is at physical (400,200), logical (300,150).
+  // Render a fixture, not a live desktop: physical (400,200), logical (300,150).
   const result = await execa(ffmpegStatic!, [
     '-hide_banner', '-loglevel', 'error', '-f', 'lavfi',
     '-i', 'color=red:s=800x600,drawbox=x=400:y=200:w=200:h=200:color=lime:t=fill,drawbox=x=544:y=288:w=8:h=8:color=blue:t=fill',
