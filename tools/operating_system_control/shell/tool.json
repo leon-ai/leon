@@ -13,6 +13,7 @@
   "functions": {
     "executeCommand": {
       "description": "Execute a command in the active platform shell and return the result.",
+      "progressive_guidance": "This tool waits for command completion; longRunning only extends the timeout. Run finite tasks directly. For existing background work, check its result before waiting again.",
       "parameters": {
         "type": "object",
         "properties": {
