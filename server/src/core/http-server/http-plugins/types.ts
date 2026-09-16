@@ -65,6 +65,7 @@ export interface HTTPPluginPlanTransition extends HTTPPluginPlanStep {
 
 export interface HTTPPluginAgentTrace {
   reasoning_summary?: string
+  progress_messages?: { id: string, content: string, created_at: number }[]
   plan_steps: HTTPPluginPlanStep[]
   plan_transitions?: HTTPPluginPlanTransition[]
   tool_calls: HTTPPluginToolCall[]
@@ -211,6 +212,7 @@ export interface HTTPPluginConversationSessionMutationResult {
 }
 
 export type HTTPPluginAgentEventType =
+  | 'progress_message'
   | 'reasoning_summary'
   | 'plan_step'
   | 'tool_call'

@@ -1539,9 +1539,15 @@ export class ReActLLMDuty extends LLMDuty {
       return
     }
 
+    const id = `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`
+    // Hosts receive the same non-final message as the built-in chat client.
+    this.reportProgressEvent({
+      type: 'progress_message',
+      message: { id, content: message, createdAt: Date.now() }
+    })
     try {
       SOCKET_SERVER.emitAnswerToChatClients({
-        id: `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`,
+        id,
         answer: message,
         generationId,
         fallbackText: message,

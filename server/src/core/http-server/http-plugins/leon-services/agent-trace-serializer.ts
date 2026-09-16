@@ -10,6 +10,15 @@ export function serializeAgentTrace(
   includeDeveloperProvenance: boolean
 ): HTTPPluginAgentTrace {
   return {
+    ...(trace.progressMessages
+      ? {
+          progress_messages: trace.progressMessages.map((message) => ({
+            id: message.id,
+            content: message.content,
+            created_at: message.createdAt
+          }))
+        }
+      : {}),
     ...(trace.reasoningSummary
       ? { reasoning_summary: trace.reasoningSummary }
       : {}),
@@ -56,6 +65,15 @@ export function deserializeAgentTrace(
   trace: HTTPPluginAgentTrace
 ): AgentResponseTrace {
   return {
+    ...(trace.progress_messages
+      ? {
+          progressMessages: trace.progress_messages.map((message) => ({
+            id: message.id,
+            content: message.content,
+            createdAt: message.created_at
+          }))
+        }
+      : {}),
     reasoningSummary: trace.reasoning_summary || '',
     planSteps: trace.plan_steps.map((step) => ({ ...step })),
     ...(trace.plan_transitions

@@ -560,6 +560,33 @@ describe('HTTP plugin Leon services', () => {
     })
   })
 
+  it('streams agent commentary and includes it in the final trace', async () => {
+    mocks.executeAgent.mockImplementationOnce(async () => {
+      const onProgress = mocks.agentDutyParams.at(-1)?.['onProgressEvent'] as (
+        event: Record<string, unknown>
+      ) => void
+      onProgress({
+        type: 'progress_message',
+        message: { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }
+      })
+    })
+    const turn = await runAgent({
+      profile_id: 'progress-owner', query: 'Investigate this issue.', create_session: true, request_id: 'turn-1'
+    })
+    const events: Array<Record<string, unknown>> = []
+    const unsubscribe = await subscribeAgentEvents(
+      { profile_id: 'progress-owner', session_id: turn.session_id || '' },
+      (event) => events.push(event)
+    )
+    unsubscribe()
+    const progress = { id: 'progress-1', content: 'Inspecting the issue.', created_at: 1_000 }
+    expect(events.find((event) => event['type'] === 'progress_message')).toMatchObject({
+      turn_id: 'turn-1', response_id: 'turn-1', data: { message: progress }
+    })
+    expect(turn.response_trace.progress_messages).toEqual([progress])
+    expect(events.filter((event) => event['type'] === 'final_answer')).toHaveLength(1)
+  })
+
   it('publishes trusted progress with Leon-owned sequence correlation', async () => {
     const turn = await runAgent({
       profile_id: 'owner-a',

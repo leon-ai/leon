@@ -10,6 +10,10 @@ export interface AgentSkillContext {
 
 export type AgentRunProgressEvent =
   | {
+      type: 'progress_message'
+      message: { id: string, content: string, createdAt: number }
+    }
+  | {
       type: 'reasoning_summary'
       summary: string
     }

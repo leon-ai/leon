@@ -17,6 +17,10 @@ export class AgentResponseTraceCollector {
     NonNullable<AgentResponseTrace['reasoning']>[number]
   >()
   private reasoningSummary = ''
+  private readonly progressMessages = new Map<
+    string,
+    NonNullable<AgentResponseTrace['progressMessages']>[number]
+  >()
   private readonly planSteps = new Map<string, AgentResponsePlanStep>()
   private readonly planTransitions: AgentResponsePlanTransition[] = []
   private readonly toolCalls = new Map<string, AgentResponseToolCall>()
@@ -25,12 +29,17 @@ export class AgentResponseTraceCollector {
     this.id = id
     this.reasoning.clear()
     this.reasoningSummary = ''
+    this.progressMessages.clear()
     this.planSteps.clear()
     this.planTransitions.length = 0
     this.toolCalls.clear()
   }
 
   public record(event: AgentRunProgressEvent): void {
+    if (event.type === 'progress_message') {
+      this.progressMessages.set(event.message.id, { ...event.message })
+      return
+    }
     if (event.type === 'reasoning_summary') {
       this.reasoningSummary = event.summary
       return
@@ -89,6 +98,11 @@ export class AgentResponseTraceCollector {
   public snapshot(metrics: Record<string, unknown>): AgentResponseTrace {
     return {
       ...(this.id ? { id: this.id } : {}),
+      ...(this.progressMessages.size > 0
+        ? {
+            progressMessages: [...this.progressMessages.values()].map((message) => ({ ...message }))
+          }
+        : {}),
       ...(this.reasoning.size > 0
         ? { reasoning: [...this.reasoning.values()].map((block) => ({ ...block })) }
         : {}),

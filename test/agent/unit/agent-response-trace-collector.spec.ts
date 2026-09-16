@@ -1,8 +1,24 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { AgentResponseTraceCollector } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-response-trace-collector'
+import { deserializeAgentTrace, serializeAgentTrace } from '@/core/http-server/http-plugins/leon-services/agent-trace-serializer'
 
 describe('AgentResponseTraceCollector', () => {
+  it('preserves ordered commentary through replay and HTTP history without duplicating it', () => {
+    const collector = new AgentResponseTraceCollector()
+    const first = { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }
+    const second = { id: 'progress-2', content: 'Reading the result.', createdAt: 2_000 }
+    collector.record({ type: 'progress_message', message: first })
+    collector.record({ type: 'progress_message', message: second })
+    collector.record({ type: 'progress_message', message: first })
+    collector.interrupt()
+    const trace = collector.snapshot({})
+    expect(trace.progressMessages).toEqual([first, second])
+    expect(deserializeAgentTrace(serializeAgentTrace(trace, false)).progressMessages)
+      .toEqual([first, second])
+    collector.reset()
+    expect(collector.snapshot({}).progressMessages).toBeUndefined()
+  })
   it('merges progressive tool activity into one durable trace', () => {
     const collector = new AgentResponseTraceCollector()
     const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)

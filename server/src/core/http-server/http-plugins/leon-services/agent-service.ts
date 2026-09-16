@@ -52,6 +52,10 @@ export async function runAgent(
       HTTPPluginAgentTrace['plan_transitions']
     > = []
     const toolCalls = new Map<string, HTTPPluginToolCall>()
+    const progressMessages = new Map<
+      string,
+      NonNullable<HTTPPluginAgentTrace['progress_messages']>[number]
+    >()
     const toolStartedAt = new Map<string, number>()
     let actionExecutionMs = 0
     let reasoningSummary = 'Understanding your request'
@@ -100,6 +104,16 @@ export async function runAgent(
             : {}),
           allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true,
           onProgressEvent: (event): void => {
+            if (event.type === 'progress_message') {
+              const message = {
+                id: event.message.id,
+                content: event.message.content,
+                created_at: event.message.createdAt
+              }
+              progressMessages.set(message.id, message)
+              emit('progress_message', { message })
+              return
+            }
             if (event.type === 'reasoning_summary') {
               reasoningSummary = event.summary
               emit('reasoning_summary', { summary: event.summary })
@@ -200,6 +214,9 @@ export async function runAgent(
         }
         const trace: HTTPPluginAgentTrace = {
           reasoning_summary: reasoningSummary,
+          ...(progressMessages.size > 0
+            ? { progress_messages: [...progressMessages.values()] }
+            : {}),
           plan_steps: [...planSteps.values()],
           ...(planTransitions.length > 0
             ? { plan_transitions: planTransitions }

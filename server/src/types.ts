@@ -137,6 +137,7 @@ export interface AgentResponseToolCall {
  */
 export interface AgentResponseTrace {
   id?: string
+  progressMessages?: { id: string, content: string, createdAt: number }[]
   reasoning?: {
     id: string
     text: string
