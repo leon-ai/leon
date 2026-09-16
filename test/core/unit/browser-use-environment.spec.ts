@@ -74,6 +74,15 @@ it.each(['permission-blocked:', 'remote-debugging-setup:'])('preserves upstream 
   expect(failure.requiresOwnerAction).toBe(true)
 })
 
+it.each(['stdout', 'stderr'] as const)('requests browser setup when a stale CDP endpoint fails in %s', (stream) => {
+  const diagnostic = 'browser-harness: fatal: CDP WS handshake failed: [Errno 111] Connect call failed (\'127.0.0.1\', 9222) -- remote browser WebSocket connection failed.'
+  const failure = describeBrowserUseReadinessFailure({
+    stdout: '', stderr: '', [stream]: diagnostic, exitCode: 1, timedOut: false
+  }, '/profile/bu.log')
+  expect(failure.requiresOwnerAction).toBe(true)
+  expect(failure.message).toContain(diagnostic)
+})
+
 it.each([
   { stderr: 'fatal: AF_UNIX path too long', timedOut: false },
   { stderr: 'PermissionError: local directory is not writable', timedOut: false },

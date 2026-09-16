@@ -8,8 +8,13 @@ const RUNTIME_ID_LENGTH = 24
 const MAX_SOCKET_PATH_BYTES = 103
 const SOCKET_FILENAME = 'bu.sock'
 const SHORT_POSIX_TEMP_DIRECTORY = '/tmp'
-// These are upstream browser-harness diagnostic codes, not task-routing keywords.
-const OWNER_ACTION_CODES = ['permission-blocked:', 'remote-debugging-setup:']
+// Upstream diagnostics, not task-routing keywords. Explicit WS endpoints report
+// stale/refused connections as handshake failures rather than permission codes.
+const OWNER_ACTION_DIAGNOSTICS = [
+  'permission-blocked:',
+  'remote-debugging-setup:',
+  'CDP WS handshake failed:'
+]
 const MAX_DIAGNOSTIC_CHARACTERS = 16_000
 
 /**
@@ -57,7 +62,7 @@ export function describeBrowserUseReadinessFailure(result: {
 }, logPath: string): { requiresOwnerAction: boolean, message: string } {
   const diagnostic = [result.stderr, result.stdout].filter(Boolean).join('\n')
   return {
-    requiresOwnerAction: OWNER_ACTION_CODES.some((code) => diagnostic.includes(code)),
+    requiresOwnerAction: OWNER_ACTION_DIAGNOSTICS.some((marker) => diagnostic.includes(marker)),
     message: `Browser Use CLI readiness failed (exit ${result.exitCode}${result.timedOut ? ', timed out' : ''}). ${diagnostic.slice(0, MAX_DIAGNOSTIC_CHARACTERS)} See daemon log: ${logPath}`
   }
 }
