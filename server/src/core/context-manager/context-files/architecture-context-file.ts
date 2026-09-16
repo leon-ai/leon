@@ -36,7 +36,7 @@ export class ArchitectureContextFile extends ContextFile {
       '- Computer use respects owner app preferences and permissions, adapts to platform capabilities, and uses observed results to verify actions and recover from ineffective attempts.',
       '## Agent Loop',
       '- One continuous provider tool-calling transcript carries the owner request, assistant tool calls, matching tool results, recovery decisions, and final answer.',
-      '- Tool schemas load progressively from the toolkit catalog as the task needs them.',
+      '- Tool schemas load progressively from the toolkit catalog as the task needs them. Guidance follows toolkit -> tool -> function, with function-specific instructions loaded alongside selected schemas before use.',
       '- The baseline prompt keeps stable behavioral instructions before volatile runtime state and exposes one-line context summaries; full context files and Agent Skill instructions load only when relevant.',
       '- The model-facing transcript has a fixed input budget: large tool results stay in artifact logs with bounded previews, and inactive toolkit schemas plus older completed tool exchanges are compacted progressively only when needed.',
       '- Checkpoints and summaries preserve task state as transcripts grow or work resumes.',

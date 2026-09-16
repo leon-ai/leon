@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-09-10T02:23:41+08:00
+- Generated at: 2026-09-16T18:01:31+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -27,7 +27,7 @@
 - Computer use respects owner app preferences and permissions, adapts to platform capabilities, and uses observed results to verify actions and recover from ineffective attempts.
 ## Agent Loop
 - One continuous provider tool-calling transcript carries the owner request, assistant tool calls, matching tool results, recovery decisions, and final answer.
-- Tool schemas load progressively from the toolkit catalog as the task needs them.
+- Tool schemas load progressively from the toolkit catalog as the task needs them. Guidance follows toolkit -> tool -> function, with function-specific instructions loaded alongside selected schemas before use.
 - The baseline prompt keeps stable behavioral instructions before volatile runtime state and exposes one-line context summaries; full context files and Agent Skill instructions load only when relevant.
 - The model-facing transcript has a fixed input budget: large tool results stay in artifact logs with bounded previews, and inactive toolkit schemas plus older completed tool exchanges are compacted progressively only when needed.
 - Checkpoints and summaries preserve task state as transcripts grow or work resumes.

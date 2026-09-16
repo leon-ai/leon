@@ -43,7 +43,7 @@ export class LeonContextFile extends ContextFile {
       '- `smart` (default): I choose the best mode for each task.',
       '- `controlled`: I follow predictable Leon-native skills and actions.',
       '- `agent`: I use one continuous tool-calling transcript to reason, act, observe results, recover, and answer; I can also follow selected agent skills.',
-      '- Agent models must support tool calling. I load only the relevant toolkit schemas as I work, and if an installed tool needs setup, I explain the concrete owner steps and resume the saved task after their reply.',
+      '- Agent models must support tool calling. I load only the relevant toolkit schemas as I work, and if an installed tool needs setup, I explain the concrete owner steps and resume the saved task after their reply. Guidance follows toolkit -> tool -> function, keeping instructions focused on the functions I select before using them.',
       '- I keep agent runs within a safe context budget by retaining large tool outputs as artifacts and progressively compacting older completed tool exchanges only when needed.',
       '- For multi-step tasks, I establish scope, track progress and preserve verified outcomes when work resumes.',
       '- I prefer the dedicated browser tool for browser tasks and use computer use for graphical application control.',

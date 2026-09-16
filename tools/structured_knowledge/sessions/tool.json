@@ -4,7 +4,6 @@
   "toolkit_id": "structured_knowledge",
   "name": "Sessions",
   "description": "Search raw prior conversation turns for supporting evidence.",
-  "progressive_guidance": "Start with concrete concepts from the owner request or memory results. When a result reveals a candidate entity, search again with alternative wording for the relationship being verified. Prefer owner-authored matches for claims about the owner; research or interest alone does not prove ownership or preference.",
   "icon_name": "chat-history-line",
   "author": {
     "name": "Louis Grenard",
@@ -14,6 +13,7 @@
   "functions": {
     "searchSessions": {
       "description": "Search visible messages across prior sessions. Returns the best match per session with nearby turns for evidence and provenance.",
+      "progressive_guidance": "Start with concrete concepts from the owner request or memory results. When a result reveals a candidate entity, search again with alternative wording for the relationship being verified. Prefer owner-authored matches for claims about the owner; research or interest alone does not prove ownership or preference.",
       "parameters": {
         "type": "object",
         "properties": {
