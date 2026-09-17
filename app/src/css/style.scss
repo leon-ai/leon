@@ -627,12 +627,24 @@ textarea::-webkit-scrollbar-thumb {
 }
 
 .llm-token {
-  opacity: 0;
-  transition: opacity 2.5s;
+  animation: tokenFadeIn 1s linear;
 }
 
-.llm-token.fade-in {
-  animation: fadeIn 2.5s forwards;
+// Tokens are opaque outside the animation, including with reduced motion.
+// An explicit start avoids inheriting opacity 1 and animating from 1 to 1.
+@keyframes tokenFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .llm-token {
+    animation: none;
+  }
 }
 
 .reasoning-block-container {

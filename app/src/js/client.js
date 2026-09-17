@@ -4,6 +4,7 @@ import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
+import { renderStreamedMessage } from './streamed-message.js'
 
 const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
 const LEON_EVENTS = {
@@ -35,6 +36,7 @@ export default class Client {
     this._suggestions = []
     this._answerGenerationId = 'xxx'
     this._activeStreamGenerationId = null
+    this._answerStreamText = ''
     this._ttsAudioContext = null
     this._isLeonGeneratingAnswer = false
     this._isVoiceModeEnabled = false
@@ -291,19 +293,20 @@ export default class Client {
           )
         }
 
-        // Slightly delay the update to avoid the stream animation to be interrupted
-        setTimeout(() => {
-          // Update the text of the bubble (quick emoji fix)
-          streamedBubbleContainerElement.querySelector('p.bubble').innerHTML =
-            this.chatbot.formatMessage(answerText)
-          this.chatbot.updateBubbleMetrics(
-            streamedBubbleContainerElement,
-            llmMetrics,
-            data && typeof data === 'object' && typeof data.sentAt === 'number'
-              ? data.sentAt
-              : Date.now()
-          )
-        }, 2_500)
+        // Apply final formatting immediately while the last streamed chunks
+        // finish their own fades; acceptance must not restart or cut them short.
+        renderStreamedMessage(
+          streamedBubbleContainerElement.querySelector('p.bubble'),
+          this.chatbot.formatMessage(answerText),
+          false
+        )
+        this.chatbot.updateBubbleMetrics(
+          streamedBubbleContainerElement,
+          llmMetrics,
+          data && typeof data === 'object' && typeof data.sentAt === 'number'
+            ? data.sentAt
+            : Date.now()
+        )
       } else {
         this.chatbot.createBubble({
           who: 'leon',
@@ -328,6 +331,7 @@ export default class Client {
       if (streamGenerationId) {
         this._activeStreamGenerationId = null
         this._answerGenerationId = 'xxx'
+        this._answerStreamText = ''
       }
       void this.sessionPanel?.refresh()
     })
@@ -385,6 +389,7 @@ export default class Client {
         if (this._activeStreamGenerationId === data.generationId) {
           this._activeStreamGenerationId = null
           this._answerGenerationId = 'xxx'
+          this._answerStreamText = ''
         }
         return
       }
@@ -399,12 +404,15 @@ export default class Client {
       this._answerGenerationId = newGenerationId
       this._activeStreamGenerationId = newGenerationId
       const isSameGeneration = previousGenerationId === newGenerationId
+      this._answerStreamText = isSameGeneration
+        ? this._answerStreamText + data.token
+        : data.token
       let bubbleContainerElement = null
 
       if (!isSameGeneration) {
         bubbleContainerElement = this.chatbot.createBubble({
           who: 'leon',
-          string: data.token,
+          string: '',
           save: false,
           bubbleId: newGenerationId
         })
@@ -414,18 +422,10 @@ export default class Client {
         )
       }
 
-      const bubbleElement = bubbleContainerElement.querySelector('p.bubble')
-
-      // Token is already appened when it's a new generation
-      if (isSameGeneration) {
-        // bubbleElement.textContent += data.token
-
-        const tokenSpan = document.createElement('span')
-        tokenSpan.className = 'llm-token fade-in'
-        tokenSpan.textContent = data.token
-
-        bubbleElement.appendChild(tokenSpan)
-      }
+      renderStreamedMessage(
+        bubbleContainerElement.querySelector('p.bubble'),
+        this.chatbot.formatMessage(this._answerStreamText)
+      )
 
       this.chatbot.scrollDown()
     })

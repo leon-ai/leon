@@ -6,6 +6,11 @@ vi.mock('socket.io-client', () => ({ io: vi.fn() }))
 vi.mock('../../../app/src/js/chatbot', () => ({ default: vi.fn() }))
 vi.mock('../../../app/src/js/voice-energy', () => ({ default: vi.fn() }))
 vi.mock('../../../app/src/js/suggestion-handler.js', () => ({ default: vi.fn() }))
+vi.mock('../../../app/src/js/streamed-message.js', () => ({
+  renderStreamedMessage: (element, formattedMessage) => {
+    element.innerHTML = formattedMessage
+  }
+}))
 
 describe('chat client answer streams', () => {
   let client
@@ -82,7 +87,7 @@ describe('chat client answer streams', () => {
 
     handlers.get('leon:llm-token')({ generationId: 'draft', token: ' world' })
     expect(client.chatbot.createBubble).toHaveBeenCalledTimes(2)
-    expect(bubbles.get('draft').querySelector().appendChild).toHaveBeenCalledOnce()
+    expect(bubbles.get('draft').querySelector().innerHTML).toBe('Hello world')
   })
 
   it('removes rejected text and lets a non-streamed ending create its own bubble', () => {
