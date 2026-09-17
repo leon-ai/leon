@@ -12,12 +12,19 @@ export class AgentAnswerStream {
   ) {}
 
   /**
-   * Forwards provider text immediately; a stream-start marker clears retry text.
+   * Streams readable output; a stream-start marker clears retry text.
    */
   public push(token: string): void {
     if (!token) {
       this.discard()
       return
+    }
+
+    // Match the final answer's leading trim so provider padding never appears
+    // then disappears. Once text starts, preserve its spacing and line breaks.
+    if (!this.generationId) {
+      token = token.trimStart()
+      if (!token) return
     }
 
     this.generationId ??= StringHelper.random(6, { onlyLetters: true })
