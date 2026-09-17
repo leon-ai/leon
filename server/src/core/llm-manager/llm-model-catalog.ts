@@ -404,10 +404,6 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://platform.kimi.ai/docs/guide/kimi-k2-6-quickstart Model-specific reasoning support.
    */
   { provider: LLMProviders.MoonshotAI, model: 'kimi-k2.6', label: 'Kimi K2.6', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED },
-  /**
-   * @see https://platform.kimi.ai/docs/guide/kimi-k2-thinking Model-specific reasoning support.
-   */
-  { provider: LLMProviders.MoonshotAI, model: 'kimi-k2.5', label: 'Kimi K2.5', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED },
 
   /**
    * @see https://router.huggingface.co/v1/models
