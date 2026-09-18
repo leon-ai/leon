@@ -41,6 +41,7 @@ const TITLE_REASONING_MODE_OFF_PROVIDERS = [
   LLMProviders.ZAI,
   LLMProviders.DeepSeek,
   LLMProviders.MiniMax,
+  LLMProviders.AIMLAPI,
   LLMProviders.Anthropic,
   LLMProviders.MoonshotAI,
   LLMProviders.HuggingFace,
