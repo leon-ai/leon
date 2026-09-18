@@ -2,6 +2,11 @@ import os
 import base64
 import re
 import shlex
+import codecs
+import io
+import signal
+from queue import Empty, Queue
+from threading import Thread
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Optional, Union, List, Any, cast
 from pypdl import Pypdl
@@ -49,6 +54,8 @@ NVIDIA_LIBRARY_FOLDERS = [
 
 COMMAND_OUTPUT_PROGRESS_INTERVAL_SECONDS = 2.0
 COMMAND_OUTPUT_MAX_CHARS = 4_000
+COMMAND_OUTPUT_CHUNK_BYTES = 4_096
+COMMAND_READER_CLEANUP_SECONDS = 1.0
 
 
 # Command execution options
@@ -421,29 +428,93 @@ class BaseTool(ABC):
                 text=True,
                 cwd=exec_options.get("cwd") if exec_options else None,
                 env=self._get_command_env(),
+                start_new_session=not is_windows(),
             )
 
-            # Read output in real time
-            while True:
-                stdout_line = process.stdout.readline() if process.stdout else ""
-                stderr_line = process.stderr.readline() if process.stderr else ""
+            output_queue: Queue[tuple[str | Exception | None, bool]] = Queue()
+            timeout = exec_options.get("timeout") if exec_options else None
+            deadline = time.monotonic() + timeout if timeout else None
 
-                if stdout_line:
-                    output_buffer += stdout_line
-                    append_output_delta(stdout_line)
-                    if on_output:
-                        on_output(stdout_line, False)
-                    if on_progress:
-                        on_progress({"status": "running"})
+            def read_stream(stream: io.TextIOWrapper, is_error: bool) -> None:
+                # Separate readers prevent either pipe from filling while the
+                # other is idle. read1 also delivers prompts without a newline.
+                decoder = io.IncrementalNewlineDecoder(
+                    codecs.getincrementaldecoder(stream.encoding)(errors=stream.errors),
+                    translate=True,
+                )
+                try:
+                    while chunk := stream.buffer.read1(COMMAND_OUTPUT_CHUNK_BYTES):
+                        output = decoder.decode(chunk)
+                        if output:
+                            output_queue.put((output, is_error))
+                    output = decoder.decode(b"", final=True)
+                    if output:
+                        output_queue.put((output, is_error))
+                except Exception as error:
+                    output_queue.put((error, is_error))
+                finally:
+                    stream.close()
+                    output_queue.put((None, is_error))
 
-                if stderr_line:
-                    output_buffer += stderr_line
-                    append_output_delta(stderr_line)
-                    if on_output:
-                        on_output(stderr_line, True)
+            def record_output(output: str, is_error: bool) -> None:
+                nonlocal output_buffer
+                output_buffer += output
+                append_output_delta(output)
+                if on_output:
+                    on_output(output, is_error)
+                if on_progress and not is_error:
+                    on_progress({"status": "running"})
 
-                if process.poll() is not None:
-                    break
+            def remaining_time() -> Optional[float]:
+                if deadline is None:
+                    return None
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command_string, timeout)
+                return remaining
+
+            readers = [
+                Thread(target=read_stream, args=(stream, is_error), daemon=True)
+                for stream, is_error in [(process.stdout, False), (process.stderr, True)]
+                if stream is not None
+            ]
+            for reader in readers:
+                reader.start()
+
+            try:
+                open_streams = len(readers)
+                while open_streams:
+                    try:
+                        output, is_error = output_queue.get(timeout=remaining_time())
+                    except Empty:
+                        raise subprocess.TimeoutExpired(command_string, timeout) from None
+                    if output is None:
+                        open_streams -= 1
+                    elif isinstance(output, Exception):
+                        raise output
+                    else:
+                        record_output(output, is_error)
+                # EOF can precede process exit if the command closes its pipes.
+                process.wait(timeout=remaining_time())
+            finally:
+                if open_streams or process.poll() is None:
+                    try:
+                        # Shell descendants can otherwise keep the pipes open
+                        # after the shell itself exits or reaches its deadline.
+                        if is_windows():
+                            process.kill()
+                        else:
+                            os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+                for reader in readers:
+                    reader.join(timeout=COMMAND_READER_CLEANUP_SECONDS)
+                # Retain output already read when a timeout interrupts the loop.
+                while not output_queue.empty():
+                    output, is_error = output_queue.get_nowait()
+                    if isinstance(output, str):
+                        record_output(output, is_error)
 
             execution_time = int((time.time() - start_time) * 1000)
             flush_output_delta()
@@ -480,6 +551,14 @@ class BaseTool(ABC):
                     f"Command failed with exit code {process.returncode}: {output_buffer}"
                 )
 
+        except subprocess.TimeoutExpired as e:
+            flush_output_delta()
+            self.report(
+                "bridges.tools.command_timeout",
+                {"command": command_string, "timeout": f"{e.timeout}s"},
+                tool_group_id,
+            )
+            raise Exception(f"Command timed out after {e.timeout}s") from e
         except Exception as e:
             if "flush_output_delta" in locals():
                 flush_output_delta()
