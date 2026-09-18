@@ -7,6 +7,7 @@ import { WidgetWrapper, Flexbox, Loader, Text } from '@aurora'
 import renderAuroraComponent from './render-aurora-component'
 import ToolUIHandler from './tool-ui-handler'
 import { expandConversationTimeline } from './conversation-timeline'
+import { renderStreamedMessage } from './streamed-message.js'
 
 const WIDGETS_TO_FETCH = []
 const WIDGETS_FETCH_CACHE = new Map()
@@ -36,6 +37,12 @@ export default class Chatbot {
     this.noBubbleMessage = document.querySelector('#no-bubble')
     this.parsedBubbles = []
     this.reasoningBlocks = new Map()
+    this.pendingReasoningBlocks = new Set()
+    this.pendingStreamedMessages = new Map()
+    this.feedRenderFrame = null
+    this.feedScrollResetFrame = null
+    this.pendingFeedScroll = false
+    this.forceFeedScroll = false
     this.feedAutoScrollEnabled = true
     this.isProgrammaticFeedScroll = false
     this.widgetHydrationPromise = null
@@ -146,6 +153,62 @@ export default class Chatbot {
     this.feedAutoScrollEnabled = this.isElementNearBottom(this.feed)
   }
 
+  /**
+   * Coalesces streaming DOM writes before measuring either scroll container.
+   */
+  scheduleFeedRender() {
+    if (this.feedRenderFrame !== null) return
+
+    this.feedRenderFrame = requestAnimationFrame(() => {
+      this.feedRenderFrame = null
+      const reasoningBlocks = [...this.pendingReasoningBlocks]
+      this.pendingReasoningBlocks.clear()
+
+      for (const block of reasoningBlocks) {
+        this.appendReasoningText(block, block.pendingText)
+        block.pendingText = ''
+      }
+      for (const [element, message] of this.pendingStreamedMessages) {
+        // A rejected draft may have been removed before this frame was painted.
+        if (this.feed.contains(element)) {
+          renderStreamedMessage(element, this.formatMessage(message))
+        }
+      }
+      this.pendingStreamedMessages.clear()
+
+      for (const block of reasoningBlocks) {
+        this.scrollReasoningContentToBottom(block)
+      }
+      if (this.pendingFeedScroll &&
+          (this.forceFeedScroll || this.feedAutoScrollEnabled)) {
+        this.isProgrammaticFeedScroll = true
+        this.feed.scrollTo(0, this.feed.scrollHeight)
+        this.feedScrollResetFrame = requestAnimationFrame(() => {
+          this.feedScrollResetFrame = null
+          this.isProgrammaticFeedScroll = false
+          this.feedAutoScrollEnabled = this.isElementNearBottom(this.feed)
+        })
+      }
+      this.pendingFeedScroll = false
+      this.forceFeedScroll = false
+    })
+  }
+
+  /**
+   * Batches live answer formatting, but settles accepted text immediately.
+   */
+  renderStreamedMessage(element, message, shouldAnimate = true) {
+    if (!shouldAnimate) {
+      // The queued draft must never overwrite an accepted final answer.
+      this.pendingStreamedMessages.delete(element)
+      renderStreamedMessage(element, this.formatMessage(message), false)
+      return
+    }
+
+    this.pendingStreamedMessages.set(element, message)
+    this.scheduleFeedRender()
+  }
+
   scrollDown(options = {}) {
     if (!this.feed) {
       return
@@ -157,13 +220,9 @@ export default class Chatbot {
       return
     }
 
-    this.isProgrammaticFeedScroll = true
-    this.feed.scrollTo(0, this.feed.scrollHeight)
-
-    requestAnimationFrame(() => {
-      this.isProgrammaticFeedScroll = false
-      this.feedAutoScrollEnabled = this.isElementNearBottom(this.feed)
-    })
+    this.pendingFeedScroll = true
+    this.forceFeedScroll ||= force
+    this.scheduleFeedRender()
   }
 
   scrollReasoningContentToBottom(reasoningBlock) {
@@ -328,6 +387,14 @@ export default class Chatbot {
   }
 
   resetFeed() {
+    cancelAnimationFrame(this.feedRenderFrame)
+    cancelAnimationFrame(this.feedScrollResetFrame)
+    this.feedRenderFrame = null
+    this.feedScrollResetFrame = null
+    this.pendingReasoningBlocks.clear()
+    this.pendingStreamedMessages.clear()
+    this.pendingFeedScroll = false
+    this.forceFeedScroll = false
     WIDGETS_TO_FETCH.length = 0
     this.toolUIHandler.clearToolGroups()
     this.feed.innerHTML = ''
@@ -340,6 +407,7 @@ export default class Chatbot {
     this.parsedBubbles = []
     this.reasoningBlocks.clear()
     this.feedAutoScrollEnabled = true
+    this.isProgrammaticFeedScroll = false
   }
 
   async loadFeed() {
@@ -590,7 +658,8 @@ export default class Chatbot {
       reasoningBlock = {
         container,
         content,
-        text: '',
+        pendingText: '',
+        textNode: null,
         isAutoScrollEnabled: true,
         isProgrammaticScroll: false
       }
@@ -608,11 +677,32 @@ export default class Chatbot {
       this.reasoningBlocks.set(generationId, reasoningBlock)
     }
 
-    reasoningBlock.text += token
-    reasoningBlock.content.textContent = reasoningBlock.text
-    this.scrollReasoningContentToBottom(reasoningBlock)
+    reasoningBlock.pendingText += token
+    this.pendingReasoningBlocks.add(reasoningBlock)
+    this.scheduleFeedRender()
 
     return reasoningBlock.container
+  }
+
+  /**
+   * Preserves completed lines so appending text does not lay out the whole trace.
+   */
+  appendReasoningText(block, text) {
+    const lines = text.split('\n')
+    for (const [index, line] of lines.entries()) {
+      if (!block.textNode) {
+        const element = document.createElement('div')
+        block.textNode = document.createTextNode('')
+        element.appendChild(block.textNode)
+        block.content.appendChild(element)
+      }
+      block.textNode.appendData(line)
+      if (index < lines.length - 1) {
+        // Keep literal newlines for copying and empty lines under pre-wrap.
+        block.textNode.appendData('\n')
+        block.textNode = null
+      }
+    }
   }
 
   handleToolOutput(data) {

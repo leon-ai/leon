@@ -4,7 +4,6 @@ import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
-import { renderStreamedMessage } from './streamed-message.js'
 
 const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
 const LEON_EVENTS = {
@@ -84,6 +83,9 @@ export default class Client {
     }
 
     this.activeSessionId = sessionId
+    this._activeStreamGenerationId = null
+    this._answerGenerationId = 'xxx'
+    this._answerStreamText = ''
     this.chatbot.setSessionId(sessionId)
     this.socket.emit('session-change', sessionId)
     await this.chatbot.loadFeed()
@@ -295,9 +297,9 @@ export default class Client {
 
         // Apply final formatting immediately while the last streamed chunks
         // finish their own fades; acceptance must not restart or cut them short.
-        renderStreamedMessage(
+        this.chatbot.renderStreamedMessage(
           streamedBubbleContainerElement.querySelector('p.bubble'),
-          this.chatbot.formatMessage(answerText),
+          answerText,
           false
         )
         this.chatbot.updateBubbleMetrics(
@@ -422,9 +424,9 @@ export default class Client {
         )
       }
 
-      renderStreamedMessage(
+      this.chatbot.renderStreamedMessage(
         bubbleContainerElement.querySelector('p.bubble'),
-        this.chatbot.formatMessage(this._answerStreamText)
+        this._answerStreamText
       )
 
       this.chatbot.scrollDown()

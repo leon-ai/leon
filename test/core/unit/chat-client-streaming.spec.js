@@ -6,11 +6,6 @@ vi.mock('socket.io-client', () => ({ io: vi.fn() }))
 vi.mock('../../../app/src/js/chatbot', () => ({ default: vi.fn() }))
 vi.mock('../../../app/src/js/voice-energy', () => ({ default: vi.fn() }))
 vi.mock('../../../app/src/js/suggestion-handler.js', () => ({ default: vi.fn() }))
-vi.mock('../../../app/src/js/streamed-message.js', () => ({
-  renderStreamedMessage: (element, formattedMessage) => {
-    element.innerHTML = formattedMessage
-  }
-}))
 
 describe('chat client answer streams', () => {
   let client
@@ -37,6 +32,9 @@ describe('chat client answer streams', () => {
         scrollDown: vi.fn(),
         saveBubble: vi.fn(),
         formatMessage: (text) => text,
+        renderStreamedMessage: (element, text) => {
+          element.innerHTML = text
+        },
         updateBubbleMetrics: vi.fn(),
         createBubble: vi.fn(({ bubbleId, string }) => {
           const text = { innerHTML: string, appendChild: vi.fn() }

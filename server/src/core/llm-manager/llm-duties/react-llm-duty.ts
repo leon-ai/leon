@@ -1648,13 +1648,11 @@ export class ReActLLMDuty extends LLMDuty {
 
     this.responseTraceCollector.recordReasoning(generationId, token, phase)
     this.scheduleTraceSave()
-    const chunks = token.match(/(\s+|[^\s]+)/g) || [token]
-    for (const chunk of chunks) {
-      SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {
-        token: chunk,
-        generationId,
-        phase
-      })
-    }
+    // Preserve provider chunks; word-level events overwhelm long-running chat UIs.
+    SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {
+      token,
+      generationId,
+      phase
+    })
   }
 }
