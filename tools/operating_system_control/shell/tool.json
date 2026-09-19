@@ -13,7 +13,7 @@
   "functions": {
     "executeCommand": {
       "description": "Execute a command in the active platform shell and return the result.",
-      "progressive_guidance": "This tool waits for command completion; longRunning only extends the timeout. Run finite tasks directly. For existing background work, check its result before waiting again.",
+      "progressive_guidance": "This tool waits for command completion; longRunning only extends the timeout. Run finite tasks directly. Bash commands use ordinary exit-status semantics; fail-fast behavior requires an explicit set -e. Use && for dependent operations and test optional programs/files in if conditions so expected absence is reported without aborting an inventory scan. The final command determines the exit status unless the script exits explicitly; nonzero status is reported with captured stdout and stderr. For existing background work, check its result before waiting again.",
       "parameters": {
         "type": "object",
         "properties": {

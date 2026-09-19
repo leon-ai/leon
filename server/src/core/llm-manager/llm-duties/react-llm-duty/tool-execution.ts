@@ -383,7 +383,8 @@ export async function runToolExecution(
         RuntimeHelper.buildManagedRuntimeShellFunctions(),
         '',
         '# LLM-generated shell command starts here.',
-        'set -e',
+        // Preserve Bash semantics: an absent optional program must not abort a scan.
+        // Commands that require fail-fast behavior can explicitly enable set -e.
         command,
         ''
       ].join('\n')
