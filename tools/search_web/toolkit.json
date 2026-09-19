@@ -9,5 +9,6 @@
   "tools": [
     "hosted",
     "grok"
-  ]
+  ],
+  "progressive_guidance": "Prefer hosted.searchWeb for ordinary web searches when the active LLM provider is OpenAI, Anthropic, or DeepSeek. It reuses that provider and API key. Use Grok for X/social searches, when explicitly requested, or when hosted search is unavailable for the active provider/model."
 }

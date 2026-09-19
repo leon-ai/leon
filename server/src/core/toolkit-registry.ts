@@ -18,7 +18,8 @@ const HOSTED_SEARCH_TOOLKIT_ID = 'search_web'
 const HOSTED_SEARCH_TOOL_ID = 'hosted'
 const HOSTED_SEARCH_PROVIDERS = new Set<LLMProviders>([
   LLMProviders.OpenAI,
-  LLMProviders.Anthropic
+  LLMProviders.Anthropic,
+  LLMProviders.DeepSeek
 ])
 
 interface ToolkitToolDefinition {

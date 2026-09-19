@@ -1,5 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
+import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai'
 
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
@@ -7,10 +8,12 @@ import { ToolkitConfig } from '@sdk/toolkit-config'
 const TOOLKIT_ID = 'search_web'
 const TOOL_ID = 'hosted'
 const DEFAULT_MAX_OUTPUT_TOKENS = 2_000
-const DEFAULT_TEMPERATURE = 0.2
+const MAX_SEARCH_STEPS = 3
+const SEARCH_SYSTEM_PROMPT =
+  'Search the web to answer the user request. Base the answer on retrieved sources and cite their URLs. Return a concise, direct answer.'
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 
-type HostedSearchProvider = 'openai' | 'anthropic'
+type HostedSearchProvider = 'openai' | 'anthropic' | 'deepseek'
 
 interface HostedSearchOptions {
   provider?: 'auto' | HostedSearchProvider
@@ -37,12 +40,9 @@ interface ModelTarget {
   model: string
 }
 
-interface GenerationState {
-  text: string
-  usedInputTokens?: number
-  usedOutputTokens?: number
-}
-
+/**
+ * Searches through the active provider's server-executed web tool.
+ */
 export default class HostedTool extends Tool {
   private readonly config: ReturnType<typeof ToolkitConfig.load>
 
@@ -68,6 +68,9 @@ export default class HostedTool extends Tool {
     return this.config['description']
   }
 
+  /**
+   * Runs hosted web search using the selected provider and model.
+   */
   async searchWeb(
     query: string,
     options?: HostedSearchOptions
@@ -79,6 +82,9 @@ export default class HostedTool extends Tool {
     )
   }
 
+  /**
+   * Runs hosted web search using the selected provider and model.
+   */
   async searchOpenAI(
     query: string,
     options?: Omit<HostedSearchOptions, 'provider'>
@@ -90,6 +96,9 @@ export default class HostedTool extends Tool {
     )
   }
 
+  /**
+   * Runs hosted web search using the selected provider and model.
+   */
   async searchAnthropic(
     query: string,
     options?: Omit<HostedSearchOptions, 'provider'>
@@ -124,7 +133,7 @@ export default class HostedTool extends Tool {
     }
 
     throw new Error(
-      'The active LLM provider does not support hosted search. Choose provider openai or anthropic.'
+      'The active LLM provider does not support hosted search. Choose a supported provider from the searchWeb schema.'
     )
   }
 
@@ -133,8 +142,23 @@ export default class HostedTool extends Tool {
     target: ResolvedTarget,
     options?: Omit<HostedSearchOptions, 'provider'>
   ): Promise<HostedSearchResult> {
-    const state = await this.runHostedSearch(query, target, options)
-    const content = state.text.trim()
+    // generateText translates SDK tools into the provider's wire format and
+    // resumes deferred server tools without introducing another agent loop.
+    const result = await generateText({
+      model: this.createLanguageModel(target),
+      system: SEARCH_SYSTEM_PROMPT,
+      prompt: query,
+      maxOutputTokens: this.resolveMaxOutputTokens(options),
+      // Leave model defaults intact unless the caller explicitly requests this.
+      ...(typeof options?.temperature === 'number' &&
+      Number.isFinite(options.temperature)
+        ? { temperature: options.temperature }
+        : {}),
+      tools: { web_search: this.createHostedSearchTool(target.provider) },
+      stopWhen: stepCountIs(MAX_SEARCH_STEPS),
+      maxRetries: 0
+    })
+    const content = result.text.trim()
 
     if (!content) {
       throw new Error(
@@ -146,41 +170,16 @@ export default class HostedTool extends Tool {
       provider: target.provider,
       model: target.model,
       content,
-      ...(typeof state.usedInputTokens === 'number'
-        ? { used_input_tokens: state.usedInputTokens }
+      ...(typeof result.totalUsage.inputTokens === 'number'
+        ? { used_input_tokens: result.totalUsage.inputTokens }
         : {}),
-      ...(typeof state.usedOutputTokens === 'number'
-        ? { used_output_tokens: state.usedOutputTokens }
+      ...(typeof result.totalUsage.outputTokens === 'number'
+        ? { used_output_tokens: result.totalUsage.outputTokens }
         : {})
     }
   }
 
-  private async runHostedSearch(
-    query: string,
-    target: ResolvedTarget,
-    options?: Omit<HostedSearchOptions, 'provider'>
-  ): Promise<GenerationState> {
-    const maxOutputTokens = this.resolveMaxOutputTokens(options)
-    const temperature = this.resolveTemperature(options)
-    const callOptions: Record<string, unknown> = {
-      prompt: this.toPrompt(query),
-      maxOutputTokens,
-      temperature,
-      tools: [this.createHostedSearchTool(target.provider)]
-    }
-    const languageModel = this.createLanguageModel(target)
-    const result = await (
-      languageModel as {
-        doGenerate: (
-          options: Record<string, unknown>
-        ) => Promise<Record<string, unknown>>
-      }
-    ).doGenerate(callOptions)
-
-    return this.extractGenerationState(result)
-  }
-
-  private createLanguageModel(target: ResolvedTarget): unknown {
+  private createLanguageModel(target: ResolvedTarget): LanguageModel {
     if (target.provider === 'openai') {
       const apiKey = this.readRequiredEnv('LEON_OPENAI_API_KEY')
       const provider = createOpenAI({
@@ -191,10 +190,17 @@ export default class HostedTool extends Tool {
       return provider.responses(target.model)
     }
 
-    const apiKey = this.readRequiredEnv('LEON_ANTHROPIC_API_KEY')
+    // DeepSeek exposes native search through its Anthropic-compatible API.
+    // Its regular OpenAI-compatible chat endpoint does not provide this tool.
+    const isDeepSeek = target.provider === 'deepseek'
+    const apiKey = this.readRequiredEnv(
+      isDeepSeek ? 'LEON_DEEPSEEK_API_KEY' : 'LEON_ANTHROPIC_API_KEY'
+    )
     const provider = createAnthropic({
       apiKey,
-      baseURL: 'https://api.anthropic.com/v1'
+      baseURL: isDeepSeek
+        ? 'https://api.deepseek.com/anthropic/v1'
+        : 'https://api.anthropic.com/v1'
     })
 
     return provider(target.model)
@@ -202,94 +208,14 @@ export default class HostedTool extends Tool {
 
   private createHostedSearchTool(
     providerName: HostedSearchProvider
-  ): Record<string, unknown> {
+  ): ToolSet[string] {
     if (providerName === 'openai') {
       const provider = createOpenAI()
-      return provider.tools.webSearch() as unknown as Record<string, unknown>
+      return provider.tools.webSearch()
     }
 
     const provider = createAnthropic()
-    return provider.tools.webSearch_20250305({}) as unknown as Record<
-      string,
-      unknown
-    >
-  }
-
-  private toPrompt(query: string): Array<Record<string, unknown>> {
-    return [
-      {
-        role: 'system',
-        content:
-          'Answer the user request using hosted web search when current public information is needed. Return a concise, direct answer. Do not mention internal tool usage.'
-      },
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'text',
-            text: query
-          }
-        ]
-      }
-    ]
-  }
-
-  private extractGenerationState(result: Record<string, unknown>): GenerationState {
-    const state: GenerationState = {
-      text: ''
-    }
-    const content = Array.isArray(result['content'])
-      ? (result['content'] as Array<Record<string, unknown>>)
-      : []
-
-    for (const part of content) {
-      if (part['type'] === 'text' && typeof part['text'] === 'string') {
-        state.text += part['text']
-      }
-    }
-
-    this.appendUsage(state, result['usage'])
-
-    return state
-  }
-
-  private appendUsage(state: GenerationState, usage: unknown): void {
-    if (!usage || typeof usage !== 'object') {
-      return
-    }
-
-    const usageRecord = usage as Record<string, unknown>
-    const inputTokens =
-      this.readTokenCount(usageRecord['inputTokens']) ??
-      this.readTokenCount(usageRecord['input_tokens']) ??
-      this.readTokenCount(usageRecord['promptTokens']) ??
-      this.readTokenCount(usageRecord['prompt_tokens'])
-    const outputTokens =
-      this.readTokenCount(usageRecord['outputTokens']) ??
-      this.readTokenCount(usageRecord['output_tokens']) ??
-      this.readTokenCount(usageRecord['completionTokens']) ??
-      this.readTokenCount(usageRecord['completion_tokens'])
-
-    if (typeof inputTokens === 'number') {
-      state.usedInputTokens = inputTokens
-    }
-    if (typeof outputTokens === 'number') {
-      state.usedOutputTokens = outputTokens
-    }
-  }
-
-  private readTokenCount(value: unknown): number | undefined {
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value
-    }
-    if (value && typeof value === 'object') {
-      const total = (value as Record<string, unknown>)['total']
-      if (typeof total === 'number' && Number.isFinite(total)) {
-        return total
-      }
-    }
-
-    return undefined
+    return provider.tools.webSearch_20250305({})
   }
 
   private resolveModel(
@@ -318,15 +244,6 @@ export default class HostedTool extends Tool {
     return typeof value === 'number' && Number.isFinite(value)
       ? Math.max(1, Math.floor(value))
       : DEFAULT_MAX_OUTPUT_TOKENS
-  }
-
-  private resolveTemperature(
-    options?: Omit<HostedSearchOptions, 'provider'>
-  ): number {
-    return typeof options?.temperature === 'number' &&
-      Number.isFinite(options.temperature)
-      ? options.temperature
-      : DEFAULT_TEMPERATURE
   }
 
   private getActiveLLMTarget(): ModelTarget | null {
@@ -363,7 +280,8 @@ export default class HostedTool extends Tool {
   ): providerName is HostedSearchProvider {
     return (
       providerName === 'openai' ||
-      providerName === 'anthropic'
+      providerName === 'anthropic' ||
+      providerName === 'deepseek'
     )
   }
 

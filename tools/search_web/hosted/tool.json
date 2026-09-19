@@ -3,7 +3,7 @@
   "tool_id": "hosted",
   "toolkit_id": "search_web",
   "name": "Hosted LLM Search",
-  "description": "Native web search through the configured LLM provider. Reuses the same provider, model, and API key configured for the active LLM in .env.",
+  "description": "Web search through the active OpenAI, Anthropic, or DeepSeek provider using its configured API key.",
   "icon_name": "global-line",
   "author": {
     "name": "Louis Grenard",
@@ -12,7 +12,7 @@
   },
   "functions": {
     "searchWeb": {
-      "description": "Search the web using the active LLM provider's native hosted search when supported. Reuses the same provider, model, and API key configured for the active LLM in .env.",
+      "description": "Search the web using the active supported provider and its configured model and API key. Prefer this for ordinary web searches.",
       "hooks": {
         "post_execution": {
           "response_jq": ".result.content"
@@ -32,7 +32,8 @@
                 "enum": [
                   "auto",
                   "openai",
-                  "anthropic"
+                  "anthropic",
+                  "deepseek"
                 ]
               },
               "model": {
