@@ -12,12 +12,16 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 2_000
 const MAX_SEARCH_STEPS = 3
 const SEARCH_TIMEOUT_MS = 90_000
 const SEARCH_RESULT_LIMIT = 5
+const KIMI_SEARCH_TIMEOUT_SECONDS = 30
 const ZAI_SEARCH_URL = 'https://api.z.ai/api/paas/v4/chat/completions'
+const KIMI_SEARCH_URL = 'https://api.moonshot.ai/v1/tools/search_pro'
 const SEARCH_SYSTEM_PROMPT =
   'Search the web to answer the user request. Base the answer on retrieved sources and cite their URLs. Return a concise, direct answer.'
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 
-type HostedSearchProvider = 'openai' | 'anthropic' | 'deepseek' | 'openrouter' | 'zai'
+type HostedSearchProvider =
+  | 'openai' | 'anthropic' | 'deepseek'
+  | 'openrouter' | 'zai' | 'moonshotai'
 
 interface HostedSearchOptions {
   provider?: 'auto' | HostedSearchProvider
@@ -51,6 +55,16 @@ interface ZAISearchResponse {
   }>
   web_search?: Array<{ title: string, link: string, refer?: string }>
   usage?: { prompt_tokens?: number, completion_tokens?: number }
+}
+
+interface KimiSearchResponse {
+  search_results?: Array<{
+    title: string
+    url: string
+    date?: string
+    snippet?: string
+    chunks?: Array<{ text: string }>
+  }>
 }
 
 /**
@@ -157,6 +171,9 @@ export default class HostedTool extends Tool {
   ): Promise<HostedSearchResult> {
     if (target.provider === 'zai') {
       return this.searchZAI(query, target, options)
+    }
+    if (target.provider === 'moonshotai') {
+      return this.searchKimi(query, target)
     }
 
     // generateText translates SDK tools into the provider's wire format and
@@ -305,6 +322,38 @@ export default class HostedTool extends Tool {
   }
 
   /**
+   * Returns Kimi's ranked search passages for Leon's active model to synthesize.
+   */
+  private async searchKimi(
+    query: string,
+    target: ResolvedTarget
+  ): Promise<HostedSearchResult> {
+    // The standalone API replaces the retiring $web_search built-in tool and
+    // needs no extra model completion or legacy tool-call echo loop.
+    const data = await this.postSearch<KimiSearchResponse>(
+      KIMI_SEARCH_URL,
+      'LEON_MOONSHOTAI_API_KEY',
+      {
+        text_query: query,
+        limit: SEARCH_RESULT_LIMIT,
+        timeout_seconds: KIMI_SEARCH_TIMEOUT_SECONDS
+      }
+    )
+    if (!Array.isArray(data.search_results)) {
+      throw new Error('Kimi search returned an invalid search response.')
+    }
+    const content = data.search_results.map((source) => [
+      source.title,
+      source.url,
+      source.date,
+      source.snippet,
+      ...(source.chunks || []).map((chunk) => chunk.text)
+    ].filter(Boolean).join('\n')).join('\n\n')
+
+    return { ...target, content: content || 'No web search results were found.' }
+  }
+
+  /**
    * Bounds provider calls and propagates cancellation from the owning tool run.
    */
   private createSearchSignal(): AbortSignal {
@@ -401,7 +450,8 @@ export default class HostedTool extends Tool {
       providerName === 'anthropic' ||
       providerName === 'deepseek' ||
       providerName === 'openrouter' ||
-      providerName === 'zai'
+      providerName === 'zai' ||
+      providerName === 'moonshotai'
     )
   }
 

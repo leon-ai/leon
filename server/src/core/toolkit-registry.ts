@@ -21,7 +21,8 @@ const HOSTED_SEARCH_PROVIDERS = new Set<LLMProviders>([
   LLMProviders.Anthropic,
   LLMProviders.DeepSeek,
   LLMProviders.OpenRouter,
-  LLMProviders.ZAI
+  LLMProviders.ZAI,
+  LLMProviders.MoonshotAI
 ])
 
 interface ToolkitToolDefinition {

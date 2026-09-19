@@ -3,7 +3,7 @@
   "tool_id": "hosted",
   "toolkit_id": "search_web",
   "name": "Hosted LLM Search",
-  "description": "Web search through the active OpenAI, Anthropic, DeepSeek, OpenRouter, or Z.AI provider using its configured API key.",
+  "description": "Web search through the active OpenAI, Anthropic, DeepSeek, OpenRouter, Z.AI, or Kimi provider using its configured API key.",
   "icon_name": "global-line",
   "author": {
     "name": "Louis Grenard",
@@ -12,7 +12,7 @@
   },
   "functions": {
     "searchWeb": {
-      "description": "Search the web using the active supported provider and its configured model and API key. Prefer this for ordinary web searches. OpenRouter selects native search or its external fallback.",
+      "description": "Search the web using the active supported provider and its configured API key. Prefer this for ordinary web searches. OpenRouter selects native search or its external fallback; Kimi returns ranked source passages for you to synthesize.",
       "hooks": {
         "post_execution": {
           "response_jq": ".result.content"
@@ -35,7 +35,8 @@
                   "anthropic",
                   "deepseek",
                   "openrouter",
-                  "zai"
+                  "zai",
+                  "moonshotai"
                 ]
               },
               "model": {
@@ -54,7 +55,8 @@
         "required": [
           "query"
         ]
-      }
+      },
+      "progressive_guidance": "Kimi uses provider moonshotai and the standalone search API. Its model, temperature, and max_output_tokens options do not affect retrieval. Other providers use the selected model for a search-backed answer. If the provider/model rejects search, report the concrete error before choosing another search tool."
     },
     "searchOpenAI": {
       "description": "Search the web using OpenAI's native hosted web search and the configured LEON_OPENAI_API_KEY.",
