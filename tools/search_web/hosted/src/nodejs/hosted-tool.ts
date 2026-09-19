@@ -1,5 +1,6 @@
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 import { generateText, stepCountIs, type LanguageModel, type ToolSet } from 'ai'
 
 import { Tool } from '@sdk/base-tool'
@@ -9,11 +10,13 @@ const TOOLKIT_ID = 'search_web'
 const TOOL_ID = 'hosted'
 const DEFAULT_MAX_OUTPUT_TOKENS = 2_000
 const MAX_SEARCH_STEPS = 3
+const SEARCH_TIMEOUT_MS = 90_000
+const SEARCH_RESULT_LIMIT = 5
 const SEARCH_SYSTEM_PROMPT =
   'Search the web to answer the user request. Base the answer on retrieved sources and cite their URLs. Return a concise, direct answer.'
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 
-type HostedSearchProvider = 'openai' | 'anthropic' | 'deepseek'
+type HostedSearchProvider = 'openai' | 'anthropic' | 'deepseek' | 'openrouter'
 
 interface HostedSearchOptions {
   provider?: 'auto' | HostedSearchProvider
@@ -156,7 +159,8 @@ export default class HostedTool extends Tool {
         : {}),
       tools: { web_search: this.createHostedSearchTool(target.provider) },
       stopWhen: stepCountIs(MAX_SEARCH_STEPS),
-      maxRetries: 0
+      maxRetries: 0,
+      abortSignal: this.createSearchSignal()
     })
     const content = result.text.trim()
 
@@ -180,6 +184,12 @@ export default class HostedTool extends Tool {
   }
 
   private createLanguageModel(target: ResolvedTarget): LanguageModel {
+    if (target.provider === 'openrouter') {
+      return createOpenRouter({
+        apiKey: this.readRequiredEnv('LEON_OPENROUTER_API_KEY')
+      }).chat(target.model)
+    }
+
     if (target.provider === 'openai') {
       const apiKey = this.readRequiredEnv('LEON_OPENAI_API_KEY')
       const provider = createOpenAI({
@@ -209,6 +219,12 @@ export default class HostedTool extends Tool {
   private createHostedSearchTool(
     providerName: HostedSearchProvider
   ): ToolSet[string] {
+    if (providerName === 'openrouter') {
+      return createOpenRouter().tools.webSearch({
+        engine: 'auto',
+        maxResults: SEARCH_RESULT_LIMIT
+      })
+    }
     if (providerName === 'openai') {
       const provider = createOpenAI()
       return provider.tools.webSearch()
@@ -216,6 +232,15 @@ export default class HostedTool extends Tool {
 
     const provider = createAnthropic()
     return provider.tools.webSearch_20250305({})
+  }
+
+  /**
+   * Bounds provider calls and propagates cancellation from the owning tool run.
+   */
+  private createSearchSignal(): AbortSignal {
+    const timeout = AbortSignal.timeout(SEARCH_TIMEOUT_MS)
+    const signal = this.executionContext?.signal
+    return signal ? AbortSignal.any([signal, timeout]) : timeout
   }
 
   private resolveModel(
@@ -281,7 +306,8 @@ export default class HostedTool extends Tool {
     return (
       providerName === 'openai' ||
       providerName === 'anthropic' ||
-      providerName === 'deepseek'
+      providerName === 'deepseek' ||
+      providerName === 'openrouter'
     )
   }
 

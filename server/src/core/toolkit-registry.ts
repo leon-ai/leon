@@ -19,7 +19,8 @@ const HOSTED_SEARCH_TOOL_ID = 'hosted'
 const HOSTED_SEARCH_PROVIDERS = new Set<LLMProviders>([
   LLMProviders.OpenAI,
   LLMProviders.Anthropic,
-  LLMProviders.DeepSeek
+  LLMProviders.DeepSeek,
+  LLMProviders.OpenRouter
 ])
 
 interface ToolkitToolDefinition {
