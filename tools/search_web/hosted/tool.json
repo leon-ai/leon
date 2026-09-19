@@ -3,7 +3,7 @@
   "tool_id": "hosted",
   "toolkit_id": "search_web",
   "name": "Hosted LLM Search",
-  "description": "Web search through the active OpenAI, Anthropic, DeepSeek, or OpenRouter provider using its configured API key.",
+  "description": "Web search through the active OpenAI, Anthropic, DeepSeek, OpenRouter, or Z.AI provider using its configured API key.",
   "icon_name": "global-line",
   "author": {
     "name": "Louis Grenard",
@@ -34,7 +34,8 @@
                   "openai",
                   "anthropic",
                   "deepseek",
-                  "openrouter"
+                  "openrouter",
+                  "zai"
                 ]
               },
               "model": {

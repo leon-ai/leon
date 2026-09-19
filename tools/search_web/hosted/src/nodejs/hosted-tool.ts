@@ -12,11 +12,12 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 2_000
 const MAX_SEARCH_STEPS = 3
 const SEARCH_TIMEOUT_MS = 90_000
 const SEARCH_RESULT_LIMIT = 5
+const ZAI_SEARCH_URL = 'https://api.z.ai/api/paas/v4/chat/completions'
 const SEARCH_SYSTEM_PROMPT =
   'Search the web to answer the user request. Base the answer on retrieved sources and cite their URLs. Return a concise, direct answer.'
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 
-type HostedSearchProvider = 'openai' | 'anthropic' | 'deepseek' | 'openrouter'
+type HostedSearchProvider = 'openai' | 'anthropic' | 'deepseek' | 'openrouter' | 'zai'
 
 interface HostedSearchOptions {
   provider?: 'auto' | HostedSearchProvider
@@ -41,6 +42,15 @@ interface ResolvedTarget {
 interface ModelTarget {
   provider: string
   model: string
+}
+
+interface ZAISearchResponse {
+  choices?: Array<{
+    message?: { content?: string | null }
+    finish_reason?: string
+  }>
+  web_search?: Array<{ title: string, link: string, refer?: string }>
+  usage?: { prompt_tokens?: number, completion_tokens?: number }
 }
 
 /**
@@ -145,6 +155,10 @@ export default class HostedTool extends Tool {
     target: ResolvedTarget,
     options?: Omit<HostedSearchOptions, 'provider'>
   ): Promise<HostedSearchResult> {
+    if (target.provider === 'zai') {
+      return this.searchZAI(query, target, options)
+    }
+
     // generateText translates SDK tools into the provider's wire format and
     // resumes deferred server tools without introducing another agent loop.
     const result = await generateText({
@@ -235,12 +249,91 @@ export default class HostedTool extends Tool {
   }
 
   /**
+   * Uses GLM's search-in-chat extension, retaining source references in tool output.
+   */
+  private async searchZAI(
+    query: string,
+    target: ResolvedTarget,
+    options?: Omit<HostedSearchOptions, 'provider'>
+  ): Promise<HostedSearchResult> {
+    const data = await this.postSearch<ZAISearchResponse>(
+      ZAI_SEARCH_URL,
+      'LEON_ZAI_API_KEY',
+      {
+        model: target.model,
+        messages: [
+          { role: 'system', content: SEARCH_SYSTEM_PROMPT },
+          { role: 'user', content: query }
+        ],
+        max_tokens: this.resolveMaxOutputTokens(options),
+        ...(typeof options?.temperature === 'number' &&
+        Number.isFinite(options.temperature)
+          ? { temperature: options.temperature }
+          : {}),
+        tools: [{
+          type: 'web_search',
+          web_search: {
+            enable: true,
+            search_engine: 'search-prime',
+            search_result: true,
+            count: SEARCH_RESULT_LIMIT
+          }
+        }]
+      }
+    )
+    const answer = data.choices?.[0]?.message?.content?.trim()
+    // A model may ignore an unsupported search extension. Do not present its
+    // ungrounded answer as a successful search in that case.
+    if (!answer || !Array.isArray(data.web_search)) {
+      throw new Error(`Z.AI hosted search returned no answer or search evidence for ${target.model}.`)
+    }
+    if (data.choices?.[0]?.finish_reason === 'length') {
+      throw new Error('Z.AI hosted search reached its output limit before completing the answer.')
+    }
+    const sources = data.web_search.map((source) =>
+      `${source.refer || source.title}: ${source.link}`
+    ).join('\n')
+
+    return {
+      ...target,
+      content: sources ? `${answer}\n\nSources:\n${sources}` : answer,
+      ...(typeof data.usage?.prompt_tokens === 'number'
+        ? { used_input_tokens: data.usage.prompt_tokens } : {}),
+      ...(typeof data.usage?.completion_tokens === 'number'
+        ? { used_output_tokens: data.usage.completion_tokens } : {})
+    }
+  }
+
+  /**
    * Bounds provider calls and propagates cancellation from the owning tool run.
    */
   private createSearchSignal(): AbortSignal {
     const timeout = AbortSignal.timeout(SEARCH_TIMEOUT_MS)
     const signal = this.executionContext?.signal
     return signal ? AbortSignal.any([signal, timeout]) : timeout
+  }
+
+  /**
+   * Calls search endpoints whose request formats are not exposed by the SDK.
+   */
+  private async postSearch<T>(
+    url: string,
+    apiKeyEnv: string,
+    body: Record<string, unknown>
+  ): Promise<T> {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.readRequiredEnv(apiKeyEnv)}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body),
+      signal: this.createSearchSignal()
+    })
+    if (!response.ok) {
+      throw new Error(`Hosted search request failed: HTTP ${response.status} from ${new URL(url).hostname}.`)
+    }
+    return await response.json() as T
   }
 
   private resolveModel(
@@ -307,7 +400,8 @@ export default class HostedTool extends Tool {
       providerName === 'openai' ||
       providerName === 'anthropic' ||
       providerName === 'deepseek' ||
-      providerName === 'openrouter'
+      providerName === 'openrouter' ||
+      providerName === 'zai'
     )
   }
 
