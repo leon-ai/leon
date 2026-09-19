@@ -34,8 +34,6 @@ interface ExecuteOptions {
 }
 
 interface ProcessExecutionError extends Error {
-  stdout?: Buffer | string
-  stderr?: Buffer | string
   status?: number
   code?: number | string | null
 }
@@ -166,6 +164,9 @@ export default class ShellTool extends Tool {
     const attempts: ShellAttempt[] = []
     const attempt = 1
     const attemptStartedAt = Date.now()
+    // The SDK returns combined output; its callback preserves the two streams.
+    let stdout = ''
+    let stderr = ''
 
     try {
       if (requiresVisibleTerminal) {
@@ -201,7 +202,7 @@ export default class ShellTool extends Tool {
         }
       }
 
-      const resultOutput = await super.executeCommand({
+      await super.executeCommand({
         binaryName: shellInvocation.binaryName,
         args: shellInvocation.args,
         options: {
@@ -209,7 +210,11 @@ export default class ShellTool extends Tool {
           cwd,
           timeout: timeoutMs
         },
-        skipBinaryDownload: true
+        skipBinaryDownload: true,
+        onOutput: (output, isError): void => {
+          if (isError) stderr += output
+          else stdout += output
+        }
       })
       attempts.push({
         attempt,
@@ -221,16 +226,16 @@ export default class ShellTool extends Tool {
       return {
         success: true,
         commandSucceeded: true,
-        stdout: resultOutput.trim(),
-        stderr: '',
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
         returncode: 0,
         command,
         attempts
       }
     } catch (error: unknown) {
       const errorMessage = (error as Error).message
-      const processError = ShellTool.readProcessError(error)
-      const timedOut = ShellTool.isTimeoutErrorMessage(errorMessage)
+      const processExitCode = ShellTool.readExitCode(error)
+      const timedOut = processExitCode === -1 && ShellTool.isTimeoutErrorMessage(errorMessage)
       const durationMs = Date.now() - attemptStartedAt
 
       if (timedOut) {
@@ -239,8 +244,8 @@ export default class ShellTool extends Tool {
         return {
           success: false,
           error: timeoutMessage,
-          stdout: '',
-          stderr: timeoutMessage,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
           returncode: -1,
           command,
           attempts: [
@@ -258,66 +263,53 @@ export default class ShellTool extends Tool {
 
       if (
         errorMessage.includes('failed with exit code') ||
-        processError.exitCode !== -1
+        processExitCode !== -1
       ) {
         const exitCodeMatch = errorMessage.match(/exit code (\d+)/)
         const exitCode =
-          processError.exitCode !== -1
-            ? processError.exitCode
+          processExitCode !== -1
+            ? processExitCode
             : exitCodeMatch && exitCodeMatch[1]
               ? parseInt(exitCodeMatch[1], 10)
               : -1
-        const stderrMatch = errorMessage.match(/exit code \d+: ([\s\S]*)$/)
-        const parsedErrorOutput =
-          stderrMatch && stderrMatch[1] ? stderrMatch[1].trim() : errorMessage
-        const stderr =
-          processError.stderr || (processError.stdout ? '' : parsedErrorOutput)
-        const failureOutput = ShellTool.joinOutput([
-          processError.stdout,
-          stderr
-        ]) || errorMessage
+        // A process exit is a command failure, not an error message made from stdout.
+        const failureMessage = requiresVisibleTerminal
+          ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
+          : `Command exited with code ${exitCode}. Output may be incomplete.`
         const attemptResult: ShellAttempt = {
           attempt,
           timeoutMs,
           durationMs,
           status: 'error'
         }
-        attemptResult.error = failureOutput
+        attemptResult.error = failureMessage
         attempts.push(attemptResult)
 
         return {
           success: false,
           commandSucceeded: false,
-          error: requiresVisibleTerminal
-            ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
-            : failureOutput,
-          stdout: processError.stdout,
-          stderr: requiresVisibleTerminal
-            ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
-            : stderr,
+          error: failureMessage,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
           returncode: exitCode,
           command,
           attempts
         }
       }
 
-      const failureOutput = ShellTool.joinOutput([
-        processError.stdout,
-        processError.stderr
-      ]) || errorMessage
       attempts.push({
         attempt,
         timeoutMs,
         durationMs,
         status: 'error',
-        error: failureOutput
+        error: errorMessage
       })
 
       return {
         success: false,
-        error: failureOutput,
-        stdout: processError.stdout,
-        stderr: processError.stderr || errorMessage,
+        error: errorMessage,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
         returncode: -1,
         command,
         attempts
@@ -390,39 +382,15 @@ export default class ShellTool extends Tool {
     )
   }
 
-  private static readProcessError(error: unknown): {
-    stdout: string
-    stderr: string
-    exitCode: number
-  } {
+  private static readExitCode(error: unknown): number {
     const processError = error as ProcessExecutionError
-    const exitCode =
+    return (
       typeof processError.status === 'number'
         ? processError.status
         : typeof processError.code === 'number'
           ? processError.code
           : -1
-
-    return {
-      stdout: ShellTool.toOutputString(processError.stdout),
-      stderr: ShellTool.toOutputString(processError.stderr),
-      exitCode
-    }
-  }
-
-  private static toOutputString(output?: Buffer | string): string {
-    if (!output) {
-      return ''
-    }
-
-    return output.toString().trim()
-  }
-
-  private static joinOutput(outputs: string[]): string {
-    return outputs
-      .map((output) => output.trim())
-      .filter((output) => output.length > 0)
-      .join('\n')
+    )
   }
 
   async isSafeCommand(command: string): Promise<boolean> {

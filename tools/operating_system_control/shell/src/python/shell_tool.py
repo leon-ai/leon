@@ -98,6 +98,12 @@ class ShellTool(BaseTool):
         attempts: List[Dict[str, Any]] = []
         attempt = 1
         attempt_started_at = self._now_milliseconds()
+        # Preserve stream identity through the SDK's existing output callback.
+        stdout: List[str] = []
+        stderr: List[str] = []
+
+        def capture_output_chunk(output: str, is_error: bool) -> None:
+            (stderr if is_error else stdout).append(output)
 
         try:
             if requires_visible_terminal:
@@ -135,7 +141,7 @@ class ShellTool(BaseTool):
                     "attempts": attempts,
                 }
 
-            result_output = super().execute_command(
+            super().execute_command(
                 ExecuteCommandOptions(
                     binary_name=binary_name,
                     args=args,
@@ -145,14 +151,15 @@ class ShellTool(BaseTool):
                         "timeout": timeout_seconds,
                     },
                     skip_binary_download=True,
+                    on_output=capture_output_chunk,
                 )
             )
 
             return {
                 "success": True,
                 "commandSucceeded": True,
-                "stdout": result_output.strip(),
-                "stderr": "",
+                "stdout": "".join(stdout).strip(),
+                "stderr": "".join(stderr).strip(),
                 "returncode": 0,
                 "command": command,
                 "attempts": attempts
@@ -167,7 +174,7 @@ class ShellTool(BaseTool):
             }
         except Exception as error:
             error_message = str(error)
-            timed_out = self._is_timeout_error_message(error_message)
+            timed_out = "failed with exit code" not in error_message and self._is_timeout_error_message(error_message)
             duration_milliseconds = self._elapsed_milliseconds(attempt_started_at)
 
             if timed_out:
@@ -179,8 +186,9 @@ class ShellTool(BaseTool):
 
                 return {
                     "success": False,
-                    "stdout": "",
-                    "stderr": timeout_message,
+                    "error": timeout_message,
+                    "stdout": "".join(stdout).strip(),
+                    "stderr": "".join(stderr).strip(),
                     "returncode": -1,
                     "command": command,
                     "attempts": attempts
@@ -198,27 +206,26 @@ class ShellTool(BaseTool):
             if "failed with exit code" in error_message:
                 exit_code_match = re.search(r"exit code (\d+)", error_message)
                 exit_code = int(exit_code_match.group(1)) if exit_code_match else -1
-                stderr_match = re.search(r"exit code \d+: ([\s\S]*)$", error_message)
-                stderr = stderr_match.group(1) if stderr_match else error_message
-                failure_output = (
+                failure_message = (
                     f"Command failed in the visible terminal with exit code {exit_code}. Review that terminal for details."
                     if requires_visible_terminal
-                    else stderr
+                    else f"Command exited with code {exit_code}. Output may be incomplete."
                 )
                 attempt_result = {
                     "attempt": attempt,
                     "timeoutMs": timeout_milliseconds,
                     "durationMs": duration_milliseconds,
                     "status": "error",
-                    "error": failure_output,
+                    "error": failure_message,
                 }
                 attempts.append(attempt_result)
 
                 return {
                     "success": False,
                     "commandSucceeded": False,
-                    "stdout": "",
-                    "stderr": failure_output,
+                    "error": failure_message,
+                    "stdout": "".join(stdout).strip(),
+                    "stderr": "".join(stderr).strip(),
                     "returncode": exit_code,
                     "command": command,
                     "attempts": attempts,
@@ -236,8 +243,9 @@ class ShellTool(BaseTool):
 
             return {
                 "success": False,
-                "stdout": "",
-                "stderr": error_message,
+                "error": error_message,
+                "stdout": "".join(stdout).strip(),
+                "stderr": "".join(stderr).strip(),
                 "returncode": -1,
                 "command": command,
                 "attempts": attempts,
