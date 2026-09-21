@@ -535,7 +535,10 @@ Rules:
 usedInputTokens: ${completionResult.usedInputTokens}
 usedOutputTokens: ${completionResult.usedOutputTokens}`)
 
-      return completionResult as unknown as LLMDutyResult
+      return {
+        ...completionResult,
+        modelCalls: 1
+      } as unknown as LLMDutyResult
     } catch (e) {
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${e}`)

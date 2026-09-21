@@ -128,6 +128,7 @@ export async function runControlledSkill(
         const dutyUsage = dutyResult as (LLMDutyResult & {
           usedInputTokens?: number
           usedOutputTokens?: number
+          modelCalls?: number
         }) | null
         const baseMetrics = {
           profile_activation_ms: profileActivationMs,
@@ -135,7 +136,8 @@ export async function runControlledSkill(
           inference_duration_ms: inferenceDurationMs,
           router_response_ms: inferenceDurationMs,
           input_tokens: Number(dutyUsage?.usedInputTokens || 0),
-          output_tokens: Number(dutyUsage?.usedOutputTokens || 0)
+          output_tokens: Number(dutyUsage?.usedOutputTokens || 0),
+          model_calls: Number(dutyUsage?.modelCalls || 0)
         }
         const outputs = parseActionCallingOutput(dutyResult)
         const selected = outputs.length === 1 ? outputs[0] : null
