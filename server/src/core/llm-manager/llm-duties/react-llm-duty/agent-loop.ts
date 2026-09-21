@@ -1681,6 +1681,12 @@ function createToolkitLoaderTool(
   // Keep loaded toolkits addressable: context compaction can hide their schemas
   // temporarily, and a loader call makes that toolkit recent again.
   const toolkits = [...toolkitsById.values()]
+  const discoveredFunctions = [...new Set(toolkits
+    .filter((toolkit) => catalog.loadedToolkitIds.has(toolkit.id))
+    .flatMap((toolkit) => toolkit.tools.flatMap((tool) =>
+      Object.keys(TOOLKIT_REGISTRY.getToolFunctions(toolkit.id, tool.id) || {})
+        .map((name) => `${tool.id}.${name}`)
+    )))].sort()
   const toolkitCatalog = toolkits
     .map((toolkit) => {
       const tools = toolkit.tools
@@ -1717,13 +1723,13 @@ function createToolkitLoaderTool(
             type: 'string',
             description: 'Optional tool id to limit discovery to one tool in the toolkit.'
           },
-          functions: {
+          ...(discoveredFunctions.length > 0 ? { functions: {
             type: 'array',
             minItems: 1,
             uniqueItems: true,
-            items: { type: 'string' },
+            items: { type: 'string', enum: discoveredFunctions },
             description: 'Exact tool_id.function_name entries to load together. Omit to discover short summaries before choosing.'
-          }
+          } } : {})
         },
         required: ['toolkit_id'],
         additionalProperties: false

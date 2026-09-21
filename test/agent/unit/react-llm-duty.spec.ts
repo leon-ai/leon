@@ -1668,6 +1668,11 @@ describe('continuous agent loop', () => {
         })] }
         if (turn === 2) {
           expect(catalog.functionsByToolName.size).toBe(0)
+          const loader = tools.find((tool) => tool.function.name === AGENT_TOOLKIT_LOADER_NAME)
+          expect(loader?.function.parameters).toMatchObject({
+            properties: { functions: { items: { enum: expect.arrayContaining(['first.read', 'first.inspect']) } } }
+          })
+          expect(JSON.stringify(loader?.function.parameters)).not.toContain('first.first')
           expect(JSON.stringify(tools)).toContain('first.read: Summary for read.')
           expect(JSON.stringify(tools)).not.toContain('Detailed')
           expect(buildAgentProgressiveGuidanceSystemPrompt(catalog)).toContain('Shared first instructions.')
