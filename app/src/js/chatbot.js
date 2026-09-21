@@ -901,6 +901,18 @@ export default class Chatbot {
     )
     const tokenFormatter = new Intl.NumberFormat()
     const timestampMarkup = this.formatTimestampMarkup(sentAt)
+    const accounting = metrics.usageAccounting
+    const calls = Number(metrics.completionCount || 0)
+    const accountingLabels = []
+    if (accounting?.cacheReadCompletionCount > 0 && Number.isFinite(accounting.cachedInputTokens)) {
+      const coverage = accounting.cacheReadCompletionCount === calls && inputTokens > 0
+        ? `${(100 * accounting.cachedInputTokens / inputTokens).toFixed(1)}%`
+        : 'partial'
+      accountingLabels.push(`${tokenFormatter.format(accounting.cachedInputTokens)} cached (${coverage})`)
+    }
+    const accountingMarkup = accountingLabels.map((label) =>
+      `<span class="bubble-metric-item" title="Observed agent model calls only">${label}</span>`
+    ).join('')
 
     return `
       <span class="bubble-metric-item">
@@ -916,6 +928,7 @@ export default class Chatbot {
         <span>${tokensPerSecond.toFixed(2)} t/s</span>
       </span>
       ${timestampMarkup}
+      ${accountingMarkup}
     `.trim()
   }
 
