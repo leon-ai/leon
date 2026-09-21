@@ -194,6 +194,17 @@ export abstract class BuiltInCommand {
     return true
   }
 
+  /**
+   * Returns whether autocomplete should keep the command's supplied item order.
+   */
+  public shouldPreserveAutocompleteItemOrder(
+    context: BuiltInCommandAutocompleteContext
+  ): boolean {
+    void context
+
+    return false
+  }
+
   public async executePendingInput(
     context: BuiltInCommandPendingInputExecutionContext
   ): Promise<BuiltInCommandExecutionResult> {

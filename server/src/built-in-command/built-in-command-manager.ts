@@ -146,9 +146,13 @@ export class BuiltInCommandManager {
     return {
       mode: 'autocomplete',
       session,
-      suggestions: exactCommand.shouldRankAutocompleteItems(autocompleteContext)
-        ? this.rankSuggestions(dedupedSuggestions, parsedInput)
-        : this.sortSuggestionsAlphabetically(dedupedSuggestions),
+      suggestions: exactCommand.shouldPreserveAutocompleteItemOrder(
+        autocompleteContext
+      )
+        ? dedupedSuggestions
+        : exactCommand.shouldRankAutocompleteItems(autocompleteContext)
+          ? this.rankSuggestions(dedupedSuggestions, parsedInput)
+          : this.sortSuggestionsAlphabetically(dedupedSuggestions),
       recent_suggestions: this.getRecentSuggestions()
     }
   }

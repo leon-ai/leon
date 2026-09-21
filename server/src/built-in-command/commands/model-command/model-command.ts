@@ -56,6 +56,18 @@ export class ModelCommand extends BuiltInCommand {
     super('model')
   }
 
+  public override shouldIncludeCommandSuggestionInAutocomplete(
+    context: BuiltInCommandAutocompleteContext
+  ): boolean {
+    return !this.isCatalogModelSelection(context)
+  }
+
+  public override shouldPreserveAutocompleteItemOrder(
+    context: BuiltInCommandAutocompleteContext
+  ): boolean {
+    return this.isCatalogModelSelection(context)
+  }
+
   public override getAutocompleteItems(
     context: BuiltInCommandAutocompleteContext
   ): BuiltInCommandAutocompleteItem[] {
@@ -79,7 +91,9 @@ export class ModelCommand extends BuiltInCommand {
 
     if (
       context.args.length === 0 ||
-      (context.args.length === 1 && !context.ends_with_space)
+      (context.args.length === 1 &&
+        !context.ends_with_space &&
+        !modelState.isSupportedProvider(providerArgument))
     ) {
       const subcommandItems = MODEL_SETTING_SUBCOMMANDS
         .filter((subcommand) => subcommand.startsWith(providerArgument))
@@ -384,6 +398,16 @@ export class ModelCommand extends BuiltInCommand {
         ]
       })
     }
+  }
+
+  private isCatalogModelSelection(
+    context: BuiltInCommandAutocompleteContext
+  ): boolean {
+    const provider = context.args[0]?.toLowerCase() || ''
+    const modelState = CONFIG_STATE.getModelState()
+
+    return modelState.isSupportedProvider(provider) &&
+      getLLMModelCatalogEntries(provider).length > 0
   }
 
   private getModelSettingAutocompleteItems(
