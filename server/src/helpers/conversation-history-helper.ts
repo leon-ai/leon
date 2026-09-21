@@ -1,4 +1,5 @@
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
+import { readUsageAccounting } from '@/core/llm-manager/usage-accounting'
 import type {
   AgentResponseTrace,
   ConversationHistoryItem,
@@ -73,6 +74,7 @@ export class ConversationHistoryHelper {
     }
 
     const normalizedMetrics: LLMAnswerMetrics = {
+      usageAccounting: readUsageAccounting(record['usageAccounting']),
       inputTokens,
       outputTokens,
       totalTokens,
@@ -81,6 +83,7 @@ export class ConversationHistoryHelper {
     }
 
     const optionalNumberKeys = [
+      'completionCount',
       'finalAnswerOutputTokens',
       'finalAnswerDurationMs',
       'finalAnswerTokensPerSecond',

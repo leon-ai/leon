@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/usage-accounting'
 import { randomUUID } from 'node:crypto'
 
 import {
@@ -161,6 +162,7 @@ export class ReActLLMDuty extends LLMDuty {
   private completionCount = 0
   private continuationSummaryFailed = false
   private totalInputTokens = 0
+  private usageAccounting: UsageAccounting | undefined
   private totalOutputTokens = 0
   private totalVisibleOutputTokens = 0
   private totalOutputChars = 0
@@ -239,6 +241,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.completionCount = 0
     this.continuationSummaryFailed = false
     this.totalInputTokens = 0
+    this.usageAccounting = undefined
     this.totalOutputTokens = 0
     this.totalVisibleOutputTokens = 0
     this.totalOutputChars = 0
@@ -1148,6 +1151,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: completionResult.output,
       reasoning: completionResult.reasoning,
       usedInputTokens: completionResult.usedInputTokens,
+      accounting: completionResult.accounting,
       usedOutputTokens: completionResult.usedOutputTokens,
       providerDecodeDurationMs: completionResult.providerDecodeDurationMs,
       providerTokensPerSecond: completionResult.providerTokensPerSecond,
@@ -1408,6 +1412,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private observeCompletionMetrics(params: {
+    accounting?: CompletionAccounting | undefined
     phase: AgentPhase
     completionStartedAt: number
     completedAt: number
@@ -1424,6 +1429,7 @@ export class ReActLLMDuty extends LLMDuty {
       providerName: getLLMProviderName(),
       accumulator: {
         completionCount: this.completionCount,
+        usageAccounting: this.usageAccounting,
         totalInputTokens: this.totalInputTokens,
         totalOutputTokens: this.totalOutputTokens,
         totalVisibleOutputTokens: this.totalVisibleOutputTokens,
@@ -1438,6 +1444,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: params.output,
       reasoning: params.reasoning,
       usedInputTokens: params.usedInputTokens,
+      accounting: params.accounting,
       usedOutputTokens: params.usedOutputTokens,
       generationDurationMs: params.generationDurationMs,
       providerDecodeDurationMs: params.providerDecodeDurationMs,
@@ -1446,6 +1453,7 @@ export class ReActLLMDuty extends LLMDuty {
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
     this.completionCount = observedMetrics.accumulator.completionCount
+    this.usageAccounting = observedMetrics.accumulator.usageAccounting
     this.totalInputTokens = observedMetrics.accumulator.totalInputTokens
     this.totalOutputTokens = observedMetrics.accumulator.totalOutputTokens
     this.totalVisibleOutputTokens =
@@ -1582,6 +1590,7 @@ export class ReActLLMDuty extends LLMDuty {
     )
 
     const llmMetrics = deriveLLMMetrics({
+      usageAccounting: this.usageAccounting,
       completionCount: this.completionCount,
       providerName: getLLMProviderName(),
       normalizedOutput,

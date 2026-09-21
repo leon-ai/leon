@@ -50,7 +50,16 @@ describe('conversation trace persistence', () => {
     // A separate session can use the same request ID without crossing histories.
     await logger.upsert(draft, { sessionId: 'second' })
     const finished = {
-      ...draft, messageId: 'request:leon', message: 'Done', isAddedToHistory: true
+      ...draft, messageId: 'request:leon', message: 'Done', isAddedToHistory: true,
+      llmMetrics: {
+        completionCount: 2, inputTokens: 100, outputTokens: 20, totalTokens: 120,
+        durationMs: 100, tokensPerSecond: 200,
+        usageAccounting: {
+          cachedInputTokens: 80, cacheReadCompletionCount: 2, cacheWriteInputTokens: 0,
+          costUSD: 0.001, costCompletionCount: 1, estimatedCostCompletionCount: 1,
+          costSources: ['test pricing']
+        }
+      }
     }
     vi.mocked(Date.now).mockReturnValue(2_000)
     await Promise.all([
@@ -60,6 +69,9 @@ describe('conversation trace persistence', () => {
     // Repeated delivery of a final answer must still update the same turn.
     await logger.upsert(finished, { sessionId: 'first' })
     expect(await logger.loadAll({ sessionId: 'first' })).toEqual([{ ...finished, sentAt: 2_000 }])
+    const history = ConversationHistoryHelper.toHistoryItems(await logger.loadAll({ sessionId: 'first' }), { supportsWidgets: true })
+    expect(history[0]?.llmMetrics?.usageAccounting).toEqual(finished.llmMetrics.usageAccounting)
+    expect(history[0]?.llmMetrics?.completionCount).toBe(2)
     expect(await logger.loadAll({ sessionId: 'second' })).toEqual([{ ...draft, sentAt: 1_000 }])
   })
 })

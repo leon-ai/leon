@@ -1,4 +1,5 @@
 import { LLMProviders } from '@/core/llm-manager/types'
+import { accumulateUsageAccounting, type CompletionAccounting, type UsageAccounting } from '@/core/llm-manager/usage-accounting'
 
 import type { AgentPhase } from './types'
 
@@ -49,6 +50,7 @@ export interface PhaseMetricSnapshot extends RawPhaseMetric {
 export type PhaseMetricSnapshots = Record<AgentPhase, PhaseMetricSnapshot>
 
 export interface DerivedLLMMetrics {
+  usageAccounting?: UsageAccounting | undefined
   completionCount: number
   inputTokens: number
   outputTokens: number
@@ -70,6 +72,7 @@ export interface DerivedLLMMetrics {
 }
 
 export interface AccumulatedLLMMetricsState {
+  usageAccounting?: UsageAccounting | undefined
   completionCount: number
   totalInputTokens: number
   totalOutputTokens: number
@@ -86,6 +89,7 @@ export interface MeasureVisibleOutputOptions {
 }
 
 interface DeriveLLMMetricsOptions extends MeasureVisibleOutputOptions {
+  usageAccounting?: UsageAccounting | undefined
   completionCount: number
   providerName: LLMProviders
   normalizedOutput: string
@@ -100,6 +104,7 @@ interface DeriveLLMMetricsOptions extends MeasureVisibleOutputOptions {
 }
 
 export interface RecordCompletionMetricsParams {
+  accounting?: CompletionAccounting | undefined
   phase: AgentPhase
   usedInputTokens?: number | undefined
   usedOutputTokens?: number | undefined
@@ -111,6 +116,7 @@ export interface RecordCompletionMetricsParams {
 
 export interface ObserveCompletionMetricsOptions
   extends MeasureVisibleOutputOptions {
+  accounting?: CompletionAccounting | undefined
   providerName: LLMProviders
   accumulator: AccumulatedLLMMetricsState
   phase: AgentPhase
@@ -203,6 +209,7 @@ export function recordCompletionMetrics(
 ): AccumulatedLLMMetricsState {
   return {
     completionCount: accumulator.completionCount + 1,
+    usageAccounting: accumulateUsageAccounting(accumulator.usageAccounting, params.accounting),
     totalInputTokens: accumulator.totalInputTokens + (params.usedInputTokens ?? 0),
     totalOutputTokens:
       accumulator.totalOutputTokens + (params.usedOutputTokens ?? 0),
@@ -247,6 +254,7 @@ export function observeCompletionMetrics(
     visibleOutputTokens: outputMetrics.visibleOutputTokens,
     requestDurationMs,
     generationDurationMs: options.generationDurationMs,
+    accounting: options.accounting,
     outputChars: outputMetrics.outputChars
   })
 
@@ -484,6 +492,7 @@ export function deriveLLMMetrics(
   })
   return {
     completionCount: options.completionCount,
+    usageAccounting: options.usageAccounting,
     inputTokens: options.totalInputTokens,
     outputTokens: options.totalOutputTokens,
     totalTokens: options.totalInputTokens + options.totalOutputTokens,

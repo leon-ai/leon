@@ -14,6 +14,7 @@
  */
 
 import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
+import type { UsageAccounting } from '@/core/llm-manager/usage-accounting'
 
 export type Languages = typeof LANG_CONFIGS
 export type LongLanguageCode = keyof Languages
@@ -85,6 +86,7 @@ export interface ConversationWidgetData {
 }
 
 export interface LLMAnswerMetrics {
+  usageAccounting?: UsageAccounting | undefined
   completionCount?: number
   inputTokens: number
   outputTokens: number

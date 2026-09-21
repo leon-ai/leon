@@ -1,3 +1,4 @@
+import { readUsageAccounting } from '@/core/llm-manager/usage-accounting'
 import type {
   NLPSkill,
   NLPUtterance,
@@ -943,6 +944,7 @@ export default class NLU {
               ...(llmMetrics
                 ? {
                     llmMetrics: {
+                      usageAccounting: readUsageAccounting(llmMetrics['usageAccounting']),
                       completionCount: Number(llmMetrics['completionCount'] || 0),
                       inputTokens: Number(llmMetrics['inputTokens'] || 0),
                       outputTokens: Number(llmMetrics['outputTokens'] || 0),
