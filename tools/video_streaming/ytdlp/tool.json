@@ -18,6 +18,20 @@
     "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/yt-dlp-v2026.08.19/yt-dlp_2026.08.19-win-amd64.exe"
   },
   "functions": {
+    "getTranscript": {
+      "description": "Read a video's timestamped transcript and source metadata without downloading media. Returns bounded text, totalCues and nextCue (null at the end); subsequent pages reuse cached captions.",
+      "progressive_guidance": "Retrieve timestamped video transcripts without downloading media. Results are paginated; continue with nextCue using the same URL and language.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoUrl": { "type": "string" },
+          "languageCode": { "type": "string", "description": "Optional caption language; omit to select the source language." },
+          "startCue": { "type": "integer", "minimum": 0, "description": "Omit for the first page; otherwise pass the previous nextCue unchanged." }
+        },
+        "required": ["videoUrl"],
+        "additionalProperties": false
+      }
+    },
     "getVideoMetadata": {
       "description": "Inspect a single video's title, description, duration in seconds, chapters, creator, and music metadata (track, artist, album) when provided by the source, without downloading media. Use this for each extracted video URL to identify videos; preserve each result's ID/URL-to-title pairing rather than matching separate lists by position. If a visually transcribed URL fails, copy or re-extract it from the source before assuming the video is unavailable. Missing fields are omitted; music fields are not available for every video. Requires a video URL, not a playlist URL.",
       "parameters": {
