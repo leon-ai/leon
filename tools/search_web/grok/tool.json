@@ -367,6 +367,23 @@
           }
         }
       }
+    },
+    "fetchUrl": {
+      "description": "Read a specific URL using Grok when the owner explicitly requests Grok. Returns a model summary only after verified page opening, not raw page text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The exact public HTTP(S) URL to read."
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "progressive_guidance": "Prefer search_web.hosted.fetchUrl for the active supported provider. Otherwise use browser_use. Use this Grok reader only when explicitly requested, not as an automatic fetch fallback. If page opening fails or lacks evidence, use browser_use."
     }
   }
 }
