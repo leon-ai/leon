@@ -239,10 +239,18 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.OpenRouter, model: 'qwen/qwen3.8-flash', label: 'qwen/qwen3.8-flash', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
   /**
-   * @see https://openrouter.ai/xiaomi/mimo-v2.5-pro Model-specific reasoning support.
+   * @see https://openrouter.ai/xiaomi/mimo-v2.6-pro Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.5-pro', label: 'xiaomi/mimo-v2.5-pro', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
+  { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.6-pro', label: 'xiaomi/mimo-v2.6-pro', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
+  /**
+   * @see https://openrouter.ai/xiaomi/mimo-v2.6-flash
+   */
+  { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.6-flash', label: 'xiaomi/mimo-v2.6-flash', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
+  /**
+   * @see https://openrouter.ai/xiaomi/mimo-v2.6-pro-ultraspeed Dedicated model, distinct from OpenRouter fast routing.
+   */
+  { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.6-pro-ultraspeed', label: 'xiaomi/mimo-v2.6-pro-ultraspeed', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED },
   /**
    * @see https://openrouter.ai/z-ai/glm-5.3
    */
