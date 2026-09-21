@@ -449,6 +449,22 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(emit.mock.calls.map(([payload]) => payload.token)).toEqual(['Hello', ' world'])
   })
 
+  it('preserves non-streaming provider accounting', async () => {
+    openRouterMocks.languageModel.doGenerate.mockResolvedValue({
+      content: [{ type: 'text', text: 'Done.' }],
+      usage: { inputTokens: { total: 100, cacheRead: 80 }, outputTokens: { total: 20 } },
+      providerMetadata: { openrouter: { usage: { cost: 0.001 } } },
+      finishReason: { unified: 'stop' }
+    })
+    const response = await createOpenRouterProvider().runChatCompletion('Hello.', {
+      ...createCompletionParams(null), shouldStream: false
+    })
+    expect(response.data['usage']).toMatchObject({
+      prompt_tokens: 100, completion_tokens: 20,
+      accounting: { cachedInputTokens: 80, costUSD: 0.001, costEstimated: false }
+    })
+  })
+
   it('preserves streaming length finishes for agent recovery', async () => {
     openRouterMocks.languageModel.doStream.mockResolvedValue({
       stream: (async function* (): AsyncGenerator<Record<string, unknown>> {
@@ -459,9 +475,10 @@ describe('AISDKRemoteLLMProvider', () => {
             raw: 'max_tokens'
           },
           usage: {
-            inputTokens: { total: 100 },
+            inputTokens: { total: 100, cacheRead: 80 },
             outputTokens: { total: 1_024 }
-          }
+          },
+          providerMetadata: { openrouter: { usage: { cost: 0.001 } } }
         }
       })()
     })
@@ -476,5 +493,9 @@ describe('AISDKRemoteLLMProvider', () => {
     const choices = response.data['choices'] as Array<Record<string, unknown>>
 
     expect(choices[0]?.['finish_reason']).toBe('length')
+    expect(response.data['usage']).toMatchObject({
+      prompt_tokens: 100,
+      accounting: { cachedInputTokens: 80, costUSD: 0.001, costEstimated: false }
+    })
   })
 })

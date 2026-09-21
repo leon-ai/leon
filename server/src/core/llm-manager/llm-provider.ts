@@ -23,8 +23,10 @@ import {
   getRoutingModeLLMDisplay
 } from '@/core/llm-manager/llm-routing'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
 
 interface CompletionResult {
+  accounting?: CompletionAccounting | undefined
   dutyType: LLMDuties
   systemPrompt: string
   input: string
@@ -47,6 +49,7 @@ interface CompletionResult {
   toolCalls?: OpenAIToolCall[]
 }
 interface NormalizedCompletionResult {
+  accounting?: CompletionAccounting | undefined
   rawResult: string
   usedInputTokens: number
   usedOutputTokens: number
@@ -1155,6 +1158,7 @@ export default class LLMProvider {
 
     const result: NormalizedCompletionResult = {
       rawResult: normalizedContent,
+      accounting: readCompletionAccounting(usage),
       usedInputTokens:
         typeof usage['prompt_tokens'] === 'number'
           ? (usage['prompt_tokens'] as number)
@@ -1499,6 +1503,7 @@ export default class LLMProvider {
     const toolCalls = this.extractOpenAIResponsesToolCalls(parsedCompletionResult)
     const result: NormalizedCompletionResult = {
       rawResult: this.extractOpenAIResponsesText(parsedCompletionResult),
+      accounting: readCompletionAccounting(usage),
       usedInputTokens:
         typeof usage['input_tokens'] === 'number'
           ? (usage['input_tokens'] as number)
@@ -1580,6 +1585,7 @@ export default class LLMProvider {
 
     let textOutput = ''
     let reasoningOutput = ''
+    let accounting: CompletionAccounting = {}
     let usedInputTokens = 0
     let usedOutputTokens = 0
     let providerDecodeDurationMs = 0
@@ -1630,6 +1636,7 @@ export default class LLMProvider {
       usage: Record<string, unknown>,
       type: 'chat' | 'responses'
     ): void => {
+      accounting = { ...accounting, ...readCompletionAccounting(usage) }
       const inputTokens =
         type === 'chat'
           ? (usage['prompt_tokens'] ?? usage['promptTokens'])
@@ -2095,6 +2102,7 @@ export default class LLMProvider {
 
     return {
       rawResult: textOutput,
+      accounting,
       usedInputTokens,
       usedOutputTokens,
       ...(providerDecodeDurationMs > 0 ? { providerDecodeDurationMs } : {}),
@@ -2613,6 +2621,7 @@ export default class LLMProvider {
     let usedInputTokens = 0
     let usedOutputTokens = 0
     let generationDurationMs = 0
+    let accounting: CompletionAccounting | undefined
     let providerDecodeDurationMs: number | undefined
     let providerTokensPerSecond: number | undefined
     let toolCalls: OpenAIToolCall[] | undefined
@@ -2671,6 +2680,7 @@ export default class LLMProvider {
         ])) as NormalizedCompletionResult
 
         rawResult = normalized.rawResult
+        accounting = normalized.accounting
         usedInputTokens = normalized.usedInputTokens
         usedOutputTokens = normalized.usedOutputTokens
         providerDecodeDurationMs = normalized.providerDecodeDurationMs
@@ -2701,6 +2711,7 @@ export default class LLMProvider {
         )
 
         rawResult = normalized.rawResult
+        accounting = normalized.accounting
         usedInputTokens = normalized.usedInputTokens
         usedOutputTokens = normalized.usedOutputTokens
         providerDecodeDurationMs = normalized.providerDecodeDurationMs
@@ -2729,6 +2740,7 @@ export default class LLMProvider {
             )
 
         rawResult = normalized.rawResult
+        accounting = normalized.accounting
         usedInputTokens = normalized.usedInputTokens
         usedOutputTokens = normalized.usedOutputTokens
         providerDecodeDurationMs = normalized.providerDecodeDurationMs
@@ -2916,6 +2928,7 @@ export default class LLMProvider {
         ? { thoughtTokensBudget: completionParams.thoughtTokensBudget }
         : {}),
       // Current used context size
+      accounting,
       usedInputTokens,
       usedOutputTokens,
       generationDurationMs,

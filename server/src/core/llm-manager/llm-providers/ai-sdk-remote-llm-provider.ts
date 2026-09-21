@@ -36,6 +36,7 @@ import {
 } from '@/core/llm-manager/llm-model-catalog'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
+import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
 
 type AISDKFlavor =
   | 'openai-responses'
@@ -70,6 +71,7 @@ interface AISDKRemoteProviderConfig {
 }
 
 interface CallState {
+  accounting?: CompletionAccounting
   text: string
   reasoning: string
   toolCallsById: Record<
@@ -1064,6 +1066,7 @@ export default class AISDKRemoteLLMProvider {
     }
 
     const usageObject = usage as Record<string, unknown>
+    state.accounting = { ...state.accounting, ...readCompletionAccounting(usage) }
     const readTokenCount = (value: unknown): number | undefined => {
       if (typeof value === 'number' && Number.isFinite(value)) {
         return value
@@ -1211,7 +1214,8 @@ export default class AISDKRemoteLLMProvider {
       ],
       usage: {
         prompt_tokens: state.usedInputTokens,
-        completion_tokens: state.usedOutputTokens
+        completion_tokens: state.usedOutputTokens,
+        accounting: state.accounting ?? {}
       }
     }
   }
