@@ -27,6 +27,7 @@ export enum LLMProviders {
   ZAI = 'zai',
   DeepSeek = 'deepseek',
   MiniMax = 'minimax',
+  AIMLAPI = 'aimlapi',
   OpenAI = 'openai',
   Anthropic = 'anthropic',
   MoonshotAI = 'moonshotai',
