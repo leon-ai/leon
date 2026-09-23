@@ -68,7 +68,7 @@ export class LocalOcr {
       const resourceRoots = await this.resolveResources()
       this.stderr = ''
       this.process = execa(PYTHON, ['-u', path.join(DIRECTORY, 'ocr_worker.py'), ...resourceRoots], {
-        buffer: false, env: { PYTHONIOENCODING: 'utf-8' }
+        buffer: false, env: { PYTHONIOENCODING: 'utf-8', ORT_DISABLE_TELEMETRY: '1' }
       })
       this.process.catch(() => undefined)
       this.process.stderr!.on('data', (chunk: Buffer) => {

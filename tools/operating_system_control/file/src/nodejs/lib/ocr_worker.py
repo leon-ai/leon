@@ -2,9 +2,13 @@
 import base64
 from contextlib import redirect_stdout
 import json
+import os
 from pathlib import Path
 import sys
 from tempfile import TemporaryDirectory
+
+# RapidOCR imports ONNX Runtime; disable telemetry before either can initialize it.
+os.environ['ORT_DISABLE_TELEMETRY'] = '1'
 
 from rapidocr import RapidOCR, ModelType, OCRVersion
 import yaml
