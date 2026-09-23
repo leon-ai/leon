@@ -56,6 +56,25 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('bounds older successful UI evidence only when the full artifact is available', () => {
+    const transcript: AgentToolTranscriptMessage[] = []
+    for (let index = 0; index < 12; index += 1) {
+      transcript.push({ role: 'tool', toolCallId: String(index),
+        toolName: 'computer_use__cua__get_window_state',
+        content: JSON.stringify({ status: index === 1 ? 'error' : 'success',
+          ...(index !== 2 ? { output_log_path: `/logs/${index}.json` } : {}),
+          data: { output: { elements: 'Old screen '.repeat(400) } } }) })
+    }
+    const original = JSON.stringify(transcript)
+    const result = prepareAgentModelContext({ transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 96_000 })
+    expect(result.transcript[0]!.content.length).toBeLessThan(1_500)
+    expect(result.transcript[0]!.content).toContain('/logs/0.json')
+    expect(result.transcript[1]).toEqual(transcript[1])
+    expect(result.transcript[2]).toEqual(transcript[2])
+    expect(result.transcript.slice(-8)).toEqual(transcript.slice(-8))
+    expect(JSON.stringify(transcript)).toBe(original)
+    expect(result.estimatedInputTokens).toBeLessThan(result.estimatedInputTokensBeforePreparation)
+  })
   it.each(['computer_use__cua__get_window_state', 'browser_use__cli__screenshot'])('keeps only the two most recent %s screenshots', (toolName) => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Operate the app.' }

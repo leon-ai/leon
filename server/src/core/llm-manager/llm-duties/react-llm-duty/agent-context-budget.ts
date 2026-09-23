@@ -27,6 +27,7 @@ const TOOL_NAME_SEPARATOR = '__'
 const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
 const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
+const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 
 interface AgentModelContextParams {
   transcript: AgentToolTranscriptMessage[]
@@ -188,6 +189,34 @@ function retainRecentComputerUseImages(
       content: message.content
     }
   })
+}
+
+/**
+ * Old screen observations are reloadable evidence, not the current interface.
+ * Bound their request-only previews while leaving original history and the
+ * semantic continuation summarizer's input intact. Never trim failure details.
+ */
+function boundOlderUIObservations(
+  transcript: AgentToolTranscriptMessage[]
+): AgentToolTranscriptMessage[] {
+  let recentTools = 0
+  return [...transcript].reverse().map((message) => {
+    if (message.role !== 'tool') return message
+    recentTools += 1
+    if (recentTools <= SUMMARY_RECENT_EXCHANGES ||
+        !UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) ||
+        message.content.length <= OLDER_UI_OBSERVATION_MAX_CHARS) return message
+    try {
+      const observation = readRecord(JSON.parse(message.content))
+      const outputLogPath = observation?.['output_log_path'] || readRecord(observation?.['data'])?.['output_log_path']
+      if (!observation || observation['status'] !== 'success' ||
+          observation['observed_tool_failure'] ||
+          typeof outputLogPath !== 'string') return message
+      return { ...message, content: buildBoundedToolObservation({ ...observation, output_log_path: outputLogPath }, OLDER_UI_OBSERVATION_MAX_CHARS) }
+    } catch {
+      return message
+    }
+  }).reverse()
 }
 
 /**
@@ -421,6 +450,7 @@ export function prepareAgentModelContext(
     params.systemPrompt,
     params.tools
   )
+  const boundedTranscript = boundOlderUIObservations(imageBoundedTranscript)
   // Only discard reloadable schemas here. The continuity summary owns text
   // reduction, so its trigger sees the real cost of the original evidence.
   const tools = params.forceCompaction ||
@@ -428,12 +458,14 @@ export function prepareAgentModelContext(
     ? pruneInactiveToolkitSchemas(imageBoundedTranscript, params.tools)
     : params.tools
   return {
-    transcript: imageBoundedTranscript,
+    transcript: boundedTranscript,
     tools,
     estimatedInputTokensBeforePreparation,
     estimatedInputTokens: estimateAgentInputTokens(
-      imageBoundedTranscript, params.systemPrompt, tools
+      boundedTranscript, params.systemPrompt, tools
     ),
-    wasCompacted: tools.length < params.tools.length
+    wasCompacted: tools.length < params.tools.length || boundedTranscript.some(
+      (message, index) => message !== imageBoundedTranscript[index]
+    )
   }
 }
