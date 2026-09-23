@@ -20,7 +20,7 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'openai',
     requiredEnv: 'LEON_OPENAI_API_KEY',
-    llmTarget: 'openai/gpt-5.6-terra',
+    llmTarget: 'openai/gpt-6-luna',
     reasoning: 'low'
   },
   {
