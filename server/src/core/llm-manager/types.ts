@@ -46,14 +46,24 @@ export enum SlotFillingStatus {
 }
 
 /**
- * Canonical message format used by the agent loop. Tool calls and results
- * stay in their protocol roles instead of being rewritten into
- * a phase prompt before every inference.
+ * Encoded evidence carried by owner messages or tool results.
+ */
+export interface AgentModelFile {
+  dataBase64: string
+  mediaType: string
+  filename?: string
+  visualDetail?: 'auto' | 'low' | 'high'
+}
+
+/**
+ * Canonical agent transcript. Preserve tool protocol roles and attachments
+ * instead of rewriting each exchange into a text-only phase prompt.
  */
 export type AgentToolTranscriptMessage =
   | {
       role: 'user'
       content: string
+      files?: AgentModelFile[]
     }
   | {
       role: 'assistant'
@@ -66,12 +76,7 @@ export type AgentToolTranscriptMessage =
       toolCallId: string
       toolName: string
       content: string
-      files?: Array<{
-        dataBase64: string
-        mediaType: string
-        filename?: string
-        visualDetail?: 'auto' | 'low' | 'high'
-      }>
+      files?: AgentModelFile[]
     }
 
 export type PromptOrChatHistory = string | AgentToolTranscriptMessage[]

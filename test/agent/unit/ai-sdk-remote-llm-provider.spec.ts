@@ -60,11 +60,11 @@ interface ProviderWithPrivateCallOptions {
   ): Promise<{ data: Record<string, unknown> }>
 }
 
-function createOpenRouterProvider(): ProviderWithPrivateCallOptions {
+function createOpenRouterProvider(model = 'qwen/qwen3.8-flash'): ProviderWithPrivateCallOptions {
   const target: ResolvedLLMTarget = {
     provider: LLMProviders.OpenRouter,
-    model: 'qwen/qwen3.7-max',
-    label: 'openrouter/qwen/qwen3.7-max',
+    model,
+    label: `openrouter/${model}`,
     isLocal: false,
     isEnabled: true,
     isResolved: true
@@ -84,6 +84,32 @@ function createCompletionParams(
 }
 
 describe('AISDKRemoteLLMProvider', () => {
+  it.each(['audio/wav', 'video/mp4'])('preserves %s only for a cataloged native-media endpoint', (mediaType) => {
+    const options = createOpenRouterProvider('meta/muse-spark-1.3').buildCallOptions([
+      { role: 'user', content: 'Describe the attachment.', files: [{ dataBase64: 'bWVkaWE=', mediaType }] }
+    ], createCompletionParams(null))
+    expect(options['prompt']).toContainEqual({ role: 'user', content: [
+      { type: 'text', text: 'Describe the attachment.' },
+      { type: 'file', data: { type: 'data', data: 'bWVkaWE=' }, mediaType }
+    ] })
+  })
+  it.each(['z-ai/glm-5.3', 'unknown-model'])('keeps local fallback references without sending unsupported media to %s', (model) => {
+    const options = createOpenRouterProvider(model).buildCallOptions([{ role: 'user', content: 'Source: /local/image.png',
+      files: [{ dataBase64: 'aW1hZ2U=', mediaType: 'image/png' }] }], createCompletionParams(null))
+    expect(JSON.stringify(options['prompt'])).toContain('/local/image.png')
+    expect(JSON.stringify(options['prompt'])).toContain('local document extraction/OCR')
+    expect(JSON.stringify(options['prompt'])).not.toContain('aW1hZ2U=')
+  })
+  it('preserves owner image parts alongside the request without an auxiliary call', () => {
+    const provider = createOpenRouterProvider()
+    const options = provider.buildCallOptions([{ role: 'user', content: 'Read this page.',
+      files: [{ dataBase64: 'aW1hZ2U=', mediaType: 'image/png', filename: 'page.png' }] }], createCompletionParams(null))
+    expect(options['prompt']).toContainEqual({ role: 'user', content: [
+      { type: 'text', text: 'Read this page.' },
+      { type: 'file', data: { type: 'data', data: 'aW1hZ2U=' }, mediaType: 'image/png', filename: 'page.png' }
+    ] })
+    expect(openRouterMocks.languageModel.doGenerate).not.toHaveBeenCalled()
+  })
   it('retires an aborted websocket before another completion can reuse it', async () => {
     const controller = new AbortController()
     const transport = { close: vi.fn() }

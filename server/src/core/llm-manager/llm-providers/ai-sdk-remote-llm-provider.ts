@@ -382,6 +382,15 @@ export default class AISDKRemoteLLMProvider {
     transcript: AgentToolTranscriptMessage[]
   ): LanguageModelV4Prompt {
     const messages: LanguageModelV4Prompt = []
+    const supported = getLLMModelCatalogEntry(this.config.providerName as LLMProviders, this.model)?.inputMediaTypes
+    // A session can change models. Keep extracted text and source references,
+    // but never replay unsupported binary inputs or claim they were observed.
+    transcript = transcript.map((message) => {
+      if (message.role === 'assistant' || !message.files?.length) return message
+      const files = message.files.filter((file) => supported?.includes(file.mediaType))
+      if (files.length === message.files.length) return message
+      return { ...message, files, content: `${message.content}\n[Some media inputs were not sent: native support is unavailable or unverified for this model. Use the attached source paths with local document extraction/OCR or transcription tools. OCR/transcription cannot describe non-text visual content.]` }
+    })
 
     for (let index = 0; index < transcript.length; index += 1) {
       const message = transcript[index]!
@@ -389,7 +398,16 @@ export default class AISDKRemoteLLMProvider {
       if (message.role === 'user') {
         messages.push({
           role: 'user',
-          content: [{ type: 'text', text: message.content }]
+          content: [
+            { type: 'text', text: message.content },
+            ...(message.files || []).map((file) => ({
+              type: 'file' as const,
+              data: { type: 'data' as const, data: file.dataBase64 },
+              mediaType: file.mediaType,
+              ...(file.filename ? { filename: file.filename } : {}),
+              ...this.getVisualFileProviderOptions(file.visualDetail)
+            }))
+          ]
         })
         continue
       }

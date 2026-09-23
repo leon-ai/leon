@@ -535,6 +535,7 @@ export async function runToolExecution(
     typeof toolExecutionResult.data?.output_log_path === 'string'
       ? toolExecutionResult.data.output_log_path
       : null
+  delete observationData.output_log_path
   const toolOutput = toolExecutionResult.data?.output || {}
   const nestedResult = asRecord(toolOutput['result'])
   const toolOutputSuccess = toolOutput['success']
@@ -681,12 +682,9 @@ export async function runToolExecution(
     ...(effectiveStatus !== toolExecutionResult.status
       ? { raw_status: toolExecutionResult.status }
       : {}),
-    // Computer-use observations already expose a bounded result and focused
-    // query path. Keeping the full-log pointer encourages expensive reads of
-    // stale snapshots; retain it only for failures where diagnostics matter.
-    ...(outputLogPath &&
-      (toolkitId !== 'computer_use' ||
-        effectiveStatus === 'error')
+    // Keep one reference so older observations can be bounded without losing
+    // access to source evidence. Historical snapshots are not current UI state.
+    ...(outputLogPath
       ? { output_log_path: outputLogPath }
       : {}),
     message: effectiveMessage,
