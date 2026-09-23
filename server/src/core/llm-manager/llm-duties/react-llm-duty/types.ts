@@ -1,4 +1,5 @@
 import type { LLMDutyParams } from '@/core/llm-manager/llm-duty'
+import type { AgentModelFile } from '@/core/llm-manager/types'
 export interface AgentSkillContext {
   id: string
   name: string
@@ -43,6 +44,7 @@ export type AgentRunProgressEvent =
     }
 
 export interface ReactLLMDutyParams extends LLMDutyParams {
+  files?: AgentModelFile[]
   signal?: AbortSignal
   agentSkill?: AgentSkillContext | null
   forcedToolName?: string | null

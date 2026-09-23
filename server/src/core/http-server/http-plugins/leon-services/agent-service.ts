@@ -4,6 +4,7 @@ import type { AgentResponseTrace } from '@/types'
 import { CONVERSATION_LOGGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
@@ -42,8 +43,8 @@ export async function runAgent(
     const totalStartedAt = performance.now()
     await ensureActiveProfileRuntime()
     input.signal?.throwIfAborted()
-    const query = input.query.trim()
     const sessionId = resolveSessionId(input)
+    const { query, files } = await prepareOwnerAttachments(input.query.trim(), input.attachments, sessionId)
     const planSteps = new Map<
       string,
       HTTPPluginAgentTrace['plan_steps'][number]
@@ -98,6 +99,7 @@ export async function runAgent(
 
         const duty = new ReActLLMDuty({
           input: query,
+          ...(files.length ? { files } : {}),
           ...(input.signal ? { signal: input.signal } : {}),
           ...(input.additionalInstructions
             ? { additionalInstructions: input.additionalInstructions }

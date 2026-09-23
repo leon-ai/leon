@@ -1,5 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io'
+import type { AgentModelFile } from '@/core/llm-manager/types'
 import axios from 'axios'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
 
 import {
   LANG,
@@ -100,6 +102,7 @@ interface InitDataEvent {
 interface UtteranceDataEvent {
   client: string
   value: string
+  attachments?: AgentModelFile[]
   messageId?: string
   sentAt?: number
   commandContext?: {
@@ -808,8 +811,11 @@ export default class SocketServer {
           BRAIN.setIsTalkingWithVoice(false, { shouldInterrupt: true })
 
           BRAIN.isMuted = false
-          const processedData = await NLU.process(utterance, {
+          const prepared = await prepareOwnerAttachments(utterance, utteranceData.attachments, sessionId)
+          const processedData = await NLU.process(prepared.query, {
             ownerMessageId,
+            files: prepared.files,
+            hasAttachments: Boolean(utteranceData.attachments?.length),
             ...(utteranceData.commandContext?.forcedRoutingMode
               ? {
                   forcedRoutingMode:
@@ -1096,6 +1102,7 @@ export default class SocketServer {
               await this.handleOwnerMessage(socket, {
                 client: chatClient.client,
                 value: message,
+                ...(payload.attachments ? { attachments: payload.attachments } : {}),
                 ...(payload.messageId ? { messageId: payload.messageId } : {}),
                 ...(typeof payload.sentAt === 'number'
                   ? { sentAt: payload.sentAt }

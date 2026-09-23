@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 import type { APIOptions } from '@/core/http-server/http-server'
+import type { AgentModelFile } from '@/core/llm-manager/types'
 
 export interface HTTPPluginAuthConfig {
   enabled: boolean
@@ -15,6 +16,7 @@ export interface HTTPPluginRuntimeConfig {
 
 export interface HTTPPluginRunAgentInput {
   query: string
+  attachments?: AgentModelFile[]
   /**
    * Cancels this turn and its active tools; supplied in-process by the plugin.
    */

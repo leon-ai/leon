@@ -1,4 +1,5 @@
 import type { RoutingMode } from '@/types'
+import type { AgentModelFile } from '@/core/llm-manager/types'
 
 export const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
 
@@ -43,6 +44,7 @@ export interface LeonClientInterfaceInitPayload {
 
 export interface LeonClientInterfaceUtterancePayload {
   value: string
+  attachments?: AgentModelFile[]
   conversationId?: string
   messageId?: string
   sentAt?: number

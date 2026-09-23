@@ -11,6 +11,7 @@ import {
   LEON_VERSION,
   LEON_NODE_ENV,
   IS_TELEMETRY_ENABLED,
+  OWNER_ATTACHMENT_BODY_LIMIT,
   TMP_PATH
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
@@ -47,7 +48,7 @@ export interface APIOptions {
 export default class HTTPServer {
   private static instance: HTTPServer
 
-  private fastify = Fastify()
+  private fastify = Fastify({ bodyLimit: OWNER_ATTACHMENT_BODY_LIMIT })
 
   public httpServer = this.fastify.server
 

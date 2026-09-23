@@ -12,6 +12,7 @@ import type {
   SkillAnswerCoreData
 } from '@/core/brain/types'
 import {
+  type AgentModelFile,
   type ActionCallingMissingParamsOutput,
   type ActionCallingOutput,
   ActionCallingStatus,
@@ -859,7 +860,8 @@ export default class NLU {
   private async runReAct(
     utterance: NLPUtterance,
     agentSkillName?: NLPSkill,
-    forcedToolName?: string
+    forcedToolName?: string,
+    files?: AgentModelFile[]
   ): Promise<void> {
     LogHelper.title('NLU')
     LogHelper.info('Routing to ReAct...')
@@ -876,6 +878,7 @@ export default class NLU {
 
     const reactDuty = new ReActLLMDuty({
       input: utterance,
+      ...(files?.length ? { files } : {}),
       agentSkill: agentSkillContext,
       ...(forcedToolName ? { forcedToolName } : {})
     })
@@ -1415,6 +1418,8 @@ export default class NLU {
     utterance: NLPUtterance,
     options?: {
       ownerMessageId?: string
+      files?: AgentModelFile[]
+      hasAttachments?: boolean
       forcedRoutingMode?: RoutingMode
       forcedSkillName?: NLPSkill
       forcedToolName?: string
@@ -1479,7 +1484,7 @@ export default class NLU {
             }
 
             const routingDecision = this.getRoutingDecision(
-              options?.forcedRoutingMode
+              options?.hasAttachments || options?.files?.length ? RoutingMode.Agent : options?.forcedRoutingMode
             )
             const persistedOwnerUtterances =
               routingDecision.route === this.routingRoutes.controlled
@@ -1526,7 +1531,8 @@ export default class NLU {
               await this.runReAct(
                 forcedAgentSkillName ? workflowUtterance : toolUtterance,
                 forcedAgentSkillName,
-                options?.forcedToolName
+                options?.forcedToolName,
+                options?.files
               )
               return resolve(null)
             }

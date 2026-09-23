@@ -190,6 +190,7 @@ export class ReActLLMDuty extends LLMDuty {
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
   private readonly signal: AbortSignal | undefined
+  private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
 
@@ -204,6 +205,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     this.input = params.input
+    this.files = params.files
     this.signal = params.signal
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
@@ -410,6 +412,7 @@ export class ReActLLMDuty extends LLMDuty {
       if (continuation) {
         transcript.push({
           role: 'user',
+          ...(this.files?.length ? { files: this.files } : {}),
           content: [
             '<clarification_response>',
             ownerInput,
@@ -420,6 +423,7 @@ export class ReActLLMDuty extends LLMDuty {
         const agentRequest = await this.buildAgentRequest(caller, originalInput)
         transcript.push({
           role: 'user',
+          ...(this.files?.length ? { files: this.files } : {}),
           content: [agentRequest, preloadedToolkitContext]
             .filter(Boolean)
             .join('\n\n')
