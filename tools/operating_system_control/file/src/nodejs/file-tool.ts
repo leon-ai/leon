@@ -100,7 +100,12 @@ export default class FileTool extends Tool {
     // Plain file operations should not initialize the PDF and canvas runtimes.
     if (!this.documentReader) {
       const { DocumentReader } = await import('./lib/document-reader')
-      this.documentReader = new DocumentReader()
+      // Separate groups avoid collisions between the official inference.onnx filenames.
+      this.documentReader = new DocumentReader(undefined, () => Promise.all([
+        this.getResourcePath('PaddleOCR-v6-small-det'),
+        this.getResourcePath('PaddleOCR-v6-small-rec'),
+        this.getResourcePath('RapidOCR-text-orientation')
+      ]))
     }
     return this.documentReader
   }

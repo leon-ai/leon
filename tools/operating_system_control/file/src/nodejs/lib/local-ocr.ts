@@ -27,6 +27,11 @@ export class LocalOcr {
   private disposed = false
 
   /**
+   * Resolve managed resources lazily so text-only reads need no OCR download.
+   */
+  public constructor(private readonly resolveResources?: () => Promise<string[]>) {}
+
+  /**
    * Serialize requests so concurrent tool calls cannot mix OCR responses.
    */
   public recognize(image: Buffer): Promise<OcrResult> {
@@ -59,8 +64,10 @@ export class LocalOcr {
 
   private async request(image: Buffer): Promise<OcrResult> {
     if (!this.process) {
+      if (!this.resolveResources) throw new Error('OCR requires the file tool resource resolver.')
+      const resourceRoots = await this.resolveResources()
       this.stderr = ''
-      this.process = execa(PYTHON, ['-u', path.join(DIRECTORY, 'ocr_worker.py')], {
+      this.process = execa(PYTHON, ['-u', path.join(DIRECTORY, 'ocr_worker.py'), ...resourceRoots], {
         buffer: false, env: { PYTHONIOENCODING: 'utf-8' }
       })
       this.process.catch(() => undefined)

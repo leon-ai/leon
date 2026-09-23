@@ -43,12 +43,17 @@ interface ModelFile {
 export class DocumentReader {
   private readonly cache = new Map<string, { signature: string, text: string, layout?: DocumentLayout, size: number }>()
   private readonly pdf = new PDFReader()
-  private readonly ocr = new LocalOcr()
+  private readonly ocr: LocalOcr
 
   /**
    * Allow a local OCR backend to be evaluated without changing PDF extraction.
    */
-  public constructor(private readonly localOcr?: (image: Buffer) => Promise<OcrResult>) {}
+  public constructor(
+    private readonly localOcr?: (image: Buffer) => Promise<OcrResult>,
+    resolveOcrResources?: () => Promise<string[]>
+  ) {
+    this.ocr = new LocalOcr(resolveOcrResources)
+  }
 
   /**
    * Convert Office/PDF documents once, then paginate cached Markdown.

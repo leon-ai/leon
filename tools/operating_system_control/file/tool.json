@@ -10,6 +10,18 @@
     "email": "louis@getleon.ai",
     "url": "https://x.com/grenlouis"
   },
+  "resources": {
+    "PaddleOCR-v6-small-det": [
+      "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx/resolve/28fe5895c24fd108c19eb3e8479f4ab385fbfc62/inference.onnx"
+    ],
+    "PaddleOCR-v6-small-rec": [
+      "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/b8f84f0b80c529de40b4fbb3544b84fa7233a513/inference.onnx",
+      "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/b8f84f0b80c529de40b4fbb3544b84fa7233a513/inference.yml"
+    ],
+    "RapidOCR-text-orientation": [
+      "https://huggingface.co/SWHL/RapidOCR/resolve/1cfba2e90fc938db55889873735088de210cc173/PP-OCRv1/ch_ppocr_mobile_v2.0_cls_infer.onnx"
+    ]
+  },
   "functions": {
     "readDocument": {
       "description": "Extract PDF with LiteParse, or Word, Excel, PowerPoint, OpenDocument, EPUB, RTF and CSV with AnyDoc, as cached local Markdown.",

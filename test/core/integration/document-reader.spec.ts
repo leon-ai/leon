@@ -8,6 +8,7 @@ import { DocumentReader } from '@@/tools/operating_system_control/file/src/nodej
 import { LocalOcr } from '@@/tools/operating_system_control/file/src/nodejs/lib/local-ocr'
 import { sliceLayout } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-layout'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { LEON_TOOLKITS_PATH } from '@bridge/constants'
 
 const profile = vi.hoisted(() => ({ sessions: '' }))
 vi.mock('@/constants', () => ({ OWNER_ATTACHMENT_MAX_BYTES: 8 * 1_024 * 1_024 }))
@@ -15,6 +16,11 @@ vi.mock('@/core/profile-runtime/profile-paths', () => ({ getProfilePaths: (): ty
 
 let directory: string | undefined
 let reader: DocumentReader
+
+// Prepared through FileTool.getResourcePath, not RapidOCR's private cache.
+const resolveOcrResources = async (): Promise<string[]> => [
+  'PaddleOCR-v6-small-det', 'PaddleOCR-v6-small-rec', 'RapidOCR-text-orientation'
+].map((resource) => path.join(LEON_TOOLKITS_PATH, 'operating_system_control', 'assets', resource))
 
 afterEach(async () => {
   await reader?.dispose()
@@ -46,7 +52,7 @@ it('extracts, caches, invalidates and renders PDF evidence without a model call'
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-document-'))
   const file = path.join(directory, 'sample.pdf')
   await fs.writeFile(file, pdf('Document total: 123.45'))
-  reader = new DocumentReader()
+  reader = new DocumentReader(undefined, resolveOcrResources)
   const first = await reader.readPdf(file, { render: true, layout: true })
   expect(first.data).toMatchObject({ totalPages: 1, nextPage: null,
     pages: [{ page: 1, text: expect.stringContaining('Document total: 123.45'), cached: false }] })
@@ -109,7 +115,7 @@ it('serializes local OCR responses, recovers after bad input and releases its wo
   reader = new DocumentReader()
   const { files } = await reader.readPdf(file, { render: true })
   const image = Buffer.from(files[0]!.dataBase64, 'base64')
-  const ocr = new LocalOcr()
+  const ocr = new LocalOcr(resolveOcrResources)
   try {
     await expect(ocr.recognize(Buffer.from('not an image'))).rejects.toThrow()
     // Two concurrent callers must receive separate responses, not share listeners.

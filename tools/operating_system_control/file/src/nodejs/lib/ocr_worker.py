@@ -2,25 +2,50 @@
 import base64
 from contextlib import redirect_stdout
 import json
+from pathlib import Path
 import sys
+from tempfile import TemporaryDirectory
 
 from rapidocr import RapidOCR, ModelType, OCRVersion
+import yaml
 
-MODEL_SIZE = ModelType.TINY
+MODEL_SIZE = ModelType.SMALL
 CPU_THREADS = 2
 
 
-def create_engine(model_size=MODEL_SIZE):
+def create_engine(detection_root, recognition_root, orientation_root):
     """Pin the multilingual model and CPU budget instead of library defaults."""
     import onnxruntime
     onnxruntime.disable_telemetry_events()
-    return RapidOCR(params={
-        'Det.model_type': model_size, 'Rec.model_type': model_size,
-        'Det.ocr_version': OCRVersion.PPOCRV6, 'Rec.ocr_version': OCRVersion.PPOCRV6,
-        'EngineConfig.onnxruntime.intra_op_num_threads': CPU_THREADS,
-        'EngineConfig.onnxruntime.inter_op_num_threads': 1,
-        'Global.log_level': 'warning',
-    })
+    # Match the relative paths retained by the SDK resource downloader.
+    models = {
+        'Det.model_path': detection_root / 'inference.onnx',
+        'Rec.model_path': recognition_root / 'inference.onnx',
+        'Cls.model_path': orientation_root / 'PP-OCRv1/ch_ppocr_mobile_v2.0_cls_infer.onnx',
+    }
+    for model in models.values():
+        if not model.is_file():
+            raise FileNotFoundError(f'Missing managed OCR resource: {model}')
+    with (recognition_root / 'inference.yml').open(encoding='utf-8') as config:
+        characters = yaml.safe_load(config)['PostProcess']['character_dict']
+    if not isinstance(characters, list) or not characters or not all(
+        isinstance(character, str) for character in characters
+    ):
+        raise ValueError('Invalid OCR character dictionary')
+    # Official exports keep the alphabet in YAML. RapidOCR reads its text form once
+    # at initialization; a private temporary file avoids modifying shared resources.
+    with TemporaryDirectory(prefix='leon-ocr-') as directory:
+        dictionary = Path(directory) / 'characters.txt'
+        dictionary.write_text('\n'.join(characters) + '\n', encoding='utf-8')
+        return RapidOCR(params={
+            **{key: str(value) for key, value in models.items()},
+            'Rec.rec_keys_path': str(dictionary),
+            'Det.model_type': MODEL_SIZE, 'Rec.model_type': MODEL_SIZE,
+            'Det.ocr_version': OCRVersion.PPOCRV6, 'Rec.ocr_version': OCRVersion.PPOCRV6,
+            'EngineConfig.onnxruntime.intra_op_num_threads': CPU_THREADS,
+            'EngineConfig.onnxruntime.inter_op_num_threads': 1,
+            'Global.log_level': 'warning',
+        })
 
 
 def main():
@@ -31,7 +56,7 @@ def main():
             request = json.loads(line)
             with redirect_stdout(sys.stderr):
                 if engine is None:
-                    engine = create_engine()
+                    engine = create_engine(*(Path(root) for root in sys.argv[1:4]))
                 # Empty OCR results may omit the source image; retain its size.
                 image = engine.load_img(base64.b64decode(request['image'], validate=True))
                 result = engine(image)

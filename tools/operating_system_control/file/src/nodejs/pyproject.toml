@@ -1,4 +1,4 @@
 [project]
 name = "leon-file-ocr"
 version = "0.1.0"
-dependencies = ["rapidocr==3.9.2", "onnxruntime==1.30.0"]
+dependencies = ["rapidocr==3.9.2", "onnxruntime==1.30.0", "PyYAML==6.0.3"]
