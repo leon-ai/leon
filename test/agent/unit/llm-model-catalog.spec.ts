@@ -105,5 +105,43 @@ describe('LLM model catalog', () => {
       model: 'gpt-6-astra',
       recommended: true
     })
+    expect(getLLMModelCatalogEntries(LLMProviders.Anthropic)[0]).toMatchObject({
+      model: 'claude-opus-5-5',
+      recommended: true
+    })
+    expect(getLLMModelCatalogEntry(
+      LLMProviders.Anthropic,
+      'claude-fable-5-1'
+    )?.recommended).toBeUndefined()
+  })
+
+  it.each([
+    [LLMProviders.Anthropic, 'claude-opus-5-5'],
+    [LLMProviders.OpenRouter, 'anthropic/claude-opus-5.5']
+  ] as const)('protects Opus 5.5 request constraints for %s', (provider, model) => {
+    expect(getLLMModelCatalogEntry(provider, model)).toMatchObject({
+      recommended: true,
+      supportsForcedToolChoice: false,
+      supportsTemperature: false,
+      reasoning: ['auto', 'low', 'medium', 'high', 'xhigh', 'max'],
+      speed: ['auto', 'normal', 'fast']
+    })
+    expect(canDisableLLMModelReasoning(provider, model)).toBe(false)
+  })
+
+  it.each([
+    [LLMProviders.OpenAI, 'gpt-6-sol'],
+    [LLMProviders.OpenAI, 'gpt-6-luna'],
+    [LLMProviders.OpenRouter, 'openai/gpt-6-sol'],
+    [LLMProviders.OpenRouter, 'openai/gpt-6-sol-pro'],
+    [LLMProviders.OpenRouter, 'openai/gpt-6-luna'],
+    [LLMProviders.OpenRouter, 'openai/gpt-6-luna-pro']
+  ] as const)('allows optional reasoning for %s/%s', (provider, model) => {
+    expect(getLLMModelCatalogEntry(provider, model)).toMatchObject({
+      supportsTemperature: false,
+      reasoning: ['auto', 'none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      speed: ['auto', 'normal', 'fast']
+    })
+    expect(canDisableLLMModelReasoning(provider, model)).toBe(true)
   })
 })

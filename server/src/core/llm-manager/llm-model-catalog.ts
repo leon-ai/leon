@@ -63,6 +63,7 @@ const OPENAI_GPT_56_REASONING = [
   'xhigh',
   'max'
 ] as const satisfies readonly LLMModelReasoning[]
+const OPENAI_GPT_6_REASONING = OPENAI_GPT_56_REASONING
 const OPENAI_GPT_55_REASONING = [
   'auto',
   'none',
@@ -167,6 +168,22 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-astra-pro', label: 'openai/gpt-6-astra-pro', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
+   * @see https://openrouter.ai/openai/gpt-6-sol
+   */
+  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-sol', label: 'openai/gpt-6-sol', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
+   * @see https://openrouter.ai/openai/gpt-6-sol-pro
+   */
+  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-sol-pro', label: 'openai/gpt-6-sol-pro', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
+   * @see https://openrouter.ai/openai/gpt-6-luna
+   */
+  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-luna', label: 'openai/gpt-6-luna', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
+   * @see https://openrouter.ai/openai/gpt-6-luna-pro
+   */
+  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-luna-pro', label: 'openai/gpt-6-luna-pro', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
    * @see https://openrouter.ai/openai/gpt-5.6-sol Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
@@ -196,6 +213,10 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
   { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.4-mini', label: 'openai/gpt-5.4-mini', reasoning: OPENAI_GPT_54_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
+   * @see https://openrouter.ai/anthropic/claude-opus-5.5
+   */
+  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-opus-5.5', label: 'anthropic/claude-opus-5.5', recommended: true, supportsForcedToolChoice: false, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://openrouter.ai/anthropic/claude-fable-5.1
    */
@@ -303,6 +324,14 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.OpenAI, model: 'gpt-6-astra', label: 'GPT-6 Astra', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
+   * @see https://developers.openai.com/api/docs/models/gpt-6-sol
+   */
+  { provider: LLMProviders.OpenAI, model: 'gpt-6-sol', label: 'GPT-6 Sol', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
+   * @see https://developers.openai.com/api/docs/models/gpt-6-luna
+   */
+  { provider: LLMProviders.OpenAI, model: 'gpt-6-luna', label: 'GPT-6 Luna', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.6-sol Model-specific reasoning support.
    * @see https://developers.openai.com/api/docs/guides/fast-mode Model-specific fast service tier.
    */
@@ -337,9 +366,13 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   { provider: LLMProviders.OpenAI, model: 'gpt-5.4-nano', label: 'GPT-5.4 nano', reasoning: OPENAI_GPT_54_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
 
   /**
+   * @see https://platform.claude.com/docs/en/models/opus-5-5/overview
+   */
+  { provider: LLMProviders.Anthropic, model: 'claude-opus-5-5', label: 'Claude Opus 5.5', recommended: true, supportsForcedToolChoice: false, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
    * @see https://platform.claude.com/docs/en/models/fable-5-1/overview
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-fable-5-1', label: 'Claude Fable 5.1', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-fable-5-1', label: 'Claude Fable 5.1', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/models/mythos-5-1/overview
    */
