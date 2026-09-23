@@ -298,7 +298,9 @@ describe('CuaRuntime', () => {
     }
   })
 
-  it.each(['insert', 'replace'])('focuses once before typing with mode=%s', async (mode) => {
+  it.each([
+    ['insert', 'type'], ['replace', 'type'], ['insert', 'paste'], ['replace', 'paste']
+  ])('focuses once before text input with mode=%s method=%s', async (mode, method) => {
     const observationResult = {
       text: 'Desktop captured.',
       images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
@@ -343,6 +345,7 @@ describe('CuaRuntime', () => {
         y: 0,
         text: 'OpenRouter',
         mode,
+        method,
         capture_after: false
       },
       profileName: PROFILE_NAME,
@@ -353,7 +356,7 @@ describe('CuaRuntime', () => {
       'get_desktop_state',
       'click',
       ...(mode === 'replace' ? ['hotkey'] : []),
-      'type_text'
+      ...(method === 'paste' ? ['clipboard_write', 'hotkey'] : ['type_text'])
     ])
     expect(JSON.parse(driver.callTool.mock.calls[1]![1])).toEqual({
       target: { kind: 'desktop', display_id: 'primary' },
@@ -362,8 +365,13 @@ describe('CuaRuntime', () => {
     })
     expect(JSON.parse(driver.callTool.mock.calls.at(-1)![1])).toEqual({
       target: { kind: 'desktop', display_id: 'primary' },
-      text: 'OpenRouter'
+      ...(method === 'paste'
+        ? { keys: [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'v'] }
+        : { text: 'OpenRouter' })
     })
+    if (method === 'paste') {
+      expect(JSON.parse(driver.callTool.mock.calls.at(-2)![1])).toEqual({ text: 'OpenRouter' })
+    }
 
     if (mode === 'replace') {
       expect(JSON.parse(driver.callTool.mock.calls[2]![1])).toEqual({
@@ -1101,9 +1109,12 @@ describe('CuaRuntime', () => {
     expect(driver.callTool).not.toHaveBeenCalled()
   })
 
-  it('preserves batch refusal diagnostics and stops before the next input', async () => {
+  it.each([
+    ['permission_denied', { status: 'refused', refusal: { code: 'permission_denied' } }],
+    ['delivery_failed', { success: true, effect: 'unverifiable', escalation: { reason: 'delivery_failed' } }]
+  ])('stops before the next input when the driver reports %s', async (code, payload) => {
     const driver = createDriver({ images: [], text: '', isError: false,
-      structuredJson: JSON.stringify({ status: 'refused', refusal: { code: 'permission_denied' } }) })
+      structuredJson: JSON.stringify(payload) })
     const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
@@ -1114,8 +1125,8 @@ describe('CuaRuntime', () => {
       ] }
     })
     expect(result.output).toMatchObject({ completed_action_count: 0,
-      error_code: 'permission_denied',
-      steps: [{ action: 'type_text', success: false, error_code: 'permission_denied' }] })
+      error_code: code,
+      steps: [{ action: 'type_text', success: false, error_code: code }] })
     expect(driver.callTool).toHaveBeenCalledTimes(1)
   })
 

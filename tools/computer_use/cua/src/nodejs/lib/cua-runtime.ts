@@ -1,4 +1,4 @@
-import { ComputerUseTextInputMode, ComputerUseZoomPurpose } from './types'
+import { ComputerUseTextInputMethod, ComputerUseTextInputMode, ComputerUseZoomPurpose } from './types'
 import type { CuaExecutionContext as ToolExecutionContext,
   CapturedComputerUseState,
   ComputerUseDriver,
@@ -531,7 +531,10 @@ export class CuaRuntime {
       return 'Automatic session recovery failed. Report this technical blocker and preserve completed work; do not ask the owner to restart an unspecified computer-use session.'
     }
     if (failureCode === 'delivery_failed') {
-      return 'Refresh the window list and target the actual dialog window if one is open; the parent window cannot receive modal keyboard input. Reassess the target before retrying.'
+      return 'Input delivery failed or was partial. Inspect the resulting field before retrying. Target the actual dialog if one is open. For unreliable character entry, use type_text with method=paste and mode=replace on the verified field; do not append another copy or start a shell clipboard helper.'
+    }
+    if (failureCode === 'surface_identity_unproven') {
+      return 'The compositor cannot establish this window\'s pixel geometry. Do not repeat the same window capture or use its reported bounds for clicks. If foreground interaction is permitted, capture get_desktop_state and use its capture_target and attached-image coordinates; semantic window tokens remain a separate option.'
     }
     if (failureCode === CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE) {
       return 'The target is covered. Inspect covering_windows or a fresh desktop screenshot first: a task-related dialog may own focus in another process. Complete that dialog using its own window target or fresh desktop pixels before returning to the parent. For an unrelated covering window, use bring_to_front if foreground interaction is permitted. Otherwise use semantic observation without a screenshot. Never address the parent using the covering window\'s pixels.'
@@ -861,14 +864,19 @@ export class CuaRuntime {
       return driver.callTool(action, JSON.stringify(parameters))
     }
     const mode = parameters['mode'] ?? ComputerUseTextInputMode.Insert
+    const method = parameters['method'] ?? ComputerUseTextInputMethod.Type
     if (!Object.values(ComputerUseTextInputMode).includes(mode as ComputerUseTextInputMode)) {
       throw new Error('type_text mode must be insert or replace.')
+    }
+    if (!Object.values(ComputerUseTextInputMethod).includes(method as ComputerUseTextInputMethod)) {
+      throw new Error('type_text method must be type or paste.')
     }
     const hasPixelTarget = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
     const hasElementTarget = parameters['element_token'] != null || parameters['element_index'] != null
     const typeParameters = { ...parameters }
     delete typeParameters['mode']
-    if (hasPixelTarget || (mode === ComputerUseTextInputMode.Replace && hasElementTarget)) {
+    delete typeParameters['method']
+    if (hasPixelTarget || ((mode === ComputerUseTextInputMode.Replace || method === ComputerUseTextInputMethod.Paste) && hasElementTarget)) {
       // Focus once before selection. Clicking again after select-all would
       // collapse the selection and append instead of replacing the value.
       const clickParameters = { ...typeParameters }
@@ -889,6 +897,17 @@ export class CuaRuntime {
       if (hasCuaError(selected) || this.resultCompactor.getStructuredFailure(selectionOutput)) return selected
     }
     signal?.throwIfAborted()
+    if (method === ComputerUseTextInputMethod.Paste) {
+      // Cua owns clipboard lifetime, including Wayland selection ownership.
+      // Do not restore immediately: the app may consume the paste asynchronously.
+      const written = await driver.callTool('clipboard_write', JSON.stringify({ text: typeParameters['text'] }))
+      const writtenOutput = parseJsonRecord(written.structuredJson) || parseJsonRecord(written.rawJson)
+      if (hasCuaError(written) || this.resultCompactor.getStructuredFailure(writtenOutput)) return written
+      signal?.throwIfAborted()
+      const pasteParameters: Record<string, unknown> = { ...typeParameters, keys: [COMPUTER_USE_SELECT_ALL_KEYS[0], 'v'] }
+      delete pasteParameters['text']
+      return driver.callTool('hotkey', JSON.stringify(pasteParameters))
+    }
     return driver.callTool('type_text', JSON.stringify(typeParameters))
   }
 

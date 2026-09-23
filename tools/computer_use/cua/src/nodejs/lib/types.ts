@@ -33,6 +33,11 @@ export enum ComputerUseTextInputMode {
   Replace = 'replace'
 }
 
+export enum ComputerUseTextInputMethod {
+  Type = 'type',
+  Paste = 'paste'
+}
+
 export enum ComputerUseInteractionMode {
   Background = 'background',
   Visible = 'visible'

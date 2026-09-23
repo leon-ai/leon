@@ -1640,11 +1640,16 @@
     },
     "type_text": {
       "description": "Type into a field; use mode=replace to focus once, select all and replace its value. Inspect the returned observation to verify the result.",
-      "progressive_guidance": "Use mode=replace to focus, select all and replace a field. Verify the entered value in the returned observation. Reuse focus only while the intended field remains active. If its value did not change, re-locate it and check where input landed before retrying; selected rows or page content are not text-field focus.",
+      "progressive_guidance": "For exact, multilingual or multiline field values, prefer method=paste using Cua's clipboard; it replaces clipboard text. Use mode=replace to focus once and replace the field value. Verify the returned observation before continuing. If input is partial or unchanged, inspect focus before retrying; do not append another copy or create shell clipboard helpers.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
+          "method": {
+            "type": "string",
+            "enum": ["type", "paste"],
+            "description": "type (default) uses driver typing; paste writes clipboard text and pastes once into the target. Paste replaces the current clipboard contents."
+          },
           "capture_after": {
             "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"

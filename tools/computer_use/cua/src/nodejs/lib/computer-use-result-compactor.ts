@@ -59,6 +59,14 @@ export class ComputerUseResultCompactor {
     }
 
     const escalation = asRecord(result['escalation'])
+    // Some drivers put partial delivery only in escalation.reason while the
+    // outer action still says success. Stop the batch instead of losing text.
+    if (escalation?.['reason'] === 'delivery_failed') {
+      return {
+        code: 'delivery_failed',
+        message: 'Input delivery failed or was partial; inspect the resulting state before retrying.'
+      }
+    }
     if (
       !hasText(result['code']) ||
       (!escalation &&
