@@ -32,7 +32,7 @@ interface CompletionResult {
   input: string
   output: string
   data: Record<string, unknown> | null
-  maxTokens: number
+  maxTokens: number | undefined
   thoughtTokensBudget?: number
   usedInputTokens: number
   usedOutputTokens: number
@@ -2178,8 +2178,12 @@ export default class LLMProvider {
     completionParams.systemPrompt = completionParams.systemPrompt ?? ''
     completionParams.temperature =
       completionParams.temperature ?? DEFAULT_TEMPERATURE
-    completionParams.maxTokens =
-      completionParams.maxTokens ?? DEFAULT_MAX_TOKENS
+    // Agent output includes reasoning and tool arguments. Let remote adapters
+    // apply model defaults instead of imposing a small workflow-sized ceiling.
+    if (completionParams.dutyType !== LLMDuties.ReAct ||
+      LOCAL_SERVER_PROVIDERS.has(providerName)) {
+      completionParams.maxTokens ??= DEFAULT_MAX_TOKENS
+    }
     completionParams.textVerbosity =
       completionParams.textVerbosity ??
       this.getDefaultTextVerbosityForDuty(completionParams.dutyType)

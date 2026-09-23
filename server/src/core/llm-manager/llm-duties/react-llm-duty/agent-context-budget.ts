@@ -19,7 +19,6 @@ import {
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   AGENT_TOOL_OBSERVATION_MAX_CHARS,
-  AGENT_OUTPUT_RECOVERY_MAX_TOKENS,
   CHARS_PER_TOKEN
 } from './constants'
 
@@ -95,16 +94,15 @@ export function resolveAgentContextRecoveryTriggerTokens(
 
 /**
  * Gives local models the context capacity left after the prepared prompt and
- * a tokenizer-estimation margin. Remote calls keep the provider layer's default
- * unless retrying output exhaustion with a bounded larger allowance.
+ * a tokenizer-estimation margin. Remote calls use their provider/SDK defaults,
+ * including recovery: a fixed retry ceiling can be lower than those defaults.
  */
 export function resolveAgentMaxOutputTokens(
   provider: LLMProviders,
-  estimatedInputTokens: number,
-  isOutputRecoveryAttempt = false
+  estimatedInputTokens: number
 ): number | undefined {
   if (!isLocalLLMProvider(provider)) {
-    return isOutputRecoveryAttempt ? AGENT_OUTPUT_RECOVERY_MAX_TOKENS : undefined
+    return undefined
   }
 
   const safetyMarginTokens = Math.floor(

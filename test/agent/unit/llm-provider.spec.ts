@@ -144,6 +144,12 @@ describe('LLMProvider', () => {
       usedOutputTokens: 5,
       finishReason: 'stop'
     })
+    expect(runChatCompletion.mock.calls[0]![1].maxTokens).toBeUndefined()
+    await manager.prompt('Explicit bounded request', {
+      dutyType: LLMDuties.ReAct, systemPrompt: '', maxTokens: 128,
+      maxRetries: 0, remoteProviderErrorRetries: 0
+    })
+    expect(runChatCompletion.mock.calls[1]![1].maxTokens).toBe(128)
   })
 
   it.each([

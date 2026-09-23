@@ -33,6 +33,7 @@ import {
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { getLLMModelCatalogEntry } from '@/core/llm-manager/llm-model-catalog'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { CONFIG_MANAGER } from '@/config'
@@ -939,9 +940,10 @@ export class ReActLLMDuty extends LLMDuty {
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
+    const agentTarget = CONFIG_STATE.getModelState().getAgentTarget()
     const modelSettings = CONFIG_STATE
       .getModelSettingsState()
-      .getSettings(CONFIG_STATE.getModelState().getAgentTarget())
+      .getSettings(agentTarget)
     const configuredReasoning = modelSettings.reasoning
     // Finalization is still a model request. Keep its configured reasoning:
     // providers with mandatory reasoning reject a forced reasoning-off retry.
@@ -951,10 +953,18 @@ export class ReActLLMDuty extends LLMDuty {
         : configuredReasoning === 'none'
           ? 'off'
           : 'on'
-    const reasoningEffort =
+    let reasoningEffort =
       configuredReasoning === 'auto' || configuredReasoning === 'on'
         ? undefined
-        : configuredReasoning
+          : configuredReasoning
+    // Auto may recover from reasoning-only exhaustion with less effort.
+    // Never disable mandatory reasoning or override an explicit owner choice.
+    if (options.isOutputRecoveryAttempt && configuredReasoning === 'auto' &&
+      reasoningMode === 'on' && getLLMModelCatalogEntry(
+        providerName, agentTarget.model
+      )?.reasoning.includes('low')) {
+      reasoningEffort = 'low'
+    }
     const reasoningUseDefaultEffort = configuredReasoning === 'on'
     const serviceTier = modelSettings.speed === 'fast'
       ? 'priority'
@@ -964,12 +974,11 @@ export class ReActLLMDuty extends LLMDuty {
     const disableThinking = reasoningMode === 'off'
     const maxOutputTokens = resolveAgentMaxOutputTokens(
       providerName,
-      preparedContext.estimatedInputTokens,
-      options.isOutputRecoveryAttempt
+      preparedContext.estimatedInputTokens
     )
     if (options.isOutputRecoveryAttempt) {
       LogHelper.info(
-        `Retrying truncated agent output with max_tokens=${maxOutputTokens}; preserving configured reasoning`
+        `Retrying truncated agent output with max_tokens=${maxOutputTokens ?? 'provider default'}; reasoning effort=${reasoningEffort ?? 'provider default'}`
       )
     }
     const shouldEmitReasoning =
