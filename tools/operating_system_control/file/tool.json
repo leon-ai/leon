@@ -3,7 +3,7 @@
   "tool_id": "file",
   "toolkit_id": "operating_system_control",
   "name": "File",
-  "description": "Read, write, and append local text files without shell commands.",
+  "description": "Read text, Office documents, PDFs and images with local extraction/OCR; write and append text without shell commands.",
   "icon_name": "file-text-line",
   "author": {
     "name": "Louis Grenard",
@@ -11,6 +11,65 @@
     "url": "https://x.com/grenlouis"
   },
   "functions": {
+    "readDocument": {
+      "description": "Extract PDF with LiteParse, or Word, Excel, PowerPoint, OpenDocument, EPUB, RTF and CSV with AnyDoc, as cached local Markdown.",
+      "progressive_guidance": "Follow nextOffsetChars for full coverage and reuse extracted facts. If requiresPageRead is returned, use readPdf. Embedded images and charts are not interpreted by text conversion.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "options": { "type": "object", "properties": {
+            "offsetChars": { "type": "integer", "minimum": 0 },
+            "maxChars": { "type": "integer", "minimum": 1, "maximum": 40000 }
+          }, "additionalProperties": false }
+        }, "required": ["path"], "additionalProperties": false
+      }
+    },
+    "readPdf": {
+      "description": "Read a bounded PDF page range with page references and reusable text extraction. Optionally attach rendered pages to the agent model.",
+      "progressive_guidance": "Start with text. Request layout for block/table-cell coordinates; coordinates use the returned dimensions and units, not screenshot pixels. For charts or ambiguous table relationships, use render with the selected vision-capable model; otherwise state the limitation. OCR does not interpret charts or recover formatting. Follow text cursors; continue a page's nextLayoutOffset with startPage, pageCount=1, layoutOffset.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "options": {
+            "type": "object",
+            "properties": {
+              "startPage": { "type": "integer", "minimum": 1, "description": "First page (1-based)." },
+              "pageCount": { "type": "integer", "minimum": 1, "maximum": 8, "description": "Maximum pages to read, default 1." },
+              "offsetChars": { "type": "integer", "minimum": 0, "description": "Continue within startPage using the returned nextOffsetChars." },
+              "maxChars": { "type": "integer", "minimum": 1, "maximum": 40000 },
+              "layout": { "type": "boolean", "description": "Include bounded native blocks/table cells or OCR text regions, default false." },
+              "layoutOffset": { "type": "integer", "minimum": 0, "description": "Continue a page's layout using nextLayoutOffset. Independent of text pagination." },
+              "render": { "type": "boolean", "description": "Also attach bounded page images; requires a vision-capable agent model." },
+              "ocr": { "type": "boolean", "description": "Force local OCR even with a partial text layer. Default: OCR only empty text layers. Set false to disable." }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      }
+    },
+    "readImage": {
+      "description": "Read image text with local multilingual OCR, including for text-only models. Models are downloaded on first use and reused. Optionally attach a bounded image for a vision model.",
+      "progressive_guidance": "OCR returns text, not chart data or semantic formatting. Request layout for text regions and confidence; coordinates refer to the returned image dimensions. Follow nextLayoutOffset using layoutOffset. For visual interpretation use ocr=false, render=true with the selected vision-capable model; otherwise state the limitation.",
+      "parameters": {
+        "type": "object",
+        "properties": { "path": { "type": "string" }, "options": {
+          "type": "object", "properties": {
+            "ocr": { "type": "boolean", "description": "Extract text locally, default true." },
+            "render": { "type": "boolean", "description": "Attach visual evidence, default false; requires vision support." },
+            "offsetChars": { "type": "integer", "minimum": 0 },
+            "layout": { "type": "boolean", "description": "Include bounded OCR text regions, default false. Requires OCR." },
+            "layoutOffset": { "type": "integer", "minimum": 0 },
+            "maxChars": { "type": "integer", "minimum": 1, "maximum": 40000 }
+          }, "additionalProperties": false
+        } },
+        "required": ["path"],
+        "additionalProperties": false
+      }
+    },
     "read": {
       "description": "Read a local text file. Rejects likely binary files. Use head, tail, or maxChars to limit output when needed.",
       "parameters": {

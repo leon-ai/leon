@@ -4,6 +4,8 @@ import path from 'node:path'
 
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
+import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
+import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
 
 const DEFAULT_MAX_CHARS = 80_000
 const MAX_CHARS = 250_000
@@ -26,8 +28,10 @@ interface AppendOptions {
 }
 
 export default class FileTool extends Tool {
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
   private static readonly TOOLKIT = 'operating_system_control'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
+  private documentReader?: DocumentReader
 
   constructor() {
     super()
@@ -44,6 +48,61 @@ export default class FileTool extends Tool {
 
   get description(): string {
     return this.config['description']
+  }
+
+  /**
+   * Extract PDF pages once and reuse their text across subsequent reads.
+   */
+  public async readPdf(targetPath: string, options: PDFReadOptions = {}): Promise<Record<string, unknown>> {
+    try {
+      const reader = await this.getDocumentReader()
+      const result = await reader.readPdf(this.resolvePath(targetPath), options)
+      this.attachModelFiles(result.files)
+      return { success: true, data: result.data }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * Extract image text locally, with optional model-facing visual evidence.
+   */
+  public async readImage(targetPath: string, options: ImageReadOptions = {}): Promise<Record<string, unknown>> {
+    try {
+      const reader = await this.getDocumentReader()
+      const result = await reader.readImage(this.resolvePath(targetPath), options)
+      this.attachModelFiles(result.files)
+      return { success: true, data: result.data }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * Read Office and PDF documents through the same bounded extraction path.
+   */
+  public async readDocument(targetPath: string, options: DocumentReadOptions = {}): Promise<Record<string, unknown>> {
+    try {
+      return { success: true, data: await (await this.getDocumentReader()).readDocument(this.resolvePath(targetPath), options) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * Retained OCR/PDF workers must not outlive the profile tool runtime.
+   */
+  public async dispose(): Promise<void> {
+    await this.documentReader?.dispose()
+  }
+
+  private async getDocumentReader(): Promise<DocumentReader> {
+    // Plain file operations should not initialize the PDF and canvas runtimes.
+    if (!this.documentReader) {
+      const { DocumentReader } = await import('./lib/document-reader')
+      this.documentReader = new DocumentReader()
+    }
+    return this.documentReader
   }
 
   public async read(
@@ -138,7 +197,7 @@ export default class FileTool extends Tool {
   }> {
     return this.read(outputLogPath, {
       maxChars: options.maxChars ?? DEFAULT_MAX_CHARS,
-      offsetChars: options.offsetChars
+      offsetChars: options.offsetChars ?? 0
     })
   }
 
