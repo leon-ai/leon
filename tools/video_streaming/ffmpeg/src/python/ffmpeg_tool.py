@@ -1,9 +1,12 @@
 from typing import List, Dict, Optional
+import math
+from pathlib import Path
 from bridges.python.src.sdk.base_tool import BaseTool, ExecuteCommandOptions
 from bridges.python.src.sdk.toolkit_config import ToolkitConfig
 
 DEFAULT_SETTINGS = {}
 REQUIRED_SETTINGS = []
+MAX_FRAME_DIMENSION = 2_048
 
 
 class FfmpegTool(BaseTool):
@@ -57,6 +60,28 @@ class FfmpegTool(BaseTool):
             return output_path
         except Exception as e:
             raise Exception(f"Video conversion failed: {str(e)}")
+
+    def extract_frame(self, video_path: str, image_path: str, at_seconds: float) -> str:
+        """Sample one bounded frame for vision/OCR without overwriting artifacts."""
+        if not math.isfinite(at_seconds) or at_seconds < 0:
+            raise ValueError("atSeconds must be a finite non-negative number.")
+        # FFmpeg creates the image file, but not its parent directories.
+        Path(image_path).parent.mkdir(parents=True, exist_ok=True)
+        self.execute_command(
+            ExecuteCommandOptions(
+                binary_name="ffmpeg",
+                args=self._get_global_args() + [
+                    "-nostdin", "-n", "-ss", str(at_seconds), "-i", video_path,
+                    "-frames:v", "1", "-vf",
+                    f"scale={MAX_FRAME_DIMENSION}:{MAX_FRAME_DIMENSION}:force_original_aspect_ratio=decrease",
+                    image_path,
+                ],
+                options={"sync": True},
+            )
+        )
+        if not Path(image_path).is_file() or Path(image_path).stat().st_size == 0:
+            raise ValueError("No frame was produced; verify the timestamp against the video duration.")
+        return image_path
 
     def extract_audio(self, video_path: str, audio_path: str) -> str:
         """

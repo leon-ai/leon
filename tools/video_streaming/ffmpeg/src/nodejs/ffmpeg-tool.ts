@@ -1,8 +1,12 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
+const MAX_FRAME_DIMENSION = 2_048
 
 export default class FfmpegTool extends Tool {
   private static readonly TOOLKIT = 'video_streaming'
@@ -39,6 +43,24 @@ export default class FfmpegTool extends Tool {
    */
   private getGlobalArgs(): string[] {
     return ['-hide_banner', '-loglevel', 'error']
+  }
+
+  /**
+   * Sample a bounded video frame for the file tool's vision/OCR reader.
+   * Never overwrite an existing artifact or interpret sampling as full coverage.
+   */
+  async extractFrame(videoPath: string, imagePath: string, atSeconds: number): Promise<string> {
+    if (!Number.isFinite(atSeconds) || atSeconds < 0) throw new Error('atSeconds must be a finite non-negative number.')
+    // FFmpeg creates the image file, but not its parent directories.
+    await fs.mkdir(path.dirname(imagePath), { recursive: true })
+    await this.executeCommand({
+      binaryName: 'ffmpeg',
+      args: [...this.getGlobalArgs(), '-nostdin', '-n', '-ss', String(atSeconds), '-i', videoPath,
+        '-frames:v', '1', '-vf', `scale=${MAX_FRAME_DIMENSION}:${MAX_FRAME_DIMENSION}:force_original_aspect_ratio=decrease`, imagePath],
+      options: { sync: true }
+    })
+    if (!(await fs.stat(imagePath).catch(() => null))?.size) throw new Error('No frame was produced; verify the timestamp against the video duration.')
+    return imagePath
   }
 
   /**
