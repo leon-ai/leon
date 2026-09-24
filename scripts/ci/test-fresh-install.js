@@ -3,6 +3,7 @@
 import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
+import { createInterface } from 'node:readline'
 import {
   isDeepStrictEqual,
   stripVTControlCharacters
@@ -16,7 +17,8 @@ const BUILD_TIMEOUT = 10 * 60 * 1_000
 const START_TIMEOUT = 2 * 60 * 1_000
 const PROCESS_STOP_TIMEOUT = 5_000
 const OUTPUT_BUFFER_LIMIT = 32_000
-const DEFAULT_API_KEY = 'xxx'
+const INFERENCE_TIMEOUT = 22 * 60 * 1_000
+const INFERENCE_SCRIPT = 'scripts/ci/fresh-install-inferences.ts'
 const DEFAULT_LOG_PATH = '/tmp/leon-fresh-install.log'
 const MODULES_STATE_PATH = path.join('node_modules', '.modules.yaml')
 const SERVER_READY_MESSAGE = 'Server is available at '
@@ -74,6 +76,7 @@ const PROMPTS = [
 ]
 
 let activeChild = null
+let inferenceChild = null
 
 function getCleanEnvironment() {
   const environment = { ...process.env }
@@ -102,6 +105,7 @@ function stopProcessGroup(child, signal = 'SIGTERM') {
 }
 
 function stopActiveChildAndExit(signal) {
+  if (inferenceChild) stopProcessGroup(inferenceChild)
   if (activeChild) {
     stopProcessGroup(activeChild, signal)
   }
@@ -135,7 +139,30 @@ function normalizeOutput(output) {
   return stripVTControlCharacters(output).replaceAll('\r', '')
 }
 
+/**
+ * Redact complete lines before console or artifact output, including secrets
+ * split across process output chunks. Installer prompts are handled separately.
+ */
+function forwardSafeOutput(source, destination, logStream) {
+  const apiKey = process.env.LEON_FRESH_INSTALL_API_KEY?.trim()
+  const lines = createInterface({ input: source, crlfDelay: Infinity })
+  lines.on('line', (line) => {
+    const normalized = normalizeOutput(line)
+    const safeLine = apiKey ? normalized.replaceAll(apiKey, '[REDACTED]') : normalized
+    destination.write(`${safeLine}\n`)
+    logStream?.write(`${safeLine}\n`)
+  })
+}
+
 function getPromptResponse(prompt, apiKey) {
+  if (prompt.name === 'remote provider') {
+    const result = spawnSync('pnpm', ['exec', 'tsx', INFERENCE_SCRIPT, 'provider-selection'], {
+      encoding: 'utf8',
+      timeout: START_TIMEOUT
+    })
+    if (result.status !== 0) throw new Error('Unable to resolve the DeepSeek setup choice')
+    return result.stdout
+  }
   return prompt.name === 'API key' ? `${apiKey}\r` : prompt.response
 }
 
@@ -145,6 +172,7 @@ function runInteractiveInstall(environment, apiKey, logPath) {
     const logStream = fs.createWriteStream(logPath)
     const answeredPrompts = new Set()
     let recentOutput = ''
+    let hidingKeyInput = false
     let hasSettled = false
     const child = spawn('script', SCRIPT_ARGUMENTS, {
       detached: true,
@@ -172,8 +200,21 @@ function runInteractiveInstall(environment, apiKey, logPath) {
     }
 
     const handleOutput = (chunk, destination) => {
-      destination.write(chunk)
-      logStream.write(chunk)
+      // The text prompt echoes the key. Omit that entire phase, including
+      // partial terminal redraws that ordinary full-secret masking misses.
+      let visibleOutput = chunk.toString()
+      if (hidingKeyInput) {
+        const voicePrompt = PROMPTS.find((prompt) => prompt.name === 'voice').text
+        const voiceIndex = normalizeOutput(`${recentOutput}${chunk}`).indexOf(voicePrompt)
+        if (voiceIndex < 0) visibleOutput = ''
+        else {
+          hidingKeyInput = false
+          visibleOutput = normalizeOutput(`${recentOutput}${chunk}`).slice(voiceIndex)
+        }
+      }
+      visibleOutput = visibleOutput.replaceAll(apiKey, '[REDACTED]')
+      destination.write(visibleOutput)
+      logStream.write(visibleOutput)
       recentOutput = `${recentOutput}${chunk}`.slice(-OUTPUT_BUFFER_LIMIT)
       const normalizedOutput = normalizeOutput(recentOutput)
 
@@ -182,7 +223,14 @@ function runInteractiveInstall(environment, apiKey, logPath) {
           !answeredPrompts.has(prompt.name) &&
           normalizedOutput.includes(prompt.text)
         ) {
-          child.stdin.write(getPromptResponse(prompt, apiKey))
+          try {
+            if (prompt.name === 'API key') hidingKeyInput = true
+            child.stdin.write(getPromptResponse(prompt, apiKey))
+          } catch (error) {
+            stopProcessGroup(child)
+            finish(error)
+            return
+          }
           answeredPrompts.add(prompt.name)
           console.log(`\n[clean-install] Answered: ${prompt.name}`)
         }
@@ -231,10 +279,12 @@ function runCommand(command, args, environment, timeoutMs) {
     const child = spawn(command, args, {
       detached: true,
       env: environment,
-      stdio: 'inherit'
+      stdio: ['ignore', 'pipe', 'pipe']
     })
 
     activeChild = child
+    forwardSafeOutput(child.stdout, process.stdout)
+    forwardSafeOutput(child.stderr, process.stderr)
 
     const finish = (error) => {
       if (hasSettled) {
@@ -343,10 +393,14 @@ async function verifyDependencyLifecycleScripts() {
   console.log('Dependency lifecycle script sentinel passed.')
 }
 
-function smokeTestStart(environment) {
+function smokeTestStart(environment, logPath) {
   return new Promise((resolve, reject) => {
     let hasSettled = false
     let isReady = false
+    let inferenceError = null
+    let inferenceComplete = false
+    let inferenceTimeout = null
+    const logStream = fs.createWriteStream(logPath, { flags: 'a' })
     let output = ''
     let forceStopTimeout = null
     const child = spawn('pnpm', ['start'], {
@@ -367,6 +421,12 @@ function smokeTestStart(environment) {
 
       hasSettled = true
       clearTimeout(startTimeout)
+      clearTimeout(inferenceTimeout)
+      if (inferenceChild) {
+        stopProcessGroup(inferenceChild)
+        inferenceChild = null
+      }
+      logStream.end()
       clearTimeout(forceStopTimeout)
       activeChild = null
 
@@ -377,31 +437,53 @@ function smokeTestStart(environment) {
       }
     }
 
-    const handleOutput = (chunk, destination) => {
-      destination.write(chunk)
+    const handleOutput = (chunk) => {
       output = `${output}${chunk}`.slice(-OUTPUT_BUFFER_LIMIT)
 
       if (!isReady && normalizeOutput(output).includes(SERVER_READY_MESSAGE)) {
         isReady = true
-        stopProcessGroup(child)
-        forceStopTimeout = setTimeout(() => {
-          stopProcessGroup(child, 'SIGKILL')
-        }, PROCESS_STOP_TIMEOUT)
+        clearTimeout(startTimeout)
+        inferenceChild = spawn('pnpm', ['exec', 'tsx', INFERENCE_SCRIPT, 'run'], {
+          detached: true,
+          env: environment,
+          stdio: ['ignore', 'pipe', 'pipe']
+        })
+        const stopServer = (error) => {
+          if (inferenceComplete) return
+          inferenceComplete = true
+          inferenceError = error
+          clearTimeout(inferenceTimeout)
+          stopProcessGroup(child)
+          forceStopTimeout = setTimeout(() => stopProcessGroup(child, 'SIGKILL'), PROCESS_STOP_TIMEOUT)
+        }
+        forwardSafeOutput(inferenceChild.stdout, process.stdout, logStream)
+        forwardSafeOutput(inferenceChild.stderr, process.stderr, logStream)
+        inferenceChild.once('error', stopServer)
+        inferenceChild.once('close', (code) => {
+          inferenceChild = null
+          stopServer(code === 0 ? null : new Error(`Inference checks exited with code ${code}`))
+        })
+        inferenceTimeout = setTimeout(() => {
+          stopProcessGroup(inferenceChild, 'SIGKILL')
+          stopServer(new Error('Inference checks timed out'))
+        }, INFERENCE_TIMEOUT)
       }
     }
 
-    child.stdout.on('data', (chunk) => handleOutput(chunk, process.stdout))
-    child.stderr.on('data', (chunk) => handleOutput(chunk, process.stderr))
+    forwardSafeOutput(child.stdout, process.stdout, logStream)
+    forwardSafeOutput(child.stderr, process.stderr, logStream)
+    child.stdout.on('data', handleOutput)
+    child.stderr.on('data', handleOutput)
     child.once('error', finish)
     child.once('close', (code, signal) => {
-      if (isReady) {
-        finish()
+      if (inferenceComplete) {
+        finish(inferenceError)
         return
       }
 
       finish(
         new Error(
-          `pnpm start exited before Leon was ready with ${
+          `pnpm start exited before inference checks completed with ${
             signal ? `signal ${signal}` : `code ${code}`
           }`
         )
@@ -417,7 +499,8 @@ function smokeTestStart(environment) {
 
 async function main() {
   const environment = getCleanEnvironment()
-  const apiKey = process.env.LEON_FRESH_INSTALL_API_KEY || DEFAULT_API_KEY
+  const apiKey = process.env.LEON_FRESH_INSTALL_API_KEY?.trim()
+  if (!apiKey) throw new Error('LEON_FRESH_INSTALL_API_KEY is required (GitHub secret LEON_DEEPSEEK_API_KEY)')
   const logPath =
     process.env.LEON_FRESH_INSTALL_LOG_PATH || DEFAULT_LOG_PATH
 
@@ -426,11 +509,12 @@ async function main() {
   await verifyPendingBuilds(environment)
   await verifyDependencyLifecycleScripts()
   await runCommand('pnpm', ['build'], environment, BUILD_TIMEOUT)
-  await smokeTestStart(environment)
-  console.log('Fresh installation, build, and start verification passed.')
+  await smokeTestStart(environment, logPath)
+  console.log('Fresh installation, build, weather, and OCR verification passed.')
 }
 
 main().catch((error) => {
+  if (inferenceChild) stopProcessGroup(inferenceChild)
   if (activeChild) {
     stopProcessGroup(activeChild)
   }

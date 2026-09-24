@@ -15,13 +15,7 @@ concurrency:
 jobs:
   fresh-install:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        pnpm-version:
-          - '11'
-          - latest
+    timeout-minutes: 90
 
     steps:
       # Scheduled workflows are loaded from the default branch, but Leon's
@@ -43,21 +37,24 @@ jobs:
           node-version: ${{ steps.versions.outputs.node }}
           package-manager-cache: false
 
-      - name: Install pnpm ${{ matrix.pnpm-version }}
-        shell: bash
-        run: npm install --global "pnpm@${{ matrix.pnpm-version }}"
+      - name: Install latest pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: latest
+          run_install: false
 
-      - name: Test the interactive installation
+      - name: Test installation and DeepSeek inferences
         env:
-          LEON_FRESH_INSTALL_API_KEY: xxx
+          LEON_FRESH_INSTALL_API_KEY: ${{ secrets.LEON_DEEPSEEK_API_KEY }}
           LEON_FRESH_INSTALL_LOG_PATH: /tmp/leon-fresh-install.log
+          LEON_HOME: ${{ runner.temp }}/leon-fresh-install
         run: node scripts/ci/test-fresh-install.js
 
       - name: Upload installer log on failure
         if: failure()
         uses: actions/upload-artifact@v6
         with:
-          name: fresh-install-log-pnpm-${{ matrix.pnpm-version }}
+          name: fresh-install-log
           path: /tmp/leon-fresh-install.log
           if-no-files-found: ignore
           retention-days: 7
