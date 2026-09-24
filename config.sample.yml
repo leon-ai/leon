@@ -11,7 +11,7 @@ server:
 
 routing:
   # Routing mode: smart | controlled | agent
-  mode: smart
+  mode: agent
 
 llm:
   # Use null to leave the global LLM target unset.

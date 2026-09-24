@@ -768,7 +768,7 @@ export default class NLU {
     }
 
     const runtimeRoutingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
-    const mode = String(runtimeRoutingMode || RoutingMode.Smart).toLowerCase()
+    const mode = String(runtimeRoutingMode || RoutingMode.Agent).toLowerCase()
     if (
       mode === RoutingMode.Controlled ||
       mode === RoutingMode.Agent ||
@@ -779,10 +779,10 @@ export default class NLU {
 
     LogHelper.title('NLU')
     LogHelper.warning(
-      `Unknown routing mode "${runtimeRoutingMode}", defaulting to smart`
+      `Unknown routing mode "${runtimeRoutingMode}", defaulting to agent`
     )
 
-    return RoutingMode.Smart
+    return RoutingMode.Agent
   }
 
   private getWorkflowUtterance(

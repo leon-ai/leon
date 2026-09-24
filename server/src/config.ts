@@ -46,7 +46,7 @@ const DEFAULT_CONFIG: LeonConfig = {
     plugins: {}
   },
   routing: {
-    mode: 'smart'
+    mode: 'agent'
   },
   mood: {
     mode: 'auto'

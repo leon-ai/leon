@@ -11,7 +11,7 @@ export class ArchitectureContextFile extends ContextFile {
       '# ARCHITECTURE',
       `- Generated at: ${DateHelper.getDateTime()}`,
       '- Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.',
-      '- Routing model: smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions; agent mode runs the continuous agent loop and can follow selected agent skills.',
+      '- Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.',
       '- Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.',
       '## Core Principles',
       '- Explicit tools over implicit behavior: Leon calls declared tools/functions instead of free-form shell logic whenever possible.',

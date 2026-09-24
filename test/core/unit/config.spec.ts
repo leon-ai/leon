@@ -82,6 +82,18 @@ describe('ConfigManager', () => {
     })
   })
 
+  it('defaults to agent routing and preserves explicit modes on reload', async () => {
+    const configManager = await loadConfigManager()
+    expect(configManager.getConfig().routing.mode).toBe('agent')
+    expect(process.env['LEON_ROUTING_MODE']).toBe('agent')
+
+    for (const mode of ['smart', 'controlled', 'agent']) {
+      fs.writeFileSync(profilePaths.configPath, YAML.stringify({ routing: { mode } }))
+      expect(configManager.reload().routing.mode).toBe(mode)
+      expect(process.env['LEON_ROUTING_MODE']).toBe(mode)
+    }
+  })
+
   it('defaults an omitted iteration limit and reloads an owner override', async () => {
     fs.writeFileSync(profilePaths.configPath, 'runtime:\n  pulse_enabled: false\n')
     const configManager = await loadConfigManager()
