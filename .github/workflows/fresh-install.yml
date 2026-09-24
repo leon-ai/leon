@@ -2,7 +2,10 @@ name: Fresh installation
 
 on:
   schedule:
+    # Space the three weekly runs exactly 56 hours apart (UTC).
     - cron: '17 4 * * 1'
+    - cron: '17 12 * * 3'
+    - cron: '17 20 * * 5'
   workflow_dispatch:
 
 permissions:
