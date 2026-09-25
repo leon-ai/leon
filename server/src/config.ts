@@ -111,6 +111,12 @@ const DEFAULT_CONFIG: LeonConfig = {
           env: 'LEON_OPENROUTER_API_KEY'
         }
       },
+      requesty: {
+        base_url: 'https://router.requesty.ai/v1',
+        api_key: {
+          env: 'LEON_REQUESTY_API_KEY'
+        }
+      },
       deepseek: {
         api_key: {
           env: 'LEON_DEEPSEEK_API_KEY'

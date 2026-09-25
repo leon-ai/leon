@@ -38,6 +38,7 @@ const TITLE_DISABLE_THINKING_PROVIDERS = [
 const TITLE_REASONING_MODE_OFF_PROVIDERS = [
   LLMProviders.OpenAI,
   LLMProviders.OpenRouter,
+  LLMProviders.Requesty,
   LLMProviders.ZAI,
   LLMProviders.DeepSeek,
   LLMProviders.MiniMax,

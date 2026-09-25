@@ -18,6 +18,12 @@ export const PROVIDER_MATRIX = [
     reasoning: 'none'
   },
   {
+    provider: 'requesty',
+    requiredEnv: 'LEON_REQUESTY_API_KEY',
+    llmTarget: 'requesty/gpt-5.4-mini',
+    reasoning: null
+  },
+  {
     provider: 'openai',
     requiredEnv: 'LEON_OPENAI_API_KEY',
     llmTarget: 'openai/gpt-6-luna',
