@@ -1,8 +1,8 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Browser Use",
-  "description": "Inspect and operate websites directly in the owner’s connected browser, including tabs, forms, collections, and authenticated file downloads. Prefer this toolkit for browser tasks.",
-  "progressive_guidance": "Use direct browser inspection for website tasks in the owner's configured browser and relevant existing tab. Browser Use handles uploads, downloads and JavaScript dialogs without native pickers. Use computer_use only for browser chrome or genuine OS controls the browser helpers cannot handle, then return here. If browser access requires permission/setup, pause for the owner; never switch browsers or use Cua to bypass it. Establish collection scope and source identities through pagination or scrolling before processing; a DOM snapshot may be incomplete. Track verified progress and remaining work in the shared plan.",
+  "description": "Inspect and operate websites directly in the owner's connected browser, including tabs, forms, collections, and authenticated file downloads. Prefer this toolkit for browser tasks.",
+  "progressive_guidance": "Use direct browser inspection for website tasks in the owner's configured browser and relevant existing tab. Browser Use handles uploads, downloads and JavaScript dialogs without native pickers. Use computer_use only for browser chrome or genuine OS controls the browser helpers cannot handle, then return here. If browser access requires permission/setup, pause for the owner; never switch browsers or use Cua to bypass it. Establish collection scope and source identities using structured page data or an observed read-only endpoint when available, otherwise observed pagination or scrolling; a DOM snapshot or advertised count may be incomplete. Prefer batched extraction and local comparison over repeated UI sorting and card inspection. Track verified progress and remaining work in the shared plan.",
   "icon_name": "seo-line",
   "context_files": [
     "LEON.md",
