@@ -14,6 +14,7 @@ export enum LLMProviders {
   SGLang = 'sglang',
   Groq = 'groq',
   OpenRouter = 'openrouter',
+  Requesty = 'requesty',
   ZAI = 'zai',
   DeepSeek = 'deepseek',
   MiniMax = 'minimax',
