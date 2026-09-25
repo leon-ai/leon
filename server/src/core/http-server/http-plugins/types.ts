@@ -242,6 +242,13 @@ export interface HTTPPluginSubscribeAgentEventsInput {
   after_sequence?: number
 }
 
+export interface HTTPPluginSaveConnectionInput {
+  profile_id?: string
+  provider: string
+  auth_type: 'api_key' | 'oauth'
+  credentials: Record<string, unknown>
+}
+
 export interface HTTPPluginLeonServices {
   readonly profileId: string
   isLLMEnabled: () => boolean
@@ -273,6 +280,38 @@ export interface HTTPPluginLeonServices {
     input: HTTPPluginSubscribeAgentEventsInput,
     listener: (event: HTTPPluginAgentEvent) => void
   ) => Promise<() => void>
+  handleConnectionSetup: (
+    input: import('@/core/connections/connection-setup').ConnectionSetupInput
+  ) => Promise<
+    import('@/core/connections/connection-setup').ConnectionSetupResult
+  >
+  listConnections: (
+    profileId?: string,
+    callback?: { origin: string, apiVersion: string }
+  ) => Promise<{
+    profile_id: string
+    connections: import('@/core/connections/connection-store').ConnectionSummary[]
+    tools: ReturnType<
+      typeof import('@/core/connections/connection-catalog').getConnectionCatalog
+    >
+  }>
+  saveConnection: (
+    input: HTTPPluginSaveConnectionInput
+  ) => Promise<import('@/core/connections/connection-store').ConnectionSummary>
+  startConnectionOAuth: (input: {
+    profile_id?: string
+    provider: string
+    callback_origin: string
+    return_url: string
+    api_version: string
+    client_id?: string
+    client_secret?: string
+  }) => Promise<{
+    authorization_url: string
+    redirect_uri: string
+    scopes: string[]
+  }>
+  removeConnection: (provider: string, profileId?: string) => Promise<boolean>
 }
 
 export type HTTPPluginSourceScope = 'global' | 'profile'

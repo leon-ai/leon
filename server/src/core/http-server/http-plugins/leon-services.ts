@@ -10,6 +10,16 @@ import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-pr
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
+import { handleConnectionSetup } from '@/core/connections/connection-setup'
+import {
+  saveConnection,
+  startConnectionOAuth
+} from '@/core/connections/connection-service'
+import { getConnectionCatalog } from '@/core/connections/connection-catalog'
+import {
+  CONNECTION_STORE,
+  type ConnectionSummary
+} from '@/core/connections/connection-store'
 
 import type {
   HTTPPluginAppendConversationMessageInput,
@@ -17,7 +27,8 @@ import type {
   HTTPPluginConversationMessage,
   HTTPPluginGetConversationHistoryInput,
   HTTPPluginGetConversationHistoryResult,
-  HTTPPluginLeonServices
+  HTTPPluginLeonServices,
+  HTTPPluginSaveConnectionInput
 } from './types'
 import {
   publishAgentEvent,
@@ -189,6 +200,72 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
     getConversationHistory,
     createConversationSession,
     selectConversationSession,
-    subscribeAgentEvents
+    subscribeAgentEvents,
+    handleConnectionSetup,
+    listConnections: async (
+      profileId,
+      callback
+    ): Promise<{
+      profile_id: string
+      connections: ConnectionSummary[]
+      tools: ReturnType<typeof getConnectionCatalog>
+    }> => {
+      const profileName = profileId?.trim() || getActiveProfileName()
+
+      if (!isValidProfileName(profileName)) {
+        throw new Error(`Invalid Leon profile name "${profileName}".`)
+      }
+
+      return runWithProfileContext({ profileName }, async () => {
+        await ensureActiveProfileRuntime()
+
+        return {
+          profile_id: getActiveProfileName(),
+          connections: await CONNECTION_STORE.list(),
+          tools: getConnectionCatalog(callback)
+        }
+      })
+    },
+    saveConnection: async (
+      input: HTTPPluginSaveConnectionInput
+    ): Promise<ConnectionSummary> => {
+      const profileName = input.profile_id?.trim() || getActiveProfileName()
+
+      if (!isValidProfileName(profileName)) {
+        throw new Error(`Invalid Leon profile name "${profileName}".`)
+      }
+
+      return runWithProfileContext({ profileName }, () => saveConnection(input))
+    },
+    startConnectionOAuth: async (
+      input
+    ): ReturnType<typeof startConnectionOAuth> => {
+      const profileName = input.profile_id?.trim() || getActiveProfileName()
+
+      if (!isValidProfileName(profileName)) {
+        throw new Error('Invalid Leon profile name.')
+      }
+
+      return startConnectionOAuth({
+        provider: input.provider,
+        profileName,
+        callbackOrigin: input.callback_origin,
+        returnURL: input.return_url,
+        apiVersion: input.api_version,
+        ...(input.client_id ? { clientId: input.client_id } : {}),
+        ...(input.client_secret ? { clientSecret: input.client_secret } : {})
+      })
+    },
+    removeConnection: async (provider, profileId): Promise<boolean> => {
+      const profileName = profileId?.trim() || getActiveProfileName()
+
+      if (!isValidProfileName(profileName)) {
+        throw new Error(`Invalid Leon profile name "${profileName}".`)
+      }
+
+      return runWithProfileContext({ profileName }, () =>
+        CONNECTION_STORE.remove(provider)
+      )
+    }
   }
 }
