@@ -11,6 +11,7 @@ import { createListResult } from '@/built-in-command/built-in-command-renderer'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import {
   getLLMModelCatalogEntries,
+  getLLMModelDefaultReasoning,
   type LLMModelReasoning,
   type LLMModelSpeed
 } from '@/core/llm-manager/llm-model-catalog'
@@ -26,6 +27,8 @@ const API_KEY_ENV_PARAMETER_NAME = 'api_key_env'
 const CREATE_API_KEY_LINK_LABEL = 'Create your API key here'
 const REASONING_SUBCOMMAND = 'reasoning'
 const SPEED_SUBCOMMAND = 'speed'
+const DEFAULT_REASONING_LABEL = 'default'
+const DEFAULT_REASONING_VALUE: LLMModelReasoning = 'auto'
 const MODEL_SETTING_SUBCOMMANDS = [
   REASONING_SUBCOMMAND,
   SPEED_SUBCOMMAND
@@ -215,7 +218,7 @@ export class ModelCommand extends BuiltInCommand {
             },
             {
               label: 'Agent reasoning',
-              value: modelSettings.reasoning
+              value: this.getModelSettingLabel(REASONING_SUBCOMMAND, modelSettings.reasoning, true)
             },
             {
               label: 'Agent speed',
@@ -410,24 +413,43 @@ export class ModelCommand extends BuiltInCommand {
       getLLMModelCatalogEntries(provider).length > 0
   }
 
+  /**
+   * Labels the default policy without changing persisted provider settings.
+   */
+  private getModelSettingLabel(
+    setting: typeof REASONING_SUBCOMMAND | typeof SPEED_SUBCOMMAND,
+    value: string,
+    resolveDefault = false
+  ): string {
+    if (resolveDefault && setting === REASONING_SUBCOMMAND &&
+      (value === DEFAULT_REASONING_VALUE || value === DEFAULT_REASONING_LABEL)) {
+      const target = CONFIG_STATE.getModelState().getAgentTarget()
+      return getLLMModelDefaultReasoning(target.provider, target.model).label
+    }
+    return setting === REASONING_SUBCOMMAND && value === DEFAULT_REASONING_VALUE
+      ? DEFAULT_REASONING_LABEL
+      : value
+  }
+
   private getModelSettingAutocompleteItems(
     setting: typeof REASONING_SUBCOMMAND | typeof SPEED_SUBCOMMAND,
     requestedValue: string
   ): BuiltInCommandAutocompleteItem[] {
     const target = CONFIG_STATE.getModelState().getAgentTarget()
     const settingsState = CONFIG_STATE.getModelSettingsState()
-    const normalizedRequestedValue = requestedValue.toLowerCase()
+    const normalizedRequestedValue = this.getModelSettingLabel(setting, requestedValue.toLowerCase())
     const values = setting === REASONING_SUBCOMMAND
       ? settingsState.getAvailableReasoning(target)
       : settingsState.getAvailableSpeed(target)
 
     return values
+      .map((value) => this.getModelSettingLabel(setting, value))
       .filter((value) => value.startsWith(normalizedRequestedValue))
       .map((value) => ({
         type: 'parameter',
         icon_name: this.getIconName(),
         name: value,
-        description: `Set ${target.label} ${setting} to "${value}".`,
+        description: `Set ${target.label} ${setting} to "${this.getModelSettingLabel(setting, value, true)}".`,
         usage: `/model ${setting} ${value}`,
         supported_usages: this.getSupportedUsages(),
         value: `/model ${setting} ${value}`
@@ -467,8 +489,8 @@ export class ModelCommand extends BuiltInCommand {
           tone: 'info',
           items: [
             { label: 'Model', value: target.label },
-            { label: 'Current value', value: currentSettings[setting] },
-            { label: 'Available values', value: availableValues.join(', ') }
+            { label: 'Current value', value: this.getModelSettingLabel(setting, currentSettings[setting], true) },
+            { label: 'Available values', value: availableValues.map((value) => this.getModelSettingLabel(setting, value)).join(', ') }
           ]
         })
       }
@@ -478,7 +500,10 @@ export class ModelCommand extends BuiltInCommand {
       if (setting === REASONING_SUBCOMMAND) {
         await settingsState.setReasoning(
           target,
-          requestedValue as LLMModelReasoning
+          // Keep existing config files and the legacy command value compatible.
+          requestedValue === DEFAULT_REASONING_LABEL
+            ? DEFAULT_REASONING_VALUE
+            : requestedValue as LLMModelReasoning
         )
       } else {
         await settingsState.setSpeed(target, requestedValue as LLMModelSpeed)
@@ -496,7 +521,7 @@ export class ModelCommand extends BuiltInCommand {
             },
             {
               label: 'Available values',
-              value: availableValues.join(', '),
+              value: availableValues.map((value) => this.getModelSettingLabel(setting, value)).join(', '),
               tone: 'error'
             }
           ]
@@ -510,7 +535,7 @@ export class ModelCommand extends BuiltInCommand {
         title: `Model ${setting === REASONING_SUBCOMMAND ? 'Reasoning' : 'Speed'} Updated`,
         tone: 'success',
         items: [{
-          label: `${target.label} ${setting} is now set to "${requestedValue}".`,
+          label: `${target.label} ${setting} is now set to "${this.getModelSettingLabel(setting, requestedValue, true)}".`,
           tone: 'success'
         }]
       })

@@ -33,7 +33,7 @@ import {
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { getLLMModelCatalogEntry } from '@/core/llm-manager/llm-model-catalog'
+import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { CONFIG_MANAGER } from '@/config'
@@ -78,7 +78,8 @@ import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
 import { AgentAnswerStream } from './react-llm-duty/agent-answer-stream'
 import {
   getAgentInferencePolicy,
-  formatAgentInferencePolicyForLog
+  formatAgentInferencePolicyForLog,
+  type AgentInferencePolicy
 } from './react-llm-duty/agent-policy'
 import { runToolExecution } from './react-llm-duty/tool-execution'
 import {
@@ -945,6 +946,7 @@ export class ReActLLMDuty extends LLMDuty {
       .getModelSettingsState()
       .getSettings(agentTarget)
     const configuredReasoning = modelSettings.reasoning
+    const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
     // Finalization is still a model request. Keep its configured reasoning:
     // providers with mandatory reasoning reject a forced reasoning-off retry.
     const reasoningMode =
@@ -954,9 +956,12 @@ export class ReActLLMDuty extends LLMDuty {
           ? 'off'
           : 'on'
     let reasoningEffort =
-      configuredReasoning === 'auto' || configuredReasoning === 'on'
-        ? undefined
-          : configuredReasoning
+      configuredReasoning === 'auto'
+        ? defaultReasoning.effort
+        : configuredReasoning === 'on' ? undefined : configuredReasoning
+    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = configuredReasoning === 'auto'
+      ? defaultReasoning.source
+      : 'owner'
     // Auto may recover from reasoning-only exhaustion with less effort.
     // Never disable mandatory reasoning or override an explicit owner choice.
     if (options.isOutputRecoveryAttempt && configuredReasoning === 'auto' &&
@@ -964,6 +969,7 @@ export class ReActLLMDuty extends LLMDuty {
         providerName, agentTarget.model
       )?.reasoning.includes('low')) {
       reasoningEffort = 'low'
+      reasoningEffortSource = 'recovery'
     }
     const reasoningUseDefaultEffort = configuredReasoning === 'on'
     const serviceTier = modelSettings.speed === 'fast'
@@ -1007,6 +1013,7 @@ export class ReActLLMDuty extends LLMDuty {
       phasePolicySummary: formatAgentInferencePolicyForLog({
         ...inferencePolicy,
         reasoningMode,
+        reasoningEffortSource,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         emitReasoning: shouldEmitReasoning

@@ -1,4 +1,4 @@
-import { LLMProviders } from '@/core/llm-manager/types'
+import { LLMProviders, type LLMReasoningEffort } from '@/core/llm-manager/types'
 
 // Keep setup choices stable when providers or models are added to the catalog.
 const SETUP_PROVIDER_ORDER = [
@@ -29,6 +29,12 @@ export const LLM_MODEL_SPEED_VALUES = ['auto', 'normal', 'fast'] as const
 export type LLMModelReasoning = typeof LLM_MODEL_REASONING_VALUES[number]
 export type LLMModelSpeed = typeof LLM_MODEL_SPEED_VALUES[number]
 
+export enum LLMDefaultReasoningSource {
+  Provider = 'provider-default',
+  Fallback = 'leon-fallback',
+  Unspecified = 'unspecified'
+}
+
 export interface LLMModelCatalogEntry {
   provider: LLMProviders
   model: string
@@ -39,6 +45,8 @@ export interface LLMModelCatalogEntry {
   // Verified inline inputs supported by both this endpoint and Leon's adapter.
   // null means unverified; [] means no native media through this adapter.
   inputMediaTypes: readonly string[] | null
+  // Only set for defaults verified for this exact provider/model endpoint.
+  defaultReasoningEffort?: LLMReasoningEffort
   reasoning: readonly LLMModelReasoning[]
   speed: readonly LLMModelSpeed[]
 }
@@ -148,7 +156,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://api-docs.deepseek.com/quick_start/pricing/
    * @see https://api-docs.deepseek.com/guides/thinking_mode/
    */
-  { provider: LLMProviders.DeepSeek, model: 'deepseek-flash', label: 'DeepSeek-V4.1-Flash', recommended: true, reasoning: DEEPSEEK_REASONING, speed: AUTO_SPEED, inputMediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] },
+  { provider: LLMProviders.DeepSeek, model: 'deepseek-flash', label: 'DeepSeek-V4.1-Flash', recommended: true, defaultReasoningEffort: 'high', reasoning: DEEPSEEK_REASONING, speed: AUTO_SPEED, inputMediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] },
 
   /**
    * @see https://docs.celeris.ai/models Fast diffusion model for short agentic calls.
@@ -157,7 +165,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://docs.celeris.ai/making-requests#reasoning
    */
-  { provider: LLMProviders.Celeris, model: 'celeris-1-magnus', label: 'Celeris 1 Magnus', reasoning: MAGNUS_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  { provider: LLMProviders.Celeris, model: 'celeris-1-magnus', label: 'Celeris 1 Magnus', defaultReasoningEffort: 'low', reasoning: MAGNUS_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
 
   /**
    * @see https://openrouter.ai/openai/gpt-6-astra
@@ -368,41 +376,41 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://platform.claude.com/docs/en/models/opus-5-5/overview
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-5-5', label: 'Claude Opus 5.5', recommended: true, supportsForcedToolChoice: false, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-opus-5-5', label: 'Claude Opus 5.5', recommended: true, supportsForcedToolChoice: false, defaultReasoningEffort: 'medium', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/models/fable-5-1/overview
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-fable-5-1', label: 'Claude Fable 5.1', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-fable-5-1', label: 'Claude Fable 5.1', defaultReasoningEffort: 'high', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/models/mythos-5-1/overview
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-mythos-5-1', label: 'Claude Mythos 5.1 (invite only)', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-mythos-5-1', label: 'Claude Mythos 5.1 (invite only)', defaultReasoningEffort: 'high', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-fable-5', label: 'Claude Fable 5', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
-  /**
-   * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
-   * @see https://platform.claude.com/docs/en/build-with-claude/fast-mode Model-specific fast mode.
-   */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-5', label: 'Claude Opus 5', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-fable-5', label: 'Claude Fable 5', defaultReasoningEffort: 'high', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    * @see https://platform.claude.com/docs/en/build-with-claude/fast-mode Model-specific fast mode.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-8', label: 'Claude Opus 4.8', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-opus-5', label: 'Claude Opus 5', defaultReasoningEffort: 'high', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
+   * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
+   * @see https://platform.claude.com/docs/en/build-with-claude/fast-mode Model-specific fast mode.
+   */
+  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-8', label: 'Claude Opus 4.8', defaultReasoningEffort: 'high', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-7', label: 'Claude Opus 4.7', reasoning: OPTIONAL_XHIGH_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-7', label: 'Claude Opus 4.7', defaultReasoningEffort: 'high', reasoning: OPTIONAL_XHIGH_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-6', label: 'Claude Opus 4.6', reasoning: OPTIONAL_MAX_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-6', label: 'Claude Opus 4.6', defaultReasoningEffort: 'high', reasoning: OPTIONAL_MAX_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', reasoning: OPTIONAL_MAX_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  { provider: LLMProviders.Anthropic, model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', defaultReasoningEffort: 'high', reasoning: OPTIONAL_MAX_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting Model-specific reasoning support.
    */
@@ -411,16 +419,16 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.3
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5.3', label: 'GLM-5.3', recommended: true, reasoning: GLM_53_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  { provider: LLMProviders.ZAI, model: 'glm-5.3', label: 'GLM-5.3', recommended: true, defaultReasoningEffort: 'max', reasoning: GLM_53_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
   /**
    * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5.3-flash', label: 'GLM-5.3-Flash', reasoning: GLM_53_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  { provider: LLMProviders.ZAI, model: 'glm-5.3-flash', label: 'GLM-5.3-Flash', defaultReasoningEffort: 'max', reasoning: GLM_53_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.2 Model-specific reasoning support.
    * @see https://docs.z.ai/guides/overview/concept-param#reasoning_effort Model-specific reasoning effort values.
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5.2', label: 'GLM-5.2', reasoning: ZAI_GLM_52_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  { provider: LLMProviders.ZAI, model: 'glm-5.2', label: 'GLM-5.2', defaultReasoningEffort: 'max', reasoning: ZAI_GLM_52_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.1 Model-specific reasoning support.
    */
@@ -510,4 +518,33 @@ export function getLLMModelCatalogProviders(): LLMProviders[] {
   return SETUP_PROVIDER_ORDER.filter((provider) =>
     LLM_MODEL_CATALOG.some((entry) => entry.provider === provider)
   )
+}
+
+/**
+ * Resolves a verified default or a supported balanced fallback without guessing
+ * effort controls for unknown or toggle-only models.
+ */
+export function getLLMModelDefaultReasoning(
+  provider: LLMProviders | null,
+  model: string
+): { effort?: LLMReasoningEffort, source: LLMDefaultReasoningSource, label: string } {
+  const entry = getLLMModelCatalogEntry(provider, model)
+  if (entry?.defaultReasoningEffort) {
+    return {
+      effort: entry.defaultReasoningEffort,
+      source: LLMDefaultReasoningSource.Provider,
+      label: `${entry.defaultReasoningEffort} (provider default)`
+    }
+  }
+  if (entry?.reasoning.includes('medium')) {
+    return {
+      effort: 'medium',
+      source: LLMDefaultReasoningSource.Fallback,
+      label: 'medium (Leon fallback)'
+    }
+  }
+  return {
+    source: LLMDefaultReasoningSource.Unspecified,
+    label: 'provider default (unspecified)'
+  }
 }

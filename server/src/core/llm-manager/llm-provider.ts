@@ -23,6 +23,7 @@ import {
   getRoutingModeLLMDisplay
 } from '@/core/llm-manager/llm-routing'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
 
 interface CompletionResult {
@@ -156,6 +157,15 @@ export default class LLMProvider {
       if (settings.reasoning === 'none') {
         completionParams.disableThinking = true
       }
+    }
+
+    // Short guarded/off duties and explicit effort or token budgets retain priority.
+    if (settings.reasoning === 'auto' && !hasDutyReasoningOverride &&
+      completionParams.reasoningMode === 'on' &&
+      !completionParams.reasoningEffort && !completionParams.reasoningUseDefaultEffort &&
+      completionParams.thoughtTokensBudget === undefined) {
+      const { effort } = getLLMModelDefaultReasoning(target.provider, target.model)
+      if (effort) completionParams.reasoningEffort = effort
     }
 
     // AI SDK v4 still calls OpenAI's Fast Mode "priority". OpenRouter maps
