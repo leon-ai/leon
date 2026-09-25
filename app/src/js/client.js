@@ -374,8 +374,16 @@ export default class Client {
       cb('string-received')
     })
 
-    this.socket.on('widget-send-utterance', (utterance) => {
-      this._input.value = utterance
+    this.socket.on('widget-send-utterance', (message) => {
+      if (
+        typeof message === 'object' &&
+        message.sessionId !== this.activeSessionId
+      ) {
+        return
+      }
+
+      this._input.value =
+        typeof message === 'object' ? message.utterance : message
       this.send('utterance')
     })
 

@@ -33,6 +33,23 @@ document.addEventListener('DOMContentLoaded', async () => {
       axios.get(`${serverUrl}/api/v1/info`),
       axios.get(`${serverUrl}/api/v1/sessions`)
     ])
+    // OAuth returns to the conversation that requested setup, even if another tab changed sessions.
+    const callback = new URLSearchParams(window.location.search)
+    const connectionSession = callback.get('connection_session')
+
+    if (
+      callback.has('connection_result') &&
+      sessionsResponse.data.sessions?.some(
+        (session) => session.id === connectionSession
+      )
+    ) {
+      await axios.patch(
+        `${serverUrl}/api/v1/sessions/${encodeURIComponent(connectionSession)}`,
+        { is_active: true }
+      )
+      sessionsResponse.data.active_session_id = connectionSession
+    }
+
     const input = document.querySelector('#utterance')
     const mic = document.querySelector('#mic-button')
     const v = document.querySelector('#version small')

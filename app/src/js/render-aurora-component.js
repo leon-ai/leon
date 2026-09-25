@@ -2,12 +2,15 @@ import { createElement } from 'react'
 
 import * as auroraComponents from '@aurora'
 
+import { createConnectionWidgetProps } from './connection-widget'
+
 import * as customAuroraComponents from '../custom-aurora-components'
 
 export default function renderAuroraComponent(
   socket,
   component,
-  supportedEvents
+  supportedEvents = [],
+  serverURL = ''
 ) {
   if (component) {
     // `import-x/namespace` cannot statically validate dynamic component lookups.
@@ -47,10 +50,21 @@ export default function renderAuroraComponent(
 
     if (component.props?.children && Array.isArray(component.props.children)) {
       component.props.children = component.props.children.map((child) => {
-        return renderAuroraComponent(socket, child, supportedEvents)
+        return renderAuroraComponent(socket, child, supportedEvents, serverURL)
       })
     }
 
-    return createElement(reactComponent, component.props)
+    const props =
+      component.component === 'ConnectionSetup'
+        ? createConnectionWidgetProps(
+            socket,
+            component.props.provider,
+            component.props.sessionId,
+            serverURL,
+            component.props.messages
+          )
+        : component.props
+
+    return createElement(reactComponent, props)
   }
 }

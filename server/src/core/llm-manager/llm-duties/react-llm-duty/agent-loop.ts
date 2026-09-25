@@ -45,6 +45,34 @@ const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: 'word'
 })
 
+/**
+ * Loads setup instructions only while a connection-blocked call is unresolved.
+ */
+export function buildAgentConnectionGuidance(
+  executions: ExecutionRecord[]
+): string {
+  const latestCalls = new Map(
+    executions.map((execution) => [execution.function, execution])
+  )
+  const needsSetup = [...latestCalls.values()].some(
+    (execution) =>
+      execution.status !== 'success' &&
+      parseToolCallArguments(execution.observation)?.['connection_required'] ===
+        true
+  )
+
+  return needsSetup
+    ? `<connection_setup>
+- A connection_required tool observation means the connection setup card has already been displayed. Explain the needed step briefly in the owner's language, using the supplied tool-owned setup facts; do not repeat the entire wizard.
+- Answer setup questions using those facts. Offer to complete setup through the owner's browser or let them use the card manually. Keep the original task pending unless the owner cancels or changes it. For manual setup, use request_clarification to pause and ask the owner to select Continue after connecting.
+- When the owner asks you to handle setup, use the available browser tools and complete the whole workflow: inspect existing configuration, create or configure the provider application if needed, fill its credentials into Leon's connection card, authorize access, and verify the connection. Do not stop after giving instructions or ask the owner to copy credentials you can enter yourself. Only use request_clarification when a step genuinely requires owner interaction or an unresolved choice; resume setup afterward.
+- Credentials and OAuth authorization belong in the setup card and connection API. During authorized browser setup, transfer the required application credentials from the provider's setup interface into the connection card. Never quote secrets in chat, plans, or summaries, retrieve unrelated credentials from files or browser storage, or bypass the connection layer. Refer to the exact callback URL displayed in the card; do not invent it.
+- After browser setup, refresh the card to confirm the connection is ready and resume the original task without requiring the owner to select Continue.
+- On a resumed turn, current_connection_context contains refreshed connection facts. These supersede earlier setup observations. Do not retry a blocked call until the connection is ready; if ready, resume the original task with the failed call. Authorization alone does not complete the original task.
+</connection_setup>`
+    : ''
+}
+
 export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 
 <agent_loop>
@@ -464,7 +492,9 @@ export function evaluateAgentToolkitPreloadCost(
 function getAvailableToolkitSummaries(): Map<string, AgentToolkitSummary> {
   const summaries = new Map<string, AgentToolkitSummary>()
 
-  for (const tool of TOOLKIT_REGISTRY.getFlattenedTools()) {
+  for (const tool of TOOLKIT_REGISTRY.getFlattenedTools({
+    includeConnectionSetup: true
+  })) {
     const toolSummary: AgentToolSummary = {
       id: tool.toolId,
       name: tool.toolName,
@@ -502,7 +532,9 @@ function loadToolkitFunctions(
   let loadedFunctionCount = 0
   const loadedToolIds = new Set<string>()
 
-  for (const tool of TOOLKIT_REGISTRY.getFlattenedTools()) {
+  for (const tool of TOOLKIT_REGISTRY.getFlattenedTools({
+    includeConnectionSetup: true
+  })) {
     if (
       tool.toolkitId !== toolkitId ||
       (onlyToolId && tool.toolId !== onlyToolId)

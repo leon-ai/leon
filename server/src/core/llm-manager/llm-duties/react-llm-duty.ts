@@ -35,6 +35,7 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { CONFIG_MANAGER } from '@/config'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
@@ -79,6 +80,7 @@ import {
   formatAgentInferencePolicyForLog,
   type AgentInferencePolicy
 } from './react-llm-duty/agent-policy'
+import { parseToolCallArguments } from './react-llm-duty/utils'
 import { runToolExecution } from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
@@ -86,6 +88,7 @@ import {
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
   buildAgentProgressiveGuidanceSystemPrompt,
+  buildAgentConnectionGuidance,
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
   evaluateAgentToolkitPreloadCost,
@@ -409,15 +412,42 @@ export class ReActLLMDuty extends LLMDuty {
       const transcript = continuation
         ? structuredClone(continuation.transcript)
         : buildAgentTranscriptHistory(history, ownerInput)
+
       if (continuation) {
+        // Refresh setup facts after owner interaction without putting credentials in the transcript.
+        const connectionProviders = continuation.executionHistory.flatMap(
+          (execution) => {
+            const observation = parseToolCallArguments(execution.observation)
+            const providers = observation?.['required_connections']
+
+            return observation?.['connection_required'] === true &&
+              Array.isArray(providers)
+              ? providers.filter(
+                  (provider): provider is string => typeof provider === 'string'
+                )
+              : []
+          }
+        )
+        const connectionContext =
+          connectionProviders.length > 0
+            ? [
+                '<current_connection_context>',
+                JSON.stringify(getConnectionRequirements(connectionProviders)),
+                '</current_connection_context>'
+              ].join('\n')
+            : ''
+
         transcript.push({
           role: 'user',
           ...(this.files?.length ? { files: this.files } : {}),
           content: [
             '<clarification_response>',
             ownerInput,
-            '</clarification_response>'
-          ].join('\n')
+            '</clarification_response>',
+            connectionContext
+          ]
+            .filter(Boolean)
+            .join('\n')
         })
       } else {
         const agentRequest = await this.buildAgentRequest(caller, originalInput)
@@ -470,6 +500,7 @@ export class ReActLLMDuty extends LLMDuty {
           const prompt = [
             agentSystemPrompt,
             progressiveGuidance,
+            buildAgentConnectionGuidance(state.executionHistory),
             ...(state.trackedSteps.length ? [
               '<current_plan>',
               JSON.stringify(state.trackedSteps),

@@ -11,6 +11,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
+import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { LEON_HOME_PATH } from '@/leon-roots'
 
 import { DUTY_NAME } from './constants'
@@ -635,6 +636,33 @@ export async function runToolExecution(
       handoffSignal: {
         intent: 'answer',
         draft: finalAnswer
+      }
+    }
+  }
+
+  // Let the agent explain tool-owned setup facts and pause through clarification.
+  const requiredConnections = toolOutput['required_connections']
+
+  if (
+    effectiveStatus !== 'success' &&
+    Array.isArray(requiredConnections) &&
+    requiredConnections.length > 0
+  ) {
+    const providers = requiredConnections.filter(
+      (provider): provider is string => typeof provider === 'string'
+    )
+
+    return {
+      execution: {
+        function: qualifiedName,
+        status: 'error',
+        observation: JSON.stringify({
+          connection_required: true,
+          required_connections: providers,
+          connections: getConnectionRequirements(providers)
+        }),
+        requestedToolInput,
+        ...(stepLabel ? { stepLabel } : {})
       }
     }
   }

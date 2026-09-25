@@ -98,7 +98,14 @@ function resolveProfileJsonPath(
 }
 
 async function readJsonFile(filePath: string): Promise<unknown> {
-  return JSON.parse(await fs.promises.readFile(filePath, 'utf8')) as unknown
+  const content = await fs.promises.readFile(filePath, 'utf8')
+
+  try {
+    return JSON.parse(content) as unknown
+  } catch {
+    // Parser errors can quote file contents before sensitive fields are redacted.
+    throw new Error('Extension file contains invalid JSON.')
+  }
 }
 
 export const postExtensionFileRead: FastifyPluginAsync<APIOptions> = async (

@@ -242,15 +242,16 @@ export default class Chatbot {
   }
 
   getWidgetPayload(formattedString) {
-    if (
-      typeof formattedString !== 'string' ||
-      !formattedString.includes('"component":"WidgetWrapper"')
-    ) {
+    if (typeof formattedString !== 'string') {
       return null
     }
 
     try {
-      return JSON.parse(formattedString)
+      const payload = JSON.parse(formattedString)
+
+      return payload?.id && payload?.widget && payload?.componentTree
+        ? payload
+        : null
     } catch {
       return null
     }
@@ -329,7 +330,8 @@ export default class Chatbot {
         ? renderAuroraComponent(
             this.socket,
             fetchedWidget.componentTree,
-            fetchedWidget.supportedEvents
+            fetchedWidget.supportedEvents,
+            this.serverURL
           )
         : createElement(WidgetWrapper, {
             children: createElement(Flexbox, {
@@ -521,8 +523,8 @@ export default class Chatbot {
 
     // Store original string before formatting
     const originalString = string
-    const formattedString = this.formatMessage(string)
-    const widgetPayload = this.getWidgetPayload(formattedString)
+    const widgetPayload = this.getWidgetPayload(string)
+    const formattedString = widgetPayload ? '' : this.formatMessage(string)
     const autoPlanInsertionPoint = this.getPlanWidgetInsertionPoint(widgetPayload)
     const resolvedBeforeElement = beforeElement || autoPlanInsertionPoint
 
@@ -555,11 +557,9 @@ export default class Chatbot {
     /**
      * Widget rendering
      */
-    if (
-      formattedString.includes &&
-      formattedString.includes('"component":"WidgetWrapper"')
-    ) {
-      const parsedWidget = widgetPayload || JSON.parse(formattedString)
+    if (widgetPayload) {
+      const parsedWidget = widgetPayload
+
       container.setAttribute('data-widget-id', parsedWidget.id)
 
       /**
@@ -598,7 +598,8 @@ export default class Chatbot {
       const reactNode = renderAuroraComponent(
         this.socket,
         widgetComponentTree,
-        widgetSupportedEvents
+        widgetSupportedEvents,
+        this.serverURL
       )
 
       root.render(reactNode)
@@ -756,8 +757,7 @@ export default class Chatbot {
   }
 
   formatMessage(message) {
-    const isWidget =
-      message.includes && message.includes('"component":"WidgetWrapper"')
+    const isWidget = this.getWidgetPayload(message)
 
     if (typeof message === 'string' && !isWidget) {
       message = escapeHTML(message)

@@ -19,6 +19,9 @@ import {
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_MANAGER } from '@/config'
+import { emitConnectionWidget } from '@/core/connections/connection-widget'
+import { getToolCredentials } from '@/core/connections/connection-catalog'
+import { CONNECTION_STORE } from '@/core/connections/connection-store'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
@@ -243,6 +246,40 @@ export default class ToolExecutor {
       })
     }
 
+    const requiredConnections = TOOLKIT_REGISTRY.getToolConnectionProviders(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
+
+    if (
+      input.executionTarget !== 'satellite' &&
+      !TOOLKIT_REGISTRY.getToolSatelliteDevice(
+        resolvedTool.toolkitId,
+        resolvedTool.toolId
+      ) &&
+      TOOLKIT_REGISTRY.needsToolConnection(
+        resolvedTool.toolkitId,
+        resolvedTool.toolId
+      )
+    ) {
+      // Keep the widget status aligned when an older grant needs new permissions.
+      await Promise.allSettled(
+        requiredConnections.map((provider) =>
+          CONNECTION_STORE.markNeedsAttention(provider)
+        )
+      )
+      requiredConnections.forEach(emitConnectionWidget)
+
+      return this.buildResult({
+        status: 'not_available',
+        message: `Connect ${resolvedTool.toolName} using the connection widget in chat to continue.`,
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        output: { required_connections: requiredConnections }
+      })
+    }
+
     const availability = TOOLKIT_REGISTRY.getToolAvailability(
       resolvedTool.toolkitId,
       resolvedTool.toolId
@@ -287,6 +324,19 @@ export default class ToolExecutor {
       resolvedTool.toolkitId,
       resolvedTool.toolId
     )
+    const declaredConnections = requiredConnections
+
+    if (satelliteDeviceId && declaredConnections.length > 0) {
+      return this.buildResult({
+        status: 'not_available',
+        message: 'Tools using profile connections must run on the Leon server.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        parsedInput: input.parsedInput ?? null,
+        output: { required_execution_target: 'server' }
+      })
+    }
 
     // Context's SDK tool reads profile files directly. Refresh device provenance
     // here as well as in prompt context, including after a disconnect.
@@ -381,15 +431,99 @@ export default class ToolExecutor {
         output: {}
       })
     }
-    const runtimeResult = await TOOL_WORKER_MANAGER.execute({
-      toolkitId: resolvedTool.toolkitId, toolId: resolvedTool.toolId, functionName,
-      parameters: normalizedParsedInput, profileName: getActiveProfileName(),
-      conversationSessionId: getActiveConversationSessionId(),
-      ...(input.signal ? { signal: input.signal } : {})
-    }, argsArray, (line) => {
-      this.emitToolRuntimeProgress(line, input.onProgress)
-      this.logMemoryToolRuntimeMessages(resolvedTool.toolkitId, resolvedTool.toolId, line)
-    })
+
+    const loadConnections = async (
+      forceRefresh = false
+    ): Promise<Record<string, Record<string, unknown>>> =>
+      Object.fromEntries(
+        await Promise.all(
+          declaredConnections.map(async (provider) => {
+            const credentials = await CONNECTION_STORE.getCredentials(
+              provider,
+              undefined,
+              forceRefresh
+            )
+
+            if (!credentials) {
+              throw new Error('Connection required.')
+            }
+
+            return [provider, getToolCredentials(provider, credentials)]
+          })
+        )
+      )
+    let connections: Record<string, Record<string, unknown>>
+
+    try {
+      connections = await loadConnections()
+    } catch {
+      await Promise.allSettled(
+        declaredConnections.map((provider) =>
+          CONNECTION_STORE.markNeedsAttention(provider)
+        )
+      )
+      declaredConnections.forEach(emitConnectionWidget)
+
+      return this.buildResult({
+        status: 'not_available',
+        message:
+          'This connection needs attention. Use the connection widget in chat to reconnect. If the encryption key is missing, restore the profile key.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName,
+        parsedInput: normalizedParsedInput,
+        output: { required_connections: declaredConnections }
+      })
+    }
+
+    const executeTool = (): ReturnType<typeof TOOL_WORKER_MANAGER.execute> =>
+      TOOL_WORKER_MANAGER.execute(
+        {
+          toolkitId: resolvedTool.toolkitId,
+          toolId: resolvedTool.toolId,
+          functionName,
+          parameters: normalizedParsedInput,
+          profileName: getActiveProfileName(),
+          conversationSessionId: getActiveConversationSessionId(),
+
+          ...(Object.keys(connections).length ? { connections } : {}),
+          ...(input.signal ? { signal: input.signal } : {})
+        },
+        argsArray,
+        (line) => {
+          this.emitToolRuntimeProgress(line, input.onProgress)
+          this.logMemoryToolRuntimeMessages(
+            resolvedTool.toolkitId,
+            resolvedTool.toolId,
+            line
+          )
+        }
+      )
+    let runtimeResult = await executeTool()
+
+    if (
+      runtimeResult.output['connection_required'] &&
+      declaredConnections.length
+    ) {
+      // Retry rejected authorization once, including providers without an expiry field.
+      try {
+        connections = await loadConnections(true)
+        runtimeResult = await executeTool()
+      } catch {
+        // Keep the original safe tool error if refresh is unavailable or rejected.
+      }
+
+      if (runtimeResult.output['connection_required']) {
+        await Promise.allSettled(
+          declaredConnections.map((provider) =>
+            CONNECTION_STORE.markNeedsAttention(provider)
+          )
+        )
+        declaredConnections.forEach(emitConnectionWidget)
+        runtimeResult.output['required_connections'] = declaredConnections
+      }
+    }
+
     let runtimeOutput = this.normalizeFilesystemValues(
       runtimeResult.output
     ) as Record<string, unknown>
