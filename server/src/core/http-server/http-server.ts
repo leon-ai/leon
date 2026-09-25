@@ -29,6 +29,7 @@ import { sessionsPlugin } from '@/core/http-server/api/sessions'
 import { openPathPlugin } from '@/core/http-server/api/open-path'
 import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
 import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
+import { connectionsPlugin } from '@/core/http-server/api/connections'
 import {
   authenticateProfileHTTPRequest,
   profileAuthRoutes
@@ -181,8 +182,13 @@ export default class HTTPServer {
     this.fastify.addHook('onRequest', async (request, reply) => {
       const requestPath = request.url.split('?')[0] || ''
       const authPath = `/api/${API_VERSION}/profile-auth`
+      const connectionOAuthCallbackPath = `/api/${API_VERSION}/connections/oauth/callback`
 
-      if (!requestPath.startsWith(`/api/${API_VERSION}/`) || requestPath === authPath) {
+      if (
+        !requestPath.startsWith(`/api/${API_VERSION}/`) ||
+        requestPath === authPath ||
+        requestPath === connectionOAuthCallbackPath
+      ) {
         return
       }
 
@@ -202,6 +208,7 @@ export default class HTTPServer {
     this.fastify.register(openPathPlugin, { apiVersion: API_VERSION })
     this.fastify.register(fileSystemListPlugin, { apiVersion: API_VERSION })
     this.fastify.register(extensionFilesPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(connectionsPlugin, { apiVersion: API_VERSION })
     await registerHTTPPlugins(this.fastify, { apiVersion: API_VERSION })
 
     try {

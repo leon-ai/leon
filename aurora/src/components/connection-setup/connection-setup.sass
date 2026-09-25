@@ -1,0 +1,43 @@
+@use '../../styles/main.sass' as *
+
+.aurora-connection-setup
+  display: flex
+  flex-direction: column
+  gap: var(--a-space-md)
+
+  &__method
+    display: flex
+    flex-direction: column
+    gap: var(--a-space-sm)
+
+  &__methods
+    display: flex
+    flex-wrap: wrap
+    gap: var(--a-space-sm)
+
+  &__details
+    summary
+      cursor: pointer
+
+    ol
+      padding-inline-start: var(--a-space-lg)
+
+    li + li
+      margin-top: var(--a-space-sm)
+
+  &__value
+    display: flex
+    flex-direction: column
+    align-items: flex-start
+    gap: var(--a-space-sm)
+    margin-block: var(--a-space-md)
+    min-width: 0
+
+    code
+      max-width: 100%
+      white-space: pre-wrap
+      overflow-wrap: anywhere
+      user-select: text
+
+    [role='status']:empty
+      display: none
