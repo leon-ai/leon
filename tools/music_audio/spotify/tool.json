@@ -1,0 +1,357 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "spotify",
+  "toolkit_id": "music_audio",
+  "name": "Spotify",
+  "description": "Search Spotify, browse playlists, and control playback on your Spotify Connect devices.",
+  "icon_name": "spotify-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "connection": {
+    "required_settings": [
+      "access_token"
+    ],
+    "methods": {
+      "oauth": {
+        "name": "OAuth",
+        "description": "Authorize Leon to access your Spotify account.",
+        "setup_url": "https://developer.spotify.com/dashboard",
+        "settings": {
+          "client_id": null
+        },
+        "authorization_url": "https://accounts.spotify.com/authorize",
+        "token_url": "https://accounts.spotify.com/api/token",
+        "scopes": [
+          "user-read-private",
+          "playlist-read-private",
+          "playlist-read-collaborative",
+          "user-read-playback-state",
+          "user-modify-playback-state"
+        ],
+        "token_auth": "none",
+        "token_format": "form",
+        "supports_refresh": true,
+        "uses_pkce": true,
+        "setup": {
+          "instructions": [
+            "Open the Spotify developer dashboard and choose Create app.",
+            "Use the suggested application details below and select Web API if asked.",
+            "Add the redirect URI below exactly as shown, then save the application.",
+            "Open the application settings and copy the Client ID. You do not need the client secret.",
+            "For development-mode access, the application owner needs Spotify Premium. Add each test account under Users Management; Spotify currently allows up to five users."
+          ],
+          "values": {
+            "App name": "Leon",
+            "App description": "Connect my Spotify account to my Leon personal assistant.",
+            "Website": "https://getleon.ai"
+          }
+        }
+      }
+    }
+  },
+  "progressive_guidance": "Connect Spotify using the connection widget. Playback requires Spotify Premium and an available Spotify Connect player; audio plays on that device. For a named device or this computer, listDevices and use an observed device ID; never assume the Leon server is the listening device. Ask which device if ambiguous. For ordinary playback, omit deviceId to use the active player. Search once and use returned track URIs or album/artist/playlist context URIs; preserve Spotify links and attribution. Do not supply both uris and contextUri. If no player is available, ask the owner to open Spotify on the intended device and start a track, then listDevices again. Respect is_restricted and supports_volume on device results. An accepted playback command can take time to apply; inspect getPlaybackState when verification is needed. This tool does not collect listening history for long-term context.",
+  "functions": {
+    "getProfile": {
+      "description": "Get the connected Spotify account profile.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "search": {
+      "description": "Search Spotify for tracks, albums, artists, or playlists.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "track",
+                  "album",
+                  "artist",
+                  "playlist"
+                ]
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10,
+                "default": 10
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1000,
+                "default": 0
+              }
+            },
+            "required": [
+              "query",
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "listPlaylists": {
+      "description": "List playlists for the connected Spotify account.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 50,
+                "default": 20
+              },
+              "offset": {
+                "type": "integer",
+                "minimum": 0,
+                "default": 0
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "getPlaylist": {
+      "description": "Retrieve a Spotify playlist by its ID.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "playlistId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "playlistId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "listDevices": {
+      "description": "List available Spotify Connect devices, names, IDs, and restrictions.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "getPlaybackState": {
+      "description": "Get the current playback state and device; active false means no active playback.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "play": {
+      "description": "Start tracks or an album, artist, or playlist on Spotify; omit content to resume.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "deviceId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Observed Spotify Connect device ID. Omit to use the currently active player."
+              },
+              "uris": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "minItems": 1,
+                "maxItems": 100
+              },
+              "contextUri": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "pause": {
+      "description": "Pause Spotify playback.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "deviceId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Observed Spotify Connect device ID. Omit to use the currently active player."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "next": {
+      "description": "Skip to the next Spotify track.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "deviceId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Observed Spotify Connect device ID. Omit to use the currently active player."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "previous": {
+      "description": "Skip to the previous Spotify track.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "deviceId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Observed Spotify Connect device ID. Omit to use the currently active player."
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "setVolume": {
+      "description": "Set Spotify playback volume on a supported device.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "deviceId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Observed Spotify Connect device ID. Omit to use the currently active player."
+              },
+              "volumePercent": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100
+              }
+            },
+            "required": [
+              "volumePercent"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "transferPlayback": {
+      "description": "Transfer Spotify playback to an observed device.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "deviceId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Observed Spotify Connect device ID. Omit to use the currently active player."
+              },
+              "play": {
+                "type": "boolean",
+                "description": "Start playback if true; otherwise preserve the current playback state."
+              }
+            },
+            "required": [
+              "deviceId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}
