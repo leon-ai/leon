@@ -419,22 +419,14 @@ export default class Chatbot {
       ? `&session_id=${encodeURIComponent(this.sessionId)}`
       : ''
 
-    const [historyResponse, systemWidgetsResponse] = await Promise.all([
-      axios.get(
-        `${this.serverURL}/api/v1/conversation-history?supports_widgets=true${sessionQuery}`
-      ),
-      axios.get(
-        `${this.serverURL}/api/v1/system-widgets?supports_widgets=true${sessionQuery}`
-      )
-    ])
+    const historyResponse = await axios.get(
+      `${this.serverURL}/api/v1/conversation-history?supports_widgets=true${sessionQuery}`
+    )
     const history = Array.isArray(historyResponse.data?.history)
       ? historyResponse.data.history
       : []
-    const systemWidgets = Array.isArray(systemWidgetsResponse.data?.widgets)
-      ? systemWidgetsResponse.data.widgets
-      : []
 
-    const timelineItems = expandConversationTimeline([...history, ...systemWidgets])
+    const timelineItems = expandConversationTimeline(history)
       .map((item, index) => ({
         ...item,
         sortIndex: index

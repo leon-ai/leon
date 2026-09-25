@@ -27,13 +27,15 @@ import {
   TOOLKIT_REGISTRY,
   PERSONA
 } from '@/core'
+import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { Telemetry } from '@/telemetry'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { RoutingMode } from '@/types'
+import { RoutingMode, type ConversationWidgetData } from '@/types'
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import {
   LEON_CLIENT_INTERFACE_DEFAULT_CLIENT_TYPE,
@@ -114,6 +116,7 @@ interface UtteranceDataEvent {
 }
 
 interface WidgetDataEvent {
+  sessionId?: string
   method: {
     methodName: string
     methodParams: Record<string, string | number | undefined | unknown[]>
@@ -586,7 +589,11 @@ export default class SocketServer {
 
     if (
       answerDataRecord &&
-      answerDataRecord['historyMode'] === SYSTEM_WIDGET_HISTORY_MODE
+      answerDataRecord['historyMode'] === SYSTEM_WIDGET_HISTORY_MODE &&
+      // Plain progress notices are persisted in the turn trace, not as widgets.
+      ConversationHistoryHelper.isRenderableWidget(
+        answerDataRecord as unknown as ConversationWidgetData
+      )
     ) {
       const messageId =
         typeof answerDataRecord['replaceMessageId'] === 'string'
@@ -602,6 +609,17 @@ export default class SocketServer {
             : ''
 
       if (messageId) {
+        // HTTP clients receive the same durable widget envelope as Socket.IO clients.
+        if (sessionId) {
+          publishAgentEvent(getActiveProfileName(), {
+            type: 'widget',
+            session_id: sessionId,
+            turn_id: null,
+            response_id: messageId,
+            data: { widget: answerDataRecord }
+          })
+        }
+
         void CONVERSATION_LOGGER.upsert(
           {
             who: 'leon',
@@ -609,7 +627,8 @@ export default class SocketServer {
             messageId,
             isAddedToHistory: false,
             widget: answerDataRecord as never
-          }
+          },
+          sessionId ? { sessionId } : undefined
         )
       }
     }
@@ -872,6 +891,11 @@ export default class SocketServer {
         this.chatClients.get(socket.id)?.sessionId ||
         CONVERSATION_SESSION_MANAGER.getActiveSessionId()
 
+      // Ignore actions from a widget whose conversation is no longer selected.
+      if (event.sessionId && event.sessionId !== sessionId) {
+        return
+      }
+
       LogHelper.title('Socket')
       LogHelper.info(`Widget event: ${JSON.stringify(event)}`)
       this.emitToChatClients('is-typing', true, { sessionId })
@@ -888,8 +912,12 @@ export default class SocketServer {
               if (method.methodParams['from'] === 'leon') {
                 await BRAIN.talk(utterance as string, true)
               } else {
-                socket.emit('widget-send-utterance', utterance)
+                socket.emit(
+                  'widget-send-utterance',
+                  event.sessionId ? { utterance, sessionId } : utterance
+                )
               }
+
               return
             }
 

@@ -45,6 +45,8 @@ const mocks = vi.hoisted(() => ({
     sentAt: number
     messageId?: string
     llmMetrics?: Record<string, unknown>
+    widget?: Record<string, unknown>
+    isAddedToHistory?: boolean
   }>
 }))
 
@@ -72,23 +74,25 @@ vi.mock('@/core', () => ({
     })
   },
   CONVERSATION_LOGGER: {
-    load: vi.fn(async (params?: {
-      sessionId?: string
-      nbOfLogsToLoad?: number
-    }) => mocks.persistedMessages
-      .filter((message) =>
-        message.profileId === mocks.activeProfile &&
-        message.sessionId === (params?.sessionId || mocks.activeSessionId)
-      )
-      .slice(-(params?.nbOfLogsToLoad || mocks.persistedMessages.length))
-      .map((message) => ({
-        who: message.who,
-        message: message.message,
-        sentAt: message.sentAt,
-        isAddedToHistory: true,
-        ...(message.messageId ? { messageId: message.messageId } : {}),
-        ...(message.llmMetrics ? { llmMetrics: message.llmMetrics } : {})
-      }))),
+    load: vi.fn(
+      async (params?: { sessionId?: string, nbOfLogsToLoad?: number }) =>
+        mocks.persistedMessages
+          .filter(
+            (message) =>
+              message.profileId === mocks.activeProfile &&
+              message.sessionId === (params?.sessionId || mocks.activeSessionId)
+          )
+          .slice(-(params?.nbOfLogsToLoad || mocks.persistedMessages.length))
+          .map((message) => ({
+            who: message.who,
+            message: message.message,
+            sentAt: message.sentAt,
+            isAddedToHistory: message.isAddedToHistory ?? true,
+            ...(message.widget ? { widget: message.widget } : {}),
+            ...(message.messageId ? { messageId: message.messageId } : {}),
+            ...(message.llmMetrics ? { llmMetrics: message.llmMetrics } : {})
+          }))
+    ),
     upsert: vi.fn(
       async (
         record: {
@@ -662,6 +666,41 @@ describe('HTTP plugin Leon services', () => {
         message_count: 2
       }
     ])
+  })
+
+  it('exposes saved widget envelopes to HTTP clients with readable fallback text', async () => {
+    mocks.sessions.set('owner-a', new Set(['widget-session']))
+    const widget = {
+      id: 'connection-widget',
+      widget: 'ConnectionWidget',
+      historyMode: 'system_widget',
+      componentTree: {
+        component: 'ConnectionSetup',
+        props: { provider: 'music_audio.spotify' }
+      }
+    }
+
+    mocks.persistedMessages.push({
+      profileId: 'owner-a',
+      sessionId: 'widget-session',
+      who: 'leon',
+      sentAt: 1,
+      messageId: widget.id,
+      message: 'Connect Spotify',
+      isAddedToHistory: false,
+      widget
+    })
+    const result = await getConversationHistory({
+      profile_id: 'owner-a',
+      session_id: 'widget-session'
+    })
+
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]).toMatchObject({
+      content: 'Connect Spotify',
+      widget,
+      message_id: widget.id
+    })
   })
 
   it('reads persisted history without crossing profile sessions', async () => {

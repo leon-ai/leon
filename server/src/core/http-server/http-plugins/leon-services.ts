@@ -79,9 +79,10 @@ export async function getConversationHistory(
     })
     const messages: HTTPPluginConversationMessage[] =
       ConversationHistoryHelper.toHistoryItems(
-        logs.filter((log) => ConversationHistoryHelper.isAddedToHistory(log)),
+        logs.filter((log) => ConversationHistoryHelper.isVisibleInHistory(log)),
         { supportsWidgets: false, source: 'conversation_history' }
       ).map((item) => ({
+        ...(item.widget ? { widget: item.widget } : {}),
         role: item.who === 'leon' ? 'assistant' : 'owner',
         content: item.string,
         created_at: item.sentAt,

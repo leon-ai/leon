@@ -50,15 +50,15 @@ export const getConversationHistory: FastifyPluginAsync<APIOptions> = async (
         const sessionOptions = request.query.session_id
           ? { sessionId: request.query.session_id }
           : {}
-        const rawConversationLogs = nbOfLogsToLoad && nbOfLogsToLoad > 0
-          ? await CONVERSATION_LOGGER.load({
-              nbOfLogsToLoad,
-              ...sessionOptions
-            })
-          : await CONVERSATION_LOGGER.loadAll(sessionOptions)
-        const conversationLogs = rawConversationLogs.filter(
-          (conversationLog) => ConversationHistoryHelper.isAddedToHistory(conversationLog) ||
-            Boolean(conversationLog.agentResponseTrace)
+        const rawConversationLogs =
+          nbOfLogsToLoad && nbOfLogsToLoad > 0
+            ? await CONVERSATION_LOGGER.load({
+                nbOfLogsToLoad,
+                ...sessionOptions
+              })
+            : await CONVERSATION_LOGGER.loadAll(sessionOptions)
+        const conversationLogs = rawConversationLogs.filter((conversationLog) =>
+          ConversationHistoryHelper.isVisibleInHistory(conversationLog)
         )
         const history = ConversationHistoryHelper.toHistoryItems(
           conversationLogs,

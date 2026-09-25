@@ -177,6 +177,7 @@ export interface HTTPPluginListConversationSessionsResult {
 }
 
 export interface HTTPPluginConversationMessage {
+  widget?: import('@/types').ConversationWidgetData
   role: 'owner' | 'assistant'
   content: string
   created_at: number
@@ -214,6 +215,7 @@ export interface HTTPPluginConversationSessionMutationResult {
 }
 
 export type HTTPPluginAgentEventType =
+  | 'widget'
   | 'progress_message'
   | 'reasoning_summary'
   | 'plan_step'

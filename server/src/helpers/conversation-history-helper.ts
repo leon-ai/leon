@@ -174,6 +174,17 @@ export class ConversationHistoryHelper {
     return conversationLog.isAddedToHistory === true
   }
 
+  /**
+   * UI history includes durable activity and widgets without adding them to model context.
+   */
+  public static isVisibleInHistory(conversationLog: MessageLog): boolean {
+    return (
+      this.isAddedToHistory(conversationLog) ||
+      Boolean(conversationLog.agentResponseTrace) ||
+      this.isRenderableWidget(conversationLog.widget)
+    )
+  }
+
   public static isSystemWidget(
     widget: ConversationWidgetData | null | undefined
   ): boolean {
@@ -215,6 +226,9 @@ export class ConversationHistoryHelper {
         : null
 
       return {
+        ...(this.isRenderableWidget(conversationLog.widget)
+          ? { widget: conversationLog.widget }
+          : {}),
         who: conversationLog.who,
         sentAt: conversationLog.sentAt,
         string: bubbleString,

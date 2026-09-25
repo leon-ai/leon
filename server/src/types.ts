@@ -165,6 +165,7 @@ export interface MessageLog {
 }
 
 export interface ConversationHistoryItem {
+  widget?: ConversationWidgetData
   who: MessageLog['who']
   sentAt: number
   string: string
