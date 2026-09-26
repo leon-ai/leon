@@ -8,5 +8,7 @@
     "ARCHITECTURE.md",
     "MEDIA_PROFILE.md"
   ],
-  "tools": []
+  "tools": [
+    "gmail"
+  ]
 }
