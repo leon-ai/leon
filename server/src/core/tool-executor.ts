@@ -1,4 +1,8 @@
+import { readArtifact, registerArtifact } from '@/core/artifacts/artifact-store'
+import { recordArtifacts } from '@/core/artifacts/artifact-context'
 import { readStoredProfileToken } from '@/core/profile-auth'
+import { attachArtifacts } from '@/core/artifacts/artifact-service'
+import type { ArtifactFile } from '@/core/artifacts/artifact-types'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -43,6 +47,7 @@ export interface ToolExecutionInput {
   toolInput?: string
   parsedInput?: Record<string, unknown>
   executionTarget?: 'any' | 'satellite'
+  deferArtifactDelivery?: boolean
   leonService?: { baseURL: string, token: string }
   signal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
@@ -229,7 +234,75 @@ export default class ToolExecutor {
     LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
   }
 
+  /**
+   * Deliver explicitly attached outputs after local execution or Satellite transfer.
+   */
   public async executeTool(
+    input: ToolExecutionInput
+  ): Promise<ToolExecutionResult> {
+    const result = await this.executeToolInternal(input)
+
+    if (input.deferArtifactDelivery) {
+      return result
+    }
+
+    const output = result.data.output['result'] as
+      | { artifacts?: Array<ArtifactFile & { id?: string }> }
+      | undefined
+    const sessionId = getActiveConversationSessionId()
+
+    if (
+      result.status === 'success' &&
+      sessionId &&
+      Array.isArray(output?.artifacts)
+    ) {
+      const artifacts = []
+      const artifactPaths = []
+
+      for (const file of output.artifacts) {
+        if (file.id) {
+          // Generation service responses already own durable, attached artifacts.
+          const stored = await readArtifact(sessionId, file.id)
+
+          recordArtifacts([stored.artifact])
+          artifactPaths.push({ id: file.id, path: stored.path })
+          continue
+        }
+
+        if (file.presentation !== 'attachment') {
+          continue
+        }
+
+        const artifact = await registerArtifact({
+          ...file,
+          session_id: sessionId,
+          source: result.toolLabel || input.toolId
+        })
+
+        artifacts.push(artifact)
+        artifactPaths.push({
+          id: artifact.id,
+          path: (await readArtifact(sessionId, artifact.id)).path
+        })
+      }
+
+      if (artifactPaths.length) {
+        result.data.output['artifact_paths'] = artifactPaths
+      }
+
+      if (artifacts.length) {
+        await attachArtifacts(
+          sessionId,
+          artifacts.map((artifact) => artifact.id)
+        )
+        result.data.output['artifacts'] = artifacts
+      }
+    }
+
+    return result
+  }
+
+  private async executeToolInternal(
     input: ToolExecutionInput
   ): Promise<ToolExecutionResult> {
     const { toolId, toolkitId, functionName } = input

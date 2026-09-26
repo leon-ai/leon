@@ -1,3 +1,5 @@
+import { API_VERSION } from '@/constants'
+import { uploadSatelliteDeliverables } from '@/core/satellite/satellite-deliverables'
 import os from 'node:os'
 
 import { io } from 'socket.io-client'
@@ -190,6 +192,11 @@ async function startSatellite(): Promise<void> {
             const execute = (): Promise<ToolExecutionResult> =>
               TOOL_EXECUTOR.executeTool({
                 ...invocation.input,
+                deferArtifactDelivery: true,
+                leonService: {
+                  baseURL: `${remoteURL.replace(/\/$/, '')}/api/${API_VERSION}`,
+                  token: credential.value
+                },
                 signal: controller.signal,
                 onProgress: (progress) => {
                   socket.volatile.emit(SATELLITE_EVENTS.toolProgress, {
@@ -208,6 +215,17 @@ async function startSatellite(): Promise<void> {
           }
         )
         if (invocation.conversationSessionId && !controller.signal.aborted) {
+          result = await uploadSatelliteDeliverables({
+            result,
+            root: getSatelliteArtifactRoot(
+              credential.profileName,
+              invocation.conversationSessionId
+            ),
+            sessionId: invocation.conversationSessionId,
+            remoteURL,
+            token: credential.value,
+            signal: controller.signal
+          })
           artifacts = await collectSatelliteArtifacts(
             getSatelliteArtifactRoot(credential.profileName, invocation.conversationSessionId), result
           ).catch((error: unknown) => {
