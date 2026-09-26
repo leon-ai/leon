@@ -22,6 +22,12 @@ export const LLM_PROVIDER_ACCOUNT_CONFIGS: ReadonlyArray<LLMProviderAccountConfi
       apiKeyURL: 'https://openrouter.ai/settings/keys'
     },
     {
+      label: 'Requesty',
+      value: LLMProviders.Requesty,
+      apiKeyEnv: 'LEON_REQUESTY_API_KEY',
+      apiKeyURL: 'https://app.requesty.ai/api-keys'
+    },
+    {
       label: 'OpenAI',
       value: LLMProviders.OpenAI,
       apiKeyEnv: 'LEON_OPENAI_API_KEY',

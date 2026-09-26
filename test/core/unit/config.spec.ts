@@ -178,6 +178,12 @@ describe('ConfigManager', () => {
               env: 'LEON_OPENROUTER_API_KEY'
             }
           },
+          requesty: {
+            base_url: 'https://router.requesty.ai/v1',
+            api_key: {
+              env: 'LEON_REQUESTY_API_KEY'
+            }
+          },
           zai: {
             api_key: {
               env: 'LEON_ZAI_API_KEY'

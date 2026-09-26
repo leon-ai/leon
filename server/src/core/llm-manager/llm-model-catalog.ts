@@ -10,7 +10,8 @@ const SETUP_PROVIDER_ORDER = [
   LLMProviders.MoonshotAI,
   LLMProviders.MiniMax,
   LLMProviders.Celeris,
-  LLMProviders.HuggingFace
+  LLMProviders.HuggingFace,
+  LLMProviders.Requesty
 ]
 
 export const LLM_MODEL_REASONING_VALUES = [
@@ -326,6 +327,23 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
   { provider: LLMProviders.OpenRouter, model: 'minimax/minimax-m3', label: 'minimax/minimax-m3', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: VIDEO_INPUTS },
+
+  /**
+   * @see https://router.requesty.ai/v1/models/managed Managed model ids route across providers.
+   */
+  { provider: LLMProviders.Requesty, model: 'claude-sonnet-4-6', label: 'claude-sonnet-4-6', recommended: true, reasoning: AUTO_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  /**
+   * @see https://router.requesty.ai/v1/models/managed
+   */
+  { provider: LLMProviders.Requesty, model: 'gpt-5.4-mini', label: 'gpt-5.4-mini', reasoning: AUTO_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  /**
+   * @see https://router.requesty.ai/v1/models/managed
+   */
+  { provider: LLMProviders.Requesty, model: 'gemini-3.8-flash', label: 'gemini-3.8-flash', reasoning: AUTO_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  /**
+   * @see https://router.requesty.ai/v1/models/managed
+   */
+  { provider: LLMProviders.Requesty, model: 'deepseek-v4.1-flash', label: 'deepseek-v4.1-flash', reasoning: AUTO_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
 
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-6-astra

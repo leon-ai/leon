@@ -84,6 +84,7 @@ const LLM_PROVIDERS_MAP = {
   [LLMProviders.SGLang]: 'sglang-llm-provider',
   [LLMProviders.Groq]: 'groq-llm-provider',
   [LLMProviders.OpenRouter]: 'openrouter-llm-provider',
+  [LLMProviders.Requesty]: 'requesty-llm-provider',
   [LLMProviders.ZAI]: 'z-ai-llm-provider',
   [LLMProviders.DeepSeek]: 'deepseek-llm-provider',
   [LLMProviders.MiniMax]: 'minimax-llm-provider',
@@ -2717,7 +2718,8 @@ export default class LLMProvider {
           LLMProviders.MoonshotAI,
           LLMProviders.Cerebras,
           LLMProviders.HuggingFace,
-          LLMProviders.Celeris
+          LLMProviders.Celeris,
+          LLMProviders.Requesty
         ].includes(providerName)
       ) {
         const normalized = this.normalizeCompletionResultForOpenAICompatibleProvider(

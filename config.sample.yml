@@ -43,6 +43,13 @@ llm:
       api_key:
         # The value is read from LEON_OPENROUTER_API_KEY in your profile .env file.
         env: LEON_OPENROUTER_API_KEY
+    requesty:
+      # Global: https://router.requesty.ai/v1
+      # EU: https://router.eu.requesty.ai/v1
+      base_url: https://router.requesty.ai/v1
+      api_key:
+        # The value is read from LEON_REQUESTY_API_KEY in your profile .env file.
+        env: LEON_REQUESTY_API_KEY
     zai:
       api_key:
         # The value is read from LEON_ZAI_API_KEY in your profile .env file.
