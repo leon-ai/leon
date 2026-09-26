@@ -2,6 +2,7 @@ import type { ToolExecutionContext } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { spawn, execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -14,6 +15,7 @@ import {
   LEON_TOOLKITS_PATH,
   NVIDIA_LIBS_PATH,
   PROFILE_TOOLS_PATH,
+  PROFILE_SESSIONS_PATH,
   PYTORCH_TORCH_PATH
 } from '@bridge/constants'
 import { ToolkitConfig } from '@sdk/toolkit-config'
@@ -152,6 +154,82 @@ export abstract class Tool {
    */
   public getModelFiles(): ToolModelFile[] {
     return this.modelFiles
+  }
+
+  /**
+   * Marks a completed file for delivery. Return it in the result's artifacts array.
+   * Copying into session storage also allows Satellite to transfer the file.
+   */
+  protected async createArtifact(
+    filePath: string,
+    mimeType: string,
+    filename = path.basename(filePath)
+  ): Promise<{
+    path: string
+    filename: string
+    mime_type: string
+    presentation: 'attachment'
+  }> {
+    const sessionId = this.executionContext?.conversationSessionId
+
+    if (!sessionId) {
+      throw new Error('Artifacts require a conversation session.')
+    }
+
+    const directory = path.join(
+      PROFILE_SESSIONS_PATH,
+      encodeURIComponent(sessionId),
+      'artifacts',
+      'outputs',
+      randomUUID()
+    )
+
+    await fs.promises.mkdir(directory, { recursive: true })
+    const target = path.join(directory, path.basename(filename))
+
+    await fs.promises.copyFile(filePath, target, fs.constants.COPYFILE_EXCL)
+
+    return {
+      path: target,
+      filename,
+      mime_type: mimeType,
+      presentation: 'attachment'
+    }
+  }
+
+  /**
+   * Calls the authenticated Core service with host-supplied profile credentials.
+   */
+  protected async requestLeon<T>(endpoint: string, body?: unknown): Promise<T> {
+    const service = this.executionContext?.leonService
+
+    if (!service) {
+      throw new Error('This operation requires a Leon server connection.')
+    }
+
+    const response = await fetch(`${service.baseURL}${endpoint}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-leon-profile-token': service.token
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(this.executionContext?.signal
+        ? { signal: this.executionContext.signal }
+        : {})
+    })
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => null)) as {
+        message?: string
+      } | null
+
+      throw new Error(
+        error?.message || `Leon service request failed (${response.status}).`
+      )
+    }
+
+    return (await response.json()) as T
   }
 
   private static isToolRuntime: boolean = ((): boolean => {

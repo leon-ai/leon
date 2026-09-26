@@ -1,4 +1,7 @@
 import os
+import uuid
+import json
+from urllib.request import Request, urlopen
 import base64
 import re
 import shlex
@@ -10,7 +13,7 @@ from threading import Thread
 from abc import ABC, abstractmethod
 from typing import Callable, Dict, Optional, Union, List, Any, cast
 from pypdl import Pypdl
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
 from .tool_runtime_types import ToolExecutionContext, ToolModelFile
 from .toolkit_config import ToolkitConfig
 from .leon import leon
@@ -28,6 +31,7 @@ from ..constants import (
     LEON_TOOLKITS_PATH,
     NVIDIA_LIBS_PATH,
     PROFILE_TOOLS_PATH,
+    LEON_PROFILE_PATH,
     PYTORCH_TORCH_PATH,
 )
 import subprocess
@@ -97,6 +101,60 @@ class BaseTool(ABC):
         """Reset per-call evidence when a host prepares this tool for execution."""
         self.execution_context = context
         self._model_files.clear()
+
+    def create_artifact(
+        self, file_path: str, mime_type: str, filename: str | None = None
+    ) -> dict[str, Any]:
+        """Copy a deliverable into session storage; return it in the result artifacts array."""
+        session_id = (
+            self.execution_context.conversation_session_id
+            if self.execution_context else None
+        )
+
+        if not session_id:
+            raise ValueError("Artifacts require a conversation session.")
+
+        directory = os.path.join(
+            LEON_PROFILE_PATH,
+            "sessions",
+            quote(session_id, safe="~()*!.'-"),
+            "artifacts",
+            "outputs",
+            str(uuid.uuid4()),
+        )
+
+        os.makedirs(directory, exist_ok=False)
+        target = os.path.join(directory, os.path.basename(filename or file_path))
+
+        shutil.copyfile(file_path, target)
+
+        return {
+            "path": target,
+            "filename": filename or os.path.basename(file_path),
+            "mime_type": mime_type,
+            "presentation": "attachment",
+        }
+
+    def request_leon(self, endpoint: str, body: Any = None) -> Any:
+        """Call Core with host-supplied profile credentials, never model arguments."""
+        service = (
+            self.execution_context.leon_service if self.execution_context else None
+        )
+
+        if not service:
+            raise ValueError("This operation requires a Leon server connection.")
+
+        request = Request(
+            service["baseURL"] + endpoint,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={
+                "Content-Type": "application/json",
+                "x-leon-profile-token": service["token"],
+            },
+        )
+
+        with urlopen(request, timeout=600) as response:
+            return json.load(response)
 
     def get_connection_credentials(self, provider: str) -> dict[str, Any] | None:
         """Get credentials for a provider declared in this tool's manifest."""

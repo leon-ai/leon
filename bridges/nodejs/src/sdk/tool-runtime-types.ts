@@ -23,6 +23,7 @@ export interface ToolExecutionContext {
    * Profile-scoped secrets declared by this tool's connection requirements.
    */
   connections?: Record<string, Record<string, unknown>>
+  leonService?: { baseURL: string; token: string }
   signal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
 }

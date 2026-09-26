@@ -1,3 +1,4 @@
+import { readStoredProfileToken } from '@/core/profile-auth'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
@@ -6,9 +7,7 @@ import jq from 'node-jq'
 import type { Json as NodeJQJson } from 'node-jq/lib/options'
 
 import { LogHelper } from '@/helpers/log-helper'
-import {
-  GLOBAL_DATA_PATH
-} from '@/constants'
+import { GLOBAL_DATA_PATH, API_VERSION } from '@/constants'
 import { LangHelper } from '@/helpers/lang-helper'
 import {
   TOOLKIT_REGISTRY,
@@ -44,6 +43,7 @@ export interface ToolExecutionInput {
   toolInput?: string
   parsedInput?: Record<string, unknown>
   executionTarget?: 'any' | 'satellite'
+  leonService?: { baseURL: string, token: string }
   signal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
 }
@@ -485,7 +485,10 @@ export default class ToolExecutor {
           parameters: normalizedParsedInput,
           profileName: getActiveProfileName(),
           conversationSessionId: getActiveConversationSessionId(),
-
+          leonService: input.leonService || {
+            baseURL: `${CONFIG_MANAGER.getConfig().server.host}:${CONFIG_MANAGER.getConfig().server.port}/api/${API_VERSION}`,
+            token: `${getActiveProfileName()}:${readStoredProfileToken(getActiveProfileName())}`
+          },
           ...(Object.keys(connections).length ? { connections } : {}),
           ...(input.signal ? { signal: input.signal } : {})
         },
