@@ -444,7 +444,7 @@ describe('AISDKRemoteLLMProvider', () => {
     ])
   })
 
-  it('forwards answer text before the provider finishes its response', async () => {
+  it('buffers provider text until the agent accepts the response', async () => {
     const emit = vi.fn()
     const answerStream = new AgentAnswerStream(emit)
     const onReasoningToken = vi.fn()
@@ -453,11 +453,9 @@ describe('AISDKRemoteLLMProvider', () => {
         yield { type: 'reasoning-delta', delta: 'Thinking' }
         expect(emit).not.toHaveBeenCalled()
         yield { type: 'text-delta', delta: 'Hello' }
-        expect(emit).toHaveBeenCalledExactlyOnceWith({
-          token: 'Hello', generationId: expect.any(String)
-        })
+        expect(emit).not.toHaveBeenCalled()
         yield { type: 'text-delta', delta: ' world' }
-        expect(emit).toHaveBeenCalledTimes(2)
+        expect(emit).not.toHaveBeenCalled()
         yield { type: 'finish', finishReason: { unified: 'stop' } }
       })()
     })
@@ -472,7 +470,12 @@ describe('AISDKRemoteLLMProvider', () => {
     })
 
     expect(onReasoningToken).toHaveBeenCalledExactlyOnceWith('Thinking')
-    expect(emit.mock.calls.map(([payload]) => payload.token)).toEqual(['Hello', ' world'])
+    expect(emit).not.toHaveBeenCalled()
+    answerStream.finish()
+    expect(emit).toHaveBeenCalledExactlyOnceWith({
+      token: 'Hello world',
+      generationId: expect.any(String)
+    })
   })
 
   it('preserves non-streaming provider accounting', async () => {

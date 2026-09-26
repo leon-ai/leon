@@ -7,7 +7,17 @@ export function expandConversationTimeline(messages) {
 
   for (const message of messages) {
     const trace = message.who === 'leon' ? message.agentResponseTrace : null
+
     if (trace) {
+      for (const progress of trace.progressMessages || []) {
+        activities.set(`progress:${progress.id}`, {
+          who: 'leon',
+          sentAt: progress.createdAt ?? message.sentAt,
+          messageId: progress.id,
+          originalString: progress.content
+        })
+      }
+
       for (const reasoning of trace.reasoning || []) {
         activities.set(`reasoning:${reasoning.id}`, {
           who: 'leon',

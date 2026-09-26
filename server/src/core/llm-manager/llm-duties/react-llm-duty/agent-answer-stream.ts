@@ -5,14 +5,14 @@ import { StringHelper } from '@/helpers/string-helper'
  * Tracks the provisional text of one agent response until it is accepted.
  */
 export class AgentAnswerStream {
-  private generationId: string | null = null
+  private pendingText = ''
 
   constructor(
     private readonly emit: (payload: LeonClientInterfaceTokenPayload) => void
   ) {}
 
   /**
-   * Streams readable output; a stream-start marker clears retry text.
+   * Buffers provider text until the loop classifies progress or accepts an ending.
    */
   public push(token: string): void {
     if (!token) {
@@ -20,36 +20,31 @@ export class AgentAnswerStream {
       return
     }
 
-    // Match the final answer's leading trim so provider padding never appears
-    // then disappears. Once text starts, preserve its spacing and line breaks.
-    if (!this.generationId) {
-      token = token.trimStart()
-      if (!token) return
-    }
-
-    this.generationId ??= StringHelper.random(6, { onlyLetters: true })
-    this.emit({
-      token: StringHelper.normalizeUserFacingText(token),
-      generationId: this.generationId
-    })
+    this.pendingText += this.pendingText ? token : token.trimStart()
   }
 
   /**
-   * Releases accepted text without replaying or removing its client bubble.
+   * Publishes accepted text once, retaining a generation ID for the answer event.
    */
   public finish(): string | null {
-    const generationId = this.generationId
-    this.generationId = null
+    const token = StringHelper.normalizeUserFacingText(this.pendingText)
+
+    this.pendingText = ''
+    if (!token) {
+      return null
+    }
+
+    const generationId = StringHelper.random(6, { onlyLetters: true })
+
+    this.emit({ token, generationId })
+
     return generationId
   }
 
   /**
-   * Removes a rejected or interrupted draft before another attempt starts.
+   * Drops rejected drafts privately so visible messages never need retracting.
    */
   public discard(): void {
-    const generationId = this.finish()
-    if (generationId) {
-      this.emit({ token: '', generationId, reset: true })
-    }
+    this.pendingText = ''
   }
 }

@@ -1085,7 +1085,7 @@ export class ReActLLMDuty extends LLMDuty {
 
     try {
       // Reviews must neither expose their text nor replace the proposed answer.
-      // A subsequent operational call discards any ending rejected by review.
+      // A subsequent operational call clears the private buffer of a rejected ending.
       if (!options.isCompletionReview) {
         this.answerStream.discard()
       }
@@ -1544,14 +1544,18 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     const id = `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`
+    const createdAt = Date.now()
+
     // Hosts receive the same non-final message as the built-in chat client.
     this.reportProgressEvent({
       type: 'progress_message',
-      message: { id, content: message, createdAt: Date.now() }
+      message: { id, content: message, createdAt }
     })
     try {
       SOCKET_SERVER.emitAnswerToChatClients({
         id,
+        messageId: id,
+        sentAt: createdAt,
         answer: message,
         generationId,
         fallbackText: message,
@@ -1574,9 +1578,9 @@ export class ReActLLMDuty extends LLMDuty {
 
     const normalizedOutput = StringHelper.normalizeUserFacingText(output)
 
-    // The normal answer event finalizes streamed text, including review edits
-    // and runtime-generated endings. Never replay the answer as synthetic tokens.
-    this.answerStream.finish()
+    // The normal answer event carries the accepted final text, including review
+    // edits. Do not publish the buffered candidate separately from that answer.
+    this.answerStream.discard()
 
     this.logTitle('final_answer')
     LogHelper.success('Duty executed')

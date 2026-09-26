@@ -3,34 +3,47 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 
 describe('agent answer streaming', () => {
-  it('delivers chunks immediately and finishes without replaying accepted progress', () => {
+  it('buffers chunks and publishes accepted progress once', () => {
     const emit = vi.fn()
     const stream = new AgentAnswerStream(emit)
 
     stream.push('Checking')
-    expect(emit).toHaveBeenCalledOnce()
-    const generationId = emit.mock.calls[0]?.[0].generationId
+    expect(emit).not.toHaveBeenCalled()
     stream.push(' the files.')
-    expect(emit).toHaveBeenLastCalledWith({ token: ' the files.', generationId })
-    expect(stream.finish()).toBe(generationId)
+    expect(emit).not.toHaveBeenCalled()
+    const generationId = stream.finish()
+
+    expect(emit).toHaveBeenCalledExactlyOnceWith({
+      token: 'Checking the files.',
+      generationId
+    })
 
     stream.discard()
-    expect(emit).toHaveBeenCalledTimes(2)
+    expect(emit).toHaveBeenCalledOnce()
     stream.push('Done.')
-    expect(emit.mock.calls[2]?.[0].generationId).not.toBe(generationId)
+    expect(stream.finish()).not.toBe(generationId)
+    expect(emit).toHaveBeenCalledTimes(2)
   })
 
-  it.each(['', null])('removes a provisional draft on retry or rejection: %j', (marker) => {
-    const emit = vi.fn()
-    const stream = new AgentAnswerStream(emit)
-    stream.push('Incomplete draft')
-    const generationId = emit.mock.calls[0]?.[0].generationId
+  it.each(['', null])(
+    'discards a private draft on retry or rejection: %j',
+    (marker) => {
+      const emit = vi.fn()
+      const stream = new AgentAnswerStream(emit)
+
+      stream.push('Incomplete draft')
+      expect(emit).not.toHaveBeenCalled()
 
     if (marker === '') stream.push(marker)
     else stream.discard()
 
-    expect(emit).toHaveBeenLastCalledWith({ token: '', generationId, reset: true })
-    stream.push('Corrected answer')
-    expect(emit.mock.calls[2]?.[0].generationId).not.toBe(generationId)
-  })
+      expect(emit).not.toHaveBeenCalled()
+      stream.push('Corrected answer')
+      stream.finish()
+      expect(emit).toHaveBeenCalledExactlyOnceWith({
+        token: 'Corrected answer',
+        generationId: expect.any(String)
+      })
+    }
+  )
 })

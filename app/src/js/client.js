@@ -295,6 +295,15 @@ export default class Client {
           )
         }
 
+        const messageId = data.messageId || data.id
+
+        if (messageId) {
+          streamedBubbleContainerElement.setAttribute(
+            'data-message-id',
+            messageId
+          )
+        }
+
         // Apply final formatting immediately while the last streamed chunks
         // finish their own fades; acceptance must not restart or cut them short.
         this.chatbot.renderStreamedMessage(
@@ -327,6 +336,7 @@ export default class Client {
               : Date.now()
         })
       }
+
       this.chatbot.scrollDown({ force: true })
 
       // Independent status notices must not consume an in-flight answer.
