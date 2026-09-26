@@ -1,0 +1,274 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "ticktick",
+  "toolkit_id": "productivity_collaboration",
+  "name": "TickTick",
+  "description": "Read TickTick projects and tasks, create or update tasks, and mark tasks complete.",
+  "icon_name": "checkbox-circle-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "connection": {
+    "required_settings": [
+      "access_token"
+    ],
+    "methods": {
+      "api_key": {
+        "name": "Personal API token",
+        "description": "Create a personal API token in TickTick Settings → Account → API Token.",
+        "setup_url": "https://developer.ticktick.com/docs#/openapi",
+        "settings": {
+          "access_token": null
+        },
+        "setup": {
+          "instructions": [
+            "Open the TickTick web app and click your avatar.",
+            "Go to Settings → Account → API Token and create a token.",
+            "Copy it into this form. Leon validates access by listing your projects before saving it."
+          ],
+          "values": {}
+        }
+      },
+      "oauth": {
+        "name": "OAuth",
+        "description": "Authorize Leon to access your TickTick account.",
+        "setup_url": "https://developer.ticktick.com/manage",
+        "settings": {
+          "client_id": null,
+          "client_secret": null
+        },
+        "authorization_url": "https://ticktick.com/oauth/authorize",
+        "token_url": "https://ticktick.com/oauth/token",
+        "scopes": [
+          "tasks:read",
+          "tasks:write"
+        ],
+        "token_auth": "basic",
+        "token_format": "form",
+        "supports_refresh": false,
+        "token_parameters": {
+          "scope": "tasks:read tasks:write"
+        },
+        "setup": {
+          "instructions": [
+            "Open the TickTick developer console and register an application.",
+            "Set the OAuth redirect URI to the exact value shown below.",
+            "Copy the application Client ID and Client Secret into this form.",
+            "Authorize task read and write access on TickTick.",
+            "TickTick documents the authorization-code grant without a refresh grant. If this authorization expires or is revoked, connect again."
+          ],
+          "values": {
+            "App name": "Leon"
+          }
+        }
+      }
+    }
+  },
+  "progressive_guidance": "Connect TickTick with a personal API token or OAuth. Discover project IDs using listProjects before creating tasks. getProjectData returns project tasks and columns; do not assume it includes completed history. Use IDs from observed results, and only complete or change tasks requested by the owner.",
+  "functions": {
+    "listProjects": {
+      "description": "List the connected TickTick account projects.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    },
+    "getProjectData": {
+      "description": "Read a TickTick project with its tasks and columns.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "projectId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "getTask": {
+      "description": "Read a TickTick task by its project and task IDs.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "taskId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "projectId",
+              "taskId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "createTask": {
+      "description": "Create a task in a TickTick project.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content": {
+                "type": "string",
+                "minLength": 1
+              },
+              "dueDate": {
+                "type": "string",
+                "minLength": 1,
+                "description": "TickTick date-time, for example 2026-10-01T09:00:00+0800."
+              },
+              "timeZone": {
+                "type": "string",
+                "minLength": 1,
+                "description": "IANA timezone, for example Asia/Shanghai."
+              },
+              "priority": {
+                "type": "integer",
+                "enum": [
+                  0,
+                  1,
+                  3,
+                  5
+                ]
+              }
+            },
+            "required": [
+              "projectId",
+              "title"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "updateTask": {
+      "description": "Update fields of an existing TickTick task.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "taskId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content": {
+                "type": "string"
+              },
+              "dueDate": {
+                "type": "string",
+                "minLength": 1,
+                "description": "TickTick date-time, for example 2026-10-01T09:00:00+0800."
+              },
+              "timeZone": {
+                "type": "string",
+                "minLength": 1
+              },
+              "priority": {
+                "type": "integer",
+                "enum": [
+                  0,
+                  1,
+                  3,
+                  5
+                ]
+              }
+            },
+            "required": [
+              "projectId",
+              "taskId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "completeTask": {
+      "description": "Mark a TickTick task as complete.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "options": {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "taskId": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "projectId",
+              "taskId"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "options"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

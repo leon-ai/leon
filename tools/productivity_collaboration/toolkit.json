@@ -5,6 +5,7 @@
   "icon_name": "task-line",
   "context_files": [],
   "tools": [
-    "notion"
+    "notion",
+    "ticktick"
   ]
 }
