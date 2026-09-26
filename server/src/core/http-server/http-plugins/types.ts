@@ -1,3 +1,4 @@
+import type { Artifact } from '@/core/artifacts/artifact-types'
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 import type { APIOptions } from '@/core/http-server/http-server'
@@ -75,6 +76,7 @@ export interface HTTPPluginAgentTrace {
 }
 
 export interface HTTPPluginRunAgentResult {
+  artifacts?: Artifact[]
   answer: string
   tier: 'leon-react'
   tool_calls: HTTPPluginToolCall[]
@@ -177,6 +179,7 @@ export interface HTTPPluginListConversationSessionsResult {
 }
 
 export interface HTTPPluginConversationMessage {
+  artifacts?: Artifact[]
   widget?: import('@/types').ConversationWidgetData
   role: 'owner' | 'assistant'
   content: string
@@ -215,6 +218,7 @@ export interface HTTPPluginConversationSessionMutationResult {
 }
 
 export type HTTPPluginAgentEventType =
+  | 'artifacts'
   | 'widget'
   | 'progress_message'
   | 'reasoning_summary'

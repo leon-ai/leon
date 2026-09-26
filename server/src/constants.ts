@@ -43,6 +43,7 @@ export const REMIX_ICON_NAME_PATTERN = '^(?!.*-fill$).+$'
 export const PROGRESSIVE_GUIDANCE_MAX_LENGTH = 4_096
 export const OWNER_ATTACHMENT_MAX_BYTES = 8 * 1_024 * 1_024
 // Base64 plus JSON framing for the same bounded payload accepted over sockets.
+export const MAX_GENERATED_ARTIFACT_BYTES = 512 * 1_024 * 1_024
 export const OWNER_ATTACHMENT_BODY_LIMIT = 12 * 1_024 * 1_024
 
 export { LANG_CONFIGS }

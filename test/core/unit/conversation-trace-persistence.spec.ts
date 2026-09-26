@@ -28,6 +28,100 @@ describe('conversation trace persistence', () => {
     await fs.rm(sessions.root, { recursive: true, force: true })
   })
 
+  it('restores one structured widget after replacement without adding it to model history', async () => {
+    const logger = new ConversationLogger({
+      loggerName: 'test',
+      fileName: 'conversation_log.json',
+      nbOfLogsToKeep: 100,
+      nbOfLogsToLoad: 100
+    })
+    const widget = {
+      id: 'connection-session-spotify',
+      widget: 'ConnectionWidget',
+      actionName: '',
+      onFetch: null,
+      historyMode: 'system_widget' as const,
+      fallbackText: 'Connect Spotify',
+      supportedEvents: [],
+      componentTree: { component: 'WidgetWrapper', props: { children: [] } }
+    }
+    const record = {
+      who: 'leon' as const,
+      message: widget.fallbackText,
+      messageId: widget.id,
+      isAddedToHistory: false,
+      widget
+    }
+
+    await logger.upsert(record, { sessionId: 'first' })
+    await logger.upsert(record, { sessionId: 'first' })
+    const logs = await logger.loadAll({ sessionId: 'first' })
+
+    expect(logs).toHaveLength(1)
+    expect(
+      logs.filter(ConversationHistoryHelper.isAddedToHistory)
+    ).toHaveLength(0)
+    const visible = logs.filter((log) =>
+      ConversationHistoryHelper.isVisibleInHistory(log)
+    )
+    const [history] = ConversationHistoryHelper.toHistoryItems(visible, {
+      supportsWidgets: true
+    })
+
+    expect(history?.widget).toEqual(widget)
+    expect(JSON.parse(history?.string || '')).toEqual(widget)
+    const [fallback] = ConversationHistoryHelper.toHistoryItems(visible, {
+      supportsWidgets: false
+    })
+
+    expect(fallback?.string).toBe('Connect Spotify')
+    expect(fallback?.widget).toEqual(widget)
+    expect(await logger.loadAll({ sessionId: 'second' })).toHaveLength(0)
+  })
+
+  it('preserves downloadable artifacts through serialization, reload and client history', async () => {
+    const logger = new ConversationLogger({
+      loggerName: 'test',
+      fileName: 'conversation_log.json',
+      nbOfLogsToKeep: 100,
+      nbOfLogsToLoad: 100
+    })
+    const artifacts = [
+      {
+        id: 'artifact',
+        session_id: 'first',
+        filename: 'report.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 100,
+        created_at: 1_000,
+        source: 'document',
+        url: '/api/v1/artifacts/first/artifact'
+      }
+    ]
+
+    await logger.upsert(
+      {
+        who: 'leon',
+        message: 'report.pdf',
+        messageId: 'artifact-message',
+        isAddedToHistory: true,
+        artifacts
+      },
+      { sessionId: 'first' }
+    )
+    const logs = await logger.loadAll({ sessionId: 'first' })
+
+    expect(logs[0]?.artifacts).toEqual(artifacts)
+    expect(ConversationHistoryHelper.getModelMessage(logs[0]!)).toContain(
+      '"artifact_id":"artifact"'
+    )
+    expect(
+      ConversationHistoryHelper.toHistoryItems(logs, {
+        supportsWidgets: false
+      })[0]?.artifacts
+    ).toEqual(artifacts)
+  })
+
   it('saves partial activity outside model history and replaces it with one final answer', async () => {
     const logger = new ConversationLogger({
       loggerName: 'test', fileName: 'conversation_log.json', nbOfLogsToKeep: 100, nbOfLogsToLoad: 100

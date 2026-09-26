@@ -16,6 +16,26 @@ interface ToolIconNames {
 }
 
 export class ConversationHistoryHelper {
+  /**
+   * Keeps durable artifact IDs available for follow-up edits after tool logs expire.
+   */
+  public static getModelMessage(
+    message: Pick<MessageLog, 'message' | 'artifacts'>
+  ): string {
+    if (!message.artifacts?.length) {
+      return message.message
+    }
+
+    return `${message.message}\nAttached artifacts: ${JSON.stringify(
+      message.artifacts.map((artifact) => ({
+        artifact_id: artifact.id,
+        session_id: artifact.session_id,
+        filename: artifact.filename,
+        mime_type: artifact.mime_type
+      }))
+    )}`
+  }
+
   private static normalizeMetricNumber(value: unknown): number | null {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return null
@@ -181,6 +201,7 @@ export class ConversationHistoryHelper {
     return (
       this.isAddedToHistory(conversationLog) ||
       Boolean(conversationLog.agentResponseTrace) ||
+      Boolean(conversationLog.artifacts?.length) ||
       this.isRenderableWidget(conversationLog.widget)
     )
   }
@@ -228,6 +249,9 @@ export class ConversationHistoryHelper {
       return {
         ...(this.isRenderableWidget(conversationLog.widget)
           ? { widget: conversationLog.widget }
+          : {}),
+        ...(conversationLog.artifacts?.length
+          ? { artifacts: conversationLog.artifacts }
           : {}),
         who: conversationLog.who,
         sentAt: conversationLog.sentAt,

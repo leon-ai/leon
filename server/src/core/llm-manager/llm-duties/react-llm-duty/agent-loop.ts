@@ -1,3 +1,4 @@
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import type {
@@ -718,7 +719,7 @@ export function buildAgentTranscriptHistory(
 
   return messages.map((message) => ({
     role: message.who === 'owner' ? 'user' : 'assistant',
-    content: message.message
+    content: ConversationHistoryHelper.getModelMessage(message)
   }))
 }
 

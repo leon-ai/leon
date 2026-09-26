@@ -1,3 +1,4 @@
+import type { Artifact } from '@/core/artifacts/artifact-types'
 /**
  * Contain common/shared types that are universal across the project
  * and cannot be placed in the respective core nodes
@@ -154,6 +155,7 @@ export interface AgentResponseTrace {
 }
 
 export interface MessageLog {
+  artifacts?: Artifact[]
   who: 'owner' | 'leon'
   sentAt: number
   message: string
@@ -165,6 +167,7 @@ export interface MessageLog {
 }
 
 export interface ConversationHistoryItem {
+  artifacts?: Artifact[]
   widget?: ConversationWidgetData
   who: MessageLog['who']
   sentAt: number

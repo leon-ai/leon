@@ -1,3 +1,5 @@
+import { collectArtifacts } from '@/core/artifacts/artifact-context'
+import type { Artifact } from '@/core/artifacts/artifact-types'
 import { performance } from 'node:perf_hooks'
 import type { AgentResponseTrace } from '@/types'
 
@@ -61,6 +63,7 @@ export async function runAgent(
     let actionExecutionMs = 0
     let reasoningSummary = 'Understanding your request'
     const requestId = input.request_id || null
+    let turnArtifacts: Artifact[] = []
     let finalMetrics: Record<string, unknown> | null = null
     let finalTrace: HTTPPluginAgentTrace = { plan_steps: [], tool_calls: [] }
     const emit = (
@@ -188,7 +191,10 @@ export async function runAgent(
 
         await duty.init()
         input.signal?.throwIfAborted()
-        const dutyResult = await duty.execute()
+        const collected = await collectArtifacts(() => duty.execute())
+        const dutyResult = collected.value
+
+        turnArtifacts = collected.artifacts
         input.signal?.throwIfAborted()
         const output = dutyResult?.output as unknown
         const data = dutyResult?.data || {}
@@ -247,7 +253,8 @@ export async function runAgent(
           emit('final_answer', {
             message_id: messageId || '',
             content: output,
-            response_trace: trace
+            response_trace: trace,
+            artifacts: turnArtifacts
           })
 
           if (data['hasExplicitMemoryWrite'] === true) {
@@ -270,6 +277,7 @@ export async function runAgent(
     return {
       answer: typeof output === 'string' ? output : '',
       tier: 'leon-react',
+      artifacts: turnArtifacts,
       tool_calls: normalizeToolCalls(result),
       profile_id: getActiveProfileName(),
       session_id: sessionId,

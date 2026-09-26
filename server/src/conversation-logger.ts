@@ -121,6 +121,9 @@ export class ConversationLogger {
         who: conversationLog.who,
         sentAt: conversationLog.sentAt,
         message: conversationLog.message,
+        ...(conversationLog.artifacts?.length
+          ? { artifacts: conversationLog.artifacts }
+          : {}),
         isAddedToHistory: conversationLog.isAddedToHistory,
         ...(conversationLog.messageId
           ? { messageId: conversationLog.messageId }

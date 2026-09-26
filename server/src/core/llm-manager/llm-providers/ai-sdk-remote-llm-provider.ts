@@ -1,3 +1,4 @@
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import type { AxiosResponse } from 'axios'
 import type {
   JSONSchema7,
@@ -315,7 +316,7 @@ export default class AISDKRemoteLLMProvider {
           content: [
             {
               type: 'text',
-              text: message.message
+              text: ConversationHistoryHelper.getModelMessage(message)
             }
           ]
         })

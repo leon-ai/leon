@@ -94,6 +94,7 @@ export async function getConversationHistory(
         { supportsWidgets: false, source: 'conversation_history' }
       ).map((item) => ({
         ...(item.widget ? { widget: item.widget } : {}),
+        ...(item.artifacts?.length ? { artifacts: item.artifacts } : {}),
         role: item.who === 'leon' ? 'assistant' : 'owner',
         content: item.string,
         created_at: item.sentAt,
