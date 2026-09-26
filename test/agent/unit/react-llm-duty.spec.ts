@@ -274,12 +274,33 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Do the task.' }], catalog: createCatalog(),
       initialExecutionHistory: [{ function: callable.qualifiedName, status: 'success', observation: 'Evidence.' }],
-      callModel: vi.fn().mockResolvedValueOnce({ textContent: 'Done.' }).mockResolvedValueOnce(review),
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ textContent: 'Done.' })
+        .mockResolvedValueOnce(review)
+        .mockResolvedValueOnce(review),
       executeFunction, loadAgentSkill: async () => null
     })
     expect(result.intent).toBe('error')
     expect(result.answer).toContain('completion check failed')
     expect(executeFunction).not.toHaveBeenCalled()
+  })
+
+  it('retries an unusable completion review before rejecting the proposed answer', async () => {
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ textContent: 'The OCR text is LEON AI 42.' })
+      .mockResolvedValueOnce({ textContent: 'The task was to OCR the image. Done.' })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The OCR result is included.' }) })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Read the image text.' }], catalog: createCatalog(),
+      initialExecutionHistory: [{
+        function: callable.qualifiedName, status: 'success', observation: 'OCR returned LEON AI 42.'
+      }],
+      callModel, executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    expect(result.intent).toBe('answer')
+    expect(result.answer).toBe('The OCR text is LEON AI 42.')
+    expect(callModel).toHaveBeenCalledTimes(3)
+    expect(callModel.mock.calls[2]?.[0].at(-1)?.content).toContain('previous completion review response was unusable')
   })
 
   it('checks unfinished plans and enters the finishing pass after rejected completion', async () => {

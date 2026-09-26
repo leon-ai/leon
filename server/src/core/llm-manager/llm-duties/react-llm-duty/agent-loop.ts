@@ -39,6 +39,7 @@ export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
 const AGENT_TOOL_NAME_SEPARATOR = '__'
 const AGENT_LIMIT_RECOVERY_EXECUTION_LIMIT = 8
 const AGENT_LIMIT_RECOVERY_OBSERVATION_MAX_CHARS = 1_000
+const AGENT_COMPLETION_REVIEW_ATTEMPTS = 2
 const AGENT_PLAN_REMINDER_INTERVAL = 4
 const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
   granularity: 'word'
@@ -987,9 +988,7 @@ async function reviewAgentCompletion(
   state: Pick<AgentLoopResult, 'executionHistory' | 'trackedSteps'>,
   isContextRecoveryAttempt = false
 ): Promise<{ status: AgentCompletionStatus, reason: string } | null> {
-  try {
-    params.signal?.throwIfAborted()
-    const response = await params.callModel([
+  const messages: AgentToolTranscriptMessage[] = [
       ...transcript,
       { role: 'assistant', content: answer },
       { role: 'user', content: JSON.stringify({
@@ -997,24 +996,39 @@ async function reviewAgentCompletion(
         remaining_operational_iterations: remainingIterations,
         reported_plan: state.trackedSteps
       }) }
-    ], [], {
-      isRecoveryAttempt: false, isCompletionReview: true,
-      ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
-    }, state)
-    params.signal?.throwIfAborted()
-    if (!response || response.isTruncated || response.toolCalls?.length) return null
-    const review = parseToolCallArguments(response.textContent || '')
-    const status = review?.['status'] as AgentCompletionStatus
-    const reason = review?.['reason']
-    if (!Object.values(AgentCompletionStatus).includes(status) ||
-        typeof reason !== 'string' || !reason.trim()) return null
-    LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
-    return { status, reason }
-  } catch {
-    params.signal?.throwIfAborted()
-    // An unavailable verifier must not turn unverified work into success.
-    return null
+  ]
+  for (let attempt = 0; attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS; attempt += 1) {
+    try {
+      params.signal?.throwIfAborted()
+      const response = await params.callModel(messages, [], {
+        isRecoveryAttempt: false, isCompletionReview: true,
+        ...(isContextRecoveryAttempt ? { isContextRecoveryAttempt: true } : {})
+      }, state)
+      params.signal?.throwIfAborted()
+      const review = response && !response.isTruncated && !response.toolCalls?.length
+        ? parseToolCallArguments(response.textContent || '')
+        : null
+      const status = review?.['status'] as AgentCompletionStatus
+      const reason = review?.['reason']
+      if (Object.values(AgentCompletionStatus).includes(status) &&
+          typeof reason === 'string' && reason.trim()) {
+        LogHelper.debug(`Agent completion review: ${status} | ${reason}`)
+        return { status, reason }
+      }
+      LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
+    } catch {
+      params.signal?.throwIfAborted()
+      LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
+    }
+    if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
+      messages.push({
+        role: 'user',
+        content: 'The previous completion review response was unusable. Review the same evidence again and return only a JSON object with status and reason as requested.'
+      })
+    }
   }
+  // An unavailable verifier must not turn unverified work into success.
+  return null
 }
 
 async function finalizeAgentLoopAtLimit(
