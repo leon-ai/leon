@@ -1,3 +1,4 @@
+import { artifactsPlugin } from '@/core/http-server/api/artifacts'
 import fs from 'node:fs'
 import path, { join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -204,6 +205,7 @@ export default class HTTPServer {
     this.fastify.register(sessionsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(infoPlugin, { apiVersion: API_VERSION })
     this.fastify.register(commandPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(artifactsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(inferencePlugin, { apiVersion: API_VERSION })
     this.fastify.register(openPathPlugin, { apiVersion: API_VERSION })
     this.fastify.register(fileSystemListPlugin, { apiVersion: API_VERSION })
