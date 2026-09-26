@@ -27,7 +27,6 @@ import {
 import {
   LLMDuties,
   LLMProviders,
-  type LLMPromptAbortReason,
   type AgentToolTranscriptMessage,
   type OpenAITool,
   type OpenAIToolCall
@@ -58,7 +57,6 @@ import {
   CHARS_PER_TOKEN,
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
-  AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS,
   AGENT_MAX_ITERATIONS,
   AGENT_FINISHING_ITERATIONS,
   AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
@@ -1025,14 +1023,7 @@ export class ReActLLMDuty extends LLMDuty {
     let completed = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
     let diagnosisTimer: NodeJS.Timeout | null = null
-    let diagnosisRetryTimer: NodeJS.Timeout | null = null
     const toolCallAbortController = new AbortController()
-
-    const delayReason = this.buildLongToolCallReason(
-      promptForLog,
-      activeSystemPrompt,
-      preparedTools
-    )
 
     waitNoticeTimer = setTimeout(() => {
       if (completed) {
@@ -1043,9 +1034,7 @@ export class ReActLLMDuty extends LLMDuty {
         `callAgentModel: pending > ${AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
       )
       void this.emitProgress(
-        BRAIN.wernicke('react.tool_call.waiting', '', {
-          '{{ reason }}': delayReason
-        })
+        BRAIN.wernicke('react.tool_call.waiting')
       )
     }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
 
@@ -1057,28 +1046,10 @@ export class ReActLLMDuty extends LLMDuty {
       void this.runLongToolCallDiagnosis(
         promptForLog,
         activeSystemPrompt,
-        preparedTools
+        preparedTools,
+        phase,
+        toolChoice
       )
-
-      diagnosisRetryTimer = setTimeout(() => {
-        if (completed || toolCallAbortController.signal.aborted) {
-          return
-        }
-
-        const abortReason: LLMPromptAbortReason = {
-          shouldRetry: true,
-          retryStrategy: 'timeout',
-          source: 'agent_tool_call_diagnosis',
-          delayMs: AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS
-        }
-
-        this.logTitle(phase)
-        LogHelper.warning(
-          `callAgentModel: diagnosis grace period exceeded (${AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS}ms); canceling in-flight request and retrying`
-        )
-
-        toolCallAbortController.abort(abortReason)
-      }, AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS)
     }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
 
     try {
@@ -1137,9 +1108,6 @@ export class ReActLLMDuty extends LLMDuty {
       }
       if (diagnosisTimer) {
         clearTimeout(diagnosisTimer)
-      }
-      if (diagnosisRetryTimer) {
-        clearTimeout(diagnosisRetryTimer)
       }
     }
 
@@ -1505,35 +1473,12 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.debug('Prompt reasoning [tools]: none')
   }
 
-  private buildLongToolCallReason(
-    prompt: string,
-    systemPrompt: string,
-    tools: OpenAITool[]
-  ): string {
-    const estimatedPromptTokens =
-      this.estimateTokensFromText(prompt) +
-      this.estimateTokensFromText(systemPrompt) +
-      this.estimateTokensFromText(JSON.stringify(tools))
-
-    if (estimatedPromptTokens > 4_500) {
-      return BRAIN.wernicke('react.tool_call.reason.large_prompt', '', {
-        '{{ estimated_tokens }}': String(estimatedPromptTokens)
-      })
-    }
-
-    if (tools.length > 1) {
-      return BRAIN.wernicke('react.tool_call.reason.multi_tools', '', {
-        '{{ tool_count }}': String(tools.length)
-      })
-    }
-
-    return BRAIN.wernicke('react.tool_call.reason.provider_latency')
-  }
-
   private async runLongToolCallDiagnosis(
     prompt: string,
     systemPrompt: string,
-    tools: OpenAITool[]
+    tools: OpenAITool[],
+    phase: AgentPhase,
+    toolChoice: string
   ): Promise<void> {
     const promptTokens =
       this.estimateTokensFromText(prompt) +
@@ -1543,12 +1488,12 @@ export class ReActLLMDuty extends LLMDuty {
 
     const diagnosisMessage = BRAIN.wernicke('react.tool_call.diagnosis', '', {
       '{{ provider }}': getLLMProviderName(),
-      '{{ tool_choice }}': 'auto',
+      '{{ phase }}': phase,
+      '{{ tool_choice }}': toolChoice,
       '{{ tool_count }}': String(tools.length),
       '{{ total_tokens }}': String(totalEstimatedTokens),
       '{{ prompt_tokens }}': String(promptTokens),
-      '{{ tool_tokens }}': String(toolSchemaTokens),
-      '{{ history_tokens }}': '0'
+      '{{ tool_tokens }}': String(toolSchemaTokens)
     })
 
     this.logTitle('execution')

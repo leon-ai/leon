@@ -327,19 +327,10 @@
       "Error downloading {{ file_name }} from {{ url }} : {{ error }}."
     ],
     "react.tool_call.waiting": [
-      "Still working on this step. Please wait because {{ reason }}."
-    ],
-    "react.tool_call.reason.large_prompt": [
-      "the prompt is large (around {{ estimated_tokens }} tokens) and needs more inference time"
-    ],
-    "react.tool_call.reason.multi_tools": [
-      "the model is evaluating {{ tool_count }} tool schemas before deciding"
-    ],
-    "react.tool_call.reason.provider_latency": [
-      "the provider is taking longer than usual to complete this tool-selection call"
+      "The model request for this step is taking longer than usual. I’m still waiting for its response."
     ],
     "react.tool_call.diagnosis": [
-      "Still running this step. Quick diagnosis while it continues: provider={{ provider }}, tool choice={{ tool_choice }}, tools={{ tool_count }}, estimated tokens={{ total_tokens }} (prompt={{ prompt_tokens }}, tools={{ tool_tokens }}, history={{ history_tokens }}). Slowdowns usually come from provider queueing or large context."
+      "Still running this step. The model request has not completed: provider={{ provider }}, phase={{ phase }}, tool choice={{ tool_choice }}, tools={{ tool_count }}, approximate input tokens={{ total_tokens }} (prompt={{ prompt_tokens }}, tool schemas={{ tool_tokens }})."
     ],
     "react.tool.preparing": [
       "Preparing the {{ tool_name }} tool..."
