@@ -202,6 +202,23 @@ describe('continuous agent loop', () => {
   })
 
   it('continues an incomplete invoice answer without replaying the downloaded item', async () => {
+    const catalog = createCatalog()
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Download all August invoices.' },
+      {
+        role: 'user',
+        content: 'Include September too. Keep the original filenames.'
+      }
+    ]
+
+    catalog.tools.push({
+      type: 'function',
+      function: {
+        name: AGENT_TOOLKIT_LOADER_NAME,
+        description: 'The full discovery catalog is unrelated to completion review.',
+        parameters: { type: 'object', properties: {} }
+      }
+    })
     const initialExecutionHistory = [{
       function: callable.qualifiedName, status: 'success',
       observation: 'Verified invoice-0003.pdf. Other requested invoices remain.',
@@ -219,15 +236,22 @@ describe('continuous agent loop', () => {
       requestedToolInput: JSON.stringify({ query: 'remaining-invoices' })
     } }))
     const result = await runAgentLoopWithCompletionReview({
-      transcript: [{ role: 'user', content: 'Download all August and September invoices.' }],
-      catalog: createCatalog(), initialExecutionHistory, callModel, executeFunction,
+      transcript: structuredClone(transcript),
+      catalog, initialExecutionHistory, callModel, executeFunction,
       loadAgentSkill: async () => null
     })
+
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('All requested invoices are downloaded and verified.')
     expect(executeFunction).toHaveBeenCalledExactlyOnceWith(callable, JSON.stringify({ query: 'remaining-invoices' }), undefined)
     expect(callModel.mock.calls[1]?.[1]).toEqual([])
     expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
+    expect(
+      callModel.mock.calls[1]?.[0].slice(0, transcript.length)
+    ).toEqual(transcript)
+    const review = JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)
+
+    expect(review.available_tool_contracts).toEqual(catalog.tools.map((tool) => tool.function))
     expect(callModel.mock.calls[2]?.[2]).toMatchObject({ requiresToolAction: true })
     expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
     expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')
@@ -290,7 +314,7 @@ describe('continuous agent loop', () => {
   it('retries an unusable completion review before rejecting the proposed answer', async () => {
     const callModel = vi.fn()
       .mockResolvedValueOnce({ textContent: 'The OCR text is LEON AI 42.' })
-      .mockResolvedValueOnce({ textContent: 'The task was to OCR the image. Done.' })
+      .mockRejectedValueOnce(new Error('Provider rejected structured output'))
       .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The OCR result is included.' }) })
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Read the image text.' }], catalog: createCatalog(),
@@ -302,6 +326,8 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('The OCR text is LEON AI 42.')
     expect(callModel).toHaveBeenCalledTimes(3)
+    expect(callModel.mock.calls[1]?.[2]).toMatchObject({ useReviewSchema: true })
+    expect(callModel.mock.calls[2]?.[2]).toMatchObject({ useReviewSchema: false })
     expect(callModel.mock.calls[2]?.[0].at(-1)?.content).toContain('previous completion review response was unusable')
   })
 

@@ -85,6 +85,7 @@ import { runToolExecution } from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
   AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
+  AGENT_COMPLETION_REVIEW_SCHEMA,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
   buildAgentProgressiveGuidanceSystemPrompt,
@@ -906,6 +907,7 @@ export class ReActLLMDuty extends LLMDuty {
       isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
       isCompletionReview?: boolean
+      useReviewSchema?: boolean
       requiresToolAction?: boolean
       isContextRecoveryAttempt?: boolean
     },
@@ -1092,6 +1094,9 @@ export class ReActLLMDuty extends LLMDuty {
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         systemPrompt: activeSystemPrompt,
+        ...(options.isCompletionReview && options.useReviewSchema !== false
+          ? { data: AGENT_COMPLETION_REVIEW_SCHEMA }
+          : {}),
         temperature: AGENT_TEMPERATURE,
         timeout: AGENT_INFERENCE_TIMEOUT_MS,
         maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
@@ -1223,10 +1228,20 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
 
-    const textContent =
+    let textContent =
       typeof completionResult.output === 'string'
         ? completionResult.output
         : ''
+
+    // JSON-mode providers return a parsed verdict; the loop validates its text.
+    if (
+      options.isCompletionReview &&
+      completionResult.output &&
+      typeof completionResult.output === 'object'
+    ) {
+      textContent = JSON.stringify(completionResult.output)
+    }
+
     this.logTitle(phase)
     LogHelper.debug(
       `callAgentModel: final text response received (${textContent.length} chars)`
