@@ -307,6 +307,18 @@ class ConfigManager {
     return this.getProviderConfig(provider)?.generation_base_url || ''
   }
 
+  /**
+   * Removes a migrated setting while preserving the profile's YAML comments.
+   */
+  public async deleteValue(keyPath: string[]): Promise<void> {
+    const profileName = getActiveProfileName()
+    const document = this.readDocument(profileName)
+
+    document.deleteIn(keyPath)
+    await this.writeDocument(document, profileName)
+    this.reload(profileName)
+  }
+
   public async setValue(keyPath: string[], value: unknown): Promise<void> {
     const profileName = getActiveProfileName()
     const document = this.readDocument(profileName)

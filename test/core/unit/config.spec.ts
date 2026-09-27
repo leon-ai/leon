@@ -82,6 +82,17 @@ describe('ConfigManager', () => {
     })
   })
 
+  it('removes migrated keys without replacing unrelated configuration', async () => {
+    const configManager = await loadConfigManager()
+
+    await configManager.setValue(['llm', 'media_generation'], {
+      image: { provider: 'openai', model: 'old-model' }
+    })
+    await configManager.deleteValue(['llm', 'media_generation'])
+    expect(configManager.getConfig().llm.media_generation).toBeUndefined()
+    expect(configManager.getConfig().llm.default).toBeNull()
+  })
+
   it('defaults to agent routing and preserves explicit modes on reload', async () => {
     const configManager = await loadConfigManager()
     expect(configManager.getConfig().routing.mode).toBe('agent')
