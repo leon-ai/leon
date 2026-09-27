@@ -300,6 +300,13 @@ class ConfigManager {
     return this.getProviderConfig(provider)?.base_url || ''
   }
 
+  /**
+   * Resolves a dedicated generation endpoint without replacing the chat server.
+   */
+  public getProviderGenerationBaseURL(provider: string): string {
+    return this.getProviderConfig(provider)?.generation_base_url || ''
+  }
+
   public async setValue(keyPath: string[], value: unknown): Promise<void> {
     const profileName = getActiveProfileName()
     const document = this.readDocument(profileName)

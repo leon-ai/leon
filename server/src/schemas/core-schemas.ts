@@ -38,9 +38,11 @@ const httpPluginDefinition = strictObject({
   root_routes: Type.Boolean()
 })
 const llmProvider = strictObject({
+  generation_base_url: Type.Optional(Type.String({ format: 'uri' })),
   api_key: secretReference
 })
 const llmProviderWithBaseURL = strictObject({
+  generation_base_url: Type.Optional(Type.String({ format: 'uri' })),
   base_url: Type.String({ minLength: 1 }),
   api_key: secretReference
 })
