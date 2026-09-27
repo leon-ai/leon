@@ -51,6 +51,20 @@ export default class FileTool extends Tool {
   }
 
   /**
+   * Delivers a completed local file through the shared artifact contract.
+   */
+  public async attach(
+    targetPath: string,
+    mimeType: string
+  ): Promise<Record<string, unknown>> {
+    return {
+      artifacts: [
+        await this.createArtifact(this.resolvePath(targetPath), mimeType)
+      ]
+    }
+  }
+
+  /**
    * Extract PDF pages once and reuse their text across subsequent reads.
    */
   public async readPdf(targetPath: string, options: PDFReadOptions = {}): Promise<Record<string, unknown>> {

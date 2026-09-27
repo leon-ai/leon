@@ -204,6 +204,25 @@
         ],
         "additionalProperties": false
       }
+    },
+    "attach": {
+      "description": "Attach a completed file to the conversation for preview and download. Use after writing or rendering a deliverable.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "targetPath": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetPath",
+          "mimeType"
+        ],
+        "additionalProperties": false
+      }
     }
   }
 }
