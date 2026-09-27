@@ -6,6 +6,7 @@ import type {
   LeonFeedActivity,
   LeonFeedEntry
 } from '../../data/feed'
+import { ArtifactAttachments } from '../artifact-attachments'
 import { FinalAnswer } from '../final-answer'
 import { ProcessGroup } from '../process-group'
 import { StreamingText, useAnimateOnce } from '../streaming-text'
@@ -106,6 +107,7 @@ export function LeonMessage({ entry }: LeonMessageProps) {
   return (
     <div className="leon-message">
       {entry.activities.map(renderActivity)}
+      <ArtifactAttachments artifacts={entry.artifacts || []} />
       {entry.finalAnswer.trim().length > 0 && (
         <FinalAnswer animationId={`${entry.id}:final-answer`}>
           {entry.finalAnswer}

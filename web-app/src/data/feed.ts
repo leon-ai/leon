@@ -1,3 +1,5 @@
+import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
+
 export type FeedPlanStepStatus =
   | 'pending'
   | 'in_progress'
@@ -74,6 +76,7 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  artifacts?: Artifact[]
   id: string
   role: 'leon'
   activities: LeonFeedActivity[]
