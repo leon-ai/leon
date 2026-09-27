@@ -480,11 +480,77 @@ export default class Chatbot {
         sentAt: bubble.sentAt,
         save: false,
         isCreatingFromLoadingFeed: true,
-        messageId: bubble.messageId
+        messageId: bubble.messageId,
+        artifacts: bubble.artifacts
       })
     }
 
     void this.hydrateFetchedWidgets()
+  }
+
+  /**
+   * Render only server-owned artifact URLs, keeping filenames out of HTML.
+   */
+  renderArtifacts(container, artifacts) {
+    for (const artifact of artifacts || []) {
+      const expected = `/api/v1/artifacts/${encodeURIComponent(artifact.session_id)}/${encodeURIComponent(artifact.id)}`
+
+      if (artifact.url !== expected) {
+        continue
+      }
+
+      const card = document.createElement('div')
+
+      card.className = 'artifact-card'
+      const type = artifact.mime_type
+      const tag = [
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'image/gif'
+      ].includes(type)
+        ? 'img'
+        : ['video/mp4', 'video/webm'].includes(type)
+          ? 'video'
+          : ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'].includes(type)
+            ? 'audio'
+            : null
+
+      if (tag) {
+        const media = document.createElement(tag)
+
+        media.src = artifact.url
+        media.style.maxWidth = '100%'
+        media.style.maxHeight = '480px'
+        if (tag === 'img') {
+          media.alt = artifact.filename
+          media.loading = 'lazy'
+        } else {
+          media.controls = true
+          media.preload = 'metadata'
+        }
+
+        card.appendChild(media)
+      }
+
+      const download = document.createElement('a')
+
+      download.href = `${artifact.url}?download=true`
+      download.download = artifact.filename
+      download.textContent = `${artifact.filename} · ${Math.ceil(artifact.size_bytes / 1_024)} KB · Download`
+      card.appendChild(download)
+      if (type === 'application/pdf') {
+        const preview = document.createElement('a')
+
+        preview.href = artifact.url
+        preview.target = '_blank'
+        preview.rel = 'noopener'
+        preview.textContent = ' Open PDF'
+        card.appendChild(preview)
+      }
+
+      container.appendChild(card)
+    }
   }
 
   createBubble(params) {
@@ -532,6 +598,7 @@ export default class Chatbot {
       this.feed.appendChild(container)
     }
     container.appendChild(bubble)
+    this.renderArtifacts(container, params.artifacts)
 
     if (who === 'leon' && metrics) {
       container.appendChild(this.createMetricsElement(metrics, sentAt))
@@ -598,7 +665,15 @@ export default class Chatbot {
     }
 
     if (save) {
-      this.saveBubble(who, originalString, formattedString, messageId, metrics, sentAt)
+      this.saveBubble(
+        who,
+        originalString,
+        formattedString,
+        messageId,
+        metrics,
+        sentAt,
+        params.artifacts
+      )
     }
 
     return container
@@ -726,7 +801,8 @@ export default class Chatbot {
     string,
     messageId,
     metrics = null,
-    sentAt = null
+    sentAt = null,
+    artifacts = []
   ) {
     if (!this.noBubbleMessage.classList.contains('hide')) {
       this.noBubbleMessage.classList.add('hide')
@@ -743,7 +819,8 @@ export default class Chatbot {
       string,
       originalString,
       messageId,
-      llmMetrics: metrics
+      llmMetrics: metrics,
+      artifacts
     })
     this.scrollDown()
   }

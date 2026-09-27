@@ -218,6 +218,26 @@ export default class Client {
       // Leon has finished to answer
       this._isLeonGeneratingAnswer = false
 
+      if (data && Array.isArray(data.artifacts) && data.artifacts.length) {
+        if (
+          [...this.chatbot.feed.querySelectorAll('[data-message-id]')].some(
+            (element) => element.dataset.messageId === data.messageId
+          )
+        ) {
+          return
+        }
+
+        this.chatbot.createBubble({
+          who: 'leon',
+          string: data.answer || '',
+          messageId: data.messageId,
+          artifacts: data.artifacts
+        })
+        this.chatbot.scrollDown()
+
+        return
+      }
+
       const isPlanWidget =
         data && typeof data === 'object' && data.widget === 'PlanWidget'
 
