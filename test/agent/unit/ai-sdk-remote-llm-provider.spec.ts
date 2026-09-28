@@ -9,6 +9,19 @@ import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 
+const mediaMocks = vi.hoisted(() => ({
+  persist: vi
+    .fn()
+    .mockResolvedValue({ artifacts: [{ id: 'image', filename: 'image.png' }] })
+}))
+
+vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
+  persistGeneratedFiles: mediaMocks.persist
+}))
+vi.mock('@/core/session-manager/session-context', () => ({
+  getActiveConversationSessionId: (): string => 'media-session'
+}))
+
 const openRouterMocks = vi.hoisted(() => {
   const languageModel = {
     doGenerate: vi.fn(),
@@ -477,6 +490,63 @@ describe('AISDKRemoteLLMProvider', () => {
       generationId: expect.any(String)
     })
   })
+
+  it.each([false, true])(
+    'retains generated files and never dispatches hosted tools locally (stream=%s)',
+    async (streaming) => {
+      const parts = [
+        {
+          type: 'tool-call',
+          toolCallId: 'hosted',
+          toolName: 'image_generation',
+          input: '{}',
+          providerExecuted: true
+        },
+        {
+          type: 'file',
+          data: new Uint8Array([1, 2, 3]),
+          mediaType: 'image/png'
+        }
+      ]
+
+      openRouterMocks.languageModel.doGenerate.mockResolvedValue({
+        content: parts,
+        finishReason: { unified: 'stop' }
+      })
+      openRouterMocks.languageModel.doStream.mockResolvedValue({
+        stream: (async function* (): AsyncGenerator<Record<string, unknown>> {
+          for (const part of parts) {
+            yield part
+          }
+        })()
+      })
+      const response = await createOpenRouterProvider().runChatCompletion(
+        'Create an image.',
+        {
+          ...createCompletionParams(null),
+          shouldStream: streaming
+        }
+      )
+
+      expect(mediaMocks.persist).toHaveBeenCalledWith(
+        'media-session',
+        expect.any(String),
+        [
+          {
+            data: new Uint8Array([1, 2, 3]),
+            mime_type: 'image/png',
+            filename: 'generated-1.png'
+          }
+        ]
+      )
+      const message = (
+        response.data['choices'] as Array<{ message: Record<string, unknown> }>
+      )[0]!.message
+
+      expect(message['tool_calls']).toBeUndefined()
+      expect(message['content']).toContain('image.png')
+    }
+  )
 
   it('preserves non-streaming provider accounting', async () => {
     openRouterMocks.languageModel.doGenerate.mockResolvedValue({

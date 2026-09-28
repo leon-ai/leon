@@ -1,4 +1,6 @@
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
+import type { GeneratedFile } from '@/core/llm-manager/media-generation/media-generation-types'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import type { AxiosResponse } from 'axios'
 import type {
   JSONSchema7,
@@ -72,6 +74,8 @@ interface AISDKRemoteProviderConfig {
 }
 
 interface CallState {
+  files: GeneratedFile[]
+  hostedToolIds: Set<string>
   accounting?: CompletionAccounting
   text: string
   reasoning: string
@@ -1049,6 +1053,8 @@ export default class AISDKRemoteLLMProvider {
 
   private createCallState(): CallState {
     return {
+      files: [],
+      hostedToolIds: new Set(),
       text: '',
       reasoning: '',
       toolCallsById: {},
@@ -1239,6 +1245,96 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
+  /**
+   * Retains binary model output and separates provider-executed tools from local calls.
+   */
+  private acceptMediaPart(
+    state: CallState,
+    part: Record<string, unknown>
+  ): boolean {
+    const id = String(part['toolCallId'] || part['id'] || '')
+
+    if (id && part['providerExecuted'] === true) {
+      state.hostedToolIds.add(id)
+      delete state.toolCallsById[id]
+    }
+
+    if (part['type'] === 'file') {
+      const data = part['data']
+      const mediaType = String(
+        part['mediaType'] || part['mimeType'] || 'application/octet-stream'
+      )
+
+      if (typeof data === 'string' || data instanceof Uint8Array) {
+        const extension =
+          (
+            {
+              'image/png': 'png',
+              'image/jpeg': 'jpg',
+              'image/webp': 'webp',
+              'video/mp4': 'mp4',
+              'audio/mpeg': 'mp3',
+              'application/pdf': 'pdf'
+            } as Record<string, string>
+          )[mediaType] || 'bin'
+
+        state.files.push({
+          data: typeof data === 'string' ? Buffer.from(data, 'base64') : data,
+          mime_type: mediaType,
+          filename: `generated-${state.files.length + 1}.${extension}`
+        })
+      }
+
+      return true
+    }
+
+    if (
+      part['type'] === 'tool-result' &&
+      part['toolName'] === 'image_generation'
+    ) {
+      const result = part['result'] as { result?: string } | undefined
+
+      if (result?.result && part['preliminary'] !== true) {
+        state.files.push({
+          data: Buffer.from(result.result, 'base64'),
+          mime_type: 'image/png',
+          filename: `image-${state.files.length + 1}.png`
+        })
+      }
+
+      return true
+    }
+
+    return state.hostedToolIds.has(id)
+  }
+
+  /**
+   * Persists binary parts before reducing the provider response to text/tool metadata.
+   */
+  private async completeMediaOutput(state: CallState): Promise<void> {
+    if (!state.files.length) {
+      return
+    }
+
+    const sessionId = getActiveConversationSessionId()
+
+    if (!sessionId) {
+      throw new Error('Generated model files require a conversation session.')
+    }
+
+    const { persistGeneratedFiles } = await import(
+      '@/core/llm-manager/media-generation/media-generation-service'
+    )
+    const result = await persistGeneratedFiles(
+      sessionId,
+      `${this.config.providerName}:${this.config.model}`,
+      state.files
+    )
+
+    // Keep the agent grounded in what was delivered, even for image-only responses.
+    state.text += `\nGenerated artifacts: ${result.artifacts.map((artifact) => artifact.filename).join(', ')}`
+  }
+
   private async runNonStreamingCompletion(
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
@@ -1251,6 +1347,11 @@ export default class AISDKRemoteLLMProvider {
 
     for (const part of content) {
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+
+      if (this.acceptMediaPart(state, part)) {
+        continue
+      }
+
       if (type === 'text' && typeof part['text'] === 'string') {
         state.text += part['text'] as string
         continue
@@ -1286,6 +1387,8 @@ export default class AISDKRemoteLLMProvider {
       state.finishReason = finishReason
     }
 
+    await this.completeMediaOutput(state)
+
     return this.buildOpenAICompatiblePayload(state)
   }
 
@@ -1305,6 +1408,10 @@ export default class AISDKRemoteLLMProvider {
     for await (const streamPart of result.stream) {
       const part = streamPart as unknown as Record<string, unknown>
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+
+      if (this.acceptMediaPart(state, part)) {
+        continue
+      }
 
       const readString = (...values: unknown[]): string => {
         for (const value of values) {
@@ -1450,6 +1557,8 @@ export default class AISDKRemoteLLMProvider {
         throw this.createStreamError(part['error'])
       }
     }
+
+    await this.completeMediaOutput(state)
 
     return this.buildOpenAICompatiblePayload(state)
   }
