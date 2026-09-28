@@ -1,8 +1,10 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Media Generation",
-  "description": "Tools for media generation and creative workflows.",
+  "description": "Generate images, videos, audio and documents, and deliver them as downloadable conversation artifacts.",
   "icon_name": "sparkling-2-line",
   "context_files": [],
-  "tools": []
+  "tools": [
+    "image"
+  ]
 }
