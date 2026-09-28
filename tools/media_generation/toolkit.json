@@ -5,6 +5,7 @@
   "icon_name": "sparkling-2-line",
   "context_files": [],
   "tools": [
-    "image"
+    "image",
+    "video"
   ]
 }
