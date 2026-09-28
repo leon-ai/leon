@@ -255,6 +255,15 @@ export interface HTTPPluginSaveConnectionInput {
 
 export interface HTTPPluginLeonServices {
   readonly profileId: string
+  generateMedia: typeof import('@/core/llm-manager/media-generation/media-generation-service').generateMedia
+  getMediaGeneration: typeof import('@/core/llm-manager/media-generation/media-generation-service').getMediaGeneration
+  readGenerationSettings: typeof import('@/core/llm-manager/media-generation/media-generation-service').readGenerationSettings
+  saveGenerationSettings: typeof import('@/core/llm-manager/media-generation/media-generation-service').saveGenerationSettings
+  listMediaDefaults: typeof import('@/core/llm-manager/media-generation/media-generation-service').listMediaDefaults
+  listMediaCapabilities: typeof import('@/core/llm-manager/media-generation/media-generation-service').listMediaCapabilities
+  registerArtifact: typeof import('@/core/artifacts/artifact-store').registerArtifact
+  readArtifact: typeof import('@/core/artifacts/artifact-store').readArtifact
+  attachArtifacts: typeof import('@/core/artifacts/artifact-service').attachArtifacts
   isLLMEnabled: () => boolean
   runAgent: (
     input: HTTPPluginRunAgentInput

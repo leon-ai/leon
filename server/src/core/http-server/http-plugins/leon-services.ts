@@ -1,4 +1,14 @@
 import {
+  generateMedia,
+  getMediaGeneration,
+  listMediaCapabilities,
+  listMediaDefaults,
+  readGenerationSettings,
+  saveGenerationSettings
+} from '@/core/llm-manager/media-generation/media-generation-service'
+import { registerArtifact, readArtifact } from '@/core/artifacts/artifact-store'
+import { attachArtifacts } from '@/core/artifacts/artifact-service'
+import {
   CONVERSATION_LOGGER,
   LLM_MANAGER
 } from '@/core'
@@ -203,6 +213,15 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
     selectConversationSession,
     subscribeAgentEvents,
     handleConnectionSetup,
+    generateMedia,
+    getMediaGeneration,
+    listMediaCapabilities,
+    listMediaDefaults,
+    readGenerationSettings,
+    saveGenerationSettings,
+    registerArtifact,
+    readArtifact,
+    attachArtifacts,
     listConnections: async (
       profileId,
       callback
