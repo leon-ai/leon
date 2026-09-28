@@ -6,6 +6,7 @@
   "context_files": [],
   "tools": [
     "image",
-    "video"
+    "video",
+    "audio"
   ]
 }
