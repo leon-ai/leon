@@ -44,6 +44,9 @@ importers:
       '@fontsource/source-sans-pro':
         specifier: 5.2.5
         version: 5.2.5
+      '@huggingface/inference':
+        specifier: 4.13.30
+        version: 4.13.30
       '@openrouter/ai-sdk-provider':
         specifier: 3.0.0
         version: 3.0.0(ai@7.0.97(zod@4.3.6))(zod@4.3.6)
@@ -773,9 +776,20 @@ packages:
   '@fontsource/source-sans-pro@5.2.5':
     resolution: {integrity: sha512-ypendqc4pYUc+EgF7qqPY9iVYEz1t/Qr03VojKxG/2g3dnpHa1B6DOlDxWQjQXDj5QrG6inEqGT0g+edjALZyg==}
 
+  '@huggingface/inference@4.13.30':
+    resolution: {integrity: sha512-d5iD7UxHFH5X4ndNhwn3eFT/P9M08RRcsWDoko40//9lgNCCCn87TziwcKWf7ztvoKOm8d29W+lrYO4ZZvyAnA==}
+    engines: {node: '>=18'}
+
+  '@huggingface/jinja@0.5.10':
+    resolution: {integrity: sha512-SgS1D1bglQ94ceD4ZCL6eayUDy9uV1xuyk61OjgSxU5GJh7upqZCKII0JoTYMc6wWsg3JUgaPRX0ElQzXPk3Cw==}
+    engines: {node: '>=18'}
+
   '@huggingface/jinja@0.5.9':
     resolution: {integrity: sha512-uWTG+l3VJRsl7EXxYizuL3P+cCPoc3cRqbWWRcQN0FhejRfbdq0RNhCmbY/YDtnTcz9icdLYuLDjsnz4d8JMuw==}
     engines: {node: '>=18'}
+
+  '@huggingface/tasks@0.21.48':
+    resolution: {integrity: sha512-+ujPTb9irMxsiCYjL2Jpjs0+aCioJTTYA8Pp/I/+fm2LenzL3tDOs2/0ELj5phMAUDVoOozLviy4y/e7mBltxA==}
 
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
@@ -4709,7 +4723,16 @@ snapshots:
 
   '@fontsource/source-sans-pro@5.2.5': {}
 
+  '@huggingface/inference@4.13.30':
+    dependencies:
+      '@huggingface/jinja': 0.5.10
+      '@huggingface/tasks': 0.21.48
+
+  '@huggingface/jinja@0.5.10': {}
+
   '@huggingface/jinja@0.5.9': {}
+
+  '@huggingface/tasks@0.21.48': {}
 
   '@humanfs/core@0.19.1': {}
 
