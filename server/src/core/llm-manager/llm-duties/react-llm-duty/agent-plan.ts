@@ -1,6 +1,6 @@
 import type { OpenAITool } from '@/core/llm-manager/types'
 
-import type { PlanStepStatus, TrackedPlanCollection, TrackedPlanStep } from './types'
+import type { PlanStepStatus, TrackedPlanCollection, TrackedPlanStep } from './agent-types'
 
 const PLAN_STATUSES = ['pending', 'in_progress', 'completed', 'error'] as const
 

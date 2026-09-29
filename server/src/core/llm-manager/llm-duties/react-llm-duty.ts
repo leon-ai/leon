@@ -63,7 +63,7 @@ import {
   AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
   AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
   AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT
-} from './react-llm-duty/constants'
+} from './react-llm-duty/agent-constants'
 import type {
   ReactLLMDutyParams,
   ExecutionRecord,
@@ -72,7 +72,7 @@ import type {
   AgentPhase,
   AgentSkillContext,
   AgentRunProgressEvent
-} from './react-llm-duty/types'
+} from './react-llm-duty/agent-types'
 import { AGENT_PLAN_GUIDANCE } from './react-llm-duty/agent-plan'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
 import { AgentAnswerStream } from './react-llm-duty/agent-answer-stream'
@@ -81,7 +81,7 @@ import {
   formatAgentInferencePolicyForLog,
   type AgentInferencePolicy
 } from './react-llm-duty/agent-policy'
-import { parseToolCallArguments } from './react-llm-duty/utils'
+import { parseToolCallArguments } from './react-llm-duty/agent-utils'
 import { runToolExecution } from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
@@ -104,7 +104,7 @@ import {
   type RawPhaseMetrics,
   deriveLLMMetrics,
   observeCompletionMetrics
-} from './react-llm-duty/metrics'
+} from './react-llm-duty/agent-metrics'
 import {
   createAgentLoopContinuationState,
   buildAgentContinuationTranscript,

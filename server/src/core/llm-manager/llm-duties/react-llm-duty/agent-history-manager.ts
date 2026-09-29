@@ -15,7 +15,7 @@ import {
   AGENT_LOCAL_PROVIDER_HISTORY_LOGS,
   AGENT_REMOTE_PROVIDER_HISTORY_COMPACTION_POINT,
   AGENT_REMOTE_PROVIDER_HISTORY_LOGS
-} from './constants'
+} from './agent-constants'
 import {
   buildCompactedHistoryMessage,
   findMessageSequenceStart,
@@ -32,7 +32,7 @@ import {
   type AgentHistoryCompactionScope,
   type AgentHistoryCompactionState
 } from './agent-session-state'
-import type { PlanStepStatus, TrackedPlanStep } from './types'
+import type { PlanStepStatus, TrackedPlanStep } from './agent-types'
 
 interface PreparedAgentHistory {
   messageLogs: MessageLog[]

@@ -20,7 +20,7 @@ import {
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   AGENT_TOOL_OBSERVATION_MAX_CHARS,
   CHARS_PER_TOKEN
-} from './constants'
+} from './agent-constants'
 
 const TOOL_NAME_SEPARATOR = '__'
 const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const

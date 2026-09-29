@@ -5,7 +5,7 @@ import type {
   AgentResponseTrace
 } from '@/types'
 
-import type { AgentRunProgressEvent } from './types'
+import type { AgentRunProgressEvent } from './agent-types'
 
 /**
  * Accumulates live agent progress into the compact trace persisted with a turn.

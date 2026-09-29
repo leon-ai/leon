@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   extractFinalAnswerFromToolResult,
   extractOwnerActionHandoffFromToolResult
-} from '@/core/llm-manager/llm-duties/react-llm-duty/utils'
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-utils'
 
 describe('ReAct LLM duty utilities', () => {
   it('extracts a terminal answer wrapped by the Node tool runtime', () => {

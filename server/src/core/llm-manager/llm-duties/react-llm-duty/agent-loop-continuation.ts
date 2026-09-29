@@ -1,11 +1,11 @@
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 
-import type { ExecutionRecord, TrackedPlanStep } from './types'
+import type { ExecutionRecord, TrackedPlanStep } from './agent-types'
 import {
   createAgentTextPreview,
   splitAgentTranscriptForSummary
 } from './agent-context-budget'
-import { parseToolCallArguments } from './utils'
+import { parseToolCallArguments } from './agent-utils'
 
 const AGENT_CONTINUATION_VERSION = 5
 const AGENT_CONTINUATION_TTL_MS = 30 * 60 * 1_000

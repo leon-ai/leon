@@ -1,7 +1,7 @@
 import { LLMProviders } from '@/core/llm-manager/types'
 import { accumulateUsageAccounting, type CompletionAccounting, type UsageAccounting } from '@/core/llm-manager/usage-accounting'
 
-import type { AgentPhase } from './types'
+import type { AgentPhase } from './agent-types'
 
 export interface RawPhaseMetric {
   outputTokens: number

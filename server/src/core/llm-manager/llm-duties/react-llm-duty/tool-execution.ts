@@ -14,14 +14,14 @@ import { SystemHelper } from '@/helpers/system-helper'
 import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { LEON_HOME_PATH } from '@/leon-roots'
 
-import { DUTY_NAME } from './constants'
+import { DUTY_NAME } from './agent-constants'
 import { buildBoundedToolObservation } from './agent-context-budget'
-import type { AgentRunProgressEvent, ToolExecutionResult } from './types'
+import type { AgentRunProgressEvent, ToolExecutionResult } from './agent-types'
 import {
   extractFinalAnswerFromToolResult,
   extractOwnerActionHandoffFromToolResult,
   formatFilePath
-} from './utils'
+} from './agent-utils'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {

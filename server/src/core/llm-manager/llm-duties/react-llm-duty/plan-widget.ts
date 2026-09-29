@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 
 import { SOCKET_SERVER, TOOLKIT_REGISTRY } from '@/core'
 
-import type { TrackedPlanStep } from './types'
+import type { TrackedPlanStep } from './agent-types'
 
 /**
  * Helper to generate a short random ID for widget component IDs.

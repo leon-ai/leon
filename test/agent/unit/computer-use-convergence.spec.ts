@@ -4,7 +4,7 @@ import {
   buildComputerUseConvergenceHint,
   getComputerUseRetryBlocker
 } from '@/core/llm-manager/llm-duties/react-llm-duty/computer-use-convergence'
-import type { ExecutionRecord } from '@/core/llm-manager/llm-duties/react-llm-duty/types'
+import type { ExecutionRecord } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 
 const CLICK = 'computer_use.cua.click'
 const BATCH = 'computer_use.cua.perform_actions'

@@ -1,5 +1,5 @@
 import { emitPlanWidget, widgetId } from '@/core/llm-manager/llm-duties/react-llm-duty/plan-widget'
-import type { TrackedPlanStep } from '@/core/llm-manager/llm-duties/react-llm-duty/types'
+import type { TrackedPlanStep } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
 import { RoutingMode } from '@/types'
 
 type WorkflowBaseStep = 'routing' | 'choosing_skill' | 'picking_action' | 'resolving_parameters'

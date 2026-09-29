@@ -1,4 +1,4 @@
-import type { FinalResponseSignal } from './types'
+import type { FinalResponseSignal } from './agent-types'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {

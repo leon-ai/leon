@@ -16,7 +16,7 @@ import type {
   FunctionConfig,
   ToolExecutionResult,
   TrackedPlanStep
-} from './types'
+} from './agent-types'
 import { createAgentPlanTool, isAgentPlanComplete, parseAgentPlan } from './agent-plan'
 import { findDuplicateToolInputMatch } from './agent-helpers'
 import {
@@ -24,13 +24,13 @@ import {
   AGENT_MAX_ITERATIONS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
   AGENT_TOOL_CALL_TITLE_MAX_CHARS
-} from './constants'
+} from './agent-constants'
 import {
   buildComputerUseConvergenceHint,
   getComputerUseRetryBlocker
 } from './computer-use-convergence'
 import { createAgentTextPreview } from './agent-context-budget'
-import { parseToolCallArguments, validateToolInput } from './utils'
+import { parseToolCallArguments, validateToolInput } from './agent-utils'
 
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
 export const AGENT_CLARIFICATION_TOOL_NAME = 'request_clarification'

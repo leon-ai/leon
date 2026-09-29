@@ -9,8 +9,8 @@ import {
   AGENT_COMPUTER_USE_UNVERIFIED_ACTION_THRESHOLD,
   AGENT_COMPUTER_USE_REPEATED_VISUAL_STATE_THRESHOLD,
   AGENT_COMPUTER_USE_SCROLL_REVERSAL_THRESHOLD
-} from './constants'
-import type { ExecutionRecord } from './types'
+} from './agent-constants'
+import type { ExecutionRecord } from './agent-types'
 
 interface ParsedComputerUseExecution {
   action: string

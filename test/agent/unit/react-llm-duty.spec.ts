@@ -39,7 +39,7 @@ import {
   AGENT_MAX_ITERATIONS,
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
-} from '@/core/llm-manager/llm-duties/react-llm-duty/constants'
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import type {
   AgentToolTranscriptMessage,
   OpenAIToolCall

@@ -1,8 +1,12 @@
+import { Readable } from 'node:stream'
+
+import type { AxiosResponse } from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogHelper } from '@/helpers/log-helper'
 
 import LLMProvider from '@/core/llm-manager/llm-provider'
+import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
 import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 
 const celerisTarget = {
@@ -449,5 +453,79 @@ describe('LLMProvider', () => {
     expect(result?.output).toEqual(
       data ? JSON.parse(content) : (expected ?? content)
     )
+  })
+})
+
+
+describe('provider stream normalization', () => {
+  it('recovers completed Responses API output across split SSE chunks', async () => {
+    const event = {
+      type: 'response.completed',
+      response: {
+        output: [
+          {
+            type: 'message',
+            content: [{ type: 'output_text', text: 'Checking the weather.' }]
+          },
+          {
+            type: 'function_call',
+            call_id: 'call-weather',
+            name: 'getWeather',
+            arguments: '{"city":"Shanghai"}'
+          }
+        ],
+        usage: { input_tokens: 24, output_tokens: 9 }
+      }
+    }
+    const wire = `data: ${JSON.stringify(event)}\n\ndata: [DONE]\n\n`
+    const response = {
+      data: Readable.from([wire.slice(0, 37), wire.slice(37)])
+    } as AxiosResponse
+
+    const result = await normalizeStreamingCompletionResult(
+      response,
+      { dutyType: LLMDuties.ReAct, systemPrompt: '' },
+      LLMProviders.OpenAI
+    )
+
+    expect(result).toMatchObject({
+      rawResult: 'Checking the weather.',
+      usedInputTokens: 24,
+      usedOutputTokens: 9,
+      toolCalls: [{
+        id: 'call-weather',
+        type: 'function',
+        function: { name: 'getWeather', arguments: '{"city":"Shanghai"}' }
+      }]
+    })
+  })
+
+  it('preserves compatible reasoning, text deltas, and trailing usage', async () => {
+    const onToken = vi.fn()
+    const onReasoningToken = vi.fn()
+    const events = [
+      { choices: [{ delta: { reasoning_content: 'Check the conditions.' } }] },
+      { choices: [{ delta: { content: 'Hello ' } }] },
+      { choices: [{ delta: { content: 'world' }, finish_reason: 'stop' }] },
+      { choices: [], usage: { prompt_tokens: 12, completion_tokens: 5 } }
+    ]
+    const wire = events.map((event) => `data: ${JSON.stringify(event)}`).join('\n\n')
+    const response = { data: Readable.from([wire]) } as AxiosResponse
+
+    const result = await normalizeStreamingCompletionResult(
+      response,
+      { dutyType: LLMDuties.ReAct, systemPrompt: '', onToken, onReasoningToken },
+      LLMProviders.Celeris
+    )
+
+    expect(result).toMatchObject({
+      rawResult: 'Hello world',
+      reasoning: 'Check the conditions.',
+      usedInputTokens: 12,
+      usedOutputTokens: 5,
+      finishReason: 'stop'
+    })
+    expect(onToken.mock.calls.map(([chunk]) => chunk).join('')).toBe('Hello world')
+    expect(onReasoningToken).toHaveBeenCalledWith('Check the conditions.')
   })
 })

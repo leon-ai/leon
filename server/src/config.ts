@@ -7,7 +7,7 @@ import dotenv from 'dotenv'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { AGENT_MAX_ITERATIONS } from '@/core/llm-manager/llm-duties/react-llm-duty/constants'
+import { AGENT_MAX_ITERATIONS } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import type {
   LLMProviderConfigSchema,
   LeonConfigSchema,
