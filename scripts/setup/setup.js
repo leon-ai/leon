@@ -379,7 +379,7 @@ async function syncLLMSetupChoice(preferences) {
     await generateProfileToken()
     currentStep = 'generateConnectionEncryptionKey'
     await ensureConnectionEncryptionKey()
-    LogHelper.success('Connection encryption key ready')
+    SetupUI.success('Connection encryption key: ready')
     currentStep = 'train'
     await train()
     currentStep = 'setFfprobePermissions'
