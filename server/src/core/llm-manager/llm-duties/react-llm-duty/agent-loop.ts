@@ -98,9 +98,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - When the owner provides a source to understand, prefer direct-source tools over secondary search. Use search as fallback when the source cannot be accessed or does not contain the needed evidence.
 - Use the exact observed values from earlier tool results when chaining calls.
 - Reuse prior results unless state may have changed or a failed call has a concrete recovery reason. Fresh UI observations are allowed when needed to ground the next action.
-- Use update_plan for complex tasks and requests covering a collection; simple tasks do not need a plan. Establish an overview before execution: identify the authoritative source, requested boundaries, navigation and completion criteria. Start with one step in_progress and keep later actionable steps pending. Inspect the relevant list/pages first, not unrelated areas of the application.
-- For collection work, create a collection on a plan step before processing items. Enumerate stable source identities, pagination/scroll coverage and the observed end condition. A filtered snippet is not the complete list. Mark enumeration completed only once the relevant scope is covered; explicitly record empty ranges. For an unbounded source, use an explicit justified boundary rather than scanning forever.
-- Execute from that worklist. Immediately after a milestone is verified, call update_plan in the same response as the next operational call: complete the current step and set the next step in_progress. Never start or report progress on a later step while the visible plan is stale, and never defer multiple historical completions until final reconciliation. Item updates merge by id: send only changes and omit unchanged collections. Preserve stable collection step labels. UI input success alone does not complete an item. Revisit discovery only if new evidence changes scope; preserve completed outcomes. Reconcile the final active step before answering.
+- For complex or collection tasks, initialize update_plan before execution to load planning guidance and collection tracking. Start one step in_progress and later steps pending; simple tasks need no plan.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
 - Context and memory tools provide external knowledge. They are not substitutes for the agent transcript.
 </tool_policy>
@@ -745,6 +743,10 @@ export async function runAgentLoop(
   let hasUsedContextRecovery = false
   let requiresToolAction = false
   let operationalTurnsSincePlanUpdate = 0
+
+  if (trackedSteps.length > 0) {
+    enableAgentPlanTracking(params.catalog)
+  }
 
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
@@ -1485,7 +1487,9 @@ async function executeAgentToolCall(
       }
     }
 
+    enableAgentPlanTracking(params.catalog)
     params.onPlanUpdated?.(nextSteps)
+
     return {
       content: 'Plan updated.',
       trackedSteps: nextSteps
@@ -1753,6 +1757,19 @@ function describeToolkitFunctions(
     .filter(([name]) => !catalog.functionsByToolName.has([toolkitId, toolId, name].join(AGENT_TOOL_NAME_SEPARATOR)))
     .map(([name, config]) => `${toolId}.${name}: ${config.description}`)
     .join('\n')
+}
+
+/**
+ * Expose collection tracking after initialization, including resumed plans.
+ */
+function enableAgentPlanTracking(catalog: AgentToolCatalog): void {
+  const planTool = catalog.tools.find(
+    (tool) => tool.function.name === AGENT_PLAN_TOOL_NAME
+  )
+
+  if (planTool) {
+    planTool.function = createAgentPlanTool(AGENT_PLAN_TOOL_NAME, true).function
+  }
 }
 
 function createToolkitLoaderTool(

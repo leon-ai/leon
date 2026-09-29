@@ -73,6 +73,7 @@ import type {
   AgentSkillContext,
   AgentRunProgressEvent
 } from './react-llm-duty/types'
+import { AGENT_PLAN_GUIDANCE } from './react-llm-duty/agent-plan'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
 import { AgentAnswerStream } from './react-llm-duty/agent-answer-stream'
 import {
@@ -510,6 +511,7 @@ export class ReActLLMDuty extends LLMDuty {
             progressiveGuidance,
             buildAgentConnectionGuidance(state.executionHistory),
             ...(state.trackedSteps.length ? [
+              AGENT_PLAN_GUIDANCE,
               '<current_plan>',
               JSON.stringify(state.trackedSteps),
               'This is the latest reported plan, not proof of completion. Reconcile it with tool evidence as milestones change; use collection scope, coverage and item outcomes to choose remaining work. Do not reopen verified items or infer missing items in an observed empty range.',

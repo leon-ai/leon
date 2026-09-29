@@ -20,7 +20,12 @@ import {
   findHighConfidenceAgentToolkitId,
   runAgentLoop as runAgentLoopWithCompletionReview
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
-import { parseAgentPlan, isAgentPlanComplete } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-plan'
+import {
+  AGENT_PLAN_GUIDANCE,
+  createAgentPlanTool,
+  parseAgentPlan,
+  isAgentPlanComplete
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-plan'
 import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import {
   createAgentLoopContinuationState,
@@ -427,13 +432,57 @@ describe('continuous agent loop', () => {
     )
   })
 
-  it('requires plan steps to advance when milestones are verified', () => {
-    expect(AGENT_SYSTEM_PROMPT).toContain(
+  it('loads collection tracking after plan initialization', async () => {
+    const catalog = createCatalog()
+    const steps = [{ label: 'Inspect requested collection', status: 'in_progress' }]
+    let turn = 0
+
+    catalog.tools.push(createAgentPlanTool(AGENT_PLAN_TOOL_NAME))
+
+    await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Retrieve the requested documents.' }],
+      catalog,
+      callModel: async (_messages, tools) => {
+        const planTool = tools.find(
+          (tool) => tool.function.name === AGENT_PLAN_TOOL_NAME
+        )
+        const schema = JSON.stringify(planTool?.function.parameters)
+
+        turn += 1
+
+        if (turn === 1) {
+          expect(schema).not.toContain('"collection"')
+
+          return {
+            toolCalls: [
+              toolCall('initialize-plan', AGENT_PLAN_TOOL_NAME, { steps })
+            ]
+          }
+        }
+
+        expect(schema).toContain('"collection"')
+        expect(schema).toContain('"enumeration"')
+
+        return {
+          toolCalls: [
+            toolCall('clarify', AGENT_CLARIFICATION_TOOL_NAME, {
+              question: 'Which account contains these documents?'
+            })
+          ]
+        }
+      },
+      executeFunction: vi.fn(),
+      loadAgentSkill: async () => null
+    })
+
+    expect(turn).toBe(2)
+    expect(AGENT_PLAN_GUIDANCE).toContain(
       'Immediately after a milestone is verified, call update_plan'
     )
-    expect(AGENT_SYSTEM_PROMPT).toContain(
+    expect(AGENT_PLAN_GUIDANCE).toContain(
       'never defer multiple historical completions until final reconciliation'
     )
+    expect(AGENT_SYSTEM_PROMPT).not.toContain('Enumerate stable source identities')
   })
 
   it.each(['active', 'completed', 'absent'] as const)(
@@ -446,16 +495,43 @@ describe('continuous agent loop', () => {
       const onPlanUpdated = vi.fn()
       const reminders: number[] = []
       let turn = 0
+      const catalog = createCatalog()
+
+      catalog.tools.push(createAgentPlanTool(AGENT_PLAN_TOOL_NAME))
+
       const result = await runAgentLoop({
         transcript: [{ role: 'user', content: 'Resolve these items.' }],
-        catalog: createCatalog(), initialTrackedSteps: steps,
-        callModel: async (_messages, _tools, options) => {
+        catalog,
+        initialTrackedSteps: steps,
+        callModel: async (_messages, tools, options) => {
+          const planTool = tools.find(
+            (tool) => tool.function.name === AGENT_PLAN_TOOL_NAME
+          )
+          const schema = JSON.stringify(planTool?.function.parameters)
+
+          expect(schema.includes('"collection"')).toBe(state !== 'absent')
+
           turn += 1
-          if (options.requiresPlanReconciliation) reminders.push(turn)
-          if (turn === 10) return { toolCalls: [toolCall('clarify', AGENT_CLARIFICATION_TOOL_NAME, {
-            question: 'Which of the two matching editions do you want?'
-          })] }
-          return { toolCalls: [toolCall(`lookup-${turn}`, CALLABLE_TOOL_NAME, { query: `item-${turn}` })] }
+          if (options.requiresPlanReconciliation) {
+            reminders.push(turn)
+          }
+          if (turn === 10) {
+            return {
+              toolCalls: [
+                toolCall('clarify', AGENT_CLARIFICATION_TOOL_NAME, {
+                  question: 'Which of the two matching editions do you want?'
+                })
+              ]
+            }
+          }
+
+          return {
+            toolCalls: [
+              toolCall(`lookup-${turn}`, CALLABLE_TOOL_NAME, {
+                query: `item-${turn}`
+              })
+            ]
+          }
         },
         executeFunction: async (_callable, toolInput) => ({ execution: {
           function: callable.qualifiedName, status: 'success',
