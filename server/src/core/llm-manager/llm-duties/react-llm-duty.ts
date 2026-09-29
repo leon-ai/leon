@@ -573,7 +573,8 @@ export class ReActLLMDuty extends LLMDuty {
                 }
               })
             },
-            this.signal
+            this.signal,
+            (message) => this.emitProgress(message)
           )
 
           return toolResult

@@ -308,8 +308,8 @@
     "bridges.tools.downloading_resource_file": [
       "Downloading {{ file_name }} for {{ resource_name }} from {{ url }} ...",
       "Fetching {{ file_name }} file for {{ resource_name }} ...",
-      "Getting {{ file_name }} from {{ url }} ...",
-      "Downloading resource file {{ file_name }} ...",
+      "Getting {{ file_name }} for {{ resource_name }} from {{ url }} ...",
+      "Downloading resource file {{ file_name }} for {{ resource_name }} ...",
       "Retrieving {{ file_name }} for {{ resource_name }} resource ..."
     ],
     "bridges.tools.resource_file_downloaded": [
@@ -334,6 +334,9 @@
     ],
     "react.tool.preparing": [
       "Preparing the {{ tool_name }} tool..."
+    ],
+    "react.tool.preparation_progress": [
+      "{{ tool_name }}: {{ message }}"
     ],
     "react.tool.ready": [
       "{{ tool_name }} is ready to be used."

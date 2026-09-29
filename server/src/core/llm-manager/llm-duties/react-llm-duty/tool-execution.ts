@@ -44,10 +44,6 @@ const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
   'bridges.tools.downloading_resource',
   'bridges.tools.downloading_resource_file'
 ])
-const TOOL_PREPARATION_READY_REPORT_KEYS = new Set([
-  'bridges.tools.binary_ready',
-  'bridges.tools.resource_downloaded'
-])
 const TOOL_PREPARATION_FAILED_REPORT_KEYS = new Set([
   'bridges.tools.no_binary_url',
   'bridges.tools.no_resource_urls',
@@ -55,6 +51,17 @@ const TOOL_PREPARATION_FAILED_REPORT_KEYS = new Set([
   'bridges.tools.download_url_failed',
   'bridges.tools.resource_file_download_failed'
 ])
+const TOOL_PREPARATION_MILESTONE_REPORT_KEYS = new Set([
+  'bridges.tools.binary_not_found',
+  'bridges.tools.downloading_resource_file',
+  'bridges.tools.resource_downloaded',
+  'bridges.tools.download_completed',
+  'bridges.tools.extracting_archive',
+  'bridges.tools.archive_extracted',
+  'bridges.tools.making_executable',
+  'bridges.tools.binary_ready'
+])
+
 function stringifyToolPanelValue(value: unknown): string {
   if (typeof value === 'string') {
     const trimmed = value.trim()
@@ -223,25 +230,6 @@ function emitToolExecutionOutputDeltaToWebApp(params: {
   })
 }
 
-function emitToolPreparationOwnerMessage(
-  key: string,
-  toolName: string
-): void {
-  const message = BRAIN.wernicke(key, '', {
-    '{{ tool_name }}': toolName
-  })
-  if (!message) {
-    return
-  }
-
-  void BRAIN.talk(message).catch((error) => {
-    LogHelper.title(`${DUTY_NAME} / execution`)
-    LogHelper.warning(
-      `Failed to emit tool preparation owner message: ${String(error)}`
-    )
-  })
-}
-
 function emitToolExecutionOutputToWebApp(params: {
   toolkitId: string
   toolId: string
@@ -296,7 +284,8 @@ export async function runToolExecution(
   onProgressEvent?: (
     event: Extract<AgentRunProgressEvent, { type: 'tool_call' }>['toolCall']
   ) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onPreparationProgress?: (message: string) => Promise<void>
 ): Promise<ToolExecutionResult> {
   signal?.throwIfAborted()
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
@@ -440,8 +429,8 @@ export async function runToolExecution(
   })
 
   let didNotifyOwnerPreparationStarted = false
-  let didNotifyOwnerPreparationReady = false
   let didObservePreparationFailure = false
+  const reportedPreparationMilestones = new Set<string>()
   toolExecutionInput.onProgress = (progress): void => {
     onProgressEvent?.({
       id: toolGroupId,
@@ -490,6 +479,26 @@ export async function runToolExecution(
 
     if (TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)) {
       didObservePreparationFailure = true
+    }
+
+    // Keep frequent percentages in the live card; surface named preparation
+    // milestones in the conversation without repeating the same report.
+    if (
+      TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key) ||
+      TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)
+    ) {
+      const milestoneId = JSON.stringify([progress.key, progress.data])
+
+      if (progress.message && !reportedPreparationMilestones.has(milestoneId)) {
+        reportedPreparationMilestones.add(milestoneId)
+        didNotifyOwnerPreparationStarted = true
+        void onPreparationProgress?.(
+          BRAIN.wernicke('react.tool.preparation_progress', '', {
+            '{{ tool_name }}': toolDisplayContext.toolName,
+            '{{ message }}': progress.message
+          })
+        )
+      }
       return
     }
 
@@ -498,24 +507,12 @@ export async function runToolExecution(
       TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key)
     ) {
       didNotifyOwnerPreparationStarted = true
-      emitToolPreparationOwnerMessage(
-        'react.tool.preparing',
-        toolDisplayContext.toolName
+      void onPreparationProgress?.(
+        BRAIN.wernicke('react.tool.preparing', '', {
+          '{{ tool_name }}': toolDisplayContext.toolName
+        })
       )
       return
-    }
-
-    if (
-      didNotifyOwnerPreparationStarted &&
-      !didNotifyOwnerPreparationReady &&
-      !didObservePreparationFailure &&
-      TOOL_PREPARATION_READY_REPORT_KEYS.has(progress.key)
-    ) {
-      didNotifyOwnerPreparationReady = true
-      emitToolPreparationOwnerMessage(
-        'react.tool.ready',
-        toolDisplayContext.toolName
-      )
     }
   }
 
@@ -573,6 +570,20 @@ export async function runToolExecution(
   LogHelper.debug(
     `Tool output: ${JSON.stringify(toolExecutionResult.data?.output)}`
   )
+
+  // Individual resources can finish while other downloads are still running.
+  // The successful call is the boundary where all required resources are ready.
+  if (
+    didNotifyOwnerPreparationStarted &&
+    !didObservePreparationFailure &&
+    effectiveStatus === 'success'
+  ) {
+    await onPreparationProgress?.(
+      BRAIN.wernicke('react.tool.ready', '', {
+        '{{ tool_name }}': toolDisplayContext.toolName
+      })
+    )
+  }
 
   emitToolExecutionOutputToWebApp({
     toolkitId,
