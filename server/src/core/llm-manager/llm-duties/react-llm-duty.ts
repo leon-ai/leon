@@ -498,8 +498,15 @@ export class ReActLLMDuty extends LLMDuty {
           const activeSkill = caller.agentSkillContext
           const progressiveGuidance =
             buildAgentProgressiveGuidanceSystemPrompt(catalog)
+
+          // Reviewers need task-specific constraints and evidence, not the acting
+          // agent's persona and general workflow. Keep the clock for relative
+          // dates and preserve trusted integration guidance.
+          const baseSystemPrompt = options.isCompletionReview
+            ? this.appendAdditionalInstructions(PERSONA.getContextInfo())
+            : agentSystemPrompt
           const prompt = [
-            agentSystemPrompt,
+            baseSystemPrompt,
             progressiveGuidance,
             buildAgentConnectionGuidance(state.executionHistory),
             ...(state.trackedSteps.length ? [
@@ -523,6 +530,7 @@ export class ReActLLMDuty extends LLMDuty {
           ]
             .filter(Boolean)
             .join('\n')
+
           return this.callAgentModel(
             messages,
             prompt,

@@ -251,7 +251,7 @@ describe('continuous agent loop', () => {
     ).toEqual(transcript)
     const review = JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)
 
-    expect(review.available_tool_contracts).toEqual(catalog.tools.map((tool) => tool.function))
+    expect(review.available_tool_contracts).toEqual([catalog.tools[0]!.function])
     expect(callModel.mock.calls[2]?.[2]).toMatchObject({ requiresToolAction: true })
     expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
     expect(JSON.stringify(callModel.mock.calls[2]?.[0])).toContain('Invoice 0003 is verified')

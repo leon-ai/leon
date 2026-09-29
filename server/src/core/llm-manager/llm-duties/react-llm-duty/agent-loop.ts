@@ -1050,7 +1050,12 @@ async function reviewAgentCompletion(
         completion_review: true,
         remaining_operational_iterations: remainingIterations,
         reported_plan: state.trackedSteps,
+        // Operational contracts prevent invented follow-up calls. Discovery and
+        // orchestration schemas add unrelated context to every completion review.
         available_tool_contracts: params.catalog.tools
+          .filter((tool) =>
+            params.catalog.functionsByToolName.has(tool.function.name)
+          )
           .map((tool) => tool.function)
       })
     }
