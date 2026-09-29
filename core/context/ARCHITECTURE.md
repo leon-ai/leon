@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-09-24T08:24:04+08:00
+- Generated at: 2026-09-29T20:20:31+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -8,15 +8,16 @@
 - Explicit tools over implicit behavior: Leon calls declared tools/functions instead of free-form shell logic whenever possible.
 - Progressive grounding: Leon prefers context and memory tools first, then shell only when no dedicated tool can satisfy the request.
 - Auditable steps: Leon keeps plan/execution traces, token usage logs, and tool observations so decisions remain inspectable.
-- Tools own their dependencies, settings and device behavior. Core and bridge hosts manage execution and transport; shared SDK capabilities stay equivalent across Node.js and Python.
+- Tools own their dependencies, settings, connection declarations and device behavior. Core and bridge hosts manage execution, transport and authentication; shared SDK capabilities stay equivalent across Node.js and Python.
 ## Client Interfaces
 - Leon exposes a client-agnostic Socket.IO interface so built-in and custom clients can connect through the same live dialogue contract.
 - HTTP APIs remain request/response support surfaces; live profile-scoped utterances should use the Socket.IO client interface.
 - External HTTP plugins can extend Leon's HTTP contract without patching the core API for each integration.
 - Custom clients can read profile-owned extension JSON files through a generic redacted HTTP endpoint, covering skill memory, skill settings, and tool settings without exposing secrets.
+- The LLM layer supports media understanding and generation; generated files are conversation artifacts with authenticated downloads and inline media playback.
 ## Profile Runtimes
 - One Leon server can serve multiple profiles concurrently, with each request and agent turn bound to one profile for its full asynchronous lifetime.
-- Runtime services are created lazily per profile, while config, secrets, sessions, memory, context, skills, tools, settings, and logs remain isolated in profile-owned paths.
+- Runtime services are created lazily per profile, while config, secrets, encrypted connections, sessions, memory, context, skills, tools, settings, and logs remain isolated in profile-owned paths.
 - A `<profile>:<token>` credential selects and authenticates the profile across Socket.IO clients, HTTP integrations, and Leon Satellite.
 ## Leon Satellite
 - Leon Satellite is an optional process on a user device that connects its enabled and available profile tools to a remote Leon server.
