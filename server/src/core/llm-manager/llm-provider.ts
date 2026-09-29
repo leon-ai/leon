@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { Readable } from 'node:stream'
 import { inspect } from 'node:util'
 
@@ -6,6 +7,7 @@ import axios, { type AxiosResponse } from 'axios'
 
 import {
   type CompletionParams,
+  type CompletionStreamEvent,
   type LLMPromptAbortReason,
   type OpenAIToolCall,
   type PromptOrChatHistory,
@@ -38,6 +40,7 @@ interface CompletionResult {
   usedInputTokens: number
   usedOutputTokens: number
   generationDurationMs: number
+  firstTokenAt?: number
   providerDecodeDurationMs?: number
   providerTokensPerSecond?: number
   temperature: number
@@ -97,6 +100,17 @@ const LLM_PROVIDERS_MAP = {
 const DEFAULT_MAX_EXECUTION_RETRIES = 2
 const DEFAULT_REMOTE_PROVIDER_ERROR_RETRIES = 1
 const TIMEOUT_RETRY_INCREMENT_MS = 30_000
+const REMOTE_STREAM_IDLE_TIMEOUT_MS = 30_000
+const STREAM_IDLE_TIMEOUT_ERROR_NAME = 'LLMStreamIdleTimeout'
+const STREAM_OUTPUT_EVENTS = new Set([
+  'tool-input-start',
+  'tool-input-delta',
+  'tool-call-delta',
+  'tool-call',
+  'file',
+  'tool-result',
+  'source'
+])
 const REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS = 5_000
 const RETRYABLE_ERROR_RETRY_DELAY_MS = 1_250
 const EMPTY_COMPLETION_RETRY_DELAY_MS = 750
@@ -2255,6 +2269,65 @@ export default class LLMProvider {
     let hasStartedStreaming = false
     const completionStartedAt = Date.now()
     let generationStartedAt: number | null = null
+    let firstTokenAt: number | undefined
+    let firstEventAt: number | undefined
+    let streamOpenedAt: number | undefined
+    let lastEventAt: number | undefined
+    let lastEvent = 'dispatched'
+    let transport: string = isRemoteProvider
+      ? providerName === LLMProviders.OpenAI && shouldStreamOutput
+        ? 'websocket'
+        : 'http'
+      : 'local'
+    let requestId: string | undefined
+    let responseId: string | undefined
+    let isReasoning = false
+    const pendingHostedTools = new Set<string>()
+    const attemptId = randomUUID()
+    const idleTimeout = completionParams.streamIdleTimeout ?? (
+      isRemoteProvider
+        ? Math.min(REMOTE_STREAM_IDLE_TIMEOUT_MS, completionParams.timeout)
+        : completionParams.timeout
+    )
+    const logAttempt = (outcome: string): void => {
+      const details = JSON.stringify({
+        attemptId,
+        startedAt: new Date(completionStartedAt).toISOString(),
+        provider: providerName,
+        model: provider.modelName,
+        duty: completionParams.dutyType,
+        reasoningEffort: completionParams.reasoningEffort,
+        serviceTier: completionParams.serviceTier,
+        transport,
+        outcome,
+        requestId,
+        responseId,
+        elapsedMs: Date.now() - completionStartedAt,
+        inferenceTimeoutMs: completionParams.timeout,
+        streamIdleTimeoutMs: idleTimeout,
+        generationStartMs: generationStartedAt === null
+          ? undefined
+          : generationStartedAt - completionStartedAt,
+        streamOpenMs: streamOpenedAt === undefined
+          ? undefined
+          : streamOpenedAt - completionStartedAt,
+        firstEventMs: firstEventAt === undefined
+          ? undefined
+          : firstEventAt - completionStartedAt,
+        firstTokenMs: firstTokenAt === undefined
+          ? undefined
+          : firstTokenAt - completionStartedAt,
+        lastEvent,
+        idleMs: lastEventAt === undefined ? undefined : Date.now() - lastEventAt
+      })
+
+      if (outcome === 'started' || outcome === 'completed') {
+        LogHelper.debug(`LLM attempt ${details}`)
+      } else {
+        // Keep failed-attempt identifiers and timings in the profile error log.
+        LogHelper.error(`LLM attempt ${details}`)
+      }
+    }
     // Attempt-level diagnosis can retry, but owner cancellation must survive it.
     const callerAbortSignal = completionParams.cancellationSignal
       ? AbortSignal.any([
@@ -2275,23 +2348,28 @@ export default class LLMProvider {
         streamStallTimeoutHandle = null
       }
     }
-    const resetStreamStallTimeout = (): void => {
+    const resetStreamStallTimeout = (
+      delay = isReasoning || pendingHostedTools.size > 0
+        ? completionParams.timeout
+        : idleTimeout
+    ): void => {
       if (!shouldStreamOutput || !completionParams.timeout) {
         return
       }
 
       clearStreamStallTimeout()
       streamStallTimeoutHandle = setTimeout(() => {
+        const error = new Error(
+          `Timeout (${delay}ms) for "${completionParams.dutyType}" duty after streaming stalled`
+        )
+        error.name = STREAM_IDLE_TIMEOUT_ERROR_NAME
+
         if (!abortController.signal.aborted) {
-          abortController.abort()
+          abortController.abort(error)
         }
 
-        rejectStreamStall?.(
-          new Error(
-            `Timeout (${completionParams.timeout}ms) for "${completionParams.dutyType}" duty after streaming stalled`
-          )
-        )
-      }, completionParams.timeout)
+        rejectStreamStall?.(error)
+      }, delay)
     }
     const markStreamStarted = (): void => {
       if (!hasStartedStreaming) {
@@ -2302,45 +2380,89 @@ export default class LLMProvider {
           timeoutHandle = null
           LogHelper.title('LLM Provider')
           LogHelper.debug(
-            'Streaming started; inference timeout watchdog replaced by stream stall watchdog for this completion'
+            'Model generation activity started; using the stream activity watchdog'
           )
         }
       }
     }
 
+    const recordActivity = (type: string): void => {
+      firstEventAt ??= Date.now()
+      lastEventAt = Date.now()
+      lastEvent = type
+    }
     const onTokenWithStreamStart = (chunk: OnTokenChunk): void => {
-      if (typeof chunk === 'string' && chunk.length === 0) {
+      if (chunk.length > 0) {
+        firstTokenAt ??= Date.now()
+        recordActivity('text-delta')
         markStreamStarted()
         resetStreamStallTimeout()
-        userOnToken?.(chunk)
-        return
       }
 
-      markStreamStarted()
-      resetStreamStallTimeout()
       userOnToken?.(chunk)
     }
-
     const onReasoningTokenWithStreamStart = (reasoningChunk: string): void => {
-      if (reasoningChunk.length === 0) {
+      if (reasoningChunk.length > 0) {
+        recordActivity('reasoning-delta')
         markStreamStarted()
-        resetStreamStallTimeout()
-        userOnReasoningToken?.(reasoningChunk)
-        return
+        // Reasoning can include silent computation between visible summaries.
+        resetStreamStallTimeout(completionParams.timeout)
       }
 
-      markStreamStarted()
-      resetStreamStallTimeout()
       userOnReasoningToken?.(reasoningChunk)
     }
+    const onStreamEvent = (event: CompletionStreamEvent): void => {
+      transport = event.transport ?? transport
+      requestId = event.requestId ?? requestId
+      responseId = event.responseId ?? responseId
 
+      if (event.type === 'stream-open') {
+        streamOpenedAt = Date.now()
+      } else if (event.type !== 'stream-start') {
+        recordActivity(event.type)
+      }
+
+      // Hosted tools can perform long work without emitting argument deltas.
+      if (event.toolCallId) {
+        if (event.type === 'tool-call' && event.providerExecuted) {
+          pendingHostedTools.add(event.toolCallId)
+        } else if (event.type === 'tool-result' && !event.preliminary) {
+          pendingHostedTools.delete(event.toolCallId)
+        }
+      }
+
+      if (event.type === 'finish') {
+        // The model has finished; artifact persistence is local post-processing.
+        clearStreamStallTimeout()
+
+        if (timeoutHandle) {
+          clearTimeout(timeoutHandle)
+          timeoutHandle = null
+        }
+      } else if (event.type === 'reasoning-start') {
+        isReasoning = true
+        markStreamStarted()
+        resetStreamStallTimeout()
+      } else if (event.type === 'reasoning-end') {
+        isReasoning = false
+        resetStreamStallTimeout()
+      } else if (STREAM_OUTPUT_EVENTS.has(event.type)) {
+        markStreamStarted()
+        resetStreamStallTimeout()
+      }
+
+      completionParams.onStreamEvent?.(event)
+    }
     const completionParamsWithAbort = {
       ...completionParams,
       shouldStream: shouldStreamOutput,
       onToken: onTokenWithStreamStart,
       onReasoningToken: onReasoningTokenWithStreamStart,
+      onStreamEvent,
       signal: abortController.signal
     }
+
+    logAttempt('started')
 
     let callerAbortListener: (() => void) | null = null
     const removeCallerAbortListener = (): void => {
@@ -2396,6 +2518,7 @@ export default class LLMProvider {
         )
       )
     } catch (e) {
+      logAttempt('failed')
       removeCallerAbortListener()
       completionParams.cancellationSignal?.throwIfAborted()
       LogHelper.title('LLM Provider')
@@ -2452,6 +2575,7 @@ export default class LLMProvider {
       }
       clearStreamStallTimeout()
     } catch (e) {
+      logAttempt(e instanceof Error ? e.name : 'failed')
       removeCallerAbortListener()
       if (timeoutHandle) {
         clearTimeout(timeoutHandle)
@@ -2563,7 +2687,9 @@ export default class LLMProvider {
           abortController.abort()
         }
 
-        const nextTimeout = isTimeoutError
+        const isStreamIdleTimeout = e instanceof Error &&
+          e.name === STREAM_IDLE_TIMEOUT_ERROR_NAME
+        const nextTimeout = isTimeoutError && !isStreamIdleTimeout
           ? (completionParams.timeout ?? 0) + TIMEOUT_RETRY_INCREMENT_MS
           : completionParams.timeout
         const retryParams = promptAbortReason?.shouldRetry
@@ -2630,6 +2756,7 @@ export default class LLMProvider {
       }*/
     }
 
+    logAttempt('completed')
     removeCallerAbortListener()
 
     let usedInputTokens = 0
@@ -2946,6 +3073,7 @@ export default class LLMProvider {
       usedInputTokens,
       usedOutputTokens,
       generationDurationMs,
+      ...(firstTokenAt !== undefined ? { firstTokenAt } : {}),
       ...(providerDecodeDurationMs ? { providerDecodeDurationMs } : {}),
       ...(providerTokensPerSecond ? { providerTokensPerSecond } : {}),
       ...(reasoning ? { reasoning } : {}),

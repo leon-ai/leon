@@ -1189,7 +1189,8 @@ export class ReActLLMDuty extends LLMDuty {
       usedOutputTokens: completionResult.usedOutputTokens,
       providerDecodeDurationMs: completionResult.providerDecodeDurationMs,
       providerTokensPerSecond: completionResult.providerTokensPerSecond,
-      generationDurationMs: completionResult.generationDurationMs
+      generationDurationMs: completionResult.generationDurationMs,
+      firstTokenAt: completionResult.firstTokenAt
     })
 
     if (toolCalls && toolCalls.length > 0) {

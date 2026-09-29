@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { LogHelper } from '@/helpers/log-helper'
+
 import LLMProvider from '@/core/llm-manager/llm-provider'
-import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 
 const celerisTarget = {
   provider: 'celeris',
@@ -91,6 +93,173 @@ describe('LLMProvider', () => {
       await canceled
       expect(runChatCompletion).toHaveBeenCalledTimes(2)
       expect(signals.every((signal) => signal.aborted)).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still extends the deadline after a genuine inference timeout', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const attempts: CompletionParams[] = []
+      const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+        attempts.push(params)
+
+        return new Promise(() => {})
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const result = manager.prompt('Hello', {
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        shouldStream: false,
+        timeout: 120_000,
+        maxRetries: 1,
+        remoteProviderErrorRetries: 0
+      })
+
+      await vi.advanceTimersByTimeAsync(0)
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(attempts.map((params) => params.timeout)).toEqual([120_000, 150_000])
+
+      await vi.advanceTimersByTimeAsync(150_000)
+      expect(await result).toBeNull()
+      expect(attempts).toHaveLength(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it.each(['text', 'tool'] as const)(
+    'separates inference from %s stream silence and retries without extending idle time',
+    async (output) => {
+      vi.useFakeTimers()
+
+      try {
+        const attempts: CompletionParams[] = []
+        const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+          attempts.push(params)
+          params.onStreamEvent?.({ type: 'stream-open', transport: 'http', requestId: 'req-test' })
+
+          if (attempts.length === 2) {
+            params.onToken?.('Recovered')
+
+            return Promise.resolve({ data: {
+              choices: [{ message: { content: 'Recovered' }, finish_reason: 'stop' }],
+              usage: { prompt_tokens: 10, completion_tokens: 1 }
+            } })
+          }
+
+          return new Promise((_resolve, reject) => {
+            params.signal?.addEventListener('abort', () => {
+              reject(params.signal?.reason)
+            }, { once: true })
+          })
+        })
+        const manager = new LLMProvider()
+        const state = manager as unknown as LLMProviderTestState
+
+        state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+        state.agentLLMProviderTargetLabel = celerisTarget.label
+
+        const pending = manager.prompt('Hello', {
+          dutyType: LLMDuties.ReAct,
+          systemPrompt: '',
+          shouldStream: true,
+          timeout: 120_000,
+          maxRetries: 1
+        })
+
+        await vi.advanceTimersByTimeAsync(0)
+
+        // Opening a connection, or an empty token, is not model output.
+        attempts[0]!.onToken?.('')
+        await vi.advanceTimersByTimeAsync(40_000)
+        expect(attempts[0]!.signal?.aborted).toBe(false)
+
+        const progress = (): void => {
+          if (output === 'text') {
+            attempts[0]!.onToken?.('partial')
+          } else {
+            attempts[0]!.onStreamEvent?.({ type: 'tool-input-delta' })
+          }
+        }
+
+        progress()
+        await vi.advanceTimersByTimeAsync(29_000)
+        progress()
+        await vi.advanceTimersByTimeAsync(29_000)
+        expect(attempts).toHaveLength(1)
+        await vi.advanceTimersByTimeAsync(1_001)
+
+        const result = await pending
+
+        expect(attempts).toHaveLength(2)
+        expect(attempts[0]!.signal?.aborted).toBe(true)
+        expect(attempts[1]!.timeout).toBe(120_000)
+        expect(result?.firstTokenAt).toBeGreaterThan(0)
+        expect(LogHelper.error).toHaveBeenCalledWith(expect.stringContaining('req-test'))
+        expect(LogHelper.error).toHaveBeenCalledWith(expect.stringContaining('LLMStreamIdleTimeout'))
+      } finally {
+        vi.useRealTimers()
+      }
+    }
+  )
+
+  it.each(['reasoning', 'hosted tool'])('allows silent %s and reports actual text arrival', async (phase) => {
+    vi.useFakeTimers()
+
+    try {
+      let params: CompletionParams | undefined
+      let complete: (value: unknown) => void = () => {}
+      const runChatCompletion = vi.fn((_prompt, options: CompletionParams) => {
+        params = options
+
+        return new Promise((resolve) => {
+          complete = resolve
+        })
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const pending = manager.prompt('Think', {
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        shouldStream: true,
+        maxRetries: 0
+      })
+
+      await vi.advanceTimersByTimeAsync(0)
+      params!.onStreamEvent?.(phase === 'reasoning'
+        ? { type: 'reasoning-start' }
+        : { type: 'tool-call', toolCallId: 'hosted', providerExecuted: true })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(params!.signal?.aborted).toBe(false)
+      params!.onStreamEvent?.(phase === 'reasoning'
+        ? { type: 'reasoning-end' }
+        : { type: 'tool-result', toolCallId: 'hosted' })
+
+      const firstTokenAt = Date.now()
+
+      params!.onToken?.('Done')
+      params!.onStreamEvent?.({ type: 'finish' })
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(params!.signal?.aborted).toBe(false)
+
+      complete({ data: {
+        choices: [{ message: { content: 'Done' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 10, completion_tokens: 1 }
+      } })
+
+      expect((await pending)?.firstTokenAt).toBe(firstTokenAt)
     } finally {
       vi.useRealTimers()
     }

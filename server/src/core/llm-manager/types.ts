@@ -137,6 +137,19 @@ export interface LLMPromptAbortReason {
   delayMs: number
 }
 
+/**
+ * Transport and protocol progress without prompt content or credentials.
+ */
+export interface CompletionStreamEvent {
+  type: string
+  transport?: 'http' | 'websocket'
+  requestId?: string
+  responseId?: string
+  toolCallId?: string
+  providerExecuted?: boolean
+  preliminary?: boolean
+}
+
 export interface CompletionParams {
   dutyType: LLMDuties
   systemPrompt: string
@@ -145,6 +158,10 @@ export interface CompletionParams {
   temperature?: number | undefined
   seed?: number | undefined
   timeout?: number
+  /**
+   * Maximum silence after output starts; independent of initial inference.
+   */
+  streamIdleTimeout?: number
   signal?: AbortSignal
   /**
    * Cancels the whole request, including retries after an attempt-level abort.
@@ -155,6 +172,7 @@ export interface CompletionParams {
   history?: MessageLog[]
   onToken?: (tokens: Token[] | string) => void
   onReasoningToken?: (reasoningChunk: string) => void
+  onStreamEvent?: (event: CompletionStreamEvent) => void
   shouldStream?: boolean
   /**
    * Optional provider hint to disable thinking/reasoning for a request.

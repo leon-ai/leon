@@ -461,8 +461,15 @@ describe('AISDKRemoteLLMProvider', () => {
     const emit = vi.fn()
     const answerStream = new AgentAnswerStream(emit)
     const onReasoningToken = vi.fn()
+    const onStreamEvent = vi.fn()
+
+    answerStream.push('Discard the failed attempt.')
+
     openRouterMocks.languageModel.doStream.mockResolvedValue({
+      response: { headers: { 'x-request-id': 'req-test' } },
       stream: (async function* (): AsyncGenerator<Record<string, unknown>> {
+        yield { type: 'response-metadata', id: 'resp-test' }
+        yield { type: 'tool-input-delta', id: 'call-test', delta: '{}' }
         yield { type: 'reasoning-delta', delta: 'Thinking' }
         expect(emit).not.toHaveBeenCalled()
         yield { type: 'text-delta', delta: 'Hello' }
@@ -479,9 +486,17 @@ describe('AISDKRemoteLLMProvider', () => {
       onToken: (token) => {
         if (typeof token === 'string') answerStream.push(token)
       },
-      onReasoningToken
+      onReasoningToken,
+      onStreamEvent
     })
 
+    expect(onStreamEvent).toHaveBeenCalledWith({
+      type: 'stream-open', transport: 'http', requestId: 'req-test'
+    })
+    expect(onStreamEvent).toHaveBeenCalledWith({
+      type: 'response-metadata', responseId: 'resp-test'
+    })
+    expect(onStreamEvent).toHaveBeenCalledWith({ type: 'tool-input-delta' })
     expect(onReasoningToken).toHaveBeenCalledExactlyOnceWith('Thinking')
     expect(emit).not.toHaveBeenCalled()
     answerStream.finish()

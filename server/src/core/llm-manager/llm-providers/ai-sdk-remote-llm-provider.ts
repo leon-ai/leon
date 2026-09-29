@@ -1345,6 +1345,15 @@ export default class AISDKRemoteLLMProvider {
     const result = await languageModel.doGenerate(callOptions)
     const content = result.content as Array<Record<string, unknown>>
 
+    completionParams.onStreamEvent?.({
+      type: 'response-metadata',
+      transport: 'http',
+      ...(result.response?.id ? { responseId: result.response.id } : {}),
+      ...(result.response?.headers?.['x-request-id']
+        ? { requestId: result.response.headers['x-request-id'] }
+        : {})
+    })
+
     for (const part of content) {
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
 
@@ -1401,13 +1410,31 @@ export default class AISDKRemoteLLMProvider {
     const languageModel = this.getLanguageModel()
     const result = await languageModel.doStream(callOptions)
 
-    // Signal streaming as soon as we receive a stream object, even if the
-    // model emits only tool-call deltas and no text tokens.
+    // Clear a previous attempt's provisional text without claiming model output.
     completionParams.onToken?.('')
+    completionParams.onStreamEvent?.({
+      type: 'stream-open',
+      transport: this.config.flavor === 'openai-responses' ? 'websocket' : 'http',
+      ...(result.response?.headers?.['x-request-id']
+        ? { requestId: result.response.headers['x-request-id'] }
+        : {})
+    })
 
     for await (const streamPart of result.stream) {
       const part = streamPart as unknown as Record<string, unknown>
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+
+      completionParams.onStreamEvent?.({
+        type,
+        ...(type === 'response-metadata' && typeof part['id'] === 'string'
+          ? { responseId: part['id'] }
+          : {}),
+        ...(typeof part['toolCallId'] === 'string'
+          ? { toolCallId: part['toolCallId'] }
+          : {}),
+        ...(part['providerExecuted'] === true ? { providerExecuted: true } : {}),
+        ...(part['preliminary'] === true ? { preliminary: true } : {})
+      })
 
       if (this.acceptMediaPart(state, part)) {
         continue
