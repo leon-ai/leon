@@ -1,0 +1,10 @@
+{
+  "name": "@leon-ai/document-generation-tool",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "docx": "9.5.1",
+    "pdfkit": "0.17.2"
+  },
+  "devDependencies": { "@types/pdfkit": "0.17.3" }
+}
