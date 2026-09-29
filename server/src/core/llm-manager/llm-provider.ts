@@ -111,6 +111,18 @@ const STREAM_OUTPUT_EVENTS = new Set([
   'tool-result',
   'source'
 ])
+const CONNECTION_ERROR_CODES = new Set([
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_SOCKET',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'EPIPE',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  'ERR_NETWORK'
+])
 const REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS = 5_000
 const RETRYABLE_ERROR_RETRY_DELAY_MS = 1_250
 const EMPTY_COMPLETION_RETRY_DELAY_MS = 750
@@ -863,7 +875,48 @@ export default class LLMProvider {
     )
   }
 
+  /**
+   * Read transport error codes through SDK wrappers and aggregate dial errors.
+   */
+  private getConnectionErrorCode(error: unknown): string | undefined {
+    const pending: unknown[] = [error]
+    const visited = new Set<object>()
+
+    while (pending.length > 0) {
+      const current = pending.pop()
+
+      if (!current || typeof current !== 'object' || visited.has(current)) {
+        continue
+      }
+
+      visited.add(current)
+
+      const details = current as Record<string, unknown>
+      const code = details['code']
+
+      // ETIMEDOUT also describes read timeouts; only classify an explicit dial.
+      if (typeof code === 'string' && (
+        CONNECTION_ERROR_CODES.has(code) ||
+        (code === 'ETIMEDOUT' && details['syscall'] === 'connect')
+      )) {
+        return code
+      }
+
+      pending.push(details['cause'])
+
+      if (current instanceof AggregateError) {
+        pending.push(...current.errors)
+      }
+    }
+
+    return undefined
+  }
+
   private isTimeoutLikeError(error: unknown): boolean {
+    if (this.getConnectionErrorCode(error)) {
+      return false
+    }
+
     const promptAbortReason = this.getPromptAbortReason(error)
     if (promptAbortReason?.retryStrategy === 'timeout') {
       return true
@@ -2289,7 +2342,7 @@ export default class LLMProvider {
         ? Math.min(REMOTE_STREAM_IDLE_TIMEOUT_MS, completionParams.timeout)
         : completionParams.timeout
     )
-    const logAttempt = (outcome: string): void => {
+    const logAttempt = (outcome: string, error?: unknown): void => {
       const details = JSON.stringify({
         attemptId,
         startedAt: new Date(completionStartedAt).toISOString(),
@@ -2300,6 +2353,7 @@ export default class LLMProvider {
         serviceTier: completionParams.serviceTier,
         transport,
         outcome,
+        connectionErrorCode: this.getConnectionErrorCode(error),
         requestId,
         responseId,
         elapsedMs: Date.now() - completionStartedAt,
@@ -2518,7 +2572,7 @@ export default class LLMProvider {
         )
       )
     } catch (e) {
-      logAttempt('failed')
+      logAttempt('failed', e)
       removeCallerAbortListener()
       completionParams.cancellationSignal?.throwIfAborted()
       LogHelper.title('LLM Provider')
@@ -2575,7 +2629,7 @@ export default class LLMProvider {
       }
       clearStreamStallTimeout()
     } catch (e) {
-      logAttempt(e instanceof Error ? e.name : 'failed')
+      logAttempt(e instanceof Error ? e.name : 'failed', e)
       removeCallerAbortListener()
       if (timeoutHandle) {
         clearTimeout(timeoutHandle)
@@ -2590,6 +2644,7 @@ export default class LLMProvider {
       )
       LogHelper.timeEnd(measureExecutionTimeLabel)
 
+      const connectionErrorCode = this.getConnectionErrorCode(e)
       const isTimeoutError = this.isTimeoutLikeError(e)
       const isRetryableNonTimeoutError = this.isRetryablePromptError(e)
       const isThinkingToolChoiceConflict =
@@ -2670,7 +2725,9 @@ export default class LLMProvider {
 
         LogHelper.title('LLM Provider')
         LogHelper.warning(
-          `Remote provider failed; retrying after ${REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS}ms (${remainingRemoteProviderErrorRetries} retry left)`
+          connectionErrorCode
+            ? `Provider connection failed (${connectionErrorCode}); retrying after ${REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS}ms without increasing the inference timeout (${remainingRemoteProviderErrorRetries} retry left)`
+            : `Remote provider failed; retrying after ${REMOTE_PROVIDER_ERROR_RETRY_DELAY_MS}ms (${remainingRemoteProviderErrorRetries} retry left)`
         )
 
         return this.prompt(promptOrChatHistory, {

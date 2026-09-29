@@ -98,6 +98,67 @@ describe('LLMProvider', () => {
     }
   })
 
+  it.each([
+    { code: 'UND_ERR_CONNECT_TIMEOUT', aggregate: false },
+    { code: 'ETIMEDOUT', aggregate: true },
+    { code: 'ECONNRESET', aggregate: false }
+  ])('bounds $code connection retries without extending inference time', async ({ code, aggregate }) => {
+    vi.useFakeTimers()
+    vi.mocked(LogHelper.warning).mockClear()
+    vi.mocked(LogHelper.error).mockClear()
+
+    try {
+      const cause = Object.assign(new Error('Connection failed'), {
+        code,
+        syscall: 'connect'
+      })
+      const error = new Error('Cannot connect to API', {
+        cause: aggregate ? new AggregateError([cause]) : cause
+      })
+      const attempts: CompletionParams[] = []
+      const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
+        attempts.push(params)
+
+        return Promise.reject(error)
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+
+      const result = manager.prompt('Hello', {
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        shouldStream: false,
+        timeout: 120_000,
+        maxRetries: 2
+      })
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(attempts).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(4_999)
+      expect(attempts).toHaveLength(1)
+
+      await vi.advanceTimersByTimeAsync(1)
+      expect(await result).toBeNull()
+      expect(attempts).toHaveLength(2)
+      expect(attempts.map((params) => params.timeout)).toEqual([120_000, 120_000])
+      expect(LogHelper.warning).toHaveBeenCalledWith(
+        expect.stringContaining(`Provider connection failed (${code})`)
+      )
+      expect(LogHelper.warning).not.toHaveBeenCalledWith(
+        expect.stringContaining('Prompt timed out')
+      )
+      expect(LogHelper.error).toHaveBeenCalledWith(
+        expect.stringContaining(`"connectionErrorCode":"${code}"`)
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('still extends the deadline after a genuine inference timeout', async () => {
     vi.useFakeTimers()
 
