@@ -100,6 +100,8 @@ vi.mock('@/core', () => ({
           message: string
           messageId?: string
           llmMetrics?: Record<string, unknown>
+          widget?: Record<string, unknown>
+          isAddedToHistory?: boolean
         },
         params: { sessionId: string }
       ) => {
@@ -109,6 +111,8 @@ vi.mock('@/core', () => ({
           who: record.who,
           message: record.message,
           sentAt: mocks.persistedMessages.length + 1,
+          ...(record.widget ? { widget: record.widget } : {}),
+          ...(record.isAddedToHistory === false ? { isAddedToHistory: false } : {}),
           ...(record.messageId ? { messageId: record.messageId } : {}),
           ...(record.llmMetrics ? { llmMetrics: record.llmMetrics } : {})
         })
@@ -673,23 +677,25 @@ describe('HTTP plugin Leon services', () => {
     const widget = {
       id: 'connection-widget',
       widget: 'ConnectionWidget',
-      historyMode: 'system_widget',
+      historyMode: 'system_widget' as const,
+      actionName: '',
+      supportedEvents: [],
+      onFetch: null,
+      fallbackText: 'Connect Spotify',
       componentTree: {
         component: 'ConnectionSetup',
         props: { provider: 'music_audio.spotify' }
       }
     }
 
-    mocks.persistedMessages.push({
-      profileId: 'owner-a',
-      sessionId: 'widget-session',
-      who: 'leon',
-      sentAt: 1,
-      messageId: widget.id,
+    await appendConversationMessage({
+      profile_id: 'owner-a',
+      session_id: 'widget-session',
+      role: 'assistant',
       message: 'Connect Spotify',
-      isAddedToHistory: false,
       widget
     })
+    expect(mocks.persistedMessages[0]?.isAddedToHistory).toBe(false)
     const result = await getConversationHistory({
       profile_id: 'owner-a',
       session_id: 'widget-session'

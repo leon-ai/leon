@@ -39,6 +39,14 @@ export const connectionsPlugin: FastifyPluginAsync<APIOptions> = async (
 ) => {
   const route = `/api/${options.apiVersion}/connections`
 
+  // Desktop hosts have no browser session to redirect into after OAuth.
+  // This public landing page exposes no account state or credentials.
+  fastify.get(`${route}/complete`, async (_request, reply) => {
+    return reply.type('text/plain; charset=utf-8').send(
+      'Return to your conversation and refresh the connection status. If authorization was canceled or failed, start it again from the connection card.'
+    )
+  })
+
   fastify.post<{
     Params: { provider: string }
     Body: Pick<

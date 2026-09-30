@@ -156,12 +156,24 @@ export async function appendConversationMessage(
       throw new Error('A conversation message is required.')
     }
 
+    const widget = input.role === 'assistant' ? input.widget : undefined
+
+    if (widget && !ConversationHistoryHelper.isRenderableWidget(widget)) {
+      throw new Error('A renderable conversation widget is required.')
+    }
+
+    const messageId = widget?.id || input.message_id
+    const artifacts = input.artifacts?.length ? input.artifacts : undefined
+
     await CONVERSATION_LOGGER.upsert(
       {
         who: input.role === 'assistant' ? 'leon' : 'owner',
         message,
-        isAddedToHistory: true,
-        ...(input.message_id ? { messageId: input.message_id } : {}),
+        // UI-only cards stay visible in history without entering the model transcript.
+        isAddedToHistory: !widget,
+        ...(messageId ? { messageId } : {}),
+        ...(widget ? { widget } : {}),
+        ...(artifacts ? { artifacts } : {}),
         ...(input.role === 'assistant' && input.response_trace
           ? {
               agentResponseTrace: deserializeAgentTrace(input.response_trace)
@@ -174,11 +186,12 @@ export async function appendConversationMessage(
     if (input.role === 'assistant') {
       publishAgentEvent(getActiveProfileName(), {
         session_id: sessionId,
-        turn_id: input.message_id || null,
-        response_id: input.message_id || null,
-        type: 'final_answer',
-        data: {
-          message_id: input.message_id || '',
+        turn_id: messageId || null,
+        response_id: messageId || null,
+        type: widget ? 'widget' : artifacts ? 'artifacts' : 'final_answer',
+        data: widget ? { widget } : {
+          ...(artifacts ? { artifacts } : {}),
+          message_id: messageId || '',
           content: message,
           response_trace: input.response_trace || {
             plan_steps: [],
@@ -192,7 +205,7 @@ export async function appendConversationMessage(
       profile_id: getActiveProfileName(),
       session_id: sessionId,
       role: input.role,
-      message_id: input.message_id || null
+      message_id: messageId || null
     }
   })
 }
@@ -220,7 +233,22 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
     readGenerationSettings,
     saveGenerationSettings,
     registerArtifact,
-    readArtifact,
+    readArtifact: async (sessionId, id, profileId): ReturnType<typeof readArtifact> => {
+      const profileName = profileId?.trim() || getActiveProfileName()
+
+      if (!isValidProfileName(profileName)) {
+        throw new Error('Invalid artifact profile.')
+      }
+
+      return runWithProfileContext({ profileName }, async () => {
+        await ensureActiveProfileRuntime()
+        if (!CONVERSATION_SESSION_MANAGER.getSession(sessionId)) {
+          throw new Error('Artifact conversation not found.')
+        }
+
+        return readArtifact(sessionId, id)
+      })
+    },
     attachArtifacts,
     listConnections: async (
       profileId,

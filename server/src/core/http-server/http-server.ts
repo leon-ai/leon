@@ -185,10 +185,12 @@ export default class HTTPServer {
       const requestPath = request.url.split('?')[0] || ''
       const authPath = `/api/${API_VERSION}/profile-auth`
       const connectionOAuthCallbackPath = `/api/${API_VERSION}/connections/oauth/callback`
+      const connectionCompletePath = `/api/${API_VERSION}/connections/complete`
 
       if (
         !requestPath.startsWith(`/api/${API_VERSION}/`) ||
         requestPath === authPath ||
+        requestPath === connectionCompletePath ||
         requestPath === connectionOAuthCallbackPath
       ) {
         return

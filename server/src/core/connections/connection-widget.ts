@@ -16,7 +16,7 @@ export function emitConnectionWidget(provider: string): void {
     replaceMessageId: id,
     widget: 'ConnectionWidget',
     historyMode: 'system_widget',
-    fallbackText: `Connect ${tool.name} to continue. Ask Leon to complete the setup in your browser, or use the setup card to connect manually.`,
+    fallbackText: `Connect ${tool.name} to continue. Ask me to complete the setup in your browser, or use the setup card to connect manually.`,
     supportedEvents: [],
     componentTree: {
       component: 'WidgetWrapper',

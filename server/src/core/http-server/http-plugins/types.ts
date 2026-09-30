@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 import type { APIOptions } from '@/core/http-server/http-server'
 import type { AgentModelFile } from '@/core/llm-manager/types'
+import type { ConversationWidgetData } from '@/types'
 
 export interface HTTPPluginAuthConfig {
   enabled: boolean
@@ -140,6 +141,8 @@ export interface HTTPPluginAppendConversationMessageInput {
   message: string
   message_id?: string
   response_trace?: HTTPPluginAgentTrace
+  widget?: ConversationWidgetData
+  artifacts?: Artifact[]
 }
 
 export interface HTTPPluginPublishConversationEventInput {
@@ -262,7 +265,11 @@ export interface HTTPPluginLeonServices {
   listMediaDefaults: typeof import('@/core/llm-manager/media-generation/media-generation-service').listMediaDefaults
   listMediaCapabilities: typeof import('@/core/llm-manager/media-generation/media-generation-service').listMediaCapabilities
   registerArtifact: typeof import('@/core/artifacts/artifact-store').registerArtifact
-  readArtifact: typeof import('@/core/artifacts/artifact-store').readArtifact
+  readArtifact: (
+    sessionId: string,
+    id: string,
+    profileId?: string
+  ) => ReturnType<typeof import('@/core/artifacts/artifact-store').readArtifact>
   attachArtifacts: typeof import('@/core/artifacts/artifact-service').attachArtifacts
   isLLMEnabled: () => boolean
   runAgent: (

@@ -7,7 +7,7 @@ import {
   runWithProfileContext
 } from '@/core/profile-runtime/profile-context'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
-import { getConnectionCatalog } from './connection-catalog'
+import { getConnectionCatalog, getConnectionCallbackURL } from './connection-catalog'
 import { CONNECTION_STORE, ConnectionStatus } from './connection-store'
 import { saveConnection, startConnectionOAuth } from './connection-service'
 
@@ -186,15 +186,16 @@ export async function handleConnectionSetup(
         )
 
         if (method.id === 'oauth') {
-          if (!input.return_url) {
-            throw new Error('An OAuth return URL is required.')
-          }
-
           const result = await startConnectionOAuth({
             provider: input.provider,
             callbackOrigin: input.callback_origin,
             apiVersion: input.api_version,
-            returnURL: input.return_url,
+            // Native clients return to a secret-free page at the public callback
+            // origin, rather than the integration server's private request host.
+            returnURL: input.return_url || new URL(
+              '../complete',
+              getConnectionCallbackURL(input.callback_origin, input.api_version)
+            ).toString(),
             ...(credentials['client_id']
               ? { clientId: credentials['client_id'] }
               : {}),
@@ -281,11 +282,11 @@ export async function handleConnectionSetup(
       if (step === SetupStep.Choice || step === SetupStep.Assisted) {
         view.description =
           step === SetupStep.Assisted
-            ? 'Setup requested. Follow Leon’s progress in the conversation.'
-            : 'Leon can use your browser to complete the setup and connect your account.'
+            ? 'Setup requested. Follow my progress in the conversation.'
+            : 'I can use your browser to complete the setup and connect your account.'
         if (step === SetupStep.Choice) {
           view.actions.push(
-            action(SetupAction.StartSetup, 'Let Leon set this up')
+            action(SetupAction.StartSetup, 'Let me set this up')
           )
         }
 
@@ -344,7 +345,7 @@ export async function handleConnectionSetup(
         }
 
         view.actions.push(
-          action(SetupAction.StartSetup, 'Let Leon set this up', true)
+          action(SetupAction.StartSetup, 'Let me set this up', true)
         )
       }
     }
