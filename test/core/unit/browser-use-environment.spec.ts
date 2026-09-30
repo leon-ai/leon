@@ -6,6 +6,7 @@ import net from 'node:net'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from '@@/tools/browser_use/src/nodejs/lib/browser-use-environment'
+import { BrowserUseTool } from '@@/tools/browser_use/src/nodejs/browser-use-tool'
 
 const directories = new Set<string>()
 
@@ -72,6 +73,34 @@ it.skipIf(process.platform === 'win32')('refuses a shared directory or symlink i
 it.each(['permission-blocked:', 'remote-debugging-setup:'])('preserves upstream authorization handoff %s', (code) => {
   const failure = describeBrowserUseReadinessFailure({ stdout: '', stderr: `RuntimeError: ${code} approval needed`, exitCode: 1, timedOut: false }, '/profile/bu.log')
   expect(failure.requiresOwnerAction).toBe(true)
+})
+
+it('preserves browser permission handoff when reconnecting fails before readiness', async () => {
+  const settings = await createProfile()
+  await environment(settings)
+  // Exercise the reconnect path without launching a browser or loading an owner profile.
+  const tool = Object.create(BrowserUseTool.prototype) as {
+    getSettingsPath: () => string
+    resolveBrowserEndpoint: () => Promise<string>
+    command: ReturnType<typeof vi.fn>
+    environment: () => Promise<NodeJS.ProcessEnv>
+  }
+  tool.getSettingsPath = (): string => settings
+  tool.resolveBrowserEndpoint = async (): Promise<string> => 'ws://127.0.0.1:9222'
+  tool.command = vi.fn().mockResolvedValue({
+    stdout: '',
+    stderr: 'CDP WS handshake failed: connection refused',
+    exitCode: 1,
+    timedOut: false
+  })
+
+  await expect(tool.environment()).rejects.toMatchObject({
+    name: 'BrowserSetupRequiredError',
+    setupState: 'connection_unavailable',
+    setup: { settings_url: 'chrome://inspect/#remote-debugging' }
+  })
+  expect(tool.command).toHaveBeenCalledOnce()
+  expect(tool.command.mock.calls[0]?.[0]).toEqual(['--reload'])
 })
 
 it.each(['stdout', 'stderr'] as const)('requests browser setup when a stale CDP endpoint fails in %s', (stream) => {

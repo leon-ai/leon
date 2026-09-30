@@ -211,7 +211,18 @@ export class BrowserUseTool extends Tool {
       const stopped = await this.command(['--reload'], {
         env: environment, timeout: COMMAND_TIMEOUT_MS, reject: false
       })
-      if (stopped.exitCode !== 0) throw new Error('Could not reset the previous browser connection.')
+      if (stopped.exitCode !== 0 || stopped.timedOut) {
+        // Reload also connects to the browser. Preserve its permission failure
+        // so the existing owner-action handoff pauses instead of retrying tools.
+        const failure = describeBrowserUseReadinessFailure(
+          stopped,
+          path.join(environment['BH_TMP_DIR']!, 'bu.log')
+        )
+        if (failure.requiresOwnerAction) {
+          throw this.createBrowserConnectionError(failure.message)
+        }
+        throw new Error(failure.message)
+      }
       await fs.mkdir(path.dirname(endpointPath), { recursive: true })
       await fs.writeFile(endpointPath, endpoint)
     }
