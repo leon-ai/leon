@@ -150,6 +150,9 @@ export async function handleConnectionSetup(
           event = ownerMessage(
             [
               `Help me connect ${tool.name} using ${method.name} in my browser, then continue my request.`,
+              ...Object.entries(method.setup?.values || {}).map(
+                ([name, value]) => `${name}: ${value}`
+              ),
               'Ask me when permission is needed. Keep credentials out of chat.'
             ].join('\n')
           )

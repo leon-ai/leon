@@ -29,7 +29,9 @@
             "A personal token uses your permissions in its selected workspace; it does not require adding an integration to each page. Workspace policies and token permissions still apply.",
             "Paste your token here to verify and save your connection."
           ],
-          "values": {}
+          "values": {
+            "Connection name": "Leon AI"
+          }
         }
       },
       "oauth": {
