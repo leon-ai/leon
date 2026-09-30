@@ -1,11 +1,20 @@
 import os from 'node:os'
-import { execFileSync } from 'node:child_process'
+import fs from 'node:fs'
+import { execFile, execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { promisify } from 'node:util'
 
 import type { Llama } from 'node-llama-cpp'
 
 import { OSTypes, CPUArchitectures } from '@/types'
+import { CODEBASE_PATH } from '@/leon-roots'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 const BYTES_PER_GIB = 1_024 * 1_024 * 1_024
+const HARDWARE_INSPECTION_CACHE_TTL_MS = 30_000
+const HARDWARE_INSPECTION_TIMEOUT_MS = 15_000
+const HARDWARE_INSPECTION_MAX_BUFFER = 64 * 1_024
+const execFileAsync = promisify(execFile)
 const MACOS_DEFAULT_VM_STAT_PAGE_SIZE_BYTES = 16_384
 const MACOS_VM_STAT_TIMEOUT_MS = 3_000
 const MACOS_VM_STAT_PAGE_SIZE_REGEX = /page size of (\d+) bytes/
@@ -54,38 +63,82 @@ type PartialInformation = {
   }
 }
 
+/**
+ * Serializable hardware information returned by the isolated GPU probe.
+ */
+export interface HardwareInspectionSnapshot {
+  gpu: Llama['gpu']
+  gpuDeviceNames: string[]
+  vram: Awaited<ReturnType<Llama['getVramState']>>
+}
+
 export class SystemHelper {
-  private static hardwareInspectionLlamaPromise: Promise<Llama | null> | null =
+  private static hardwareInspectionPromise:
+    Promise<HardwareInspectionSnapshot | null> | null = null
+  private static hardwareInspectionSnapshot: HardwareInspectionSnapshot | null =
     null
+  private static hardwareInspectionExpiresAt = 0
 
-  private static async getHardwareInspectionLlama(): Promise<Llama | null> {
-    if (!this.hardwareInspectionLlamaPromise) {
-      this.hardwareInspectionLlamaPromise = (async (): Promise<Llama | null> => {
-        try {
-          const { getLlama, LlamaLogLevel } = await Function(
-            'return import("node-llama-cpp")'
-          )()
-
-          return await getLlama({
-            logLevel: LlamaLogLevel.disabled
-          })
-        } catch {
-          return null
+  /**
+   * Keep native GPU libraries in a disposable process, including in development.
+   */
+  private static async inspectHardware(): Promise<HardwareInspectionSnapshot | null> {
+    try {
+      const workerPath = fileURLToPath(
+        new URL('./hardware-inspection-worker.js', import.meta.url)
+      )
+      const workerArgs = fs.existsSync(workerPath)
+        ? [workerPath]
+        : [
+            fileURLToPath(import.meta.resolve('tsx/cli')),
+            fileURLToPath(
+              new URL('./hardware-inspection-worker.ts', import.meta.url)
+            )
+          ]
+      const { stdout } = await execFileAsync(
+        RuntimeHelper.getNodeBinPath(),
+        workerArgs,
+        {
+          cwd: CODEBASE_PATH,
+          timeout: HARDWARE_INSPECTION_TIMEOUT_MS,
+          killSignal: 'SIGKILL',
+          maxBuffer: HARDWARE_INSPECTION_MAX_BUFFER,
+          windowsHide: true
         }
-      })()
-    }
+      )
 
-    return this.hardwareInspectionLlamaPromise
+      return JSON.parse(stdout) as HardwareInspectionSnapshot | null
+    } catch {
+      // Optional hardware information must not prevent Leon from starting.
+      return null
+    }
   }
 
-  private static async resolveLlamaAPI(
-    llama?: Llama
-  ): Promise<Llama | null> {
-    if (llama) {
-      return llama
+  /**
+   * Share one probe across concurrent callers and periodically refresh VRAM.
+   */
+  private static async getHardwareInspection(): Promise<HardwareInspectionSnapshot | null> {
+    if (this.hardwareInspectionPromise) {
+      return this.hardwareInspectionPromise
     }
 
-    return this.getHardwareInspectionLlama()
+    if (Date.now() < this.hardwareInspectionExpiresAt) {
+      return this.hardwareInspectionSnapshot
+    }
+
+    this.hardwareInspectionPromise = this.inspectHardware()
+      .then((snapshot) => {
+        this.hardwareInspectionSnapshot = snapshot
+        this.hardwareInspectionExpiresAt =
+          Date.now() + HARDWARE_INSPECTION_CACHE_TTL_MS
+
+        return snapshot
+      })
+      .finally(() => {
+        this.hardwareInspectionPromise = null
+      })
+
+    return this.hardwareInspectionPromise
   }
 
   /**
@@ -312,13 +365,13 @@ export class SystemHelper {
    * @example getGPUDeviceNames() // ['Apple M1 Pro']
    */
   public static async getGPUDeviceNames(llama?: Llama): Promise<string[]> {
-    const llamaAPI = await this.resolveLlamaAPI(llama)
-
-    if (llamaAPI) {
-      return llamaAPI.getGpuDeviceNames()
+    if (llama) {
+      return llama.getGpuDeviceNames()
     }
 
-    return []
+    const snapshot = await this.getHardwareInspection()
+
+    return snapshot ? [...snapshot.gpuDeviceNames] : []
   }
 
   /**
@@ -326,13 +379,11 @@ export class SystemHelper {
    * @example hasGPU() // true
    */
   public static async hasGPU(llama?: Llama): Promise<boolean> {
-    const llamaAPI = await this.resolveLlamaAPI(llama)
-
-    if (llamaAPI) {
-      return !!llamaAPI.gpu
+    if (llama) {
+      return !!llama.gpu
     }
 
-    return false
+    return !!(await this.getHardwareInspection())?.gpu
   }
 
   /**
@@ -342,13 +393,11 @@ export class SystemHelper {
   public static async getGraphicsComputeAPI(
     llama?: Llama
   ): Promise<GraphicsComputeAPIs> {
-    const llamaAPI = await this.resolveLlamaAPI(llama)
+    const gpu = llama
+      ? llama.gpu
+      : (await this.getHardwareInspection())?.gpu
 
-    if (llamaAPI && llamaAPI.gpu) {
-      return llamaAPI.gpu as GraphicsComputeAPIs
-    }
-
-    return GraphicsComputeAPIs.CPU
+    return (gpu || GraphicsComputeAPIs.CPU) as GraphicsComputeAPIs
   }
 
   /**
@@ -356,15 +405,11 @@ export class SystemHelper {
    * @example getUsedVRAM() // 6.04
    */
   public static async getUsedVRAM(llama?: Llama): Promise<number> {
-    const llamaAPI = await this.resolveLlamaAPI(llama)
+    const vramState = llama
+      ? await llama.getVramState()
+      : (await this.getHardwareInspection())?.vram
 
-    if (llamaAPI) {
-      const vramState = await llamaAPI.getVramState()
-
-      return Number((vramState.used / (1_024 * 1_024 * 1_024)).toFixed(2))
-    }
-
-    return 0
+    return Number(((vramState?.used || 0) / BYTES_PER_GIB).toFixed(2))
   }
 
   /**
@@ -372,15 +417,11 @@ export class SystemHelper {
    * @example getTotalVRAM() // 12
    */
   public static async getTotalVRAM(llama?: Llama): Promise<number> {
-    const llamaAPI = await this.resolveLlamaAPI(llama)
+    const vramState = llama
+      ? await llama.getVramState()
+      : (await this.getHardwareInspection())?.vram
 
-    if (llamaAPI) {
-      const vramState = await llamaAPI.getVramState()
-
-      return Number((vramState.total / (1_024 * 1_024 * 1_024)).toFixed(2))
-    }
-
-    return 0
+    return Number(((vramState?.total || 0) / BYTES_PER_GIB).toFixed(2))
   }
 
   /**
@@ -399,14 +440,10 @@ export class SystemHelper {
    * @example getFreeVRAM() // 6
    */
   public static async getFreeVRAM(llama?: Llama): Promise<number> {
-    const llamaAPI = await this.resolveLlamaAPI(llama)
+    const vramState = llama
+      ? await llama.getVramState()
+      : (await this.getHardwareInspection())?.vram
 
-    if (llamaAPI) {
-      const vramState = await llamaAPI.getVramState()
-
-      return Number((vramState.free / (1_024 * 1_024 * 1_024)).toFixed(2))
-    }
-
-    return 0
+    return Number(((vramState?.free || 0) / BYTES_PER_GIB).toFixed(2))
   }
 }
