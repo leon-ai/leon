@@ -10,6 +10,21 @@ import { BrowserUseTool } from '@@/tools/browser_use/src/nodejs/browser-use-tool
 
 const directories = new Set<string>()
 
+it('reports a missing CLI interpreter as a setup failure, not browser permission', () => {
+  const failure = describeBrowserUseReadinessFailure({
+    stdout: '',
+    stderr: '',
+    code: 'ENOENT',
+    shortMessage: 'spawn browser-use ENOENT',
+    timedOut: false
+  }, '/profile/bu.log')
+
+  expect(failure.requiresOwnerAction).toBe(false)
+  expect(failure.message).toContain('spawn browser-use ENOENT')
+  expect(failure.message).toContain('Rerun dependency setup')
+  expect(failure.message).not.toContain('undefined')
+})
+
 async function createProfile(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-browser-test-'))
   directories.add(root)

@@ -57,12 +57,17 @@ export async function prepareBrowserUseEnvironment(settingsPath: string): Promis
 export function describeBrowserUseReadinessFailure(result: {
   stdout: string
   stderr: string
-  exitCode: number
+  exitCode?: number
+  code?: string
+  shortMessage?: string
   timedOut: boolean
 }, logPath: string): { requiresOwnerAction: boolean, message: string } {
-  const diagnostic = [result.stderr, result.stdout].filter(Boolean).join('\n')
+  const diagnostic = [result.stderr, result.stdout, result.shortMessage].filter(Boolean).join('\n')
+  const repairHint = result.code === 'ENOENT'
+    ? ' The CLI executable or its interpreter is missing. Rerun dependency setup to rebuild its Python environment.'
+    : ''
   return {
     requiresOwnerAction: OWNER_ACTION_DIAGNOSTICS.some((marker) => diagnostic.includes(marker)),
-    message: `Browser Use CLI readiness failed (exit ${result.exitCode}${result.timedOut ? ', timed out' : ''}). ${diagnostic.slice(0, MAX_DIAGNOSTIC_CHARACTERS)} See daemon log: ${logPath}`
+    message: `Browser Use CLI readiness failed (${result.code || `exit ${result.exitCode ?? 'unavailable'}`}${result.timedOut ? ', timed out' : ''}). ${diagnostic.slice(0, MAX_DIAGNOSTIC_CHARACTERS)}${repairHint} See daemon log: ${logPath}`
   }
 }
