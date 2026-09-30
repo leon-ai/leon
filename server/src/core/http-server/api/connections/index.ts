@@ -209,7 +209,7 @@ export const connectionsPlugin: FastifyPluginAsync<APIOptions> = async (
       status: 200,
       code: 'connections_listed',
       connections: await CONNECTION_STORE.list(),
-      tools: getConnectionCatalog({ origin, apiVersion: options.apiVersion })
+      tools: await getConnectionCatalog({ origin, apiVersion: options.apiVersion })
     })
   })
 

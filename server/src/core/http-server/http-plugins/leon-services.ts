@@ -256,7 +256,7 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
     ): Promise<{
       profile_id: string
       connections: ConnectionSummary[]
-      tools: ReturnType<typeof getConnectionCatalog>
+      tools: Awaited<ReturnType<typeof getConnectionCatalog>>
     }> => {
       const profileName = profileId?.trim() || getActiveProfileName()
 
@@ -270,7 +270,7 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
         return {
           profile_id: getActiveProfileName(),
           connections: await CONNECTION_STORE.list(),
-          tools: getConnectionCatalog(callback)
+          tools: await getConnectionCatalog(callback)
         }
       })
     },

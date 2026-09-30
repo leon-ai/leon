@@ -311,9 +311,9 @@ export interface HTTPPluginLeonServices {
   ) => Promise<{
     profile_id: string
     connections: import('@/core/connections/connection-store').ConnectionSummary[]
-    tools: ReturnType<
+    tools: Awaited<ReturnType<
       typeof import('@/core/connections/connection-catalog').getConnectionCatalog
-    >
+    >>
   }>
   saveConnection: (
     input: HTTPPluginSaveConnectionInput

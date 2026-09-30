@@ -93,11 +93,11 @@ export async function handleConnectionSetup(
       throw new Error('Unknown connection setup action.')
     }
 
-    const tool = getConnectionCatalog({
+    const tool = (await getConnectionCatalog({
       origin: input.callback_origin,
       apiVersion: input.api_version,
       ...(input.setup_values ? { setup_values: input.setup_values } : {})
-    }).find(
+    })).find(
       (entry) => `${entry.toolkit_id}.${entry.tool_id}` === input.provider
     )
 

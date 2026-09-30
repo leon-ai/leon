@@ -265,7 +265,7 @@ export class OAuthManager {
       )
     }
 
-    const client = getOAuthClientSettings(provider)
+    const client = await getOAuthClientSettings(provider)
     const token = await exchangeToken(
       config,
       client['client_id'] || '',
@@ -277,7 +277,7 @@ export class OAuthManager {
     )
     const next = { ...credentials, ...tokenCredentials(token) }
 
-    // Application settings belong to the tool, including for older saved records.
+    // Application credentials have their own encrypted record.
     delete next['client_id']
     delete next['client_secret']
     // A provider may return a non-expiring token; do not retain the previous deadline.

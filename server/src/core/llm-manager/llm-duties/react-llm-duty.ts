@@ -434,7 +434,7 @@ export class ReActLLMDuty extends LLMDuty {
           connectionProviders.length > 0
             ? [
                 '<current_connection_context>',
-                JSON.stringify(getConnectionRequirements(connectionProviders)),
+                JSON.stringify(await getConnectionRequirements(connectionProviders)),
                 '</current_connection_context>'
               ].join('\n')
             : ''

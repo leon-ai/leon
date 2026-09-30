@@ -1,4 +1,3 @@
-import { ToolkitConfig } from '@sdk/toolkit-config'
 import { HOST, IS_PRODUCTION_ENV, WEB_APP_DEV_SERVER_PORT } from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { TOOLKIT_REGISTRY, TOOL_WORKER_MANAGER } from '@/core'
@@ -9,6 +8,7 @@ import {
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import {
   CONNECTION_STORE,
+  OAUTH_APPLICATION_STORE,
   type ConnectionSummary,
   type SaveConnectionInput
 } from './connection-store'
@@ -18,6 +18,18 @@ import {
   getToolCredentials
 } from './connection-catalog'
 import { OAUTH_MANAGER } from './oauth-manager'
+
+/**
+ * Stores application credentials separately; account authorization happens later.
+ */
+export async function saveOAuthApplicationSettings(
+  provider: string,
+  credentials: Record<string, unknown>
+): Promise<void> {
+  await OAUTH_APPLICATION_STORE.save({ provider, auth_type: 'oauth', credentials })
+  // Verify encrypted read-back before clearing any legacy plaintext settings.
+  await getOAuthClientSettings(provider)
+}
 
 /**
  * Validates through the ordinary tool worker before saving an account connection.
@@ -82,7 +94,7 @@ export async function saveConnection(
         Object.keys(method.settings).map((key) => [key, credentials[key]])
       )
 
-      // Persist the application settings only after successful account validation.
+      // Encrypt application credentials only after successful account validation.
       if (
         typeof clientSettings['client_id'] === 'string' &&
         clientSettings['client_id'].trim()
@@ -99,12 +111,7 @@ export async function saveConnection(
         }
 
         try {
-          ToolkitConfig.saveToolSettings(
-            tool.toolkit_id,
-            tool.tool_id,
-            clientSettings,
-            profileName
-          )
+          await saveOAuthApplicationSettings(input.provider, clientSettings)
         } catch {
           throw new Error(
             'Unable to save OAuth application settings for this tool.'
@@ -187,7 +194,7 @@ export async function startConnectionOAuth(
     // A different application ID must be supplied with its own secret.
     const configured = input.clientId
       ? {}
-      : getOAuthClientSettings(input.provider)
+      : await getOAuthClientSettings(input.provider)
     const clientSecret = input.clientId
       ? input.clientSecret
       : configured['client_secret']

@@ -670,7 +670,7 @@ export async function runToolExecution(
         observation: JSON.stringify({
           connection_required: true,
           required_connections: providers,
-          connections: getConnectionRequirements(providers)
+          connections: await getConnectionRequirements(providers)
         }),
         requestedToolInput,
         ...(stepLabel ? { stepLabel } : {})

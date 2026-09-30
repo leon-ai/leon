@@ -89,7 +89,7 @@ export function ensureConnectionEncryptionKey(
 
     // Losing a key must not silently replace it while encrypted accounts remain.
     const entries = await fs
-      .readdir(getProfilePaths(profileName).connections)
+      .readdir(getProfilePaths(profileName).connections, { recursive: true })
       .catch((error: NodeJS.ErrnoException) => {
         if (error.code === 'ENOENT') {
           return []
@@ -169,6 +169,15 @@ export class ConnectionStore {
   private readonly operations = new Map<string, Promise<unknown>>()
 
   /**
+   * Application credentials share encryption but remain separate from accounts.
+   */
+  public constructor(private readonly subdirectory = '') {}
+
+  private getDirectory(profileName?: string): string {
+    return path.join(getProfilePaths(profileName).connections, this.subdirectory)
+  }
+
+  /**
    * Serializes refreshes and mutations so token rotation cannot revive a removed connection.
    */
   private async withConnectionLock<T>(
@@ -192,7 +201,7 @@ export class ConnectionStore {
 
   private getConnectionPath(provider: string, profileName?: string): string {
     return path.join(
-      getProfilePaths(profileName).connections,
+      this.getDirectory(profileName),
       `${validateProvider(provider)}.json`
     )
   }
@@ -201,7 +210,7 @@ export class ConnectionStore {
    * Lists connection metadata without decrypting or returning credentials.
    */
   async list(profileName?: string): Promise<ConnectionSummary[]> {
-    const directory = getProfilePaths(profileName).connections
+    const directory = this.getDirectory(profileName)
     let entries: string[]
 
     try {
@@ -433,3 +442,4 @@ export class ConnectionStore {
 }
 
 export const CONNECTION_STORE = new ConnectionStore()
+export const OAUTH_APPLICATION_STORE = new ConnectionStore('oauth-applications')

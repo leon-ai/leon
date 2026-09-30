@@ -293,7 +293,7 @@ import {
 } from '@/core/http-server/http-plugins/leon-services'
 import { getConnectionCatalog } from '@/core/connections/connection-catalog'
 
-it('overrides only declared setup display values without mutating tool defaults', () => {
+it('overrides only declared setup display values without mutating tool defaults', async () => {
   const tool = {
     toolkit_id: 'test', tool_id: 'connection', name: 'Test',
     connection: { methods: { api_key: {
@@ -304,13 +304,13 @@ it('overrides only declared setup display values without mutating tool defaults'
   mocks.connectionRegistry.getConnectionTools.mockReturnValue([tool])
   mocks.connectionRegistry.getConnectionTool.mockReturnValue(tool)
 
-  const overridden = getConnectionCatalog({
+  const overridden = (await getConnectionCatalog({
     origin: 'http://localhost', apiVersion: 'v1',
     setup_values: { 'App name': 'Example Assistant', access_token: 'ignored' }
-  })[0]!.methods[0]!
+  }))[0]!.methods[0]!
   expect(overridden.setup?.values).toEqual({ 'App name': 'Example Assistant' })
   expect(overridden.settings).toEqual({ access_token: null })
-  expect(getConnectionCatalog()[0]!.methods[0]!.setup?.values).toEqual({ 'App name': 'Leon AI' })
+  expect((await getConnectionCatalog())[0]!.methods[0]!.setup?.values).toEqual({ 'App name': 'Leon AI' })
 })
 
 describe('HTTP plugin Leon services', () => {

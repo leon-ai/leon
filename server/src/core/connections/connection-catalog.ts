@@ -2,6 +2,7 @@ import { ToolkitConfig } from '@sdk/toolkit-config'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { CONFIG_MANAGER } from '@/config'
 import { TOOLKIT_REGISTRY } from '@/core'
+import { OAUTH_APPLICATION_STORE } from './connection-store'
 
 /**
  * Limits runtime credentials to the fields declared by the tool.
@@ -18,9 +19,9 @@ export function getToolCredentials(
 }
 
 /**
- * Reads OAuth application settings from the owning profile's tool settings.
+ * Reads legacy settings without reflecting parser errors containing secrets.
  */
-export function getOAuthClientSettings(
+function getLegacyOAuthClientSettings(
   provider: string
 ): Record<string, string> {
   const tool = TOOLKIT_REGISTRY.getConnectionTool(provider)
@@ -53,6 +54,47 @@ export function getOAuthClientSettings(
       typeof settings[key] === 'string' ? settings[key] : ''
     ])
   )
+}
+
+/**
+ * Migrates legacy application credentials only after verifying encrypted storage.
+ */
+export async function getOAuthClientSettings(
+  provider: string
+): Promise<Record<string, string>> {
+  const tool = TOOLKIT_REGISTRY.getConnectionTool(provider)
+  const method = tool.connection.methods.oauth
+  if (!method) {
+    return {}
+  }
+
+  const legacy = getLegacyOAuthClientSettings(provider)
+  const stored = await OAUTH_APPLICATION_STORE.getCredentials(provider)
+  const credentials = stored || legacy
+  if (!stored && Object.values(legacy).some(Boolean)) {
+    await OAUTH_APPLICATION_STORE.save({
+      provider, auth_type: 'oauth', credentials: legacy
+    })
+  }
+
+  if (Object.values(legacy).some(Boolean)) {
+    const verified = await OAUTH_APPLICATION_STORE.getCredentials(provider)
+    if (!verified || Object.entries(credentials).some(([key, value]) => verified[key] !== value)) {
+      throw new Error('Unable to verify encrypted application credentials.')
+    }
+    // Keep unrelated configuration and remove plaintext only after read-back.
+    try {
+      ToolkitConfig.saveToolSettings(tool.toolkit_id, tool.tool_id,
+        Object.fromEntries(Object.keys(method.settings).map((key) => [key, null])),
+        getActiveProfileName())
+    } catch {
+      throw new Error('Application credentials are encrypted, but legacy settings could not be cleared.')
+    }
+  }
+
+  return Object.fromEntries(Object.entries(credentials).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string'
+  ))
 }
 
 /**
@@ -92,10 +134,10 @@ export function getConnectionCallbackURL(
 /**
  * Exposes tool-owned setup metadata; configured client secrets never leave Core.
  */
-function getConnectionSetup(
+async function getConnectionSetup(
   provider: string,
   callback?: { origin: string, apiVersion: string, setup_values?: Record<string, string> }
-): {
+): Promise<{
   tool_id: string
   toolkit_id: string
   name: string
@@ -110,7 +152,7 @@ function getConnectionSetup(
     settings: Record<string, string | null>
     redirect_uri?: string
   }>
-} {
+}> {
   const tool = TOOLKIT_REGISTRY.getConnectionTool(provider)
 
   return {
@@ -119,10 +161,10 @@ function getConnectionSetup(
     name: tool.name,
     description: tool.description,
     icon_name: tool.icon_name,
-    methods: Object.entries(tool.connection.methods).map(([id, method]) => {
+    methods: await Promise.all(Object.entries(tool.connection.methods).map(async ([id, method]) => {
       const configured =
         id === 'oauth'
-          ? getOAuthClientSettings(`${tool.toolkit_id}.${tool.tool_id}`)
+          ? await getOAuthClientSettings(`${tool.toolkit_id}.${tool.tool_id}`)
           : {}
       const hasClient = Object.entries(method.settings).every(
         ([key, fallback]) => fallback !== null || Boolean(configured[key])
@@ -160,32 +202,32 @@ function getConnectionSetup(
             }
           : {})
       }
-    })
+    }))
   }
 }
 
 /**
  * Exposes the same tool-owned setup metadata to every connection client.
  */
-export function getConnectionCatalog(callback?: {
+export async function getConnectionCatalog(callback?: {
   origin: string
   apiVersion: string
   setup_values?: Record<string, string>
-}): ReturnType<typeof getConnectionSetup>[] {
-  return TOOLKIT_REGISTRY.getConnectionTools().map((tool) =>
+}): Promise<Array<Awaited<ReturnType<typeof getConnectionSetup>>>> {
+  return Promise.all(TOOLKIT_REGISTRY.getConnectionTools().map((tool) =>
     getConnectionSetup(`${tool.toolkit_id}.${tool.tool_id}`, callback)
-  )
+  ))
 }
 
 /**
  * Gives the agent current setup facts without configured credentials or tokens.
  */
-export function getConnectionRequirements(
+export async function getConnectionRequirements(
   providers: string[]
-): Array<Record<string, unknown>> {
-  return [...new Set(providers)].map((provider) => {
+): Promise<Array<Record<string, unknown>>> {
+  return Promise.all([...new Set(providers)].map(async (provider) => {
     try {
-      const tool = getConnectionSetup(provider)
+      const tool = await getConnectionSetup(provider)
 
       return {
         provider,
@@ -203,5 +245,5 @@ export function getConnectionRequirements(
       // A removed tool or malformed settings must not discard the paused task.
       return { provider, setup_unavailable: true }
     }
-  })
+  }))
 }
