@@ -176,6 +176,18 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-astra-pro', label: 'openai/gpt-6-astra-pro', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
+   * @see https://openrouter.ai/openai/gpt-6.1-sol
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6.1-sol',
+    label: 'openai/gpt-6.1-sol',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/openai/gpt-6-sol
    */
   { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-sol', label: 'openai/gpt-6-sol', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
@@ -331,6 +343,19 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://developers.openai.com/api/docs/models/gpt-6-astra
    */
   { provider: LLMProviders.OpenAI, model: 'gpt-6-astra', label: 'GPT-6 Astra', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  /**
+   * @see https://developers.openai.com/api/docs/models/gpt-6.1-sol
+   */
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-6.1-sol',
+    label: 'GPT-6.1 Sol',
+    defaultReasoningEffort: 'medium',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-6-sol
    */
