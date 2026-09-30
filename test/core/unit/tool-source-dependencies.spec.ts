@@ -5,6 +5,7 @@ import path from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import setupToolsDependencies from '@@/scripts/setup/setup-tools-dependencies'
+import { getProjectVenvPythonPath, isPythonProjectSyncCurrent } from '@@/scripts/setup/setup-python-project-env'
 
 const fixture = vi.hoisted(() => ({ builtIn: '', profile: '', node: vi.fn(), python: vi.fn() }))
 vi.mock('@/constants', () => ({
@@ -19,6 +20,26 @@ vi.mock('@@/scripts/setup/sync-source-dependencies', () => ({
 let directory = ''
 afterEach(async () => {
   if (directory) await fs.rm(directory, { recursive: true, force: true })
+})
+
+it('invalidates Python dependency stamps after relocation or failed installation', async () => {
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-python-dependencies-'))
+  const original = path.join(directory, 'original')
+  const moved = path.join(directory, 'moved')
+  const stamp = '.last-source-deps-sync'
+  const python = getProjectVenvPythonPath(original)
+  await fs.mkdir(path.dirname(python), { recursive: true })
+  await fs.writeFile(python, '')
+  await fs.writeFile(path.join(original, 'pyproject.toml'), '')
+  await fs.writeFile(path.join(original, stamp), original)
+  expect(await isPythonProjectSyncCurrent(original, stamp)).toBe(true)
+
+  await fs.rename(original, moved)
+  expect(await isPythonProjectSyncCurrent(moved, stamp)).toBe(false)
+  await fs.writeFile(path.join(moved, stamp), `${Date.now()}`)
+  expect(await isPythonProjectSyncCurrent(moved, stamp)).toBe(false)
+  await fs.rm(path.join(moved, stamp))
+  expect(await isPythonProjectSyncCurrent(moved, stamp)).toBe(false)
 })
 
 it('uses both existing dependency installers for flat, nested and profile tool sources', async () => {

@@ -12,7 +12,8 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 import {
   getProjectVenvPythonPath,
-  getPyprojectDependencies
+  getPyprojectDependencies,
+  isPythonProjectSyncCurrent
 } from './setup-python-project-env'
 
 const PACKAGE_JSON_FILE_NAME = 'package.json'
@@ -126,17 +127,14 @@ export const syncPythonSourceDependencies = async (sourcePath) => {
   }
 
   if (
-    await isSyncCurrent(
-      manifestPath,
-      stampPath,
-      getProjectVenvPythonPath(sourcePath)
-    )
+    await isPythonProjectSyncCurrent(sourcePath, SYNC_STAMP_FILE_NAME)
   ) {
     return
   }
 
   const dependencies = await getPyprojectDependencies(sourcePath)
 
+  await fs.promises.rm(stampPath, { force: true })
   await fs.promises.rm(venvPath, { recursive: true, force: true })
   await execa(UV_RUNTIME_BIN_PATH, [
       'venv',
@@ -155,5 +153,5 @@ export const syncPythonSourceDependencies = async (sourcePath) => {
       ], { cwd: sourcePath })
   }
 
-  await markSourceDependenciesAsSynced(sourcePath)
+  await fs.promises.writeFile(stampPath, path.resolve(sourcePath))
 }
