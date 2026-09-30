@@ -3,47 +3,56 @@ import { describe, expect, it, vi } from 'vitest'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 
 describe('agent answer streaming', () => {
-  it('buffers chunks and publishes accepted progress once', () => {
+  it('streams chunks immediately and settles without replaying accepted text', () => {
     const emit = vi.fn()
     const stream = new AgentAnswerStream(emit)
 
-    stream.push('Checking')
+    stream.push('  ')
     expect(emit).not.toHaveBeenCalled()
+    stream.push(' Checking')
+    expect(emit).toHaveBeenCalledExactlyOnceWith({
+      token: 'Checking', generationId: expect.any(String)
+    })
     stream.push(' the files.')
-    expect(emit).not.toHaveBeenCalled()
+    expect(emit).toHaveBeenCalledTimes(2)
     const generationId = stream.finish()
 
-    expect(emit).toHaveBeenCalledExactlyOnceWith({
-      token: 'Checking the files.',
+    expect(emit).toHaveBeenLastCalledWith({
+      token: ' the files.',
       generationId
     })
 
     stream.discard()
-    expect(emit).toHaveBeenCalledOnce()
+    expect(emit).toHaveBeenCalledTimes(2)
     stream.push('Done.')
     expect(stream.finish()).not.toBe(generationId)
-    expect(emit).toHaveBeenCalledTimes(2)
+    expect(emit).toHaveBeenCalledTimes(3)
   })
 
   it.each(['', null])(
-    'discards a private draft on retry or rejection: %j',
+    'resets a visible draft on retry or rejection: %j',
     (marker) => {
       const emit = vi.fn()
       const stream = new AgentAnswerStream(emit)
 
       stream.push('Incomplete draft')
-      expect(emit).not.toHaveBeenCalled()
+      const generationId = emit.mock.calls[0]![0].generationId
 
-    if (marker === '') stream.push(marker)
-    else stream.discard()
+      if (marker === '') {
+        stream.push(marker)
+      } else {
+        stream.discard()
+      }
 
-      expect(emit).not.toHaveBeenCalled()
+      expect(emit).toHaveBeenLastCalledWith({ token: '', generationId, reset: true })
       stream.push('Corrected answer')
       stream.finish()
-      expect(emit).toHaveBeenCalledExactlyOnceWith({
+      expect(emit).toHaveBeenCalledTimes(3)
+      expect(emit).toHaveBeenLastCalledWith({
         token: 'Corrected answer',
         generationId: expect.any(String)
       })
+      expect(emit.mock.calls[2]![0].generationId).not.toBe(generationId)
     }
   )
 })

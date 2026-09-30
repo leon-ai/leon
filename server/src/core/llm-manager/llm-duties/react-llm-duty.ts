@@ -1098,7 +1098,7 @@ export class ReActLLMDuty extends LLMDuty {
 
     try {
       // Reviews must neither expose their text nor replace the proposed answer.
-      // A subsequent operational call clears the private buffer of a rejected ending.
+      // A subsequent operational call removes any ending rejected by review.
       if (!options.isCompletionReview) {
         this.answerStream.discard()
       }
@@ -1605,9 +1605,9 @@ export class ReActLLMDuty extends LLMDuty {
 
     const normalizedOutput = StringHelper.normalizeUserFacingText(output)
 
-    // The normal answer event carries the accepted final text, including review
-    // edits. Do not publish the buffered candidate separately from that answer.
-    this.answerStream.discard()
+    // The normal answer event settles the active bubble with accepted text,
+    // including review edits or runtime-generated endings, without replaying tokens.
+    this.answerStream.finish()
 
     this.logTitle('final_answer')
     LogHelper.success('Duty executed')
