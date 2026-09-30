@@ -307,7 +307,7 @@ export interface HTTPPluginLeonServices {
   >
   listConnections: (
     profileId?: string,
-    callback?: { origin: string, apiVersion: string }
+    callback?: { origin: string, apiVersion: string, setup_values?: Record<string, string> }
   ) => Promise<{
     profile_id: string
     connections: import('@/core/connections/connection-store').ConnectionSummary[]

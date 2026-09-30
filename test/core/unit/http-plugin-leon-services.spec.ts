@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  connectionRegistry: {
+    getConnectionTools: vi.fn(),
+    getConnectionTool: vi.fn()
+  },
   activeProfile: 'startup-profile',
   activeSessionId: 'active-session',
   nextSessionId: 0,
@@ -62,6 +66,7 @@ function getProfileSessions(): Set<string> {
 }
 
 vi.mock('@/core', () => ({
+  TOOLKIT_REGISTRY: mocks.connectionRegistry,
   BRAIN: {
     isMuted: false,
     runSkillAction: vi.fn(async (nluProcessResult: Record<string, unknown>) => {
@@ -286,6 +291,27 @@ import {
   runControlledSkill,
   subscribeAgentEvents
 } from '@/core/http-server/http-plugins/leon-services'
+import { getConnectionCatalog } from '@/core/connections/connection-catalog'
+
+it('overrides only declared setup display values without mutating tool defaults', () => {
+  const tool = {
+    toolkit_id: 'test', tool_id: 'connection', name: 'Test',
+    connection: { methods: { api_key: {
+      settings: { access_token: null },
+      setup: { instructions: ['Connect your account.'], values: { 'App name': 'Leon AI' } }
+    } } }
+  }
+  mocks.connectionRegistry.getConnectionTools.mockReturnValue([tool])
+  mocks.connectionRegistry.getConnectionTool.mockReturnValue(tool)
+
+  const overridden = getConnectionCatalog({
+    origin: 'http://localhost', apiVersion: 'v1',
+    setup_values: { 'App name': 'Example Assistant', access_token: 'ignored' }
+  })[0]!.methods[0]!
+  expect(overridden.setup?.values).toEqual({ 'App name': 'Example Assistant' })
+  expect(overridden.settings).toEqual({ access_token: null })
+  expect(getConnectionCatalog()[0]!.methods[0]!.setup?.values).toEqual({ 'App name': 'Leon AI' })
+})
 
 describe('HTTP plugin Leon services', () => {
   beforeEach(() => {

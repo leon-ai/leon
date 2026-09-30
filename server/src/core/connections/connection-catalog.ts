@@ -94,7 +94,7 @@ export function getConnectionCallbackURL(
  */
 function getConnectionSetup(
   provider: string,
-  callback?: { origin: string, apiVersion: string }
+  callback?: { origin: string, apiVersion: string, setup_values?: Record<string, string> }
 ): {
   tool_id: string
   toolkit_id: string
@@ -133,7 +133,23 @@ function getConnectionSetup(
         name: method.name,
         description: method.description,
         setup_url: method.setup_url,
-        ...(method.setup ? { setup: method.setup } : {}),
+        ...(method.setup
+          ? {
+              setup: {
+                ...method.setup,
+                // Hosts may brand declared display values, never credential
+                // fields, authorization endpoints or the computed callback.
+                values: Object.fromEntries(
+                  Object.entries(method.setup.values).map(([key, value]) => [
+                    key,
+                    typeof callback?.setup_values?.[key] === 'string'
+                      ? callback.setup_values[key]
+                      : value
+                  ])
+                )
+              }
+            }
+          : {}),
         settings: hasClient ? {} : method.settings,
         ...(id === 'oauth' && callback
           ? {
@@ -154,6 +170,7 @@ function getConnectionSetup(
 export function getConnectionCatalog(callback?: {
   origin: string
   apiVersion: string
+  setup_values?: Record<string, string>
 }): ReturnType<typeof getConnectionSetup>[] {
   return TOOLKIT_REGISTRY.getConnectionTools().map((tool) =>
     getConnectionSetup(`${tool.toolkit_id}.${tool.tool_id}`, callback)

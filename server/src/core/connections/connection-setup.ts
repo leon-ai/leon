@@ -53,6 +53,7 @@ export interface ConnectionSetupInput {
   state?: ConnectionSetupView['state']
   credentials?: Record<string, string>
   authorization_failed?: boolean
+  setup_values?: Record<string, string>
 }
 
 export interface ConnectionSetupResult {
@@ -94,7 +95,8 @@ export async function handleConnectionSetup(
 
     const tool = getConnectionCatalog({
       origin: input.callback_origin,
-      apiVersion: input.api_version
+      apiVersion: input.api_version,
+      ...(input.setup_values ? { setup_values: input.setup_values } : {})
     }).find(
       (entry) => `${entry.toolkit_id}.${entry.tool_id}` === input.provider
     )
