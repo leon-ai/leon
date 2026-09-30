@@ -8,6 +8,8 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Use `pnpm`, never npm. Keep changes minimal; reuse existing SDK facilities and `server/src/helpers/` before adding abstractions. Remove superseded logic rather than maintaining parallel implementations.
 - Preserve unrelated working-tree changes and profile isolation. Use existing profile/path/runtime utilities instead of hardcoded owner paths, runtime versions, or global mutable owner state.
 - Run `pnpm lint`, fix warnings/errors, and run checks relevant to the change. Keep tests focused on meaningful behavior and regressions; avoid redundant tests.
+- Default to minimal new tests. For a small fix, one focused regression test is usually enough; extend an existing test before creating a new test file. Documentation, formatting, and trivial reversible changes usually need no new tests.
+- Add a test only when it covers a concrete failure or behavior that existing checks do not cover. Avoid exhaustive edge-case matrices, mock-heavy tests of implementation details, and duplicate unit/integration coverage. Add broader coverage only when the change's complexity or risk justifies it.
 - Use `pnpm test:unit` for fast feedback and `pnpm test:integration` for real worker, download, capture, and rendering changes; `pnpm test` includes both.
 - Agent e2e tests must use `pnpm test:agent:e2e -- -t openai` unless the owner explicitly requests other providers.
 - Suggest a commit message matching `scripts/commit-msg.js`; do not commit unless asked.
