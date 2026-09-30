@@ -1,4 +1,6 @@
 import fs from 'node:fs'
+import { saveConnection } from '@/core/connections/connection-service'
+import { ConnectionStatus } from '@/core/connections/connection-store'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -48,11 +50,23 @@ import type {
 const coreMocks = vi.hoisted(() => ({
   getFlattenedTools: vi.fn(),
   getToolFunctions: vi.fn(),
+  needsToolConnection: vi.fn().mockReturnValue(true),
   resolveToolById: vi.fn()
+}))
+
+vi.mock('@/core/connections/connection-service', () => ({
+  saveConnection: vi.fn(),
+  saveOAuthApplicationSettings: vi.fn()
 }))
 
 vi.mock('@/core', () => ({
   TOOLKIT_REGISTRY: {
+    getConnectionTools: (): never[] => [],
+    getConnectionTool: (): Record<string, unknown> => ({
+      toolkit_id: 'example', tool_id: 'account',
+      connection: { methods: { api_key: { settings: { access_token: null } } } }
+    }),
+    needsToolConnection: coreMocks.needsToolConnection,
     getFlattenedTools: coreMocks.getFlattenedTools,
     getToolFunctions: coreMocks.getToolFunctions,
     resolveToolById: coreMocks.resolveToolById
@@ -60,6 +74,77 @@ vi.mock('@/core', () => ({
 }))
 
 const CALLABLE_TOOL_NAME = 'test__lookup__run'
+
+it('submits connection secrets without retaining them in the loop transcript', async () => {
+  const secret = 'fixture-connection-secret'
+  const call: OpenAIToolCall = {
+    id: 'connect', type: 'function',
+    function: {
+      name: 'setup_connection',
+      arguments: JSON.stringify({
+        provider: 'example.account', method: 'api_key',
+        credentials: { access_token: secret }
+      })
+    }
+  }
+  const transcript: AgentToolTranscriptMessage[] = []
+  const blocked = {
+    function: callable.qualifiedName, status: 'error',
+    observation: JSON.stringify({
+      connection_required: true, required_connections: ['example.account']
+    })
+  }
+  coreMocks.needsToolConnection.mockReturnValue(true)
+  const callModel = vi.fn()
+    .mockImplementationOnce(async (_messages, tools) => {
+      expect(tools.some((tool: { function: { name: string } }) => tool.function.name === 'setup_connection')).toBe(false)
+      return { toolCalls: [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'account' })] }
+    })
+    .mockImplementationOnce(async (_messages, tools) => {
+      const setup = tools.find((tool: { function: { name: string } }) => tool.function.name === 'setup_connection')
+      expect(setup.function.parameters.properties.provider.enum).toEqual(['example.account'])
+      return { toolCalls: [call], textContent: '' }
+    })
+    .mockImplementationOnce(async (_messages, tools) => {
+      expect(tools.some((tool: { function: { name: string } }) => tool.function.name === 'setup_connection')).toBe(false)
+      return { textContent: 'Connected.' }
+    })
+  vi.mocked(saveConnection).mockImplementationOnce(async () => {
+    coreMocks.needsToolConnection.mockReturnValue(false)
+    return {
+      status: ConnectionStatus.Connected, provider: 'example.account',
+      auth_type: 'api_key', connected_at: '2026-09-30T00:00:00Z'
+    }
+  })
+
+  const result = await runAgentLoop({
+    transcript, catalog: createCatalog(), callModel,
+    executeFunction: vi.fn().mockResolvedValue({ execution: blocked }),
+    loadAgentSkill: async () => null, maxIterations: 3
+  })
+
+  expect(saveConnection).toHaveBeenCalledWith({
+    provider: 'example.account', auth_type: 'api_key',
+    credentials: { access_token: secret }
+  })
+  expect(JSON.stringify(result)).not.toContain(secret)
+  expect(JSON.stringify(transcript)).toContain('***')
+
+  vi.mocked(saveConnection).mockRejectedValueOnce(new Error(secret))
+  coreMocks.needsToolConnection.mockReturnValue(true)
+  callModel.mockImplementationOnce(async (_messages, tools) => {
+    expect(tools.some((tool: { function: { name: string } }) => tool.function.name === 'setup_connection')).toBe(true)
+    return { toolCalls: [call], textContent: '' }
+  })
+    .mockResolvedValueOnce({ textContent: 'Setup failed.' })
+  const failure = await runAgentLoop({
+    transcript: [], catalog: createCatalog(), callModel,
+    initialExecutionHistory: [blocked],
+    executeFunction: vi.fn(), loadAgentSkill: async () => null, maxIterations: 2
+  })
+  expect(JSON.stringify(failure)).not.toContain(secret)
+  expect(JSON.stringify(failure)).toContain('Connection setup failed')
+})
 
 const callable: AgentCallableFunction = {
   qualifiedName: 'test.lookup.run',

@@ -1,5 +1,11 @@
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
+import {
+  CONNECTION_SETUP_TOOL_NAME,
+  setupConnection,
+  createConnectionSetupTool,
+  redactConnectionSetupCall
+} from '@/core/connections/connection-tool'
 import { LogHelper } from '@/helpers/log-helper'
 import type {
   AgentToolTranscriptMessage,
@@ -52,26 +58,48 @@ const AGENT_TOOLKIT_ROUTING_SEGMENTER = new Intl.Segmenter(undefined, {
 export function buildAgentConnectionGuidance(
   executions: ExecutionRecord[]
 ): string {
-  const latestCalls = new Map(
-    executions.map((execution) => [execution.function, execution])
-  )
-  const needsSetup = [...latestCalls.values()].some(
-    (execution) =>
-      execution.status !== 'success' &&
-      parseToolCallArguments(execution.observation)?.['connection_required'] ===
-        true
-  )
+  const needsSetup = getPendingConnectionProviders(executions).length > 0
 
   return needsSetup
     ? `<connection_setup>
 - A connection_required tool observation means the connection setup card has already been displayed. Explain the needed step briefly in the owner's language, using the supplied tool-owned setup facts; do not repeat the entire wizard.
 - Answer setup questions using those facts. Offer to complete setup through the owner's browser or let them use the card manually. Keep the original task pending unless the owner cancels or changes it. For manual setup, use request_clarification to pause and ask the owner to select Continue after connecting.
-- When the owner asks you to handle setup, use the available browser tools and complete the whole workflow: inspect existing configuration, create or configure the provider application if needed, fill its credentials into Leon's connection card, authorize access, and verify the connection. Do not stop after giving instructions or ask the owner to copy credentials you can enter yourself. Only use request_clarification when a step genuinely requires owner interaction or an unresolved choice; resume setup afterward.
-- Credentials and OAuth authorization belong in the setup card and connection API. During authorized browser setup, transfer the required application credentials from the provider's setup interface into the connection card. Never quote secrets in chat, plans, or summaries, retrieve unrelated credentials from files or browser storage, or bypass the connection layer. Refer to the exact callback URL displayed in the card; do not invent it.
+- When the owner asks you to handle setup, use browser tools and submit the declared credentials through setup_connection, not shell commands or settings files. The application name supplied in the owner's setup request takes precedence over tool defaults. OAuth application setup still requires provider authorization through the connection card.
+- Never quote secrets in chat, plans, or summaries, retrieve unrelated credentials from files or browser storage, or bypass the connection layer. Refer to the exact callback URL displayed in the card; do not invent it.
 - After browser setup, refresh the card to confirm the connection is ready and resume the original task without requiring the owner to select Continue.
 - On a resumed turn, current_connection_context contains refreshed connection facts. These supersede earlier setup observations. Do not retry a blocked call until the connection is ready; if ready, resume the original task with the failed call. Authorization alone does not complete the original task.
 </connection_setup>`
     : ''
+}
+
+/**
+ * Derives setup scope from unresolved calls, including restored continuations.
+ * Live connection state prevents a stale failed call from reopening setup.
+ */
+function getPendingConnectionProviders(executions: ExecutionRecord[]): string[] {
+  const latestCalls = new Map(executions.map((execution) => [execution.function, execution]))
+  const providers = [...latestCalls.values()].flatMap((execution) => {
+    const observation = parseToolCallArguments(execution.observation)
+    const required = observation?.['required_connections']
+    if (
+      execution.status === 'success' || observation?.['connection_required'] !== true ||
+      !Array.isArray(required)
+    ) {
+      return []
+    }
+
+    return required.filter((provider): provider is string => typeof provider === 'string')
+  })
+
+  return [...new Set(providers)].filter((provider) => {
+    try {
+      const tool = TOOLKIT_REGISTRY.getConnectionTool(provider)
+      return TOOLKIT_REGISTRY.needsToolConnection(tool.toolkit_id, tool.tool_id)
+    } catch {
+      // A removed tool cannot be configured by a restored task.
+      return false
+    }
+  })
 }
 
 export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
@@ -783,6 +811,17 @@ export async function runAgentLoop(
     while (true) {
       try {
         params.signal?.throwIfAborted()
+        // Keep setup out of ordinary turns and narrow it to the blocked providers.
+        const setupIndex = params.catalog.tools.findIndex(
+          (tool) => tool.function.name === CONNECTION_SETUP_TOOL_NAME
+        )
+        if (setupIndex !== -1) {
+          params.catalog.tools.splice(setupIndex, 1)
+        }
+        const setupTool = createConnectionSetupTool(getPendingConnectionProviders(executionHistory))
+        if (setupTool) {
+          params.catalog.tools.push(setupTool)
+        }
         modelResult = await params.callModel(
           transcript,
           params.catalog.tools,
@@ -962,7 +1001,7 @@ export async function runAgentLoop(
         .filter(Boolean)
         .join('\n'),
       ...reasoning,
-      toolCalls
+      toolCalls: toolCalls.map(redactConnectionSetupCall)
     })
 
     let terminalSignal: FinalResponseSignal | undefined
@@ -1386,6 +1425,18 @@ async function executeAgentToolCall(
   trackedSteps: TrackedPlanStep[]
   signal?: FinalResponseSignal
 }> {
+  if (toolCall.function.name === CONNECTION_SETUP_TOOL_NAME) {
+    const input = parseToolCallArguments(toolCall.function.arguments) || {}
+    if (!getPendingConnectionProviders(executionHistory).includes(String(input['provider']))) {
+      return { content: 'Connection setup is not needed for this provider in the current task.', trackedSteps }
+    }
+
+    return {
+      content: await setupConnection(input),
+      trackedSteps
+    }
+  }
+
   if (toolCall.function.name === AGENT_TOOLKIT_LOADER_NAME) {
     const toolkitId = parseStringArgument(
       toolCall.function.arguments,

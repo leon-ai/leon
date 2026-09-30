@@ -66,6 +66,7 @@ import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { CONNECTION_STORE, OAUTH_APPLICATION_STORE, ensureConnectionEncryptionKey } from '@/core/connections/connection-store'
 import { getConnectionCatalog, getOAuthClientSettings } from '@/core/connections/connection-catalog'
 import { saveConnection } from '@/core/connections/connection-service'
+import { setupConnection } from '@/core/connections/connection-tool'
 import { OAUTH_MANAGER } from '@/core/connections/oauth-manager'
 
 beforeEach(async () => {
@@ -109,6 +110,13 @@ it('preserves plaintext when the encrypted write fails', async () => {
 it('saves new OAuth credentials encrypted and refreshes with the stored application secret', async () => {
   fixture.settings = { unrelated: 'preserved' }
   await runWithProfileContext({ profileName: 'test' }, async () => {
+    const setup = await setupConnection({
+      provider: 'example.account', method: 'oauth',
+      credentials: { client_id: 'new-client', client_secret: 'new-secret' }
+    })
+    expect(setup).toContain('not connected yet')
+    expect(setup).not.toContain('new-secret')
+    expect(await CONNECTION_STORE.list()).toEqual([])
     await saveConnection({
       provider: 'example.account', auth_type: 'oauth',
       credentials: { client_id: 'new-client', client_secret: 'new-secret', access_token: 'access', refresh_token: 'refresh' }
