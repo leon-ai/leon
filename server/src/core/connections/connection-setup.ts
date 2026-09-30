@@ -276,10 +276,10 @@ export async function handleConnectionSetup(
         view.description =
           step === SetupStep.Assisted
             ? 'You can follow setup progress in this conversation.'
-            : 'You can get help connecting your account in your browser.'
+            : 'Your assistant will complete setup in your browser.'
         if (step === SetupStep.Choice) {
           view.actions.push(
-            action(SetupAction.StartSetup, 'Guided setup')
+            action(SetupAction.StartSetup, 'Set it up for me')
           )
         }
 
@@ -338,7 +338,7 @@ export async function handleConnectionSetup(
         }
 
         view.actions.push(
-          action(SetupAction.StartSetup, 'Guided setup', true)
+          action(SetupAction.StartSetup, 'Set it up for me', true)
         )
       }
     }
