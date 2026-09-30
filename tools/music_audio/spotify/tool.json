@@ -17,7 +17,7 @@
     "methods": {
       "oauth": {
         "name": "OAuth",
-        "description": "Authorize Leon to access your Spotify account.",
+        "description": "Connect your Spotify account.",
         "setup_url": "https://developer.spotify.com/dashboard",
         "settings": {
           "client_id": null
@@ -44,8 +44,8 @@
             "For development-mode access, the application owner needs Spotify Premium. Add each test account under Users Management; Spotify currently allows up to five users."
           ],
           "values": {
-            "App name": "Leon",
-            "App description": "Connect my Spotify account to my Leon personal assistant.",
+            "App name": "Leon AI",
+            "App description": "Connect my Spotify account to my Leon AI personal assistant.",
             "Website": "https://getleon.ai"
           }
         }

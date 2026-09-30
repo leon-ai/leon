@@ -76,7 +76,7 @@ export async function handleConnectionSetup(
   const profileName = input.profile_id?.trim() || getActiveProfileName()
 
   if (!isValidProfileName(profileName)) {
-    throw new Error('Invalid Leon profile name.')
+    throw new Error('Invalid profile name.')
   }
 
   return runWithProfileContext({ profileName }, async () => {
@@ -147,17 +147,8 @@ export async function handleConnectionSetup(
           step = SetupStep.Assisted
           event = ownerMessage(
             [
-              `Use my browser to fully set up and connect ${tool.name} (${input.provider}) using ${method.name} (${method.id}).`,
-              'Handle the entire setup, including creating or configuring the application if needed, entering its credentials into the connection card, and completing authorization. Then resume my original request.',
-              'Only ask me to intervene when a step genuinely requires me. Do not include credentials in chat.',
-              `Setup page: ${method.setup_url}`,
-              ...(method.setup?.instructions || []),
-              ...Object.entries(method.setup?.values || {}).map(
-                ([key, value]) => `${key}: ${value}`
-              ),
-              ...(method.redirect_uri
-                ? [`Use this exact redirect URI: ${method.redirect_uri}`]
-                : [])
+              `Help me connect ${tool.name} using ${method.name} in my browser, then continue my request.`,
+              'Ask me when permission is needed. Keep credentials out of chat.'
             ].join('\n')
           )
         }
@@ -282,11 +273,11 @@ export async function handleConnectionSetup(
       if (step === SetupStep.Choice || step === SetupStep.Assisted) {
         view.description =
           step === SetupStep.Assisted
-            ? 'Setup requested. Follow my progress in the conversation.'
-            : 'I can use your browser to complete the setup and connect your account.'
+            ? 'You can follow setup progress in this conversation.'
+            : 'You can get help connecting your account in your browser.'
         if (step === SetupStep.Choice) {
           view.actions.push(
-            action(SetupAction.StartSetup, 'Let me set this up')
+            action(SetupAction.StartSetup, 'Guided setup')
           )
         }
 
@@ -345,7 +336,7 @@ export async function handleConnectionSetup(
         }
 
         view.actions.push(
-          action(SetupAction.StartSetup, 'Let me set this up', true)
+          action(SetupAction.StartSetup, 'Guided setup', true)
         )
       }
     }

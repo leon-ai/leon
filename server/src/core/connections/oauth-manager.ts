@@ -198,7 +198,7 @@ export class OAuthManager {
     this.pendingAuthorizations.delete(input.state)
     if (!pending || Date.now() - pending.created_at > OAUTH_STATE_LIFETIME_MS) {
       throw new Error(
-        'This authorization request expired. Start again from Leon.'
+        'Your authorization request expired. Start again from the connection card.'
       )
     }
 

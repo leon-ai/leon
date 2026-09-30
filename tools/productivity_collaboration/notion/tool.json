@@ -27,14 +27,14 @@
             "Open the Notion Developer portal and create a personal access token for your workspace, or create an internal integration if you want access limited to shared pages.",
             "For an internal integration, enable the content capabilities you need, then add the integration to each intended page through its Add connections menu.",
             "A personal token uses your permissions in its selected workspace; it does not require adding an integration to each page. Workspace policies and token permissions still apply.",
-            "Paste the token only into this form. Leon checks the account before saving it."
+            "Paste your token here to verify and save your connection."
           ],
           "values": {}
         }
       },
       "oauth": {
         "name": "OAuth",
-        "description": "Authorize Leon to access your Notion account.",
+        "description": "Choose which Notion pages you want to connect.",
         "setup_url": "https://developers.notion.com/guides/get-started/authorization",
         "settings": {
           "client_id": null,
@@ -55,10 +55,10 @@
             "Configure the content capabilities needed for reading, creating, and updating pages.",
             "Register the redirect URI shown below in the OAuth configuration.",
             "Copy the OAuth Client ID and Client Secret into this form.",
-            "Authorize the connection and select the workspace pages Leon may access."
+            "Authorize the connection and select the workspace pages you want to share."
           ],
           "values": {
-            "Connection name": "Leon",
+            "Connection name": "Leon AI",
             "Website": "https://getleon.ai"
           }
         }

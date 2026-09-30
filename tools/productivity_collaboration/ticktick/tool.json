@@ -26,14 +26,14 @@
           "instructions": [
             "Open the TickTick web app and click your avatar.",
             "Go to Settings → Account → API Token and create a token.",
-            "Copy it into this form. Leon validates access by listing your projects before saving it."
+            "Paste your token here to verify and save your connection."
           ],
           "values": {}
         }
       },
       "oauth": {
         "name": "OAuth",
-        "description": "Authorize Leon to access your TickTick account.",
+        "description": "Connect your TickTick account.",
         "setup_url": "https://developer.ticktick.com/manage",
         "settings": {
           "client_id": null,
@@ -60,7 +60,7 @@
             "TickTick documents the authorization-code grant without a refresh grant. If this authorization expires or is revoked, connect again."
           ],
           "values": {
-            "App name": "Leon"
+            "App name": "Leon AI"
           }
         }
       }

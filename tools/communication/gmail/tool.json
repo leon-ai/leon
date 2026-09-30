@@ -17,7 +17,7 @@
     "methods": {
       "oauth": {
         "name": "OAuth",
-        "description": "Authorize Leon to access your Gmail account.",
+        "description": "Connect your Gmail account with read-only access.",
         "setup_url": "https://console.cloud.google.com/apis/credentials",
         "settings": {
           "client_id": null,
@@ -40,13 +40,13 @@
           "instructions": [
             "Select or create a Google Cloud project and enable the Gmail API in APIs & Services → Library.",
             "Configure Google Auth Platform branding and audience. For an External app in Testing, add your Google account as a test user.",
-            "Configure the Gmail read-only scope: https://www.googleapis.com/auth/gmail.readonly. Leon cannot send, modify, or delete mail.",
+            "Choose the read-only scope: https://www.googleapis.com/auth/gmail.readonly. This connection cannot send, modify, or delete your mail.",
             "Create an OAuth client with application type Web application. Add the redirect URI below under Authorized redirect URIs exactly as shown.",
             "Copy its Client ID and Client Secret into this form, then authorize your Gmail account.",
             "For External apps in Testing, Google refresh tokens for Gmail access expire after seven days. Reconnect when needed; production publishing and any verification requirements are managed in Google Cloud."
           ],
           "values": {
-            "Application name": "Leon"
+            "Application name": "Leon AI"
           }
         }
       }
