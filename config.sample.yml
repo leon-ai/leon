@@ -115,7 +115,7 @@ context:
 # satellite:
 #   tools:
 #     computer_use.cua: my-laptop
-#     browser_use.cli: my-laptop
+#     browser_use.browser-use: my-laptop
 
 availability:
   skills:

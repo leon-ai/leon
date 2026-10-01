@@ -72,7 +72,7 @@ export class ToolkitConfig {
   private static settingsCache = new Map<string, Record<string, unknown>>()
 
   /**
-   * Load tool configuration from the flat tools structure.
+   * Load tool configuration from its toolkit/tool directory.
    * @param toolkitName - The toolkit name (e.g., 'video_streaming')
    * @param toolName - Name of the tool (e.g., 'ffmpeg')
    */

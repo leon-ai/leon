@@ -1,6 +1,6 @@
 {
-  "$schema": "../../schemas/tool-schemas/tool.json",
-  "tool_id": "cli",
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "browser-use",
   "toolkit_id": "browser_use",
   "name": "Browser Use CLI",
   "description": "Operate the configured signed-in browser through the upstream Browser Use CLI and its persistent Browser Harness session.",

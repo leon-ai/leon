@@ -10,22 +10,8 @@ from .utils import get_platform_name
 
 
 def resolve_tool_directory(root: str, toolkit_id: str, tool_id: str) -> str:
-    """Prefer nested tools, accepting flat layouts only for matching manifests."""
-    nested = os.path.join(root, toolkit_id, tool_id)
-    if os.path.exists(os.path.join(nested, "tool.json")):
-        return nested
-    flat = os.path.join(root, toolkit_id)
-    try:
-        with open(os.path.join(flat, "tool.json"), encoding="utf-8") as source:
-            manifest = json.load(source)
-        if (isinstance(manifest, dict)
-                and manifest.get("toolkit_id") == toolkit_id
-                and manifest.get("tool_id") == tool_id):
-            return flat
-    except (OSError, ValueError):
-        # Leave invalid or missing manifests to the caller's configuration error.
-        pass
-    return nested
+    """Resolve a tool within its owning toolkit directory."""
+    return os.path.join(root, toolkit_id, tool_id)
 
 
 def merge_missing_settings(

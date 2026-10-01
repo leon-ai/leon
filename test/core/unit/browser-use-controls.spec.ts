@@ -9,6 +9,6 @@ it('verifies Browser Use form-control behavior without launching a browser', () 
   const root = process.cwd()
   expect(() => execFileSync(RuntimeHelper.getPythonBinPath(), [
     path.join(root, 'test/core/unit/fixtures/browser-use-controls.py'),
-    path.join(root, 'tools/browser_use/src/nodejs/lib/browser-use-runtime.py')
+    path.join(root, 'tools/browser_use/browser-use/src/nodejs/lib/browser-use-runtime.py')
   ], { encoding: 'utf8', timeout: 10_000 })).not.toThrow()
 })
