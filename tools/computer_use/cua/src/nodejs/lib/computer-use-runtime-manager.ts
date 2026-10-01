@@ -154,17 +154,12 @@ export class ComputerUseRuntimeManager {
         return { ...predicate, element: { ...normalized, selector } }
       })
     }
-    const hasElement = typeof managedParameters['element_index'] === 'number' ||
-        (typeof managedParameters['element_token'] === 'string' &&
-          managedParameters['element_token'].length > 0)
+    const hasElement = typeof managedParameters['element_token'] === 'string' &&
+      managedParameters['element_token'].length > 0
     if (['click', 'type_text', 'press_key', 'hotkey', 'scroll'].includes(action)) {
       const hasPixels = managedParameters['x'] != null || managedParameters['y'] != null
       if (hasElement && hasPixels) {
-        throw new Error('Choose one target: a current element token/index OR screenshot pixels, not both.')
-      }
-      if (managedParameters['element_token'] === '' &&
-          managedParameters['element_index'] != null) {
-        throw new Error('An empty element token with an index is ambiguous. Supply only the intended current selector.')
+        throw new Error('Choose one target: a current element token or screenshot pixels.')
       }
     }
     const target = asRecord(managedParameters['target'])
@@ -218,7 +213,7 @@ export class ComputerUseRuntimeManager {
       // Accept duplicate representations only when they identify the same
       // desktop; never silently reinterpret window coordinates as global input.
       if ((managedParameters['scope'] != null && managedParameters['scope'] !== 'desktop') ||
-          ['pid', 'window_id', 'element_index', 'snapshot_id'].some((key) =>
+          ['pid', 'window_id'].some((key) =>
             managedParameters[key] != null || target[key] != null) || hasElement) {
         throw new Error('A desktop target cannot include window scope, identifiers, or element selectors.')
       }
@@ -229,8 +224,8 @@ export class ComputerUseRuntimeManager {
       delete managedParameters['scope']
       delete managedParameters['display_id']
     }
-    for (const key of ['element_token', 'snapshot_id']) {
-      if (managedParameters[key] === '') delete managedParameters[key]
+    if (managedParameters['element_token'] === '') {
+      delete managedParameters['element_token']
     }
     if (action === 'clipboard_write' && typeof managedParameters['text'] === 'string') {
       for (const key of ['file_path', 'image_path']) {

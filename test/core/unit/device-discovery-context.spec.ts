@@ -69,7 +69,7 @@ it('does not substitute another device, merge ambiguous bindings, or ignore disa
   const manager = new ContextManager()
   Object.assign(manager, { _isLoaded: true })
   expect(manager.getContextFileContent('ACTIVITY.md')).toContain('unavailable')
-  state.bindings = { 'computer_use.cua': 'device-a', 'browser_use.cli': 'device-b' }
+  state.bindings = { 'computer_use.cua': 'device-a', 'browser_use.browser-use': 'device-b' }
   expect(manager.getContextFileContent('ACTIVITY.md')).toContain('unavailable')
   state.disabled = ['*']
   const disabled = new ContextManager()

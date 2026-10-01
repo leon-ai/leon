@@ -5,8 +5,10 @@ import net from 'node:net'
 
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from '@@/tools/browser_use/src/nodejs/lib/browser-use-environment'
-import { BrowserUseTool } from '@@/tools/browser_use/src/nodejs/browser-use-tool'
+import { ToolkitConfig } from '@sdk/toolkit-config'
+
+import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from '@@/tools/browser_use/browser-use/src/nodejs/lib/browser-use-environment'
+import { BrowserUseTool } from '@@/tools/browser_use/browser-use/src/nodejs/browser-use-tool'
 
 const directories = new Set<string>()
 
@@ -28,7 +30,7 @@ it('reports a missing CLI interpreter as a setup failure, not browser permission
 async function createProfile(): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-browser-test-'))
   directories.add(root)
-  const directory = path.join(root, 'a-long-profile-name-'.repeat(8), 'tools', 'browser_use', 'cli')
+  const directory = path.join(root, 'a-long-profile-name-'.repeat(8), 'tools', 'browser_use', 'browser-use')
   await fs.mkdir(directory, { recursive: true })
   return path.join(directory, 'settings.json')
 }
@@ -136,4 +138,39 @@ it.each([
   expect(failure.requiresOwnerAction).toBe(false)
   expect(failure.message).toContain(stderr)
   expect(failure.message).toContain('/profile/bu.log')
+})
+
+it('persists legacy CLI browser settings and preserves the new tool configuration', async () => {
+  const settingsPath = await createProfile()
+  const legacyPath = path.join(path.dirname(settingsPath), 'legacy-settings.json')
+  await fs.writeFile(legacyPath, '{}')
+
+  const legacySettings = { cdp_endpoint: 'http://127.0.0.1:9222', user_data_dir: '' }
+  let currentSettings = { cdp_endpoint: '', user_data_dir: '' }
+  const loadSettings = vi.spyOn(ToolkitConfig, 'loadToolSettings').mockImplementation(
+    (_toolkit, toolId) => toolId === 'cli' ? legacySettings : currentSettings
+  )
+  const saveSettings = vi.spyOn(ToolkitConfig, 'saveToolSettings').mockImplementation(
+    (_toolkit, _toolId, values) => {
+      currentSettings = { ...currentSettings, ...values }
+    }
+  )
+  const prototype = BrowserUseTool.prototype as unknown as {
+    getSettingsPath: (toolId?: string) => string
+  }
+  vi.spyOn(prototype, 'getSettingsPath').mockReturnValue(legacyPath)
+
+  const tool = new BrowserUseTool()
+  expect(tool.toolName).toBe('browser-use')
+  expect(saveSettings).toHaveBeenCalledWith('browser_use', 'browser-use', legacySettings)
+  expect(currentSettings).toEqual(legacySettings)
+
+  currentSettings = { cdp_endpoint: 'http://127.0.0.1:9333', user_data_dir: '' }
+  loadSettings.mockClear()
+  saveSettings.mockClear()
+  new BrowserUseTool()
+
+  expect(loadSettings).toHaveBeenCalledTimes(1)
+  expect(saveSettings).not.toHaveBeenCalled()
+  expect(currentSettings.cdp_endpoint).toBe('http://127.0.0.1:9333')
 })

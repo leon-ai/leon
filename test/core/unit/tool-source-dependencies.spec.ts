@@ -42,12 +42,12 @@ it('invalidates Python dependency stamps after relocation or failed installation
   expect(await isPythonProjectSyncCurrent(moved, stamp)).toBe(false)
 })
 
-it('uses both existing dependency installers for flat, nested and profile tool sources', async () => {
+it('uses both existing dependency installers for nested built-in and profile tool sources', async () => {
   directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-tool-dependencies-'))
   fixture.builtIn = path.join(directory, 'built-in')
   fixture.profile = path.join(directory, 'profile')
   const tools = [
-    path.join(fixture.builtIn, 'browser_use'),
+    path.join(fixture.builtIn, 'browser_use', 'browser-use'),
     path.join(fixture.builtIn, 'video_streaming', 'ffmpeg'),
     path.join(fixture.profile, 'weather', 'custom')
   ]
@@ -55,6 +55,8 @@ it('uses both existing dependency installers for flat, nested and profile tool s
     await fs.mkdir(tool, { recursive: true })
     await fs.writeFile(path.join(tool, 'tool.json'), '{}')
   }
+  // A toolkit-root manifest must not be treated as another tool.
+  await fs.writeFile(path.join(fixture.builtIn, 'browser_use', 'tool.json'), '{}')
   await setupToolsDependencies()
   for (const tool of tools) {
     for (const language of ['nodejs', 'python']) {

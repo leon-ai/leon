@@ -32,13 +32,20 @@ const getToolSourcePaths = async (toolsPath) => {
       withFileTypes: true
     })
 
-    const toolPaths = [
-      toolkitPath,
-      ...toolEntries.filter((entry) => entry.isDirectory()).map((entry) => path.join(toolkitPath, entry.name))
-    ]
-    for (const toolPath of toolPaths) {
-      if (!fs.existsSync(path.join(toolPath, 'tool.json'))) continue
-      sourcePaths.push(path.join(toolPath, NODEJS_SOURCE_PATH), path.join(toolPath, PYTHON_SOURCE_PATH))
+    for (const toolEntry of toolEntries) {
+      if (!toolEntry.isDirectory()) {
+        continue
+      }
+
+      const toolPath = path.join(toolkitPath, toolEntry.name)
+      if (!fs.existsSync(path.join(toolPath, 'tool.json'))) {
+        continue
+      }
+
+      sourcePaths.push(
+        path.join(toolPath, NODEJS_SOURCE_PATH),
+        path.join(toolPath, PYTHON_SOURCE_PATH)
+      )
     }
   }
 

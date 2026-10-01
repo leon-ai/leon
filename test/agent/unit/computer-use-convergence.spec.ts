@@ -48,15 +48,15 @@ describe('computer-use retry guard', () => {
       effect: 'unverifiable', state_id: 'same', error_code: 'outcome_timeout' }
     const input = JSON.stringify({ tab_id: 'tab-a', action: 'download', target })
     const batch: ExecutionRecord = {
-      function: 'browser_use.cli.run', status: 'success', requestedToolInput: '{"code":"caught_error()"}',
+      function: 'browser_use.browser-use.run', status: 'success', requestedToolInput: '{"code":"caught_error()"}',
       observation: JSON.stringify({ output: { result: { success: false, browser_actions: [action, action, action] } } })
     }
     expect(buildComputerUseConvergenceHint([batch])).toContain('multiple uncertain actions')
-    expect(getComputerUseRetryBlocker([batch], 'browser_use.cli.act', input)).toContain('retry blocked')
-    const inspect: ExecutionRecord = { function: 'browser_use.cli.inspect', status: 'success',
+    expect(getComputerUseRetryBlocker([batch], 'browser_use.browser-use.act', input)).toContain('retry blocked')
+    const inspect: ExecutionRecord = { function: 'browser_use.browser-use.inspect', status: 'success',
       requestedToolInput: '{"tab_id":"tab-a"}', observation: '{"observation":{"state_id":"changed"}}' }
-    expect(getComputerUseRetryBlocker([batch, inspect], 'browser_use.cli.act', input)).toBeNull()
-    expect(getComputerUseRetryBlocker([batch], 'browser_use.cli.act', JSON.stringify({
+    expect(getComputerUseRetryBlocker([batch, inspect], 'browser_use.browser-use.act', input)).toBeNull()
+    expect(getComputerUseRetryBlocker([batch], 'browser_use.browser-use.act', JSON.stringify({
       tab_id: 'tab-b', action: 'download', target
     }))).toBeNull()
   })

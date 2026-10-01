@@ -168,7 +168,6 @@ export class ComputerUseResultCompactor {
     for (const element of candidates) {
       const compact = Object.fromEntries(
         Object.entries(element).filter(([key, value]) => {
-          if (key === 'element_index') return !hasText(element['element_token'])
           if (key === 'value') return value !== element['label']
           if (key === 'enabled') return value === false
           if (key === 'selected' || key === 'focused') return value === true
@@ -188,10 +187,12 @@ export class ComputerUseResultCompactor {
     const omitted = allElements.length - elements.length
     const metadata = Object.fromEntries(
       Object.entries(result).filter(([key]) =>
-        ['pid', 'window_id', 'snapshot_id', 'window_bounds', 'screenshot_width',
+        ['pid', 'window_id', 'snapshot_id', 'invalidated_snapshot_ids', 'window_bounds', 'screenshot_width',
           'screenshot_height', 'screenshot_scale', 'screenshot_frame_valid', 'screenshot_error',
           'elements_complete', 'total_element_count', 'background_input',
-          'capture_coverage', 'degraded', 'effect', 'escalation', 'off_space'].includes(key)
+          'capture_coverage', 'degraded', 'effect', 'escalation', 'off_space',
+          'truncated', 'truncation_reason', 'nodes_visited', 'nodes_pending',
+          'bounds_complete', 'walk_elapsed_ms', 'timeout_ms'].includes(key)
       )
     )
     if (!metadata['window_bounds'] && windowFrame) {

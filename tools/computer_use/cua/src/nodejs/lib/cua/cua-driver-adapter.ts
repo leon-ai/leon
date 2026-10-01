@@ -2,17 +2,14 @@ import type {
   CuaExecutionContext as ToolExecutionContext,
   ComputerUseDriver
 } from '../types'
-import path from 'node:path'
-
-import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-
 import { CuaDesktopSetup, CuaDesktopSetupPendingError, CuaDesktopSetupState, isCuaWaylandSession } from './cua-desktop-setup'
 import { CuaWaylandCaptureAdapter } from './cua-wayland-capture'
-import { CuaLinuxLaunchAdapter } from './cua-linux-launch'
 
 import {
   CUA_TELEMETRY_ENABLED_ENV,
-  CUA_X11_UINPUT_SAFETY_ENV
+  CUA_X11_UINPUT_SAFETY_ENV,
+  CUA_WINDOW_CHANGE_TIMEOUT_ENV,
+  COMPUTER_USE_WINDOW_CHANGE_TIMEOUT_MS
 } from '../constants'
 import { shouldUseCuaSafeX11Input } from '../computer-use-coordinate-mapper'
 
@@ -30,6 +27,10 @@ export async function createCuaDriverAdapter(
     throw new CuaDesktopSetupPendingError()
   }
   process.env[CUA_TELEMETRY_ENABLED_ENV] ??= 'false'
+  // This trusted host bound applies to direct SDK runtimes too. Preserve an
+  // operator override; tool-call arguments cannot shorten focus protection.
+  process.env[CUA_WINDOW_CHANGE_TIMEOUT_ENV] ??=
+    String(COMPUTER_USE_WINDOW_CHANGE_TIMEOUT_MS)
   if (shouldUseCuaSafeX11Input(process.platform, process.env)) {
     // Cua currently keys its MPX/uinput crash guard to KDE; apply its XTEST
     // fallback to every local X11 session because the X server is shared.
@@ -46,11 +47,7 @@ export async function createCuaDriverAdapter(
       maxIdleTtlSeconds: CUA_MAX_IDLE_TTL_SECONDS
     }
   }
-  const nativeDriver = CuaDriver.createConfigured(options) as unknown as ComputerUseDriver
-  // A driver is retained across conversations; application logs belong to its profile.
-  const driver = process.platform === 'linux'
-    ? new CuaLinuxLaunchAdapter(nativeDriver, path.join(getProfilePaths(input.profileName).logs, 'applications'))
-    : nativeDriver
+  const driver = CuaDriver.createConfigured(options) as unknown as ComputerUseDriver
   const gnomeWayland = isCuaWaylandSession(process.platform, process.env) &&
     process.env['XDG_CURRENT_DESKTOP']?.toLowerCase().split(':').includes('gnome') &&
     process.env['CUA_DRIVER_RS_ENABLE_WAYLAND'] === '1'

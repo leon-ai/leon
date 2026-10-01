@@ -34,7 +34,7 @@ const COMPUTER_USE_ACTION_SEQUENCE_NAME = 'perform_actions'
 
 
 const BROWSER_USE_FUNCTION_PREFIX = 'browser_use.playwright.'
-const BROWSER_CLI_FUNCTION_PREFIX = 'browser_use.cli.'
+const BROWSER_CLI_FUNCTION_PREFIX = 'browser_use.browser-use.'
 const TARGET_AND_CAPTURE_FIELDS = new Set([
   'target', 'pid', 'window_id', 'display_id', 'scope', 'x', 'y', 'capture_after', 'tab_id'
 ])

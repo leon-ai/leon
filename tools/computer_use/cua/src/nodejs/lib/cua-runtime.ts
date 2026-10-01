@@ -39,6 +39,7 @@ import {
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
   COMPUTER_USE_WINDOW_MAX_DEPTH,
+  COMPUTER_USE_WINDOW_TIMEOUT_MS,
   CUA_FOREGROUND_DELIVERY_MODE,
   CUA_SESSION_ENDED_ERROR_CODE,
   CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE
@@ -174,6 +175,7 @@ export class CuaRuntime {
           throw new Error('zoom purpose must be act or read.')
         }
         delete driverParameters['purpose']
+        delete driverParameters['scope']
       }
       delete driverParameters[COMPUTER_USE_CAPTURE_AFTER_PARAMETER]
       const settleMs = this.resolveSettleMs(driverParameters['settle_ms'])
@@ -284,13 +286,6 @@ export class CuaRuntime {
         action === 'launch_app'
           ? await this.applicationLauncher.captureWindowBaseline(runtime.driver)
           : null
-      if (action === 'zoom') {
-        // Native zoom does not accept a session label. A new crop can replace
-        // its shared mapping, so another conversation must not reuse an old one.
-        for (const [key, transform] of this.visualTransforms) {
-          if (transform.fromZoom) this.visualTransforms.delete(key)
-        }
-      }
       const driverStartedAt = performance.now()
       if (action === 'click' && actionParameters['button'] === 'right' &&
           actionParameters['delivery_mode'] === CUA_FOREGROUND_DELIVERY_MODE) {
@@ -679,7 +674,7 @@ export class CuaRuntime {
         parameters['delivery_mode'] === focusedField['delivery_mode']
       const sameField = sameWindow && focusedField && parameters['x'] === focusedField['x'] &&
         parameters['y'] === focusedField['y'] &&
-        parameters['element_token'] == null && parameters['element_index'] == null
+        parameters['element_token'] == null
       if (action === 'type_text' && hasPixels && sameField) {
         delete parameters['x']
         delete parameters['y']
@@ -800,7 +795,9 @@ export class CuaRuntime {
     action: string,
     parameters: Record<string, unknown>
   ): Record<string, unknown> {
-    if (action !== 'get_window_state') return parameters
+    if (action !== 'get_window_state') {
+      return parameters
+    }
 
     // Bound the driver walk itself, not just the text sent to the model.
     // Callers can request deeper observations when a needed control is omitted.
@@ -809,6 +806,7 @@ export class CuaRuntime {
     return {
       max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
       max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH,
+      timeout_ms: COMPUTER_USE_WINDOW_TIMEOUT_MS,
       include_screenshot: true,
       ...parameters
     }
@@ -872,7 +870,7 @@ export class CuaRuntime {
       throw new Error('type_text method must be type or paste.')
     }
     const hasPixelTarget = typeof parameters['x'] === 'number' && typeof parameters['y'] === 'number'
-    const hasElementTarget = parameters['element_token'] != null || parameters['element_index'] != null
+    const hasElementTarget = parameters['element_token'] != null
     const typeParameters = { ...parameters }
     delete typeParameters['mode']
     delete typeParameters['method']
@@ -884,7 +882,7 @@ export class CuaRuntime {
       const clickResult = await driver.callTool('click', JSON.stringify(clickParameters))
       const clickOutput = parseJsonRecord(clickResult.structuredJson) || parseJsonRecord(clickResult.rawJson)
       if (hasCuaError(clickResult) || this.resultCompactor.getStructuredFailure(clickOutput)) return clickResult
-      for (const key of ['x', 'y', 'element_token', 'element_index', 'snapshot_id', 'from_zoom']) {
+      for (const key of ['x', 'y', 'element_token', 'from_zoom']) {
         delete typeParameters[key]
       }
     }
@@ -1078,7 +1076,7 @@ export class CuaRuntime {
       returned_element_count: 0,
       omitted_element_count: elements.length,
       elements_complete: false,
-      hint: 'For exact text absent from these elements, the next extraction step is Copy: right-click the source in the existing screenshot, inspect the menu, then call copy_text. Do not switch to reading zoom, OCR, or guessed URLs until you have tried the source’s Copy action; empty accessibility does not establish that Copy is unavailable. Use current element tokens with their pid/window_id. Observe after acting; old tokens expire. Increase max_elements/max_depth only for an omitted control; query filters results, not traversal cost. elements_complete=false alone does not prove a traversal limit.'
+      hint: 'For exact text absent from these elements, the next extraction step is Copy: right-click the source in the existing screenshot, inspect the menu, then call copy_text. Do not switch to reading zoom, OCR, or guessed URLs until you have tried the source’s Copy action; empty accessibility does not establish that Copy is unavailable. Use current element tokens with their pid/window_id. A newer read replaces tokens. Increase timeout_ms only for a missing control when truncation_reason indicates a timeout, or max_elements/max_depth for their respective limits. query filters results, not traversal cost.'
     }
     // Include paths, metadata and envelope in the budget, not just AX elements.
     // Reserve the worst-case counter width so counters cannot overflow it.
@@ -1210,13 +1208,10 @@ export class CuaRuntime {
     const session = actionParameters['session']
     const captureParameters: Record<string, unknown> = isDesktop
       ? {}
-      : {
+      : this.applyObservationDefaults('get_window_state', {
           pid,
-          window_id: windowId,
-          include_screenshot: true,
-          max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
-          max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH
-        }
+          window_id: windowId
+        })
     if (
       typeof session === 'string' &&
       runtime.sessionAwareActions.has(captureAction)

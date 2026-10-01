@@ -14,6 +14,9 @@ export const COMPUTER_USE_VISUAL_STATE_LIMIT = 512
 // visited nodes independently so the initial observation still reaches them.
 export const COMPUTER_USE_WINDOW_MAX_ELEMENTS = 500
 export const COMPUTER_USE_WINDOW_MAX_DEPTH = 32
+export const COMPUTER_USE_WINDOW_TIMEOUT_MS = 1_000
+// Leon captures action results itself; retain a short native window-change watch.
+export const COMPUTER_USE_WINDOW_CHANGE_TIMEOUT_MS = 200
 export const COMPUTER_USE_SET_OF_MARK_LIMIT = 40
 export const COMPUTER_USE_SET_OF_MARK_COLOR = 'yellow'
 export const COMPUTER_USE_SET_OF_MARK_FONT_SIZE = 16
@@ -29,6 +32,7 @@ export const COMPUTER_USE_LAUNCH_WINDOW_RETRY_DELAYS_MS = [
 ] as const
 export const CUA_TELEMETRY_ENABLED_ENV = 'CUA_TELEMETRY_ENABLED'
 export const CUA_X11_UINPUT_SAFETY_ENV = 'KDE_FULL_SESSION'
+export const CUA_WINDOW_CHANGE_TIMEOUT_ENV = 'CUA_DRIVER_WINDOW_CHANGE_TIMEOUT_MS'
 export const COMPUTER_USE_INTERACTION_MODE_SETTING = 'interaction_mode'
 export const COMPUTER_USE_ACTIVITY_OVERLAY_SETTING = 'activity_overlay'
 export const COMPUTER_USE_SET_OF_MARK_SETTING = 'set_of_mark'

@@ -14,6 +14,7 @@ import { ToolkitConfig } from '@sdk/toolkit-config'
 
 import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from './lib/browser-use-environment'
 
+const LEGACY_TOOL_IDS = ['cli', 'playwright'] as const
 const MAX_PORT = 65_535
 const REMOTE_DEBUGGING_SETTINGS_URL = 'chrome://inspect/#remote-debugging'
 
@@ -70,9 +71,22 @@ export class BrowserUseTool extends Tool {
   public constructor() {
     super()
     this.settings = ToolkitConfig.loadToolSettings(this.toolkit, this.toolName)
-    // Preserve the configured browser from the earlier comparison tool.
-    if (!this.settings['cdp_endpoint'] && !this.settings['user_data_dir'] && existsSync(this.getSettingsPath('playwright'))) {
-      this.settings = ToolkitConfig.loadToolSettings(this.toolkit, 'playwright')
+    // Carry forward the configured browser without replacing newer owner settings.
+    if (!this.settings['cdp_endpoint'] && !this.settings['user_data_dir']) {
+      for (const legacyToolId of LEGACY_TOOL_IDS) {
+        if (!existsSync(this.getSettingsPath(legacyToolId))) {
+          continue
+        }
+
+        const legacySettings = ToolkitConfig.loadToolSettings(this.toolkit, legacyToolId)
+        if (!legacySettings['cdp_endpoint'] && !legacySettings['user_data_dir']) {
+          continue
+        }
+
+        ToolkitConfig.saveToolSettings(this.toolkit, this.toolName, legacySettings)
+        this.settings = ToolkitConfig.loadToolSettings(this.toolkit, this.toolName)
+        break
+      }
     }
     this.checkRequiredSettings()
   }
@@ -101,7 +115,7 @@ export class BrowserUseTool extends Tool {
    */
   public screenshot(): Promise<Record<string, unknown>> { return this.invoke('screenshot', {}) }
 
-  public get toolName(): string { return 'cli' }
+  public get toolName(): string { return 'browser-use' }
   public get toolkit(): string { return 'browser_use' }
   public get description(): string { return this.config.description }
 
