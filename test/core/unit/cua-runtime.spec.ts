@@ -738,6 +738,7 @@ describe('CuaRuntime', () => {
       JSON.stringify({
         max_elements: 500,
         max_depth: 32,
+        timeout_ms: 1_000,
         include_screenshot: true,
         pid: 42,
         window_id: 7,

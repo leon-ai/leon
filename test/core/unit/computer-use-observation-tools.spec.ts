@@ -84,6 +84,35 @@ afterEach(async () => {
 })
 
 describe('computer-use observations and capture recovery', () => {
+  it('preserves traversal and snapshot diagnostics while bounding observation work', async () => {
+    const { driver, execute } = createProvider()
+    const diagnostics = {
+      ...WINDOW, snapshot_id: 'current', invalidated_snapshot_ids: ['previous'],
+      truncated: true, truncation_reason: 'timeout', timeout_ms: 5_000,
+      nodes_visited: 17, nodes_pending: 3, walk_elapsed_ms: 5_000,
+      bounds_complete: false, elements_complete: false
+    }
+    driver.callTool.mockResolvedValue({
+      text: '', images: [], isError: false,
+      structuredJson: JSON.stringify({
+        ...diagnostics, elements: [{ element_token: 'current-save', element_index: 1, label: 'Save' }]
+      })
+    })
+    const result = await execute('get_window_state', {
+      ...WINDOW, include_screenshot: false, timeout_ms: 5_000
+    })
+    expect(result.output['result']).toMatchObject(diagnostics)
+    expect((result.output['result'] as { elements: unknown[] }).elements)
+      .toEqual([{ element_token: 'current-save', label: 'Save' }])
+    expect(JSON.parse(driver.callTool.mock.calls[0]![1])).toMatchObject({
+      timeout_ms: 5_000, include_screenshot: false
+    })
+
+    await execute('click', { ...WINDOW, element_token: 'current-save' })
+    const refresh = driver.callTool.mock.calls.findLast(([action]) => action === 'get_window_state')!
+    expect(JSON.parse(refresh[1])).toMatchObject({ timeout_ms: 1_000 })
+  })
+
   it('reports invalid window screenshots as failures and preserves their diagnostics', async () => {
     const { driver, execute } = createProvider()
     await execute('get_window_state', WINDOW)
@@ -383,7 +412,7 @@ describe('computer-use observations and capture recovery', () => {
     expect((await execute('zoom', region)).success).toBe(false)
     // A synthetic capture exercises real image processing without opening a window.
     const source = execFileSync(ffmpegStatic!, [
-      '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=white:s=800x200',
+      '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=white:s=800x200,format=rgb24',
       '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'
     ])
     const nativeCall = driver.callTool.getMockImplementation()!
@@ -547,15 +576,25 @@ describe('computer-use observations and capture recovery', () => {
     expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 20, y: 20 }))
   })
 
-  it('invalidates an older conversation crop when a different conversation zooms', async () => {
+  it('keeps zoom mappings in their owning native sessions', async () => {
     const { execute, zoom, driver } = createProvider()
+    vi.spyOn(driver, 'listToolsJson').mockResolvedValue(JSON.stringify({ tools: [
+      { name: 'get_window_state', inputSchema: { properties: { session: {} } } },
+      { name: 'zoom', inputSchema: { properties: { session: {} } } },
+      { name: 'click', inputSchema: { properties: { session: {}, from_zoom: {} } } }
+    ] }))
     const otherSession = crypto.randomUUID()
     await execute('get_window_state', WINDOW)
     await zoom()
     await execute('get_window_state', WINDOW, otherSession)
     await execute('zoom', { ...WINDOW, x1: 50, y1: 30, x2: 350, y2: 150 }, otherSession)
-    expect((await execute('click', { ...WINDOW, x: 20, y: 20 })).success).toBe(false)
-    expect(driver.callTool).toHaveBeenCalledTimes(4)
+    expect((await execute('click', { ...WINDOW, x: 20, y: 20 })).success).toBe(true)
+    const zoomCalls = driver.callTool.mock.calls.filter(([action]) => action === 'zoom')
+    const firstSession = JSON.parse(zoomCalls[0]![1]).session
+    expect(JSON.parse(zoomCalls[1]![1]).session).not.toBe(firstSession)
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({
+      ...WINDOW, x: 20, y: 20, from_zoom: true, session: firstSession
+    }))
   })
 
   it('rejects invalid crop rectangles before calling the driver', async () => {

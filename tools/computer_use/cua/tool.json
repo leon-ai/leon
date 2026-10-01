@@ -4,7 +4,7 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
-  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Element tokens require the latest matching window snapshot; element_index also requires snapshot_id.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.",
+  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -168,6 +168,17 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 2000
+          },
+          "include_accessibility_tree": {
+            "description": "Default true. Set false for a screenshot-only observation when accessibility text is unnecessary. At least one of include_accessibility_tree/include_screenshot must be true.",
+            "type": "boolean"
+          },
+          "timeout_ms": {
+            "description": "Wall-clock budget for the accessibility walk. Omit for the bounded default. Increase only for a missing control when truncation_reason indicates a timeout; query filters results without reducing traversal cost.",
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000,
+            "default": 1000
           }
         },
         "required": [
@@ -893,10 +904,6 @@
           "count": {
             "type": "integer"
           },
-          "cursor_id": {
-            "description": "Optional multi-cursor instance id. Default: 'default'.",
-            "type": "string"
-          },
           "delivery_mode": {
             "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
@@ -905,10 +912,6 @@
               "foreground"
             ],
             "type": "string"
-          },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
           },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
@@ -930,11 +933,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1138,10 +1136,6 @@
               "right",
               "middle"
             ],
-            "type": "string"
-          },
-          "cursor_id": {
-            "description": "Optional multi-cursor instance id. Default: 'default'.",
             "type": "string"
           },
           "delivery_mode": {
@@ -1403,10 +1397,6 @@
             ],
             "type": "string"
           },
-          "cursor_id": {
-            "description": "Optional multi-cursor instance id. Default: 'default'.",
-            "type": "string"
-          },
           "delivery_mode": {
             "default": "foreground",
             "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
@@ -1425,10 +1415,6 @@
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
@@ -1442,11 +1428,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1478,11 +1459,11 @@
             "type": "integer"
           },
           "x": {
-            "description": "Window-local screenshot-pixel X of the scroll target. Pass with y and without element_index.",
+            "description": "Window-local screenshot-pixel X of the scroll target. Pass with y and without element_token.",
             "type": "number"
           },
           "y": {
-            "description": "Window-local screenshot-pixel Y of the scroll target. Pass with x and without element_index.",
+            "description": "Window-local screenshot-pixel Y of the scroll target. Pass with x and without element_token.",
             "type": "number"
           },
           "settle_ms": {
@@ -1647,7 +1628,10 @@
         "properties": {
           "method": {
             "type": "string",
-            "enum": ["type", "paste"],
+            "enum": [
+              "type",
+              "paste"
+            ],
             "description": "type (default) uses driver typing; paste writes clipboard text and pastes once into the target. Paste replaces the current clipboard contents."
           },
           "capture_after": {
@@ -1663,10 +1647,6 @@
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
@@ -1680,11 +1660,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1719,7 +1694,7 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X of the field to type into — the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click. For replacement use mode=replace. After a separate focus/select-all sequence, omit x/y to preserve selection.",
+            "description": "Screenshot-pixel X of the field to type into — the element px action form. Pass x,y (no element_token) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click. For replacement use mode=replace. After a separate focus/select-all sequence, omit x/y to preserve selection.",
             "type": "number"
           },
           "y": {
@@ -1908,10 +1883,6 @@
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
@@ -1935,11 +1906,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1971,7 +1937,7 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_index.",
+            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_token.",
             "type": "number"
           },
           "y": {
@@ -2152,10 +2118,6 @@
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
@@ -2177,11 +2139,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -2429,10 +2386,6 @@
       "parameters": {
         "additionalProperties": false,
         "properties": {
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
             "type": "string"
@@ -2440,22 +2393,18 @@
           "pid": {
             "type": "integer"
           },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
-            "type": "string"
-          },
           "value": {
             "type": "string"
           },
           "window_id": {
-            "description": "Required when element_index is used; optional when element_token is supplied (the token carries it).",
+            "description": "Optional when element_token is supplied (the token carries it).",
             "type": "integer"
           }
         },
         "required": [
           "pid",
-          "value"
+          "value",
+          "element_token"
         ],
         "type": "object"
       },
@@ -2810,6 +2759,18 @@
           "record_video": {
             "description": "Capture the main display to <output_dir>/recording.mp4. Default: false. Set to true to also capture the main display to recording.mp4 (otherwise only the per-turn screenshots + JSON are recorded). On macOS this uses native ScreenCaptureKit (no extra TCC prompt, macOS 15.0+); on Windows + Linux it requires ffmpeg on PATH.",
             "type": "boolean"
+          },
+          "include_accessibility_tree": {
+            "description": "Default true. Set false to skip before/after accessibility walks while retaining screenshots and action evidence.",
+            "type": "boolean",
+            "default": true
+          },
+          "state_timeout_ms": {
+            "description": "Time budget for each before/after accessibility walk while recording. Partial trees and timeout diagnostics are retained in the evidence.",
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000,
+            "default": 1000
           }
         },
         "type": "object"
