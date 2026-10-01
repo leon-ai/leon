@@ -844,7 +844,6 @@ class BaseTool(ABC):
         config = ToolkitConfig.load(self.toolkit, tool_config_name)
         binary_url = ToolkitConfig.get_binary_url(config)
 
-        self.report("bridges.tools.checking_binary", {"binary_name": binary_name})
         if not binary_url:
             self.report("bridges.tools.no_binary_url", {"binary_name": binary_name})
             raise Exception(f"No download URL found for binary '{binary_name}'")
@@ -867,6 +866,14 @@ class BaseTool(ABC):
         )
 
         bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
+        binary_path = os.path.join(bins_path, executable)
+        binary_exists = os.path.exists(binary_path)
+
+        # Reusing an executable needs no preparation or repeated permission changes.
+        if binary_exists and (is_windows() or os.access(binary_path, os.X_OK)):
+            return binary_path
+
+        self.report("bridges.tools.checking_binary", {"binary_name": binary_name})
 
         # Ensure toolkit bins directory exists
         if not os.path.exists(bins_path):
@@ -875,15 +882,10 @@ class BaseTool(ABC):
             )
             os.makedirs(bins_path, exist_ok=True)
 
-        binary_path = os.path.join(bins_path, executable)
-
         # Ensure binary is available before returning path
-        if not os.path.exists(binary_path):
+        if not binary_exists:
             self._download_binary_on_demand(binary_name, binary_url, executable)
-
-        # Force chmod again in case it has been downloaded but somehow failed
-        # so it could not chmod correctly earlier
-        if not is_windows():
+        elif not is_windows():
             self.report(
                 "bridges.tools.applying_permissions", {"binary_name": binary_name}
             )

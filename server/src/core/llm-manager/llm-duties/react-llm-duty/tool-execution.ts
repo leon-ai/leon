@@ -38,6 +38,7 @@ const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
   'bridges.tools.download_progress',
   'bridges.tools.download_progress_with_details',
   'bridges.tools.extracting_archive',
+  'bridges.tools.applying_permissions',
   'bridges.tools.making_executable',
   'bridges.tools.removing_quarantine',
   'bridges.tools.creating_resource_directory',
@@ -428,6 +429,7 @@ export async function runToolExecution(
     ...(stepLabel ? { stepLabel } : {})
   })
 
+  let didObservePreparationStarted = false
   let didNotifyOwnerPreparationStarted = false
   let didObservePreparationFailure = false
   const reportedPreparationMilestones = new Set<string>()
@@ -463,6 +465,32 @@ export async function runToolExecution(
       return
     }
 
+    if (!progress.key) {
+      return
+    }
+
+    const isPreparationStart =
+      TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key)
+    const isPreparationFailure =
+      TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)
+
+    if (isPreparationStart) {
+      didObservePreparationStarted = true
+    }
+
+    // Cached binaries also report readiness; only actual setup belongs in
+    // preparation cards and owner-facing preparation announcements.
+    if (
+      !isPreparationStart &&
+      !isPreparationFailure &&
+      !(
+        didObservePreparationStarted &&
+        TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key)
+      )
+    ) {
+      return
+    }
+
     emitToolPreparationProgressToWebApp({
       toolkitId,
       toolId,
@@ -473,11 +501,7 @@ export async function runToolExecution(
       ...(stepLabel ? { stepLabel } : {})
     })
 
-    if (!progress.key) {
-      return
-    }
-
-    if (TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)) {
+    if (isPreparationFailure) {
       didObservePreparationFailure = true
     }
 
@@ -485,7 +509,7 @@ export async function runToolExecution(
     // milestones in the conversation without repeating the same report.
     if (
       TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key) ||
-      TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)
+      isPreparationFailure
     ) {
       const milestoneId = JSON.stringify([progress.key, progress.data])
 

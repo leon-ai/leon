@@ -775,10 +775,6 @@ export abstract class Tool {
     const config = ToolkitConfig.load(this.toolkit, toolConfigName)
     const binaryUrl = ToolkitConfig.getBinaryUrl(config)
 
-    await this.report('bridges.tools.checking_binary', {
-      binary_name: binaryName
-    })
-
     if (!binaryUrl) {
       await this.report('bridges.tools.no_binary_url', {
         binary_name: binaryName
@@ -805,6 +801,26 @@ export abstract class Tool {
         : actualFilename
 
     const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
+    const binaryPath = path.join(binsPath, executable)
+    const binaryExists = fs.existsSync(binaryPath)
+
+    // Reusing an executable needs no preparation or repeated permission changes.
+    if (binaryExists) {
+      if (isWindows()) {
+        return binaryPath
+      }
+
+      try {
+        fs.accessSync(binaryPath, fs.constants.X_OK)
+        return binaryPath
+      } catch {
+        // Repair permissions below if an earlier download left them incomplete.
+      }
+    }
+
+    await this.report('bridges.tools.checking_binary', {
+      binary_name: binaryName
+    })
 
     // Ensure toolkit bins directory exists
     if (!fs.existsSync(binsPath)) {
@@ -814,18 +830,10 @@ export abstract class Tool {
       fs.mkdirSync(binsPath, { recursive: true })
     }
 
-    const binaryPath = path.join(binsPath, executable)
-
     // Ensure binary is available before returning path
-    if (!fs.existsSync(binaryPath)) {
+    if (!binaryExists) {
       await this.downloadBinaryOnDemand(binaryName, binaryUrl, executable)
-    }
-
-    /**
-     * Force chmod again in case it has been downloaded but somehow failed
-     * so it could not chmod correctly earlier
-     */
-    if (!isWindows()) {
+    } else if (!isWindows()) {
       await this.report('bridges.tools.applying_permissions', {
         binary_name: binaryName
       })

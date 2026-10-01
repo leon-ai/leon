@@ -29,6 +29,7 @@ import {
   isAgentPlanComplete
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-plan'
 import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
+import { runToolExecution } from '@/core/llm-manager/llm-duties/react-llm-duty/tool-execution'
 import {
   createAgentLoopContinuationState,
   isAgentLoopContinuationStateValid
@@ -51,7 +52,9 @@ const coreMocks = vi.hoisted(() => ({
   getFlattenedTools: vi.fn(),
   getToolFunctions: vi.fn(),
   needsToolConnection: vi.fn().mockReturnValue(true),
-  resolveToolById: vi.fn()
+  resolveToolById: vi.fn(),
+  executeTool: vi.fn(),
+  emitAnswerToChatClients: vi.fn()
 }))
 
 vi.mock('@/core/connections/connection-service', () => ({
@@ -60,6 +63,19 @@ vi.mock('@/core/connections/connection-service', () => ({
 }))
 
 vi.mock('@/core', () => ({
+  BRAIN: {
+    wernicke: (
+      key: string,
+      _fallback: string,
+      values: Record<string, string>
+    ): string => values['{{ message }}'] || key
+  },
+  SOCKET_SERVER: {
+    emitAnswerToChatClients: coreMocks.emitAnswerToChatClients
+  },
+  TOOL_EXECUTOR: {
+    executeTool: coreMocks.executeTool
+  },
   TOOLKIT_REGISTRY: {
     getConnectionTools: (): never[] => [],
     getConnectionTool: (): Record<string, unknown> => ({
@@ -74,6 +90,68 @@ vi.mock('@/core', () => ({
 }))
 
 const CALLABLE_TOOL_NAME = 'test__lookup__run'
+
+it('announces binary readiness only after actual preparation starts', async () => {
+  const onPreparationProgress = vi.fn(async (): Promise<void> => {})
+  const readyReport = {
+    key: 'bridges.tools.binary_ready',
+    message: 'Binary ready.',
+    data: { binary_name: 'fixture' }
+  }
+  const run = async (): Promise<void> => {
+    await runToolExecution(
+      'test',
+      'lookup',
+      'run',
+      '{}',
+      {},
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      onPreparationProgress
+    )
+  }
+
+  coreMocks.executeTool.mockImplementationOnce(async (input) => {
+    input.onProgress(readyReport)
+
+    return { status: 'success', data: { output: {} } }
+  })
+
+  await run()
+
+  expect(onPreparationProgress).not.toHaveBeenCalled()
+  expect(coreMocks.emitAnswerToChatClients).not.toHaveBeenCalledWith(
+    expect.objectContaining({ toolPhase: 'preparation' })
+  )
+
+  coreMocks.executeTool.mockImplementationOnce(async (input) => {
+    input.onProgress({
+      key: 'bridges.tools.binary_not_found',
+      message: 'Downloading missing binary.',
+      data: { binary_name: 'fixture' }
+    })
+    input.onProgress(readyReport)
+    input.onProgress(readyReport)
+
+    return { status: 'success', data: { output: {} } }
+  })
+
+  await run()
+
+  expect(onPreparationProgress.mock.calls).toEqual([
+    ['Downloading missing binary.'],
+    ['Binary ready.'],
+    ['react.tool.ready']
+  ])
+  expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(
+    expect.objectContaining({
+      toolPhase: 'preparation',
+      message: 'Downloading missing binary.'
+    })
+  )
+})
 
 it('submits connection secrets without retaining them in the loop transcript', async () => {
   const secret = 'fixture-connection-secret'
