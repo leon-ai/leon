@@ -55,9 +55,12 @@ export function verifyInference(scenario: Scenario, payload: LeonClientInterface
   assert(typeof payload['answer'] === 'string' && payload['answer'].trim(), 'Empty answer')
   const trace = payload['agentResponseTrace'] as AgentResponseTrace | undefined
   const calls = trace?.toolCalls || []
-  assert(!calls.some((call) => call.status !== 'success'), 'An agent tool call failed or did not finish')
-  const call = calls.find((item) => item.name === scenario.functionName)
-  assert(call, `Missing tool call: ${scenario.functionName}`)
+  assert(!calls.some((call) => call.status === 'running'), 'An agent tool call did not finish')
+  // Failed attempts are valid when the agent recovers with the required evidence.
+  const call = calls.find((item) => (
+    item.name === scenario.functionName && item.status === 'success'
+  ))
+  assert(call, `Missing successful tool call: ${scenario.functionName}`)
   // The bridge wraps the SDK method's return value in result.
   const envelope = call.output as { result?: { success?: boolean, data?: Record<string, unknown> } } | undefined
   const output = envelope?.result
