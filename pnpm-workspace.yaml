@@ -1,7 +1,6 @@
 # Leon setup depends on native/binary packages whose install scripts must run
 dangerouslyAllowAllBuilds: true
 
-# Leon validates and rebuilds native packages for its managed Node.js runtime.
 # Restore package sources instead of trusting machine-global cached build output.
 sideEffectsCache: false
 

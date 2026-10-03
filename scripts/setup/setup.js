@@ -33,7 +33,6 @@ import { CONFIG_MANAGER } from '@/config'
 import setupCore from './setup-core'
 import setupNode from './setup-node'
 import setupPNPM from './setup-pnpm'
-import setupNativeNodeModules from './setup-native-node-modules'
 import setupPython from './setup-python'
 import setupUV from './setup-uv'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
@@ -300,8 +299,6 @@ async function syncLLMSetupChoice(preferences) {
       await setupNode()
       currentStep = 'setupPNPM'
       await setupPNPM()
-      currentStep = 'setupNativeNodeModules'
-      await setupNativeNodeModules()
       currentStep = 'setupPython'
       await setupPython()
       currentStep = 'setupUV'
