@@ -392,10 +392,26 @@ describe('continuous agent loop', () => {
       observation: 'Verified invoice-0003.pdf. Other requested invoices remain.',
       requestedToolInput: JSON.stringify({ query: 'invoice-0003' })
     }]
+    const progressMessage =
+      'I downloaded one invoice. The remaining invoices are not downloaded yet.'
+    const onProgressMessage = vi.fn()
     const callModel = vi.fn()
-      .mockResolvedValueOnce({ textContent: 'I downloaded one invoice. The remaining invoices are not downloaded yet.' })
+      .mockResolvedValueOnce({ textContent: progressMessage })
       .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'continue', reason: 'Invoice 0003 is verified. Download the remaining August and September invoices.' }) })
-      .mockResolvedValueOnce({ toolCalls: [toolCall('remaining', CALLABLE_TOOL_NAME, { query: 'remaining-invoices' })] })
+      .mockImplementationOnce(async () => {
+        // Settle the displayed message before the next call resets its draft.
+        expect(onProgressMessage).toHaveBeenCalledExactlyOnceWith(
+          progressMessage
+        )
+
+        return {
+          toolCalls: [
+            toolCall('remaining', CALLABLE_TOOL_NAME, {
+              query: 'remaining-invoices'
+            })
+          ]
+        }
+      })
       .mockResolvedValueOnce({ textContent: 'All requested invoices are downloaded and verified.' })
       .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'All requested invoices have verified files.' }) })
     const executeFunction = vi.fn(async () => ({ execution: {
@@ -406,11 +422,13 @@ describe('continuous agent loop', () => {
     const result = await runAgentLoopWithCompletionReview({
       transcript: structuredClone(transcript),
       catalog, initialExecutionHistory, callModel, executeFunction,
+      onProgressMessage,
       loadAgentSkill: async () => null
     })
 
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('All requested invoices are downloaded and verified.')
+    expect(onProgressMessage).toHaveBeenCalledExactlyOnceWith(progressMessage)
     expect(executeFunction).toHaveBeenCalledExactlyOnceWith(callable, JSON.stringify({ query: 'remaining-invoices' }), undefined)
     expect(callModel.mock.calls[1]?.[1]).toEqual([])
     expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })

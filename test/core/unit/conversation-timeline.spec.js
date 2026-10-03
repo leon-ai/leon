@@ -7,7 +7,13 @@ describe('conversation activity replay', () => {
   it('restores thinking and tools in time order without draft bubbles or duplicate cards', () => {
     const reasoning = { id: 'r1', text: 'Checking', phase: 'agent', startedAt: 2 }
     const toolCall = { id: 't1', name: 'test.lookup', status: 'running', startedAt: 3 }
-    const trace = { id: 'turn', reasoning: [reasoning], toolCalls: [toolCall] }
+    const progress = {
+      id: 'progress', content: 'One item is verified; more remain.', createdAt: 4
+    }
+    const trace = {
+      id: 'turn', reasoning: [reasoning], toolCalls: [toolCall],
+      progressMessages: [progress]
+    }
     const messages = [
       { who: 'owner', string: 'Check it', sentAt: 1 },
       { who: 'leon', string: '', sentAt: 4, agentResponseTrace: trace },
@@ -17,9 +23,10 @@ describe('conversation activity replay', () => {
       } }
     ]
     const timeline = expandConversationTimeline(messages).sort((a, b) => a.sentAt - b.sentAt)
-    expect(timeline.map((item) => item.string || item.reasoning?.id || item.toolCall?.id))
-      .toEqual(['Check it', 'r1', 't1', 'Working', 'Done'])
+    expect(timeline.map((item) => item.string || item.originalString || item.reasoning?.id || item.toolCall?.id))
+      .toEqual(['Check it', 'r1', 't1', progress.content, 'Working', 'Done'])
     expect(timeline[2].toolCall.status).toBe('success')
+    expect(timeline[3].messageId).toBe(progress.id)
 
     const legacy = expandConversationTimeline([{
       who: 'leon', string: 'Old answer', sentAt: 9,

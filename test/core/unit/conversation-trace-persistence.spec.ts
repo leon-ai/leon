@@ -130,6 +130,11 @@ describe('conversation trace persistence', () => {
       who: 'leon', message: '', messageId: 'turn', isAddedToHistory: false,
       agentResponseTrace: {
         id: 'turn', planSteps: [], toolCalls: [],
+        progressMessages: [{
+          id: 'progress',
+          content: 'One item is verified; more remain.',
+          createdAt: 1_000
+        }],
         reasoning: [{ id: 'thinking', text: 'Checking $&', phase: 'agent', startedAt: 1_000 }]
       }
     }
@@ -164,6 +169,8 @@ describe('conversation trace persistence', () => {
     await logger.upsert(finished, { sessionId: 'first' })
     expect(await logger.loadAll({ sessionId: 'first' })).toEqual([{ ...finished, sentAt: 2_000 }])
     const history = ConversationHistoryHelper.toHistoryItems(await logger.loadAll({ sessionId: 'first' }), { supportsWidgets: true })
+    expect(history[0]?.agentResponseTrace?.progressMessages)
+      .toEqual(draft.agentResponseTrace?.progressMessages)
     expect(history[0]?.llmMetrics?.usageAccounting).toEqual(finished.llmMetrics.usageAccounting)
     expect(history[0]?.llmMetrics?.completionCount).toBe(2)
     expect(await logger.loadAll({ sessionId: 'second' })).toEqual([{ ...draft, sentAt: 1_000 }])

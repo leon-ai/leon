@@ -942,6 +942,10 @@ export async function runAgentLoop(
           if (status === AgentCompletionStatus.Continue ||
               (status === AgentCompletionStatus.Complete &&
                 !isAgentPlanComplete(trackedSteps))) {
+            // Review keeps the task running, so settle the completed message as
+            // progress before the next model call discards its active draft.
+            await params.onProgressMessage?.(textContent)
+
             requiresToolAction = true
             transcript.push({
               role: 'user',

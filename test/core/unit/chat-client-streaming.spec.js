@@ -66,11 +66,21 @@ describe('chat client answer streams', () => {
     expect(client.chatbot.saveBubble).not.toHaveBeenCalled()
     expect(bubbles.get('progress').querySelector().innerHTML).toBe('Checking the files.')
 
+    handlers.get('leon:llm-token')({
+      generationId: 'retry', token: 'Incomplete attempt'
+    })
+    handlers.get('leon:llm-token')({
+      generationId: 'retry', token: '', reset: true
+    })
+
+    expect(bubbles.has('retry')).toBe(false)
+    expect(bubbles.get('progress').querySelector().innerHTML).toBe('Checking the files.')
+
     handlers.get('leon:llm-token')({ generationId: 'final', token: 'Done' })
     handlers.get('leon:answer')({ answer: 'Done.' })
     vi.runAllTimers()
 
-    expect(client.chatbot.createBubble).toHaveBeenCalledTimes(2)
+    expect(client.chatbot.createBubble).toHaveBeenCalledTimes(3)
     expect(client.chatbot.saveBubble).toHaveBeenCalledOnce()
     expect(bubbles.get('final').querySelector().innerHTML).toBe('Done.')
   })
