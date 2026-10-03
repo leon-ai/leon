@@ -46,6 +46,21 @@ export default class Fixture extends Tool {
     await new Promise((resolve) => this.executionContext.signal.addEventListener('abort', resolve, { once: true }))
     return { interrupted: true }
   }
+  async readInput() {
+    const command = [
+      "process.stdin.on('end', () => {",
+      "  process.stdout.write('stdin-closed')",
+      '})',
+      'process.stdin.resume()'
+    ].join('\\n')
+
+    return this.executeCommand({
+      binaryName: process.execPath,
+      args: ['-e', command],
+      options: { timeout: 5_000 },
+      skipBinaryDownload: true
+    })
+  }
   async dispose() {
     await fs.appendFile(path.join(process.env.LEON_HOME, 'disposed'), process.env.LEON_PROFILE + '\\n')
   }
@@ -84,6 +99,22 @@ it('keeps ordinary calls isolated and does not replay a crashed persistent call'
   expect(crashed.success).toBe(false)
   expect(crashed.message).toContain('Input may have been delivered')
   expect((await next('a', 'one')).output['result']).toMatchObject({ count: 1 })
+})
+
+it('closes unused stdin so non-interactive commands can finish', async () => {
+  await fixture(false)
+
+  const result = await manager.execute({
+    toolkitId: 'fixture',
+    toolId: 'state',
+    functionName: 'readInput',
+    profileName: 'a',
+    conversationSessionId: 'one',
+    parameters: {}
+  }, [], () => {})
+
+  expect(result.success).toBe(true)
+  expect(result.output['result']).toBe('stdin-closed')
 })
 
 it('cancels an active call cooperatively and releases its worker before another call', async () => {

@@ -598,9 +598,11 @@ export abstract class Tool {
         timeoutHandle = null
       }
 
+      // No input is supplied here; EOF keeps commands from waiting on an open pipe.
       const childProcess = spawn(binaryPath, args, {
         cwd: execOptions.cwd,
         env,
+        stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true
       })
 

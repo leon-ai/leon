@@ -426,8 +426,10 @@ class BaseTool(ABC):
         try:
             start_time = time.time()
 
+            # Non-interactive commands receive EOF instead of reading worker input.
             result = subprocess.run(
                 command_string,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 shell=True,
@@ -530,8 +532,10 @@ class BaseTool(ABC):
                 pending_output = ""
                 last_output_reported_at = time.time()
 
+            # Match the synchronous runner: no input is supplied by this API.
             process = subprocess.Popen(
                 [binary_path] + args,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
@@ -905,7 +909,6 @@ class BaseTool(ABC):
         Returns:
             The path to the resource directory
         """
-        from urllib.parse import urlparse
 
         # Get tool name without "Tool" suffix for config lookup
         tool_config_name = self.tool_name.lower().replace("tool", "")
@@ -1004,7 +1007,7 @@ class BaseTool(ABC):
                 # Verify the file was downloaded correctly
                 if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
                     raise Exception(
-                        f"Downloaded file is empty or was not created properly"
+                        "Downloaded file is empty or was not created properly"
                     )
 
                 self.report(
@@ -1050,7 +1053,6 @@ class BaseTool(ABC):
         Returns:
             True if all files exist and are not empty, False otherwise
         """
-        from urllib.parse import urlparse
 
         for resource_url in resource_urls:
             relative_path = self._get_resource_relative_path(resource_url)
@@ -1275,7 +1277,7 @@ class BaseTool(ABC):
             # Verify the file was downloaded correctly
             if not os.path.exists(download_path) or os.path.getsize(download_path) == 0:
                 raise Exception(
-                    f"Downloaded binary is empty or was not created properly"
+                    "Downloaded binary is empty or was not created properly"
                 )
 
             # If it's an archive, extract it
