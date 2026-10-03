@@ -45,6 +45,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Avoid hardcoded behavioral keywords, regex rules, paths, and configuration when existing schemas/settings/utilities provide them.
 - Put file-local constants near the top; shared server constants belong in `server/src/constants.ts`. Use numeric separators (`3_600`) and enums for meaningful states.
 - Comment non-trivial decisions and edge cases, not obvious assignments. Use `//` for JS/TS implementation comments, including multiline implementation comments; preserve existing double-slash comments. Use multiline JSDoc for exported APIs and reusable helpers, never single-line `/** ... */`. Use Python comments/docstrings where appropriate.
+- Keep documentation and code/configuration comments focused on lasting behavior, rationale, and constraints. Avoid narrating the current change or adding incidental dependency/version facts that will quickly become stale. Include such details only when readers need them to understand an active compatibility constraint. Documentation and comments should remain useful without knowing the change that introduced them.
 - In `web-app/`, inspect installed TanStack packages first: Router for routing, Query for server state, Virtual for long lists. Propose a missing package before adding it; avoid custom replacements when an installed package fits.
 
 JSDoc format:
