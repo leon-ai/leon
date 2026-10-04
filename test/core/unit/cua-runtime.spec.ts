@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import Ajv from 'ajv'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -985,6 +986,77 @@ describe('CuaRuntime', () => {
         ]
       }
     })
+  })
+
+  it('validates semantic batch targets and captures only their final state', async () => {
+    const manifest = readComputerUseManifest()
+    const validate = new Ajv().compile(
+      manifest.functions['perform_actions']!.parameters
+    )
+    const parameters = {
+      steps: [14, 15, 24, 14, 15, 30].map((index) => ({
+        action: 'click',
+        parameters: {
+          target: { kind: 'window', pid: 42, window_id: 7 },
+          element_token: `s00000001:${index}`
+        }
+      }))
+    }
+
+    // Reproduce the rejected batch from the Calculator run: element selectors
+    // belong beside the target, and the target must identify its kind.
+    expect(validate({
+      steps: [{
+        action: 'click',
+        parameters: {
+          target: { pid: 42, window_id: 7, element_token: 's00000001:14' }
+        }
+      }]
+    })).toBe(false)
+    expect(validate(parameters)).toBe(true)
+
+    const driver = createDriver({
+      text: '',
+      images: [],
+      structuredJson: '{"effect":"unverifiable"}',
+      isError: false
+    })
+    driver.callTool.mockImplementation(async (action: string) => ({
+      text: '',
+      images: action === 'get_window_state'
+        ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }]
+        : [],
+      structuredJson: '{"effect":"unverifiable"}',
+      isError: false
+    }))
+    const runtime = new CuaRuntime(async () => driver as never)
+    const result = await runtime.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'perform_actions',
+      parameters,
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'semantic-button-sequence'
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.output['completed_action_count']).toBe(6)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'start_session',
+      ...parameters.steps.map(() => 'click'),
+      'get_window_state'
+    ])
+    const clicks = driver.callTool.mock.calls.filter(([name]) => name === 'click')
+    expect(clicks.map(([, argumentsJson]) => JSON.parse(argumentsJson)))
+      .toEqual(parameters.steps.map((step) => ({
+        ...step.parameters,
+        session: expect.any(String)
+      })))
+
+    const artifacts = result.output['artifacts'] as Array<{ path: string }>
+    await Promise.all(artifacts.map((artifact) =>
+      fs.promises.rm(artifact.path, { force: true })
+    ))
   })
 
   it('settles between batch actions without an intermediate capture', async () => {

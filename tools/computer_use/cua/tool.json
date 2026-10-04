@@ -4,7 +4,7 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
-  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.",
+  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse perform_actions for predictable inputs on already observed controls, including semantic button sequences and keyboard input. Load its schema before building the sequence. Keep element_token beside target (or pid/window_id), never inside target; target uses kind=window with pid/window_id or kind=desktop with display_id.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -2332,8 +2332,8 @@
       }
     },
     "perform_actions": {
-      "description": "Run up to eight grounded inputs in order, stopping on failure. Use predictable steps that do not need intermediate visual decisions.",
-      "progressive_guidance": "Batch predictable steps without intermediate visual decisions, with at most one pixel-targeted click. Within one field, combine click, select-all and type_text; do not batch different spatial fields or zoom with its dependent click. Set settle_ms on the last step before a navigation capture. Reuse the final observation and inspect uncertain input before retrying; capture_after=false is only for cases needing no observation.",
+      "description": "Run up to eight grounded inputs in order with one final observation, stopping on failure. Prefer this to individual calls for predictable button or keyboard sequences.",
+      "progressive_guidance": "Batch predictable steps without intermediate visual decisions. Multiple semantic clicks from the same current window snapshot are allowed when the controls stay valid; the one-click limit applies only to pixel targeting. Keep element_token at the step parameters root, beside pid/window_id or target={kind:\"window\",pid,window_id}. Never nest element_token inside target. Include an explicit target on every keyboard step. Within one field, combine click, select-all and type_text; do not batch different spatial fields or zoom with its dependent click. Set settle_ms only when a transition needs time; place it on the last step before the final observation when possible. Reuse the final observation and inspect uncertain input before retrying.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2358,8 +2358,153 @@
                   "type": "string"
                 },
                 "parameters": {
-                  "additionalProperties": true,
-                  "type": "object"
+                  "additionalProperties": false,
+                  "type": "object",
+                  "description": "Input fields for this step action. For a semantic click use {pid,window_id,element_token}; alternatively use {target:{kind:\"window\",pid,window_id},element_token}. Keyboard steps require target plus text, key, or keys for their action.",
+                  "properties": {
+                    "amount": {
+                      "maximum": 50,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "button": {
+                      "description": "Mouse button. Default: \"left\" (legacy back-compat). X11: routed via ButtonPress/Release with the matching evdev code. Native Wayland: only left-button is supported via the virtual-pointer protocol; right/middle return an error.",
+                      "enum": [
+                        "left",
+                        "right",
+                        "middle"
+                      ],
+                      "type": "string"
+                    },
+                    "by": {
+                      "enum": [
+                        "line",
+                        "page"
+                      ],
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "delivery_mode": {
+                      "default": "foreground",
+                      "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+                      "enum": [
+                        "background",
+                        "foreground"
+                      ],
+                      "type": "string"
+                    },
+                    "direction": {
+                      "enum": [
+                        "up",
+                        "down",
+                        "left",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "element_token": {
+                      "description": "Current semantic element handle from the matching window snapshot. Put it directly in parameters, with pid/window_id or an exact window target.",
+                      "type": "string"
+                    },
+                    "key": {
+                      "description": "Canonical lowercase CUA key name. Use `return` to submit or commit, not `enter`; common names include `tab`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, and `delete`. Letters, digits, and function keys use their lowercase form.",
+                      "type": "string"
+                    },
+                    "keys": {
+                      "description": "Canonical lowercase CUA names for modifier(s) plus one non-modifier key, e.g. [\"ctrl\",\"c\"]. Use `return` rather than `enter`.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "type",
+                        "paste"
+                      ],
+                      "description": "type (default) uses driver typing; paste writes clipboard text and pastes once into the target. Paste replaces the current clipboard contents."
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "insert",
+                        "replace"
+                      ],
+                      "default": "insert",
+                      "description": "insert types at the caret. replace selects all in the established field before typing; x/y or a current element handle focuses it once. Without a field selector, uses the already focused field."
+                    },
+                    "modifier": {
+                      "description": "Modifier keys held during the action: cmd, shift, option/alt, ctrl.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "modifiers": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "pid": {
+                      "type": "integer"
+                    },
+                    "scope": {
+                      "default": "window",
+                      "enum": [
+                        "window",
+                        "desktop"
+                      ],
+                      "type": "string"
+                    },
+                    "settle_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2000,
+                      "description": "Optional bounded wait after this step. Intermediate steps wait before the next input; the final step waits before observation. Omit for immediate input."
+                    },
+                    "target": {
+                      "additionalProperties": false,
+                      "description": "Exact observed target: {kind:\"window\",pid,window_id} or {kind:\"desktop\",display_id}. Put element_token beside target, never inside it. Omit target when using top-level pid/window_id for semantic clicks.",
+                      "properties": {
+                        "display_id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "enum": [
+                            "window",
+                            "desktop"
+                          ],
+                          "type": "string"
+                        },
+                        "pid": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "window_id": {
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "window_id": {
+                      "type": "integer"
+                    },
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  }
                 }
               },
               "type": "object"
