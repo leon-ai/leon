@@ -14,7 +14,6 @@ export const COMPUTER_USE_VISUAL_STATE_LIMIT = 512
 // visited nodes independently so the initial observation still reaches them.
 export const COMPUTER_USE_WINDOW_MAX_ELEMENTS = 500
 export const COMPUTER_USE_WINDOW_MAX_DEPTH = 32
-export const COMPUTER_USE_WINDOW_TIMEOUT_MS = 1_000
 // Leon captures action results itself; retain a short native window-change watch.
 export const COMPUTER_USE_WINDOW_CHANGE_TIMEOUT_MS = 200
 export const COMPUTER_USE_SET_OF_MARK_LIMIT = 40

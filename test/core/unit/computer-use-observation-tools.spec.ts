@@ -110,7 +110,7 @@ describe('computer-use observations and capture recovery', () => {
 
     await execute('click', { ...WINDOW, element_token: 'current-save' })
     const refresh = driver.callTool.mock.calls.findLast(([action]) => action === 'get_window_state')!
-    expect(JSON.parse(refresh[1])).toMatchObject({ timeout_ms: 1_000 })
+    expect(JSON.parse(refresh[1])).not.toHaveProperty('timeout_ms')
   })
 
   it('reports invalid window screenshots as failures and preserves their diagnostics', async () => {

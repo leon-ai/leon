@@ -39,7 +39,6 @@ import {
   COMPUTER_USE_VISUAL_STATE_LIMIT,
   COMPUTER_USE_WINDOW_MAX_ELEMENTS,
   COMPUTER_USE_WINDOW_MAX_DEPTH,
-  COMPUTER_USE_WINDOW_TIMEOUT_MS,
   CUA_FOREGROUND_DELIVERY_MODE,
   CUA_SESSION_ENDED_ERROR_CODE,
   CUA_WINDOW_CAPTURE_OCCLUDED_ERROR_CODE
@@ -799,14 +798,14 @@ export class CuaRuntime {
       return parameters
     }
 
-    // Bound the driver walk itself, not just the text sent to the model.
+    // Bound the driver walk itself, not just the text sent to the model. Leave
+    // its timeout default to the driver so cold windows get platform grace.
     // Callers can request deeper observations when a needed control is omitted.
     // A filtered tree is still a new observation. Return its matching image
     // by default so the next pixel action never loses its coordinate frame.
     return {
       max_elements: COMPUTER_USE_WINDOW_MAX_ELEMENTS,
       max_depth: COMPUTER_USE_WINDOW_MAX_DEPTH,
-      timeout_ms: COMPUTER_USE_WINDOW_TIMEOUT_MS,
       include_screenshot: true,
       ...parameters
     }

@@ -739,7 +739,6 @@ describe('CuaRuntime', () => {
       JSON.stringify({
         max_elements: 500,
         max_depth: 32,
-        timeout_ms: 1_000,
         include_screenshot: true,
         pid: 42,
         window_id: 7,
@@ -1014,6 +1013,35 @@ describe('CuaRuntime', () => {
       }]
     })).toBe(false)
     expect(validate(parameters)).toBe(true)
+
+    const tokenActions = [
+      'click',
+      'scroll',
+      'type_text',
+      'press_key',
+      'hotkey',
+      'set_value'
+    ]
+
+    // Keep model-facing schema validation consistent for every token input.
+    for (const action of tokenActions) {
+      const tokenSchema = (
+        manifest.functions[action]!.parameters['properties'] as Record<string, unknown>
+      )['element_token'] as Record<string, unknown>
+      const validateToken = new Ajv().compile(tokenSchema)
+
+      expect(validateToken('s00000001:14')).toBe(true)
+      expect(validateToken('invented-button')).toBe(false)
+    }
+    expect(validate({
+      steps: [{
+        action: 'click',
+        parameters: {
+          target: { kind: 'window', pid: 42, window_id: 7 },
+          element_token: 'invented-button'
+        }
+      }]
+    })).toBe(false)
 
     const driver = createDriver({
       text: '',

@@ -174,11 +174,10 @@
             "type": "boolean"
           },
           "timeout_ms": {
-            "description": "Wall-clock budget for the accessibility walk. Omit for the bounded default. Increase only for a missing control when truncation_reason indicates a timeout; query filters results without reducing traversal cost.",
+            "description": "Wall-clock budget for the accessibility walk. Omit to let the driver give cold Linux windows a larger initial budget. Increase only for a missing control when truncation_reason indicates a timeout; query filters results without reducing traversal cost.",
             "type": "integer",
             "minimum": 100,
-            "maximum": 120000,
-            "default": 1000
+            "maximum": 120000
           }
         },
         "required": [
@@ -915,7 +914,8 @@
           },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "modifier": {
             "description": "Modifier keys held during the action: cmd, shift, option/alt, ctrl.",
@@ -1121,6 +1121,7 @@
     },
     "drag": {
       "description": "Drag between two screenshot coordinates in one target window.",
+      "progressive_guidance": "On macOS, window-scoped drag requires foreground delivery and an exact window_id; it moves the physical pointer. Background delivery returns background_unavailable without sending input. Respect the configured interaction mode.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -1417,7 +1418,8 @@
           },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "pid": {
             "type": "integer"
@@ -1649,7 +1651,8 @@
           },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "pid": {
             "type": "integer"
@@ -1885,7 +1888,8 @@
           },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "key": {
             "description": "Canonical lowercase CUA key name. Use `return` to submit or commit, not `enter`; common names include `tab`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, and `delete`. Letters, digits, and function keys use their lowercase form.",
@@ -2120,7 +2124,8 @@
           },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "keys": {
             "description": "Canonical lowercase CUA names for modifier(s) plus one non-modifier key, e.g. [\"ctrl\",\"c\"]. Use `return` rather than `enter`.",
@@ -2406,7 +2411,8 @@
                     },
                     "element_token": {
                       "description": "Current semantic element handle from the matching window snapshot. Put it directly in parameters, with pid/window_id or an exact window target.",
-                      "type": "string"
+                      "type": "string",
+                      "pattern": "^s[0-9a-f]{8}:[0-9]+$"
                     },
                     "key": {
                       "description": "Canonical lowercase CUA key name. Use `return` to submit or commit, not `enter`; common names include `tab`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, and `delete`. Letters, digits, and function keys use their lowercase form.",
@@ -2533,7 +2539,8 @@
         "properties": {
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "pid": {
             "type": "integer"
