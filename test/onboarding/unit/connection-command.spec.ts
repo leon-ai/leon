@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConnectionCommand } from '@/built-in-command/commands/connection-command/connection-command'
+import { BuiltInCommandManager } from '@/built-in-command/built-in-command-manager'
 import type {
   BuiltInCommandExecutionContext,
   BuiltInCommandExecutionResult,
@@ -18,6 +19,7 @@ const runtime = vi.hoisted(() => ({
 }))
 
 vi.mock('@/config', () => ({ CONFIG_MANAGER: { getProviderConfig: (): null => null } }))
+vi.mock('@/constants', () => ({ PROFILE_RECENTLY_USED_COMMANDS_FILE_PATH: '' }))
 vi.mock('@/core/config-states/config-state', () => ({ CONFIG_STATE: {} }))
 vi.mock('@/core/profile-runtime/profile-runtime-manager', () => ({ PROFILE_RUNTIME_MANAGER: {} }))
 vi.mock('@/helpers/log-helper', () => ({ LogHelper: { warning: vi.fn() } }))
@@ -48,6 +50,17 @@ async function executeAICommand(
 }
 
 describe('Connection commands', () => {
+  it('keeps a complete connection command instead of suggesting the root command', () => {
+    const manager = new BuiltInCommandManager([new ConnectionCommand()])
+    const input = '/connection ai use openai.test-account'
+
+    expect(manager.autocomplete(input).suggestions).toEqual([])
+    expect(manager.autocomplete('/connection ai').suggestions.map((item) => item.name).sort())
+      .toEqual(['connect', 'disconnect', 'discover', 'use'])
+    expect(manager.autocomplete('/connection').suggestions.map((item) => item.value))
+      .toContain('/connection')
+  })
+
   it('lists AI and tool metadata without reading credentials', async () => {
     runtime.list.mockResolvedValue([{ provider: 'openai.test', account_label: 'ChatGPT', status: 'connected' }])
     runtime.tools.mockResolvedValue([{ provider: 'music_audio.spotify', account_label: 'Spotify owner', status: 'connected' }])

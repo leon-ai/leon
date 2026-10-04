@@ -141,7 +141,19 @@ export class BuiltInCommandManager {
         : []),
       ...exactCommand.getAutocompleteItems(autocompleteContext)
     ]
+    const normalizedInput = [
+      `${COMMAND_PREFIX}${parsedInput.command_name}`,
+      ...parsedInput.args
+    ].join(' ').toLowerCase()
+    // Enter submits the selected suggestion. A shorter command must not erase
+    // arguments the owner has already entered.
     const dedupedSuggestions = this.dedupeSuggestions(suggestions)
+      .filter((suggestion) => {
+        const normalizedValue = suggestion.value.trim().toLowerCase()
+          .split(WHITESPACE_PATTERN).join(' ')
+
+        return !normalizedInput.startsWith(`${normalizedValue} `)
+      })
 
     return {
       mode: 'autocomplete',
