@@ -47,11 +47,11 @@ import setupNinja from './setup-ninja'
 import setupLlamaCPP from './setup-llama-cpp'
 import setupLocalLLM from './setup-local-llm'
 import setupQMDLLM from './setup-qmd-llm'
-import setupVoiceResources from './setup-voice-resources.js'
+// import setupVoiceResources from './setup-voice-resources.js'
 import inspectLocalAICapability from './local-ai-capability'
 import {
-  inspectLocalAISetupState,
-  inspectVoiceSetupState
+  inspectLocalAISetupState
+  // inspectVoiceSetupState
 } from './inspect-setup-state'
 import postSetup from './post-setup'
 import { printSetupBanner } from './setup-banner'
@@ -148,6 +148,9 @@ async function resolveExistingLLMChoice() {
 
 async function syncLLMSetupChoice(preferences) {
   CONFIG_MANAGER.reload()
+  if (preferences.fellowAccount) {
+    return
+  }
   const llmConfig = CONFIG_MANAGER.getConfig().llm
   const leonLLM = getOptionalLLMTarget(llmConfig.default)
   const leonWorkflowLLM = getOptionalLLMTarget(llmConfig.workflow)
@@ -208,9 +211,9 @@ async function syncLLMSetupChoice(preferences) {
     isInstalled: false,
     label: ''
   }
-  let voiceSetupState = {
-    isInstalled: false
-  }
+  // let voiceSetupState = {
+  //   isInstalled: false
+  // }
   const getExitCodeFromSignal = (signal) => (signal === 'SIGINT' ? 130 : 143)
 
   // Clean up process signal listeners when setup exits normally or with an error.
@@ -268,15 +271,15 @@ async function syncLLMSetupChoice(preferences) {
       const existingLLMChoice = await resolveExistingLLMChoice()
       currentStep = 'inspectLocalAISetupState'
       localAISetupState = inspectLocalAISetupState()
-      currentStep = 'inspectVoiceSetupState'
-      voiceSetupState = inspectVoiceSetupState()
+      // currentStep = 'inspectVoiceSetupState'
+      // voiceSetupState = inspectVoiceSetupState()
 
       currentStep = 'setupPreferences'
       preferences = await setupPreferences(
         localAICapability,
         existingLLMChoice,
-        localAISetupState,
-        voiceSetupState
+        localAISetupState
+        // voiceSetupState
       )
     }
 
@@ -355,12 +358,13 @@ async function syncLLMSetupChoice(preferences) {
         SetupUI.info('I will skip local AI because this computer does not support it.')
       }
 
-      if (preferences.setupVoice) {
-        currentStep = 'setupVoiceResources'
-        await setupVoiceResources()
-      } else {
-        SetupUI.info('I will skip voice setup for now. You can add it later.')
-      }
+      // Voice setup is paused; retain the installation flow for its return.
+      // if (preferences.setupVoice) {
+      //   currentStep = 'setupVoiceResources'
+      //   await setupVoiceResources()
+      // } else {
+      //   SetupUI.info('I will skip voice setup for now. You can add it later.')
+      // }
     } else {
       // Skip hardware-specific setup in CI where local AI and voice stacks are not needed.
       SetupUI.info(
@@ -368,9 +372,9 @@ async function syncLLMSetupChoice(preferences) {
       )
     }
 
-    if (!preferences.setupVoice) {
-      SetupUI.info('I will skip voice model downloads for now.')
-    }
+    // if (!preferences.setupVoice) {
+    //   SetupUI.info('I will skip voice model downloads for now.')
+    // }
 
     // Finalize generated assets and instance-specific setup metadata.
     SetupUI.section('Finishing Up')
@@ -419,8 +423,8 @@ async function syncLLMSetupChoice(preferences) {
 
     SetupUI.recap([
       'Setup complete',
-      `Local AI: ${preferences.setupLocalAI ? 'enabled' : 'skipped'}`,
-      `Voice: ${preferences.setupVoice ? 'enabled' : 'skipped'}`
+      `Local AI: ${preferences.setupLocalAI ? 'enabled' : 'skipped'}`
+      // `Voice: ${preferences.setupVoice ? 'enabled' : 'skipped'}`
     ])
     tellSetupCompletionJoke()
     console.log('')

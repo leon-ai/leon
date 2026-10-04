@@ -58,7 +58,7 @@ export class SetupUI {
 
   static questionSummary(preferences) {
     this.success(`Local AI: ${preferences.setupLocalAI ? 'Yes' : 'No'}`)
-    this.success(`Voice: ${preferences.setupVoice ? 'Yes' : 'No'}`)
+    // this.success(`Voice: ${preferences.setupVoice ? 'Yes' : 'No'}`)
   }
 
   static recap(items) {

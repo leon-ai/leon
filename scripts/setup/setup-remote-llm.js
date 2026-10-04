@@ -8,6 +8,7 @@ import {
 } from '@/core/llm-manager/llm-model-catalog'
 
 import { SetupUI, setupConsola } from './setup-ui'
+import { setupModelAccount } from './setup-fellows'
 
 const REMOTE_LLM_PROVIDERS = getLLMModelCatalogProviders().map((provider) => ({
   ...getRequiredProviderAccountConfig(provider),
@@ -46,14 +47,14 @@ function getProviderConfig(providerValue) {
 }
 
 /**
- * Ask for a remote LLM provider, model, and API key when local AI is skipped.
+ * Connect an online AI service with account consent or a model and API key.
  */
 export default async function setupRemoteLLM() {
   SetupUI.info(
     'No problem. I can use an online AI service instead.'
   )
   SetupUI.info(
-    'I just need 3 quick details so I can connect it for you.'
+    'I just need a few details so I can connect it for you.'
   )
 
   const providerValue = await setupConsola.prompt(
@@ -69,6 +70,29 @@ export default async function setupRemoteLLM() {
 
   if (!provider) {
     throw new Error(`Unsupported remote LLM provider "${providerValue}".`)
+  }
+
+  if (provider.accountLabel) {
+    const method = await setupConsola.prompt(
+      `How should I connect to ${provider.label}?`,
+      {
+        type: 'select',
+        initial: 'account',
+        options: [
+          { value: 'account', label: `Continue with ${provider.accountLabel}` },
+          { value: 'key', label: 'Use an API key' }
+        ],
+        cancel: 'default'
+      }
+    )
+
+    if (method === 'account') {
+      try {
+        return await setupModelAccount(provider.value)
+      } catch {
+        SetupUI.info('I could not connect your account. I can use an API key instead.')
+      }
+    }
   }
 
   const modelValue = await setupConsola.prompt(
