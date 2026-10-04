@@ -59,9 +59,16 @@ export class ComputerUseResultCompactor {
     }
 
     const escalation = asRecord(result['escalation'])
-    // Some drivers put partial delivery only in escalation.reason while the
-    // outer action still says success. Stop the batch instead of losing text.
-    if (escalation?.['reason'] === 'delivery_failed') {
+    // Background typing can request escalation merely because its effect is
+    // unverified. Keep the batch running unless delivery actually failed or
+    // was partial; its final observation verifies the intended effect.
+    if (
+      result['effect'] === 'partial' ||
+      (escalation?.['reason'] === 'delivery_failed' &&
+        (result['effect'] !== 'unverifiable' ||
+          result['success'] === false ||
+          result['status'] === 'error'))
+    ) {
       return {
         code: 'delivery_failed',
         message: 'Input delivery failed or was partial; inspect the resulting state before retrying.'

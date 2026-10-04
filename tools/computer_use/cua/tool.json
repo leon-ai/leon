@@ -4,7 +4,7 @@
   "toolkit_id": "computer_use",
   "name": "Cua",
   "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
-  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse perform_actions for predictable inputs on already observed controls, including semantic button sequences and keyboard input. Load its schema before building the sequence. Keep element_token beside target (or pid/window_id), never inside target; target uses kind=window with pid/window_id or kind=desktop with display_id.",
+  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens. Application menu-bar entries may appear in a window tree but are outside that window; use invoke_menu with an exact observed menu path rather than clicking their window tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse perform_actions for predictable inputs on already observed controls, including semantic button sequences and keyboard input. Load its schema before building the sequence. Keep element_token beside target (or pid/window_id), never inside target; target uses kind=window with pid/window_id or kind=desktop with display_id.",
   "icon_name": "computer-line",
   "author": {
     "name": "Louis Grenard",
@@ -707,7 +707,7 @@
     },
     "invoke_menu": {
       "description": "Invoke an observed native application-menu path in one call.",
-      "progressive_guidance": "Use an exact observed application-menu path. The driver handles activation and restoration; a separate bring_to_front is unnecessary. Inspect the result rather than treating delivery as completion.",
+      "progressive_guidance": "Use an exact observed application-menu path, including menu-bar entries exposed by get_window_state. Those entries are application controls outside the window and cannot be clicked with window tokens. The driver handles activation and restoration; a separate bring_to_front is unnecessary. Inspect the result rather than treating delivery as completion.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -904,8 +904,7 @@
             "type": "integer"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1140,8 +1139,7 @@
             "type": "string"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1399,8 +1397,7 @@
             "type": "string"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1641,8 +1638,7 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1878,8 +1874,7 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -2114,8 +2109,7 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -2392,8 +2386,7 @@
                       "type": "integer"
                     },
                     "delivery_mode": {
-                      "default": "foreground",
-                      "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+                      "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
                       "enum": [
                         "background",
                         "foreground"

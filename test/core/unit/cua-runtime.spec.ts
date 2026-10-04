@@ -13,7 +13,10 @@ import {
 } from '@@/tools/computer_use/cua/src/nodejs/lib/cua-runtime'
 import { createComputerUseSetOfMarkPlan } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-set-of-mark'
 import CuaTool from '@@/tools/computer_use/cua/src/nodejs/cua-tool'
-import { ComputerUseSetOfMarkMode } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
+import {
+  ComputerUseInteractionMode,
+  ComputerUseSetOfMarkMode
+} from '@@/tools/computer_use/cua/src/nodejs/lib/types'
 import { resolveComputerUseInteractionMode } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-settings'
 
 const PROFILE_NAME = 'computer-use-test'
@@ -1057,7 +1060,10 @@ describe('CuaRuntime', () => {
       structuredJson: '{"effect":"unverifiable"}',
       isError: false
     }))
-    const runtime = new CuaRuntime(async () => driver as never)
+    const runtime = new CuaRuntime(
+      async () => driver as never,
+      () => ComputerUseInteractionMode.Background
+    )
     const result = await runtime.execute({
       toolkitId: 'computer_use',
       toolId: 'cua',
@@ -1211,8 +1217,27 @@ describe('CuaRuntime', () => {
   })
 
   it.each([
-    ['permission_denied', { status: 'refused', refusal: { code: 'permission_denied' } }],
-    ['delivery_failed', { success: true, effect: 'unverifiable', escalation: { reason: 'delivery_failed' } }]
+    [
+      'permission_denied',
+      { status: 'refused', refusal: { code: 'permission_denied' } }
+    ],
+    ['delivery_failed', { success: true, effect: 'partial' }],
+    [
+      'delivery_failed',
+      {
+        success: false,
+        effect: 'unverifiable',
+        escalation: { reason: 'delivery_failed' }
+      }
+    ],
+    [
+      'delivery_failed',
+      {
+        code: 'delivery_failed',
+        effect: 'unverifiable',
+        escalation: { reason: 'delivery_failed' }
+      }
+    ]
   ])('stops before the next input when the driver reports %s', async (code, payload) => {
     const driver = createDriver({ images: [], text: '', isError: false,
       structuredJson: JSON.stringify(payload) })
@@ -1231,27 +1256,69 @@ describe('CuaRuntime', () => {
     expect(driver.callTool).toHaveBeenCalledTimes(1)
   })
 
-  it('returns final capture guidance and uncertain effects from a batch', async () => {
+  it('finishes a batch with one final observation when background typing is unverified', async () => {
     const driver = createDriver({ images: [], text: '', isError: false,
       structuredJson: JSON.stringify({ effect: 'unverifiable' }) })
     driver.callTool.mockImplementation(async (action: string) => ({
       images: action === 'get_window_state'
         ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] : [],
-      text: '', isError: false, structuredJson: JSON.stringify({ effect: 'unverifiable' })
+      text: '', isError: false, structuredJson: JSON.stringify({
+        effect: 'unverifiable',
+        ...(action === 'type_text' ? {
+          delivery: { mode: 'background' },
+          route: 'synthetic_events',
+          escalation: { reason: 'delivery_failed', target: 'foreground' }
+        } : {})
+      })
     }))
-    const provider = new CuaRuntime(async () => driver as never)
+    const provider = new CuaRuntime(
+      async () => driver as never,
+      () => ComputerUseInteractionMode.Background
+    )
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
       parameters: { capture_after: true, steps: [
-        { action: 'press_key', parameters: { pid: 42, window_id: 7, key: 'return' } }
+        {
+          action: 'type_text',
+          parameters: {
+            target: { kind: 'window', pid: 42, window_id: 7 },
+            text: '43*9='
+          }
+        },
+        {
+          action: 'press_key',
+          parameters: {
+            target: { kind: 'window', pid: 42, window_id: 7 },
+            key: 'escape'
+          }
+        }
       ] }
     })
+    expect(result.success).toBe(true)
     expect(result.output).toMatchObject({
+      completed_action_count: 2,
       recovery: expect.stringContaining('does not mean failure'),
       next_step: expect.stringContaining('post-action state'),
-      steps: [{ action: 'press_key', result: { effect: 'unverifiable' }, recovery: expect.any(String) }]
+      steps: [
+        {
+          action: 'type_text',
+          success: true,
+          result: { effect: 'unverifiable' },
+          recovery: expect.stringContaining('does not mean failure')
+        },
+        {
+          action: 'press_key',
+          success: true,
+          result: { effect: 'unverifiable' },
+          recovery: expect.any(String)
+        }
+      ]
     })
+    expect(result.output['error_code']).toBeUndefined()
+    expect(driver.callTool.mock.calls.map(([action]) => action)
+      .filter((action) => action !== 'start_session'))
+      .toEqual(['type_text', 'press_key', 'get_window_state'])
     expect(result.output['recovery']).not.toContain('expose the target')
   })
 

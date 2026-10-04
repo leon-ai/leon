@@ -536,7 +536,13 @@ export class CuaRuntime {
     if (failureCode === COMPUTER_USE_CAPTURE_FAILED_ERROR_CODE) {
       return 'Post-action capture failed. Input may already have landed; obtain a valid observation and verify the intended effect before retrying.'
     }
-    if (asRecord(result['escalation'])) {
+    const escalation = asRecord(result['escalation'])
+    // Unconfirmed background input needs final verification, not a route change.
+    if (
+      escalation &&
+      !(result['effect'] === 'unverifiable' &&
+        escalation['reason'] === 'delivery_failed')
+    ) {
       return 'Inspect the resulting state first: input may already have landed. If the intended result is absent, follow escalation.recommended with a grounded target instead of repeating the ineffective route. Preserve foreground and owner permission boundaries.'
     }
     if (!isComputerUseEffectUncertain(result['effect'])) return null
