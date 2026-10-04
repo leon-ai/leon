@@ -1,3 +1,4 @@
+import { CONFIG_MANAGER } from '@/config'
 import {
   getLLMProviderAccountConfig
 } from '@/core/llm-manager/llm-provider-account-configs'
@@ -17,7 +18,10 @@ const REMOTE_LLM_PROVIDERS = getLLMModelCatalogProviders().map((provider) => ({
 }))
 
 function getRequiredProviderAccountConfig(providerValue) {
-  const providerAccountConfig = getLLMProviderAccountConfig(providerValue)
+  const providerAccountConfig = getLLMProviderAccountConfig(
+    providerValue,
+    CONFIG_MANAGER.getProviderAPIKeyEnv(providerValue)
+  )
 
   if (!providerAccountConfig || !providerAccountConfig.apiKeyURL) {
     throw new Error(

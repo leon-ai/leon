@@ -159,7 +159,8 @@ export class ModelState {
   }
 
   public getProviderAPIKeyEnv(provider: LLMProviders): string | null {
-    return getLLMProviderAccountConfig(provider)?.apiKeyEnv || null
+    return CONFIG_MANAGER.getProviderAPIKeyEnv(provider) ||
+      getLLMProviderAccountConfig(provider)?.apiKeyEnv || null
   }
 
   public getProviderAPIKeyURL(provider: LLMProviders): string | null {

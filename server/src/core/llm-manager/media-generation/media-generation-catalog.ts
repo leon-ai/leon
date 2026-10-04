@@ -1,3 +1,4 @@
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import { CONFIG_MANAGER } from '@/config'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { MediaKind } from './media-generation-types'
@@ -28,7 +29,7 @@ export const MEDIA_PROVIDERS: Partial<
   >
 > = {
   [LLMProviders.OpenAI]: {
-    base_url: 'https://api.openai.com/v1',
+    base_url: getRequiredLLMProviderAccountConfig(LLMProviders.OpenAI).baseURL,
     kinds: [MediaKind.Image, MediaKind.Audio, MediaKind.Document],
     models: {
       image: ['gpt-image-2.5-flare', 'gpt-image-2.5-sunburst'],
@@ -37,12 +38,12 @@ export const MEDIA_PROVIDERS: Partial<
     }
   },
   [LLMProviders.Anthropic]: {
-    base_url: 'https://api.anthropic.com/v1',
+    base_url: getRequiredLLMProviderAccountConfig(LLMProviders.Anthropic).baseURL,
     kinds: [MediaKind.Document],
     models: { document: ['claude-opus-5-5'] }
   },
   [LLMProviders.OpenRouter]: {
-    base_url: 'https://openrouter.ai/api/v1',
+    base_url: getRequiredLLMProviderAccountConfig(LLMProviders.OpenRouter).baseURL,
     kinds: [MediaKind.Image, MediaKind.Video, MediaKind.Audio],
     models: {
       image: ['google/gemini-3.1-flash-image'],
@@ -50,12 +51,12 @@ export const MEDIA_PROVIDERS: Partial<
     }
   },
   [LLMProviders.ZAI]: {
-    base_url: 'https://api.z.ai/api/paas/v4',
+    base_url: getRequiredLLMProviderAccountConfig(LLMProviders.ZAI).baseURL,
     kinds: [MediaKind.Image, MediaKind.Video],
     models: { image: ['glm-image'], video: ['cogvideox-3'] }
   },
   [LLMProviders.MiniMax]: {
-    base_url: 'https://api.minimax.io/v1',
+    base_url: getRequiredLLMProviderAccountConfig(LLMProviders.MiniMax).baseURL,
     kinds: [MediaKind.Image, MediaKind.Video, MediaKind.Audio],
     models: {
       image: ['image-01'],
@@ -64,7 +65,7 @@ export const MEDIA_PROVIDERS: Partial<
     }
   },
   [LLMProviders.Groq]: {
-    base_url: 'https://api.groq.com/openai/v1',
+    base_url: getRequiredLLMProviderAccountConfig(LLMProviders.Groq).baseURL,
     kinds: [MediaKind.Audio],
     models: {
       audio: [
@@ -74,7 +75,9 @@ export const MEDIA_PROVIDERS: Partial<
     }
   },
   [LLMProviders.HuggingFace]: {
-    base_url: 'https://router.huggingface.co',
+    base_url: new URL(
+      getRequiredLLMProviderAccountConfig(LLMProviders.HuggingFace).baseURL
+    ).origin,
     kinds: [MediaKind.Image, MediaKind.Video, MediaKind.Audio],
     models: {}
   },

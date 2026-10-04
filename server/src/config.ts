@@ -4,6 +4,8 @@ import path from 'node:path'
 import YAML from 'yaml'
 import dotenv from 'dotenv'
 
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
+import { LLMProviders } from '@/core/llm-manager/types'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -108,59 +110,85 @@ const DEFAULT_CONFIG: LeonConfig = {
       },
       openrouter: {
         api_key: {
-          env: 'LEON_OPENROUTER_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.OpenRouter
+          ).apiKeyEnv
         }
       },
       deepseek: {
         api_key: {
-          env: 'LEON_DEEPSEEK_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.DeepSeek
+          ).apiKeyEnv
         }
       },
       zai: {
         api_key: {
-          env: 'LEON_ZAI_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.ZAI
+          ).apiKeyEnv
         }
       },
       minimax: {
-        base_url: 'https://api.minimax.io/v1',
+        base_url: getRequiredLLMProviderAccountConfig(
+          LLMProviders.MiniMax
+        ).baseURL,
         api_key: {
-          env: 'LEON_MINIMAX_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.MiniMax
+          ).apiKeyEnv
         }
       },
       openai: {
         api_key: {
-          env: 'LEON_OPENAI_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.OpenAI
+          ).apiKeyEnv
         }
       },
       anthropic: {
         api_key: {
-          env: 'LEON_ANTHROPIC_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.Anthropic
+          ).apiKeyEnv
         }
       },
       moonshotai: {
         api_key: {
-          env: 'LEON_MOONSHOTAI_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.MoonshotAI
+          ).apiKeyEnv
         }
       },
       huggingface: {
         api_key: {
-          env: 'LEON_HUGGINGFACE_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.HuggingFace
+          ).apiKeyEnv
         }
       },
       cerebras: {
         api_key: {
-          env: 'LEON_CEREBRAS_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.Cerebras
+          ).apiKeyEnv
         }
       },
       groq: {
         api_key: {
-          env: 'LEON_GROQ_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.Groq
+          ).apiKeyEnv
         }
       },
       celeris: {
-        base_url: 'https://inference.celeris.ai/celeris-1/v1',
+        base_url: getRequiredLLMProviderAccountConfig(
+          LLMProviders.Celeris
+        ).baseURL,
         api_key: {
-          env: 'LEON_CELERIS_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.Celeris
+          ).apiKeyEnv
         }
       }
     }
