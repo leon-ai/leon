@@ -1,0 +1,35 @@
+name: Fellows discovery
+
+on:
+  schedule:
+    - cron: '17 7 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'server/src/core/llm-manager/fellows/**'
+      - 'scripts/ci/check-fellows-discovery.js'
+      - '.github/workflows/fellows-discovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  upstream-config-locations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - name: Check current upstream config locations
+        run: node scripts/ci/check-fellows-discovery.js
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - name: Save discovery report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: fellows-discovery-report
+          path: fellows-discovery-report.json
+          if-no-files-found: error
