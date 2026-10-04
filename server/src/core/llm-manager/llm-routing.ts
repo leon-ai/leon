@@ -4,6 +4,7 @@ import path from 'node:path'
 import { LLMProviders } from '@/core/llm-manager/types'
 
 export interface ResolvedLLMTarget {
+  accountCredentials?: Record<string, unknown> | undefined
   provider: LLMProviders | null
   model: string
   label: string

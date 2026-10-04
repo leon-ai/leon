@@ -22,6 +22,7 @@ import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import { CONFIG_MANAGER } from '@/config'
+import type { LLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import type {
   CompletionParams,
   LLMReasoningEffort,
@@ -57,6 +58,7 @@ interface AISDKProviderOptionsContext {
 }
 
 interface AISDKRemoteProviderConfig {
+  credentials?: Record<string, unknown> | undefined
   name: string
   providerName: string
   apiKeyEnv: string
@@ -93,6 +95,13 @@ interface CallState {
   finishReason?: string
 }
 
+const CHATGPT_UNSUPPORTED_FIELDS = [
+      'background', 'conversation', 'max_output_tokens', 'max_tool_calls', 'metadata',
+      'moderation', 'multi_agent', 'prompt', 'prompt_cache_retention', 'safety_identifier',
+      'temperature', 'top_logprobs', 'top_p', 'truncation', 'user', 'previous_response_id'
+    ]
+const CHATGPT_TOOL_NAMESPACE = 'leon'
+
 const STRUCTURED_OUTPUT_JSON_INSTRUCTION =
   'Return only valid JSON matching the requested schema.'
 
@@ -112,7 +121,10 @@ export default class AISDKRemoteLLMProvider {
   ) {
     this.config = config
     this.name = config.name
-    this.apiKey = CONFIG_MANAGER.getProviderAPIKey(config.providerName)
+    const apiKey = config.credentials
+      ? config.credentials['api_key'] || config.credentials['access_token']
+      : CONFIG_MANAGER.getProviderAPIKey(config.providerName)
+    this.apiKey = typeof apiKey === 'string' ? apiKey : undefined
     this.model = config.model
 
     LogHelper.title(this.name)
@@ -120,6 +132,26 @@ export default class AISDKRemoteLLMProvider {
 
     this.checkAPIKey()
     this.languageModel = this.createLanguageModel()
+  }
+
+  /**
+   * Resolve the connection URL before a provider applies its endpoint format.
+   */
+  public static resolveBaseURL(
+    provider: Pick<LLMProviderAccountConfig, 'value' | 'baseURL'>,
+    credentials?: Record<string, unknown>
+  ): string {
+    if (credentials) {
+      // Browser-linked accounts use official endpoints. Imported keys stay with
+      // their fellow endpoint and never inherit a previous profile's proxy.
+      if (credentials['auth_kind'] === 'chatgpt' || credentials['auth_kind'] === LLMProviders.OpenRouter) {
+        return provider.baseURL
+      }
+
+      return String(credentials['base_url'] || provider.baseURL)
+    }
+
+    return CONFIG_MANAGER.getProviderBaseURL(provider.value) || provider.baseURL
   }
 
   public get modelName(): string {
@@ -160,7 +192,8 @@ export default class AISDKRemoteLLMProvider {
     const headers = this.config.headers?.(apiKey)
 
     if (this.config.flavor === 'openai-responses') {
-      const fetch = this.getOpenAIWebSocketFetch()
+      const fetch = this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? this.fetchChatGPT.bind(this) : this.getOpenAIWebSocketFetch()
       const provider = createOpenAI({
         apiKey,
         baseURL: this.config.baseURL,
@@ -259,6 +292,67 @@ export default class AISDKRemoteLLMProvider {
   }
   private getLanguageModel(): LanguageModelV4 {
     return this.languageModel
+  }
+
+  private async fetchChatGPT(input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit): Promise<Response> {
+    const { MODEL_ACCOUNT_STORE } = await import('@/core/llm-manager/llm-accounts')
+    const credentials = await MODEL_ACCOUNT_STORE.getCredentials(String(this.config.credentials?.['account_id'] || ''))
+    if (!credentials?.['access_token']) {
+      throw new Error('Please reconnect your ChatGPT account with /connection ai connect openai.')
+    }
+
+    const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
+    for (const field of CHATGPT_UNSUPPORTED_FIELDS) {
+      delete body[field]
+    }
+
+    body['store'] = false
+    body['stream'] = true
+    // SIWC accepts developer instructions, while explicit system messages are rejected.
+    const items = Array.isArray(body['input']) ? body['input'] as Record<string, unknown>[] : []
+    body['input'] = items.map((item) => item['role'] === 'system'
+      ? { ...item, role: 'developer' } : item)
+    const tools = Array.isArray(body['tools']) ? body['tools'] : []
+    if (tools.length) {
+      // Plan usage requires function tools in a namespace; Core still executes them.
+      body['tools'] = [{ type: 'namespace', name: CHATGPT_TOOL_NAMESPACE, description: 'Leon tools', tools }]
+      const choice = body['tool_choice'] as Record<string, unknown> | undefined
+      if (choice?.['type'] === 'function') {
+        choice['namespace'] = CHATGPT_TOOL_NAMESPACE
+      }
+      body['input'] = (body['input'] as Record<string, unknown>[]).map((item) =>
+        item['type'] === 'function_call' ? { ...item, namespace: CHATGPT_TOOL_NAMESPACE } : item)
+    }
+    const headers = new Headers(init?.headers)
+    headers.set('authorization', `Bearer ${String(credentials['access_token'])}`)
+
+    const request = { ...init, headers, body: JSON.stringify(body), redirect: 'error' as const }
+    let response = await globalThis.fetch(input, request)
+    if (response.status === 401) {
+      // A revoked/early-expired token gets one explicit refresh, never another account.
+      const id = String(this.config.credentials?.['account_id'] || '')
+      try {
+        const refreshed = await MODEL_ACCOUNT_STORE.getCredentials(id, undefined, true)
+        if (!refreshed?.['access_token']) {
+          throw new Error('Missing authorization.')
+        }
+        await response.body?.cancel()
+        headers.set('authorization', `Bearer ${String(refreshed['access_token'])}`)
+        response = await globalThis.fetch(input, request)
+        if (response.status === 401 || response.status === 403) {
+          throw new Error('Authorization was rejected.')
+        }
+      } catch {
+        await MODEL_ACCOUNT_STORE.markNeedsAttention(id)
+        throw new Error(`I need you to reconnect this account with /connection ai connect ${id}.`)
+      }
+    }
+    if (response.status === 403) {
+      const id = String(this.config.credentials?.['account_id'] || '')
+      await MODEL_ACCOUNT_STORE.markNeedsAttention(id)
+      throw new Error(`I need you to reconnect this account with /connection ai connect ${id}.`)
+    }
+    return response
   }
 
   private getOpenAIWebSocketFetch(): ReturnType<typeof createWebSocketFetch> {
@@ -392,7 +486,9 @@ export default class AISDKRemoteLLMProvider {
     // but never replay unsupported binary inputs or claim they were observed.
     transcript = transcript.map((message) => {
       if (message.role === 'assistant' || !message.files?.length) return message
-      const files = message.files.filter((file) => supported?.includes(file.mediaType))
+      const files = message.files.filter((file) => supported?.includes(file.mediaType) &&
+        (this.config.credentials?.['auth_kind'] !== 'chatgpt' ||
+          file.mediaType.startsWith('image/') || file.mediaType === 'application/pdf'))
       if (files.length === message.files.length) return message
       return { ...message, files, content: `${message.content}\n[Some media inputs were not sent: native support is unavailable or unverified for this model. Use the attached source paths with local document extraction/OCR or transcription tools. OCR/transcription cannot describe non-text visual content.]` }
     })
@@ -1608,7 +1704,7 @@ export default class AISDKRemoteLLMProvider {
     }
     completionParams.signal?.addEventListener('abort', abort, { once: true })
     try {
-      const responseData = await (completionParams.shouldStream === true
+      const responseData = await (completionParams.shouldStream === true || this.config.credentials?.['auth_kind'] === 'chatgpt'
         ? this.runStreamingCompletion(prompt, completionParams)
         : this.runNonStreamingCompletion(prompt, completionParams))
       completionParams.signal?.throwIfAborted()

@@ -21,6 +21,7 @@ import {
   type PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 import { FileHelper } from '@/helpers/file-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -254,6 +255,18 @@ export default class LLMProvider {
   }
 
   private async createProvider(target: ResolvedLLMTarget): Promise<Provider> {
+    const accountCredentials = target.provider
+      ? await getModelAccountCredentials(target.provider) : null
+
+    if (accountCredentials?.['auth_kind'] === 'claude_code') {
+      // The linked account selects Anthropic's CLI adapter rather than its API client.
+      const { default: AnthropicClaudeCodeAdapter } = await import(
+        './llm-providers/anthropic-claude-code-adapter'
+      )
+
+      return new AnthropicClaudeCodeAdapter(target, accountCredentials)
+    }
+
     const providerName = target.provider
 
     if (!providerName) {
@@ -278,7 +291,7 @@ export default class LLMProvider {
       )
     )
 
-    return new provider(target) as Provider
+    return new provider({ ...target, accountCredentials: accountCredentials || undefined }) as Provider
   }
 
   private disposeCurrentProviders(): void {

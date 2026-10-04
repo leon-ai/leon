@@ -1,13 +1,15 @@
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
   CompletionParams,
   LLMReasoningMode
 } from '@/core/llm-manager/types'
-import { CONFIG_MANAGER } from '@/config'
+import { LLMProviders } from '@/core/llm-manager/types'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.MiniMax)
 
 const ADAPTIVE_THINKING_MODEL = 'MiniMax-M3'
-const DEFAULT_BASE_URL = 'https://api.minimax.io/v1'
 
 type MiniMaxFlavor = 'anthropic' | 'openai-compatible'
 
@@ -16,9 +18,7 @@ interface MiniMaxEndpoint {
   flavor: MiniMaxFlavor
 }
 
-function resolveMiniMaxEndpoint(): MiniMaxEndpoint {
-  const configuredBaseURL =
-    CONFIG_MANAGER.getProviderBaseURL('minimax') || DEFAULT_BASE_URL
+function resolveMiniMaxEndpoint(configuredBaseURL: string): MiniMaxEndpoint {
   const publicBaseURL = configuredBaseURL.replace(/\/+$/, '')
 
   if (publicBaseURL.endsWith('/anthropic')) {
@@ -75,12 +75,15 @@ function buildMiniMaxProviderOptions(
  */
 export default class MiniMaxLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
-    const endpoint = resolveMiniMaxEndpoint()
+    const endpoint = resolveMiniMaxEndpoint(
+      AISDKRemoteLLMProvider.resolveBaseURL(PROVIDER_CONFIG, target.accountCredentials)
+    )
 
     super({
-      name: 'MiniMax LLM Provider',
-      providerName: 'minimax',
-      apiKeyEnv: 'LEON_MINIMAX_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
       baseURL: endpoint.baseURL,
       flavor: endpoint.flavor,

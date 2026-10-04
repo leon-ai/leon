@@ -176,6 +176,10 @@ export class ModelState {
   }
 
   public hasProviderAPIKey(provider: LLMProviders): boolean {
+    if (CONFIG_MANAGER.getProviderConfig(provider)?.account) {
+      return true
+    }
+
     if (!this.getProviderAPIKeyEnv(provider)) {
       return true
     }

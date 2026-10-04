@@ -38,10 +38,13 @@ const httpPluginDefinition = strictObject({
   root_routes: Type.Boolean()
 })
 const llmProvider = strictObject({
+  account: Type.Optional(Type.String({ minLength: 1 })),
+  base_url: Type.Optional(Type.String({ minLength: 1 })),
   generation_base_url: Type.Optional(Type.String({ format: 'uri' })),
   api_key: secretReference
 })
 const llmProviderWithBaseURL = strictObject({
+  account: Type.Optional(Type.String({ minLength: 1 })),
   generation_base_url: Type.Optional(Type.String({ format: 'uri' })),
   base_url: Type.String({ minLength: 1 }),
   api_key: secretReference

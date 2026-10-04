@@ -1,5 +1,9 @@
+import { LLMProviders } from '@/core/llm-manager/types'
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.HuggingFace)
 
 /**
  * @see https://router.huggingface.co/v1/chat/completions
@@ -7,11 +11,15 @@ import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 export default class HuggingFaceLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
     super({
-      name: 'HuggingFace LLM Provider',
-      providerName: 'huggingface',
-      apiKeyEnv: 'LEON_HUGGINGFACE_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
-      baseURL: 'https://router.huggingface.co/v1',
+      baseURL: AISDKRemoteLLMProvider.resolveBaseURL(
+        PROVIDER_CONFIG,
+        target.accountCredentials
+      ),
       flavor: 'huggingface'
     })
   }

@@ -1,6 +1,10 @@
+import { LLMProviders } from '@/core/llm-manager/types'
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type { CompletionParams, LLMReasoningMode } from '@/core/llm-manager/types'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.DeepSeek)
 
 /**
  * DeepSeek enables thinking by default; explicit off and guarded calls keep
@@ -23,11 +27,15 @@ function isThinkingDisabled(
 export default class DeepSeekLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
     super({
-      name: 'DeepSeek LLM Provider',
-      providerName: 'deepseek',
-      apiKeyEnv: 'LEON_DEEPSEEK_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
-      baseURL: 'https://api.deepseek.com/v1',
+      baseURL: AISDKRemoteLLMProvider.resolveBaseURL(
+        PROVIDER_CONFIG,
+        target.accountCredentials
+      ),
       flavor: 'openai-compatible',
       shouldOmitTemperature: (params) => !isThinkingDisabled(params),
       buildProviderOptions: ({ completionParams, reasoningMode }) => {

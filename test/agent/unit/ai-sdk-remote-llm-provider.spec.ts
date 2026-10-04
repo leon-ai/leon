@@ -7,12 +7,20 @@ import type {
 } from '@/core/llm-manager/types'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-llm-provider'
+import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
+import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
+import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
+import { CONFIG_MANAGER } from '@/config'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 
 const mediaMocks = vi.hoisted(() => ({
   persist: vi
     .fn()
     .mockResolvedValue({ artifacts: [{ id: 'image', filename: 'image.png' }] })
+}))
+const accountMocks = vi.hoisted(() => ({ getCredentials: vi.fn() }))
+vi.mock('@/core/llm-manager/llm-accounts', () => ({
+  MODEL_ACCOUNT_STORE: accountMocks
 }))
 
 vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
@@ -46,7 +54,8 @@ vi.mock('@openrouter/ai-sdk-provider', () => ({
 vi.mock('@/config', () => ({
   CONFIG_MANAGER: {
     getProviderAPIKeyEnv: vi.fn(() => null),
-    getProviderAPIKey: vi.fn(() => 'test-openrouter-key')
+    getProviderAPIKey: vi.fn(() => 'test-openrouter-key'),
+    getProviderBaseURL: vi.fn(() => null)
   }
 }))
 
@@ -97,6 +106,79 @@ function createCompletionParams(
 }
 
 describe('AISDKRemoteLLMProvider', () => {
+  it.each([
+    { auth_kind: 'api_key', expected: 'https://openrouter.ai/api/v1' },
+    { auth_kind: 'api_key', base_url: 'https://fellow.example.invalid/v1', expected: 'https://fellow.example.invalid/v1' },
+    { auth_kind: 'openrouter', expected: 'https://openrouter.ai/api/v1' }
+  ])('keeps a linked $auth_kind key off an older profile endpoint ($expected)', ({ expected, ...credentials }) => {
+    vi.mocked(CONFIG_MANAGER.getProviderBaseURL).mockReturnValueOnce('https://old-proxy.example.invalid/v1')
+    new OpenRouterLLMProvider({
+      provider: LLMProviders.OpenRouter, model: 'anthropic/test-model', label: 'openrouter/anthropic/test-model',
+      isEnabled: true, isLocal: false, isResolved: true,
+      accountCredentials: { ...credentials, api_key: 'test-key' }
+    })
+    expect(openRouterMocks.createOpenRouter).toHaveBeenLastCalledWith(expect.objectContaining({ baseURL: expected }))
+    vi.mocked(CONFIG_MANAGER.getProviderBaseURL).mockReset().mockReturnValue(null)
+  })
+
+  it('preserves provider endpoint formatting after resolving the configured URL', () => {
+    const target: ResolvedLLMTarget = {
+      provider: LLMProviders.Celeris, model: 'celeris-1-magnus', label: 'celeris/celeris-1-magnus',
+      isEnabled: true, isLocal: false, isResolved: true
+    }
+    vi.mocked(CONFIG_MANAGER.getProviderBaseURL).mockReturnValueOnce('https://inference.celeris.ai/celeris-1/v1')
+    const celeris = new CelerisLLMProvider(target) as unknown as { config: { baseURL: string } }
+    expect(celeris.config.baseURL).toBe('https://inference.celeris.ai/celeris-1-magnus/v1')
+    vi.mocked(CONFIG_MANAGER.getProviderBaseURL).mockReturnValueOnce('https://api.minimax.io/anthropic')
+    const minimax = new MiniMaxLLMProvider({ ...target, provider: LLMProviders.MiniMax, model: 'MiniMax-M3' }) as unknown as {
+      config: { baseURL: string, flavor: string }
+    }
+    expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'anthropic' })
+  })
+
+  it('uses ChatGPT HTTP streaming and namespaced tools even for a nonstreaming caller', async () => {
+    accountMocks.getCredentials.mockResolvedValueOnce({ access_token: 'fresh-chatgpt-token' })
+    const call = { type: 'function_call', id: 'fc_test', call_id: 'call_test',
+      name: 'read_note', namespace: 'leon', arguments: '{"name":"todo"}', status: 'completed' }
+    const response = { id: 'resp_test', created_at: 1, model: 'gpt-6.1-sol',
+      status: 'completed', output: [call], usage: {
+        input_tokens: 12, output_tokens: 4, total_tokens: 16,
+        input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 }
+      } }
+    const events = [
+      { type: 'response.created', response: { ...response, output: [], status: 'in_progress' } },
+      { type: 'response.output_item.added', output_index: 0, item: { ...call, arguments: '', status: 'in_progress' } },
+      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 0, delta: call.arguments },
+      { type: 'response.output_item.done', output_index: 0, item: call },
+      { type: 'response.completed', response }
+    ]
+    const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(
+      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    const provider = new OpenAILLMProvider({
+      provider: LLMProviders.OpenAI, model: response.model, label: `openai/${response.model}`,
+      isEnabled: true, isLocal: false, isResolved: true,
+      accountCredentials: { auth_kind: 'chatgpt', access_token: 'old-chatgpt-token', account_id: 'openai.test' }
+    })
+    const result = await provider.runChatCompletion('Read my note.', {
+      ...createCompletionParams(null), shouldStream: false, temperature: 0.5,
+      tools: [{ type: 'function', function: { name: 'read_note', description: 'Read a note',
+        parameters: { type: 'object', properties: { name: { type: 'string' } } }
+      } }]
+    })
+
+    const [url, request] = transport.mock.calls[0]!
+    expect(String(url)).toBe('https://api.openai.com/v1/responses')
+    expect(new Headers(request?.headers).get('authorization')).toBe('Bearer fresh-chatgpt-token')
+    const body = JSON.parse(request?.body as string)
+    expect(body).toMatchObject({ stream: true, store: false, tools: [{ type: 'namespace', name: 'leon' }] })
+    expect(body.temperature).toBeUndefined()
+    expect(body.input[0].role).toBe('developer')
+    expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
+    expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test')
+  })
+
   it.each(['audio/wav', 'video/mp4'])('preserves %s only for a cataloged native-media endpoint', (mediaType) => {
     const options = createOpenRouterProvider('meta/muse-spark-1.3').buildCallOptions([
       { role: 'user', content: 'Describe the attachment.', files: [{ dataBase64: 'bWVkaWE=', mediaType }] }
@@ -457,7 +539,7 @@ describe('AISDKRemoteLLMProvider', () => {
     ])
   })
 
-  it('buffers provider text until the agent accepts the response', async () => {
+  it('streams provider text and clears the draft from a failed attempt', async () => {
     const emit = vi.fn()
     const answerStream = new AgentAnswerStream(emit)
     const onReasoningToken = vi.fn()
@@ -471,11 +553,11 @@ describe('AISDKRemoteLLMProvider', () => {
         yield { type: 'response-metadata', id: 'resp-test' }
         yield { type: 'tool-input-delta', id: 'call-test', delta: '{}' }
         yield { type: 'reasoning-delta', delta: 'Thinking' }
-        expect(emit).not.toHaveBeenCalled()
+        expect(emit).toHaveBeenCalledTimes(2)
         yield { type: 'text-delta', delta: 'Hello' }
-        expect(emit).not.toHaveBeenCalled()
+        expect(emit).toHaveBeenCalledTimes(3)
         yield { type: 'text-delta', delta: ' world' }
-        expect(emit).not.toHaveBeenCalled()
+        expect(emit).toHaveBeenCalledTimes(4)
         yield { type: 'finish', finishReason: { unified: 'stop' } }
       })()
     })
@@ -498,10 +580,12 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(onStreamEvent).toHaveBeenCalledWith({ type: 'tool-input-delta' })
     expect(onReasoningToken).toHaveBeenCalledExactlyOnceWith('Thinking')
-    expect(emit).not.toHaveBeenCalled()
+    expect(emit).toHaveBeenCalledTimes(4)
+    expect(emit.mock.calls[1]![0]).toMatchObject({ reset: true, token: '' })
     answerStream.finish()
-    expect(emit).toHaveBeenCalledExactlyOnceWith({
-      token: 'Hello world',
+    expect(emit).toHaveBeenCalledTimes(4)
+    expect(emit).toHaveBeenLastCalledWith({
+      token: ' world',
       generationId: expect.any(String)
     })
   })

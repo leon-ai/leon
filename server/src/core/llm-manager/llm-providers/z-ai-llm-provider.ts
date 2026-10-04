@@ -1,9 +1,13 @@
+import { LLMProviders } from '@/core/llm-manager/types'
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
   CompletionParams,
   LLMReasoningMode
 } from '@/core/llm-manager/types'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.ZAI)
 
 const REASONING_EFFORT_MODEL = 'glm-5.2'
 
@@ -56,11 +60,15 @@ function buildZAIProviderOptions(
 export default class ZAILLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
     super({
-      name: 'Z-AI LLM Provider',
-      providerName: 'zai',
-      apiKeyEnv: 'LEON_ZAI_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
-      baseURL: 'https://api.z.ai/api/paas/v4',
+      baseURL: AISDKRemoteLLMProvider.resolveBaseURL(
+        PROVIDER_CONFIG,
+        target.accountCredentials
+      ),
       flavor: 'openai-compatible',
       buildProviderOptions: ({ completionParams, reasoningMode }) =>
         buildZAIProviderOptions(

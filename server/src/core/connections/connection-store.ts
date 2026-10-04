@@ -171,7 +171,13 @@ export class ConnectionStore {
   /**
    * Application credentials share encryption but remain separate from accounts.
    */
-  public constructor(private readonly subdirectory = '') {}
+  public constructor(
+    private readonly subdirectory = '',
+    private readonly refresh?: (
+      provider: string,
+      credentials: Record<string, unknown>
+    ) => Promise<Record<string, unknown>>
+  ) {}
 
   private getDirectory(profileName?: string): string {
     return path.join(getProfilePaths(profileName).connections, this.subdirectory)
@@ -313,10 +319,11 @@ export class ConnectionStore {
   async getCredentials(
     provider: string,
     profileName?: string,
-    forceRefresh = false
+    forceRefresh = false,
+    refresh = true
   ): Promise<Record<string, unknown> | null> {
     return this.withConnectionLock(provider, profileName, () =>
-      this.readCredentials(provider, profileName, forceRefresh)
+      this.readCredentials(provider, profileName, forceRefresh, refresh)
     )
   }
 
@@ -326,7 +333,8 @@ export class ConnectionStore {
   private async readCredentials(
     provider: string,
     profileName?: string,
-    forceRefresh = false
+    forceRefresh = false,
+    refresh = true
   ): Promise<Record<string, unknown> | null> {
     try {
       const raw = await fs.readFile(
@@ -341,16 +349,22 @@ export class ConnectionStore {
       const expiresAt = Number(credentials['expires_at'] || 0)
 
       if (
-        stored.auth_type === 'oauth' &&
+        refresh && stored.auth_type === 'oauth' &&
         (forceRefresh ||
           (expiresAt > 0 && expiresAt <= Date.now() + TOKEN_REFRESH_WINDOW_MS))
       ) {
         // Load the OAuth manager only when a refresh is needed to avoid coupling
         // ordinary API-key reads to OAuth provider code.
-        const { OAUTH_MANAGER } = await import('./oauth-manager')
         const refreshed = await runWithProfileContext(
           { profileName: profileName || getActiveProfileName() },
-          () => OAUTH_MANAGER.refreshCredentials(stored.provider, credentials)
+          async () => {
+            if (this.refresh) {
+              return this.refresh(stored.provider, credentials)
+            }
+
+            const { OAUTH_MANAGER } = await import('./oauth-manager')
+            return OAUTH_MANAGER.refreshCredentials(stored.provider, credentials)
+          }
         )
 
         await this.saveCredentials(
