@@ -5,6 +5,12 @@ import type { Static } from '@sinclair/typebox'
 import { BUILT_IN_COMMAND_MANAGER } from '@/built-in-command'
 import type { APIOptions } from '@/core/http-server/http-server'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { refreshActiveProfileLLMRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
+import {
+  CONNECTION_COMMAND_NAME,
+  AI_CONNECTION_SCOPE,
+  AI_CONNECTION_MUTATION_ACTIONS
+} from '@/built-in-command/commands/connection-command/connection-command'
 
 const COMMAND_MODES = ['autocomplete', 'execute'] as const
 const COMMAND_INPUT_SEPARATOR_PATTERN = /\s+/
@@ -32,25 +38,27 @@ interface PostCommandSchema {
   body: Static<typeof postCommandSchema.body>
 }
 
-async function refreshLLMRuntimeIfModelCommand(input: {
+async function refreshLLMRuntimeIfConfigurationCommand(input: {
   mode: (typeof COMMAND_MODES)[number]
   commandName: string | null
   status: string | undefined
+  rawInput: string
 }): Promise<void> {
+  const [, scope, action, argument] = input.rawInput.trim().toLowerCase().split(COMMAND_INPUT_SEPARATOR_PATTERN)
+  const isAIConnectionMutation = input.commandName === CONNECTION_COMMAND_NAME &&
+    scope === AI_CONNECTION_SCOPE &&
+    !!argument &&
+    AI_CONNECTION_MUTATION_ACTIONS.some((candidate) => candidate === action)
+
   if (
     input.mode !== 'execute' ||
-    input.commandName !== 'model' ||
+    (input.commandName !== 'model' && !isAIConnectionMutation) ||
     input.status !== 'completed'
   ) {
     return
   }
 
-  const { LLM_PROVIDER, LLM_MANAGER } = await import('@/core')
-  const isProviderReady = await LLM_PROVIDER.init()
-
-  if (isProviderReady) {
-    await LLM_MANAGER.init()
-  }
+  await refreshActiveProfileLLMRuntime()
 }
 
 function isSkillToggleCommand(rawInput: string): boolean {
@@ -147,9 +155,10 @@ export const postCommand: FastifyPluginAsync<APIOptions> = async (
                 () => BUILT_IN_COMMAND_MANAGER.execute(input, sessionId)
               )
 
-        await refreshLLMRuntimeIfModelCommand({
+        await refreshLLMRuntimeIfConfigurationCommand({
           mode,
           commandName: data.session.command_name,
+          rawInput: data.session.raw_input,
           status: 'status' in data ? data.status : undefined
         })
         await refreshSkillListIfSkillToggleCommand({

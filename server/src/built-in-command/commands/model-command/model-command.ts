@@ -17,6 +17,7 @@ import {
 } from '@/core/llm-manager/llm-model-catalog'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { ProfileHelper } from '@/helpers/profile-helper'
+import { CONFIG_MANAGER } from '@/config'
 
 const API_KEY_PARAMETER_NAME = 'api_key'
 const API_KEY_INPUT_PLACEHOLDER = 'Paste API key here'
@@ -199,6 +200,10 @@ export class ModelCommand extends BuiltInCommand {
             {
               label: 'Configured target',
               value: modelState.getConfiguredTargetDisplay()
+            },
+            {
+              label: 'Account',
+              value: CONFIG_MANAGER.getProviderConfig(agentTarget.provider || '')?.account || 'API key or local AI'
             },
             {
               label: 'Workflow provider',

@@ -2,6 +2,7 @@ import { BuiltInCommandManager } from '@/built-in-command/built-in-command-manag
 import { DownloadCommand } from '@/built-in-command/commands/download-command/download-command'
 import { HelpCommand } from '@/built-in-command/commands/help-command/help-command'
 import { ModelCommand } from '@/built-in-command/commands/model-command/model-command'
+import { ConnectionCommand } from '@/built-in-command/commands/connection-command/connection-command'
 import { MoodCommand } from '@/built-in-command/commands/mood-command/mood-command'
 import { OpenCommand } from '@/built-in-command/commands/open-command/open-command'
 import { RestartCommand } from '@/built-in-command/commands/restart-command/restart-command'
@@ -21,6 +22,7 @@ const WHITELISTED_BUILT_IN_COMMAND_NAMES = [
   'download',
   'mood',
   'model',
+  'connection',
   'restart',
   'session',
   'skill',
@@ -36,6 +38,7 @@ const BUILT_IN_COMMANDS = [
   new DownloadCommand(),
   new MoodCommand(),
   new ModelCommand(),
+  new ConnectionCommand(),
   new RestartCommand(),
   new SessionCommand(),
   new SkillCommand(),
