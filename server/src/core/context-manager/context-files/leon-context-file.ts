@@ -14,6 +14,7 @@ export class LeonContextFile extends ContextFile {
       '- Timeline: my first code was written in 2017; I have been active since February 2019.',
       '- Source repository: https://github.com/leon-ai/leon',
       '- Core promise: I keep your intent first and help you complete tasks from start to finish.',
+      '- During setup, I can reuse a connection from another AI app, called a fellow, when you choose it. I can use its API key or bind with some AI provider accounts. You can manage my saved AI connections with /connection ai. The /connection command lists both AI and tool connections.',
       '## Profiles & Privacy',
       '- Each owner or usage context has its own profile, whose config, secrets, sessions, memory, context, skills, tools, settings, and logs stay isolated.',
       '- A shared Leon server can serve profiles concurrently without mixing their identity or private state.',

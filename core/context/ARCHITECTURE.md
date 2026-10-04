@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-09-29T20:20:31+08:00
+- Generated at: 2026-10-04T18:57:48+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
@@ -15,6 +15,7 @@
 - External HTTP plugins can extend Leon's HTTP contract without patching the core API for each integration.
 - Custom clients can read profile-owned extension JSON files through a generic redacted HTTP endpoint, covering skill memory, skill settings, and tool settings without exposing secrets.
 - The LLM layer supports media understanding and generation; generated files are conversation artifacts with authenticated downloads and inline media playback.
+- Setup discovers known AI fellows and can reuse their API keys or bind with some AI provider accounts. AI and tool connections share profile encryption with separate stores and setup handlers; /connection lists both, and /connection ai manages AI connections.
 ## Profile Runtimes
 - One Leon server can serve multiple profiles concurrently, with each request and agent turn bound to one profile for its full asynchronous lifetime.
 - Runtime services are created lazily per profile, while config, secrets, encrypted connections, sessions, memory, context, skills, tools, settings, and logs remain isolated in profile-owned paths.
