@@ -1,0 +1,335 @@
+[
+  {
+    "id": "codex",
+    "label": "Codex",
+    "directory": ".codex",
+    "directoryEnv": "CODEX_HOME",
+    "files": [
+      [
+        "auth.json",
+        "json"
+      ],
+      [
+        "config.toml",
+        "toml"
+      ]
+    ],
+    "upstream": "openai/codex",
+    "sources": [
+      "codex-rs/utils/home-dir/src/lib.rs",
+      "codex-rs/login/src/auth/storage.rs",
+      "docs/config.md"
+    ],
+    "checks": [
+      {
+        "source": 0,
+        "field": "directory",
+        "template": "push(\"{value}\")"
+      },
+      {
+        "source": 0,
+        "field": "directoryEnv"
+      },
+      {
+        "source": 1,
+        "field": "files.0.0"
+      },
+      {
+        "source": 2,
+        "field": "files.1.0"
+      }
+    ]
+  },
+  {
+    "id": "claude-code",
+    "label": "Claude Code",
+    "directory": ".claude",
+    "directoryEnv": "CLAUDE_CONFIG_DIR",
+    "files": [
+      [
+        ".credentials.json",
+        "json"
+      ],
+      [
+        "settings.json",
+        "json"
+      ]
+    ],
+    "upstream": "anthropics/claude-code",
+    "sources": [],
+    "documentation": "https://code.claude.com/docs/en/settings",
+    "checks": [
+      {
+        "field": "directory",
+        "template": "~/{value}"
+      },
+      {
+        "field": "directoryEnv"
+      },
+      {
+        "field": "files.1.0"
+      }
+    ],
+    "unverified": "The credential filename is not documented in the public repository. Claude Code auth status also covers OS keychains."
+  },
+  {
+    "id": "opencode",
+    "label": "OpenCode",
+    "directory": "opencode",
+    "directoryEnv": "",
+    "files": [
+      [
+        "auth.json",
+        "json"
+      ]
+    ],
+    "root": "data",
+    "configFiles": [
+      [
+        "opencode.json",
+        "jsonc"
+      ],
+      [
+        "opencode.jsonc",
+        "jsonc"
+      ],
+      [
+        "config.json",
+        "jsonc"
+      ]
+    ],
+    "upstream": "anomalyco/opencode",
+    "sources": [
+      "packages/core/src/global.ts",
+      "packages/opencode/src/auth/index.ts",
+      "packages/opencode/src/config/config.ts"
+    ],
+    "checks": [
+      {
+        "source": 0,
+        "field": "directory",
+        "template": "const app = \"{value}\""
+      },
+      {
+        "source": 0,
+        "value": "path.join(xdgData!, app)"
+      },
+      {
+        "source": 0,
+        "value": "path.join(xdgConfig!, app)"
+      },
+      {
+        "source": 1,
+        "field": "files.0.0"
+      },
+      {
+        "source": 2,
+        "field": "configFiles.0.0"
+      },
+      {
+        "source": 2,
+        "field": "configFiles.1.0"
+      },
+      {
+        "source": 2,
+        "field": "configFiles.2.0"
+      }
+    ]
+  },
+  {
+    "id": "pi",
+    "label": "Pi",
+    "directory": ".pi/agent",
+    "directoryEnv": "PI_CODING_AGENT_DIR",
+    "files": [
+      [
+        "auth.json",
+        "json"
+      ],
+      [
+        "settings.json",
+        "json"
+      ],
+      [
+        "models.json",
+        "json"
+      ]
+    ],
+    "upstream": "earendil-works/pi",
+    "sources": [
+      "packages/coding-agent/docs/configuration.md"
+    ],
+    "checks": [
+      {
+        "source": 0,
+        "field": "directory"
+      },
+      {
+        "source": 0,
+        "field": "directoryEnv"
+      },
+      {
+        "source": 0,
+        "field": "files.0.0"
+      },
+      {
+        "source": 0,
+        "field": "files.1.0"
+      },
+      {
+        "source": 0,
+        "field": "files.2.0"
+      }
+    ]
+  },
+  {
+    "id": "hermes",
+    "label": "Hermes Agent",
+    "directory": ".hermes",
+    "directoryEnv": "HERMES_HOME",
+    "files": [
+      [
+        "config.yaml",
+        "yaml"
+      ],
+      [
+        ".env",
+        "dotenv"
+      ],
+      [
+        "auth.json",
+        "json"
+      ]
+    ],
+    "upstream": "NousResearch/hermes-agent",
+    "sources": [
+      "website/docs/user-guide/configuration.md"
+    ],
+    "checks": [
+      {
+        "source": 0,
+        "field": "directory"
+      },
+      {
+        "source": 0,
+        "field": "directoryEnv"
+      },
+      {
+        "source": 0,
+        "field": "files.0.0"
+      },
+      {
+        "source": 0,
+        "field": "files.1.0"
+      },
+      {
+        "source": 0,
+        "field": "files.2.0"
+      }
+    ]
+  },
+  {
+    "id": "openclaw",
+    "label": "OpenClaw",
+    "directory": ".openclaw",
+    "directoryEnv": "OPENCLAW_STATE_DIR",
+    "files": [
+      [
+        "openclaw.json",
+        "jsonc"
+      ],
+      [
+        ".env",
+        "dotenv"
+      ]
+    ],
+    "upstream": "openclaw/openclaw",
+    "sources": [
+      "docs/concepts/oauth.md",
+      "docs/gateway/configuration.md",
+      "src/agents/auth-profiles/sqlite-json.ts"
+    ],
+    "accountStores": {
+      "shared": "state/openclaw.sqlite",
+      "agent": "agents/<agentId>/agent/openclaw-agent.sqlite",
+      "legacy": "auth-profiles.json"
+    },
+    "checks": [
+      {
+        "source": 1,
+        "field": "directory",
+        "template": "~/{value}"
+      },
+      {
+        "source": 0,
+        "field": "directoryEnv"
+      },
+      {
+        "source": 1,
+        "field": "files.0.0"
+      },
+      {
+        "source": 0,
+        "field": "accountStores.shared"
+      },
+      {
+        "source": 0,
+        "field": "accountStores.agent",
+        "template": "{value}"
+      },
+      {
+        "source": 2,
+        "value": "auth_profile_store"
+      },
+      {
+        "source": 2,
+        "value": "store_json"
+      },
+      {
+        "source": 2,
+        "value": "authProfiles.store"
+      }
+    ]
+  },
+  {
+    "id": "t3-code",
+    "label": "T3 Code",
+    "directory": ".t3",
+    "directoryEnv": "T3CODE_HOME",
+    "files": [
+      [
+        "userdata/settings.json",
+        "json"
+      ]
+    ],
+    "upstream": "pingdotgg/t3code",
+    "sources": [
+      "apps/server/src/os-jank.ts",
+      "apps/server/src/cli/config.ts",
+      "apps/server/src/config.ts",
+      "docs/user/providers-claude.md"
+    ],
+    "checks": [
+      {
+        "source": 0,
+        "field": "directory",
+        "template": "NodeOS.homedir(), \"{value}\""
+      },
+      {
+        "source": 1,
+        "field": "directoryEnv"
+      },
+      {
+        "source": 2,
+        "field": "files.0.0",
+        "template": "{value}",
+        "basename": true
+      },
+      {
+        "source": 2,
+        "field": "files.0.0",
+        "dirname": true
+      }
+    ]
+  }
+]
