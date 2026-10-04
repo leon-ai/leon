@@ -49,7 +49,12 @@ export class ConnectionCommand extends BuiltInCommand {
   ): BuiltInCommandAutocompleteItem[] {
     const scope = context.args[0]?.toLowerCase() || ''
 
-    if (!context.args.length || (context.args.length === 1 && !context.ends_with_space)) {
+    if (
+      !context.args.length ||
+      (context.args.length === 1 &&
+        !context.ends_with_space &&
+        scope !== AI_CONNECTION_SCOPE)
+    ) {
       return AI_CONNECTION_SCOPE.startsWith(scope) ? [{
         type: 'parameter',
         icon_name: this.getIconName(),

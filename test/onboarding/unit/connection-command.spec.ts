@@ -60,8 +60,17 @@ describe('Connection commands', () => {
   it('uses exact autocomplete usage and rejects values for discovery', async () => {
     const command = new ConnectionCommand()
     const suggestions = command.getAutocompleteItems({
-      raw_input: '/connection ai ', args: ['ai'], ends_with_space: true
+      raw_input: '/connection ai', args: ['ai'], ends_with_space: false
     })
+    expect(suggestions.map((item) => item.name)).toEqual([
+      'discover', 'connect', 'use', 'disconnect'
+    ])
+    expect(command.getAutocompleteItems({
+      raw_input: '/connection ai ', args: ['ai'], ends_with_space: true
+    })).toEqual(suggestions)
+    expect(command.getAutocompleteItems({
+      raw_input: '/connection a', args: ['a'], ends_with_space: false
+    }).map((item) => item.value)).toEqual(['/connection ai'])
     expect(suggestions.find((item) => item.name === 'discover')?.usage).toBe('/connection ai discover')
     expect(suggestions.find((item) => item.name === 'use')?.usage).toBe('/connection ai use <connection>')
     const response = await command.execute({
