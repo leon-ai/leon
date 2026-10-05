@@ -33,8 +33,10 @@ interface ComputerUseManifest {
   }>
 }
 
+type DriverCall = (action: string, args: string) => Promise<Record<string, unknown>>
+
 interface FakeDriver {
-  callTool: ReturnType<typeof vi.fn>
+  callTool: ReturnType<typeof vi.fn<DriverCall>>
   isAvailable: ReturnType<typeof vi.fn>
   listToolsJson: ReturnType<typeof vi.fn>
   setAgentCursorEnabled: ReturnType<typeof vi.fn>
@@ -44,7 +46,7 @@ interface FakeDriver {
 
 function createDriver(result: Record<string, unknown>): FakeDriver {
   return {
-    callTool: vi.fn().mockResolvedValue(result),
+    callTool: vi.fn<DriverCall>().mockResolvedValue(result),
     isAvailable: vi.fn().mockReturnValue(true),
     listToolsJson: vi.fn().mockResolvedValue(
       JSON.stringify({
@@ -163,6 +165,8 @@ describe('CuaRuntime', () => {
   ])('resolves interaction settings %j to %s', (settings, expected) => {
     expect(resolveComputerUseInteractionMode({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'click', parameters: {},
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'interaction-settings',
       getSettings: () => settings as Record<string, unknown>
     })).toBe(expected)
   })
@@ -516,7 +520,7 @@ describe('CuaRuntime', () => {
     })
     const provider = new CuaRuntime(
       async () => driver as never,
-      () => 'background',
+      () => ComputerUseInteractionMode.Background,
       () => ({ music: 'Spotify', coding: 'Codex' })
     )
 
@@ -577,7 +581,7 @@ describe('CuaRuntime', () => {
     })
     const provider = new CuaRuntime(
       async () => driver as never,
-      () => 'background',
+      () => ComputerUseInteractionMode.Background,
       () => ({ browser: 'Brave' })
     )
 
@@ -875,7 +879,8 @@ describe('CuaRuntime', () => {
     const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
-      parameters: {}, profileName: PROFILE_NAME
+      parameters: {}, profileName: PROFILE_NAME,
+      conversationSessionId: 'session-recovery'
     })
     expect(result.success).toBe(false)
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
@@ -893,7 +898,8 @@ describe('CuaRuntime', () => {
       const provider = new CuaRuntime(async () => driver as never)
       const result = await provider.execute({
         toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
-        parameters: {}, profileName: PROFILE_NAME
+        parameters: {}, profileName: PROFILE_NAME,
+        conversationSessionId: 'session-recovery'
       })
       expect(result.success).toBe(false)
       expect(driver.callTool).toHaveBeenCalledTimes(1)
@@ -912,7 +918,8 @@ describe('CuaRuntime', () => {
     const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
-      parameters: {}, profileName: PROFILE_NAME
+      parameters: {}, profileName: PROFILE_NAME,
+      conversationSessionId: 'session-recovery'
     })
     expect(result.success).toBe(false)
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual(['list_windows', 'start_session'])
@@ -1207,6 +1214,7 @@ describe('CuaRuntime', () => {
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
+      conversationSessionId: 'batch-actions',
       parameters: { steps: [
         { action: 'type_text', parameters: { pid: 42, window_id: 7, text: 'first' } },
         { action: 'launch_app', parameters: {} }
@@ -1245,6 +1253,7 @@ describe('CuaRuntime', () => {
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
+      conversationSessionId: 'batch-actions',
       parameters: { steps: [
         { action: 'type_text', parameters: { pid: 42, window_id: 7, text: 'first' } },
         { action: 'press_key', parameters: { pid: 42, window_id: 7, key: 'return' } }
@@ -1278,6 +1287,7 @@ describe('CuaRuntime', () => {
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
+      conversationSessionId: 'batch-observation',
       parameters: { capture_after: true, steps: [
         {
           action: 'type_text',
@@ -1558,7 +1568,10 @@ describe('CuaRuntime', () => {
       }
       return nativeCall(action, args)
     })
-    const provider = new CuaRuntime(async () => driver as never, () => 'background')
+    const provider = new CuaRuntime(
+      async () => driver as never,
+      () => ComputerUseInteractionMode.Background
+    )
     try {
       const result = await provider.execute({
         toolkitId: 'computer_use', toolId: 'cua', functionName: 'click',
@@ -1586,7 +1599,7 @@ describe('CuaRuntime', () => {
     })
     const provider = new CuaRuntime(
       async () => driver as never,
-      () => 'visible',
+      () => ComputerUseInteractionMode.Visible,
       () => ({}),
       () => enabled
     )
@@ -1632,6 +1645,7 @@ describe('CuaRuntime', () => {
       const provider = new CuaRuntime(factory)
       const input = {
         toolkitId: 'computer_use', toolId: 'cua', profileName: PROFILE_NAME,
+        conversationSessionId: 'removed-browser-action',
         functionName, parameters: {},
         getSettings: (): Record<string, unknown> => ({
           browser_inspection: { allow_existing_profile: true }
