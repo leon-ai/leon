@@ -31,6 +31,7 @@ import type {
   OpenAITool,
   OpenAIToolCall,
   OpenAIToolChoice,
+  ProviderReasoningItem,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
@@ -81,6 +82,7 @@ interface CallState {
   accounting?: CompletionAccounting
   text: string
   reasoning: string
+  reasoningItems: Map<string, ProviderReasoningItem>
   toolCallsById: Record<
     string,
     {
@@ -505,6 +507,25 @@ export default class AISDKRemoteLLMProvider {
       if (this.config.providerName === LLMProviders.DeepSeek && message.reasoning) {
         content.push({ type: 'reasoning', text: message.reasoning })
       }
+      if (this.config.flavor === 'openai-responses') {
+        for (const item of message.reasoningItems || []) {
+          if (item.provider !== LLMProviders.OpenAI) {
+            continue
+          }
+          content.push({
+            type: 'reasoning',
+            text: item.text,
+            providerOptions: {
+              openai: {
+                itemId: item.id,
+                ...(item.encryptedContent
+                  ? { reasoningEncryptedContent: item.encryptedContent }
+                  : {})
+              }
+            }
+          })
+        }
+      }
       if (message.content.trim()) {
         content.push({ type: 'text', text: message.content })
       }
@@ -660,6 +681,10 @@ export default class AISDKRemoteLLMProvider {
     completionParams: CompletionParams
   ): Record<string, unknown> {
     return {
+      // Configure storage before SDK serialization so encrypted reasoning is included.
+      ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? { store: false }
+        : {}),
       ...(completionParams.promptCacheKey
         ? { promptCacheKey: completionParams.promptCacheKey }
         : {}),
@@ -1074,6 +1099,7 @@ export default class AISDKRemoteLLMProvider {
       hostedToolIds: new Set(),
       text: '',
       reasoning: '',
+      reasoningItems: new Map(),
       toolCallsById: {},
       toolCallOrder: [],
       usedInputTokens: 0,
@@ -1250,6 +1276,9 @@ export default class AISDKRemoteLLMProvider {
             ...(state.reasoning.trim().length > 0
               ? { reasoning: state.reasoning.trim() }
               : {}),
+            ...(state.reasoningItems.size > 0
+              ? { reasoningItems: [...state.reasoningItems.values()] }
+              : {}),
             ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {})
           }
         }
@@ -1260,6 +1289,43 @@ export default class AISDKRemoteLLMProvider {
         accounting: state.accounting ?? {}
       }
     }
+  }
+
+  /**
+   * Retains SDK reasoning metadata, including items with no public summary.
+   */
+  private appendOpenAIReasoningItem(
+    state: CallState,
+    part: Record<string, unknown>
+  ): void {
+    if (this.config.flavor !== 'openai-responses') {
+      return
+    }
+
+    const metadata = part['providerMetadata'] as
+      | { openai?: Record<string, unknown> }
+      | undefined
+    const itemId = metadata?.openai?.['itemId']
+    if (typeof itemId !== 'string') {
+      return
+    }
+
+    const item = state.reasoningItems.get(itemId) || {
+      provider: LLMProviders.OpenAI,
+      id: itemId,
+      text: ''
+    }
+    const encryptedContent = metadata?.openai?.['reasoningEncryptedContent']
+    if (typeof encryptedContent === 'string') {
+      item.encryptedContent = encryptedContent
+    }
+    if (part['type'] === 'reasoning-delta' && typeof part['delta'] === 'string') {
+      item.text += part['delta']
+    } else if (part['type'] === 'reasoning' && typeof part['text'] === 'string') {
+      item.text += part['text']
+    }
+
+    state.reasoningItems.set(itemId, item)
   }
 
   /**
@@ -1384,6 +1450,7 @@ export default class AISDKRemoteLLMProvider {
       }
 
       if (type === 'reasoning' && typeof part['text'] === 'string') {
+        this.appendOpenAIReasoningItem(state, part)
         state.reasoning += part['text'] as string
         continue
       }
@@ -1440,6 +1507,10 @@ export default class AISDKRemoteLLMProvider {
     for await (const streamPart of result.stream) {
       const part = streamPart as unknown as Record<string, unknown>
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+
+      if (type.startsWith('reasoning')) {
+        this.appendOpenAIReasoningItem(state, part)
+      }
 
       completionParams.onStreamEvent?.({
         type,

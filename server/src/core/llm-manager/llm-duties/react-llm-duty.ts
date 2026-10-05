@@ -29,7 +29,8 @@ import {
   LLMProviders,
   type AgentToolTranscriptMessage,
   type OpenAITool,
-  type OpenAIToolCall
+  type OpenAIToolCall,
+  type ProviderReasoningItem
 } from '@/core/llm-manager/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
@@ -927,6 +928,7 @@ export class ReActLLMDuty extends LLMDuty {
     toolCalls?: OpenAIToolCall[]
     textContent?: string
     reasoning?: string
+    reasoningItems?: ProviderReasoningItem[]
     isTruncated?: boolean
   } | null> {
     this.signal?.throwIfAborted()
@@ -1227,6 +1229,9 @@ export class ReActLLMDuty extends LLMDuty {
       return {
         toolCalls: normalizedToolCalls,
         textContent,
+        ...(completionResult.reasoningItems?.length
+          ? { reasoningItems: completionResult.reasoningItems }
+          : {}),
         ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
           ? { reasoning: completionResult.reasoning }
           : {}),
@@ -1260,6 +1265,9 @@ export class ReActLLMDuty extends LLMDuty {
     )
     return {
       textContent,
+      ...(completionResult.reasoningItems?.length
+        ? { reasoningItems: completionResult.reasoningItems }
+        : {}),
       ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
         ? { reasoning: completionResult.reasoning }
         : {}),
@@ -1279,7 +1287,10 @@ export class ReActLLMDuty extends LLMDuty {
 
   private safeJSONStringify(value: unknown): string {
     try {
-      return JSON.stringify(value)
+      // Opaque replay data belongs in the provider request, not diagnostic prose.
+      return JSON.stringify(value, (key, content) =>
+        key === 'encryptedContent' ? '[provider reasoning retained]' : content
+      )
     } catch {
       return String(value)
     }

@@ -3,6 +3,7 @@ import {
   type CompletionParams,
   type LLMPromptAbortReason,
   type OpenAIToolCall,
+  type ProviderReasoningItem,
   type PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
@@ -27,6 +28,7 @@ export interface CompletionResult {
   providerTokensPerSecond?: number
   temperature: number
   reasoning?: string
+  reasoningItems?: ProviderReasoningItem[]
   finishReason?: string
   /**
    * When the model responds through its tool-calling protocol,
@@ -48,6 +50,7 @@ export interface NormalizedCompletionResult {
   providerTokensPerSecond?: number
   toolCalls?: OpenAIToolCall[]
   reasoning?: string
+  reasoningItems?: ProviderReasoningItem[]
   finishReason?: string
 }
 

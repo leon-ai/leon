@@ -3,6 +3,7 @@ import { type AxiosResponse } from 'axios'
 import { type NormalizedCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   type CompletionParams,
+  type ProviderReasoningItem,
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
@@ -201,6 +202,11 @@ export function normalizeCompletionResultForOpenAICompatibleProvider(
   const reasoning = extractOpenAICompatibleReasoning(message)
   if (reasoning) {
     result.reasoning = reasoning
+  }
+
+  if (Array.isArray(message['reasoningItems'])) {
+    // These items were validated at the SDK boundary and remain internal state.
+    result.reasoningItems = message['reasoningItems'] as ProviderReasoningItem[]
   }
 
   const toolCallsRaw = Array.isArray(message['tool_calls'])

@@ -7,6 +7,7 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
 
 function createCheckpointInput(): AgentContinuityCheckpointInput {
   return {
@@ -96,6 +97,17 @@ describe('agent loop continuation', () => {
     for (let index = 1; index <= 16; index += 1) {
       appendToolExchange(transcript, index)
     }
+    for (const message of transcript) {
+      if (message.role === 'assistant') {
+        message.reasoningItems = [{
+          provider: LLMProviders.OpenAI,
+          id: `rs-${message.toolCalls?.[0]?.id}`,
+          text: 'Checking release evidence.',
+          encryptedContent: 'opaque-replay-data'
+        }]
+      }
+    }
+
     const summarize = vi.fn().mockResolvedValue('Older release work completed.')
 
     const result = await buildAgentContinuationTranscript(
@@ -105,6 +117,12 @@ describe('agent loop continuation', () => {
     )
 
     expect(summarize).toHaveBeenCalledOnce()
+    expect(summarize.mock.calls[0]?.[0]).not.toContain('opaque-replay-data')
+    expect(result.find((message) =>
+      message.role === 'assistant' && message.toolCalls?.[0]?.id === 'call-16'
+    )).toEqual(transcript.find((message) =>
+      message.role === 'assistant' && message.toolCalls?.[0]?.id === 'call-16'
+    ))
     expect(result.some((message) =>
       message.role === 'assistant' &&
       message.content.includes('<continuation_summary>')

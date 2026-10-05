@@ -12,6 +12,7 @@ import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-pro
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
 import { CONFIG_MANAGER } from '@/config'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
+import { normalizeCompletionResultForOpenAICompatibleProvider } from '@/core/llm-manager/llm-provider/llm-provider-response'
 
 const mediaMocks = vi.hoisted(() => ({
   persist: vi
@@ -149,7 +150,7 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'anthropic' })
   })
 
-  it('reuses account websockets and streams namespaced tools for a nonstreaming caller', async () => {
+  it('reuses account websockets and preserves cache usage, summaries and encrypted reasoning for replay', async () => {
     accountMocks.getCredentials.mockResolvedValue({ access_token: 'fresh-chatgpt-token' })
     const call = { type: 'function_call', id: 'fc_test', call_id: 'call_test',
       name: 'read_note', namespace: 'leon', arguments: '{"name":"todo"}', status: 'completed' }
@@ -213,7 +214,22 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'stream-open', transport: 'websocket'
     }))
-    await provider.runChatCompletion('Read my note again.', params)
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
+    expect(normalized.accounting?.cachedInputTokens).toBe(1_024)
+    expect(normalized.accounting?.reasoningOutputTokens).toBe(10)
+    expect(normalized.reasoningItems).toEqual([{
+      provider: LLMProviders.OpenAI, id: 'rs_test', text: 'Checking the note.',
+      encryptedContent: 'encrypted-test'
+    }])
+
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Read my note.' },
+      { role: 'assistant', content: '', toolCalls: normalized.toolCalls,
+        reasoningItems: normalized.reasoningItems },
+      { role: 'tool', toolName: 'read_note', toolCallId: 'call_test', content: 'Note contents.' }
+    ], params)
+    const replay = JSON.parse(websocketMocks.fetch.mock.calls[1]![1].body)
+    expect(replay.input).toContainEqual(reasoning)
     expect(websocketMocks.create).toHaveBeenCalledTimes(1)
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test')
     provider.dispose()

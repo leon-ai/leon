@@ -45,8 +45,10 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import type {
   AgentToolTranscriptMessage,
+  ProviderReasoningItem,
   OpenAIToolCall
 } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
 
 const coreMocks = vi.hoisted(() => ({
   getFlattenedTools: vi.fn(),
@@ -321,10 +323,15 @@ describe('continuous agent loop', () => {
 
   it('retains provider reasoning through tool exchanges and continuation', async () => {
     const reasoning = 'The lookup is needed to answer the question.'
+    const reasoningItems: ProviderReasoningItem[] = [{
+      provider: LLMProviders.OpenAI, id: 'rs_lookup', text: '',
+      encryptedContent: 'encrypted-lookup'
+    }]
     const callModel = vi.fn()
-      .mockResolvedValueOnce({ reasoning, toolCalls: [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })] })
+      .mockResolvedValueOnce({ reasoning, reasoningItems,
+        toolCalls: [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })] })
       .mockImplementationOnce(async (messages) => {
-        expect(messages).toContainEqual(expect.objectContaining({ role: 'assistant', reasoning }))
+        expect(messages).toContainEqual(expect.objectContaining({ role: 'assistant', reasoning, reasoningItems }))
         return { textContent: 'It is sunny.', reasoning: 'The lookup confirms sunny weather.' }
       })
     const prepareContinuation = vi.fn(async (state) => structuredClone(state.transcript))

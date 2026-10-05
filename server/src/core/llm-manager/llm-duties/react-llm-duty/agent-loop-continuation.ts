@@ -216,10 +216,10 @@ export async function buildAgentContinuationTranscript(
   const parts = splitAgentTranscriptForSummary(rawTranscript)
   if (!parts) return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
 
-  // The model needs the textual evidence, not historical image bytes.
+  // The summary needs textual evidence, not image bytes or opaque replay data.
   // Full tool observations remain in the execution history and artifact logs.
   const history = JSON.stringify(parts.older, (key, value) =>
-    key === 'dataBase64' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
   )
   const summary = await summarize(history)
   if (!summary?.trim() && !checkpoint) {
@@ -245,7 +245,7 @@ export async function buildAgentContinuationTranscript(
   ]
   // Compare text sizes consistently; retained images already have a fixed cap.
   const replacementText = JSON.stringify(replacement, (key, value) =>
-    key === 'dataBase64' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
   )
   if (replacementText.length >= history.length) {
     return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript

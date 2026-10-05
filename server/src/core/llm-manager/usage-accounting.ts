@@ -2,6 +2,7 @@
  * Optional provider accounting. Missing values mean unavailable, not zero.
  */
 export interface CompletionAccounting {
+  reasoningOutputTokens?: number | undefined
   cachedInputTokens?: number | undefined
   cacheWriteInputTokens?: number | undefined
   costUSD?: number | undefined
@@ -42,6 +43,14 @@ export function readCompletionAccounting(usage: unknown): CompletionAccounting {
   const input = object(data['inputTokens'])
   const details = object(data['prompt_tokens_details'] ?? data['input_tokens_details'])
   const rawDetails = object(raw['prompt_tokens_details'] ?? raw['input_tokens_details'])
+  const output = object(data['outputTokens'])
+  const outputDetails = object(data['output_tokens_details'])
+  const rawOutputDetails = object(raw['output_tokens_details'])
+  const reasoningOutputTokens = count(
+    normalized['reasoningOutputTokens'],
+    outputDetails['reasoning_tokens'], rawOutputDetails['reasoning_tokens'],
+    data['raw'] == null ? output['reasoning'] : undefined
+  )
   const cachedInputTokens = count(
     normalized['cachedInputTokens'],
     details['cached_tokens'], rawDetails['cached_tokens'],
@@ -56,6 +65,7 @@ export function readCompletionAccounting(usage: unknown): CompletionAccounting {
   )
   const costUSD = count(normalized['costUSD'], data['cost'], raw['cost'])
   return {
+    ...(reasoningOutputTokens !== undefined ? { reasoningOutputTokens } : {}),
     ...(cachedInputTokens !== undefined ? { cachedInputTokens } : {}),
     ...(cacheWriteInputTokens !== undefined ? { cacheWriteInputTokens } : {}),
     ...(costUSD !== undefined ? {

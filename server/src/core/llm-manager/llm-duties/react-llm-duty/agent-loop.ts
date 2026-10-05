@@ -9,6 +9,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import type {
   AgentToolTranscriptMessage,
+  ProviderReasoningItem,
   OpenAITool,
   OpenAIToolCall
 } from '@/core/llm-manager/types'
@@ -246,6 +247,7 @@ interface AgentProgressiveGuidance {
 interface AgentModelResult {
   textContent?: string
   reasoning?: string
+  reasoningItems?: ProviderReasoningItem[]
   toolCalls?: OpenAIToolCall[]
   isTruncated?: boolean
 }
@@ -909,7 +911,12 @@ export async function runAgentLoop(
     )
     const deferredToolCallCount = emittedToolCalls.length - toolCalls.length
     // Preserve provider reasoning with its response across tool calls and resumes.
-    const reasoning = modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}
+    const reasoning = {
+      ...(modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}),
+      ...(modelResult.reasoningItems?.length
+        ? { reasoningItems: modelResult.reasoningItems }
+        : {})
+    }
     const textContent = modelResult.textContent?.trim() || ''
     if (modelResult.isTruncated) {
       return {
@@ -1323,7 +1330,12 @@ async function attemptAgentLimitFinalization(
   }
 
   const toolCalls = modelResult.toolCalls || []
-  const reasoning = modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}
+  const reasoning = {
+    ...(modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}),
+    ...(modelResult.reasoningItems?.length
+      ? { reasoningItems: modelResult.reasoningItems }
+      : {})
+  }
   const textContent = modelResult.textContent?.trim() || ''
   if (toolCalls.length === 0) {
     return textContent

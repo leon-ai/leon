@@ -56,6 +56,16 @@ export interface AgentModelFile {
 }
 
 /**
+ * Provider-owned reasoning state retained for tool-call replay, never displayed.
+ */
+export interface ProviderReasoningItem {
+  provider: LLMProviders
+  id: string
+  text: string
+  encryptedContent?: string
+}
+
+/**
  * Canonical agent transcript. Preserve tool protocol roles and attachments
  * instead of rewriting each exchange into a text-only phase prompt.
  */
@@ -69,6 +79,7 @@ export type AgentToolTranscriptMessage =
       role: 'assistant'
       content: string
       reasoning?: string
+      reasoningItems?: ProviderReasoningItem[]
       toolCalls?: OpenAIToolCall[]
     }
   | {
