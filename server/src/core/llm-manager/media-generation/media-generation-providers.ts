@@ -5,6 +5,7 @@ import {
 } from '@huggingface/inference'
 
 import { CONFIG_MANAGER } from '@/config'
+import { resolveProviderConnection } from '../provider-requests'
 import { LLMProviders } from '@/core/llm-manager/types'
 import {
   MediaKind,
@@ -77,9 +78,8 @@ export async function generateWithProvider(
   }
 
   if (provider === LLMProviders.HuggingFace) {
-    const client = new InferenceClient(
-      CONFIG_MANAGER.getProviderAPIKey(provider)
-    )
+    const connection = await resolveProviderConnection(provider)
+    const client = new InferenceClient(connection.apiKey)
     const { inference_provider, ...parameters } = options
     const endpointUrl = CONFIG_MANAGER.getProviderGenerationBaseURL(provider)
     const args = {

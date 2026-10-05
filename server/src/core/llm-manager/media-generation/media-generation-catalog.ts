@@ -1,3 +1,4 @@
+import { hasProviderConnection } from '../provider-requests'
 import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import { CONFIG_MANAGER } from '@/config'
 import { LLMProviders } from '@/core/llm-manager/types'
@@ -99,7 +100,7 @@ export function listMediaCapabilities(): Array<Record<string, unknown>> {
     configured:
       provider === LLMProviders.SGLang
         ? Boolean(CONFIG_MANAGER.getProviderGenerationBaseURL(provider))
-        : Boolean(CONFIG_MANAGER.getProviderAPIKey(provider)),
+        : hasProviderConnection(provider),
     ...(provider === LLMProviders.OpenAI
       ? {
           example_options: DEFAULT_GENERATION_OPTIONS[provider],

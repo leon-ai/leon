@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LLMProviders } from '@/core/llm-manager/types'
 import { PROVIDER_REQUESTS, requestProvider } from '@/core/llm-manager/provider-requests'
+import { mediaEndpoint } from '@/core/llm-manager/media-generation/media-generation-transport'
 import HostedTool from '@@/tools/search_web/hosted/src/nodejs/hosted-tool'
 
 const mocks = vi.hoisted(() => ({
@@ -143,6 +144,17 @@ describe('profile provider requests', () => {
       model: 'gpt-6', input: 'Search.'
     })).rejects.toThrow('Reconnect bound account')
     expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('uses the bound media endpoint before normalizing its provider path', async () => {
+    mocks.credentials.mockResolvedValueOnce({
+      auth_kind: 'api_key', api_key: 'bound-key',
+      base_url: 'https://bound.example.com/anthropic'
+    })
+
+    expect(await mediaEndpoint(LLMProviders.MiniMax)).toEqual({
+      apiKey: 'bound-key', baseURL: 'https://bound.example.com/v1'
+    })
   })
 
   it('reports terminal built-in failures instead of returning empty success', async () => {

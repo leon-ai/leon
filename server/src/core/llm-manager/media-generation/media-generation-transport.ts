@@ -3,54 +3,42 @@ import { MAX_GENERATED_ARTIFACT_BYTES } from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { MEDIA_PROVIDERS } from './media-generation-catalog'
-import { createMediaProviderError } from './media-generation-provider-error'
+import { requestProvider, resolveProviderConnection, type ProviderConnection } from '../provider-requests'
 
 const REQUEST_TIMEOUT_MS = 600_000
 
 /**
  * Reuses profile credentials, with no secrets in results or provider error bodies.
  */
-export function mediaEndpoint(provider: LLMProviders): {
-  base: string
-  headers: Record<string, string>
-} {
+export async function mediaEndpoint(provider: LLMProviders): Promise<ProviderConnection> {
   const config = MEDIA_PROVIDERS[provider]
 
   if (!config) {
     throw new Error(`Provider ${provider} does not expose media generation.`)
   }
 
-  const key = CONFIG_MANAGER.getProviderAPIKey(provider)
+  const configuredBaseURL = CONFIG_MANAGER.getProviderGenerationBaseURL(provider)
+  if (provider === LLMProviders.SGLang) {
+    const base = configuredBaseURL || config.base_url
+    if (!base) {
+      throw new Error('Configure the media runtime endpoint first.')
+    }
 
-  if (!key && provider !== LLMProviders.SGLang) {
-    throw new Error(`Configure the ${provider} API key first.`)
+    return { baseURL: base, apiKey: '' }
   }
 
-  let base =
-    CONFIG_MANAGER.getProviderGenerationBaseURL(provider) ||
-    (provider === LLMProviders.MiniMax
-      ? CONFIG_MANAGER.getProviderBaseURL(provider)
-      : '') ||
-    config.base_url
+  const connection = await resolveProviderConnection(
+    provider,
+    provider === LLMProviders.MiniMax ? undefined : config.base_url,
+    configuredBaseURL
+  )
 
-  // MiniMax exposes a separate Anthropic-compatible chat path on the same API host.
-  if (provider === LLMProviders.MiniMax && base.endsWith('/anthropic')) {
-    base = base.slice(0, -'/anthropic'.length) + '/v1'
+  // Normalize the selected connection, never an older profile chat endpoint.
+  if (provider === LLMProviders.MiniMax && connection.baseURL.endsWith('/anthropic')) {
+    connection.baseURL = connection.baseURL.slice(0, -'/anthropic'.length) + '/v1'
   }
 
-  if (!base) {
-    throw new Error('Configure the media runtime endpoint first.')
-  }
-
-  return {
-    base: base.replace(/\/$/, ''),
-    headers:
-      provider === LLMProviders.Anthropic
-        ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' }
-        : key
-          ? { Authorization: `Bearer ${key}` }
-          : {}
-  }
+  return connection
 }
 
 /**
@@ -62,34 +50,12 @@ export async function providerRequest(
   body?: unknown,
   signal?: AbortSignal
 ): Promise<Response> {
-  const { base, headers } = mediaEndpoint(provider)
-  const response = await fetch(`${base}${endpoint}`, {
-    method: body === undefined ? 'GET' : 'POST',
-    headers: {
-      ...headers,
-      ...(body === undefined || body instanceof FormData
-        ? {}
-        : { 'Content-Type': 'application/json' })
-    },
-    ...(body === undefined
-      ? {}
-      : { body: body instanceof FormData ? body : JSON.stringify(body) }),
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
-      : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    redirect: 'error'
+  const connection = await mediaEndpoint(provider)
+
+  return requestProvider(provider, endpoint, body, {
+    connection,
+    ...(signal ? { signal } : {})
   })
-
-  if (!response.ok) {
-    throw await createMediaProviderError(
-      provider,
-      response,
-      [CONFIG_MANAGER.getProviderAPIKey(provider), ...Object.values(headers)],
-      body
-    )
-  }
-
-  return response
 }
 
 /**

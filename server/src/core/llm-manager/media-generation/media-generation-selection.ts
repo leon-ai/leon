@@ -1,3 +1,4 @@
+import { hasProviderConnection } from '../provider-requests'
 import { readGenerationSettings } from './media-generation-settings'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
@@ -20,7 +21,7 @@ interface GenerationTarget {
 function isConfigured(provider: LLMProviders): boolean {
   return provider === LLMProviders.SGLang
     ? Boolean(CONFIG_MANAGER.getProviderGenerationBaseURL(provider))
-    : Boolean(CONFIG_MANAGER.getProviderAPIKey(provider))
+    : hasProviderConnection(provider)
 }
 
 function validateTarget(
