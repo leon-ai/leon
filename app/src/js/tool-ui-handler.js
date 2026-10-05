@@ -221,8 +221,8 @@ export default class ToolUIHandler {
     const expandIcon = document.createElement('i')
     expandIcon.className = 'ri-arrow-down-s-line expand-icon'
 
-    meta.appendChild(statusChip)
     meta.appendChild(durationLabel)
+    meta.appendChild(statusChip)
     meta.appendChild(expandIcon)
     toolHeader.appendChild(heading)
     toolHeader.appendChild(meta)

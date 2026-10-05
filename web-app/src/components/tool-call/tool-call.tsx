@@ -89,10 +89,6 @@ export function ToolCall({ toolCall }: ToolCallProps) {
             {headingLayer('tool-call-wave', true)}
           </span>
         ) : headingLayer()}
-        <i
-          className="tool-call-chevron ri-arrow-right-s-line"
-          aria-hidden="true"
-        />
         {duration && (
           <span
             className="tool-call-duration"
@@ -103,6 +99,10 @@ export function ToolCall({ toolCall }: ToolCallProps) {
             {isBackground ? `${duration} to return` : duration}
           </span>
         )}
+        <i
+          className="tool-call-chevron ri-arrow-right-s-line"
+          aria-hidden="true"
+        />
       </button>
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">
