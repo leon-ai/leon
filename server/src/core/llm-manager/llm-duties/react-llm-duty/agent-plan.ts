@@ -9,7 +9,7 @@ const PLAN_STATUSES = ['pending', 'in_progress', 'completed', 'error'] as const
 export const AGENT_PLAN_GUIDANCE = `<planning>
 - Use update_plan for complex tasks and requests covering a collection; simple tasks do not need a plan. Establish an overview before execution: identify the authoritative source, requested boundaries, navigation and completion criteria. Start with one step in_progress and keep later actionable steps pending. Inspect the relevant list/pages first, not unrelated areas of the application.
 - For collection work, create a collection on a plan step before processing items. Enumerate stable source identities, pagination/scroll coverage and the observed end condition. A filtered snippet is not the complete list. Mark enumeration completed only once the relevant scope is covered; explicitly record empty ranges. Keep its plan step in_progress until every item is verified, even after enumeration ends. For an unbounded source, use an explicit justified boundary rather than scanning forever.
-- Execute from that worklist. Immediately after a milestone is verified, call update_plan in the same response as the next operational call: complete the current step and set the next step in_progress. Never start or report progress on a later step while the visible plan is stale, and never defer multiple historical completions until final reconciliation. Item updates merge by id: send only changes and omit unchanged collections. Preserve stable collection step labels. UI input success alone does not complete an item. Revisit discovery only if new evidence changes scope; preserve completed outcomes. Reconcile the final active step before answering.
+- Execute from that worklist. Immediately after a milestone is verified, call update_plan in the same response as the next operational call: complete the current step and set the next step in_progress. Never start or report progress on a later step while the visible plan is stale, and never defer multiple historical completions until final reconciliation. Step updates merge by stable label and item updates merge by id: send only changes and omit unchanged steps or collections. Omitted steps retain their state and order; new steps append to the plan. UI input success alone does not complete an item. Revisit discovery only if new evidence changes scope; preserve completed outcomes. Reconcile the final active step before answering.
 </planning>`
 
 /**
@@ -120,7 +120,7 @@ function readCollection(
 }
 
 /**
- * Merges item deltas without losing recorded outcomes when a plan is replaced.
+ * Merges step and item deltas while preserving recorded outcomes and step order.
  */
 export function parseAgentPlan(
   input: string,
@@ -134,7 +134,11 @@ export function parseAgentPlan(
     }
 
     const labels = new Set<string>()
-    const steps: TrackedPlanStep[] = parsed.steps.map((step: TrackedPlanStep) => {
+    const steps = new Map(
+      previous.map((step) => [step.label, structuredClone(step)])
+    )
+
+    for (const step of parsed.steps as TrackedPlanStep[]) {
       const label = readText(step.label)
 
       if (labels.has(label)) {
@@ -143,7 +147,7 @@ export function parseAgentPlan(
 
       labels.add(label)
 
-      const prior = previous.find((entry) => entry.label === label)
+      const prior = steps.get(label)
       const details = step.details == null ? prior?.details : readText(step.details)
       const collection = step.collection == null
         ? prior?.collection
@@ -159,15 +163,12 @@ export function parseAgentPlan(
         throw new Error('Collection coverage or outcomes are incomplete.')
       }
 
-      return next
-    })
-
-    // A renamed or omitted collection step must not silently erase its ledger.
-    if (previous.some((step) => step.collection && !labels.has(step.label))) {
-      return null
+      // Existing keys keep their positions, so partial or reordered updates
+      // cannot shift the step identities used by the widget and durable trace.
+      steps.set(label, next)
     }
 
-    return steps
+    return [...steps.values()]
   } catch {
     return null
   }
@@ -185,20 +186,21 @@ export function createAgentPlanTool(
     function: {
       name,
       description: includeCollection
-        ? 'Update milestones and collection coverage as work advances. Merge item changes by stable id; omit unchanged collections.'
+        ? 'Update milestones and collection coverage as work advances. Steps merge by stable label; items merge by stable id. Omit unchanged steps or collections to preserve their state.'
         : 'Initialize a plan for complex or collection work before execution. Start one step in_progress and later steps pending. This loads detailed planning guidance and the collection schema for the next turn.',
       parameters: {
         type: 'object',
         properties: {
           steps: {
             type: 'array',
+            description: 'Changed or new steps. Omitted steps keep their state and order; new steps append to the plan.',
             minItems: 1,
             items: {
               type: 'object',
               properties: {
                 label: {
                   type: 'string',
-                  description: 'Short verb-first user-facing step label. Keep collection labels stable.'
+                  description: 'Short verb-first user-facing step label. Keep the same label when updating an existing step.'
                 },
                 status: {
                   type: 'string',

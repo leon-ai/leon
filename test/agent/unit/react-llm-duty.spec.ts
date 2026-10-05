@@ -899,6 +899,12 @@ describe('continuous agent loop', () => {
 
   it('checks unfinished plans and enters the finishing pass after rejected completion', async () => {
     const prepareContinuation = vi.fn(async (state) => state.transcript)
+    const onPlanUpdated = vi.fn()
+    const completedStep = {
+      label: 'Find the files',
+      status: 'completed' as const,
+      details: 'The full inventory is saved.'
+    }
     const callModel = vi.fn()
       .mockResolvedValueOnce({ textContent: 'Done.' })
       .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'The task is complete.' }) })
@@ -909,9 +915,9 @@ describe('continuous agent loop', () => {
       .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Files and plan verified.' }) })
     const result = await runAgentLoopWithCompletionReview({
       transcript: [{ role: 'user', content: 'Verify the files.' }], catalog: createCatalog(),
-      initialTrackedSteps: [{ label: 'Verify the files', status: 'pending' }],
+      initialTrackedSteps: [completedStep, { label: 'Verify the files', status: 'pending' }],
       maxIterations: 3, finishingIterations: 2, callModel, prepareContinuation,
-      executeFunction: vi.fn(), loadAgentSkill: async () => null
+      executeFunction: vi.fn(), loadAgentSkill: async () => null, onPlanUpdated
     })
     expect(prepareContinuation).toHaveBeenCalledOnce()
     expect(JSON.parse(callModel.mock.calls[1]?.[0].at(-1).content)).toMatchObject({
@@ -922,7 +928,11 @@ describe('continuous agent loop', () => {
     })
     expect(callModel.mock.calls[3]?.[2]).not.toHaveProperty('requiresToolAction')
     expect(result.intent).toBe('answer')
-    expect(result.trackedSteps).toEqual([{ label: 'Verify the files', status: 'completed' }])
+    expect(result.trackedSteps).toEqual([
+      completedStep,
+      { label: 'Verify the files', status: 'completed' }
+    ])
+    expect(onPlanUpdated).toHaveBeenCalledExactlyOnceWith(result.trackedSteps)
   })
 
   it('keeps direct answers without tools on the fast path', async () => {
@@ -2927,7 +2937,58 @@ describe('collection plan state', () => {
   }
   const plan = [{ label: 'Retrieve documents', status: 'in_progress' as const, collection }]
 
-  it('merges item deltas and preserves coverage and verified outcomes across plan replacement', () => {
+  it('preserves step order and completed outcomes across partial and reordered updates', () => {
+    const previous = [
+      {
+        label: 'Find video files',
+        status: 'completed' as const,
+        details: 'The full inventory is saved.'
+      },
+      { label: 'Group extensions', status: 'in_progress' as const }
+    ]
+    const updated = parseAgentPlan(JSON.stringify({
+      steps: [{ label: 'Group extensions', status: 'completed' }]
+    }), previous)
+
+    expect(updated).toEqual([
+      previous[0],
+      { label: 'Group extensions', status: 'completed' }
+    ])
+    expect(isAgentPlanComplete(updated!)).toBe(true)
+    expect(previous[1]?.status).toBe('in_progress')
+
+    const extended = parseAgentPlan(JSON.stringify({
+      steps: [
+        { label: 'Show examples', status: 'pending' },
+        updated![1],
+        { label: 'Find video files', status: 'completed' }
+      ]
+    }), updated!)
+
+    expect(extended).toEqual([
+      ...updated!,
+      { label: 'Show examples', status: 'pending' }
+    ])
+    expect(isAgentPlanComplete(extended!)).toBe(false)
+    expect(parseAgentPlan(JSON.stringify({
+      steps: [updated![1], updated![1]]
+    }), updated!)).toBeNull()
+  })
+
+  it('retains omitted collection ledgers when another step is added or completed', () => {
+    const updated = parseAgentPlan(JSON.stringify({
+      steps: [{ label: 'Summarize documents', status: 'completed' }]
+    }), plan)
+
+    expect(updated).toEqual([
+      ...plan,
+      { label: 'Summarize documents', status: 'completed' }
+    ])
+    expect(updated?.[0]?.collection).not.toBe(collection)
+    expect(isAgentPlanComplete(updated!)).toBe(false)
+  })
+
+  it('merges item deltas and preserves coverage and verified outcomes across plan updates', () => {
     const updated = parseAgentPlan(JSON.stringify({ steps: [{ ...plan[0],
       status: 'completed', collection: { ...collection, items: [
         { id: 'B', status: 'completed', details: 'Verified /tmp/B.pdf against document B' }
@@ -2946,9 +3007,8 @@ describe('collection plan state', () => {
     } }] }), plan)?.[0]?.collection?.items[0]?.status).toBe('pending')
   })
 
-  it('rejects lost ledgers, premature completion and execution before enumeration', () => {
+  it('rejects premature completion and execution before enumeration', () => {
     for (const steps of [
-      [{ label: 'Renamed step', status: 'completed' }],
       [{ ...plan[0], status: 'completed' }],
       [{ ...plan[0], collection: { ...collection, enumeration: 'in_progress', items: [
         { id: 'B', status: 'in_progress' }
@@ -2957,7 +3017,9 @@ describe('collection plan state', () => {
         { id: 'B', status: 'completed' }
       ] } }],
       [{ ...plan[0], collection: { ...collection, items: [collection.items[0], collection.items[0]] } }]
-    ]) expect(parseAgentPlan(JSON.stringify({ steps }), plan)).toBeNull()
+    ]) {
+      expect(parseAgentPlan(JSON.stringify({ steps }), plan)).toBeNull()
+    }
   })
 
   it('keeps an unfinished collection blocked at the limit even if the reviewer says complete', async () => {

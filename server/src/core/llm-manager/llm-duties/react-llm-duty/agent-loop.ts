@@ -1637,7 +1637,7 @@ async function executeAgentToolCall(
     const nextSteps = parseAgentPlan(toolCall.function.arguments, trackedSteps)
     if (!nextSteps) {
       return {
-        content: 'Plan update rejected: use unique step labels and valid statuses. Preserve collection step labels; enumerate before processing; completed collections need coverage evidence and verified details for every item. Updates merge items by id; omit unchanged collections.',
+        content: 'Plan update rejected: use unique stable step labels and valid statuses. Enumerate before processing; completed collections need coverage evidence and verified details for every item. Updates merge steps by label and items by id; omit unchanged steps or collections.',
         trackedSteps
       }
     }
