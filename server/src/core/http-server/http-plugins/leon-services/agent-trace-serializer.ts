@@ -36,6 +36,9 @@ export function serializeAgentTrace(
     tool_calls: trace.toolCalls.map((toolCall) => ({
       id: toolCall.id,
       name: toolCall.name,
+      ...(toolCall.toolCallTitle
+        ? { tool_call_title: toolCall.toolCallTitle }
+        : {}),
       status: toolCall.status,
       ...(toolCall.startedAt !== undefined ? { started_at: toolCall.startedAt } : {}),
       ...(toolCall.durationMs !== undefined ? { duration_ms: toolCall.durationMs } : {}),
@@ -91,6 +94,9 @@ export function deserializeAgentTrace(
     toolCalls: trace.tool_calls.map((toolCall) => ({
       id: toolCall.id || toolCall.name,
       name: toolCall.name,
+      ...(toolCall.tool_call_title
+        ? { toolCallTitle: toolCall.tool_call_title }
+        : {}),
       status: toolCall.status,
       ...(toolCall.started_at !== undefined ? { startedAt: toolCall.started_at } : {}),
       ...(toolCall.duration_ms !== undefined ? { durationMs: toolCall.duration_ms } : {}),

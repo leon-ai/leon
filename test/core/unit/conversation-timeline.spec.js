@@ -45,10 +45,15 @@ describe('conversation activity replay', () => {
   it('does not turn an in-progress tool into a completed result on reload', () => {
     const handler = Object.create(ToolUIHandler.prototype)
     handler.handleToolOutput = vi.fn()
-    handler.replayAgentResponseTrace({ toolCalls: [{ id: 't1', name: 'test.lookup', status: 'running' }] })
+    handler.replayAgentResponseTrace({ toolCalls: [{
+      id: 't1', name: 'test.lookup', status: 'running', toolCallTitle: 'Look up the requested value'
+    }] })
     expect(handler.handleToolOutput).toHaveBeenCalledOnce()
-    expect(handler.handleToolOutput).toHaveBeenCalledWith(expect.objectContaining({ toolPhase: 'input' }))
+    expect(handler.handleToolOutput).toHaveBeenCalledWith(expect.objectContaining({
+      toolPhase: 'input', toolCallTitle: 'Look up the requested value'
+    }))
   })
+
   it.each([
     [138, '138 ms'],
     [0, '0 ms'],
@@ -61,5 +66,47 @@ describe('conversation activity replay', () => {
   ])('formats a duration of %s as "%s"', (durationMs, expected) => {
     expect(formatToolDuration(durationMs)).toBe(expected)
   })
+
+  it.each(['success', 'error', 'background'])(
+    'restores and displays a %s tool title and duration from history',
+    (outcome) => {
+      const handler = Object.create(ToolUIHandler.prototype)
+      const card = {
+        title: {},
+        subtitle: {},
+        summary: {},
+        statusChip: {},
+        durationLabel: { hidden: true }
+      }
+      handler.setStatusChip = vi.fn()
+      handler.renderOutputPreview = vi.fn()
+      handler.renderValuePreview = vi.fn()
+      handler.renderPlaceholder = vi.fn()
+      handler.renderRawData = vi.fn()
+      handler.handleToolOutput = (data) => handler.updateActivityCard(card, data, 'lookup')
+      handler.replayAgentResponseTrace({
+        toolCalls: [{
+          id: 't1',
+          name: 'test.lookup.run',
+          
+          
+          toolCallTitle: 'Look up the requested value',
+          stepLabel: 'test.lookup.run',
+          status: outcome === 'error' ? 'error' : 'success',
+          durationMs: 1_400,
+          output: outcome === 'background'
+            ? { execution: { id: 'job-1', state: 'running' } }
+            : { value: 42 }
+        }]
+      })
+
+      expect(card.durationLabel.hidden).toBe(false)
+      expect(card.title.textContent).toBe('Look up the requested value')
+      expect(card.subtitle.textContent).toBe('test toolkit • lookup • Run')
+      expect(card.durationLabel.textContent).toBe(
+        outcome === 'background' ? '1.4 s to return' : '1.4 s'
+      )
+    }
+  )
 
 })

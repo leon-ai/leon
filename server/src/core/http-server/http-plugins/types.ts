@@ -43,6 +43,7 @@ export interface HTTPPluginRunAgentInput {
 export interface HTTPPluginToolCall {
   id?: string
   name: string
+  tool_call_title?: string
   status: 'running' | 'success' | 'error'
   toolkit_icon_name?: string
   tool_icon_name?: string

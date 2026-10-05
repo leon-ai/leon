@@ -1025,6 +1025,9 @@ export default class ToolUIHandler {
         toolName,
         functionName,
         toolGroupId,
+        ...(toolCall.toolCallTitle
+          ? { toolCallTitle: toolCall.toolCallTitle }
+          : {}),
         ...(toolCall.toolkitIconName
           ? { toolkitIconName: toolCall.toolkitIconName }
           : {}),

@@ -147,6 +147,9 @@ export async function runAgent(
             const toolCall: HTTPPluginToolCall = {
               id: event.toolCall.id,
               name: event.toolCall.name,
+              ...(event.toolCall.toolCallTitle
+                ? { tool_call_title: event.toolCall.toolCallTitle }
+                : {}),
               status: event.toolCall.status,
               ...(event.toolCall.durationMs !== undefined
                 ? { duration_ms: event.toolCall.durationMs }

@@ -134,6 +134,7 @@ export interface AgentResponseToolCall {
   startedAt?: number
   durationMs?: number
   name: string
+  toolCallTitle?: string
   status: 'running' | 'success' | 'error'
   toolkitIconName?: string
   toolIconName?: string

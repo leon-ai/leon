@@ -45,6 +45,11 @@ export function normalizeToolCalls(
       }
       const observation = getStringField(record, 'observation')
       const stepLabel = getStringField(record, 'stepLabel')
+      const toolCallTitle = getStringField(record, 'toolCallTitle')
+
+      if (toolCallTitle) {
+        toolCall.tool_call_title = toolCallTitle
+      }
 
       if (observation) toolCall.observation = observation
       if (typeof record['startedAt'] === 'number') {

@@ -37,6 +37,7 @@ describe('AgentResponseTraceCollector', () => {
         id: 'tool-1',
         name: 'computer_use.cua.get_screenshot',
         status: 'running',
+        toolCallTitle: 'Inspect the current screen',
         input: { display: 0 }
       }
     })
@@ -69,6 +70,7 @@ describe('AgentResponseTraceCollector', () => {
           id: 'tool-1',
           name: 'computer_use.cua.get_screenshot',
           status: 'success',
+          toolCallTitle: 'Inspect the current screen',
           startedAt: 1_000,
           durationMs: 138,
           input: { display: 0 },

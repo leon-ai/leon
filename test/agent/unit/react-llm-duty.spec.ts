@@ -107,7 +107,7 @@ vi.mock('@/core', () => ({
 const CALLABLE_TOOL_NAME = 'test__lookup__run'
 
 it.each(['success', 'error', 'background', 'throw'])(
-  'reports dispatch duration for a %s call to live cards and durable progress',
+  'reports title and dispatch duration for a %s call to live cards and durable progress',
   async (outcome) => {
     const now = vi.spyOn(performance, 'now').mockReturnValue(1_000)
     const onProgress = vi.fn()
@@ -148,11 +148,14 @@ it.each(['success', 'error', 'background', 'throw'])(
     const status = outcome === 'error' || outcome === 'throw' ? 'error' : 'success'
     expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
       status,
+      toolCallTitle,
       durationMs: 1_234
     }))
     expect(coreMocks.emitAnswerToChatClients).toHaveBeenLastCalledWith(
-      expect.objectContaining({ toolPhase: 'output', status, ...displayNames, durationMs: 1_234 })
+      expect.objectContaining({ toolPhase: 'output', status, toolCallTitle, ...displayNames, durationMs: 1_234 })
     )
+    expect(onProgress.mock.calls.every(([event]) => event.toolCallTitle === toolCallTitle))
+      .toBe(true)
 
 
     if (outcome === 'background') {

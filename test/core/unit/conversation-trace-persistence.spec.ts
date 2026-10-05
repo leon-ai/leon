@@ -310,6 +310,7 @@ describe('conversation trace persistence', () => {
         id: 'turn', planSteps: [],
         toolCalls: [{
           id: 'tool', name: 'test.lookup', status: 'success', startedAt: 2_000,
+          toolCallTitle: 'Look up the requested value',
           durationMs: 138
         }],
         progressMessages: [{

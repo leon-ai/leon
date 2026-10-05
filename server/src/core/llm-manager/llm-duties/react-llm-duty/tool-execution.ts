@@ -421,6 +421,7 @@ export async function runToolExecution(
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
+    ...(toolCallTitle ? { toolCallTitle } : {}),
     status: 'running',
     ...(toolDisplayContext.toolkitIconName
       ? { toolkitIconName: toolDisplayContext.toolkitIconName }
@@ -457,6 +458,7 @@ export async function runToolExecution(
     onProgressEvent?.({
       id: toolGroupId,
       name: qualifiedName,
+      ...(toolCallTitle ? { toolCallTitle } : {}),
       status: 'running',
       ...(toolDisplayContext.toolkitIconName
         ? { toolkitIconName: toolDisplayContext.toolkitIconName }
@@ -582,11 +584,13 @@ export async function runToolExecution(
       status: 'error',
       message,
       durationMs,
+      ...(toolCallTitle ? { toolCallTitle } : {}),
       ...(stepLabel ? { stepLabel } : {})
     })
     onProgressEvent?.({
       id: toolGroupId,
       name: qualifiedName,
+      ...(toolCallTitle ? { toolCallTitle } : {}),
       status: 'error',
       durationMs,
       input: requestedToolInput,
@@ -680,6 +684,7 @@ export async function runToolExecution(
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
+    ...(toolCallTitle ? { toolCallTitle } : {}),
     status: effectiveStatus === 'error' ? 'error' : 'success',
     durationMs,
     ...(toolDisplayContext.toolkitIconName

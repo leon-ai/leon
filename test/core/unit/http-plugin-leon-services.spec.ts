@@ -512,6 +512,7 @@ describe('HTTP plugin Leon services', () => {
         executionHistory: [
           {
             function: 'structured_knowledge.memory.write',
+            toolCallTitle: 'Remember your city',
             status: 'success',
             observation
           }
@@ -519,10 +520,14 @@ describe('HTTP plugin Leon services', () => {
       }
     }
 
-    await runAgent({
+    const turn = await runAgent({
       profile_id: 'owner-a',
       query: 'I live in Shenzhen. Remember that.',
       create_session: true
+    })
+
+    expect(turn.response_trace.tool_calls[0]?.tool_call_title).toBe('Remember your city')
+    expect(turn.response_trace.tool_calls[0]).toMatchObject({
     })
 
     expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual([
