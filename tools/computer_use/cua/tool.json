@@ -707,11 +707,11 @@
     },
     "invoke_menu": {
       "description": "Invoke an observed native application-menu path in one call.",
-      "progressive_guidance": "Use an exact observed application-menu path, including menu-bar entries exposed by get_window_state. Those entries are application controls outside the window and cannot be clicked with window tokens. The driver handles activation and restoration; a separate bring_to_front is unnecessary. Inspect the result rather than treating delivery as completion.",
+      "progressive_guidance": "Use an exact observed application-menu path, including menu-bar entries exposed by get_window_state. On macOS, three periods (...) also match the native ellipsis (…). Those entries are application controls outside the window and cannot be clicked with window tokens. The driver handles activation and restoration; a separate bring_to_front is unnecessary. Inspect the result rather than treating delivery as completion.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
-        "description": "Exact, immediate-child application menu path to resolve and invoke through\nthe operating system's accessibility API. Path labels are matched after\ntrimming surrounding whitespace and otherwise remain case-sensitive.",
+        "description": "Exact, immediate-child application menu path to resolve and invoke through\nthe operating system's accessibility API. Path labels are matched after\ntrimming surrounding whitespace and otherwise remain case-sensitive. On\nmacOS, three periods in a label also match the ellipsis character that\nnative menu titles use (`Save As...` finds `Save As…`).",
         "properties": {
           "path": {
             "items": {
@@ -2525,7 +2525,7 @@
     },
     "set_value": {
       "description": "Set the value of an editable UI element from the latest window state.",
-      "progressive_guidance": "Use a current editable element from get_window_state. Confirm the field's label and meaning, then verify the resulting value, units and dependent totals rather than relying on dispatch success.",
+      "progressive_guidance": "Use a current editable element from get_window_state. Confirm the field's label and meaning, then verify the resulting value, units and dependent totals rather than relying on dispatch success. If Finder returns file_name_needs_rename, use a permitted keyboard rename flow and verify the filename in a fresh folder listing; changing Get Info text alone does not prove the file was renamed.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,

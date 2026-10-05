@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 
 import { expect, it } from 'vitest'
 
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { createCuaDriverAdapter } from '@@/tools/computer_use/cua/src/nodejs/lib/cua/cua-driver-adapter'
 import { CuaDesktopSetupState } from '@@/tools/computer_use/cua/src/nodejs/lib/cua/cua-desktop-setup'
 
@@ -13,7 +14,9 @@ it('keeps native Cua action arguments compatible with the installed driver', asy
     toolkitId: 'computer_use',
     toolId: 'cua',
     functionName: 'health_report',
-    parameters: {}
+    parameters: {},
+    profileName: getActiveProfileName(),
+    conversationSessionId: 'cua-driver-contract'
   }, { ensure: async () => CuaDesktopSetupState.Ready } as never)
 
   try {
