@@ -38,6 +38,8 @@ const DEVELOPMENT_ENV = 'development'
 
 export const GITHUB_URL = 'https://github.com/leon-ai/leon'
 export const API_VERSION = 'v1'
+export const TOOL_EXECUTION_WAIT_MS = 10_000
+export const TOOL_EXECUTION_MAX_WAIT_MS = 30_000
 export const WEB_APP_DEV_SERVER_PORT = 5_173
 export const REMIX_ICON_NAME_PATTERN = '^(?!.*-fill$).+$'
 export const PROGRESSIVE_GUIDANCE_MAX_LENGTH = 4_096

@@ -304,6 +304,7 @@ export async function runToolExecution(
     toolId: string
     toolkitId: string
     functionName: string
+    retainExecution: boolean
     toolInput: string
     parsedInput?: Record<string, unknown>
     onProgress?: (progress: {
@@ -316,6 +317,7 @@ export async function runToolExecution(
     toolId,
     toolkitId,
     functionName,
+    retainExecution: true,
     toolInput
   }
 
@@ -769,6 +771,10 @@ export async function runToolExecution(
       : {})
   })
 
+  const executionHandle = toolExecutionResult.data?.output['execution'] as
+    | { id?: unknown, state?: unknown }
+    | undefined
+
   return {
     execution: {
       function: qualifiedName,
@@ -777,6 +783,9 @@ export async function runToolExecution(
       requestedToolInput,
       ...(stepLabel ? { stepLabel } : {})
     },
+    ...(typeof executionHandle?.id === 'string' && typeof executionHandle.state === 'string'
+      ? { executionHandle: { id: executionHandle.id, state: executionHandle.state } }
+      : {}),
     ...(modelFiles ? { modelFiles } : {})
   }
 }

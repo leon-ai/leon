@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
 
 import psList from 'ps-list'
 import kill from 'tree-kill'
@@ -289,7 +290,10 @@ async function bootstrap(): Promise<void> {
     }, SHUTDOWN_FORCE_TIMEOUT_MS)
     forceExitTimeout.unref()
 
-    void TOOL_WORKER_MANAGER.dispose()
+    void Promise.all([
+      TOOL_EXECUTION_MANAGER.dispose(),
+      TOOL_WORKER_MANAGER.dispose()
+    ])
       .catch((error: unknown) => {
         LogHelper.error(
           `Tool worker shutdown failed: ${error instanceof Error ? error.message : String(error)}`

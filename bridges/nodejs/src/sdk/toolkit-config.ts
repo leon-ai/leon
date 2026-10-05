@@ -32,6 +32,7 @@ interface ToolConfig {
     {
       description: string
       parameters: Record<string, unknown>
+      background?: boolean
     }
   >
 }

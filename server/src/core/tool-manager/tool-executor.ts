@@ -27,6 +27,7 @@ import { CONNECTION_STORE } from '@/core/connections/connection-store'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
+import { TOOL_EXECUTION_MANAGER } from './tool-execution-manager'
 import type { LongLanguageCode } from '@/types'
 import type {
   ToolModelFile,
@@ -50,6 +51,7 @@ export interface ToolExecutionInput {
   leonService?: { baseURL: string, token: string }
   signal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
+  retainExecution?: boolean
 }
 
 export interface ToolExecutionResult {
@@ -239,6 +241,56 @@ export default class ToolExecutor {
   public async executeTool(
     input: ToolExecutionInput
   ): Promise<ToolExecutionResult> {
+    const sessionId = getActiveConversationSessionId()
+    const functionConfig = input.toolkitId && input.functionName
+      ? TOOLKIT_REGISTRY.getToolFunctions(input.toolkitId, input.toolId)?.[input.functionName]
+      : undefined
+
+    if (input.retainExecution && sessionId && functionConfig?.background === true) {
+      const profileName = getActiveProfileName()
+      const id = TOOL_EXECUTION_MANAGER.start(
+        profileName,
+        sessionId,
+        `${input.toolkitId}.${input.toolId}.${input.functionName}`,
+        (signal, onProgress) => this.executeTool({
+          ...input,
+          retainExecution: false,
+          signal,
+          onProgress: (progress) => {
+            onProgress(progress)
+            input.onProgress?.(progress)
+          }
+        }),
+        input.signal
+      )
+      const snapshot = await TOOL_EXECUTION_MANAGER.wait(profileName, sessionId, id)
+      input.signal?.throwIfAborted()
+
+      if (snapshot.result) {
+        // Keep the handle even for a fast call: later filtering reuses its data.
+        return {
+          ...snapshot.result,
+          data: {
+            ...snapshot.result.data,
+            output: { ...snapshot.result.data.output, execution: snapshot.execution }
+          }
+        }
+      }
+
+      return {
+        status: snapshot.execution.error ? 'error' : 'success',
+        message: snapshot.execution.error || 'Tool execution is still running. Use system_utilities.tool_executions.wait/read with its id; do not restart it or claim completion.',
+        data: {
+          tool_id: input.toolId,
+          toolkit_id: input.toolkitId || null,
+          function_name: input.functionName || null,
+          input: input.toolInput || null,
+          parsed_input: input.parsedInput || null,
+          output: { execution: snapshot.execution }
+        }
+      }
+    }
+
     const result = await this.executeToolInternal(input)
 
     if (input.deferArtifactDelivery) {
@@ -248,7 +300,6 @@ export default class ToolExecutor {
     const output = result.data.output['result'] as
       | { artifacts?: Array<ArtifactFile & { id?: string }> }
       | undefined
-    const sessionId = getActiveConversationSessionId()
 
     if (
       result.status === 'success' &&

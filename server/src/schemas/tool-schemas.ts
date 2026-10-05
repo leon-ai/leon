@@ -72,6 +72,12 @@ const toolFunctionSchemaObject = Type.Strict(
             'Whether the agent should block repeated successful calls with the same input. Disable this for state reads whose result can change over time.'
         })
       ),
+      background: Type.Optional(
+        Type.Boolean({
+          description:
+            'Allow agent calls to yield a retained execution handle after a bounded wait. Execution keeps its original deadline and can be waited on, queried or canceled.'
+        })
+      ),
       hooks: Type.Optional(
         Type.Strict(
           Type.Object(

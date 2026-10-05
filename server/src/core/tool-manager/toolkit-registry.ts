@@ -46,6 +46,8 @@ interface ToolkitToolDefinition {
       progressive_guidance?: string
       parameters: Record<string, unknown>
       output_schema?: Record<string, unknown>
+      deduplicate_calls?: boolean
+      background?: boolean
       hooks?: {
         post_execution?: {
           response_jq?: string

@@ -59,6 +59,7 @@ export interface FunctionConfig {
   parameters: Record<string, unknown>
   output_schema?: Record<string, unknown>
   deduplicate_calls?: boolean
+  background?: boolean
   hooks?: {
     post_execution?: {
       response_jq?: string
@@ -108,6 +109,7 @@ export interface FinalResponseSignal {
 
 export interface ToolExecutionResult {
   execution: ExecutionRecord
+  executionHandle?: { id: string, state: string }
   modelFiles?: Array<{
     dataBase64: string
     mediaType: string
