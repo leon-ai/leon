@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConversationLogger } from '@/conversation-logger'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
-import type { MessageLog } from '@/types'
+import Brain from '@/core/brain/brain'
+import PulseManager from '@/core/pulse-manager'
+import { CONFIG_MANAGER } from '@/config'
+import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
+import type { LLMAnswerMetrics, MessageLog } from '@/types'
 import {
   getActiveTurnInference,
   recordTurnInference,
@@ -20,6 +24,19 @@ import {
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 
 const sessions = vi.hoisted(() => ({ root: '' }))
+const answerRuntime = vi.hoisted(() => ({
+  CONVERSATION_LOGGER: null as ConversationLogger | null,
+  NLU: { currentResponseRoute: 'controlled', nluResult: {} },
+  SOCKET_SERVER: {
+    emitAnswerToChatClients: vi.fn(),
+    emitToChatClients: vi.fn()
+  },
+  POST_TURN_MAINTENANCE_QUEUE: { enqueue: vi.fn() },
+  TTS: { add: vi.fn() }
+}))
+vi.mock('@/core', () => {
+  return answerRuntime
+})
 vi.mock('@/core/session-manager', () => ({
   CONVERSATION_SESSION_MANAGER: {
     resolveConversationLogPath: (sessionId: string): string => `${sessions.root}/${sessionId}.json`,
@@ -27,7 +44,7 @@ vi.mock('@/core/session-manager', () => ({
   }
 }))
 vi.mock('@/helpers/log-helper', () => ({
-  LogHelper: { title: vi.fn(), success: vi.fn(), error: vi.fn() }
+  LogHelper: { title: vi.fn(), success: vi.fn(), info: vi.fn(), error: vi.fn() }
 }))
 
 describe('conversation trace persistence', () => {
@@ -36,7 +53,79 @@ describe('conversation trace persistence', () => {
   })
 
   afterEach(async () => {
+    vi.clearAllTimers()
+    vi.useRealTimers()
     await fs.rm(sessions.root, { recursive: true, force: true })
+  })
+
+  it('delivers pulse metrics and trace through the ordinary answer queue and history', async () => {
+    vi.useFakeTimers()
+    const config = CONFIG_MANAGER.getConfig()
+    vi.spyOn(CONFIG_MANAGER, 'getConfig').mockReturnValue({
+      ...config,
+      runtime: { ...config.runtime, pulse_enabled: false }
+    })
+    const logger = new ConversationLogger({
+      loggerName: 'test', fileName: 'conversation_log.json',
+      nbOfLogsToKeep: 100, nbOfLogsToLoad: 100
+    })
+    answerRuntime.CONVERSATION_LOGGER = logger
+    const brain = new Brain()
+    const pulse = new PulseManager()
+    const paraphrase = vi.spyOn(ParaphraseLLMDuty.prototype, 'execute')
+    const output = 'I checked your upcoming calendar and prepared your meeting notes.'
+    const llmMetrics: LLMAnswerMetrics = {
+      completionCount: 2, inputTokens: 100, outputTokens: 20, totalTokens: 120,
+      durationMs: 1_000, tokensPerSecond: 20, ttftMs: 100,
+      usageAccounting: {
+        cachedInputTokens: 80, cacheReadCompletionCount: 1,
+        cacheWriteInputTokens: 0, costUSD: 0,
+        costCompletionCount: 0, estimatedCostCompletionCount: 0, costSources: []
+      }
+    }
+    const agentResponseTrace = { id: 'pulse-turn', metrics: llmMetrics }
+    Object.assign(pulse, {
+      persist: vi.fn(),
+      loadCoreNodes: async () => ({
+        ...answerRuntime,
+        BRAIN: brain,
+        MEMORY_MANAGER: { observeTurn: vi.fn() }
+      }),
+      loadReActLLMDuty: async () => ({
+        ReActLLMDuty: class {
+          public async init(): Promise<void> {
+            return
+          }
+
+          public async execute(): Promise<unknown> {
+            return { output, data: { llmMetrics, agentResponseTrace } }
+          }
+        }
+      })
+    })
+    const matter = {
+      id: 'pulse-matter', fingerprint: 'meeting-notes', intentKey: 'prepare',
+      targetScope: 'calendar', turnPrompt: 'Prepare meeting notes.',
+      summary: 'Prepare meeting notes', why: 'An upcoming meeting', notifyOwner: true
+    } as Parameters<PulseManager['executeMatter']>[1]
+    const state = {
+      matters: [matter], recentOutcomes: [], suppressionPolicies: [], recentTicks: []
+    } as Parameters<PulseManager['executeMatter']>[0]
+
+    await pulse['executeMatter'](state, matter)
+
+    expect(answerRuntime.SOCKET_SERVER.emitAnswerToChatClients)
+      .toHaveBeenCalledExactlyOnceWith({ answer: output, llmMetrics, agentResponseTrace })
+    const history = ConversationHistoryHelper.toHistoryItems(
+      await logger.loadAll(), { supportsWidgets: false }
+    )
+    expect(history).toHaveLength(1)
+    expect(history[0]).toMatchObject({
+      originalString: output, llmMetrics, agentResponseTrace
+    })
+    expect(paraphrase).not.toHaveBeenCalled()
+    expect(answerRuntime.POST_TURN_MAINTENANCE_QUEUE.enqueue.mock.calls.map(([label]) => label))
+      .toEqual(['pulse self-model reflection', 'session title generation'])
   })
 
   it('persists distinct turn routes without credentials and keeps older attribution unknown', async () => {

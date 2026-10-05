@@ -42,6 +42,7 @@ type QueuedAnswer =
       llmMetrics?: LLMAnswerMetrics
       agentResponseTrace?: AgentResponseTrace
       shouldSkipParaphrase?: boolean
+      responseRoute?: 'controlled' | 'react' | 'pulse'
     }
 
 interface QueuedSuggestions {
@@ -219,6 +220,12 @@ export default class Brain {
         answer && typeof answer === 'object' && 'agentResponseTrace' in answer
           ? answer.agentResponseTrace
           : undefined
+      // Autonomous answers carry their own route rather than inheriting the
+      // last owner turn's paraphrasing and reflection behavior.
+      const responseRoute =
+        answer && typeof answer === 'object' && 'responseRoute' in answer
+          ? answer.responseRoute || NLU.currentResponseRoute
+          : NLU.currentResponseRoute
       const shouldSkipParaphrase =
         answer &&
         typeof answer === 'object' &&
@@ -239,7 +246,7 @@ export default class Brain {
          * and it will mislead the conversation)
          */
         if (
-          NLU.currentResponseRoute !== 'react' &&
+          responseRoute === 'controlled' &&
           !hasLoopConfig &&
           !hasSlotsConfig
         ) {
@@ -330,7 +337,7 @@ export default class Brain {
               : finalTextAnswer
           )
 
-          if (NLU.currentResponseRoute !== 'react') {
+          if (responseRoute === 'controlled') {
             POST_TURN_MAINTENANCE_QUEUE.enqueue(
               'controlled self-model reflection',
               () => SELF_MODEL_MANAGER.observeTurn({

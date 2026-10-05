@@ -3,7 +3,8 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import type { MessageLog } from '@/types'
+import type { AgentResponseTrace, LLMAnswerMetrics, MessageLog } from '@/types'
+import type Brain from '@/core/brain/brain'
 import { LEON_PULSE_INTERVAL_MS } from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
@@ -1061,6 +1062,7 @@ export default class PulseManager {
     ].join('\n')
 
     let output = ''
+    let answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace'> = {}
     let finalIntent: 'answer' | 'clarification' | 'cancelled' | 'blocked' | 'error' =
       'answer'
     let toolExecutions: Array<{
@@ -1086,6 +1088,14 @@ export default class PulseManager {
         typeof resultData['finalIntent'] === 'string'
           ? (resultData['finalIntent'] as typeof finalIntent)
           : 'answer'
+      answerMetadata = {
+        ...(resultData['llmMetrics']
+          ? { llmMetrics: resultData['llmMetrics'] as LLMAnswerMetrics }
+          : {}),
+        ...(resultData['agentResponseTrace']
+          ? { agentResponseTrace: resultData['agentResponseTrace'] as AgentResponseTrace }
+          : {})
+      }
       toolExecutions = this.extractToolExecutions(resultData['executionHistory'])
     } catch (error) {
       finalIntent = 'error'
@@ -1131,7 +1141,7 @@ export default class PulseManager {
     }
 
     if (output && matter.notifyOwner) {
-      await this.surfacePulseMessage(state, matter, output)
+      await this.surfacePulseMessage(state, matter, output, answerMetadata)
     }
 
     state.matters = state.matters.filter((entry) => entry.id !== matter.id)
@@ -1153,15 +1163,19 @@ export default class PulseManager {
   private async surfacePulseMessage(
     state: PulseState,
     matter: PulseMatter,
-    output: string
+    output: string,
+    answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace'>
   ): Promise<void> {
     const core = await this.loadCoreNodes()
-    core.SOCKET_SERVER.emitAnswerToChatClients(output)
-    await core.CONVERSATION_LOGGER.push({
-      who: 'leon',
-      message: output,
-      isAddedToHistory: true
-    })
+    await core.BRAIN.talk(
+      {
+        text: output,
+        speech: output,
+        responseRoute: 'pulse',
+        ...answerMetadata
+      },
+      true
+    )
 
     const nowIso = new Date().toISOString()
     matter.surfacedAt = nowIso
@@ -1410,12 +1424,12 @@ export default class PulseManager {
   }
 
   private async loadCoreNodes(): Promise<{
+    BRAIN: Pick<Brain, 'talk'>
     CONTEXT_MANAGER: {
       getManifest(): string
     }
     CONVERSATION_LOGGER: {
       load(params?: { nbOfLogsToLoad?: number }): Promise<MessageLog[]>
-      push(record: Omit<MessageLog, 'sentAt'>): Promise<void>
     }
     MEMORY_MANAGER: {
       buildPlanningMemoryPack(query: string, tokenBudget?: number): Promise<string>
@@ -1456,12 +1470,6 @@ export default class PulseManager {
     }
     POST_TURN_MAINTENANCE_QUEUE: {
       enqueue(label: string, task: () => Promise<void> | void): void
-    }
-    SOCKET_SERVER: {
-      emitAnswerToChatClients(answerData: unknown): void
-      socket?: {
-        emit(eventName: string, ...args: unknown[]): void
-      } | null
     }
   }> {
     return this.loadModule('index')
