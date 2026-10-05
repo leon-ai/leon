@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
   CompletionParams,
+  OpenAIToolCall,
   PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
@@ -1367,6 +1368,44 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(response.data['usage']).toMatchObject({
       prompt_tokens: 100,
       accounting: { cachedInputTokens: 80, costUSD: 0.001, costEstimated: false }
+    })
+  })
+
+  it('streams Z.ai tool arguments into a provisional call before returning its completed decision', async () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    const fetch = vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(streamController): void {
+        controller = streamController
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new ZAILLMProvider({ ...TARGET, provider: LLMProviders.ZAI, model: 'glm-5.3' })
+    const calls: OpenAIToolCall[] = []
+    const completion = provider.runChatCompletion('Read README.md', {
+      ...PARAMS,
+      shouldStream: true,
+      onToolCall: (call): void => {
+        calls.push(call)
+      }
+    })
+    const send = (delta: Record<string, unknown>, finishReason: string | null = null): void => {
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({
+        id: 'response-1', model: 'glm-5.3', created: 1,
+        choices: [{ index: 0, delta, finish_reason: finishReason }]
+      })}\n\n`))
+    }
+
+    await vi.waitFor(() => expect(fetch).toHaveBeenCalledOnce())
+    send({ tool_calls: [{ index: 0, id: 'call-1', type: 'function', function: { name: 'read_file', arguments: '{"path":' } }] })
+    await vi.waitFor(() => expect(calls.at(-1)?.function.arguments).toBe('{"path":'))
+    expect(JSON.parse(fetch.mock.calls[0]![1].body).tool_stream).toBe(true)
+    send({ tool_calls: [{ index: 0, function: { arguments: '"README.md"}' } }] }, 'tool_calls')
+    controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'))
+    controller.close()
+
+    const response = await completion
+    expect(response.data.choices[0].message.tool_calls[0]).toMatchObject({
+      id: 'call-1', function: { name: 'read_file', arguments: '{"path":"README.md"}' }
     })
   })
 

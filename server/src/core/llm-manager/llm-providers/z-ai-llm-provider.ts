@@ -12,6 +12,15 @@ import type {
 
 const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.ZAI)
 
+// Z.ai requires a separate opt-in on models verified to stream tool arguments.
+const TOOL_STREAM_MODELS = new Set([
+  'glm-5.3',
+  'glm-5.3-flash',
+  'glm-5.2',
+  'glm-5.1',
+  'glm-5-turbo',
+  'glm-5'
+])
 const REASONING_EFFORT_MODEL = 'glm-5.2'
 const REQUIRED_TOOL_INSTRUCTION =
   'Continue by calling one of the available tools that advances the authorized task. Do not return a final answer before performing that action.'
@@ -96,6 +105,17 @@ export default class ZAILLMProvider extends AISDKRemoteLLMProvider {
   ): LanguageModelV4CallOptions {
     const options = super.buildCallOptions(prompt, completionParams)
     const toolChoice = options.toolChoice
+
+    if (
+      completionParams.shouldStream && options.tools?.length &&
+      toolChoice?.type !== 'none' &&
+      TOOL_STREAM_MODELS.has(this.modelName)
+    ) {
+      options.providerOptions = {
+        ...options.providerOptions,
+        zai: { ...options.providerOptions?.['zai'], toolStream: true }
+      }
+    }
 
     if (toolChoice?.type !== 'required' && toolChoice?.type !== 'tool') {
       return options

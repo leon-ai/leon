@@ -278,7 +278,8 @@ export interface AgentLoopParams {
   executeFunction: (
     callable: AgentCallableFunction,
     toolInput: string,
-    toolCallTitle?: string
+    toolCallTitle?: string,
+    toolCallId?: string
   ) => Promise<AgentFunctionExecutionResult>
   loadAgentSkill: (skillId: string) => Promise<AgentSkillContext | null>
   loadToolkitContext?: (toolkitId: string) => string
@@ -1657,7 +1658,8 @@ async function executeAgentToolCall(
     const result = await params.executeFunction(
       callable,
       validatedInput,
-      toolCallInput.title
+      toolCallInput.title,
+      toolCall.id
     )
     params.signal?.throwIfAborted()
     const executionCompletedAt = Date.now()

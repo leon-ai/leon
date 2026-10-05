@@ -1063,6 +1063,14 @@ export default class AISDKRemoteLLMProvider {
     const tools = this.toTools(completionParams.tools)
     if (tools.length > 0) {
       options.tools = tools
+
+      if (this.config.flavor === 'anthropic' && completionParams.shouldStream) {
+        // Claude can emit long arguments without buffering each JSON value.
+        // MiniMax shares this SDK but does not document the same API option.
+        for (const tool of tools) {
+          tool.providerOptions = { anthropic: { eagerInputStreaming: true } }
+        }
+      }
     }
 
     const toolChoice = this.toToolChoice(completionParams.toolChoice)
@@ -1239,6 +1247,25 @@ export default class AISDKRemoteLLMProvider {
         arguments: ''
       }
       state.toolCallOrder.push(toolCallId)
+    }
+  }
+
+  /**
+   * Publishes a snapshot for display without executing incomplete arguments.
+   */
+  private emitToolCall(
+    state: CallState,
+    toolCallId: string,
+    completionParams: CompletionParams
+  ): void {
+    const call = state.toolCallsById[toolCallId]!
+
+    if (!state.hostedToolIds.has(toolCallId)) {
+      completionParams.onToolCall?.({
+        id: toolCallId,
+        type: 'function',
+        function: { name: call.functionName, arguments: call.arguments }
+      })
     }
   }
 
@@ -1779,6 +1806,7 @@ export default class AISDKRemoteLLMProvider {
         this.ensureToolCall(state, toolCallId)
         state.toolCallsById[toolCallId]!.functionName = toolName
         state.toolCallsById[toolCallId]!.arguments = input
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 
@@ -1794,6 +1822,7 @@ export default class AISDKRemoteLLMProvider {
         if (toolName) {
           state.toolCallsById[toolCallId]!.functionName = toolName
         }
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 
@@ -1810,6 +1839,7 @@ export default class AISDKRemoteLLMProvider {
 
         this.ensureToolCall(state, toolCallId)
         state.toolCallsById[toolCallId]!.arguments += delta
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 
@@ -1831,6 +1861,7 @@ export default class AISDKRemoteLLMProvider {
         if (delta) {
           state.toolCallsById[toolCallId]!.arguments += delta
         }
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 

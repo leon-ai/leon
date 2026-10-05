@@ -122,7 +122,10 @@ function getToolDisplayContext(
   }
 }
 
-function emitToolExecutionInputToWebApp(params: {
+/**
+ * Updates the same activity card as arguments arrive and execution begins.
+ */
+export function emitToolExecutionInputToWebApp(params: {
   toolkitId: string
   toolId: string
   functionName: string
@@ -231,7 +234,10 @@ function emitToolExecutionOutputDeltaToWebApp(params: {
   })
 }
 
-function emitToolExecutionOutputToWebApp(params: {
+/**
+ * Settles an activity card with an execution outcome or an unused preview.
+ */
+export function emitToolExecutionOutputToWebApp(params: {
   toolkitId: string
   toolId: string
   functionName: string
@@ -286,7 +292,8 @@ export async function runToolExecution(
     event: Extract<AgentRunProgressEvent, { type: 'tool_call' }>['toolCall']
   ) => void,
   signal?: AbortSignal,
-  onPreparationProgress?: (message: string) => Promise<void>
+  onPreparationProgress?: (message: string) => Promise<void>,
+  streamedToolGroupId?: string
 ): Promise<ToolExecutionResult> {
   signal?.throwIfAborted()
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
@@ -400,7 +407,7 @@ export async function runToolExecution(
   LogHelper.debug(`Running tool: ${qualifiedName}`)
   LogHelper.debug(`Tool input: ${toolInput}`)
 
-  const toolGroupId = createToolGroupId(toolkitId, toolId, functionName)
+  const toolGroupId = streamedToolGroupId || createToolGroupId(toolkitId, toolId, functionName)
   const toolDisplayContext = getToolDisplayContext(
     toolkitId,
     toolId,

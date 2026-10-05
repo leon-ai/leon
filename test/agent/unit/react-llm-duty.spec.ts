@@ -436,7 +436,12 @@ describe('continuous agent loop', () => {
     expect(result.intent).toBe('answer')
     expect(result.answer).toBe('All requested invoices are downloaded and verified.')
     expect(onProgressMessage).toHaveBeenCalledExactlyOnceWith(progressMessage)
-    expect(executeFunction).toHaveBeenCalledExactlyOnceWith(callable, JSON.stringify({ query: 'remaining-invoices' }), undefined)
+    expect(executeFunction).toHaveBeenCalledExactlyOnceWith(
+      callable,
+      JSON.stringify({ query: 'remaining-invoices' }),
+      undefined,
+      'remaining'
+    )
     expect(callModel.mock.calls[1]?.[1]).toEqual([])
     expect(callModel.mock.calls[1]?.[2]).toMatchObject({ isCompletionReview: true })
     expect(
@@ -986,7 +991,8 @@ describe('continuous agent loop', () => {
     expect(executeFunction).toHaveBeenCalledWith(
       callable,
       JSON.stringify({ query: '~/Desktop' }),
-      'List files on ~/Desktop'
+      'List files on ~/Desktop',
+      'list-desktop'
     )
     expect(result.executionHistory[0]).toMatchObject({
       toolCallTitle: 'List files on ~/Desktop',

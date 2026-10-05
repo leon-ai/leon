@@ -83,7 +83,11 @@ import {
   type AgentInferencePolicy
 } from './react-llm-duty/agent-policy'
 import { parseToolCallArguments } from './react-llm-duty/agent-utils'
-import { runToolExecution } from './react-llm-duty/tool-execution'
+import {
+  runToolExecution,
+  emitToolExecutionInputToWebApp,
+  emitToolExecutionOutputToWebApp
+} from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
   AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
@@ -98,6 +102,7 @@ import {
   findHighConfidenceAgentToolkitId,
   runAgentLoop
 } from './react-llm-duty/agent-loop'
+import type { AgentCallableFunction } from './react-llm-duty/agent-loop'
 import { buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import {
   type AccumulatedLLMMetricsState,
@@ -181,6 +186,11 @@ export class ReActLLMDuty extends LLMDuty {
 
   private executionStartedAt = 0
   private firstOutputAt: number | null = null
+  private readonly streamedToolCalls = new Map<string, {
+    callable: AgentCallableFunction
+    groupId: string
+    input: string
+  }>()
   private hasExplicitMemoryWrite = false
   private reasoningGenerationId: string | null = null
   private hasFinalizedAnswer = false
@@ -552,10 +562,16 @@ export class ReActLLMDuty extends LLMDuty {
               loadedToolNames: catalog.loadedToolNames,
               loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
               activeSkillId: caller.agentSkillContext?.id ?? null
-            }
+            },
+            catalog.functionsByToolName
           )
         },
-        executeFunction: async (callable, toolInput, toolCallTitle) => {
+        executeFunction: async (callable, toolInput, toolCallTitle, toolCallId) => {
+          const preview = toolCallId ? this.streamedToolCalls.get(toolCallId) : undefined
+          if (toolCallId) {
+            this.streamedToolCalls.delete(toolCallId)
+          }
+
           const toolResult = await runToolExecution(
             callable.toolkitId,
             callable.toolId,
@@ -580,7 +596,8 @@ export class ReActLLMDuty extends LLMDuty {
               })
             },
             this.signal,
-            (message) => this.emitProgress(message)
+            (message) => this.emitProgress(message),
+            preview?.groupId
           )
 
           return toolResult
@@ -675,6 +692,8 @@ export class ReActLLMDuty extends LLMDuty {
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
     } finally {
+      this.closeStreamedToolCalls()
+
       if (this.traceSaveTimer) {
         clearTimeout(this.traceSaveTimer)
         this.traceSaveTimer = null
@@ -704,6 +723,34 @@ export class ReActLLMDuty extends LLMDuty {
     this.responseTraceCollector.record(event)
     this.scheduleTraceSave()
     this.onProgressEvent?.(event)
+  }
+
+  /**
+   * Closes previews that were canceled, rejected, or never selected for execution.
+   */
+  private closeStreamedToolCalls(): void {
+    for (const { callable, groupId, input } of this.streamedToolCalls.values()) {
+      const message = 'This proposed tool call was not executed.'
+      this.reportProgressEvent({
+        type: 'tool_call',
+        toolCall: {
+          id: groupId,
+          name: callable.qualifiedName,
+          status: 'error',
+          input,
+          errorMessage: message
+        }
+      })
+      emitToolExecutionOutputToWebApp({
+        ...callable,
+        toolGroupId: groupId,
+        output: {},
+        status: 'error',
+        message
+      })
+    }
+
+    this.streamedToolCalls.clear()
   }
 
   private scheduleTraceSave(): void {
@@ -928,7 +975,8 @@ export class ReActLLMDuty extends LLMDuty {
       requiresToolAction?: boolean
       isContextRecoveryAttempt?: boolean
     },
-    checkpointInput?: AgentContinuityCheckpointInput
+    checkpointInput?: AgentContinuityCheckpointInput,
+    functionsByToolName?: ReadonlyMap<string, AgentCallableFunction>
   ): Promise<{
     toolCalls?: OpenAIToolCall[]
     textContent?: string
@@ -1123,7 +1171,45 @@ export class ReActLLMDuty extends LLMDuty {
         ...(!options.isCompletionReview
           ? {
               onToken: (token: unknown): void => {
-                if (typeof token === 'string') this.answerStream.push(token)
+                if (typeof token === 'string') {
+                  this.answerStream.push(token)
+                }
+              },
+              onStreamEvent: (event): void => {
+                if (event.type === 'stream-open') {
+                  // A retry replaces any unfinished previews from its predecessor.
+                  this.closeStreamedToolCalls()
+                }
+              },
+              onToolCall: (call): void => {
+                const callable = functionsByToolName?.get(call.function.name)
+                if (!callable) {
+                  return
+                }
+
+                const previous = this.streamedToolCalls.get(call.id)
+                const input = call.function.arguments
+                if (previous?.input === input) {
+                  return
+                }
+
+                const groupId = previous?.groupId || `agent_${StringHelper.random(12)}`
+                this.streamedToolCalls.set(call.id, { callable, groupId, input })
+                this.firstOutputAt ??= Date.now()
+                this.reportProgressEvent({
+                  type: 'tool_call',
+                  toolCall: {
+                    id: groupId,
+                    name: callable.qualifiedName,
+                    status: 'running',
+                    input
+                  }
+                })
+                emitToolExecutionInputToWebApp({
+                  ...callable,
+                  toolGroupId: groupId,
+                  toolInput: input
+                })
               }
             }
           : {}),

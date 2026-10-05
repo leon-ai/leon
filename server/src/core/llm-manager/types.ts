@@ -186,6 +186,11 @@ export interface CompletionParams {
   onToken?: (tokens: Token[] | string) => void
   onReasoningToken?: (reasoningChunk: string) => void
   onStreamEvent?: (event: CompletionStreamEvent) => void
+  /**
+   * Provisional function arguments for display while the model is generating.
+   * Execute only the completed tool calls returned by the completion.
+   */
+  onToolCall?: (toolCall: OpenAIToolCall) => void
   shouldStream?: boolean
   /**
    * Optional provider hint to disable thinking/reasoning for a request.

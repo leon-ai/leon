@@ -143,6 +143,7 @@ export default class AnthropicClaudeCodeAdapter {
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-claude-'))
     let command: execa.ExecaChildProcess<string> | undefined
     let lines: ReturnType<typeof createInterface> | undefined
+    const toolCallIds: string[] = []
     const closeStream = (): void => {
       lines?.close()
     }
@@ -226,7 +227,9 @@ export default class AnthropicClaudeCodeAdapter {
           // A retried model message replaces provisional output from its predecessor.
           streamedJSON = ''
           streamedText = ''
+          toolCallIds.length = 0
           params.onToken?.('')
+          params.onStreamEvent?.({ type: 'stream-open' })
         }
 
         if (event.delta?.type === 'thinking_delta') {
@@ -245,6 +248,29 @@ export default class AnthropicClaudeCodeAdapter {
             if (delta) {
               streamedText = text
               params.onToken?.(delta)
+            }
+          }
+
+          if (value && typeof value === 'object' && 'tool_calls' in value) {
+            const partialCalls = value['tool_calls']
+            if (Array.isArray(partialCalls)) {
+              // SDK partial JSON parsing is for display only. Core receives the
+              // validated final decisions, using these same IDs for activity cards.
+              for (const [index, call] of partialCalls.entries()) {
+                if (!call || typeof call !== 'object' || typeof call.name !== 'string') {
+                  continue
+                }
+
+                toolCallIds[index] ??= randomUUID()
+                params.onToolCall?.({
+                  id: toolCallIds[index]!,
+                  type: 'function',
+                  function: {
+                    name: call.name,
+                    arguments: JSON.stringify(call.arguments ?? {})
+                  }
+                })
+              }
             }
           }
         }
@@ -288,8 +314,8 @@ export default class AnthropicClaudeCodeAdapter {
           finish_reason: calls?.length ? 'tool_calls' : 'stop',
           message: {
             content: text,
-            tool_calls: (calls || []).map((call) => ({
-              id: randomUUID(),
+            tool_calls: (calls || []).map((call, index) => ({
+              id: toolCallIds[index] || randomUUID(),
               type: 'function',
               function: { name: call.name, arguments: JSON.stringify(call.arguments) }
             }))
