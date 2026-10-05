@@ -8,9 +8,10 @@ import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manag
 import { TOOL_EXECUTION_WAIT_MS } from '@/constants'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { TOOL_WORKER_MANAGER } from '@/core'
 
 interface FilesystemValueNormalizer {
-  normalizeFilesystemValues(value: unknown): unknown
+  normalizePossibleFilesystemPath(value: string): string
 }
 
 interface ExecutorInternals {
@@ -86,18 +87,32 @@ it('keeps ordinary callers and functions without background opt-in synchronous',
 })
 
 describe('ToolExecutor filesystem value normalization', () => {
-  it('does not reinterpret ordinary tool values as filesystem paths', () => {
-    const executor = new ToolExecutor() as unknown as FilesystemValueNormalizer
-
-    expect(
-      executor.normalizeFilesystemValues({
-        scope: 'desktop',
-        target: { kind: 'desktop' }
-      })
-    ).toEqual({
-      scope: 'desktop',
-      target: { kind: 'desktop' }
+  it('preserves patterns, globs and matched text through actual tool dispatch', async () => {
+    const executor = new ToolExecutor()
+    vi.spyOn(ToolkitRegistry.prototype, 'resolveToolById').mockReturnValue({
+      toolkitId: 'test', toolId: 'fixture', toolName: 'Fixture', toolDescription: 'Fixture'
     })
+    vi.spyOn(ToolkitRegistry.prototype, 'getToolConnectionProviders').mockReturnValue([])
+    vi.spyOn(ToolkitRegistry.prototype, 'getToolSatelliteDevice').mockReturnValue(undefined)
+    vi.spyOn(ToolkitRegistry.prototype, 'needsToolConnection').mockReturnValue(false)
+    vi.spyOn(ToolkitRegistry.prototype, 'getToolAvailability').mockReturnValue({ available: true, missingSettings: [] })
+    vi.spyOn(ToolkitRegistry.prototype, 'getToolFunctions').mockReturnValue({ run: {
+      description: 'Search', parameters: {
+        type: 'object', properties: { pattern: { type: 'string' }, glob: { type: 'string' } }
+      }
+    } })
+    const output = { result: { lines: { text: '/api//v1' }, path: { text: './src/file.ts' } } }
+    const dispatch = vi.spyOn(TOOL_WORKER_MANAGER, 'execute').mockResolvedValue({
+      success: true, message: 'Done', output
+    })
+    const result = await executor.executeTool({
+      toolkitId: 'test', toolId: 'fixture', functionName: 'run',
+      parsedInput: { pattern: '/api//v1', glob: './src/**' },
+      leonService: { baseURL: 'http://localhost', token: 'test' }
+    })
+
+    expect(dispatch.mock.calls[0]?.[1]).toEqual(['/api//v1', './src/**'])
+    expect(result.data.output).toEqual(output)
   })
 
   it('does not treat a temporary runtime directory as a user-home root', () => {
@@ -105,7 +120,7 @@ describe('ToolExecutor filesystem value normalization', () => {
     const executor = new ToolExecutor() as unknown as FilesystemValueNormalizer
     const benchmarkArtifact = '/tmp/computer-use-run/result.txt'
 
-    expect(executor.normalizeFilesystemValues(benchmarkArtifact)).toBe(
+    expect(executor.normalizePossibleFilesystemPath(benchmarkArtifact)).toBe(
       benchmarkArtifact
     )
   })

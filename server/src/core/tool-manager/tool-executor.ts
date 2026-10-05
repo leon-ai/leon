@@ -535,14 +535,12 @@ export default class ToolExecutor {
       })
     }
 
-    const normalizedParsedInput = this.normalizeFilesystemValues(parsedInput) as Record<
-      string,
-      unknown
-    >
+    // Tools resolve their own filesystem arguments. Other strings may be
+    // literal search text, globs or source code and must remain unchanged.
     const responseJQ = this.getResponseJQ(functionConfig)
     let argsArray: unknown[] = []
     try {
-      argsArray = this.mapArgs(normalizedParsedInput, functionConfig.parameters)
+      argsArray = this.mapArgs(parsedInput, functionConfig.parameters)
     } catch (error) {
       return this.buildResult({
         status: 'invalid_input',
@@ -550,7 +548,7 @@ export default class ToolExecutor {
         input: input.toolInput ?? null,
         resolvedTool,
         functionName,
-        parsedInput: normalizedParsedInput,
+        parsedInput: parsedInput,
         output: {}
       })
     }
@@ -594,7 +592,7 @@ export default class ToolExecutor {
         input: input.toolInput ?? null,
         resolvedTool,
         functionName,
-        parsedInput: normalizedParsedInput,
+        parsedInput: parsedInput,
         output: { required_connections: declaredConnections }
       })
     }
@@ -605,7 +603,7 @@ export default class ToolExecutor {
           toolkitId: resolvedTool.toolkitId,
           toolId: resolvedTool.toolId,
           functionName,
-          parameters: normalizedParsedInput,
+          parameters: parsedInput,
           profileName: getActiveProfileName(),
           conversationSessionId: getActiveConversationSessionId(),
           leonService: input.leonService || {
@@ -651,9 +649,7 @@ export default class ToolExecutor {
       }
     }
 
-    let runtimeOutput = this.normalizeFilesystemValues(
-      runtimeResult.output
-    ) as Record<string, unknown>
+    let runtimeOutput = runtimeResult.output
     const toolReportedFailure = runtimeResult.success
       ? this.getToolReportedFailure(runtimeOutput)
       : null
@@ -668,7 +664,7 @@ export default class ToolExecutor {
           input: input.toolInput ?? null,
           resolvedTool,
           functionName,
-          parsedInput: normalizedParsedInput,
+          parsedInput: parsedInput,
           output: runtimeResult.output
         })
       }
@@ -678,7 +674,7 @@ export default class ToolExecutor {
       toolkitId: resolvedTool.toolkitId,
       toolId: resolvedTool.toolId,
       functionName,
-      params: normalizedParsedInput
+      params: parsedInput
     })
 
     return this.buildResult({
@@ -688,7 +684,7 @@ export default class ToolExecutor {
       input: input.toolInput ?? null,
       resolvedTool,
       functionName,
-      parsedInput: normalizedParsedInput,
+      parsedInput: parsedInput,
       output: runtimeOutput,
       ...(runtimeResult.modelFiles
         ? { modelFiles: runtimeResult.modelFiles }
@@ -808,28 +804,6 @@ export default class ToolExecutor {
     }
 
     return null
-  }
-
-  private normalizeFilesystemValues(value: unknown): unknown {
-    if (typeof value === 'string') {
-      return this.normalizePossibleFilesystemPath(value)
-    }
-
-    if (Array.isArray(value)) {
-      return value.map((item) => this.normalizeFilesystemValues(item))
-    }
-
-    if (value && typeof value === 'object') {
-      const objectValue = value as Record<string, unknown>
-      const normalizedEntries = Object.entries(objectValue).map(([key, nestedValue]) => [
-        key,
-        this.normalizeFilesystemValues(nestedValue)
-      ])
-
-      return Object.fromEntries(normalizedEntries)
-    }
-
-    return value
   }
 
   private normalizePossibleFilesystemPath(value: string): string {
