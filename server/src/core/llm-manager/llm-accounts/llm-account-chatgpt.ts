@@ -6,9 +6,10 @@ import path from 'node:path'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
-import { LEON_HOME_PATH } from '@/leon-roots'
+import { CODEBASE_PATH, LEON_HOME_PATH } from '@/leon-roots'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { MODEL_ACCOUNT_STORE, useModelAccount, type LLMAccountSignIn } from './index'
+import { serveChatGPTSignInPage } from './chatgpt-sign-in-page'
 import { getLLMModelCatalogEntries } from '../llm-model-catalog'
 import { LLMProviders } from '../types'
 import type { ConnectionSummary } from '@/core/connections/connection-store'
@@ -24,6 +25,7 @@ const CALLBACK_PATH = '/auth/callback'
 const AUTH_TIMEOUT_MS = 600_000
 const REQUEST_TIMEOUT_MS = 30_000
 const HOST_ID_FILENAME = '.chatgpt-host-id'
+const LOGO_PATH = path.join(CODEBASE_PATH, 'web-app', 'public', 'img', 'logo-for-dark-bg.svg')
 const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`))
 
 interface OAuthToken {
@@ -119,6 +121,7 @@ export async function startChatGPTSignIn(accountID?: string, preferredModel = ''
     throw new Error('I could not find that ChatGPT connection. Use /connection ai.')
   }
 
+  const logo = (await fs.readFile(LOGO_PATH)).toString('base64')
   const clientID = previous ? String(previous['client_id']) : DYNAMIC_CLIENT
   const hostID = previous ? String(previous['ext_agent_host_id']) : await getHostID()
   const state = randomBytes(32).toString('base64url')
@@ -149,7 +152,7 @@ export async function startChatGPTSignIn(accountID?: string, preferredModel = ''
 
     if (request.method !== 'GET' || callback.pathname !== CALLBACK_PATH ||
       callback.searchParams.get('state') !== state || consumed) {
-      response.writeHead(400).end('This sign-in request is not valid.')
+      serveChatGPTSignInPage(response, logo)
       return
     }
 
@@ -160,13 +163,12 @@ export async function startChatGPTSignIn(accountID?: string, preferredModel = ''
 
     if (callback.searchParams.has('error') || !code || !issuedID ||
       issuedID === DYNAMIC_CLIENT || (previous && issuedID !== clientID)) {
-      response.writeHead(400).end('Sign-in was not completed. Return to Leon AI to try again.')
+      serveChatGPTSignInPage(response, logo)
       cancel()
       return
     }
 
-    response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' })
-      .end('I received your sign-in. You can return to Leon AI now.')
+    serveChatGPTSignInPage(response, logo, complete)
     if (timer) {
       clearTimeout(timer)
     }

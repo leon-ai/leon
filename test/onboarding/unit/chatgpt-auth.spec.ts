@@ -16,6 +16,7 @@ vi.mock('@/core/llm-manager/llm-accounts', () => ({
   useModelAccount: account.use
 }))
 vi.mock('@/leon-roots', () => ({
+  CODEBASE_PATH: process.cwd(),
   get LEON_HOME_PATH(): string {
     return account.directory
   }
@@ -72,10 +73,20 @@ describe('ChatGPT sign-in', () => {
           finishModels = resolve
         })
       )
-    expect((await browserFetch(callback)).status).toBe(200)
+    const page = await browserFetch(callback)
+    expect(page.status).toBe(200)
+    expect(page.headers.get('content-type')).toBe('text/html; charset=utf-8')
+    const reader = page.body!.getReader()
+    const initial = new TextDecoder().decode((await reader.read()).value)
+    expect(initial).toContain('Connecting your ChatGPT account')
+    expect(initial).not.toContain('ChatGPT connected')
     await vi.waitFor(() => expect(exchange).toHaveBeenCalledTimes(2))
     signIn.cancel()
     await expect(signIn.complete).rejects.toThrow('sign-in ended')
+    const final = new TextDecoder().decode((await reader.read()).value)
+    expect(final).toContain('Unable to connect ChatGPT')
+    expect(final).not.toContain('ChatGPT connected')
+    await reader.cancel()
     expect(exchange.mock.calls[1]![1]!.signal!.aborted).toBe(true)
 
     finishModels(Response.json({ models: [{ slug: 'test-model', visibility: 'list' }] }))
@@ -109,17 +120,24 @@ describe('ChatGPT sign-in', () => {
     callback.searchParams.set('code', 'test-code')
     callback.searchParams.set('client_id', 'oaiapp_test')
     callback.searchParams.set('state', 'wrong-state')
-    expect((await browserFetch(callback)).status).toBe(400)
+    const invalidPage = await browserFetch(callback)
+    expect(invalidPage.status).toBe(400)
+    expect(await invalidPage.text()).toContain('Unable to connect ChatGPT')
     expect(exchange).not.toHaveBeenCalled()
 
     callback.searchParams.set('state', authorize.searchParams.get('state')!)
-    expect((await browserFetch(callback)).status).toBe(200)
+    const page = await browserFetch(callback)
+    expect(page.status).toBe(200)
     if (wrongNonce) {
       await expect(signIn.complete).rejects.toThrow('finish ChatGPT sign-in')
+      const html = await page.text()
+      expect(html).toContain('Unable to connect ChatGPT')
+      expect(html).not.toContain('ChatGPT connected')
       expect(account.save).not.toHaveBeenCalled()
       expect(account.use).not.toHaveBeenCalled()
     } else {
       await signIn.complete
+      expect(await page.text()).toContain('ChatGPT connected')
       const form = new URLSearchParams(exchange.mock.calls[0]![1]!.body as string)
       expect(form.get('client_id')).toBe('oaiapp_test')
       expect(form.get('code_verifier')).not.toBeNull()
