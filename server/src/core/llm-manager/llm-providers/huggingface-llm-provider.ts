@@ -6,7 +6,7 @@ import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.HuggingFace)
 
 /**
- * @see https://router.huggingface.co/v1/chat/completions
+ * @see https://huggingface.co/docs/inference-providers/guides/responses-api
  */
 export default class HuggingFaceLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
@@ -20,7 +20,15 @@ export default class HuggingFaceLLMProvider extends AISDKRemoteLLMProvider {
         PROVIDER_CONFIG,
         target.accountCredentials
       ),
-      flavor: 'huggingface'
+      flavor: 'open-responses',
+      buildProviderOptions: ({ completionParams, reasoningMode }) => ({
+        huggingface: {
+          reasoningEffort: completionParams.disableThinking === true || reasoningMode === 'off'
+            ? 'low'
+            : completionParams.reasoningEffort ||
+              (reasoningMode === 'guarded' ? 'low' : reasoningMode === 'on' ? 'medium' : 'high')
+        }
+      })
     })
   }
 }

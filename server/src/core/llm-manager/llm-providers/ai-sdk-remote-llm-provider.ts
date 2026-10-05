@@ -15,12 +15,12 @@ import type {
   SharedV4ProviderOptions
 } from '@ai-sdk/provider'
 import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenResponses } from '@ai-sdk/open-responses'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createMiniMax } from '@ai-sdk/minimax'
 import { createZai } from '@ai-sdk/zai'
 import { createMoonshotAI } from '@ai-sdk/moonshotai'
-import { createHuggingFace } from '@ai-sdk/huggingface'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
 import { OpenAIResponsesTransport } from './openai-responses-transport'
@@ -55,13 +55,13 @@ import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-
 
 type AISDKFlavor =
   | 'openai-responses'
+  | 'open-responses'
   | 'openrouter'
   | 'openai-compatible'
   | 'anthropic'
   | 'minimax'
   | 'zai'
   | 'moonshotai'
-  | 'huggingface'
   | 'cerebras'
   | 'groq'
 
@@ -193,7 +193,7 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
-  private createLanguageModel(): LanguageModelV4 {
+  private createLanguageModel(flavor = this.config.flavor): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
     const fetch: typeof globalThis.fetch = (input, init) => {
@@ -216,6 +216,18 @@ export default class AISDKRemoteLLMProvider {
       })
 
       return provider.responses(this.model)
+    }
+
+    if (flavor === 'open-responses') {
+      const provider = createOpenResponses({
+        name: this.config.providerName,
+        url: `${this.config.baseURL.replace(/\/+$/, '')}/responses`,
+        apiKey,
+        fetch,
+        ...(headers ? { headers } : {})
+      })
+
+      return provider(this.model)
     }
 
     if (this.config.flavor === 'openai-compatible') {
@@ -279,17 +291,6 @@ export default class AISDKRemoteLLMProvider {
       return provider(this.model)
     }
 
-
-    if (this.config.flavor === 'huggingface') {
-      const provider = createHuggingFace({
-        fetch,
-        apiKey,
-        baseURL: this.config.baseURL,
-        ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
-      })
-
-      return provider(this.model)
-    }
 
     if (this.config.flavor === 'moonshotai') {
       const provider = createMoonshotAI({
@@ -607,6 +608,7 @@ export default class AISDKRemoteLLMProvider {
       if (
         reasoningItems.length === 0 && message.reasoning &&
         (this.config.flavor === 'openai-compatible' ||
+          this.config.flavor === 'open-responses' ||
           this.config.flavor === 'zai' ||
           this.config.flavor === 'moonshotai')
       ) {
@@ -636,13 +638,19 @@ export default class AISDKRemoteLLMProvider {
   private getVisualFileProviderOptions(
     visualDetail: 'auto' | 'low' | 'high' | undefined
   ): { providerOptions: SharedV4ProviderOptions } | Record<string, never> {
-    if (!visualDetail || this.config.flavor !== 'openai-responses') {
+    if (
+      !visualDetail ||
+      (this.config.flavor !== 'openai-responses' &&
+        this.config.flavor !== 'open-responses')
+    ) {
       return {}
     }
 
     return {
       providerOptions: {
-        openai: { imageDetail: visualDetail }
+        [this.config.flavor === 'openai-responses' ? 'openai' : this.config.providerName]: {
+          imageDetail: visualDetail
+        }
       }
     }
   }
@@ -938,16 +946,6 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
-    if (this.config.flavor === 'huggingface') {
-      return {
-        huggingface: {
-          reasoningEffort:
-            completionParams.reasoningEffort ||
-            (reasoningMode === 'on' ? 'medium' : 'low')
-        }
-      }
-    }
-
     if (this.config.flavor === 'cerebras') {
       return {
         cerebras: {
@@ -1126,14 +1124,6 @@ export default class AISDKRemoteLLMProvider {
         : {
             thinking: { type: 'enabled' },
             reasoningHistory: 'interleaved'
-          }
-    } else if (this.config.flavor === 'huggingface') {
-      providerOptions['huggingface'] = completionParams.disableThinking === true
-        ? {
-            reasoningEffort: 'low'
-          }
-        : {
-            reasoningEffort: 'high'
           }
     } else if (this.config.flavor === 'cerebras') {
       providerOptions['cerebras'] = completionParams.disableThinking === true

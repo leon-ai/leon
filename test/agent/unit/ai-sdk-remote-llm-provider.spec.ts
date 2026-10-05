@@ -12,6 +12,7 @@ import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-pro
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
 import ZAILLMProvider from '@/core/llm-manager/llm-providers/z-ai-llm-provider'
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
+import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
 import { CONFIG_MANAGER } from '@/config'
@@ -400,6 +401,35 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(readCompletionAccounting({ inputTokens, raw: {
       prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 0 }
     } })).toEqual({ cachedInputTokens: 0 })
+  })
+
+  it('retains Hugging Face function calls and outputs in Responses history', async () => {
+    const response = { id: 'resp_hf', created_at: 1, model: 'openai/gpt-oss-120b', status: 'completed',
+      output: [{ type: 'function_call', call_id: 'call_hf', name: 'lookup', arguments: '{}' }],
+      usage: { input_tokens: 100, output_tokens: 20, input_tokens_details: { cached_tokens: 80 } } }
+    const fetch = vi.fn().mockImplementation(async () => Response.json(response))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new HuggingFaceLLMProvider({
+      provider: LLMProviders.HuggingFace, model: response.model, label: 'HF',
+      isEnabled: true, isLocal: false, isResolved: true
+    })
+    const params = { ...createCompletionParams(null), shouldStream: false }
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
+      await provider.runChatCompletion('Lookup.', params)
+    )
+    expect(normalized.accounting?.cachedInputTokens).toBe(80)
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Lookup.' },
+      { role: 'assistant', content: '', toolCalls: normalized.toolCalls },
+      { role: 'tool', toolCallId: 'call_hf', toolName: 'lookup', content: 'Found.' }
+    ], { ...params, toolChoice: 'none' })
+    expect(String(fetch.mock.calls[1]![0])).toBe('https://router.huggingface.co/v1/responses')
+    const body = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(body.input).toContainEqual({
+      type: 'function_call', call_id: 'call_hf', name: 'lookup', arguments: '{}'
+    })
+    expect(body.input).toContainEqual({ type: 'function_call_output', call_id: 'call_hf', output: 'Found.' })
+    expect(body.tool_choice).toBe('none')
   })
 
   it.each([LLMProviders.Anthropic, LLMProviders.MiniMax])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
