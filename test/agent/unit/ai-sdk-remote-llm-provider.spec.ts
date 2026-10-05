@@ -10,6 +10,7 @@ import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-l
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
+import ZAILLMProvider from '@/core/llm-manager/llm-providers/z-ai-llm-provider'
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
@@ -179,7 +180,124 @@ describe('AISDKRemoteLLMProvider', () => {
     vi.unstubAllGlobals()
   })
 
+  it('streams Z.ai before completion and replays exact reasoning with reported cache hits', async () => {
+    let controller: ReadableStreamDefaultController<Uint8Array>
+    const fetch = vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(streamController): void {
+        controller = streamController
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new ZAILLMProvider({
+      provider: LLMProviders.ZAI, model: 'glm-5.3', label: 'Z.ai',
+      isEnabled: true, isLocal: false, isResolved: true
+    })
+    const onToken = vi.fn()
+    const onReasoningToken = vi.fn()
+    const params = {
+      ...createCompletionParams(null), shouldStream: true,
+      reasoningMode: 'on' as const, onToken, onReasoningToken
+    }
+    const pending = provider.runChatCompletion('Check.', params)
+    const write = (value: Record<string, unknown>): void => {
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(value)}\n\n`))
+    }
+    for (const reasoning of ['  ', 'check ', 'check ', '\n']) {
+      write({ choices: [{ delta: { reasoning_content: reasoning } }] })
+    }
+    write({ choices: [{ delta: { content: 'Done.' } }] })
+    await vi.waitFor(() => {
+      expect(onToken).toHaveBeenCalledWith('Done.')
+      expect(onReasoningToken.mock.calls.map(([chunk]) => chunk).join('')).toBe('  check check \n')
+    })
+    write({ choices: [{ delta: {}, finish_reason: 'stop' }], usage: {
+      prompt_tokens: 1_000, completion_tokens: 20,
+      prompt_tokens_details: { cached_tokens: 512 },
+      completion_tokens_details: { reasoning_tokens: 15 }
+    } })
+    controller!.close()
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(await pending)
+    expect(normalized.accounting).toMatchObject({ cachedInputTokens: 512, reasoningOutputTokens: 15 })
+    const reasoningItems = normalized.reasoningItems!
+    expect(reasoningItems[0]!.text).toBe('  check check \n')
+
+    fetch.mockResolvedValue(new Response(
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'
+    ))
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Check.' },
+      { role: 'assistant', content: '', reasoningItems,
+        toolCalls: [{ id: 'call_1', type: 'function', function: { name: 'check', arguments: '{}' } }] },
+      { role: 'tool', toolCallId: 'call_1', toolName: 'check', content: 'Checked.' }
+    ], params)
+    const body = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(body).toMatchObject({
+      stream: true,
+      thinking: { type: 'enabled', clear_thinking: false }
+    })
+    expect(body.messages).toContainEqual(expect.objectContaining({
+      role: 'assistant', reasoning_content: '  check check \n'
+    }))
+  })
+
   it.each([
+    'required' as const,
+    { type: 'function' as const, function: { name: 'check' } }
+  ])('adapts Z.ai tool-action intent to automatic selection (%j)', async (toolChoice) => {
+    const fetch = vi.fn().mockImplementation(async () => Response.json({
+      id: 'chat_zai', model: 'glm-5.3', created: 1,
+      choices: [{ index: 0, finish_reason: 'tool_calls', message: {
+        role: 'assistant', content: '',
+        tool_calls: [{ id: 'call_check', type: 'function', function: { name: 'check', arguments: '{}' } }]
+      } }],
+      usage: { prompt_tokens: 100, completion_tokens: 20, prompt_tokens_details: { cached_tokens: 80 } }
+    }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new ZAILLMProvider({
+      provider: LLMProviders.ZAI, model: 'glm-5.3', label: 'Z.ai',
+      isEnabled: true, isLocal: false, isResolved: true,
+      accountCredentials: {
+        api_key: 'coding-key', base_url: 'https://example.invalid/api/coding/paas/v4'
+      }
+    })
+    const prompt: PromptOrChatHistory = [{ role: 'user', content: 'Check.' }]
+    const params: CompletionParams = {
+      ...createCompletionParams(null), shouldStream: false, toolChoice,
+      reasoningMode: 'on', reasoningEffort: 'max',
+      tools: ['check', 'other'].map((name) => ({
+        type: 'function', function: { name, parameters: { type: 'object', properties: {} } }
+      }))
+    }
+    const result = normalizeCompletionResultForOpenAICompatibleProvider(
+      await provider.runChatCompletion(prompt, params)
+    )
+    const body = JSON.parse(fetch.mock.calls[0]![1].body)
+
+    expect(String(fetch.mock.calls[0]![0])).toBe('https://example.invalid/api/coding/paas/v4/chat/completions')
+    expect(new Headers(fetch.mock.calls[0]![1].headers).get('authorization')).toBe('Bearer coding-key')
+    expect(body).toMatchObject({
+      tool_choice: 'auto', reasoning_effort: 'max', thinking: { type: 'enabled', clear_thinking: false }
+    })
+    expect(body.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual(
+      toolChoice === 'required' ? ['check', 'other'] : ['check']
+    )
+    expect(body.messages[0]).toEqual({ role: 'system', content: params.systemPrompt })
+    expect(body.messages.at(-1)).toMatchObject({
+      role: 'user', content: expect.stringContaining('calling one of the available tools')
+    })
+    expect(prompt).toEqual([{ role: 'user', content: 'Check.' }])
+    expect(result.toolCalls?.[0]?.function.name).toBe('check')
+    expect(result.accounting?.cachedInputTokens).toBe(80)
+
+    await provider.runChatCompletion(prompt, { ...params, toolChoice: 'none', reasoningMode: 'off' })
+    const finalization = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(finalization.tools).toBeUndefined()
+    expect(finalization.reasoning_effort).toBe('low')
+    expect(finalization.messages.at(-1)).toEqual({ role: 'user', content: 'Check.' })
+  })
+
+  it.each([
+    [LLMProviders.ZAI, 'zai', 'glm-5.3'],
     [LLMProviders.MiniMax, 'openai-compatible', 'MiniMax-M3'],
     [LLMProviders.Celeris, 'openai-compatible', 'celeris-1-magnus'],
     [LLMProviders.SGLang, 'openai-compatible', 'local-model'],

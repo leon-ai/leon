@@ -32,6 +32,9 @@ importers:
       '@ai-sdk/provider':
         specifier: 4.0.21
         version: 4.0.21
+      '@ai-sdk/zai':
+        specifier: 3.0.24
+        version: 3.0.24(zod@4.3.6)
       '@ark-ui/react':
         specifier: 5.36.0
         version: 5.36.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -340,6 +343,12 @@ packages:
   '@ai-sdk/provider@4.0.21':
     resolution: {integrity: sha512-UpbC9C1oht8dhfKPbVXSLRZS3DI8uk8n5v2uMjBPNIYGsC2kL045ywq7D8Hh9KgnH9rP5W/GxQdYtWScRouqlA==}
     engines: {node: '>=22'}
+
+  '@ai-sdk/zai@3.0.24':
+    resolution: {integrity: sha512-YCE0naz8AvsYo/FZ7YSGERwoEjgs2Ps1qJ9StK3J3qjuAccZOFpelBT17YBAGBt/GQPhRD0NqkWN5V9TYjhG+A==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@ark-ui/react@5.36.0':
     resolution: {integrity: sha512-LjxQb1XyF3CqRnCoaRwm/eImOjIjAjRmrL3ZMzA1J41Is4KnDpc4Zvh1268LQIaRiX/3voUM0uLsjFxVx8MNQA==}
@@ -4436,6 +4445,13 @@ snapshots:
   '@ai-sdk/provider@4.0.21':
     dependencies:
       json-schema: 0.4.0
+
+  '@ai-sdk/zai@3.0.24(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/openai-compatible': 3.0.62(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
+      zod: 4.3.6
 
   '@ark-ui/react@5.36.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
     dependencies:

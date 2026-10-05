@@ -17,6 +17,7 @@ import type {
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createAnthropic } from '@ai-sdk/anthropic'
+import { createZai } from '@ai-sdk/zai'
 import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createHuggingFace } from '@ai-sdk/huggingface'
 import { createCerebras } from '@ai-sdk/cerebras'
@@ -56,6 +57,7 @@ type AISDKFlavor =
   | 'openrouter'
   | 'openai-compatible'
   | 'anthropic'
+  | 'zai'
   | 'moonshotai'
   | 'huggingface'
   | 'cerebras'
@@ -261,8 +263,8 @@ export default class AISDKRemoteLLMProvider {
       return provider(this.model)
     }
 
-    if (this.config.flavor === 'moonshotai') {
-      const provider = createMoonshotAI({
+    if (this.config.flavor === 'zai') {
+      const provider = createZai({
         fetch,
         apiKey,
         baseURL: this.config.baseURL,
@@ -272,8 +274,20 @@ export default class AISDKRemoteLLMProvider {
       return provider(this.model)
     }
 
+
     if (this.config.flavor === 'huggingface') {
       const provider = createHuggingFace({
+        fetch,
+        apiKey,
+        baseURL: this.config.baseURL,
+        ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
+      })
+
+      return provider(this.model)
+    }
+
+    if (this.config.flavor === 'moonshotai') {
+      const provider = createMoonshotAI({
         fetch,
         apiKey,
         baseURL: this.config.baseURL,
@@ -588,6 +602,7 @@ export default class AISDKRemoteLLMProvider {
       if (
         reasoningItems.length === 0 && message.reasoning &&
         (this.config.flavor === 'openai-compatible' ||
+          this.config.flavor === 'zai' ||
           this.config.flavor === 'moonshotai')
       ) {
         content.push({ type: 'reasoning', text: message.reasoning })
@@ -960,7 +975,10 @@ export default class AISDKRemoteLLMProvider {
     return {}
   }
 
-  private buildCallOptions(
+  /**
+   * Builds SDK options while allowing provider-specific compatibility policies.
+   */
+  protected buildCallOptions(
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
   ): LanguageModelV4CallOptions {

@@ -1,15 +1,20 @@
+import type { LanguageModelV4CallOptions } from '@ai-sdk/provider'
+
 import { LLMProviders } from '@/core/llm-manager/types'
 import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
   CompletionParams,
-  LLMReasoningMode
+  LLMReasoningMode,
+  PromptOrChatHistory
 } from '@/core/llm-manager/types'
 
 const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.ZAI)
 
 const REASONING_EFFORT_MODEL = 'glm-5.2'
+const REQUIRED_TOOL_INSTRUCTION =
+  'Continue by calling one of the available tools that advances the authorized task. Do not return a final answer before performing that action.'
 
 function buildZAIProviderOptions(
   model: string,
@@ -24,7 +29,8 @@ function buildZAIProviderOptions(
 
     return {
       zai: {
-        thinking: { type: 'enabled' },
+        // Keep the exact reasoning history reusable across agent tool turns.
+        thinking: { type: 'enabled', clearThinking: false },
         ...(lowEffort
           ? { reasoningEffort: 'low' }
           : requestedEffort && ['low', 'high', 'max'].includes(requestedEffort)
@@ -42,9 +48,11 @@ function buildZAIProviderOptions(
     reasoningMode === 'off' || reasoningMode === 'guarded'
 
   return {
-    // The OpenAI-compatible adapter forwards provider-named extension fields.
     zai: {
-      thinking: { type: isThinkingDisabled ? 'disabled' : 'enabled' },
+      thinking: {
+        type: isThinkingDisabled ? 'disabled' : 'enabled',
+        ...(!isThinkingDisabled ? { clearThinking: false } : {})
+      },
       ...(model === REASONING_EFFORT_MODEL &&
         !isThinkingDisabled &&
         completionParams.reasoningEffort
@@ -69,7 +77,7 @@ export default class ZAILLMProvider extends AISDKRemoteLLMProvider {
         PROVIDER_CONFIG,
         target.accountCredentials
       ),
-      flavor: 'openai-compatible',
+      flavor: 'zai',
       buildProviderOptions: ({ completionParams, reasoningMode }) =>
         buildZAIProviderOptions(
           target.model,
@@ -77,5 +85,40 @@ export default class ZAILLMProvider extends AISDKRemoteLLMProvider {
           reasoningMode
         )
     })
+  }
+
+  /**
+   * Retains tool-action intent on an API that supports only automatic selection.
+   */
+  protected override buildCallOptions(
+    prompt: PromptOrChatHistory,
+    completionParams: CompletionParams
+  ): LanguageModelV4CallOptions {
+    const options = super.buildCallOptions(prompt, completionParams)
+    const toolChoice = options.toolChoice
+
+    if (toolChoice?.type !== 'required' && toolChoice?.type !== 'tool') {
+      return options
+    }
+
+    if (toolChoice.type === 'tool') {
+      options.tools = (options.tools || []).filter(
+        (tool) => tool.name === toolChoice.toolName
+      )
+    }
+
+    if (!options.tools?.length) {
+      throw new Error('Z.ai tool-action requests require an available matching tool.')
+    }
+
+    // Keep the cached system prefix and reasoning history intact. Core still
+    // reviews completion; automatic selection cannot guarantee a tool call.
+    options.toolChoice = { type: 'auto' }
+    options.prompt.push({
+      role: 'user',
+      content: [{ type: 'text', text: REQUIRED_TOOL_INSTRUCTION }]
+    })
+
+    return options
   }
 }
