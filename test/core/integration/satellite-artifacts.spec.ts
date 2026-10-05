@@ -5,15 +5,28 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 
 import ffmpeg from 'ffmpeg-static'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import Fastify from 'fastify'
 
 import { collectSatelliteArtifacts, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
-import type { ToolExecutionResult } from '@/core/tool-executor'
+import * as satelliteArtifacts from '@/core/satellite/satellite-artifacts'
+import { uploadSatelliteDeliverables } from '@/core/satellite/satellite-deliverables'
+import { uploadArtifacts } from '@/core/http-server/api/artifacts/upload'
+import { toolExecutionsPlugin } from '@/core/http-server/api/tool-executions'
+import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { attachArtifacts } from '@/core/artifacts/artifact-service'
+import { API_VERSION } from '@/constants'
+import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import { ComputerUseArtifactStore } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-artifact-store'
 import type { PersistedComputerUseImages } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
 
 const execute = promisify(execFile)
 const temporaryRoots: string[] = []
+vi.mock('@/core/artifacts/artifact-service', () => ({ attachArtifacts: vi.fn() }))
+vi.mock('@/core/session-manager', () => ({
+  CONVERSATION_SESSION_MANAGER: { getSession: (id: string): { id: string } => ({ id }) }
+}))
 const result = (output: Record<string, unknown>): ToolExecutionResult => ({
   status: 'success', message: 'done', data: {
     tool_id: 'cua', toolkit_id: 'computer_use', function_name: 'capture',
@@ -29,9 +42,70 @@ async function temporaryRoot(): Promise<string> {
 
 afterEach(async () => {
   await Promise.all(temporaryRoots.splice(0).map((root) => fs.rm(root, { recursive: true, force: true })))
+  await TOOL_EXECUTION_MANAGER.dispose()
 })
 
 describe('Satellite session artifact integration', () => {
+  it('streams large inventories over HTTP and queries them after removing the device files without attaching them', async () => {
+    const temporary = await temporaryRoot()
+    const device = path.join(temporary, 'device', 'artifacts')
+    const serverRoot = path.join(temporary, 'server', 'artifacts')
+    await fs.mkdir(device, { recursive: true })
+    vi.spyOn(satelliteArtifacts, 'getSatelliteArtifactRoot').mockReturnValue(serverRoot)
+    const files = Array.from({ length: 60_000 }, (_, index) => ({
+      text: `/images/${'x'.repeat(160)}/${index}.png`
+    }))
+    const summary = { returnedRecords: files.length, complete: true }
+    const filename = path.join(device, 'inventory.json')
+    await fs.writeFile(filename, JSON.stringify({ result: { files, summary, truncated: false } }))
+    expect((await fs.stat(filename)).size).toBeGreaterThan(8 * 1_024 * 1_024)
+    const server = Fastify()
+    await server.register(uploadArtifacts, { apiVersion: API_VERSION })
+    await server.register(toolExecutionsPlugin, { apiVersion: API_VERSION })
+    const remoteURL = await server.listen({ host: '127.0.0.1', port: 0 })
+
+    try {
+      const transferred = await uploadSatelliteDeliverables({
+        result: result({ result: {
+          files: files.slice(0, 1), summary, truncated: false,
+          retainedOutput: { path: filename }
+        } }),
+        root: device,
+        sessionId: 'session',
+        remoteURL,
+        token: 'test'
+      })
+      expect(attachArtifacts).not.toHaveBeenCalled()
+      expect(transferred.data.output['result']).toMatchObject({
+        retainedOutput: { artifactId: expect.any(String) }
+      })
+      expect(await collectSatelliteArtifacts(device, transferred)).toBeUndefined()
+      await fs.rm(device, { recursive: true })
+
+      const profile = getActiveProfileName()
+      const id = TOOL_EXECUTION_MANAGER.start(profile, 'session', 'test.fixture.run', async () => transferred)
+      await TOOL_EXECUTION_MANAGER.wait(profile, 'session', id)
+      const count = await server.inject({
+        method: 'POST', url: `/api/${API_VERSION}/tool-executions/read`,
+        payload: { sessionId: 'session', executionId: id, options: { jq: '.result.files | length' } }
+      })
+      expect(count.statusCode).toBe(200)
+      expect(count.json()).toMatchObject({ content: '60000', sourceCoverage: { truncated: false, summary } })
+
+      // Ordinary uploads still publish attachments when the new flag is omitted.
+      const delivery = await server.inject({
+        method: 'POST',
+        url: `/api/${API_VERSION}/artifacts/session?filename=output.txt&mime_type=text%2Fplain`,
+        headers: { 'content-type': 'application/octet-stream' },
+        payload: Buffer.from('Delivered output')
+      })
+      expect(delivery.statusCode).toBe(201)
+      expect(attachArtifacts).toHaveBeenCalledExactlyOnceWith('session', [delivery.json().id])
+    } finally {
+      await server.close()
+    }
+  })
+
   it('renders from transferred PNGs and capture metadata after the device files are removed', async () => {
     const temporary = await temporaryRoot()
     const device = path.join(temporary, 'device', 'artifacts')

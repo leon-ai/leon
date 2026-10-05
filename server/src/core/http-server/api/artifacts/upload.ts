@@ -27,7 +27,7 @@ export const uploadArtifacts: FastifyPluginAsync<APIOptions> = async (
   )
   fastify.post<{
     Params: { sessionId: string }
-    Querystring: { filename: string, mime_type: string }
+    Querystring: { filename: string, mime_type: string, attach?: boolean }
     Body: Readable
   }>(
     `/api/${options.apiVersion}/artifacts/:sessionId`,
@@ -36,7 +36,8 @@ export const uploadArtifacts: FastifyPluginAsync<APIOptions> = async (
       schema: {
         querystring: Type.Object({
           filename: Type.String({ minLength: 1, maxLength: 255 }),
-          mime_type: Type.String({ minLength: 1, maxLength: 255 })
+          mime_type: Type.String({ minLength: 1, maxLength: 255 }),
+          attach: Type.Optional(Type.Boolean())
         })
       }
     },
@@ -78,11 +79,14 @@ export const uploadArtifacts: FastifyPluginAsync<APIOptions> = async (
         const artifact = await registerArtifact({
           session_id: sessionId,
           path: filename,
-          ...request.query,
+          filename: request.query.filename,
+          mime_type: request.query.mime_type,
           source: 'upload'
         })
 
-        await attachArtifacts(sessionId, [artifact.id])
+        if (request.query.attach !== false) {
+          await attachArtifacts(sessionId, [artifact.id])
+        }
 
         return reply.code(201).send(artifact)
       } finally {
