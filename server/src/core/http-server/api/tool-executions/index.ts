@@ -1,11 +1,16 @@
 import type { FastifyPluginAsync } from 'fastify'
 import { Type } from '@sinclair/typebox'
+import fs from 'node:fs/promises'
+import path from 'node:path'
 
 import type { APIOptions } from '@/core/http-server/http-server'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { FileHelper } from '@/helpers/file-helper'
+import { getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
+import { readArtifact } from '@/core/artifacts/artifact-store'
 import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
-import { TOOL_EXECUTION_MAX_WAIT_MS } from '@/constants'
+import { TOOL_EXECUTION_MAX_WAIT_MS, MAX_GENERATED_ARTIFACT_BYTES } from '@/constants'
 
 const DEFAULT_MAX_CHARS = 8_000
 const MAX_CHARS = 30_000
@@ -15,6 +20,49 @@ interface ExecutionInput {
   sessionId: string
   waitMs?: number
   options?: { jq?: string, offsetChars?: number, maxChars?: number }
+}
+
+/**
+ * Resolve only saved JSON belonging to the authenticated execution's session.
+ */
+async function resolveRetainedOutput(
+  reference: unknown,
+  profileName: string,
+  sessionId: string
+): Promise<string | null> {
+  if (!reference || typeof reference !== 'object') {
+    return null
+  }
+
+  const retained = reference as { path?: unknown, artifactId?: unknown }
+  let filename: string
+
+  if (typeof retained.artifactId === 'string') {
+    filename = (await readArtifact(sessionId, retained.artifactId)).path
+  } else if (typeof retained.path === 'string') {
+    filename = await fs.realpath(retained.path)
+    const root = await fs.realpath(getSatelliteArtifactRoot(profileName, sessionId))
+    const relative = path.relative(root, filename)
+
+    if (
+      !relative ||
+      relative === '..' ||
+      relative.startsWith(`..${path.sep}`) ||
+      path.isAbsolute(relative)
+    ) {
+      throw new Error('Retained output escapes its conversation.')
+    }
+  } else {
+    throw new Error('Invalid retained output reference.')
+  }
+
+  const stat = await fs.stat(filename)
+
+  if (!stat.isFile() || stat.size > MAX_GENERATED_ARTIFACT_BYTES) {
+    throw new Error('Invalid or oversized retained output.')
+  }
+
+  return filename
 }
 
 /**
@@ -65,18 +113,32 @@ export const toolExecutionsPlugin: FastifyPluginAsync<APIOptions> = async (
       const coverage = source && typeof source === 'object' && !Array.isArray(source)
         ? source as Record<string, unknown>
         : output
+      const filename = await resolveRetainedOutput(
+        coverage['retainedOutput'],
+        profileName,
+        sessionId
+      )
       const offset = projection.offsetChars ?? 0
       const maxChars = projection.maxChars ?? DEFAULT_MAX_CHARS
-      const content = projection.jq
-        ? await RuntimeHelper.projectJSON(projection.jq, output)
-        : JSON.stringify(output)
-      const end = Math.min(content.length, offset + maxChars)
-      const page = {
-        content: content.slice(offset, end),
-        totalChars: content.length,
-        offsetChars: offset,
-        nextOffsetChars: end < content.length ? end : null,
-        truncated: end < content.length
+      let page: Awaited<ReturnType<typeof FileHelper.readTextFilePage>>
+
+      if (filename && !projection.jq) {
+        page = await FileHelper.readTextFilePage(filename, offset, maxChars)
+      } else {
+        const content = projection.jq
+          ? filename
+            ? await RuntimeHelper.projectJSONFile(projection.jq, filename)
+            : await RuntimeHelper.projectJSON(projection.jq, output)
+          : JSON.stringify(output)
+        const end = Math.min(content.length, offset + maxChars)
+
+        page = {
+          content: content.slice(offset, end),
+          totalChars: content.length,
+          offsetChars: offset,
+          nextOffsetChars: end < content.length ? end : null,
+          truncated: end < content.length
+        }
       }
 
       return {

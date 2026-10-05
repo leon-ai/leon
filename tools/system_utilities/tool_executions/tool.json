@@ -117,5 +117,5 @@
       }
     }
   },
-  "progressive_guidance": "Running means unfinished work. Reuse the execution id until completed, failed or canceled. A wait timeout is not an execution timeout. Results are retained for 15 minutes after completion and scoped to the same profile and conversation. jq queries retained output before preview truncation; check sourceCoverage when counting incomplete scans. Use this tool instead of restarting a scan, repeatedly reading a whole output artifact, or creating a shell script for aggregation."
+  "progressive_guidance": "Running means unfinished work. Reuse the execution id until completed, failed or canceled. A wait timeout is not an execution timeout. Results are retained for 15 minutes after completion and scoped to the same profile and conversation. jq operates on full saved JSON, including disk-backed ripgrep inventories, before preview truncation; .result.files and .result.matches remain the query paths. Check sourceCoverage when counting; a small inline preview does not mean the saved scan is incomplete. Use this tool instead of restarting a scan, repeatedly reading a whole output artifact, or creating a shell script for aggregation."
 }

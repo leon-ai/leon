@@ -180,6 +180,21 @@ export class RuntimeHelper {
   }
 
   /**
+   * Query disk-backed JSON directly, avoiding a full copy in the server heap.
+   */
+  public static projectJSONFile(filter: string, filename: string): Promise<string> {
+    if (typeof filter !== 'string' || !filter.trim() || filter.includes('\0')) {
+      throw new Error('jq requires a non-empty filter without NUL bytes')
+    }
+
+    return this.runBinary(
+      this.getJQBinPath(),
+      ['--compact-output', filter, '--', filename],
+      { timeoutMs: JSON_PROJECTION_TIMEOUT_MS, env: {} }
+    )
+  }
+
+  /**
    * Preserve JSON values, empty selections and multi-value jq streams for callers.
    */
   public static async projectJSONValue(filter: string, input: unknown): Promise<unknown> {

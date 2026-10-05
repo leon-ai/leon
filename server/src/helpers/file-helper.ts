@@ -132,6 +132,55 @@ const FILE_EXTENSION_REMIX_ICON_NAMES = new Map<string, string>([
 ])
 
 export class FileHelper {
+  /**
+   * Page UTF-8 text with JavaScript character offsets without loading the file.
+   */
+  public static async readTextFilePage(
+    filename: string,
+    offsetChars: number,
+    maxChars: number
+  ): Promise<{
+    content: string
+    totalChars: number
+    offsetChars: number
+    nextOffsetChars: number | null
+    truncated: boolean
+  }> {
+    if (
+      !Number.isSafeInteger(offsetChars) ||
+      offsetChars < 0 ||
+      !Number.isSafeInteger(maxChars) ||
+      maxChars < 1
+    ) {
+      throw new Error('Text paging requires a nonnegative offset and a positive page size.')
+    }
+
+    let totalChars = 0
+    let content = ''
+
+    for await (const chunk of fs.createReadStream(filename, { encoding: 'utf8' })) {
+      const text = String(chunk)
+      const start = Math.max(0, offsetChars - totalChars)
+      const end = Math.min(text.length, offsetChars + maxChars - totalChars)
+
+      if (start < end) {
+        content += text.slice(start, end)
+      }
+
+      totalChars += text.length
+    }
+
+    const end = Math.min(totalChars, offsetChars + maxChars)
+
+    return {
+      content,
+      totalChars,
+      offsetChars,
+      nextOffsetChars: end < totalChars ? end : null,
+      truncated: end < totalChars
+    }
+  }
+
   public static readonly DEFAULT_FILE_REMIX_ICON_NAME = DEFAULT_FILE_ICON_NAME
 
   public static readonly FOLDER_REMIX_ICON_NAME = FOLDER_ICON_NAME
