@@ -9,9 +9,20 @@ import { parsePartialJson } from 'ai'
 import type { AxiosResponse } from 'axios'
 
 import { ajv } from '@/ajv'
+import {
+  createInferenceMetadata,
+  InferenceAuthMode,
+  InferenceCredentialSource
+} from '@/core/llm-manager/inference-metadata'
+import { recordTurnInference } from '@/core/session-manager/session-context'
 import { getClaudeSubscriptionEnvironment } from '../fellows/fellow-catalog'
 import type { ResolvedLLMTarget } from '../llm-routing'
-import type { CompletionParams, PromptOrChatHistory, AgentModelFile } from '../types'
+import {
+  LLMProviders,
+  type CompletionParams,
+  type PromptOrChatHistory,
+  type AgentModelFile
+} from '../types'
 
 const CLI_MAX_BUFFER = 16_777_216
 const CLI_MAX_TURNS = '3'
@@ -42,10 +53,12 @@ interface ClaudeResult {
 export default class AnthropicClaudeCodeAdapter {
   public readonly modelName: string
   private readonly configDirectory: string
+  private readonly connectionId: string
 
   public constructor(target: ResolvedLLMTarget, credentials: Record<string, unknown>) {
     this.modelName = target.model
     this.configDirectory = String(credentials['config_directory'] || '')
+    this.connectionId = String(credentials['account_id'] || '')
   }
 
   private fileParts(files: AgentModelFile[]): Record<string, unknown>[] {
@@ -140,6 +153,15 @@ export default class AnthropicClaudeCodeAdapter {
         ...(streamText ? [STREAM_OUTPUT_INSTRUCTIONS, JSON.stringify(schema)] : [])
       ].join('\n'))
 
+      // The CLI owns its transport, so do not invent an observed network endpoint.
+      recordTurnInference(createInferenceMetadata({
+        provider: LLMProviders.Anthropic,
+        model: this.modelName,
+        authMode: InferenceAuthMode.ClaudeSubscription,
+        credentialSource: InferenceCredentialSource.AccountBinding,
+        connectionId: this.connectionId,
+        endpoint: null
+      }))
       command = execa('claude', [
         '--print', '--verbose', '--input-format', 'stream-json',
         '--output-format', 'stream-json', '--model', this.modelName,

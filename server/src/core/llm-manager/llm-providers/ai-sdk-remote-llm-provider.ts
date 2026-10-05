@@ -1,6 +1,9 @@
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import type { GeneratedFile } from '@/core/llm-manager/media-generation/media-generation-types'
-import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import {
+  getActiveConversationSessionId,
+  recordTurnInference
+} from '@/core/session-manager/session-context'
 import type { AxiosResponse } from 'axios'
 import type {
   JSONSchema7,
@@ -22,6 +25,11 @@ import { OpenAIResponsesTransport } from './openai-responses-transport'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import { CONFIG_MANAGER } from '@/config'
+import {
+  createInferenceMetadata,
+  InferenceAuthMode,
+  InferenceCredentialSource
+} from '@/core/llm-manager/inference-metadata'
 import type { LLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import type {
   CompletionParams,
@@ -184,11 +192,18 @@ export default class AISDKRemoteLLMProvider {
   private createLanguageModel(): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
-
-    if (this.config.flavor === 'openai-responses') {
-      const fetch: typeof globalThis.fetch = (input, init) => {
+    const fetch: typeof globalThis.fetch = (input, init) => {
+      if (this.config.flavor === 'openai-responses') {
         return this.getOpenAITransport().fetch(input, init)
       }
+
+      init?.signal?.throwIfAborted()
+      this.recordInference(input instanceof Request ? input.url : String(input))
+
+      return globalThis.fetch(input, init)
+    }
+
+    if (this.config.flavor === 'openai-responses') {
       const provider = createOpenAI({
         apiKey,
         baseURL: this.config.baseURL,
@@ -201,6 +216,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'openai-compatible') {
       const provider = createOpenAICompatible({
+        fetch,
         name: this.config.providerName,
         baseURL: this.config.baseURL,
         includeUsage: true,
@@ -220,6 +236,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'openrouter') {
       const provider = createOpenRouter({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         compatibility: 'strict',
@@ -235,6 +252,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'anthropic') {
       const provider = createAnthropic({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -245,6 +263,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'moonshotai') {
       const provider = createMoonshotAI({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -255,6 +274,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'huggingface') {
       const provider = createHuggingFace({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -265,6 +285,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'cerebras') {
       const provider = createCerebras({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -275,6 +296,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'groq') {
       const provider = createGroq({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -297,10 +319,46 @@ export default class AISDKRemoteLLMProvider {
       this.config.baseURL,
       this.config.credentials?.['auth_kind'] === 'chatgpt'
         ? String(this.config.credentials['account_id'] || '')
-        : undefined
+        : undefined,
+      (endpoint) => {
+        this.recordInference(endpoint)
+      }
     )
 
     return this.openAITransport
+  }
+
+  /**
+   * Attributes dispatched requests to this provider instance's resolved binding.
+   */
+  protected recordInference(
+    endpoint: string,
+    apiKey: string | undefined = this.apiKey
+  ): void {
+    const credentials = this.config.credentials
+    const subscription = this.config.flavor === 'openai-responses' &&
+      credentials?.['auth_kind'] === 'chatgpt'
+    const authMode = subscription
+      ? InferenceAuthMode.ChatGPTOAuth
+      : apiKey
+        ? InferenceAuthMode.APIKey
+        : InferenceAuthMode.None
+
+    recordTurnInference(createInferenceMetadata({
+      provider: this.config.providerName,
+      model: this.modelName,
+      authMode,
+      privateValues: apiKey ? [apiKey] : [],
+      credentialSource: credentials
+        ? InferenceCredentialSource.AccountBinding
+        : authMode === InferenceAuthMode.APIKey
+          ? InferenceCredentialSource.ProfileAPIKey
+          : InferenceCredentialSource.None,
+      ...(credentials?.['account_id']
+        ? { connectionId: String(credentials['account_id']) }
+        : {}),
+      endpoint
+    }))
   }
 
   private toTextPrompt(

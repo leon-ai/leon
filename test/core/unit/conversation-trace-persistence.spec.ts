@@ -7,6 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ConversationLogger } from '@/conversation-logger'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import type { MessageLog } from '@/types'
+import {
+  getActiveTurnInference,
+  recordTurnInference,
+  runWithConversationSession
+} from '@/core/session-manager/session-context'
+import {
+  createInferenceMetadata,
+  InferenceAuthMode,
+  InferenceCredentialSource
+} from '@/core/llm-manager/inference-metadata'
+import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 
 const sessions = vi.hoisted(() => ({ root: '' }))
 vi.mock('@/core/session-manager', () => ({
@@ -26,6 +37,84 @@ describe('conversation trace persistence', () => {
 
   afterEach(async () => {
     await fs.rm(sessions.root, { recursive: true, force: true })
+  })
+
+  it('persists distinct turn routes without credentials and keeps older attribution unknown', async () => {
+    const logger = new ConversationLogger({
+      loggerName: 'test',
+      fileName: 'conversation_log.json',
+      nbOfLogsToKeep: 100,
+      nbOfLogsToLoad: 100
+    })
+    const account = createInferenceMetadata({
+      provider: 'openai',
+      model: 'account-model',
+      authMode: InferenceAuthMode.ChatGPTOAuth,
+      credentialSource: InferenceCredentialSource.AccountBinding,
+      connectionId: 'private-account-id',
+      endpoint: 'wss://private-user:private-password@api.openai.com/v1/responses?token=private-token#private-fragment'
+    })
+    const apiKey = createInferenceMetadata({
+      provider: 'openai',
+      model: 'api-model',
+      authMode: InferenceAuthMode.APIKey,
+      credentialSource: InferenceCredentialSource.ProfileAPIKey,
+      endpoint: 'wss://api.openai.com/v1/responses'
+    })
+    const message = {
+      who: 'leon' as const,
+      message: 'Done',
+      isAddedToHistory: true
+    }
+
+    await logger.upsert(message, { sessionId: 'first' })
+    await runWithConversationSession({ sessionId: 'first' }, async () => {
+      await logger.upsert(message, { sessionId: 'first' })
+      recordTurnInference(account)
+      recordTurnInference(account)
+      await logger.upsert(message, { sessionId: 'first' })
+
+      await runWithConversationSession({ sessionId: 'first' }, async () => {
+        recordTurnInference(apiKey)
+      })
+      const snapshot = getActiveTurnInference()
+      await logger.upsert(message, { sessionId: 'first' })
+
+      await runWithConversationSession({ sessionId: 'second' }, async () => {
+        expect(getActiveTurnInference()).toBeNull()
+        await logger.upsert(message, { sessionId: 'second' })
+      })
+      await runWithProfileContext({ profileName: 'another-profile' }, async () => {
+        await runWithConversationSession({ sessionId: 'first' }, async () => {
+          expect(getActiveTurnInference()).toBeNull()
+          recordTurnInference(apiKey)
+          expect(getActiveTurnInference()).toEqual(apiKey)
+        })
+      })
+      expect(getActiveTurnInference()).toEqual(snapshot)
+    })
+
+    const history = ConversationHistoryHelper.toHistoryItems(
+      await logger.loadAll({ sessionId: 'first' }),
+      { supportsWidgets: false }
+    )
+    expect(history.map((item) => item.inference)).toEqual([
+      undefined,
+      null,
+      account,
+      [account, apiKey]
+    ])
+    expect(history[0]).not.toHaveProperty('inference')
+    expect(account.endpoint).toBe('wss://api.openai.com/v1/responses')
+    expect(account.connectionRef).toHaveLength(12)
+    expect(JSON.stringify(history)).not.toContain('private-')
+    expect(createInferenceMetadata({
+      ...apiKey,
+      endpoint: 'https://proxy.example/private-key/private%2Fkey/v1/responses',
+      privateValues: ['private-key', 'private/key']
+    }).endpoint).toBe('https://proxy.example/[REDACTED]/[REDACTED]/v1/responses')
+    expect((await logger.loadAll({ sessionId: 'second' }))[0]?.inference).toBeNull()
+    expect(getActiveTurnInference()).toBeUndefined()
   })
 
   it('restores one structured widget after replacement without adding it to model history', async () => {

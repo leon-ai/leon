@@ -16,6 +16,7 @@ import type { Artifact } from '@/core/artifacts/artifact-types'
 
 import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
 import type { UsageAccounting } from '@/core/llm-manager/usage-accounting'
+import type { TurnInference } from '@/core/llm-manager/inference-metadata'
 
 export type Languages = typeof LANG_CONFIGS
 export type LongLanguageCode = keyof Languages
@@ -155,6 +156,7 @@ export interface AgentResponseTrace {
 }
 
 export interface MessageLog {
+  inference?: TurnInference
   artifacts?: Artifact[]
   who: 'owner' | 'leon'
   sentAt: number
@@ -167,6 +169,7 @@ export interface MessageLog {
 }
 
 export interface ConversationHistoryItem {
+  inference?: TurnInference
   artifacts?: Artifact[]
   widget?: ConversationWidgetData
   who: MessageLog['who']

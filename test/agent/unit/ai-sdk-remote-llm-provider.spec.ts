@@ -11,6 +11,15 @@ import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provi
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
 import { CONFIG_MANAGER } from '@/config'
+import {
+  getActiveTurnInference,
+  runWithConversationSession
+} from '@/core/session-manager/session-context'
+import {
+  InferenceAuthMode,
+  InferenceCredentialSource,
+  type TurnInference
+} from '@/core/llm-manager/inference-metadata'
 import { AgentAnswerStream } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-answer-stream'
 import { normalizeCompletionResultForOpenAICompatibleProvider } from '@/core/llm-manager/llm-provider/llm-provider-response'
 
@@ -40,7 +49,8 @@ vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
 vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
   persistGeneratedFiles: mediaMocks.persist
 }))
-vi.mock('@/core/session-manager/session-context', () => ({
+vi.mock('@/core/session-manager/session-context', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/core/session-manager/session-context')>(),
   getActiveConversationSessionId: (): string => 'media-session'
 }))
 
@@ -196,7 +206,29 @@ describe('AISDKRemoteLLMProvider', () => {
         parameters: { type: 'object', properties: { name: { type: 'string' } } }
       } }]
     } satisfies CompletionParams
-    const result = await provider.runChatCompletion('Read my note.', params)
+    let inference: TurnInference | undefined
+    const result = await runWithConversationSession(
+      { sessionId: 'media-session' },
+      async () => {
+        expect(getActiveTurnInference()).toBeNull()
+        const completion = await provider.runChatCompletion('Read my note.', params)
+        inference = getActiveTurnInference()
+
+        return completion
+      }
+    )
+
+    expect(inference).toMatchObject({
+      provider: LLMProviders.OpenAI,
+      model: response.model,
+      authMode: InferenceAuthMode.ChatGPTOAuth,
+      credentialSource: InferenceCredentialSource.AccountBinding,
+      connectionRef: expect.any(String),
+      endpoint: 'wss://api.openai.com/v1/responses'
+    })
+    expect(JSON.stringify(inference)).not.toContain('openai.test')
+    expect(JSON.stringify(inference)).not.toContain('chatgpt-token')
+    expect(getActiveTurnInference()).toBeUndefined()
 
     const [url, request] = websocketMocks.fetch.mock.calls[0]!
     expect(String(url)).toBe('https://api.openai.com/v1/responses')
@@ -254,9 +286,23 @@ describe('AISDKRemoteLLMProvider', () => {
     })
 
     try {
-      const result = await provider.runChatCompletion('Continue.', {
-        ...createCompletionParams(null), shouldStream: true
-      })
+      const result = await runWithConversationSession(
+        { sessionId: 'api-session' },
+        async () => {
+          const completion = await provider.runChatCompletion('Continue.', {
+            ...createCompletionParams(null), shouldStream: true
+          })
+          expect(getActiveTurnInference()).toEqual({
+            provider: LLMProviders.OpenAI,
+            model: response.model,
+            authMode: InferenceAuthMode.APIKey,
+            credentialSource: InferenceCredentialSource.ProfileAPIKey,
+            endpoint: 'wss://api.openai.com/v1/responses'
+          })
+
+          return completion
+        }
+      )
       expect(result.data.choices[0].finish_reason).toBe('length')
       expect(result.data.usage).toMatchObject({ prompt_tokens: 100, completion_tokens: 10 })
       expect(websocketMocks.close).toHaveBeenCalled()

@@ -391,11 +391,16 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   private buildDirectRequestConfig(
     completionParams: CompletionParams
   ): Record<string, unknown> {
+    completionParams.signal?.throwIfAborted()
+    const apiKey = CONFIG_MANAGER.getProviderAPIKey('llamacpp')
+
+    this.recordInference(LlamaCPPLLMProvider.getChatCompletionsURL(), apiKey || undefined)
+
     return {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${
-          CONFIG_MANAGER.getProviderAPIKey('llamacpp') || 'Bearer no-key'
+          apiKey || 'Bearer no-key'
         }`
       },
       ...(typeof completionParams.timeout === 'number'

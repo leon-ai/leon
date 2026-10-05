@@ -3,6 +3,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 
 import type { APIOptions } from '@/core/http-server/http-server'
 import type { AgentModelFile } from '@/core/llm-manager/types'
+import type { TurnInference } from '@/core/llm-manager/inference-metadata'
 import type { ConversationWidgetData } from '@/types'
 
 export interface HTTPPluginAuthConfig {
@@ -182,6 +183,7 @@ export interface HTTPPluginListConversationSessionsResult {
 }
 
 export interface HTTPPluginConversationMessage {
+  inference?: TurnInference
   artifacts?: Artifact[]
   widget?: import('@/types').ConversationWidgetData
   role: 'owner' | 'assistant'

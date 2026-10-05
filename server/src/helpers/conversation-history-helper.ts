@@ -247,6 +247,9 @@ export class ConversationHistoryHelper {
         : null
 
       return {
+        ...('inference' in conversationLog
+          ? { inference: conversationLog.inference }
+          : {}),
         ...(this.isRenderableWidget(conversationLog.widget)
           ? { widget: conversationLog.widget }
           : {}),

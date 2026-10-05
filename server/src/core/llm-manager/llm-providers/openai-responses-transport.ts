@@ -37,7 +37,8 @@ export class OpenAIResponsesTransport {
 
   constructor(
     private readonly baseURL: string,
-    private readonly accountId?: string
+    private readonly accountId?: string,
+    private readonly onDispatch?: (endpoint: string) => void
   ) {
   }
 
@@ -183,6 +184,7 @@ export class OpenAIResponsesTransport {
 
     const transport = this.getOpenAIWebSocketFetch()
     try {
+      this.onDispatch?.(this.toOpenAIResponsesWebSocketURL(this.baseURL))
       const response = await transport(input, init)
       if (init?.signal?.aborted) {
         transport.close()

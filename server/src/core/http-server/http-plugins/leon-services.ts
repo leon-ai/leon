@@ -103,6 +103,7 @@ export async function getConversationHistory(
         logs.filter((log) => ConversationHistoryHelper.isVisibleInHistory(log)),
         { supportsWidgets: false, source: 'conversation_history' }
       ).map((item) => ({
+        ...('inference' in item ? { inference: item.inference } : {}),
         ...(item.widget ? { widget: item.widget } : {}),
         ...(item.artifacts?.length ? { artifacts: item.artifacts } : {}),
         role: item.who === 'leon' ? 'assistant' : 'owner',

@@ -9,6 +9,10 @@ import type {
 } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import {
+  getActiveConversationSessionId,
+  getActiveTurnInference
+} from '@/core/session-manager/session-context'
 
 interface ConversationLoggerSettings {
   loggerName: string
@@ -118,6 +122,9 @@ export class ConversationLogger {
       let llmMetricsPlaceholder: string | null = null
       let agentTracePlaceholder: string | null = null
       const preparedConversationLog: MessageLog = {
+        ...('inference' in conversationLog
+          ? { inference: conversationLog.inference }
+          : {}),
         who: conversationLog.who,
         sentAt: conversationLog.sentAt,
         message: conversationLog.message,
@@ -212,6 +219,18 @@ export class ConversationLogger {
     newRecord: Omit<MessageLog, 'sentAt'>,
     params?: UpsertParams
   ): Promise<void> {
+    // Capture the caller's turn before the serialized writer awaits other sessions.
+    const inference = getActiveTurnInference()
+
+    if (
+      newRecord.who === 'leon' &&
+      !('inference' in newRecord) &&
+      inference !== undefined &&
+      (!params?.sessionId || params.sessionId === getActiveConversationSessionId())
+    ) {
+      newRecord = { ...newRecord, inference }
+    }
+
     await this.enqueue(async () => {
       try {
         const conversationLogs = await this.getAllLogs(params?.sessionId)
