@@ -1,4 +1,4 @@
-"""Regression checks for the CLI support script, without a browser or model."""
+"""Current Browser Use form-control contracts, without a browser or model."""
 
 import sys
 import types

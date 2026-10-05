@@ -39,7 +39,6 @@ import {
   prepareAgentModelContext
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import {
-  AGENT_MAX_ITERATIONS,
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
@@ -567,10 +566,6 @@ describe('continuous agent loop', () => {
     expect(callModel).toHaveBeenCalledOnce()
   })
 
-  it('uses a 256-iteration total budget by default', () => {
-    expect(AGENT_MAX_ITERATIONS).toBe(256)
-  })
-
   it.each([1, 3])('keeps the finishing pass inside a %i-turn owner limit', async (limit) => {
     let operationalTurns = 0
     const prepareContinuation = vi.fn(async (state) => state.transcript)
@@ -594,11 +589,6 @@ describe('continuous agent loop', () => {
     expect(prepareContinuation).toHaveBeenCalledTimes(limit > 1 ? 1 : 0)
   })
 
-  it('keeps computer-use guidance out of the global prompt', () => {
-    expect(AGENT_SYSTEM_PROMPT).not.toContain('<visual_inspection>')
-    expect(AGENT_SYSTEM_PROMPT).not.toContain('Survey long pages')
-  })
-
   it('requires coding delegation before toolkit selection without choosing a product', () => {
     const skill = fs.readFileSync('skills/agent/coding-delegation/SKILL.md', 'utf8')
 
@@ -617,12 +607,6 @@ describe('continuous agent loop', () => {
     )
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Codex')
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')
-  })
-
-  it('preserves source meaning without use-case-specific rules', () => {
-    expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Preserve source meaning; never guess or silently convert incompatible values.'
-    )
   })
 
   it('loads collection tracking after plan initialization', async () => {

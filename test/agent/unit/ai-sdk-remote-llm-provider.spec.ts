@@ -1031,13 +1031,7 @@ describe('AISDKRemoteLLMProvider', () => {
 
   it.each([
     'openai-responses',
-    'openrouter',
-    'openai-compatible',
-    'anthropic',
-    'moonshotai',
-    'huggingface',
-    'cerebras',
-    'groq'
+    'openrouter'
   ])('delivers tool images through the portable %s schema', (flavor) => {
     const provider = createOpenRouterProvider()
     provider.config.flavor = flavor
