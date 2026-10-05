@@ -1,5 +1,6 @@
 import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
+import { ToolConcurrency } from '@/types'
 
 import {
   PROGRESSIVE_GUIDANCE_MAX_LENGTH,
@@ -176,6 +177,12 @@ export const toolManifestSchemaObject = Type.Strict(
         minLength: 1,
         description: 'Human-readable tool name shown in interfaces.'
       }),
+      concurrency: Type.Optional(
+        Type.Enum(ToolConcurrency, {
+          description:
+            'Default parallel: independent calls use isolated workers. Use serial for tools owning a shared session, device or persistent instance state.'
+        })
+      ),
       description: Type.String({
         minLength: 8,
         maxLength: 272,

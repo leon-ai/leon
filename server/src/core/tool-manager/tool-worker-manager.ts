@@ -1,9 +1,11 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { CODEBASE_PATH, NODE_RUNTIME_BIN_PATH, NODEJS_BRIDGE_ROOT_PATH,
   NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH, TSX_CLI_PATH } from '@/constants'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { ToolConcurrency } from '@/types'
 import type { ToolExecutionContext, ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { ToolRuntimeLifetime, type ToolWorkerResponse } from '@bridge/tool-runtime-types'
 
@@ -28,19 +30,39 @@ export class ToolWorkerManager {
   private closing = false
 
   /**
-   * Serialize one tool across profiles, since it may share a physical device.
+   * Serialize shared sessions across profiles; ordinary calls use isolated workers.
    */
-  public async execute(context: ToolExecutionContext, args: unknown[], log: (line: string) => void): Promise<ToolRuntimeResult> {
+  public async execute(
+    context: ToolExecutionContext,
+    args: unknown[],
+    log: (line: string) => void,
+    options: { concurrency?: ToolConcurrency } = {}
+  ): Promise<ToolRuntimeResult> {
+    if (this.closing || context.signal?.aborted) {
+      return this.failure('Tool execution canceled before dispatch.')
+    }
+
+    if (options.concurrency !== ToolConcurrency.Serial) {
+      return this.dispatch(context, args, log, true)
+    }
+
     const toolKey = JSON.stringify([context.toolkitId, context.toolId])
     const previous = this.tails.get(toolKey) ?? Promise.resolve()
     const execution = previous.then(() => {
-      if (this.closing || context.signal?.aborted) return this.failure('Tool execution canceled before dispatch.')
+      if (this.closing || context.signal?.aborted) {
+        return this.failure('Tool execution canceled before dispatch.')
+      }
+
       return this.dispatch(context, args, log)
     })
     const tail = execution.then(() => undefined, () => undefined)
     this.tails.set(toolKey, tail)
-    try { return await execution } finally {
-      if (this.tails.get(toolKey) === tail) this.tails.delete(toolKey)
+    try {
+      return await execution
+    } finally {
+      if (this.tails.get(toolKey) === tail) {
+        this.tails.delete(toolKey)
+      }
     }
   }
 
@@ -63,37 +85,61 @@ export class ToolWorkerManager {
         LEON_PROFILE: context.profileName, LEON_SESSION_ID: context.conversationSessionId || '' },
       windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
-    const worker: Worker = { process: child, diagnostics: '', closed: new Promise((resolve) => child.once('close', () => resolve())) }
+    const worker: Worker = {
+      process: child,
+      diagnostics: '',
+      closed: new Promise((resolve) => child.once('close', () => resolve()))
+    }
     let pendingLine = ''
     child.stderr?.on('data', (data: Buffer) => {
       worker.diagnostics = (worker.diagnostics + data.toString()).slice(-DIAGNOSTIC_LIMIT)
       pendingLine += data.toString()
       const lines = pendingLine.split('\n')
       pendingLine = lines.pop() || ''
-      for (const line of lines) worker.log?.(line)
+      for (const line of lines) {
+        worker.log?.(line)
+      }
     })
     child.stdout?.on('data', (data: Buffer) => {
       worker.diagnostics = (worker.diagnostics + data.toString()).slice(-DIAGNOSTIC_LIMIT)
     })
     child.on('message', (message: ToolWorkerResponse) => {
-      if (message.type === 'result') worker.result?.(message)
+      if (message.type === 'result') {
+        worker.result?.(message)
+      }
     })
     child.on('error', (error) => worker.fail?.(error.message))
     child.on('close', () => {
-      if (this.workers.get(key) === worker) this.workers.delete(key)
-      if (pendingLine) worker.log?.(pendingLine)
+      if (this.workers.get(key) === worker) {
+        this.workers.delete(key)
+      }
+      if (pendingLine) {
+        worker.log?.(pendingLine)
+      }
       worker.fail?.('Tool worker exited before returning its result. Input may have been delivered; inspect before retrying.')
     })
     this.workers.set(key, worker)
     return worker
   }
 
-  private async dispatch(context: ToolExecutionContext, args: unknown[], log: (line: string) => void): Promise<ToolRuntimeResult> {
-    const key = JSON.stringify([context.profileName, context.toolkitId, context.toolId])
+  private async dispatch(
+    context: ToolExecutionContext,
+    args: unknown[],
+    log: (line: string) => void,
+    isolated = false
+  ): Promise<ToolRuntimeResult> {
+    const key = JSON.stringify([
+      context.profileName,
+      context.toolkitId,
+      context.toolId,
+      ...(isolated ? [randomUUID()] : [])
+    ])
     const worker = this.workers.get(key) ?? this.create(context, key)
     worker.log = log
     worker.diagnostics = ''
-    const abort = (): void => { void this.stop(worker) }
+    const abort = (): void => {
+      void this.stop(worker)
+    }
     context.signal?.addEventListener('abort', abort, { once: true })
     let retire = false
     const result = await new Promise<ToolRuntimeResult>((resolve) => {
@@ -102,9 +148,12 @@ export class ToolWorkerManager {
         delete worker.fail
         resolve(value)
       }
-      worker.fail = (message): void => { retire = true; finish(this.failure(message, worker.diagnostics)) }
+      worker.fail = (message): void => {
+        retire = true
+        finish(this.failure(message, worker.diagnostics))
+      }
       worker.result = (message): void => {
-        retire = message.lifetime !== ToolRuntimeLifetime.Persistent
+        retire = isolated || message.lifetime !== ToolRuntimeLifetime.Persistent
         finish(message.result)
       }
       // Progress callbacks are local; only serializable call context crosses IPC.
@@ -112,7 +161,9 @@ export class ToolWorkerManager {
       delete callContext.onProgress
       delete callContext.signal
       worker.process.send({ type: 'execute', context: callContext, args }, (error) => {
-        if (error) worker.fail?.(error.message)
+        if (error) {
+          worker.fail?.(error.message)
+        }
       })
     })
     context.signal?.removeEventListener('abort', abort)
@@ -129,9 +180,13 @@ export class ToolWorkerManager {
   private async stop(worker: Worker): Promise<void> {
     const timer = setTimeout(() => worker.process.kill('SIGKILL'), SHUTDOWN_TIMEOUT_MS)
     try {
-      if (worker.process.connected) worker.process.send({ type: 'shutdown' }, () => {})
+      if (worker.process.connected) {
+        worker.process.send({ type: 'shutdown' }, () => {})
+      }
       await worker.closed
-    } finally { clearTimeout(timer) }
+    } finally {
+      clearTimeout(timer)
+    }
   }
 
   private failure(message: string, diagnostics = ''): ToolRuntimeResult {

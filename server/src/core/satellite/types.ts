@@ -1,3 +1,4 @@
+import type { ToolConcurrency } from '@/types'
 import type {
   ToolExecutionInput,
   ToolExecutionResult,
@@ -24,6 +25,7 @@ export interface SatelliteToolDefinition {
   toolkit_id: string
   name: string
   description: string
+  concurrency?: ToolConcurrency
   progressive_guidance?: string
   icon_name?: string
   execution?: {

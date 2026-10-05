@@ -1,5 +1,6 @@
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
+import type { ToolConcurrency } from '@/types'
 import { LEON_PROFILE_NAME, resolveToolDirectory } from '@/leon-roots'
 import {
   readFileSync,
@@ -22,6 +23,7 @@ interface ToolConfig {
   toolkit_id: string
   name: string
   description: string
+  concurrency?: ToolConcurrency
   binaries?: Record<string, string>
   resources?: Record<string, string[]>
   connection?: ToolConnectionSchema

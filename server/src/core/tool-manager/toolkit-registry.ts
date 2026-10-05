@@ -11,6 +11,7 @@ import { ProfileHelper } from '@/helpers/profile-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { ConnectionStatus } from '@/core/connections/connection-store'
 import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
+import { ToolConcurrency } from '@/types'
 import type {
   SatelliteToolkitDefinition,
   SatelliteToolDefinition
@@ -32,6 +33,7 @@ interface ToolkitToolDefinition {
   toolkit_id: string
   name: string
   description: string
+  concurrency?: ToolConcurrency
   progressive_guidance?: string
   icon_name?: string
   binaries?: Record<string, string>
@@ -374,6 +376,15 @@ export default class ToolkitRegistry {
     }
 
     return tool.functions || null
+  }
+
+  /**
+   * Apply tool-level ordering only to declared shared sessions.
+   */
+  public getToolConcurrency(toolkitId: string, toolId: string): ToolConcurrency {
+    const toolkit = this._toolkits.find((item) => item.id === toolkitId)
+
+    return toolkit?.tools?.[toolId]?.concurrency ?? ToolConcurrency.Parallel
   }
 
   public getToolkitContextFiles(toolkitId: string): string[] {

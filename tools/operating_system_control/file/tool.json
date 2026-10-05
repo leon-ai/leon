@@ -2,6 +2,7 @@
   "$schema": "../../../schemas/tool-schemas/tool.json",
   "tool_id": "file",
   "toolkit_id": "operating_system_control",
+  "concurrency": "serial",
   "name": "File",
   "description": "Read text, Office documents, PDFs and images with local extraction/OCR; write and append text without shell commands.",
   "icon_name": "file-text-line",

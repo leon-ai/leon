@@ -1,3 +1,4 @@
+import { ToolConcurrency } from '@/types'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
@@ -8,6 +9,54 @@ import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 
 let home = ''
 let manager: ToolWorkerManager
+
+it('isolates concurrent calls even when a tool normally retains instance state', async () => {
+  await fixture(true)
+  const run = (session: string): Promise<ToolRuntimeResult> => manager.execute({
+    toolkitId: 'fixture', toolId: 'state', functionName: 'next',
+    profileName: 'a', conversationSessionId: session, parameters: {}
+  }, [false, false], () => {}, { concurrency: ToolConcurrency.Parallel })
+  const [first, second] = await Promise.all([run('one'), run('two')])
+
+  expect(first.output['result']).toMatchObject({ count: 1, session: 'one' })
+  expect(second.output['result']).toMatchObject({ count: 1, session: 'two' })
+  expect((first.output['result'] as { pid: number }).pid)
+    .not.toBe((second.output['result'] as { pid: number }).pid)
+  expect((await fs.readFile(path.join(home, 'disposed'), 'utf8')).trim().split('\n'))
+    .toEqual(['a', 'a'])
+})
+
+it('runs two workers at once and cancellation affects only the selected call', async () => {
+  await fixture(true)
+  const firstController = new AbortController()
+  const secondController = new AbortController()
+  let started = 0
+  let releaseBothStarted: () => void = () => {}
+  const bothStarted = new Promise<void>((resolve) => {
+    releaseBothStarted = resolve
+  })
+  const run = (profile: string, controller: AbortController): Promise<ToolRuntimeResult> => manager.execute({
+    toolkitId: 'fixture', toolId: 'state', functionName: 'hold',
+    profileName: profile, conversationSessionId: 'one', parameters: {},
+    signal: controller.signal
+  }, [], (line) => {
+    if (line.includes('fixture-waiting')) {
+      started += 1
+      if (started === 2) {
+        releaseBothStarted()
+      }
+    }
+  }, { concurrency: ToolConcurrency.Parallel })
+  const first = run('a', firstController)
+  const second = run('b', secondController)
+  await bothStarted
+  firstController.abort()
+  expect((await first).success).toBe(false)
+  expect(secondController.signal.aborted).toBe(false)
+  expect(await fs.readFile(path.join(home, 'disposed'), 'utf8')).toBe('a\n')
+  secondController.abort()
+  expect((await second).success).toBe(false)
+}, 10_000)
 
 afterEach(async () => {
   await manager?.dispose()
@@ -71,7 +120,7 @@ export default class Fixture extends Tool {
 
 async function next(profile: string, session: string, attach = false, crash = false): Promise<ToolRuntimeResult> {
   return manager.execute({ toolkitId: 'fixture', toolId: 'state', functionName: 'next',
-    profileName: profile, conversationSessionId: session, parameters: {} }, [attach, crash], () => {})
+    profileName: profile, conversationSessionId: session, parameters: {} }, [attach, crash], () => {}, { concurrency: ToolConcurrency.Serial })
 }
 
 it('retains per-profile state, refreshes session context, clears attachments and disposes workers', async () => {
@@ -122,7 +171,7 @@ it('cancels an active call cooperatively and releases its worker before another 
   const controller = new AbortController()
   const result = await manager.execute({ toolkitId: 'fixture', toolId: 'state', functionName: 'hold',
     profileName: 'a', conversationSessionId: 'one', parameters: {}, signal: controller.signal }, [],
-  (line) => { if (line.includes('fixture-waiting')) controller.abort() })
+  (line) => { if (line.includes('fixture-waiting')) controller.abort() }, { concurrency: ToolConcurrency.Serial })
   expect(result.success).toBe(false)
   expect(result.message).toContain('canceled')
   expect(await fs.readFile(path.join(home, 'disposed'), 'utf8')).toBe('a\n')

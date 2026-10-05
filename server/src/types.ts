@@ -39,6 +39,14 @@ export enum CPUArchitectures {
 }
 
 /**
+ * Stateless tools accept concurrent calls; shared sessions require ordering.
+ */
+export enum ToolConcurrency {
+  Parallel = 'parallel',
+  Serial = 'serial'
+}
+
+/**
  * Routing mode
  */
 export enum RoutingMode {
