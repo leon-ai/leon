@@ -2,8 +2,10 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import execa from 'execa'
+import YAML from 'yaml'
 
 import {
+  CODEBASE_PATH,
   PNPM_RUNTIME_BIN_PATH,
   PYTHON_RUNTIME_BIN_PATH,
   UV_RUNTIME_BIN_PATH
@@ -22,6 +24,11 @@ const PYPROJECT_FILE_NAME = 'pyproject.toml'
 const SYNC_STAMP_FILE_NAME = '.last-source-deps-sync'
 const NODE_MODULES_DIR_NAME = 'node_modules'
 const VENV_DIR_NAME = '.venv'
+const PNPM_BUILD_ENV_KEYS = {
+  allowBuilds: 'pnpm_config_allow_builds',
+  dangerouslyAllowAllBuilds: 'pnpm_config_dangerously_allow_all_builds',
+  sideEffectsCache: 'pnpm_config_side_effects_cache'
+}
 
 const isFileEmpty = async (filePath) => {
   const content = await fs.promises.readFile(filePath, 'utf8')
@@ -33,21 +40,38 @@ const getSyncStampPath = (sourcePath) => {
   return path.join(sourcePath, SYNC_STAMP_FILE_NAME)
 }
 
-const isSyncCurrent = async (manifestPath, stampPath, dependencyPath) => {
+const isSyncCurrent = async (configPaths, stampPath, dependencyPath) => {
   if (
     !fs.existsSync(stampPath) ||
-    !fs.existsSync(manifestPath) ||
+    configPaths.some((configPath) => !fs.existsSync(configPath)) ||
     !fs.existsSync(dependencyPath)
   ) {
     return false
   }
 
-  const [manifestStat, stampStat] = await Promise.all([
-    fs.promises.stat(manifestPath),
+  const [configStats, stampStat] = await Promise.all([
+    Promise.all(configPaths.map((configPath) => fs.promises.stat(configPath))),
     fs.promises.stat(stampPath)
   ])
 
-  return manifestStat.mtimeMs <= stampStat.mtimeMs
+  return configStats.every((configStat) => configStat.mtimeMs <= stampStat.mtimeMs)
+}
+
+/**
+ * Carry root build permissions into standalone installs, including profile sources.
+ */
+const getNodejsBuildEnvironment = async (workspacePath) => {
+  const config = YAML.parse(await fs.promises.readFile(workspacePath, 'utf8')) || {}
+  const environment = RuntimeHelper.getManagedNodeEnvironment()
+
+  // JSON preserves structured allowBuilds rules; CLI flags only handle scalars.
+  for (const [setting, environmentKey] of Object.entries(PNPM_BUILD_ENV_KEYS)) {
+    if (Object.hasOwn(config, setting)) {
+      environment[environmentKey] = JSON.stringify(config[setting])
+    }
+  }
+
+  return environment
 }
 
 const markSourceDependenciesAsSynced = async (sourcePath) => {
@@ -71,6 +95,7 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
   const packageJSONPath = path.join(sourcePath, PACKAGE_JSON_FILE_NAME)
   const nodeModulesPath = path.join(sourcePath, NODE_MODULES_DIR_NAME)
   const stampPath = getSyncStampPath(sourcePath)
+  const workspacePath = path.join(CODEBASE_PATH, PNPM_WORKSPACE_FILE_NAME)
 
   if (!fs.existsSync(packageJSONPath) || (await isFileEmpty(packageJSONPath))) {
     return
@@ -79,31 +104,30 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
   const manifest = JSON.parse(await fs.promises.readFile(packageJSONPath, 'utf8'))
 
   if (
-    await isSyncCurrent(packageJSONPath, stampPath, nodeModulesPath) &&
+    await isSyncCurrent([packageJSONPath, workspacePath], stampPath, nodeModulesPath) &&
     getMissingNodejsDependencies(manifest, nodeModulesPath).length === 0
   ) {
     return
   }
 
+  const environment = await getNodejsBuildEnvironment(workspacePath)
+
   // A failed repair must not leave an earlier success stamp behind.
   await fs.promises.rm(stampPath, { force: true })
   await fs.promises.rm(nodeModulesPath, { recursive: true, force: true })
 
-  const hasSourceWorkspaceConfig = fs.existsSync(
-    path.join(sourcePath, PNPM_WORKSPACE_FILE_NAME)
-  )
   const installArgs = [
     'install',
-    // A source-local workspace config both isolates the install and carries
-    // explicit native dependency build approvals such as node-pty.
-    // pnpm 12 otherwise uses the parent root even with --ignore-workspace.
-    ...(hasSourceWorkspaceConfig ? [] : ['--ignore-workspace', '--lockfile-dir', sourcePath]),
+    // Keep dependencies beside their source without requiring nested workspaces.
+    '--ignore-workspace',
+    '--lockfile-dir',
+    sourcePath,
     '--lockfile=false'
   ]
 
   await execa(PNPM_RUNTIME_BIN_PATH, installArgs, {
     cwd: sourcePath,
-    env: RuntimeHelper.getManagedNodeEnvironment()
+    env: environment
   })
 
   const missingDependencies = getMissingNodejsDependencies(manifest, nodeModulesPath)

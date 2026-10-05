@@ -1,0 +1,8 @@
+{
+  "name": "@leon-ai/shell-tool",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "node-pty": "1.1.0"
+  }
+}
