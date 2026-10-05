@@ -192,7 +192,6 @@ export class ReActLLMDuty extends LLMDuty {
     input: string
   }>()
   private hasExplicitMemoryWrite = false
-  private reasoningGenerationId: string | null = null
   private hasFinalizedAnswer = false
   private readonly answerStream = new AgentAnswerStream((payload) => {
     if (payload.token) {
@@ -275,7 +274,6 @@ export class ReActLLMDuty extends LLMDuty {
     }
     this.finalAnswerMetrics = null
     this.hasExplicitMemoryWrite = false
-    this.reasoningGenerationId = StringHelper.random(6, { onlyLetters: true })
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
@@ -1088,11 +1086,9 @@ export class ReActLLMDuty extends LLMDuty {
       !options.isCompletionReview && reasoningMode !== 'off' && inferencePolicy.emitReasoning
 
     const toolNames = preparedTools.map((t) => t.function.name).join(', ')
+    // Each model call starts a new block; its streamed chunks share this ID.
     const reasoningGenerationId = shouldEmitReasoning
-      ? this.getReasoningGenerationId(
-          phase,
-          StringHelper.random(6, { onlyLetters: true })
-        )
+      ? randomUUID()
       : null
 
     this.logTitle(phase)
@@ -1765,20 +1761,6 @@ export class ReActLLMDuty extends LLMDuty {
         }))
       }
     } as unknown as LLMDutyResult
-  }
-
-  private getReasoningGenerationId(
-    phase: AgentPhase,
-    fallbackGenerationId?: string | null
-  ): string | null {
-    const baseGenerationId =
-      this.reasoningGenerationId || fallbackGenerationId || null
-
-    if (!baseGenerationId) {
-      return null
-    }
-
-    return `${baseGenerationId}_${phase}`
   }
 
   private emitReasoningToken(

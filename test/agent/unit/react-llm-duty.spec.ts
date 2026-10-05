@@ -4,6 +4,8 @@ import { ConnectionStatus } from '@/core/connections/connection-store'
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
 import type {
   AgentCallableFunction,
   AgentToolCatalog,
@@ -55,7 +57,9 @@ const coreMocks = vi.hoisted(() => ({
   needsToolConnection: vi.fn().mockReturnValue(true),
   resolveToolById: vi.fn(),
   executeTool: vi.fn(),
-  emitAnswerToChatClients: vi.fn()
+  emitAnswerToChatClients: vi.fn(),
+  emitToChatClients: vi.fn(),
+  prompt: vi.fn()
 }))
 
 vi.mock('@/core/connections/connection-service', () => ({
@@ -64,6 +68,12 @@ vi.mock('@/core/connections/connection-service', () => ({
 }))
 
 vi.mock('@/core', () => ({
+  PERSONA: {
+    getCompactDutySystemPrompt: (prompt: string): string => prompt
+  },
+  LLM_PROVIDER: {
+    prompt: coreMocks.prompt
+  },
   BRAIN: {
     wernicke: (
       key: string,
@@ -72,7 +82,8 @@ vi.mock('@/core', () => ({
     ): string => values['{{ message }}'] || key
   },
   SOCKET_SERVER: {
-    emitAnswerToChatClients: coreMocks.emitAnswerToChatClients
+    emitAnswerToChatClients: coreMocks.emitAnswerToChatClients,
+    emitToChatClients: coreMocks.emitToChatClients
   },
   TOOL_EXECUTOR: {
     executeTool: coreMocks.executeTool
@@ -290,6 +301,95 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it('keeps reasoning from successive model calls separate in live events and saved traces', async () => {
+    const modelState = CONFIG_STATE.getModelState()
+    vi.spyOn(modelState, 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
+    vi.spyOn(modelState, 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6-sol'
+    })
+    vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
+      reasoning: 'on',
+      speed: 'auto'
+    })
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const duty = new ReActLLMDuty({ input: 'Check the weather.' })
+    Object.assign(duty, {
+      // A turn ID must not group reasoning across separate model calls.
+      reasoningGenerationId: 'turn',
+      writeAgentPromptLog: vi.fn()
+    })
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Check the weather.' }
+    ]
+    const catalog = createCatalog()
+    const call = toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })
+    coreMocks.prompt
+      .mockImplementationOnce(async (_messages, params) => {
+        params.onReasoningToken('Checking ')
+        params.onReasoningToken('the weather.')
+
+        return { output: '', toolCalls: [call] }
+      })
+      .mockImplementationOnce(async (_messages, params) => {
+        params.onReasoningToken('Reading ')
+        params.onReasoningToken('the result.')
+
+        return { output: 'It is sunny.' }
+      })
+
+    await duty['callAgentModel'](
+      transcript,
+      'Check the weather.',
+      catalog.tools,
+      { isRecoveryAttempt: false }
+    )
+    now.mockReturnValue(2_000)
+    duty['responseTraceCollector'].record({
+      type: 'tool_call',
+      toolCall: { id: call.id, name: callable.qualifiedName, status: 'success' }
+    })
+    transcript.push(
+      { role: 'assistant', content: '', toolCalls: [call] },
+      {
+        role: 'tool',
+        toolCallId: call.id,
+        toolName: CALLABLE_TOOL_NAME,
+        content: 'Sunny.'
+      }
+    )
+    now.mockReturnValue(3_000)
+    await duty['callAgentModel'](
+      transcript,
+      'Check the weather.',
+      catalog.tools,
+      { isRecoveryAttempt: false }
+    )
+
+    const events = coreMocks.emitToChatClients.mock.calls
+      .filter(([event]) => event === 'llm-reasoning-token')
+      .map(([, payload]) => payload)
+    expect(events).toHaveLength(4)
+    expect(events[0].generationId).toBe(events[1].generationId)
+    expect(events[2].generationId).toBe(events[3].generationId)
+    expect(events[2].generationId).not.toBe(events[0].generationId)
+    const trace = duty['responseTraceCollector'].snapshot({})
+    expect(trace.reasoning).toEqual([
+      {
+        id: events[0].generationId,
+        text: 'Checking the weather.',
+        phase: 'agent',
+        startedAt: 1_000
+      },
+      {
+        id: events[2].generationId,
+        text: 'Reading the result.',
+        phase: 'agent',
+        startedAt: 3_000
+      }
+    ])
+  })
+
   it.each(['model', 'tool'])('does not recover or verify after cancellation during %s execution', async (phase) => {
     const controller = new AbortController()
     const reason = new Error('Owner canceled')

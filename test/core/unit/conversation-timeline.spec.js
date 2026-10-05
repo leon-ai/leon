@@ -6,6 +6,9 @@ import ToolUIHandler from '../../../app/src/js/tool-ui-handler.js'
 describe('conversation activity replay', () => {
   it('restores thinking and tools in time order without draft bubbles or duplicate cards', () => {
     const reasoning = { id: 'r1', text: 'Checking', phase: 'agent', startedAt: 2 }
+    const laterReasoning = {
+      id: 'r2', text: 'Reading the result', phase: 'agent', startedAt: 5
+    }
     const toolCall = { id: 't1', name: 'test.lookup', status: 'running', startedAt: 3 }
     const progress = {
       id: 'progress', content: 'One item is verified; more remain.', createdAt: 4
@@ -18,13 +21,15 @@ describe('conversation activity replay', () => {
       { who: 'owner', string: 'Check it', sentAt: 1 },
       { who: 'leon', string: '', sentAt: 4, agentResponseTrace: trace },
       { who: 'leon', string: 'Working', sentAt: 4 },
-      { who: 'leon', string: 'Done', sentAt: 5, agentResponseTrace: {
-        ...trace, toolCalls: [{ ...toolCall, status: 'success' }]
+      { who: 'leon', string: 'Done', sentAt: 6, agentResponseTrace: {
+        ...trace,
+        reasoning: [reasoning, laterReasoning],
+        toolCalls: [{ ...toolCall, status: 'success' }]
       } }
     ]
     const timeline = expandConversationTimeline(messages).sort((a, b) => a.sentAt - b.sentAt)
     expect(timeline.map((item) => item.string || item.originalString || item.reasoning?.id || item.toolCall?.id))
-      .toEqual(['Check it', 'r1', 't1', progress.content, 'Working', 'Done'])
+      .toEqual(['Check it', 'r1', 't1', progress.content, 'Working', 'r2', 'Done'])
     expect(timeline[2].toolCall.status).toBe('success')
     expect(timeline[3].messageId).toBe(progress.id)
 

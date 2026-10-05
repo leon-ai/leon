@@ -307,13 +307,19 @@ describe('conversation trace persistence', () => {
     const draft: Omit<MessageLog, 'sentAt'> = {
       who: 'leon', message: '', messageId: 'turn', isAddedToHistory: false,
       agentResponseTrace: {
-        id: 'turn', planSteps: [], toolCalls: [],
+        id: 'turn', planSteps: [],
+        toolCalls: [{
+          id: 'tool', name: 'test.lookup', status: 'success', startedAt: 2_000
+        }],
         progressMessages: [{
           id: 'progress',
           content: 'One item is verified; more remain.',
           createdAt: 1_000
         }],
-        reasoning: [{ id: 'thinking', text: 'Checking $&', phase: 'agent', startedAt: 1_000 }]
+        reasoning: [
+          { id: 'thinking', text: 'Checking $&', phase: 'agent', startedAt: 1_000 },
+          { id: 'later-thinking', text: 'Reading the result.', phase: 'agent', startedAt: 3_000 }
+        ]
       }
     }
     vi.spyOn(Date, 'now').mockReturnValue(1_000)
