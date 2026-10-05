@@ -11,6 +11,7 @@ import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provi
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
 import ZAILLMProvider from '@/core/llm-manager/llm-providers/z-ai-llm-provider'
+import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-provider'
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
@@ -401,6 +402,65 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(readCompletionAccounting({ inputTokens, raw: {
       prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 0 }
     } })).toEqual({ cachedInputTokens: 0 })
+  })
+
+  it('preserves reasoning, tool images and cache usage on DeepSeek schema Responses', async () => {
+    const reasoning = { type: 'reasoning', id: 'rs_deepseek', summary: [],
+      content: [{ type: 'reasoning_text', text: '  inspect inspect \n' }] }
+    const call = { type: 'function_call', id: 'fc_1', call_id: 'call_1', name: 'inspect', arguments: '{}' }
+    const response = { id: 'resp_deepseek', created_at: 1, model: 'deepseek-flash', status: 'completed',
+      output: [reasoning, call], usage: { input_tokens: 100, output_tokens: 20,
+        input_tokens_details: { cached_tokens: 80 }, output_tokens_details: { reasoning_tokens: 15 } } }
+    const events = [
+      { type: 'response.created', response: { ...response, output: [], status: 'in_progress' } },
+      { type: 'response.output_item.added', output_index: 0, item: { ...reasoning, content: [] } },
+      { type: 'response.reasoning_text.delta', item_id: reasoning.id, output_index: 0, delta: '  inspect ' },
+      { type: 'response.reasoning_text.delta', item_id: reasoning.id, output_index: 0, delta: 'inspect \n' },
+      { type: 'response.output_item.done', output_index: 0, item: reasoning },
+      { type: 'response.output_item.added', output_index: 1, item: { ...call, arguments: '' } },
+      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 1, delta: '{}' },
+      { type: 'response.output_item.done', output_index: 1, item: call },
+      { type: 'response.completed', response }
+    ]
+    const fetch = vi.fn().mockImplementation(async () => new Response(
+      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new DeepSeekLLMProvider({
+      provider: LLMProviders.DeepSeek, model: response.model, label: 'DeepSeek',
+      isEnabled: true, isLocal: false, isResolved: true
+    })
+    const params = {
+      ...createCompletionParams({ inspected: { type: 'boolean' } }),
+      shouldStream: true,
+      reasoningMode: 'on' as const
+    }
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
+      await provider.runChatCompletion('Inspect.', params)
+    )
+    expect(String(fetch.mock.calls[0]![0])).toBe('https://api.deepseek.com/v1/responses')
+    expect(normalized).toMatchObject({
+      accounting: { cachedInputTokens: 80, reasoningOutputTokens: 15 },
+      toolCalls: [{ id: 'call_1', function: { name: 'inspect' } }],
+      reasoningItems: [{ provider: LLMProviders.DeepSeek, id: reasoning.id, text: '  inspect inspect \n' }]
+    })
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Inspect.' },
+      { role: 'assistant', content: '', reasoningItems: normalized.reasoningItems, toolCalls: normalized.toolCalls },
+      { role: 'tool', toolName: 'inspect', toolCallId: 'call_1', content: 'Screenshot.',
+        files: [{ dataBase64: 'aW1hZ2U=', mediaType: 'image/png', visualDetail: 'low' }] }
+    ], { ...params, toolChoice: 'required' })
+    const body = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(body).toMatchObject({ reasoning: { effort: 'none' }, tool_choice: 'required' })
+    expect(body.input).toContainEqual(reasoning)
+    expect(body.input).toContainEqual({
+      type: 'function_call_output', call_id: 'call_1', output: [
+        { type: 'input_text', text: 'Screenshot.' },
+        { type: 'input_image', image_url: 'data:image/png;base64,aW1hZ2U=', detail: 'low' }
+      ]
+    })
+    expect(body.previous_response_id).toBeUndefined()
   })
 
   it('retains Hugging Face function calls and outputs in Responses history', async () => {
@@ -1306,6 +1366,31 @@ describe('AISDKRemoteLLMProvider', () => {
       prompt_tokens: 100,
       accounting: { cachedInputTokens: 80, costUSD: 0.001, costEstimated: false }
     })
+  })
+
+  it('uses the native DeepSeek SDK for tool turns and Responses for schema-constrained output', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json(CHAT_RESPONSE))
+      .mockResolvedValueOnce(Response.json({
+        id: 'response-2', object: 'response', created_at: 1, model: 'deepseek-flash', status: 'completed',
+        output: [{ type: 'message', id: 'message-1', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: '{"done":true}', annotations: [] }] }],
+        usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120, input_tokens_details: { cached_tokens: 80 } }
+      }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new DeepSeekLLMProvider({ ...TARGET, provider: LLMProviders.DeepSeek, model: 'deepseek-flash' })
+
+    const response = await provider.runChatCompletion('Read README.md', PARAMS)
+    expect(fetch.mock.calls[0]![0]).toMatch(/\/chat\/completions$/)
+    expect(response.data.choices[0].message.tool_calls[0].function.name).toBe('read_file')
+    expect(response.data.usage.prompt_tokens).toBe(100)
+
+    await provider.runChatCompletion('Is it done?', {
+      ...PARAMS,
+      toolChoice: 'none',
+      data: { done: { type: 'boolean' } }
+    })
+    expect(fetch.mock.calls[1]![0]).toMatch(/\/responses$/)
+    expect(JSON.parse(fetch.mock.calls[1]![1].body).text.format.type).toBe('json_schema')
   })
 
   it('uses the dedicated OpenRouter SDK for tool decisions and retains provider reasoning for replay', async () => {

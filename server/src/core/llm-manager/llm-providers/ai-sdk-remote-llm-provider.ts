@@ -20,6 +20,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createMiniMax } from '@ai-sdk/minimax'
 import { createZai } from '@ai-sdk/zai'
+import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
@@ -61,6 +62,7 @@ type AISDKFlavor =
   | 'anthropic'
   | 'minimax'
   | 'zai'
+  | 'deepseek'
   | 'moonshotai'
   | 'cerebras'
   | 'groq'
@@ -80,6 +82,7 @@ interface AISDKRemoteProviderConfig {
   flavor: AISDKFlavor
   requiresApiKey?: boolean
   sendApiKeyAsBearer?: boolean
+  supportsToolResultFiles?: boolean
   headers?: (apiKey: string) => Record<string, string>
   transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown>
   buildProviderOptions?: (
@@ -120,6 +123,7 @@ export default class AISDKRemoteLLMProvider {
 
   private readonly config: AISDKRemoteProviderConfig
   private languageModel: LanguageModelV4
+  private responsesModel: LanguageModelV4 | undefined
   private openAITransport: OpenAIResponsesTransport | undefined
 
   constructor(
@@ -176,6 +180,7 @@ export default class AISDKRemoteLLMProvider {
     this.config.baseURL = baseURL
     this.openAITransport?.close()
     this.openAITransport = undefined
+    this.responsesModel = undefined
     this.languageModel = this.createLanguageModel()
   }
 
@@ -291,6 +296,16 @@ export default class AISDKRemoteLLMProvider {
       return provider(this.model)
     }
 
+    if (this.config.flavor === 'deepseek') {
+      const provider = createDeepSeek({
+        fetch,
+        apiKey,
+        baseURL: this.config.baseURL,
+        ...(headers ? { headers } : {})
+      })
+
+      return provider(this.model)
+    }
 
     if (this.config.flavor === 'moonshotai') {
       const provider = createMoonshotAI({
@@ -327,7 +342,14 @@ export default class AISDKRemoteLLMProvider {
 
     throw new Error(`Unsupported AI SDK flavor: ${this.config.flavor}`)
   }
-  private getLanguageModel(): LanguageModelV4 {
+  private getLanguageModel(completionParams: CompletionParams): LanguageModelV4 {
+    // The dedicated DeepSeek SDK only exposes Chat Completions and downgrades
+    // JSON schemas there. Responses retains Leon's schema-constrained calls.
+    if (this.config.flavor === 'deepseek' && completionParams.data) {
+      this.responsesModel ??= this.createLanguageModel('open-responses')
+      return this.responsesModel
+    }
+
     return this.languageModel
   }
 
@@ -540,13 +562,24 @@ export default class AISDKRemoteLLMProvider {
             type: 'tool-result',
             toolCallId: toolMessage.toolCallId,
             toolName: toolMessage.toolName,
-            output: {
-              type: 'text',
-              value: toolMessage.content
-            }
+            output: this.config.supportsToolResultFiles && toolMessage.files?.length
+              ? {
+                  type: 'content',
+                  value: [
+                    { type: 'text', text: toolMessage.content },
+                    ...toolMessage.files.map((file) => ({
+                      type: 'file' as const,
+                      data: { type: 'data' as const, data: file.dataBase64 },
+                      mediaType: file.mediaType,
+                      ...(file.filename ? { filename: file.filename } : {}),
+                      ...this.getVisualFileProviderOptions(file.visualDetail)
+                    }))
+                  ]
+                }
+              : { type: 'text', value: toolMessage.content }
           })
 
-          if (toolMessage.files?.length) {
+          if (toolMessage.files?.length && !this.config.supportsToolResultFiles) {
             visualEvidence.push({
               type: 'text',
               text: `Visual evidence returned by ${toolMessage.toolName}.`
@@ -610,6 +643,7 @@ export default class AISDKRemoteLLMProvider {
         (this.config.flavor === 'openai-compatible' ||
           this.config.flavor === 'open-responses' ||
           this.config.flavor === 'zai' ||
+          this.config.flavor === 'deepseek' ||
           this.config.flavor === 'moonshotai')
       ) {
         content.push({ type: 'reasoning', text: message.reasoning })
@@ -641,7 +675,8 @@ export default class AISDKRemoteLLMProvider {
     if (
       !visualDetail ||
       (this.config.flavor !== 'openai-responses' &&
-        this.config.flavor !== 'open-responses')
+        this.config.flavor !== 'open-responses' &&
+        this.config.flavor !== 'deepseek')
     ) {
       return {}
     }
@@ -1552,7 +1587,7 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel()
+    const languageModel = this.getLanguageModel(completionParams)
     const result = await languageModel.doGenerate(callOptions)
     const content = result.content as Array<Record<string, unknown>>
 
@@ -1623,7 +1658,7 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel()
+    const languageModel = this.getLanguageModel(completionParams)
     const result = await languageModel.doStream(callOptions)
 
     // Clear a previous attempt's provisional text without claiming model output.

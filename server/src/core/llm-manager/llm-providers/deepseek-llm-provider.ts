@@ -21,8 +21,8 @@ function isThinkingDisabled(
 }
 
 /**
- * Uses the existing compatible adapter for streaming, tool calls, and JSON.
- * @see https://api-docs.deepseek.com/guides/thinking_mode/
+ * Uses the native SDK, retaining Responses for schema-constrained completions.
+ * @see https://api-docs.deepseek.com/guides/responses_api/
  */
 export default class DeepSeekLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
@@ -36,29 +36,24 @@ export default class DeepSeekLLMProvider extends AISDKRemoteLLMProvider {
         PROVIDER_CONFIG,
         target.accountCredentials
       ),
-      flavor: 'openai-compatible',
+      flavor: 'deepseek',
+      supportsToolResultFiles: true,
       shouldOmitTemperature: (params) => !isThinkingDisabled(params),
       buildProviderOptions: ({ completionParams, reasoningMode }) => {
         const disabled = isThinkingDisabled(completionParams, reasoningMode)
         return {
           deepseek: {
-            thinking: { type: disabled ? 'disabled' : 'enabled' },
-            ...(!disabled && completionParams.reasoningEffort
-              ? { reasoningEffort: completionParams.reasoningEffort }
-              : {})
+            ...(completionParams.data
+              ? { reasoningEffort: disabled ? 'none' : completionParams.reasoningEffort || 'high' }
+              : {
+                  thinking: { type: disabled ? 'disabled' : 'enabled' },
+                  ...(!disabled
+                    ? { reasoningEffort: completionParams.reasoningEffort || 'high' }
+                    : {})
+                })
           }
         }
-      },
-      transformRequestBody: (body) => ({
-        ...body,
-        // Runtime checkpoints and history from non-thinking calls have no
-        // reasoning. DeepSeek still requires the field on assistant messages.
-        messages: (body['messages'] as Array<Record<string, unknown>>).map(
-          (message) => message['role'] === 'assistant'
-            ? { ...message, reasoning_content: message['reasoning_content'] ?? '' }
-            : message
-        )
-      })
+      }
     })
   }
 }

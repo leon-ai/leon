@@ -14,6 +14,9 @@ importers:
       '@ai-sdk/cerebras':
         specifier: 3.0.62
         version: 3.0.62(zod@4.3.6)
+      '@ai-sdk/deepseek':
+        specifier: 3.0.58
+        version: 3.0.58(zod@4.3.6)
       '@ai-sdk/groq':
         specifier: 4.0.54
         version: 4.0.54(zod@4.3.6)
@@ -281,6 +284,12 @@ packages:
 
   '@ai-sdk/cerebras@3.0.62':
     resolution: {integrity: sha512-fh5T5I2pL5lk+uxt8H5aQbHhk8J3ofqyGZqJxiKgmj9UrNk/+IjhqPSB/zY8QyEi8UJarrh5FEtwaF+gvQlUbg==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/deepseek@3.0.58':
+    resolution: {integrity: sha512-tOafL69mHQGJH3g/mu4k0evkP/cRLSHCWe7L9rcVV4b0S1zI2rpWDZbToZO7D4X/uox9baVmgRQ5AoUTeaDs0A==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -4365,6 +4374,12 @@ snapshots:
   '@ai-sdk/cerebras@3.0.62(zod@4.3.6)':
     dependencies:
       '@ai-sdk/openai-compatible': 3.0.62(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
+      zod: 4.3.6
+
+  '@ai-sdk/deepseek@3.0.58(zod@4.3.6)':
+    dependencies:
       '@ai-sdk/provider': 4.0.21
       '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
