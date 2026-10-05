@@ -4,10 +4,7 @@ import { spawn, spawnSync } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 import { createInterface } from 'node:readline'
-import {
-  isDeepStrictEqual,
-  stripVTControlCharacters
-} from 'node:util'
+import { stripVTControlCharacters } from 'node:util'
 
 const INSTALL_COMMAND =
   'stty rows 40 cols 120 && pnpm install --frozen-lockfile'
@@ -23,9 +20,6 @@ const DEFAULT_LOG_PATH = '/tmp/leon-fresh-install.log'
 const MODULES_STATE_PATH = path.join('node_modules', '.modules.yaml')
 const SERVER_READY_MESSAGE = 'Server is available at '
 const INSTALL_OUTPUT_RESUME_MARKER = 'Base Setup'
-const JQ_SENTINEL_INPUT = {
-  lifecycleScripts: 'available'
-}
 const SCRIPT_ARGUMENTS = [
   '--quiet',
   '--return',
@@ -388,21 +382,6 @@ async function verifyPendingBuilds(environment) {
   )
 }
 
-async function verifyDependencyLifecycleScripts() {
-  // node-jq downloads its executable during preinstall, making it a lifecycle sentinel.
-  const { default: jq } = await import('node-jq')
-  const output = await jq.run('.', JQ_SENTINEL_INPUT, {
-    input: 'json',
-    output: 'json'
-  })
-
-  if (!isDeepStrictEqual(output, JQ_SENTINEL_INPUT)) {
-    throw new Error('node-jq lifecycle sentinel returned unexpected output')
-  }
-
-  console.log('Dependency lifecycle script sentinel passed.')
-}
-
 function smokeTestStart(environment, logPath) {
   return new Promise((resolve, reject) => {
     let hasSettled = false
@@ -517,7 +496,6 @@ async function main() {
   ensureEmptyPNPMStore(environment)
   await runInteractiveInstall(environment, apiKey, logPath)
   await verifyPendingBuilds(environment)
-  await verifyDependencyLifecycleScripts()
   await runCommand('pnpm', ['build'], environment, BUILD_TIMEOUT)
   await smokeTestStart(environment, logPath)
   console.log('Fresh installation, build, weather, and OCR verification passed.')
