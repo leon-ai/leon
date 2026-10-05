@@ -9,29 +9,29 @@ importers:
   .:
     dependencies:
       '@ai-sdk/anthropic':
-        specifier: 4.0.52
-        version: 4.0.52(zod@4.3.6)
+        specifier: 4.0.71
+        version: 4.0.71(zod@4.3.6)
       '@ai-sdk/cerebras':
-        specifier: 3.0.47
-        version: 3.0.47(zod@4.3.6)
+        specifier: 3.0.62
+        version: 3.0.62(zod@4.3.6)
       '@ai-sdk/groq':
-        specifier: 4.0.40
-        version: 4.0.40(zod@4.3.6)
+        specifier: 4.0.54
+        version: 4.0.54(zod@4.3.6)
       '@ai-sdk/huggingface':
         specifier: 2.0.47
         version: 2.0.47(zod@4.3.6)
       '@ai-sdk/moonshotai':
-        specifier: 3.0.48
-        version: 3.0.48(zod@4.3.6)
+        specifier: 3.0.62
+        version: 3.0.62(zod@4.3.6)
       '@ai-sdk/openai':
-        specifier: 4.0.65
-        version: 4.0.65(zod@4.3.6)
+        specifier: 4.0.83
+        version: 4.0.83(zod@4.3.6)
       '@ai-sdk/openai-compatible':
-        specifier: 3.0.47
-        version: 3.0.47(zod@4.3.6)
+        specifier: 3.0.62
+        version: 3.0.62(zod@4.3.6)
       '@ai-sdk/provider':
-        specifier: 4.0.13
-        version: 4.0.13
+        specifier: 4.0.21
+        version: 4.0.21
       '@ark-ui/react':
         specifier: 5.36.0
         version: 5.36.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -48,8 +48,8 @@ importers:
         specifier: 4.13.30
         version: 4.13.30
       '@openrouter/ai-sdk-provider':
-        specifier: 3.0.0
-        version: 3.0.0(ai@7.0.97(zod@4.3.6))(zod@4.3.6)
+        specifier: 3.1.0
+        version: 3.1.0(ai@7.0.127(zod@4.3.6))(zod@4.3.6)
       '@segment/ajv-human-errors':
         specifier: 2.16.0
         version: 2.16.0(ajv@8.18.0)
@@ -70,10 +70,10 @@ importers:
         version: 2.8.3(@typescript/typescript6@6.0.2)(supports-color@5.5.0)
       '@vercel/ai-sdk-openai-websocket-fetch':
         specifier: 1.0.0
-        version: 1.0.0(@ai-sdk/openai@4.0.65(zod@4.3.6))
+        version: 1.0.0(@ai-sdk/openai@4.0.83(zod@4.3.6))
       ai:
-        specifier: 7.0.97
-        version: 7.0.97(zod@4.3.6)
+        specifier: 7.0.127
+        version: 7.0.127(zod@4.3.6)
       ajv:
         specifier: 8.18.0
         version: 8.18.0
@@ -235,8 +235,8 @@ importers:
         specifier: 15.1.0
         version: 15.1.0(supports-color@5.5.0)
       node-llama-cpp:
-        specifier: 3.20.0
-        version: 3.20.0(@typescript/typescript6@6.0.2)(supports-color@5.5.0)
+        specifier: 3.22.1
+        version: 3.22.1(@typescript/typescript6@6.0.2)(supports-color@5.5.0)
       nodemon:
         specifier: 3.1.14
         version: 3.1.14
@@ -267,26 +267,26 @@ importers:
 
 packages:
 
-  '@ai-sdk/anthropic@4.0.52':
-    resolution: {integrity: sha512-IQt/y++kSUdqa9EbFOJntxLGjZMURTm/MnTUikNBZ5X86K5l96t/BwsRsX/SrH5kx+7yRPrmJ1WBNlmE8quSVg==}
+  '@ai-sdk/anthropic@4.0.71':
+    resolution: {integrity: sha512-wiv3jhUH0RrvGzSolJMZfZ2cI9As45LhwYmcAoWvNivXjC7wzJ4W/Udq9/u7EGnGsT8lpmFKEKBrMXVeUO97Dg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/cerebras@3.0.47':
-    resolution: {integrity: sha512-N1ww+QzXOZoK3+J0GV25x823DgsireA5XtOt6EXWDCZawC0rssuzHfmA+mIJrhaHq6E0nrsD0tjTWJqxhbWrng==}
+  '@ai-sdk/cerebras@3.0.62':
+    resolution: {integrity: sha512-fh5T5I2pL5lk+uxt8H5aQbHhk8J3ofqyGZqJxiKgmj9UrNk/+IjhqPSB/zY8QyEi8UJarrh5FEtwaF+gvQlUbg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/gateway@4.0.78':
-    resolution: {integrity: sha512-fcamzmFlcy+c/tIc7QcATLe/kArgSVGQ1QxaddMjhOSX8zypc2hmD5sHB2bp1DSFcSxDD32d6usF9a7xLCTULg==}
+  '@ai-sdk/gateway@4.0.103':
+    resolution: {integrity: sha512-nnGTUHzPRQ14jhv9CL4OQrzcRBIFTBMIPKGIi9Z9u/4GtwSRxa/nxUX6np2Iwp5phOzO0a0njj/j9Jolf5AEaA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/groq@4.0.40':
-    resolution: {integrity: sha512-J9EXVHLandoqLbEnIEka4u31DRKlsL1F9Y64CkXKLN6Izspxx0lFZc4oJ1lbl1Sri56V8rifD7OJ1/9YMgIwKg==}
+  '@ai-sdk/groq@4.0.54':
+    resolution: {integrity: sha512-hAcGQqvThh52tEbhCwOaaSMcxHtJrA7SENLSRBxeteEzdFT/tjRhqes6S8MobR4O53nLZYz7HsSoRejH/D1bWA==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -297,8 +297,8 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4
 
-  '@ai-sdk/moonshotai@3.0.48':
-    resolution: {integrity: sha512-fBTqZncQ5/Fqy18jY8kBgUgB4ltimrGRYwArj6buXUhQwzlAPe7BP+r5lKJZqwEihZAMw79z/4vjpFSdqk62NQ==}
+  '@ai-sdk/moonshotai@3.0.62':
+    resolution: {integrity: sha512-OuiSS9CyWvLBOFJSs+3dDGQC3oFdHAUhC4otcfwXCJQuGi1GLbk7s0EInYGaqT4o7VKVOjv9VdP4+ihxz2Z+qw==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -309,8 +309,14 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
-  '@ai-sdk/openai@4.0.65':
-    resolution: {integrity: sha512-rpk1Tv7TR0H338zTKmSVMxv4yo++HDOxioiuvBySb8cWkx2fS10tWl/5cEwL0diJbcV/+p3+9gpIOre52UoQJA==}
+  '@ai-sdk/openai-compatible@3.0.62':
+    resolution: {integrity: sha512-IAz1xv8zot4KLGa8kN7UfAA6H5+ARzAgAKLsoKxHPBzZuOc2E3ohaELg0x/JR9HVTbMbiftb0dPyCb8cT2KBRg==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
+  '@ai-sdk/openai@4.0.83':
+    resolution: {integrity: sha512-NgqZVWoya7hfmtLkWyIjX9THbyYMLfxFqpShdAmvMnkoT+R9AZbdULGan8+4BiBWIZ1aHiAsc90l3SL8QU/0+Q==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -321,8 +327,18 @@ packages:
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
 
+  '@ai-sdk/provider-utils@5.0.53':
+    resolution: {integrity: sha512-VVe6UDd0y0/B4TfauuKKzcppqvhTmSluwwUVT4WG2/8h7gFbyFm7PM4UGM+ZXe3/RI6bv+Vl1cw/7aiBoQqdxg==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
+
   '@ai-sdk/provider@4.0.13':
     resolution: {integrity: sha512-sJvnbFIFLzmKFXIjfwS8XCOAj6puHCawItwvA9PBZgk2f/l/TiC4OSfK3ueDbUVXfRCOn5eJN97EIF10toIOmQ==}
+    engines: {node: '>=22'}
+
+  '@ai-sdk/provider@4.0.21':
+    resolution: {integrity: sha512-UpbC9C1oht8dhfKPbVXSLRZS3DI8uk8n5v2uMjBPNIYGsC2kL045ywq7D8Hh9KgnH9rP5W/GxQdYtWScRouqlA==}
     engines: {node: '>=22'}
 
   '@ark-ui/react@5.36.0':
@@ -860,8 +876,22 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@node-llama-cpp/linux-arm64@3.22.1':
+    resolution: {integrity: sha512-W+7naKCXX9/eEjjFmRS8vvx91QyLXDbeFxexZc3bh/PtQABZgmRL3C0AtYYXn4YGTj/3Qor4lWZn2tpjZFPLdQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64, x64]
+    os: [linux]
+    libc: [glibc]
+
   '@node-llama-cpp/linux-armv7l@3.20.0':
     resolution: {integrity: sha512-VUWc9U8QzgfNVcAB2BoapxBJK3wQt8EnBkstRWITTxIb4PLQjARM8Lobuz0p8gMJja4W0yWJLCN0YzkLqn51Qw==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm, x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@node-llama-cpp/linux-armv7l@3.22.1':
+    resolution: {integrity: sha512-v/pHg4BcQHRDna+YYq4vWp44HCFluar4hAiB732Pa5PF89flMXhHSku68tQn+25RJjuc3TtoeY/i57WnX9GrdQ==}
     engines: {node: '>=20.0.0'}
     cpu: [arm, x64]
     os: [linux]
@@ -874,8 +904,22 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@node-llama-cpp/linux-riscv64@3.22.1':
+    resolution: {integrity: sha512-AUnyUgcIUiGbWce/jWqM13Hs3wPyIZG3mxnR/GXm3/F8g8vNlqCldeVdRS6lyZ0xWQkCowdMQkbdoQuuu7YWOw==}
+    engines: {node: '>=20.0.0'}
+    cpu: [riscv64]
+    os: [linux]
+    libc: [glibc]
+
   '@node-llama-cpp/linux-x64-cuda-ext@3.20.0':
     resolution: {integrity: sha512-2XwxFr0K+bLnmhcmXHeR2xM+RZ3LCisrSTJN9LHFkkctCsuZ9mw292XLq5V5b4oJxa3d28UJm5G0WJjnvVd17Q==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@node-llama-cpp/linux-x64-cuda-ext@3.22.1':
+    resolution: {integrity: sha512-4e5ajkiM2aR2WAdB/N/ACk4weEhHvOAIrzxZPsIX0xDFW5+6hhShuy1/vs88SK9NGdgAco9IyE28eYS0H1efpA==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
@@ -888,8 +932,22 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@node-llama-cpp/linux-x64-cuda@3.22.1':
+    resolution: {integrity: sha512-8rQCjyNNLZJUFit+YpjwlC4hwkKgOMIkB2wuycKBf8NU2O3ySKbiWZQ8aw9ku2nUTXjSnUIrE6KB88itduTBuA==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@node-llama-cpp/linux-x64-vulkan@3.20.0':
     resolution: {integrity: sha512-xTzv4cuTpsmmQgqvWWZvcvURHfPgUQdQzVXvYN1bwAEYq2DRVckEKrHPJ48824sFmdIRRJqDerniqEXiZlDPzA==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@node-llama-cpp/linux-x64-vulkan@3.22.1':
+    resolution: {integrity: sha512-bBxqU+JOcBu1nb5Qj2zcMci+JByT1E8EajHvYodyNfVIPkEhXh+/HMwR1/BT7xP08YK0hks+kM8fglER0P8JEg==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [linux]
@@ -902,8 +960,21 @@ packages:
     os: [linux]
     libc: [glibc]
 
+  '@node-llama-cpp/linux-x64@3.22.1':
+    resolution: {integrity: sha512-5uCCDNqWCNfaAm8aR/Uzxbo4HBpKgNF91kCHPepKhgMgV2OAmatoefbOlMihsqCiH2Od35E/eUHQCFbfRBJuOg==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
   '@node-llama-cpp/mac-arm64-metal@3.20.0':
     resolution: {integrity: sha512-QeFyyTZWicxKGzyoYwR1VtBGM8R1/oHjai9DC6KSg3T8WYpZd3mqATy24GPPVxgg20yEXUCbNl4xyKXZsLD0dQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64, x64]
+    os: [darwin]
+
+  '@node-llama-cpp/mac-arm64-metal@3.22.1':
+    resolution: {integrity: sha512-ZnKeJSCcT7ueulMEktdWxjf4AcgbvaLvWdNYzBuysgMEypD9VjGQmMGAU0O4sybVmiaz3o+rdiYV4AUD4P3M4g==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64, x64]
     os: [darwin]
@@ -914,8 +985,20 @@ packages:
     cpu: [x64]
     os: [darwin]
 
+  '@node-llama-cpp/mac-x64@3.22.1':
+    resolution: {integrity: sha512-z28s8otqJDPGvLrEOK1/8yuvN1bZQIftetvlEaZn9Sbi8nMZlsw4q1Of3oScxhk0V+T20lgzYNGTXPN1tV/bpQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [darwin]
+
   '@node-llama-cpp/win-arm64@3.20.0':
     resolution: {integrity: sha512-UDx5NBXVRtcLaoQsF1gZiYlgXQYfxLbFVb4j4sa7Jgq/b6oq2lTAjeos7sYsMPRKa+S/BB/rDFis6FsRDJur7w==}
+    engines: {node: '>=20.0.0'}
+    cpu: [arm64, x64]
+    os: [win32]
+
+  '@node-llama-cpp/win-arm64@3.22.1':
+    resolution: {integrity: sha512-//HLMt4nf9KqUPlmvYbLSZXdtSUQgBBsp9D3NuMcJfJSHGRtZ26enh92gE2AqJq5EB/m43mDSdjSpQYq/oa1Pw==}
     engines: {node: '>=20.0.0'}
     cpu: [arm64, x64]
     os: [win32]
@@ -926,8 +1009,20 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@node-llama-cpp/win-x64-cuda-ext@3.22.1':
+    resolution: {integrity: sha512-TybtWp/gNXZ7Bjzty8pqNonltffzOw6GlIdal02VLwEzyIzqxosVgBkksjM3E5xm2+L0RUxsGLmBFPsNUTHQsQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [win32]
+
   '@node-llama-cpp/win-x64-cuda@3.20.0':
     resolution: {integrity: sha512-VPV0Ayw3TP9gGiuwlyWD5x97dQSNMKcbWFXsREJ0KLVRxJXihZdZTrjRaudQX1T1d0lJUeLhDmQUGpDh/8jf1w==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@node-llama-cpp/win-x64-cuda@3.22.1':
+    resolution: {integrity: sha512-2oC1qcnm+ierlkwFp8FdMvl0/9HC0wq3OZXlw1CkrIIwRA/B4vD1fNYEOIwqS500qePGsDQEuzoFB+DKsPBTgw==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [win32]
@@ -938,8 +1033,20 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@node-llama-cpp/win-x64-vulkan@3.22.1':
+    resolution: {integrity: sha512-Y7S2K9T7kBhnbgTIAoEnn1hrD5QQZT939I8ywd2CqXTMJwst7qPW5H7vCt0nvMQtec96Wd9yf4JoHSNPwberpQ==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [win32]
+
   '@node-llama-cpp/win-x64@3.20.0':
     resolution: {integrity: sha512-Mbh9n74DCB5zTw02cme7Kp9nVg9X5Wvf+SNMWkXx5o3rGLuiSijGqRIktPOO3aHQwshB/RXC4j6I34HCPsgdgg==}
+    engines: {node: '>=20.0.0'}
+    cpu: [x64]
+    os: [win32]
+
+  '@node-llama-cpp/win-x64@3.22.1':
+    resolution: {integrity: sha512-qffeWJTnQOBNtTFikWl+Vtly4fSORn/OAd6AJCAq8u93IUI0NTKeF7nwKRqA8KCtIOL9KzF+yIQ7plkV+Fm8aQ==}
     engines: {node: '>=20.0.0'}
     cpu: [x64]
     os: [win32]
@@ -956,8 +1063,8 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@openrouter/ai-sdk-provider@3.0.0':
-    resolution: {integrity: sha512-m9XTSWoODH2RM5OsZpaGiN7QRR8cdP5paBWq699Tu3JVmGPBKT8xF8XwV0ZBVVsjikD/JgWfak4VSsTR4wAVbg==}
+  '@openrouter/ai-sdk-provider@3.1.0':
+    resolution: {integrity: sha512-BQy1TA9fKrh47s9ivsO6FY5QimN7GUF0i8Qon3pkxQclEgShso0dClpcWn8OIyPLEZZPFaFKgI8TW4S/O0p0Dw==}
     engines: {node: '>=22'}
     peerDependencies:
       ai: ^7.0.0
@@ -1950,8 +2057,8 @@ packages:
     resolution: {integrity: sha512-RZNwNclF7+MS/8bDg70amg32dyeZGZxiDuQmZxKLAlQjr3jGyLx+4Kkk58UO7D2QdgFIQCovuSuZESne6RG6XQ==}
     engines: {node: '>= 6.0.0'}
 
-  ai@7.0.97:
-    resolution: {integrity: sha512-tQGZ234p/bk5X/LNQdB43a5/z1Bve7wK0EOR1AwN6xrosZih4MIC/3pXhcnytcpBJHMbhLISW6J1dFTd/tnwPA==}
+  ai@7.0.127:
+    resolution: {integrity: sha512-JNsNPk4ZvRGEJuqdVo2lYFkm7uAuf3p/RwKFWn1Wh/+IK3U1RyFWw2GXoFnhzqNfxEuj7XJB4WpIUhl1sHToWg==}
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4.1.8
@@ -2654,6 +2761,10 @@ packages:
     resolution: {integrity: sha512-CTXd6rk/M3/ULNQj8FBqBWHYBVYybQ3VPBw0xGKFe3tuH7ytT6ACnvzpIQ3UZtB8yvUKC2cXn1a+x+5EVQLovA==}
     engines: {node: '>=14.14'}
 
+  fs-extra@11.4.1:
+    resolution: {integrity: sha512-KYAb4c9BJQI6QqGKthV68OHe0badztdXJWKo0WtBA9IuCFPTKvE5ZdUBglP833aMjhaSPNO4A5j/EkzZtGlKjA==}
+    engines: {node: '>=14.14'}
+
   fs-extra@8.1.0:
     resolution: {integrity: sha512-yhlQgA6mnOJUKOsRUFsgJdQCvkKhcz8tlZG5HBQfReYZy46OwLcY+Zia0mtdHsOo9y/hP+CxMN0TU9QxoOtG4g==}
     engines: {node: '>=6 <7 || >=8'}
@@ -2968,6 +3079,9 @@ packages:
   lifecycle-utils@4.3.1:
     resolution: {integrity: sha512-sHZNkjBVcR0e/2indpmvpOj++4e1mUyniN94wqdbtQaXYoAJRlYxpOJ3TwBmp7PwgHqsoAkiTQu+aLa9bss7Jw==}
 
+  lifecycle-utils@4.5.2:
+    resolution: {integrity: sha512-3C1g98pNKGmtakPeIfRqvOiiBJflKAvNjo/WsDI/70vsOy/DJDoutsLM+wGuAdfcOitlbUQfl6UcfvyeIimh7g==}
+
   light-my-request@6.6.0:
     resolution: {integrity: sha512-CHYbu8RtboSIoVsHZ6Ye4cj4Aw/yg2oAFimlF7mNvfDV192LR7nDiKtSIfCuLT7KokPSTn/9kfVLm5OGN0A28A==}
 
@@ -3221,6 +3335,16 @@ packages:
 
   node-llama-cpp@3.20.0:
     resolution: {integrity: sha512-KnET3ttADYLCobjMnMTLkWkLt87rPRDhNzTZgGOCt8m8yTmdQW2sfLNmulGBA9laFvcyRIMOsgQST8lunPmMgw==}
+    engines: {node: '>=20.0.0'}
+    hasBin: true
+    peerDependencies:
+      typescript: '>=5.0.0'
+    peerDependenciesMeta:
+      typescript:
+        optional: true
+
+  node-llama-cpp@3.22.1:
+    resolution: {integrity: sha512-bltIipuWmc123H7tMIgDGKSsSrhmhlQYeVUC48XTjVW7XGJJiJJyCdlTMzQ/LiWoPkGDpcL4FviDpgw7qfTiDw==}
     engines: {node: '>=20.0.0'}
     hasBin: true
     peerDependencies:
@@ -4230,30 +4354,30 @@ packages:
 
 snapshots:
 
-  '@ai-sdk/anthropic@4.0.52(zod@4.3.6)':
+  '@ai-sdk/anthropic@4.0.71(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 4.0.13
-      '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
 
-  '@ai-sdk/cerebras@3.0.47(zod@4.3.6)':
+  '@ai-sdk/cerebras@3.0.62(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/openai-compatible': 3.0.47(zod@4.3.6)
-      '@ai-sdk/provider': 4.0.13
-      '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      '@ai-sdk/openai-compatible': 3.0.62(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
 
-  '@ai-sdk/gateway@4.0.78(zod@4.3.6)':
+  '@ai-sdk/gateway@4.0.103(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 4.0.13
-      '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       '@vercel/oidc': 3.2.0
       zod: 4.3.6
 
-  '@ai-sdk/groq@4.0.40(zod@4.3.6)':
+  '@ai-sdk/groq@4.0.54(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 4.0.13
-      '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
 
   '@ai-sdk/huggingface@2.0.47(zod@4.3.6)':
@@ -4263,10 +4387,10 @@ snapshots:
       '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
       zod: 4.3.6
 
-  '@ai-sdk/moonshotai@3.0.48(zod@4.3.6)':
+  '@ai-sdk/moonshotai@3.0.62(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 4.0.13
-      '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
 
   '@ai-sdk/openai-compatible@3.0.47(zod@4.3.6)':
@@ -4275,10 +4399,16 @@ snapshots:
       '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
       zod: 4.3.6
 
-  '@ai-sdk/openai@4.0.65(zod@4.3.6)':
+  '@ai-sdk/openai-compatible@3.0.62(zod@4.3.6)':
     dependencies:
-      '@ai-sdk/provider': 4.0.13
-      '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
+      zod: 4.3.6
+
+  '@ai-sdk/openai@4.0.83(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
 
   '@ai-sdk/provider-utils@5.0.39(zod@4.3.6)':
@@ -4290,7 +4420,20 @@ snapshots:
       undici: 7.29.0
       zod: 4.3.6
 
+  '@ai-sdk/provider-utils@5.0.53(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/provider': 4.0.21
+      '@standard-schema/spec': 1.1.0
+      '@workflow/serde': 4.1.0
+      eventsource-parser: 3.0.8
+      undici: 7.29.0
+      zod: 4.3.6
+
   '@ai-sdk/provider@4.0.13':
+    dependencies:
+      json-schema: 0.4.0
+
+  '@ai-sdk/provider@4.0.21':
     dependencies:
       json-schema: 0.4.0
 
@@ -4746,43 +4889,85 @@ snapshots:
   '@node-llama-cpp/linux-arm64@3.20.0':
     optional: true
 
+  '@node-llama-cpp/linux-arm64@3.22.1':
+    optional: true
+
   '@node-llama-cpp/linux-armv7l@3.20.0':
+    optional: true
+
+  '@node-llama-cpp/linux-armv7l@3.22.1':
     optional: true
 
   '@node-llama-cpp/linux-riscv64@3.20.0':
     optional: true
 
+  '@node-llama-cpp/linux-riscv64@3.22.1':
+    optional: true
+
   '@node-llama-cpp/linux-x64-cuda-ext@3.20.0':
+    optional: true
+
+  '@node-llama-cpp/linux-x64-cuda-ext@3.22.1':
     optional: true
 
   '@node-llama-cpp/linux-x64-cuda@3.20.0':
     optional: true
 
+  '@node-llama-cpp/linux-x64-cuda@3.22.1':
+    optional: true
+
   '@node-llama-cpp/linux-x64-vulkan@3.20.0':
+    optional: true
+
+  '@node-llama-cpp/linux-x64-vulkan@3.22.1':
     optional: true
 
   '@node-llama-cpp/linux-x64@3.20.0':
     optional: true
 
+  '@node-llama-cpp/linux-x64@3.22.1':
+    optional: true
+
   '@node-llama-cpp/mac-arm64-metal@3.20.0':
+    optional: true
+
+  '@node-llama-cpp/mac-arm64-metal@3.22.1':
     optional: true
 
   '@node-llama-cpp/mac-x64@3.20.0':
     optional: true
 
+  '@node-llama-cpp/mac-x64@3.22.1':
+    optional: true
+
   '@node-llama-cpp/win-arm64@3.20.0':
+    optional: true
+
+  '@node-llama-cpp/win-arm64@3.22.1':
     optional: true
 
   '@node-llama-cpp/win-x64-cuda-ext@3.20.0':
     optional: true
 
+  '@node-llama-cpp/win-x64-cuda-ext@3.22.1':
+    optional: true
+
   '@node-llama-cpp/win-x64-cuda@3.20.0':
+    optional: true
+
+  '@node-llama-cpp/win-x64-cuda@3.22.1':
     optional: true
 
   '@node-llama-cpp/win-x64-vulkan@3.20.0':
     optional: true
 
+  '@node-llama-cpp/win-x64-vulkan@3.22.1':
+    optional: true
+
   '@node-llama-cpp/win-x64@3.20.0':
+    optional: true
+
+  '@node-llama-cpp/win-x64@3.22.1':
     optional: true
 
   '@nodelib/fs.scandir@2.1.5':
@@ -4797,9 +4982,9 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.18.0
 
-  '@openrouter/ai-sdk-provider@3.0.0(ai@7.0.97(zod@4.3.6))(zod@4.3.6)':
+  '@openrouter/ai-sdk-provider@3.1.0(ai@7.0.127(zod@4.3.6))(zod@4.3.6)':
     dependencies:
-      ai: 7.0.97(zod@4.3.6)
+      ai: 7.0.127(zod@4.3.6)
       zod: 4.3.6
 
   '@oxc-project/types@0.132.0': {}
@@ -5328,11 +5513,11 @@ snapshots:
   '@unrs/resolver-binding-win32-x64-msvc@1.11.1':
     optional: true
 
-  '@vercel/ai-sdk-openai-websocket-fetch@1.0.0(@ai-sdk/openai@4.0.65(zod@4.3.6))':
+  '@vercel/ai-sdk-openai-websocket-fetch@1.0.0(@ai-sdk/openai@4.0.83(zod@4.3.6))':
     dependencies:
       ws: 8.17.1
     optionalDependencies:
-      '@ai-sdk/openai': 4.0.65(zod@4.3.6)
+      '@ai-sdk/openai': 4.0.83(zod@4.3.6)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -5973,11 +6158,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  ai@7.0.97(zod@4.3.6):
+  ai@7.0.127(zod@4.3.6):
     dependencies:
-      '@ai-sdk/gateway': 4.0.78(zod@4.3.6)
-      '@ai-sdk/provider': 4.0.13
-      '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      '@ai-sdk/gateway': 4.0.103(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
 
   ajv-formats@2.1.1(ajv@8.18.0):
@@ -6762,6 +6947,12 @@ snapshots:
       jsonfile: 6.1.0
       universalify: 2.0.1
 
+  fs-extra@11.4.1:
+    dependencies:
+      graceful-fs: 4.2.11
+      jsonfile: 6.1.0
+      universalify: 2.0.1
+
   fs-extra@8.1.0:
     dependencies:
       graceful-fs: 4.2.11
@@ -7048,6 +7239,8 @@ snapshots:
 
   lifecycle-utils@4.3.1: {}
 
+  lifecycle-utils@4.5.2: {}
+
   light-my-request@6.6.0:
     dependencies:
       cookie: 1.1.1
@@ -7300,6 +7493,55 @@ snapshots:
       '@node-llama-cpp/win-x64-cuda': 3.20.0
       '@node-llama-cpp/win-x64-cuda-ext': 3.20.0
       '@node-llama-cpp/win-x64-vulkan': 3.20.0
+      typescript: '@typescript/typescript6@6.0.2'
+    transitivePeerDependencies:
+      - supports-color
+
+  node-llama-cpp@3.22.1(@typescript/typescript6@6.0.2)(supports-color@5.5.0):
+    dependencies:
+      '@huggingface/jinja': 0.5.10
+      async-retry: 1.3.3
+      bytes: 3.1.2
+      chalk: 5.6.2
+      chmodrp: 1.0.2
+      cmake-js: 8.0.0(supports-color@5.5.0)
+      cross-spawn: 7.0.6
+      env-var: 7.5.0
+      filenamify: 6.0.0
+      fs-extra: 11.4.1
+      ignore: 7.0.5
+      ipull: 3.9.5
+      is-unicode-supported: 2.1.0
+      lifecycle-utils: 4.5.2
+      log-symbols: 7.0.1
+      nanoid: 5.1.6
+      node-addon-api: 8.9.2
+      ora: 9.3.0
+      pretty-ms: 9.3.0
+      proper-lockfile: 4.1.2
+      semver: 7.8.5
+      simple-git: 3.36.0(supports-color@5.5.0)
+      slice-ansi: 8.0.0
+      stdout-update: 4.0.1
+      strip-ansi: 7.2.0
+      validate-npm-package-name: 7.0.2
+      which: 6.0.1
+      yargs: 17.7.2
+    optionalDependencies:
+      '@node-llama-cpp/linux-arm64': 3.22.1
+      '@node-llama-cpp/linux-armv7l': 3.22.1
+      '@node-llama-cpp/linux-riscv64': 3.22.1
+      '@node-llama-cpp/linux-x64': 3.22.1
+      '@node-llama-cpp/linux-x64-cuda': 3.22.1
+      '@node-llama-cpp/linux-x64-cuda-ext': 3.22.1
+      '@node-llama-cpp/linux-x64-vulkan': 3.22.1
+      '@node-llama-cpp/mac-arm64-metal': 3.22.1
+      '@node-llama-cpp/mac-x64': 3.22.1
+      '@node-llama-cpp/win-arm64': 3.22.1
+      '@node-llama-cpp/win-x64': 3.22.1
+      '@node-llama-cpp/win-x64-cuda': 3.22.1
+      '@node-llama-cpp/win-x64-cuda-ext': 3.22.1
+      '@node-llama-cpp/win-x64-vulkan': 3.22.1
       typescript: '@typescript/typescript6@6.0.2'
     transitivePeerDependencies:
       - supports-color

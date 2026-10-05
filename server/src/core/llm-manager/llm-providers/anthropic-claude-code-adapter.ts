@@ -230,7 +230,7 @@ export default class AnthropicClaudeCodeAdapter {
         if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
           streamedJSON += event.delta.text || ''
           const { value } = await parsePartialJson(streamedJSON)
-          const text = value && typeof value === 'object' && !Array.isArray(value)
+          const text = value && typeof value === 'object' && 'text' in value
             ? value['text'] : undefined
 
           // Decode JSON escapes through the existing SDK; never show tool arguments.
