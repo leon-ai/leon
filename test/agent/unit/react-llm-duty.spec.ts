@@ -4,8 +4,11 @@ import { performance } from 'node:perf_hooks'
 import { saveConnection } from '@/core/connections/connection-service'
 import { ConnectionStatus } from '@/core/connections/connection-store'
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { BRAIN } from '@/core'
+import { LogHelper } from '@/helpers/log-helper'
+import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
 import type {
@@ -44,6 +47,8 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
+  AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
+  AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import type {
@@ -80,7 +85,7 @@ vi.mock('@/core', () => ({
     wernicke: (
       key: string,
       _fallback: string,
-      values: Record<string, string>
+      values: Record<string, string> = {}
     ): string => values['{{ message }}'] || key
   },
   SOCKET_SERVER: {
@@ -2946,7 +2951,153 @@ describe('continuous agent loop', () => {
 })
 
 
-describe('collection plan state', () => {
+describe('model waiting progress', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.clearAllMocks()
+    coreMocks.prompt.mockReset()
+
+    const modelState = CONFIG_STATE.getModelState()
+    vi.spyOn(modelState, 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
+    vi.spyOn(modelState, 'getAgentTarget').mockReturnValue({
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6-sol'
+    })
+    vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
+      reasoning: 'on', speed: 'auto'
+    })
+    const answers = JSON.parse(fs.readFileSync('core/data/en/answers.json', 'utf8')).answers
+    vi.spyOn(BRAIN, 'wernicke').mockImplementation((key, _fallback, values = {}) => {
+      const answer = answers[key][0]
+
+      if (Object.keys(values).length === 0) {
+        return answer
+      }
+
+      return StringHelper.findAndMap(answer, values)
+    })
+    vi.spyOn(LogHelper, 'warning').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it.each([
+    ['initial', 'I’m reviewing your request and working out the next action.'],
+    ['step', 'I’m working through “Group extensions and show examples” and deciding the next action.'],
+    ['progress', 'I’m checking the results and next steps. My latest update was: The file inventory is saved. I’ll review the extension groups.'],
+    ['review', 'I’m checking the results against your request before wrapping up.'],
+    ['final', 'I’m putting together your answer from the available results.'],
+    ['recovery', 'I’m reviewing the available results to work out how to continue.']
+  ])('describes the %s stage once and keeps diagnostics out of owner progress', async (stage, expected) => {
+    let finish!: (result: { output: string }) => void
+    coreMocks.prompt.mockReturnValueOnce(new Promise((resolve) => {
+      finish = resolve
+    }))
+    const duty = new ReActLLMDuty({ input: 'Group video files by extension.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Group video files by extension.' },
+      {
+        role: 'assistant', content: '',
+        reasoning: 'Private reasoning must not become progress.'
+      }
+    ]
+
+    if (stage === 'progress') {
+      transcript.push({
+        role: 'assistant',
+        content: 'The file inventory is saved. I’ll review the extension groups.',
+        toolCalls: [toolCall('groups', CALLABLE_TOOL_NAME, { query: 'groups' })]
+      })
+    }
+
+    const pending = duty['callAgentModel'](
+      transcript, 'Follow the request.', createCatalog().tools,
+      {
+        isRecoveryAttempt: stage === 'recovery',
+        isCompletionReview: stage === 'review',
+        isFinalizationAttempt: stage === 'final'
+      },
+      {
+        originalInput: 'Group video files by extension.',
+        trackedSteps: stage === 'initial' || stage === 'progress' ? [] : [{
+          label: 'Group extensions and show examples', status: 'in_progress'
+        }],
+        executionHistory: [], loadedToolkitIds: [], activeSkillId: null
+      }
+    )
+
+    try {
+      await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
+      expect(duty['responseTraceCollector'].snapshot({}).progressMessages?.map(
+        (message) => message.content
+      )).toEqual([expected])
+      expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(
+        expect.objectContaining({ answer: expected, historyMode: 'system_widget' })
+      )
+
+      await vi.advanceTimersByTimeAsync(
+        AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS - AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS
+      )
+      expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toHaveLength(1)
+      expect(LogHelper.warning).toHaveBeenCalledWith(
+        expect.stringContaining('approximate input tokens=')
+      )
+      expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    } finally {
+      finish({ output: 'The groups are ready.' })
+      await pending
+    }
+  })
+
+  it.each(['streaming', 'completed', 'canceled'])(
+    'does not add waiting notices to a %s request',
+    async (state) => {
+      let finish!: (result: { output: string }) => void
+      let emitToken!: (token: string) => void
+      const response = new Promise((resolve) => {
+        finish = resolve
+      })
+      coreMocks.prompt.mockImplementationOnce((_messages, params) => {
+        emitToken = params.onToken
+        return response
+      })
+      const controller = new AbortController()
+      const duty = new ReActLLMDuty({ input: 'Find video files.', signal: controller.signal })
+      Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+      const pending = duty['callAgentModel'](
+        [{ role: 'user', content: 'Find video files.' }], 'Follow the request.',
+        createCatalog().tools, { isRecoveryAttempt: false }
+      ).then(() => null, (error) => error)
+
+      try {
+        if (state === 'streaming') {
+          emitToken('Found video files. ')
+        } else if (state === 'completed') {
+          finish({ output: 'Done.' })
+          await pending
+        } else {
+          controller.abort(new Error('Owner canceled.'))
+        }
+
+        await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
+        expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toBeUndefined()
+        expect(coreMocks.emitAnswerToChatClients).not.toHaveBeenCalled()
+      } finally {
+        finish({ output: 'Done.' })
+        const error = await pending
+
+        if (state === 'canceled') {
+          expect(error).toBe(controller.signal.reason)
+        }
+      }
+    }
+  )
+})
+
+describe('plan state', () => {
   const collection = {
     scope: 'Requested documents from the authoritative list', enumeration: 'completed' as const,
     evidence: 'All pages inspected. Range A has two documents; range B is empty.', cursor: '',

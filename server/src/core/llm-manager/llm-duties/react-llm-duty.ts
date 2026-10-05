@@ -130,6 +130,7 @@ import { AgentResponseTraceCollector } from './react-llm-duty/agent-response-tra
 import { AgentSessionState } from './react-llm-duty/agent-session-state'
 
 const AGENT_PROMPT_CACHE_KEY = 'leon-agent'
+const MODEL_WAIT_PROGRESS_CONTEXT_MAX_CHARS = 240
 const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
   'length',
   'max_tokens',
@@ -1139,35 +1140,52 @@ export class ReActLLMDuty extends LLMDuty {
 
     let completionResult: Awaited<ReturnType<typeof LLM_PROVIDER.prompt>>
     let completed = false
+    let hasStartedAnswer = false
+    let hasSentWaitNotice = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
     let diagnosisTimer: NodeJS.Timeout | null = null
     const toolCallAbortController = new AbortController()
 
+    const emitWaitNotice = (): void => {
+      if (
+        completed || this.signal?.aborted ||
+        hasStartedAnswer || hasSentWaitNotice
+      ) {
+        return
+      }
+
+      // Reuse public task state without an extra inference request or private
+      // reasoning. One notice is enough while the same request remains pending.
+      hasSentWaitNotice = true
+      void this.emitProgress(
+        this.getModelWaitProgress(transcript, options, checkpointInput)
+      )
+    }
+
     waitNoticeTimer = setTimeout(() => {
-      if (completed) {
+      if (completed || this.signal?.aborted) {
         return
       }
       this.logTitle(phase)
       LogHelper.warning(
         `callAgentModel: pending > ${AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
       )
-      void this.emitProgress(
-        BRAIN.wernicke('react.tool_call.waiting')
-      )
+      emitWaitNotice()
     }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
 
     diagnosisTimer = setTimeout(() => {
-      if (completed) {
+      if (completed || this.signal?.aborted) {
         return
       }
 
-      void this.runLongToolCallDiagnosis(
+      this.logLongToolCallDiagnosis(
         promptForLog,
         activeSystemPrompt,
         preparedTools,
         phase,
         toolChoice
       )
+      emitWaitNotice()
     }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
 
     try {
@@ -1191,6 +1209,12 @@ export class ReActLLMDuty extends LLMDuty {
           ? {
               onToken: (token: unknown): void => {
                 if (typeof token === 'string') {
+                  if (!token) {
+                    hasStartedAnswer = false
+                  } else if (token.trim()) {
+                    hasStartedAnswer = true
+                  }
+
                   this.answerStream.push(token)
                 }
               },
@@ -1655,35 +1679,76 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.debug('Prompt reasoning [tools]: none')
   }
 
-  private async runLongToolCallDiagnosis(
+  /**
+   * Describes the known task stage while a model request remains pending.
+   */
+  private getModelWaitProgress(
+    transcript: AgentToolTranscriptMessage[],
+    options: {
+      isCompletionReview?: boolean
+      isFinalizationAttempt?: boolean
+      isRecoveryAttempt: boolean
+    },
+    checkpointInput?: AgentContinuityCheckpointInput
+  ): string {
+    if (options.isCompletionReview) {
+      return BRAIN.wernicke('react.tool_call.reviewing_completion')
+    }
+
+    if (options.isFinalizationAttempt) {
+      return BRAIN.wernicke('react.tool_call.preparing_answer')
+    }
+
+    if (options.isRecoveryAttempt) {
+      return BRAIN.wernicke('react.tool_call.recovering')
+    }
+
+    const activeStep = checkpointInput?.trackedSteps.find(
+      (step) => step.status === 'in_progress'
+    )
+
+    if (activeStep) {
+      return BRAIN.wernicke('react.tool_call.working_step', '', {
+        '{{ step }}': activeStep.label.slice(0, MODEL_WAIT_PROGRESS_CONTEXT_MAX_CHARS)
+      })
+    }
+
+    // Assistant text accompanying tool calls is the public progress already
+    // shown by the loop. Tool output and reasoning are not progress summaries.
+    const progress = transcript.findLast((message) =>
+      message.role === 'assistant' && message.toolCalls?.length &&
+      message.content.trim()
+    )?.content
+
+    if (progress) {
+      return BRAIN.wernicke('react.tool_call.reviewing_progress', '', {
+        '{{ progress }}': progress.trim().slice(0, MODEL_WAIT_PROGRESS_CONTEXT_MAX_CHARS)
+      })
+    }
+
+    return BRAIN.wernicke('react.tool_call.waiting')
+  }
+
+  /**
+   * Keeps pending-request diagnostics in server logs rather than owner messages.
+   */
+  private logLongToolCallDiagnosis(
     prompt: string,
     systemPrompt: string,
     tools: OpenAITool[],
     phase: AgentPhase,
     toolChoice: string
-  ): Promise<void> {
+  ): void {
     const promptTokens =
       this.estimateTokensFromText(prompt) +
       this.estimateTokensFromText(systemPrompt)
     const toolSchemaTokens = this.estimateTokensFromText(JSON.stringify(tools))
     const totalEstimatedTokens = promptTokens + toolSchemaTokens
 
-    const diagnosisMessage = BRAIN.wernicke('react.tool_call.diagnosis', '', {
-      '{{ provider }}': getLLMProviderName(),
-      '{{ phase }}': phase,
-      '{{ tool_choice }}': toolChoice,
-      '{{ tool_count }}': String(tools.length),
-      '{{ total_tokens }}': String(totalEstimatedTokens),
-      '{{ prompt_tokens }}': String(promptTokens),
-      '{{ tool_tokens }}': String(toolSchemaTokens)
-    })
-
     this.logTitle('execution')
     LogHelper.warning(
-      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): ${diagnosisMessage}`
+      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): provider=${getLLMProviderName()}, phase=${phase}, tool choice=${toolChoice}, tools=${tools.length}, approximate input tokens=${totalEstimatedTokens} (prompt=${promptTokens}, tool schemas=${toolSchemaTokens}).`
     )
-
-    await this.emitProgress(diagnosisMessage)
   }
 
   private async emitProgress(
