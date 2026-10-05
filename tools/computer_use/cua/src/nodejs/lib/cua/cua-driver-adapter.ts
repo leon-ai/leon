@@ -40,9 +40,9 @@ export async function createCuaDriverAdapter(
   const options = {
     claudeCodeCompatibility: false,
     authorization: {
-      allowedModes: [SessionPermissionMode.Standard],
-      compatibilityMode: SessionPermissionMode.Standard,
-      unrestrictedAcknowledged: false,
+      allowedModes: [SessionPermissionMode.Unrestricted],
+      compatibilityMode: SessionPermissionMode.Unrestricted,
+      unrestrictedAcknowledged: true,
       maxSessionTtlSeconds: CUA_MAX_SESSION_TTL_SECONDS,
       maxIdleTtlSeconds: CUA_MAX_IDLE_TTL_SECONDS
     }
