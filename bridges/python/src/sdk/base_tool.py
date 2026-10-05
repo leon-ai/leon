@@ -1165,7 +1165,7 @@ class BaseTool(ABC):
             self.report("bridges.tools.binary_not_found", {"binary_name": binary_name})
 
             # Publish only a complete executable, never an in-progress download.
-            self._download_binary(binary_url, staged_binary_path)
+            self._download_binary(binary_url, staged_binary_path, binary_name)
 
             self.report("bridges.tools.binary_downloaded", {"binary_name": binary_name})
 
@@ -1246,7 +1246,7 @@ class BaseTool(ABC):
             or basename.endswith(".tgz")
         )
 
-    def _download_binary(self, url: str, output_path: str) -> None:
+    def _download_binary(self, url: str, output_path: str, binary_name: str) -> None:
         """Download binary from URL using pypdl (faster parallel downloader)
         If the downloaded file is an archive, it will be extracted automatically"""
 
@@ -1308,34 +1308,30 @@ class BaseTool(ABC):
                 # Try extracting without strip first to see the structure
                 extract_archive(download_path, temp_extract_path)
 
-                # Find the binary in the extracted directory (recursively if needed)
-                def find_binary_file(dir_path):
-                    """Find the first file in the directory tree"""
-                    try:
-                        entries = os.listdir(dir_path)
-
-                        # First, look for files in the current directory
-                        for entry in entries:
-                            full_path = os.path.join(dir_path, entry)
-                            if os.path.isfile(full_path):
-                                return full_path
-
-                        # If no files found, look in subdirectories (one level deep)
-                        for entry in entries:
-                            full_path = os.path.join(dir_path, entry)
-                            if os.path.isdir(full_path):
-                                found_file = find_binary_file(full_path)
-                                if found_file:
-                                    return found_file
-                    except Exception:
-                        pass
-
-                    return None
-
-                binary_file_path = find_binary_file(temp_extract_path)
+                # Release archives may contain documentation before the executable.
+                expected_name = (
+                    f"{binary_name}.exe"
+                    if is_windows() and not binary_name.endswith(".exe")
+                    else binary_name
+                )
+                files = [
+                    os.path.join(root, name)
+                    for root, _, names in os.walk(temp_extract_path)
+                    for name in names
+                    if os.path.isfile(os.path.join(root, name))
+                    and not os.path.islink(os.path.join(root, name))
+                ]
+                matches = [file for file in files if os.path.basename(file) == expected_name]
+                binary_file_path = (
+                    matches[0]
+                    if len(matches) == 1
+                    else files[0] if not matches and len(files) == 1 else None
+                )
 
                 if not binary_file_path:
-                    raise Exception("Archive extraction resulted in no files")
+                    raise Exception(
+                        f"Archive does not contain an unambiguous {expected_name} executable"
+                    )
 
                 # Move the binary to the final output path
                 import shutil

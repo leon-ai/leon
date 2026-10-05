@@ -1347,7 +1347,7 @@ export abstract class Tool {
 
       // Publish only a complete executable. Parallel workers must never observe
       // an archive download or extraction in progress as an installed binary.
-      await this.downloadBinary(binaryUrl, stagedBinaryPath)
+      await this.downloadBinary(binaryUrl, stagedBinaryPath, binaryName)
 
       await this.report('bridges.tools.binary_downloaded', {
         binary_name: binaryName
@@ -1411,7 +1411,11 @@ export abstract class Tool {
    * Download binary from URL using the core download helper.
    * If the downloaded file is an archive, it will be extracted automatically
    */
-  private async downloadBinary(url: string, outputPath: string): Promise<void> {
+  private async downloadBinary(
+    url: string,
+    outputPath: string,
+    binaryName: string
+  ): Promise<void> {
     try {
       await this.report('bridges.tools.downloading_from_url')
 
@@ -1456,37 +1460,35 @@ export abstract class Tool {
         await extractArchive(downloadPath, tempExtractPath)
 
         // Find the binary in the extracted directory (recursively if needed)
-        let binaryFilePath: string | null = null
+        const files: string[] = []
+        const expectedName = isWindows() && !binaryName.endsWith('.exe')
+          ? `${binaryName}.exe`
+          : binaryName
 
-        const findBinaryFile = (dir: string): string | null => {
+        const collectFiles = (dir: string): void => {
           const entries = fs.readdirSync(dir, { withFileTypes: true })
 
-          // First, look for files in the current directory
           for (const entry of entries) {
             const fullPath = path.join(dir, entry.name)
             if (entry.isFile()) {
-              return fullPath
+              files.push(fullPath)
+            } else if (entry.isDirectory()) {
+              collectFiles(fullPath)
             }
           }
 
-          // If no files found, look in subdirectories (one level deep)
-          for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name)
-            if (entry.isDirectory()) {
-              const foundFile = findBinaryFile(fullPath)
-              if (foundFile) {
-                return foundFile
-              }
-            }
-          }
-
-          return null
         }
 
-        binaryFilePath = findBinaryFile(tempExtractPath)
+        collectFiles(tempExtractPath)
+        // Release archives may contain documentation before the executable.
+        // Preserve single-file archives whose executable has a versioned name.
+        const matches = files.filter((file) => path.basename(file) === expectedName)
+        const binaryFilePath = matches.length === 1
+          ? matches[0]
+          : matches.length === 0 && files.length === 1 ? files[0] : undefined
 
         if (!binaryFilePath) {
-          throw new Error('Archive extraction resulted in no files')
+          throw new Error(`Archive does not contain an unambiguous ${expectedName} executable`)
         }
 
         // Move the binary to the final output path
