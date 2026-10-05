@@ -182,7 +182,10 @@ async function runProviderScenario(
       'tsx',
       'test/agent/e2e/run-agent-provider-scenario.ts',
       provider,
-      scenarioId
+      scenarioId,
+      // SDK imports must not treat the scenario as a native-skill intent path.
+      '--runtime',
+      'tool'
     ],
     {
       cwd: ROOT_DIR,
