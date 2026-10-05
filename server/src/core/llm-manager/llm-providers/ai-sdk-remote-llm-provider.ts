@@ -561,28 +561,33 @@ export default class AISDKRemoteLLMProvider {
         LanguageModelV4Prompt[number],
         { role: 'assistant' }
       >['content'] = []
-      // DeepSeek requires the original reasoning when replaying tool exchanges.
-      if (this.config.providerName === LLMProviders.DeepSeek && message.reasoning) {
-        content.push({ type: 'reasoning', text: message.reasoning })
+      const reasoningItems = (message.reasoningItems || []).filter(
+        (item) => item.provider === this.config.providerName
+      )
+      for (const item of reasoningItems) {
+        content.push({
+          type: 'reasoning',
+          text: item.text,
+          ...(item.providerOptions
+            ? { providerOptions: item.providerOptions }
+            : item.provider === LLMProviders.OpenAI
+              ? { providerOptions: { openai: {
+                  itemId: item.id,
+                  ...(item.encryptedContent
+                    ? { reasoningEncryptedContent: item.encryptedContent }
+                    : {})
+                } } }
+              : {})
+        })
       }
-      if (this.config.flavor === 'openai-responses') {
-        for (const item of message.reasoningItems || []) {
-          if (item.provider !== LLMProviders.OpenAI) {
-            continue
-          }
-          content.push({
-            type: 'reasoning',
-            text: item.text,
-            providerOptions: {
-              openai: {
-                itemId: item.id,
-                ...(item.encryptedContent
-                  ? { reasoningEncryptedContent: item.encryptedContent }
-                  : {})
-              }
-            }
-          })
-        }
+      // Plain-text reasoning must be replayed with tool results on compatible
+      // APIs, including older checkpoints without provider-owned items.
+      if (
+        reasoningItems.length === 0 && message.reasoning &&
+        (this.config.flavor === 'openai-compatible' ||
+          this.config.flavor === 'moonshotai')
+      ) {
+        content.push({ type: 'reasoning', text: message.reasoning })
       }
       if (message.content.trim()) {
         content.push({ type: 'text', text: message.content })
@@ -1343,8 +1348,8 @@ export default class AISDKRemoteLLMProvider {
             : {}),
           message: {
             content: state.text,
-            ...(state.reasoning.trim().length > 0
-              ? { reasoning: state.reasoning.trim() }
+            ...(state.reasoning.length > 0
+              ? { reasoning: state.reasoning }
               : {}),
             ...(state.reasoningItems.size > 0
               ? { reasoningItems: [...state.reasoningItems.values()] }
@@ -1364,30 +1369,41 @@ export default class AISDKRemoteLLMProvider {
   /**
    * Retains SDK reasoning metadata, including items with no public summary.
    */
-  private appendOpenAIReasoningItem(
+  private appendReasoningItem(
     state: CallState,
     part: Record<string, unknown>
   ): void {
-    if (this.config.flavor !== 'openai-responses') {
+    const metadata = part['providerMetadata'] as SharedV4ProviderOptions | undefined
+    const namespace = this.config.flavor === 'anthropic'
+      ? 'anthropic'
+      : this.config.flavor === 'openai-responses' ? 'openai' : this.config.providerName
+    const providerData = metadata?.[namespace]
+    const reasoningDetails = providerData?.['reasoning_details']
+    const isReasoning = String(part['type']).startsWith('reasoning')
+
+    if (!isReasoning && !Array.isArray(reasoningDetails)) {
       return
     }
-
-    const metadata = part['providerMetadata'] as
-      | { openai?: Record<string, unknown> }
-      | undefined
-    const itemId = metadata?.openai?.['itemId']
+    const itemId = providerData?.['itemId'] ?? part['id'] ??
+      (part['type'] === 'reasoning' ? `reasoning-${state.reasoningItems.size}` : 'reasoning-0')
     if (typeof itemId !== 'string') {
       return
     }
-
-    const item = state.reasoningItems.get(itemId) || {
-      provider: LLMProviders.OpenAI,
+    const item: ProviderReasoningItem = state.reasoningItems.get(itemId) || {
+      provider: this.config.providerName as LLMProviders,
       id: itemId,
       text: ''
     }
-    const encryptedContent = metadata?.openai?.['reasoningEncryptedContent']
-    if (typeof encryptedContent === 'string') {
+    const encryptedContent = providerData?.['reasoningEncryptedContent']
+    if (typeof encryptedContent === 'string' && this.config.flavor === 'openai-responses') {
       item.encryptedContent = encryptedContent
+    } else if (providerData && this.config.flavor !== 'openai-responses') {
+      const previous = item.providerOptions?.[namespace]
+      item.providerOptions = { [namespace]: { ...previous, ...providerData } }
+      if (typeof providerData['signature'] === 'string') {
+        item.providerOptions[namespace]!['signature'] =
+          String(previous?.['signature'] ?? '') + providerData['signature']
+      }
     }
     if (part['type'] === 'reasoning-delta' && typeof part['delta'] === 'string') {
       item.text += part['delta']
@@ -1509,6 +1525,7 @@ export default class AISDKRemoteLLMProvider {
 
     for (const part of content) {
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+      this.appendReasoningItem(state, part)
 
       if (this.acceptMediaPart(state, part)) {
         continue
@@ -1520,7 +1537,6 @@ export default class AISDKRemoteLLMProvider {
       }
 
       if (type === 'reasoning' && typeof part['text'] === 'string') {
-        this.appendOpenAIReasoningItem(state, part)
         state.reasoning += part['text'] as string
         continue
       }
@@ -1544,6 +1560,10 @@ export default class AISDKRemoteLLMProvider {
     }
 
     this.appendUsageFromUnknown(state, result.usage)
+    this.appendReasoningItem(state, {
+      type: 'finish',
+      providerMetadata: result.providerMetadata
+    })
     this.appendProviderMetadataUsageFromUnknown(state, result.providerMetadata)
     const finishReason = this.readFinishReason(result.finishReason)
     if (finishReason) {
@@ -1578,9 +1598,7 @@ export default class AISDKRemoteLLMProvider {
       const part = streamPart as unknown as Record<string, unknown>
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
 
-      if (type.startsWith('reasoning')) {
-        this.appendOpenAIReasoningItem(state, part)
-      }
+      this.appendReasoningItem(state, part)
 
       completionParams.onStreamEvent?.({
         type,
@@ -1636,7 +1654,11 @@ export default class AISDKRemoteLLMProvider {
         if (!delta) {
           continue
         }
-        const mergedDelta = mergeStreamingChunk(state.reasoning, delta)
+        // SDK delta events are incremental. Overlap removal corrupts repeated
+        // words and whitespace needed for provider reasoning replay.
+        const mergedDelta = type === 'reasoning-delta'
+          ? delta
+          : mergeStreamingChunk(state.reasoning, delta)
         if (!mergedDelta) {
           continue
         }

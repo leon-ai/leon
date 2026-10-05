@@ -10,6 +10,7 @@ import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-l
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
+import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
 import { CONFIG_MANAGER } from '@/config'
@@ -182,6 +183,68 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(readCompletionAccounting({ inputTokens, raw: {
       prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 0 }
     } })).toEqual({ cachedInputTokens: 0 })
+  })
+
+  it.each([LLMProviders.Anthropic])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
+    const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3'
+    const message = { id: 'msg_claude', type: 'message', role: 'assistant', model,
+      content: [], stop_reason: null, stop_sequence: null,
+      usage: { input_tokens: 100, output_tokens: 0, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 } }
+    const events = [
+      { type: 'message_start', message },
+      { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: '  check ' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'check \n' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'sig-' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'signature_delta', signature: 'complete' } },
+      { type: 'content_block_stop', index: 0 },
+      { type: 'message_delta', delta: { stop_reason: 'end_turn', stop_sequence: null }, usage: { output_tokens: 20 } },
+      { type: 'message_stop' }
+    ]
+    const fetch = vi.fn().mockImplementation(async () => new Response(
+      events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join(''),
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const target = {
+      provider: providerName, model, label: providerName,
+      isEnabled: true, isLocal: false, isResolved: true
+    }
+    const provider = providerName === LLMProviders.Anthropic
+      ? new AnthropicLLMProvider(target)
+      : new MiniMaxLLMProvider({
+          ...target,
+          accountCredentials: {
+            api_key: 'minimax-account-key', base_url: 'https://api.minimax.io/anthropic/v1'
+          }
+        })
+    const params = { ...createCompletionParams(null), shouldStream: true, promptCacheKey: 'agent' }
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
+      await provider.runChatCompletion('Check.', params)
+    )
+    expect(normalized).toMatchObject({
+      usedInputTokens: 190, usedOutputTokens: 20,
+      accounting: { cachedInputTokens: 80, cacheWriteInputTokens: 10 },
+      reasoningItems: [{ provider: providerName, text: '  check check \n', providerOptions: { anthropic: { signature: 'sig-complete' } } }]
+    })
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Check.' },
+      { role: 'assistant', content: '', reasoningItems: normalized.reasoningItems,
+        toolCalls: [{ id: 'tool_claude', type: 'function', function: { name: 'check', arguments: '{}' } }] },
+      { role: 'tool', toolCallId: 'tool_claude', toolName: 'check', content: 'Checked.' }
+    ], params)
+    const body = JSON.parse(fetch.mock.calls[1]![1].body)
+    if (providerName === LLMProviders.Anthropic) {
+      expect(body.cache_control).toEqual({ type: 'ephemeral' })
+    } else {
+      expect(String(fetch.mock.calls[1]![0])).toBe('https://api.minimax.io/anthropic/v1/messages')
+      expect(new Headers(fetch.mock.calls[1]![1].headers).get('x-api-key')).toBe('minimax-account-key')
+      expect(body.thinking).toEqual({ type: 'adaptive' })
+      expect(body.cache_control).toBeUndefined()
+    }
+    expect(body.messages[1].content).toContainEqual({
+      type: 'thinking', thinking: '  check check \n', signature: 'sig-complete'
+    })
   })
 
   it.each([

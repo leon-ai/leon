@@ -3,6 +3,7 @@ import type {
 } from 'node-llama-cpp'
 
 import type { MessageLog } from '@/types'
+import type { SharedV4ProviderOptions } from '@ai-sdk/provider'
 
 export enum LLMDuties {
   Inference = 'inference',
@@ -63,6 +64,7 @@ export interface ProviderReasoningItem {
   id: string
   text: string
   encryptedContent?: string
+  providerOptions?: SharedV4ProviderOptions
 }
 
 /**
