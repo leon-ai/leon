@@ -35,6 +35,7 @@ import setupNode from './setup-node'
 import setupPNPM from './setup-pnpm'
 import setupPython from './setup-python'
 import setupUV from './setup-uv'
+import setupJQ from './setup-jq'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
 import setupPythonBridgeEnv from './setup-python-bridge-env'
 import setupToolsDependencies from './setup-tools-dependencies'
@@ -311,6 +312,11 @@ async function syncLLMSetupChoice(preferences) {
         'Skipping portable Node.js, pnpm, Python and uv setup because it is running in CI'
       )
     }
+
+    // Core queries retained results even in CI, where portable runtimes are skipped.
+    currentStep = 'setupJQ'
+    await setupJQ()
+
     currentStep = 'setupNodejsBridgeEnv'
     await setupNodejsBridgeEnv()
     currentStep = 'setupPythonBridgeEnv'

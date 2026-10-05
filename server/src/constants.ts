@@ -82,6 +82,7 @@ export const NODE_INSTALL_PATH = path.join(BIN_PATH, 'node')
 export const PNPM_INSTALL_PATH = path.join(BIN_PATH, 'pnpm')
 export const PYTHON_INSTALL_PATH = path.join(BIN_PATH, 'python')
 export const UV_INSTALL_PATH = path.join(BIN_PATH, 'uv')
+export const JQ_INSTALL_PATH = path.join(BIN_PATH, 'jq')
 export const SKILLS_PATH = path.join(CODEBASE_PATH, 'skills')
 export const NATIVE_SKILLS_PATH = path.join(SKILLS_PATH, 'native')
 export const AGENT_SKILLS_PATH = path.join(SKILLS_PATH, 'agent')
@@ -284,6 +285,11 @@ export const UV_VERSIONS_PATH = path.join(
 export const UV_MANIFEST_PATH = path.join(UV_INSTALL_PATH, 'manifest.json')
 const UV_VERSIONS = JSON.parse(fs.readFileSync(UV_VERSIONS_PATH, 'utf8'))
 export const UV_VERSION = UV_VERSIONS.uv
+
+export const JQ_VERSIONS_PATH = path.join(CODEBASE_BIN_PATH, 'jq', 'versions.json')
+export const JQ_MANIFEST_PATH = path.join(JQ_INSTALL_PATH, 'manifest.json')
+const JQ_VERSIONS = JSON.parse(fs.readFileSync(JQ_VERSIONS_PATH, 'utf8'))
+export const JQ_VERSION = JQ_VERSIONS.jq
 
 /**
  * llama.cpp paths and versions.
