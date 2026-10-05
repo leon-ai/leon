@@ -18,7 +18,7 @@ import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createHuggingFace } from '@ai-sdk/huggingface'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
-import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
+import { OpenAIResponsesTransport } from './openai-responses-transport'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import { CONFIG_MANAGER } from '@/config'
@@ -95,12 +95,6 @@ interface CallState {
   finishReason?: string
 }
 
-const CHATGPT_UNSUPPORTED_FIELDS = [
-      'background', 'conversation', 'max_output_tokens', 'max_tool_calls', 'metadata',
-      'moderation', 'multi_agent', 'prompt', 'prompt_cache_retention', 'safety_identifier',
-      'temperature', 'top_logprobs', 'top_p', 'truncation', 'user', 'previous_response_id'
-    ]
-const CHATGPT_TOOL_NAMESPACE = 'leon'
 
 const STRUCTURED_OUTPUT_JSON_INSTRUCTION =
   'Return only valid JSON matching the requested schema.'
@@ -112,9 +106,7 @@ export default class AISDKRemoteLLMProvider {
 
   private readonly config: AISDKRemoteProviderConfig
   private languageModel: LanguageModelV4
-  private openAIWebSocketFetch:
-    | ReturnType<typeof createWebSocketFetch>
-    | undefined
+  private openAITransport: OpenAIResponsesTransport | undefined
 
   constructor(
     config: AISDKRemoteProviderConfig
@@ -159,7 +151,7 @@ export default class AISDKRemoteLLMProvider {
   }
 
   public dispose(): void {
-    this.openAIWebSocketFetch?.close()
+    this.openAITransport?.close()
   }
 
   protected setBaseURL(baseURL: string): void {
@@ -168,8 +160,8 @@ export default class AISDKRemoteLLMProvider {
     }
 
     this.config.baseURL = baseURL
-    this.openAIWebSocketFetch?.close()
-    this.openAIWebSocketFetch = undefined
+    this.openAITransport?.close()
+    this.openAITransport = undefined
     this.languageModel = this.createLanguageModel()
   }
 
@@ -192,8 +184,9 @@ export default class AISDKRemoteLLMProvider {
     const headers = this.config.headers?.(apiKey)
 
     if (this.config.flavor === 'openai-responses') {
-      const fetch = this.config.credentials?.['auth_kind'] === 'chatgpt'
-        ? this.fetchChatGPT.bind(this) : this.getOpenAIWebSocketFetch()
+      const fetch: typeof globalThis.fetch = (input, init) => {
+        return this.getOpenAITransport().fetch(input, init)
+      }
       const provider = createOpenAI({
         apiKey,
         baseURL: this.config.baseURL,
@@ -294,90 +287,18 @@ export default class AISDKRemoteLLMProvider {
     return this.languageModel
   }
 
-  private async fetchChatGPT(input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit): Promise<Response> {
-    const { MODEL_ACCOUNT_STORE } = await import('@/core/llm-manager/llm-accounts')
-    const credentials = await MODEL_ACCOUNT_STORE.getCredentials(String(this.config.credentials?.['account_id'] || ''))
-    if (!credentials?.['access_token']) {
-      throw new Error('Please reconnect your ChatGPT account with /connection ai connect openai.')
-    }
+  /**
+   * Lazily creates the shared transport for this provider binding.
+   */
+  private getOpenAITransport(): OpenAIResponsesTransport {
+    this.openAITransport ??= new OpenAIResponsesTransport(
+      this.config.baseURL,
+      this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? String(this.config.credentials['account_id'] || '')
+        : undefined
+    )
 
-    const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
-    for (const field of CHATGPT_UNSUPPORTED_FIELDS) {
-      delete body[field]
-    }
-
-    body['store'] = false
-    body['stream'] = true
-    // SIWC accepts developer instructions, while explicit system messages are rejected.
-    const items = Array.isArray(body['input']) ? body['input'] as Record<string, unknown>[] : []
-    body['input'] = items.map((item) => item['role'] === 'system'
-      ? { ...item, role: 'developer' } : item)
-    const tools = Array.isArray(body['tools']) ? body['tools'] : []
-    if (tools.length) {
-      // Plan usage requires function tools in a namespace; Core still executes them.
-      body['tools'] = [{ type: 'namespace', name: CHATGPT_TOOL_NAMESPACE, description: 'Leon tools', tools }]
-      const choice = body['tool_choice'] as Record<string, unknown> | undefined
-      if (choice?.['type'] === 'function') {
-        choice['namespace'] = CHATGPT_TOOL_NAMESPACE
-      }
-      body['input'] = (body['input'] as Record<string, unknown>[]).map((item) =>
-        item['type'] === 'function_call' ? { ...item, namespace: CHATGPT_TOOL_NAMESPACE } : item)
-    }
-    const headers = new Headers(init?.headers)
-    headers.set('authorization', `Bearer ${String(credentials['access_token'])}`)
-
-    const request = { ...init, headers, body: JSON.stringify(body), redirect: 'error' as const }
-    let response = await globalThis.fetch(input, request)
-    if (response.status === 401) {
-      // A revoked/early-expired token gets one explicit refresh, never another account.
-      const id = String(this.config.credentials?.['account_id'] || '')
-      try {
-        const refreshed = await MODEL_ACCOUNT_STORE.getCredentials(id, undefined, true)
-        if (!refreshed?.['access_token']) {
-          throw new Error('Missing authorization.')
-        }
-        await response.body?.cancel()
-        headers.set('authorization', `Bearer ${String(refreshed['access_token'])}`)
-        response = await globalThis.fetch(input, request)
-        if (response.status === 401 || response.status === 403) {
-          throw new Error('Authorization was rejected.')
-        }
-      } catch {
-        await MODEL_ACCOUNT_STORE.markNeedsAttention(id)
-        throw new Error(`I need you to reconnect this account with /connection ai connect ${id}.`)
-      }
-    }
-    if (response.status === 403) {
-      const id = String(this.config.credentials?.['account_id'] || '')
-      await MODEL_ACCOUNT_STORE.markNeedsAttention(id)
-      throw new Error(`I need you to reconnect this account with /connection ai connect ${id}.`)
-    }
-    return response
-  }
-
-  private getOpenAIWebSocketFetch(): ReturnType<typeof createWebSocketFetch> {
-    if (!this.openAIWebSocketFetch) {
-      this.openAIWebSocketFetch = createWebSocketFetch({
-        url: this.toOpenAIResponsesWebSocketURL(this.config.baseURL)
-      })
-    }
-
-    return this.openAIWebSocketFetch
-  }
-
-  private toOpenAIResponsesWebSocketURL(baseURL: string): string {
-    const url = new URL(baseURL)
-    const normalizedBasePath = url.pathname.endsWith('/')
-      ? url.pathname
-      : `${url.pathname}/`
-
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-    url.pathname = new URL('responses', `http://localhost${normalizedBasePath}`)
-      .pathname
-    url.search = ''
-    url.hash = ''
-
-    return url.toString()
+    return this.openAITransport
   }
 
   private toTextPrompt(
@@ -1692,15 +1613,10 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<AxiosResponse> {
     completionParams.signal?.throwIfAborted()
     this.checkAPIKey()
-    const transport = this.openAIWebSocketFetch
     const abort = (): void => {
       // The WebSocket fetch adapter stops reading on abort but leaves the
       // response in flight. Never reuse that socket for the next owner's turn.
-      transport?.close()
-      if (transport && this.openAIWebSocketFetch === transport) {
-        this.openAIWebSocketFetch = undefined
-        this.languageModel = this.createLanguageModel()
-      }
+      this.openAITransport?.close()
     }
     completionParams.signal?.addEventListener('abort', abort, { once: true })
     try {
@@ -1712,7 +1628,9 @@ export default class AISDKRemoteLLMProvider {
     } finally {
       completionParams.signal?.removeEventListener('abort', abort)
       // Also close a connection that finished opening after cancellation.
-      if (completionParams.signal?.aborted) transport?.close()
+      if (completionParams.signal?.aborted) {
+        this.openAITransport?.close()
+      }
     }
   }
 }

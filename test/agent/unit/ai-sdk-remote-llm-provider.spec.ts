@@ -18,9 +18,22 @@ const mediaMocks = vi.hoisted(() => ({
     .fn()
     .mockResolvedValue({ artifacts: [{ id: 'image', filename: 'image.png' }] })
 }))
-const accountMocks = vi.hoisted(() => ({ getCredentials: vi.fn() }))
+const accountMocks = vi.hoisted(() => ({
+  getCredentials: vi.fn(),
+  markNeedsAttention: vi.fn()
+}))
 vi.mock('@/core/llm-manager/llm-accounts', () => ({
   MODEL_ACCOUNT_STORE: accountMocks
+}))
+
+const websocketMocks = vi.hoisted(() => ({
+  create: vi.fn(),
+  fetch: vi.fn(),
+  close: vi.fn()
+}))
+
+vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
+  createWebSocketFetch: websocketMocks.create
 }))
 
 vi.mock('@/core/llm-manager/media-generation/media-generation-service', () => ({
@@ -136,23 +149,33 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'anthropic' })
   })
 
-  it('uses ChatGPT HTTP streaming and namespaced tools even for a nonstreaming caller', async () => {
-    accountMocks.getCredentials.mockResolvedValueOnce({ access_token: 'fresh-chatgpt-token' })
+  it('reuses account websockets and streams namespaced tools for a nonstreaming caller', async () => {
+    accountMocks.getCredentials.mockResolvedValue({ access_token: 'fresh-chatgpt-token' })
     const call = { type: 'function_call', id: 'fc_test', call_id: 'call_test',
       name: 'read_note', namespace: 'leon', arguments: '{"name":"todo"}', status: 'completed' }
+    const reasoning = {
+      type: 'reasoning',
+      id: 'rs_test',
+      encrypted_content: 'encrypted-test',
+      summary: [{ type: 'summary_text', text: 'Checking the note.' }]
+    }
     const response = { id: 'resp_test', created_at: 1, model: 'gpt-6.1-sol',
-      status: 'completed', output: [call], usage: {
-        input_tokens: 12, output_tokens: 4, total_tokens: 16,
-        input_tokens_details: { cached_tokens: 0 }, output_tokens_details: { reasoning_tokens: 0 }
+      status: 'completed', output: [reasoning, call], usage: {
+        input_tokens: 1_536, output_tokens: 24, total_tokens: 1_560,
+        input_tokens_details: { cached_tokens: 1_024 }, output_tokens_details: { reasoning_tokens: 10 }
       } }
     const events = [
       { type: 'response.created', response: { ...response, output: [], status: 'in_progress' } },
-      { type: 'response.output_item.added', output_index: 0, item: { ...call, arguments: '', status: 'in_progress' } },
-      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 0, delta: call.arguments },
-      { type: 'response.output_item.done', output_index: 0, item: call },
+      { type: 'response.output_item.added', output_index: 0, item: { ...reasoning, summary: [] } },
+      { type: 'response.reasoning_summary_text.delta', item_id: reasoning.id, output_index: 0,
+        summary_index: 0, delta: 'Checking the note.' },
+      { type: 'response.output_item.done', output_index: 0, item: reasoning },
+      { type: 'response.output_item.added', output_index: 1, item: { ...call, arguments: '', status: 'in_progress' } },
+      { type: 'response.function_call_arguments.delta', item_id: call.id, output_index: 1, delta: call.arguments },
+      { type: 'response.output_item.done', output_index: 1, item: call },
       { type: 'response.completed', response }
     ]
-    const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(
+    websocketMocks.fetch.mockImplementation(async () => new Response(
       events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
       { headers: { 'content-type': 'text/event-stream' } }
     ))
@@ -161,22 +184,129 @@ describe('AISDKRemoteLLMProvider', () => {
       isEnabled: true, isLocal: false, isResolved: true,
       accountCredentials: { auth_kind: 'chatgpt', access_token: 'old-chatgpt-token', account_id: 'openai.test' }
     })
-    const result = await provider.runChatCompletion('Read my note.', {
+    const onReasoningToken = vi.fn()
+    const onStreamEvent = vi.fn()
+    const params = {
       ...createCompletionParams(null), shouldStream: false, temperature: 0.5,
+      reasoningMode: 'on' as const, reasoningEffort: 'medium' as const,
+      reasoningSummary: 'auto' as const, promptCacheKey: 'leon-test',
+      onReasoningToken, onStreamEvent,
       tools: [{ type: 'function', function: { name: 'read_note', description: 'Read a note',
         parameters: { type: 'object', properties: { name: { type: 'string' } } }
       } }]
-    })
+    } satisfies CompletionParams
+    const result = await provider.runChatCompletion('Read my note.', params)
 
-    const [url, request] = transport.mock.calls[0]!
+    const [url, request] = websocketMocks.fetch.mock.calls[0]!
     expect(String(url)).toBe('https://api.openai.com/v1/responses')
     expect(new Headers(request?.headers).get('authorization')).toBe('Bearer fresh-chatgpt-token')
     const body = JSON.parse(request?.body as string)
     expect(body).toMatchObject({ stream: true, store: false, tools: [{ type: 'namespace', name: 'leon' }] })
     expect(body.temperature).toBeUndefined()
     expect(body.input[0].role).toBe('developer')
+    expect(body).toMatchObject({
+      reasoning: { effort: 'medium', summary: 'auto' },
+      include: ['reasoning.encrypted_content'], prompt_cache_key: 'leon-test'
+    })
     expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
+    expect(onReasoningToken).toHaveBeenCalledWith('Checking the note.')
+    expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'stream-open', transport: 'websocket'
+    }))
+    await provider.runChatCompletion('Read my note again.', params)
+    expect(websocketMocks.create).toHaveBeenCalledTimes(1)
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test')
+    provider.dispose()
+  })
+
+  it('finishes an incomplete websocket response even when the adapter leaves it open', async () => {
+    const response = {
+      id: 'resp_limited', created_at: 1, model: 'gpt-6.1-sol', status: 'incomplete',
+      output: [], incomplete_details: { reason: 'max_output_tokens' },
+      usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 }
+    }
+    websocketMocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(controller): void {
+        controller.enqueue(new TextEncoder().encode(
+          `data: ${JSON.stringify({ type: 'response.incomplete', response })}\n\n`
+        ))
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    const provider = new OpenAILLMProvider({
+      provider: LLMProviders.OpenAI, model: response.model, label: 'OpenAI',
+      isEnabled: true, isLocal: false, isResolved: true
+    })
+
+    try {
+      const result = await provider.runChatCompletion('Continue.', {
+        ...createCompletionParams(null), shouldStream: true
+      })
+      expect(result.data.choices[0].finish_reason).toBe('length')
+      expect(result.data.usage).toMatchObject({ prompt_tokens: 100, completion_tokens: 10 })
+      expect(websocketMocks.close).toHaveBeenCalled()
+    } finally {
+      provider.dispose()
+    }
+  }, 2_000)
+
+  it('refreshes a rejected websocket token once and retires sockets when credentials change', async () => {
+    accountMocks.getCredentials
+      .mockResolvedValueOnce({ access_token: 'expired-token' })
+      .mockResolvedValueOnce({ access_token: 'fresh-token' })
+      .mockResolvedValueOnce({ access_token: 'rotated-token' })
+    websocketMocks.fetch
+      .mockRejectedValueOnce(new Error('Unexpected server response: 401'))
+      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
+      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
+    const provider = new OpenAILLMProvider({
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6.1-sol',
+      label: 'OpenAI',
+      isEnabled: true,
+      isLocal: false,
+      isResolved: true,
+      accountCredentials: {
+        auth_kind: 'chatgpt',
+        access_token: 'expired-token',
+        account_id: 'openai.test'
+      }
+    })
+
+    await provider.runChatCompletion('Hello.', createCompletionParams(null))
+    await provider.runChatCompletion('Hello again.', createCompletionParams(null))
+
+    expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test', undefined, true)
+    expect(websocketMocks.create).toHaveBeenCalledTimes(3)
+    expect(websocketMocks.fetch.mock.calls.map(([, request]) =>
+      new Headers(request.headers).get('authorization')
+    )).toEqual(['Bearer expired-token', 'Bearer fresh-token', 'Bearer rotated-token'])
+    expect(websocketMocks.close).toHaveBeenCalledTimes(2)
+    expect(accountMocks.markNeedsAttention).not.toHaveBeenCalled()
+    provider.dispose()
+  })
+
+  it('reports reconnect after a forbidden websocket without switching accounts', async () => {
+    accountMocks.getCredentials.mockResolvedValue({ access_token: 'revoked-token' })
+    websocketMocks.fetch.mockRejectedValueOnce(new Error('Unexpected server response: 403'))
+    const provider = new OpenAILLMProvider({
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6.1-sol',
+      label: 'OpenAI',
+      isEnabled: true,
+      isLocal: false,
+      isResolved: true,
+      accountCredentials: {
+        auth_kind: 'chatgpt',
+        access_token: 'revoked-token',
+        account_id: 'openai.test'
+      }
+    })
+
+    await expect(provider.runChatCompletion('Hello.', createCompletionParams(null)))
+      .rejects.toThrow('/connection ai connect openai.test')
+    expect(accountMocks.getCredentials).toHaveBeenCalledTimes(1)
+    expect(accountMocks.markNeedsAttention).toHaveBeenCalledWith('openai.test')
+    provider.dispose()
   })
 
   it.each(['audio/wav', 'video/mp4'])('preserves %s only for a cataloged native-media endpoint', (mediaType) => {
@@ -207,32 +337,48 @@ describe('AISDKRemoteLLMProvider', () => {
   })
   it('retires an aborted websocket before another completion can reuse it', async () => {
     const controller = new AbortController()
-    const transport = { close: vi.fn() }
-    const freshModel = { doStream: vi.fn() }
-    const provider = createOpenRouterProvider() as unknown as {
-      openAIWebSocketFetch: typeof transport | undefined
-      languageModel: unknown
-      createLanguageModel: () => unknown
-      runStreamingCompletion: () => Promise<unknown>
-      runChatCompletion: ProviderWithPrivateCallOptions['runChatCompletion']
-    }
-    provider.openAIWebSocketFetch = transport
-    provider.createLanguageModel = vi.fn(() => freshModel)
-    provider.runStreamingCompletion = async (): Promise<unknown> => {
-      controller.abort(new Error('Canceled'))
-      expect(transport.close).toHaveBeenCalled()
-      expect(provider.languageModel).toBe(freshModel)
-      expect(provider.openAIWebSocketFetch).toBeUndefined()
-      throw controller.signal.reason
-    }
+    const provider = new OpenAILLMProvider({
+      provider: LLMProviders.OpenAI,
+      model: 'gpt-6.1-sol',
+      label: 'OpenAI',
+      isEnabled: true,
+      isLocal: false,
+      isResolved: true,
+      accountCredentials: { auth_kind: 'api_key', api_key: 'selected-key' }
+    })
+    websocketMocks.fetch
+      .mockImplementationOnce(async () => {
+        controller.abort(new Error('Canceled'))
+        return new Response('data: [DONE]\n\n')
+      })
+      .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
+
     await expect(provider.runChatCompletion('Old turn', {
-      ...createCompletionParams(null), shouldStream: true, signal: controller.signal
+      ...createCompletionParams(null),
+      shouldStream: true,
+      signal: controller.signal
     })).rejects.toThrow('Canceled')
-    expect(provider.createLanguageModel).toHaveBeenCalledTimes(1)
+    expect(websocketMocks.close).toHaveBeenCalled()
+
+    await provider.runChatCompletion('New turn', {
+      ...createCompletionParams(null),
+      shouldStream: true
+    })
+    expect(websocketMocks.create).toHaveBeenCalledTimes(2)
+    provider.dispose()
   })
 
   beforeEach(() => {
     vi.clearAllMocks()
+    websocketMocks.fetch.mockReset()
+    websocketMocks.create.mockImplementation(() => {
+      return Object.assign(
+        (...args: unknown[]) => {
+          return websocketMocks.fetch(...args)
+        },
+        { close: websocketMocks.close }
+      )
+    })
     vi.stubEnv('LEON_OPENROUTER_API_KEY', 'test-openrouter-key')
   })
 
