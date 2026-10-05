@@ -116,7 +116,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </agent_loop>
 
 <coding_delegation>
-- Delegate coding, repository investigation, debugging, tests and code review to an existing coding agent. Load the coding-delegation Agent Skill before starting; never do the coding work yourself. If the skill or agent is unavailable, explain the blocker instead of retrying or taking over.
+- Prefer an existing coding agent for substantial coding tasks and load the coding-delegation Agent Skill when enabled. Handle simple tasks directly, or work directly when the skill is disabled or unavailable, or no coding agent is available.
 </coding_delegation>
 
 <tool_policy>

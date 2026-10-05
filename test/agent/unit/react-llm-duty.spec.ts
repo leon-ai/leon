@@ -689,7 +689,7 @@ describe('continuous agent loop', () => {
     expect(prepareContinuation).toHaveBeenCalledTimes(limit > 1 ? 1 : 0)
   })
 
-  it('requires coding delegation before toolkit selection without choosing a product', () => {
+  it('prefers coding delegation with direct fallback without choosing a product', () => {
     const skill = fs.readFileSync('skills/agent/coding-delegation/SKILL.md', 'utf8')
 
     expect(AGENT_SYSTEM_PROMPT.indexOf('<coding_delegation>')).toBeLessThan(
@@ -697,11 +697,18 @@ describe('continuous agent loop', () => {
     )
 
     expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Load the coding-delegation Agent Skill before starting'
+      'Prefer an existing coding agent for substantial coding tasks'
     )
-    expect(AGENT_SYSTEM_PROMPT).toContain('never do the coding work yourself')
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      'load the coding-delegation Agent Skill when enabled'
+    )
+    expect(AGENT_SYSTEM_PROMPT).toContain(
+      'work directly when the skill is disabled or unavailable, or no coding agent is available'
+    )
     expect(skill).toContain('submitting a prompt is not completion')
-    expect(skill).toContain('Never silently take over the coding task')
+    expect(skill).toContain(
+      'If delegation is unavailable, explain briefly and continue directly'
+    )
     expect(skill).toContain(
       'a request for analysis or a suggested fix does not authorize edits'
     )
