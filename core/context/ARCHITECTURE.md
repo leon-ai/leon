@@ -35,6 +35,7 @@
 - Checkpoints and summaries preserve task state as transcripts grow or work resumes.
 - Tool state is separated: installed tools exist in the registry, enabled tools are not disabled by the owner, and available tools have the required settings to run.
 - Deterministic runtime guards validate and repair arguments, block duplicate calls, execute tools, and return every success or failure as a structured observation to the same loop.
+- The model batches independent calls within or across planned work. Tools run concurrently in isolated workers by default; tool-level serial declarations preserve shared sessions and instance state, bookkeeping stays ordered, and results retain their emitted transcript order.
 - Plans track scope, collection coverage and verified outcomes; their worklists persist through checkpointing and continuation.
 - The agent can share progress updates alongside tool calls during longer tasks.
 - Clarification pauses preserve the transcript, plan and execution state so the owner reply can resume the same task.

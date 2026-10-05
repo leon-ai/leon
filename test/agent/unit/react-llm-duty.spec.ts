@@ -1,3 +1,4 @@
+import { ToolConcurrency } from '@/types'
 import fs from 'node:fs'
 import { saveConnection } from '@/core/connections/connection-service'
 import { ConnectionStatus } from '@/core/connections/connection-store'
@@ -97,6 +98,7 @@ vi.mock('@/core', () => ({
     needsToolConnection: coreMocks.needsToolConnection,
     getFlattenedTools: coreMocks.getFlattenedTools,
     getToolFunctions: coreMocks.getToolFunctions,
+    getToolConcurrency: (): ToolConcurrency => ToolConcurrency.Parallel,
     resolveToolById: coreMocks.resolveToolById
   }
 }))
@@ -301,6 +303,177 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it('runs ordinary calls concurrently by default and preserves emitted history and result order', async () => {
+    const catalog = createCatalog()
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable,
+      functionConfig: callable.functionConfig
+    })
+    const started: string[] = []
+    let releaseFirst: () => void = () => {}
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    const result = await runAgentLoop({
+      transcript: [],
+      catalog,
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ toolCalls: [
+          toolCall('first', CALLABLE_TOOL_NAME, { query: 'first' }),
+          toolCall('second', CALLABLE_TOOL_NAME, { query: 'second' })
+        ] })
+        .mockResolvedValueOnce({ textContent: 'Done.' }),
+      executeFunction: async (_callable, input) => {
+        const { query } = JSON.parse(input)
+        started.push(query)
+        if (query === 'first') {
+          await firstGate
+        } else {
+          releaseFirst()
+          throw new Error('second lookup failed')
+        }
+
+        return { execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: query,
+          requestedToolInput: input
+        } }
+      },
+      loadAgentSkill: async () => null,
+      maxIterations: 2
+    })
+
+    expect(started).toEqual(['first', 'second'])
+    expect(result.executionHistory.map((record) => record.status)).toEqual(['success', 'error'])
+    expect(result.transcript.filter((message) => message.role === 'tool')
+      .map((message) => message.toolCallId)).toEqual(['first', 'second'])
+  }, 5_000)
+
+  it('keeps shared-session calls ordered and deduplicates identical parallel calls within a batch', async () => {
+    for (const parallel of [false, true]) {
+      const catalog = createCatalog()
+      catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+        ...callable,
+        functionConfig: callable.functionConfig,
+        concurrency: parallel ? ToolConcurrency.Parallel : ToolConcurrency.Serial
+      })
+      let active = 0
+      let maximumActive = 0
+      const executeFunction = vi.fn(async (_callable, input: string) => {
+        active += 1
+        maximumActive = Math.max(maximumActive, active)
+        await Promise.resolve()
+        await Promise.resolve()
+        active -= 1
+
+        return { execution: {
+          function: callable.qualifiedName,
+          status: 'success',
+          observation: input,
+          requestedToolInput: input
+        } }
+      })
+      const result = await runAgentLoop({
+        transcript: [], catalog,
+        callModel: vi.fn()
+          .mockResolvedValueOnce({ toolCalls: [
+            toolCall('one', CALLABLE_TOOL_NAME, { query: 'same' }),
+            toolCall('two', CALLABLE_TOOL_NAME, { query: parallel ? 'same' : 'other' })
+          ] })
+          .mockResolvedValueOnce({ textContent: 'Done.' }),
+        executeFunction,
+        loadAgentSkill: async () => null,
+        maxIterations: 2
+      })
+
+      expect(maximumActive).toBe(1)
+      expect(executeFunction).toHaveBeenCalledTimes(parallel ? 1 : 2)
+      if (parallel) {
+        expect(JSON.stringify(result.transcript)).toContain('Duplicate call blocked')
+      }
+    }
+  })
+
+  it('drains both safe calls when the owner cancels the agent run', async () => {
+    const catalog = createCatalog()
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable,
+      functionConfig: callable.functionConfig
+    })
+    const controller = new AbortController()
+    let started = 0
+    let finished = 0
+    const run = runAgentLoop({
+      transcript: [], catalog, signal: controller.signal,
+      callModel: vi.fn().mockResolvedValueOnce({ toolCalls: [
+        toolCall('one', CALLABLE_TOOL_NAME, { query: 'one' }),
+        toolCall('two', CALLABLE_TOOL_NAME, { query: 'two' })
+      ] }),
+      executeFunction: async (_callable, input) => {
+        const canceled = new Promise<void>((resolve) => {
+          controller.signal.addEventListener('abort', () => resolve(), { once: true })
+        })
+        started += 1
+        if (started === 2) {
+          controller.abort(new Error('Owner canceled.'))
+        }
+        await canceled
+        finished += 1
+
+        return { execution: {
+          function: callable.qualifiedName, status: 'success', observation: input
+        } }
+      },
+      loadAgentSkill: async () => null,
+      maxIterations: 1
+    })
+
+    await expect(run).rejects.toThrow('Owner canceled.')
+    expect(finished).toBe(2)
+  }, 5_000)
+
+  it('treats serial calls as barriers between concurrent groups', async () => {
+    const catalog = createCatalog()
+    const serialName = 'test__lookup__serial'
+    catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {
+      ...callable,
+      functionConfig: callable.functionConfig
+    })
+    catalog.functionsByToolName.set(serialName, { ...callable, qualifiedName: 'test.lookup.serial', concurrency: ToolConcurrency.Serial })
+    const finished: string[] = []
+    await runAgentLoop({
+      transcript: [], catalog,
+      callModel: vi.fn()
+        .mockResolvedValueOnce({ toolCalls: [
+          toolCall('one', CALLABLE_TOOL_NAME, { query: 'one' }),
+          toolCall('two', CALLABLE_TOOL_NAME, { query: 'two' }),
+          toolCall('barrier', serialName, { query: 'barrier' }),
+          toolCall('three', CALLABLE_TOOL_NAME, { query: 'three' })
+        ] })
+        .mockResolvedValueOnce({ textContent: 'Done.' }),
+      executeFunction: async (fn, input) => {
+        const { query } = JSON.parse(input)
+        if (query === 'barrier') {
+          expect(finished.sort()).toEqual(['one', 'two'])
+        }
+        if (query === 'three') {
+          expect(finished).toContain('barrier')
+        }
+        await Promise.resolve()
+        finished.push(query)
+
+        return { execution: {
+          function: fn.qualifiedName, status: 'success', observation: input,
+          requestedToolInput: input
+        } }
+      },
+      loadAgentSkill: async () => null,
+      maxIterations: 2
+    })
+    expect(finished).toHaveLength(4)
+  })
+
   it('keeps reasoning from successive model calls separate in live events and saved traces', async () => {
     const modelState = CONFIG_STATE.getModelState()
     vi.spyOn(modelState, 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)

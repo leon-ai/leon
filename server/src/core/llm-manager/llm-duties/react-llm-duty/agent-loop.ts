@@ -1,3 +1,4 @@
+import { ToolConcurrency } from '@/types'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { TOOLKIT_REGISTRY } from '@/core'
 import {
@@ -126,6 +127,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - Prefer dedicated/API tools, then direct browser inspection and browser actions for web interfaces, then semantic OS tools. Use screenshots for visual questions, unsupported controls or a concrete inspection limitation. Use bounded shell commands for non-visual work without a dedicated tool, and computer use for graphical interaction. Observe before acting. Accept low-risk tool success unless the effect is unverified, failure is reported, or consequences require verification; follow the toolkit's verification rules.
 - When the owner provides a source to understand, prefer direct-source tools over secondary search. Use search as fallback when the source cannot be accessed or does not contain the needed evidence.
 - Use the exact observed values from earlier tool results when chaining calls.
+- Batch independent tool calls in one turn. Ordinary tools run concurrently by default; wait for results before calling anything that depends on them. Shared-session tools and bookkeeping remain ordered.
 - Reuse prior results unless state may have changed or a failed call has a concrete recovery reason. Fresh UI observations are allowed when needed to ground the next action.
 - For complex or collection tasks, initialize update_plan before execution to load planning guidance and collection tracking. Start one step in_progress and later steps pending; simple tasks need no plan.
 - If an Agent Skill is relevant, load it before executing the specialized workflow and follow its instructions.
@@ -205,6 +207,7 @@ export interface AgentCallableFunction {
   toolkitId: string
   toolId: string
   functionName: string
+  concurrency?: ToolConcurrency
   functionConfig: FunctionConfig
 }
 
@@ -628,6 +631,7 @@ function loadToolkitFunctions(
         toolkitId: tool.toolkitId,
         toolId: tool.toolId,
         functionName,
+        concurrency: TOOLKIT_REGISTRY.getToolConcurrency(tool.toolkitId, tool.toolId),
         functionConfig
       })
       catalog.tools.push({
@@ -1018,7 +1022,8 @@ export async function runAgentLoop(
 
     let terminalSignal: FinalResponseSignal | undefined
     let planUpdated = false
-    for (const toolCall of toolCalls) {
+    for (let callIndex = 0; callIndex < toolCalls.length;) {
+      const toolCall = toolCalls[callIndex]!
       if (terminalSignal) {
         // Providers require one result for every emitted tool call. Complete
         // the protocol without running work after a terminal handoff.
@@ -1028,32 +1033,40 @@ export async function runAgentLoop(
           toolName: toolCall.function.name,
           content: 'Tool call skipped because an earlier call ended this agent run.'
         })
+        callIndex += 1
         continue
       }
 
-      const toolResult = await executeAgentToolCall(
-        toolCall,
+      const batch = await executeAgentToolBatch(
+        toolCalls.slice(callIndex),
         params,
         executionHistory,
         trackedSteps
       )
-      if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
-          toolResult.trackedSteps !== trackedSteps) planUpdated = true
-      trackedSteps = toolResult.trackedSteps
-      if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
-          trackedSteps.length > 0 && isAgentPlanComplete(trackedSteps)) {
-        // Reconciliation can be the only remaining work after a complete review.
-        // Let the verifier accept that result without forcing a redundant action.
-        requiresToolAction = false
+      callIndex += batch.length
+
+      for (const { call: toolCall, result: toolResult, records } of batch) {
+        executionHistory.push(...records)
+        if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
+            toolResult.trackedSteps !== trackedSteps) {
+          planUpdated = true
+        }
+        trackedSteps = toolResult.trackedSteps
+        if (toolCall.function.name === AGENT_PLAN_TOOL_NAME &&
+            trackedSteps.length > 0 && isAgentPlanComplete(trackedSteps)) {
+          // Reconciliation can be the only remaining work after a complete review.
+          // Let the verifier accept that result without forcing a redundant action.
+          requiresToolAction = false
+        }
+        transcript.push({
+          role: 'tool',
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          content: toolResult.content,
+          ...(toolResult.files ? { files: toolResult.files } : {})
+        })
+        terminalSignal ??= toolResult.signal
       }
-      transcript.push({
-        role: 'tool',
-        toolCallId: toolCall.id,
-        toolName: toolCall.function.name,
-        content: toolResult.content,
-        ...(toolResult.files ? { files: toolResult.files } : {})
-      })
-      terminalSignal = toolResult.signal
     }
 
     if (planUpdated) operationalTurnsSincePlanUpdate = 0
@@ -1429,6 +1442,78 @@ function buildResumableAgentAnswer(
     `Next, I will: ${nextAction}.`,
     'May I continue with that next step?'
   ].join('\n\n')
+}
+
+/**
+ * Run contiguous independent calls together, preserving protocol and history order.
+ * Bookkeeping, shared-session calls and duplicate inputs are ordering barriers.
+ */
+async function executeAgentToolBatch(
+  toolCalls: OpenAIToolCall[],
+  params: AgentLoopParams,
+  executionHistory: ExecutionRecord[],
+  trackedSteps: TrackedPlanStep[]
+): Promise<Array<{
+  call: OpenAIToolCall
+  result: Awaited<ReturnType<typeof executeAgentToolCall>>
+  records: ExecutionRecord[]
+}>> {
+  const batch: OpenAIToolCall[] = []
+  const reserved: ExecutionRecord[] = []
+
+  for (const call of toolCalls) {
+    const callable = params.catalog.functionsByToolName.get(call.function.name)
+    const input = extractToolCallInput(call.function.arguments).toolInput
+    const parallel = Boolean(callable) && callable?.concurrency !== ToolConcurrency.Serial
+    const duplicate = callable && callable.functionConfig.deduplicate_calls !== false
+      ? findDuplicateToolInputMatch(
+          reserved,
+          callable.qualifiedName,
+          callable.qualifiedName,
+          input
+        )
+      : null
+
+    if (batch.length > 0 && (!parallel || duplicate)) {
+      break
+    }
+
+    batch.push(call)
+    if (!parallel || !callable) {
+      break
+    }
+
+    reserved.push({
+      function: callable.qualifiedName,
+      status: 'success',
+      observation: '',
+      requestedToolInput: input
+    })
+  }
+
+  // Each call sees the same preceding history. Merge only its new records,
+  // in emitted order, after every worker settles (including cancellation).
+  const outcomes = await Promise.allSettled(batch.map(async (call) => {
+    const history = [...executionHistory]
+    const result = await executeAgentToolCall(call, params, history, trackedSteps)
+
+    return { call, result, records: history.slice(executionHistory.length) }
+  }))
+  const results: Array<{
+    call: OpenAIToolCall
+    result: Awaited<ReturnType<typeof executeAgentToolCall>>
+    records: ExecutionRecord[]
+  }> = []
+
+  for (const outcome of outcomes) {
+    if (outcome.status === 'rejected') {
+      throw outcome.reason
+    }
+
+    results.push(outcome.value)
+  }
+
+  return results
 }
 
 async function executeAgentToolCall(
