@@ -1154,32 +1154,45 @@ class BaseTool(ABC):
     ) -> None:
         """Download binary on-demand if not found"""
 
+        bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
+        os.makedirs(bins_path, exist_ok=True)
+        staging_path = tempfile.mkdtemp(prefix=".download-", dir=bins_path)
+
         try:
-            bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
             binary_path = os.path.join(bins_path, executable)
+            staged_binary_path = os.path.join(staging_path, executable)
 
             self.report("bridges.tools.binary_not_found", {"binary_name": binary_name})
 
-            self._download_binary(binary_url, binary_path)
+            # Publish only a complete executable, never an in-progress download.
+            self._download_binary(binary_url, staged_binary_path)
 
             self.report("bridges.tools.binary_downloaded", {"binary_name": binary_name})
-
-            # Delete older versions of this binary
-            self._delete_older_binary_versions(bins_path, executable)
 
             # Make binary executable (Unix systems)
             if not is_windows():
                 self.report(
                     "bridges.tools.making_executable", {"binary_name": binary_name}
                 )
-                os.chmod(binary_path, 0o755)
+                os.chmod(staged_binary_path, 0o755)
 
             # Remove quarantine attribute on macOS to prevent Gatekeeper blocking
             if is_macos():
                 self.report(
                     "bridges.tools.removing_quarantine", {"binary_name": binary_name}
                 )
-                self._remove_quarantine_attribute(binary_path)
+                self._remove_quarantine_attribute(staged_binary_path)
+
+            if not os.path.exists(binary_path):
+                try:
+                    os.replace(staged_binary_path, binary_path)
+                except OSError:
+                    # Windows may reject replacement once another worker has
+                    # published and started using the same executable.
+                    if not os.path.exists(binary_path):
+                        raise
+
+            self._delete_older_binary_versions(bins_path, executable)
 
         except Exception as e:
             self.report(
@@ -1187,6 +1200,8 @@ class BaseTool(ABC):
                 {"binary_name": binary_name, "error": str(e)},
             )
             raise Exception(f"Failed to download binary '{binary_name}': {str(e)}")
+        finally:
+            shutil.rmtree(staging_path, ignore_errors=True)
 
     def _remove_quarantine_attribute(self, file_path: str) -> None:
         """Remove macOS quarantine attribute to prevent Gatekeeper blocking"""

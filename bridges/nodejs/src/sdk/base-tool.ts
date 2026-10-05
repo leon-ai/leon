@@ -1333,35 +1333,51 @@ export abstract class Tool {
     binaryUrl: string,
     executable: string
   ): Promise<void> {
+    const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
+    const stagingPath = path.join(binsPath, `.download-${randomUUID()}`)
+
     try {
-      const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
       const binaryPath = path.join(binsPath, executable)
+      const stagedBinaryPath = path.join(stagingPath, executable)
+      fs.mkdirSync(stagingPath, { recursive: true })
 
       await this.report('bridges.tools.binary_not_found', {
         binary_name: binaryName
       })
 
-      await this.downloadBinary(binaryUrl, binaryPath)
+      // Publish only a complete executable. Parallel workers must never observe
+      // an archive download or extraction in progress as an installed binary.
+      await this.downloadBinary(binaryUrl, stagedBinaryPath)
 
       await this.report('bridges.tools.binary_downloaded', {
         binary_name: binaryName
       })
-
-      // Delete older versions of this binary
-      await this.deleteOlderBinaryVersions(binsPath, executable)
 
       // Make binary executable (Unix systems)
       if (!isWindows()) {
         await this.report('bridges.tools.making_executable', {
           binary_name: binaryName
         })
-        fs.chmodSync(binaryPath, 0o755)
+        fs.chmodSync(stagedBinaryPath, 0o755)
       }
 
       // Remove quarantine attribute on macOS to prevent Gatekeeper blocking
       if (isMacOS()) {
-        await this.removeQuarantineAttribute(binaryPath)
+        await this.removeQuarantineAttribute(stagedBinaryPath)
       }
+
+      if (!fs.existsSync(binaryPath)) {
+        try {
+          fs.renameSync(stagedBinaryPath, binaryPath)
+        } catch (error) {
+          // Windows can reject a rename when another worker published first.
+          if (!fs.existsSync(binaryPath)) {
+            throw error
+          }
+        }
+      }
+
+      await this.deleteOlderBinaryVersions(binsPath, executable)
     } catch (error) {
       await this.report('bridges.tools.download_failed', {
         binary_name: binaryName,
@@ -1370,6 +1386,8 @@ export abstract class Tool {
       throw new Error(
         `Failed to download binary '${binaryName}': ${(error as Error).message}`
       )
+    } finally {
+      fs.rmSync(stagingPath, { recursive: true, force: true })
     }
   }
 
