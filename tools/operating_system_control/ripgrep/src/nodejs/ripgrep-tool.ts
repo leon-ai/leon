@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { TextDecoder } from 'node:util'
+import { randomUUID } from 'node:crypto'
 
+import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { FileHelper } from '@/helpers/file-helper'
@@ -10,7 +12,11 @@ import { runRipgrep } from './lib/run-ripgrep'
 
 const MAX_PATHS = 100
 const MAX_GLOBS = 100
-const MAX_RECORDS = 100_000
+const MAX_RECORDS = 1_000_000
+const MAX_RETAINED_BYTES = 128 * 1_024 * 1_024
+const MAX_PREVIEW_RECORDS = 100
+const MAX_PREVIEW_BYTES = 32_000
+const WRITE_BUFFER_BYTES = 64 * 1_024
 const SEARCH_TIMEOUT_MS = 120_000
 const THREADS = 0
 const FILENAME_DECODER = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true })
@@ -54,6 +60,8 @@ interface SearchResult {
   truncated: boolean
   reason: string | null
   summary: { returnedRecords: number, complete: boolean }
+  preview?: { returnedRecords: number, truncated: boolean }
+  retainedOutput?: { path: string }
 }
 
 /**
@@ -149,7 +157,7 @@ export default class RipgrepTool extends Tool {
   }
 
   /**
-   * Discover filenames with bounded native ripgrep output.
+   * Save the inventory on disk while returning only a small inline preview.
    */
   async listFiles(paths: string[], options: FileOptions = {}): Promise<SearchResult> {
     const prepared = await this.prepare(paths, options, options?.ignoreCase ?? true)
@@ -163,7 +171,7 @@ export default class RipgrepTool extends Tool {
   }
 
   /**
-   * Collect bounded native records without parsing shell output.
+   * Keep the worker result small without limiting the saved search inventory.
    */
   private async collect(
     args: string[],
@@ -172,26 +180,89 @@ export default class RipgrepTool extends Tool {
     field: 'files' | 'matches',
     decode: (record: Buffer) => TextData | MatchData | null
   ): Promise<SearchResult> {
-    const records: (TextData | MatchData)[] = []
-    const outcome = await this.run(args, separator, (record) => {
-      const value = decode(record)
+    const sessionId = this.executionContext?.conversationSessionId
 
-      if (value === null) {
+    if (!sessionId) {
+      throw new Error('Retained search results require a conversation session.')
+    }
+
+    const directory = path.join(
+      PROFILE_SESSIONS_PATH,
+      encodeURIComponent(sessionId),
+      'artifacts',
+      'tool-results'
+    )
+    await fs.mkdir(directory, { recursive: true, mode: 0o700 })
+    const filename = path.join(directory, `${randomUUID()}.json`)
+    const file = await fs.open(filename, 'wx', 0o600)
+    const preview: (TextData | MatchData)[] = []
+    let previewBytes = 0
+    let retainedBytes = 0
+    let records = 0
+    let buffer = ''
+    let bufferedBytes = 0
+
+    try {
+      await file.writeFile(`{"result":{"${field}":[`)
+      const outcome = await this.run(args, separator, async (record) => {
+        const value = decode(record)
+
+        if (value === null) {
+          return true
+        }
+
+        const serialized = JSON.stringify(value)
+        const bytes = Buffer.byteLength(serialized) + 1
+
+        if (records >= MAX_RECORDS || retainedBytes + bytes > MAX_RETAINED_BYTES) {
+          return false
+        }
+
+        buffer += `${records > 0 ? ',' : ''}${serialized}`
+        bufferedBytes += bytes
+        retainedBytes += bytes
+        records += 1
+
+        if (
+          preview.length < MAX_PREVIEW_RECORDS &&
+          previewBytes + bytes <= MAX_PREVIEW_BYTES
+        ) {
+          preview.push(value)
+          previewBytes += bytes
+        }
+
+        // Batch writes rather than issuing one filesystem operation per path.
+        if (bufferedBytes >= WRITE_BUFFER_BYTES) {
+          await file.writeFile(buffer)
+          buffer = ''
+          bufferedBytes = 0
+        }
+
         return true
-      }
-      if (records.length >= MAX_RECORDS) {
-        return false
+      })
+
+      // Cancellation does not publish an orphaned partial inventory.
+      this.executionContext?.signal?.throwIfAborted()
+
+      const metadata = {
+        paths,
+        summary: { returnedRecords: records, complete: !outcome.truncated },
+        ...outcome
       }
 
-      records.push(value)
-      return true
-    })
+      await file.writeFile(`${buffer}],${JSON.stringify(metadata).slice(1)}}`)
+      await file.close()
 
-    return {
-      [field]: records,
-      paths,
-      summary: { returnedRecords: records.length, complete: !outcome.truncated },
-      ...outcome
+      return {
+        [field]: preview,
+        ...metadata,
+        preview: { returnedRecords: preview.length, truncated: preview.length < records },
+        retainedOutput: { path: filename }
+      }
+    } catch (error) {
+      await file.close()
+      await fs.rm(filename, { force: true })
+      throw error
     }
   }
 
@@ -258,7 +329,7 @@ export default class RipgrepTool extends Tool {
   private async run(
     args: string[],
     separator: number,
-    consume: (record: Buffer) => boolean
+    consume: (record: Buffer) => boolean | Promise<boolean>
   ): Promise<{
     truncated: boolean
     reason: string | null

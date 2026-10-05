@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process'
 
-const MAX_OUTPUT_BYTES = 4 * 1_024 * 1_024
+const MAX_OUTPUT_BYTES = 128 * 1_024 * 1_024
 const MAX_RECORD_BYTES = 8 * 1_024 * 1_024
 const MAX_ERROR_BYTES = 16 * 1_024
 
@@ -13,7 +13,7 @@ export async function runRipgrep(
   args: string[],
   timeoutMs: number,
   separator: number,
-  consume: (record: Buffer) => boolean,
+  consume: (record: Buffer) => boolean | Promise<boolean>,
   signal?: AbortSignal
 ): Promise<{ truncated: boolean, reason: string | null }> {
   if (signal?.aborted) {
@@ -53,6 +53,7 @@ export async function runRipgrep(
   })
 
   try {
+    // Await the sink so disk backpressure also bounds stdout buffering.
     for await (const chunk of child.stdout) {
       if (reason) {
         break
@@ -68,7 +69,7 @@ export async function runRipgrep(
           stop('recordSizeLimit')
           break
         }
-        if (reason || !consume(data.subarray(start, end))) {
+        if (reason || !(await consume(data.subarray(start, end)))) {
           stop('recordLimit')
           break
         }

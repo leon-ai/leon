@@ -7,8 +7,32 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
 import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
+import { runRipgrep } from '@@/tools/operating_system_control/ripgrep/src/nodejs/lib/run-ripgrep'
+
 const LARGE_RESULT_BYTES = 4 * 1_024 * 1_024
 
+it.each(['recordLimit', 'timeout', 'canceled'])(
+  'preserves the %s guard while awaiting an asynchronous ripgrep sink',
+  async (reason) => {
+    const controller = new AbortController()
+    const program = reason === 'timeout'
+      ? 'setInterval(() => {}, 1000)'
+      : 'process.stdout.write(Buffer.from([97, 0, 98, 0]))'
+    const consume = vi.fn(async () => {
+      if (reason === 'canceled') {
+        controller.abort()
+        return true
+      }
+
+      return false
+    })
+    expect(await runRipgrep(
+      process.execPath, ['-e', program], reason === 'timeout' ? 100 : 5_000,
+      0, consume, controller.signal
+    )).toEqual({ truncated: true, reason })
+    expect(consume).toHaveBeenCalledTimes(reason === 'timeout' ? 0 : 1)
+  }
+)
 
 let home = ''
 let manager: ToolWorkerManager
@@ -228,4 +252,30 @@ it.skipIf(spawnSync('rg', ['--version']).status !== 0)('executes built-in ripgre
   expect(files.success, files.message).toBe(true)
   expect(files.output['result']).toMatchObject({ truncated: false, files: [{ text: source }] })
 
+  // Long paths exceed the former 4 MiB cap with a modest number of empty files.
+  const directory = path.join(home, ...Array.from({ length: 4 }, () => 'd'.repeat(240)))
+  await fs.mkdir(directory, { recursive: true })
+  const inventory = Array.from({ length: 4_001 }, (_, index) =>
+    path.join(directory, `${'f'.repeat(210)}-${index}.png`)
+  )
+  for (let offset = 0; offset < inventory.length; offset += 64) {
+    await Promise.all(inventory.slice(offset, offset + 64).map((filename) => fs.writeFile(filename, '')))
+  }
+  const listing = await manager.execute({ ...context, functionName: 'listFiles' },
+    [[directory]], () => {}, { concurrency: ToolConcurrency.Parallel })
+  expect(listing.success, listing.message).toBe(true)
+  const saved = listing.output['result'] as {
+    files: { text: string }[]
+    retainedOutput: { path: string }
+  }
+  expect(saved.files.length).toBeLessThan(100)
+  expect(listing.output['result']).toMatchObject({
+    truncated: false,
+    summary: { returnedRecords: inventory.length, complete: true },
+    preview: { truncated: true }
+  })
+  expect(JSON.stringify(listing).length).toBeLessThan(40_000)
+  expect((await fs.stat(saved.retainedOutput.path)).size).toBeGreaterThan(LARGE_RESULT_BYTES)
+  const complete = JSON.parse(await fs.readFile(saved.retainedOutput.path, 'utf8'))
+  expect(complete.result.files.map((file: { text: string }) => file.text).sort()).toEqual(inventory.sort())
 })
