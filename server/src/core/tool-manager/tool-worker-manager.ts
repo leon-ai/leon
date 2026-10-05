@@ -2,8 +2,12 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
-import { CODEBASE_PATH, NODE_RUNTIME_BIN_PATH, NODEJS_BRIDGE_ROOT_PATH,
-  NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH, TSX_CLI_PATH } from '@/constants'
+import {
+  CODEBASE_PATH,
+  NODE_RUNTIME_BIN_PATH,
+  NODEJS_BRIDGE_ROOT_PATH,
+  NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH
+} from '@/constants'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { ToolConcurrency } from '@/types'
 import type { ToolExecutionContext, ToolRuntimeResult } from '@sdk/tool-runtime-types'
@@ -11,6 +15,7 @@ import { ToolRuntimeLifetime, type ToolWorkerResponse } from '@bridge/tool-runti
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
 const DIAGNOSTIC_LIMIT = 16_000
+const TSX_LOADER_URL = import.meta.resolve('tsx')
 
 interface Worker {
   process: ChildProcess
@@ -77,13 +82,25 @@ export class ToolWorkerManager {
   }
 
   private create(context: ToolExecutionContext, key: string): Worker {
-    const child = spawn(NODE_RUNTIME_BIN_PATH, [TSX_CLI_PATH, '--tsconfig',
-      path.join(NODEJS_BRIDGE_ROOT_PATH, 'tsconfig.json'), NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
-      '--runtime', 'tool', '--toolkit', context.toolkitId, '--tool', context.toolId], {
+    // Load TypeScript in the worker itself. The CLI's intermediary process can
+    // exit before a large result finishes forwarding over its second IPC hop.
+    const child = spawn(NODE_RUNTIME_BIN_PATH, [
+      '--import', TSX_LOADER_URL,
+      NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH,
+      '--runtime', 'tool',
+      '--toolkit', context.toolkitId,
+      '--tool', context.toolId
+    ], {
       cwd: NODEJS_BRIDGE_ROOT_PATH,
-      env: { ...RuntimeHelper.getManagedNodeEnvironment(), LEON_CODEBASE_PATH: CODEBASE_PATH,
-        LEON_PROFILE: context.profileName, LEON_SESSION_ID: context.conversationSessionId || '' },
-      windowsHide: true, stdio: ['ignore', 'pipe', 'pipe', 'ipc']
+      env: {
+        ...RuntimeHelper.getManagedNodeEnvironment(),
+        TSX_TSCONFIG_PATH: path.join(NODEJS_BRIDGE_ROOT_PATH, 'tsconfig.json'),
+        LEON_CODEBASE_PATH: CODEBASE_PATH,
+        LEON_PROFILE: context.profileName,
+        LEON_SESSION_ID: context.conversationSessionId || ''
+      },
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     })
     const worker: Worker = {
       process: child,

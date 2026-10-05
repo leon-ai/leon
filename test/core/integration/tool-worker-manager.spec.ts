@@ -7,6 +7,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
 import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
+const LARGE_RESULT_BYTES = 4 * 1_024 * 1_024
+
 
 let home = ''
 let manager: ToolWorkerManager
@@ -25,6 +27,23 @@ it('isolates concurrent calls even when a tool normally retains instance state',
     .not.toBe((second.output['result'] as { pid: number }).pid)
   expect((await fs.readFile(path.join(home, 'disposed'), 'utf8')).trim().split('\n'))
     .toEqual(['a', 'a'])
+})
+
+it('delivers a large result before retiring a one-shot worker', async () => {
+  await fixture(false)
+
+  const result = await manager.execute({
+    toolkitId: 'fixture',
+    toolId: 'state',
+    functionName: 'largeResult',
+    profileName: 'a',
+    conversationSessionId: 'large-result',
+    parameters: {}
+  }, [LARGE_RESULT_BYTES], () => {})
+
+  expect(result.success, result.message).toBe(true)
+  expect(result.output['result']).toEqual({ payload: 'x'.repeat(LARGE_RESULT_BYTES) })
+  expect(await fs.readFile(path.join(home, 'disposed'), 'utf8')).toBe('a\n')
 })
 
 it('runs two workers at once and cancellation affects only the selected call', async () => {
@@ -96,6 +115,9 @@ export default class Fixture extends Tool {
     this.log('fixture-waiting')
     await new Promise((resolve) => this.executionContext.signal.addEventListener('abort', resolve, { once: true }))
     return { interrupted: true }
+  }
+  largeResult(bytes) {
+    return { payload: 'x'.repeat(bytes) }
   }
   async readInput() {
     const command = [
