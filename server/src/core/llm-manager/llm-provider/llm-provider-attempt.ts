@@ -87,6 +87,7 @@ export async function runCompletionAttempt(
   const completionStartedAt = Date.now()
   let generationStartedAt: number | null = null
   let firstTokenAt: number | undefined
+  let accounting: CompletionAccounting | undefined
   let firstEventAt: number | undefined
   let streamOpenedAt: number | undefined
   let lastEventAt: number | undefined
@@ -116,6 +117,7 @@ export async function runCompletionAttempt(
       reasoningEffort: completionParams.reasoningEffort,
       serviceTier: completionParams.serviceTier,
       transport,
+      accounting,
       outcome,
       connectionErrorCode: getConnectionErrorCode(error),
       requestId,
@@ -446,13 +448,11 @@ export async function runCompletionAttempt(
     return null
   }
 
-  logAttempt('completed')
   removeCallerAbortListener()
 
   let usedInputTokens = 0
   let usedOutputTokens = 0
   let generationDurationMs = 0
-  let accounting: CompletionAccounting | undefined
   let providerDecodeDurationMs: number | undefined
   let providerTokensPerSecond: number | undefined
   let toolCalls: OpenAIToolCall[] | undefined
@@ -626,6 +626,8 @@ export async function runCompletionAttempt(
   }
   clearStreamStallTimeout()
   rejectStreamStall = null
+
+  logAttempt('completed')
 
   // Guard against silent empty provider responses which otherwise trigger
   // an unnecessary planning fallback and double latency.

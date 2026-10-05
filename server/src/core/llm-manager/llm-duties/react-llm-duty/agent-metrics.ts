@@ -89,6 +89,7 @@ export interface MeasureVisibleOutputOptions {
 }
 
 interface DeriveLLMMetricsOptions extends MeasureVisibleOutputOptions {
+  turnTtftMs?: number | undefined
   usageAccounting?: UsageAccounting | undefined
   completionCount: number
   providerName: LLMProviders
@@ -445,7 +446,7 @@ export function deriveLLMMetrics(
     options.finalAnswerMetrics?.finalAnswerDurationMs ?? totalGenerationDurationMs
   const finalAnswerRequestDurationMs =
     options.finalAnswerMetrics?.requestDurationMs ?? finalAnswerDurationMs
-  const ttftMs = options.finalAnswerMetrics?.ttftMs ?? 0
+  const ttftMs = options.turnTtftMs ?? options.finalAnswerMetrics?.ttftMs ?? 0
   const finalAnswerInputTokens =
     (options.finalAnswerMetrics?.inputTokens ?? 0) > 0
       ? (options.finalAnswerMetrics?.inputTokens as number)

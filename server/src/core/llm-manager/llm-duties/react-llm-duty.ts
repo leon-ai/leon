@@ -180,10 +180,14 @@ export class ReActLLMDuty extends LLMDuty {
   private finalAnswerMetrics: FinalAnswerMetricsSnapshot | null = null
 
   private executionStartedAt = 0
+  private firstOutputAt: number | null = null
   private hasExplicitMemoryWrite = false
   private reasoningGenerationId: string | null = null
   private hasFinalizedAnswer = false
   private readonly answerStream = new AgentAnswerStream((payload) => {
+    if (payload.token) {
+      this.firstOutputAt ??= Date.now()
+    }
     SOCKET_SERVER.emitToChatClients('llm-token', payload)
   })
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
@@ -246,6 +250,7 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.info('Executing...')
 
     this.executionStartedAt = Date.now()
+    this.firstOutputAt = null
     this.completionCount = 0
     this.continuationSummaryFailed = false
     this.totalInputTokens = 0
@@ -1132,6 +1137,9 @@ export class ReActLLMDuty extends LLMDuty {
         ...(shouldEmitReasoning && reasoningGenerationId
           ? {
               onReasoningToken: (reasoningChunk: string): void => {
+                if (reasoningChunk) {
+                  this.firstOutputAt ??= Date.now()
+                }
                 this.emitReasoningToken(
                   reasoningChunk,
                   reasoningGenerationId,
@@ -1638,6 +1646,9 @@ export class ReActLLMDuty extends LLMDuty {
       totalOutputChars: this.totalOutputChars,
       totalGenerationDurationMs: this.totalGenerationDurationMs,
       turnDurationMs: Math.max(Date.now() - this.executionStartedAt, 0),
+      turnTtftMs: this.firstOutputAt === null
+        ? undefined
+        : Math.max(this.firstOutputAt - this.executionStartedAt, 0),
       phaseMetrics: this.phaseMetrics,
       finalAnswerMetrics: this.finalAnswerMetrics,
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
