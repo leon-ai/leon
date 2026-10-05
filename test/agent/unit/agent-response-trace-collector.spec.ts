@@ -38,6 +38,8 @@ describe('AgentResponseTraceCollector', () => {
         name: 'computer_use.cua.get_screenshot',
         status: 'running',
         toolCallTitle: 'Inspect the current screen',
+        toolkitName: 'Computer Use',
+        toolName: 'Cua',
         input: { display: 0 }
       }
     })
@@ -71,6 +73,8 @@ describe('AgentResponseTraceCollector', () => {
           name: 'computer_use.cua.get_screenshot',
           status: 'success',
           toolCallTitle: 'Inspect the current screen',
+          toolkitName: 'Computer Use',
+          toolName: 'Cua',
           startedAt: 1_000,
           durationMs: 138,
           input: { display: 0 },
@@ -79,6 +83,13 @@ describe('AgentResponseTraceCollector', () => {
       ],
       metrics: { totalTokens: 42 }
     })
+    const trace = collector.snapshot({})
+    expect(serializeAgentTrace(trace, false).tool_calls[0]).toMatchObject({
+      toolkit_name: 'Computer Use',
+      tool_name: 'Cua'
+    })
+    expect(deserializeAgentTrace(serializeAgentTrace(trace, false)).toolCalls)
+      .toEqual(trace.toolCalls)
 
     now.mockRestore()
   })

@@ -97,7 +97,10 @@ function createToolGroupId(
   return `agent_${toolkitId}_${toolId}_${functionName}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 
-function getToolDisplayContext(
+/**
+ * Resolves the registry labels and icons shared by live cards and saved traces.
+ */
+export function getToolDisplayContext(
   toolkitId: string,
   toolId: string,
   functionName: string
@@ -421,6 +424,8 @@ export async function runToolExecution(
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
+    toolkitName: toolDisplayContext.toolkitName,
+    toolName: toolDisplayContext.toolName,
     ...(toolCallTitle ? { toolCallTitle } : {}),
     status: 'running',
     ...(toolDisplayContext.toolkitIconName
@@ -458,6 +463,8 @@ export async function runToolExecution(
     onProgressEvent?.({
       id: toolGroupId,
       name: qualifiedName,
+      toolkitName: toolDisplayContext.toolkitName,
+      toolName: toolDisplayContext.toolName,
       ...(toolCallTitle ? { toolCallTitle } : {}),
       status: 'running',
       ...(toolDisplayContext.toolkitIconName
@@ -590,6 +597,8 @@ export async function runToolExecution(
     onProgressEvent?.({
       id: toolGroupId,
       name: qualifiedName,
+      toolkitName: toolDisplayContext.toolkitName,
+      toolName: toolDisplayContext.toolName,
       ...(toolCallTitle ? { toolCallTitle } : {}),
       status: 'error',
       durationMs,
@@ -684,6 +693,8 @@ export async function runToolExecution(
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
+    toolkitName: toolDisplayContext.toolkitName,
+    toolName: toolDisplayContext.toolName,
     ...(toolCallTitle ? { toolCallTitle } : {}),
     status: effectiveStatus === 'error' ? 'error' : 'success',
     durationMs,
@@ -707,6 +718,8 @@ export async function runToolExecution(
     return {
       execution: {
         function: qualifiedName,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
         status: 'error',
         observation: ownerActionHandoff.draft,
         requestedToolInput,
@@ -725,6 +738,8 @@ export async function runToolExecution(
     return {
       execution: {
         function: qualifiedName,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
         status: 'success',
         observation: finalAnswer,
         requestedToolInput,
@@ -753,6 +768,8 @@ export async function runToolExecution(
     return {
       execution: {
         function: qualifiedName,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
         status: 'error',
         observation: JSON.stringify({
           connection_required: true,
@@ -791,6 +808,8 @@ export async function runToolExecution(
         function: qualifiedName,
         status: 'error',
         observation: `Missing settings: ${missingSettings.join(', ')}`,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
         requestedToolInput,
         ...(stepLabel ? { stepLabel } : {})
       },
@@ -832,6 +851,8 @@ export async function runToolExecution(
   return {
     execution: {
       function: qualifiedName,
+      toolkitName: toolDisplayContext.toolkitName,
+      toolName: toolDisplayContext.toolName,
       status: effectiveStatus,
       observation,
       requestedToolInput,

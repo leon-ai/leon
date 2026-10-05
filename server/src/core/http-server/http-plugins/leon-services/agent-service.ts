@@ -147,6 +147,12 @@ export async function runAgent(
             const toolCall: HTTPPluginToolCall = {
               id: event.toolCall.id,
               name: event.toolCall.name,
+              ...(event.toolCall.toolkitName
+                ? { toolkit_name: event.toolCall.toolkitName }
+                : {}),
+              ...(event.toolCall.toolName
+                ? { tool_name: event.toolCall.toolName }
+                : {}),
               ...(event.toolCall.toolCallTitle
                 ? { tool_call_title: event.toolCall.toolCallTitle }
                 : {}),

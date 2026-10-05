@@ -936,6 +936,16 @@ export default class ToolUIHandler {
   }
 
   /**
+   * Provide readable toolkit/tool labels when older traces lack display names.
+   */
+  humanizeToolName(value) {
+    return this.humanizeFunctionName(value)
+      .split(' ')
+      .map((word) => this.humanizeFunctionName(word))
+      .join(' ')
+  }
+
+  /**
    * Produce a compact preview string for nested values.
    */
   stringifyCompact(value) {
@@ -1014,8 +1024,10 @@ export default class ToolUIHandler {
       }
 
       const nameParts = toolCall.name.split('.')
-      const toolkitName = nameParts[0] || 'Leon'
-      const toolName = nameParts[1] || toolkitName
+      const toolkitName = toolCall.toolkitName ||
+        this.humanizeToolName(nameParts[0] || 'Leon')
+      const toolName = toolCall.toolName ||
+        this.humanizeToolName(nameParts[1] || toolkitName)
       const functionName = nameParts.at(-1) || toolCall.name
       const toolGroupId = toolCall.id || `history-${toolCall.name}`
       const sharedData = {

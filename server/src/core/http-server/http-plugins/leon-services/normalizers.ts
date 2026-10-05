@@ -46,6 +46,16 @@ export function normalizeToolCalls(
       const observation = getStringField(record, 'observation')
       const stepLabel = getStringField(record, 'stepLabel')
       const toolCallTitle = getStringField(record, 'toolCallTitle')
+      const toolkitName = getStringField(record, 'toolkitName')
+      const toolName = getStringField(record, 'toolName')
+
+      if (toolkitName) {
+        toolCall.toolkit_name = toolkitName
+      }
+
+      if (toolName) {
+        toolCall.tool_name = toolName
+      }
 
       if (toolCallTitle) {
         toolCall.tool_call_title = toolCallTitle

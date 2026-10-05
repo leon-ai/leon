@@ -88,8 +88,8 @@ describe('conversation activity replay', () => {
         toolCalls: [{
           id: 't1',
           name: 'test.lookup.run',
-          
-          
+          toolkitName: 'Test Toolkit',
+          toolName: 'Official Lookup',
           toolCallTitle: 'Look up the requested value',
           stepLabel: 'test.lookup.run',
           status: outcome === 'error' ? 'error' : 'success',
@@ -102,11 +102,30 @@ describe('conversation activity replay', () => {
 
       expect(card.durationLabel.hidden).toBe(false)
       expect(card.title.textContent).toBe('Look up the requested value')
-      expect(card.subtitle.textContent).toBe('test toolkit • lookup • Run')
+      expect(card.subtitle.textContent).toBe('Test Toolkit toolkit • Official Lookup • Run')
       expect(card.durationLabel.textContent).toBe(
         outcome === 'background' ? '1.4 s to return' : '1.4 s'
       )
     }
   )
 
+  it('uses readable toolkit and tool labels when older traces lack display names', () => {
+    const handler = Object.create(ToolUIHandler.prototype)
+    handler.handleToolOutput = vi.fn()
+    handler.replayAgentResponseTrace({
+      toolCalls: [{
+        id: 'old',
+        name: 'system_utilities.tool_executions.read',
+        status: 'success'
+      }]
+    })
+
+    for (const [data] of handler.handleToolOutput.mock.calls) {
+      expect(data).toMatchObject({
+        toolkitName: 'System Utilities',
+        toolName: 'Tool Executions',
+        functionName: 'read'
+      })
+    }
+  })
 })

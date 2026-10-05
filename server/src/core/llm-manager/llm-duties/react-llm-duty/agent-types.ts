@@ -58,6 +58,8 @@ export interface FunctionConfig {
 
 export interface ExecutionRecord {
   function: string
+  toolkitName?: string
+  toolName?: string
   status: string
   observation: string
   startedAt?: number

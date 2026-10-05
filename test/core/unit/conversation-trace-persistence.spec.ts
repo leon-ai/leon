@@ -311,6 +311,8 @@ describe('conversation trace persistence', () => {
         toolCalls: [{
           id: 'tool', name: 'test.lookup', status: 'success', startedAt: 2_000,
           toolCallTitle: 'Look up the requested value',
+          toolkitName: 'Test Toolkit',
+          toolName: 'Official Lookup',
           durationMs: 138
         }],
         progressMessages: [{

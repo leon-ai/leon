@@ -149,6 +149,7 @@ it.each(['success', 'error', 'background', 'throw'])(
     expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
       status,
       toolCallTitle,
+      ...displayNames,
       durationMs: 1_234
     }))
     expect(coreMocks.emitAnswerToChatClients).toHaveBeenLastCalledWith(
@@ -156,7 +157,10 @@ it.each(['success', 'error', 'background', 'throw'])(
     )
     expect(onProgress.mock.calls.every(([event]) => event.toolCallTitle === toolCallTitle))
       .toBe(true)
-
+    expect(onProgress.mock.calls.every(([event]) =>
+      event.toolkitName === displayNames.toolkitName &&
+      event.toolName === displayNames.toolName
+    )).toBe(true)
 
     if (outcome === 'background') {
       const callCount = onProgress.mock.calls.length
@@ -571,6 +575,9 @@ describe('continuous agent loop', () => {
   })
 
   it('keeps reasoning from successive model calls separate in live events and saved traces', async () => {
+    const displayNames = { toolkitName: 'Test Toolkit', toolName: 'Official Lookup' }
+    coreMocks.resolveToolById.mockReturnValue(displayNames)
+
     const modelState = CONFIG_STATE.getModelState()
     vi.spyOn(modelState, 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
     vi.spyOn(modelState, 'getAgentTarget').mockReturnValue({
@@ -597,6 +604,7 @@ describe('continuous agent loop', () => {
       .mockImplementationOnce(async (_messages, params) => {
         params.onReasoningToken('Checking ')
         params.onReasoningToken('the weather.')
+        params.onToolCall(call)
 
         return { output: '', toolCalls: [call] }
       })
@@ -611,8 +619,20 @@ describe('continuous agent loop', () => {
       transcript,
       'Check the weather.',
       catalog.tools,
-      { isRecoveryAttempt: false }
+      { isRecoveryAttempt: false },
+      undefined,
+      catalog.functionsByToolName
     )
+    expect(duty['responseTraceCollector'].snapshot({}).toolCalls[0]).toMatchObject({
+      ...displayNames,
+      status: 'running'
+    })
+    duty['closeStreamedToolCalls']()
+    expect(duty['responseTraceCollector'].snapshot({}).toolCalls[0]).toMatchObject({
+      ...displayNames,
+      status: 'error'
+    })
+
     now.mockReturnValue(2_000)
     duty['responseTraceCollector'].record({
       type: 'tool_call',

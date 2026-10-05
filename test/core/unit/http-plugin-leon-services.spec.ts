@@ -513,6 +513,8 @@ describe('HTTP plugin Leon services', () => {
           {
             function: 'structured_knowledge.memory.write',
             toolCallTitle: 'Remember your city',
+            toolkitName: 'Structured Knowledge',
+            toolName: 'Memory',
             status: 'success',
             observation
           }
@@ -528,6 +530,8 @@ describe('HTTP plugin Leon services', () => {
 
     expect(turn.response_trace.tool_calls[0]?.tool_call_title).toBe('Remember your city')
     expect(turn.response_trace.tool_calls[0]).toMatchObject({
+      toolkit_name: 'Structured Knowledge',
+      tool_name: 'Memory'
     })
 
     expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual([
@@ -608,6 +612,16 @@ describe('HTTP plugin Leon services', () => {
         type: 'progress_message',
         message: { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }
       })
+      onProgress({
+        type: 'tool_call',
+        toolCall: {
+          id: 'tool-1',
+          name: 'system_utilities.tool_executions.read',
+          toolkitName: 'System Utilities',
+          toolName: 'Tool Executions',
+          status: 'success'
+        }
+      })
     })
     const turn = await runAgent({
       profile_id: 'progress-owner', query: 'Investigate this issue.', create_session: true, request_id: 'turn-1'
@@ -623,6 +637,14 @@ describe('HTTP plugin Leon services', () => {
       turn_id: 'turn-1', response_id: 'turn-1', data: { message: progress }
     })
     expect(turn.response_trace.progress_messages).toEqual([progress])
+    const toolCall = {
+      toolkit_name: 'System Utilities',
+      tool_name: 'Tool Executions'
+    }
+    expect(turn.response_trace.tool_calls[0]).toMatchObject(toolCall)
+    expect(events.find((event) => event['type'] === 'tool_call')).toMatchObject({
+      data: { tool_call: toolCall }
+    })
     expect(events.filter((event) => event['type'] === 'final_answer')).toHaveLength(1)
   })
 

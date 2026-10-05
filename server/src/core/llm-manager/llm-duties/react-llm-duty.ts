@@ -85,6 +85,7 @@ import {
 import { parseToolCallArguments } from './react-llm-duty/agent-utils'
 import {
   runToolExecution,
+  getToolDisplayContext,
   emitToolExecutionInputToWebApp,
   emitToolExecutionOutputToWebApp
 } from './react-llm-duty/tool-execution'
@@ -718,6 +719,28 @@ export class ReActLLMDuty extends LLMDuty {
    * Records user-visible progress before forwarding it to an optional host.
    */
   private reportProgressEvent(event: AgentRunProgressEvent): void {
+    // Argument previews and interrupted proposals can end before dispatch.
+    // Give those traces the same registry labels as executed calls.
+    if (
+      event.type === 'tool_call' &&
+      (!event.toolCall.toolkitName || !event.toolCall.toolName)
+    ) {
+      const [toolkitId, toolId, functionName] = event.toolCall.name.split('.')
+
+      if (toolkitId && toolId && functionName) {
+        const display = getToolDisplayContext(toolkitId, toolId, functionName)
+
+        event = {
+          ...event,
+          toolCall: {
+            ...event.toolCall,
+            toolkitName: event.toolCall.toolkitName || display.toolkitName,
+            toolName: event.toolCall.toolName || display.toolName
+          }
+        }
+      }
+    }
+
     this.responseTraceCollector.record(event)
     this.scheduleTraceSave()
     this.onProgressEvent?.(event)

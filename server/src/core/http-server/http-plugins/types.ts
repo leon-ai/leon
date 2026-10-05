@@ -44,6 +44,8 @@ export interface HTTPPluginToolCall {
   id?: string
   name: string
   tool_call_title?: string
+  toolkit_name?: string
+  tool_name?: string
   status: 'running' | 'success' | 'error'
   toolkit_icon_name?: string
   tool_icon_name?: string

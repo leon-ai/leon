@@ -36,6 +36,8 @@ export function serializeAgentTrace(
     tool_calls: trace.toolCalls.map((toolCall) => ({
       id: toolCall.id,
       name: toolCall.name,
+      ...(toolCall.toolkitName ? { toolkit_name: toolCall.toolkitName } : {}),
+      ...(toolCall.toolName ? { tool_name: toolCall.toolName } : {}),
       ...(toolCall.toolCallTitle
         ? { tool_call_title: toolCall.toolCallTitle }
         : {}),
@@ -94,6 +96,8 @@ export function deserializeAgentTrace(
     toolCalls: trace.tool_calls.map((toolCall) => ({
       id: toolCall.id || toolCall.name,
       name: toolCall.name,
+      ...(toolCall.toolkit_name ? { toolkitName: toolCall.toolkit_name } : {}),
+      ...(toolCall.tool_name ? { toolName: toolCall.tool_name } : {}),
       ...(toolCall.tool_call_title
         ? { toolCallTitle: toolCall.tool_call_title }
         : {}),
