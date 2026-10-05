@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { SatelliteArtifactBundle } from '@/core/satellite/types'
-import type { ToolExecutionResult } from '@/core/tool-executor'
+import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 
 const MAX_ARTIFACT_BYTES = 8 * 1_024 * 1_024
 const MAX_ARTIFACT_ENTRIES = 64

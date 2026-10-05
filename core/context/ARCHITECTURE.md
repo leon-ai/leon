@@ -1,9 +1,9 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-10-04T18:57:48+08:00
+- Generated at: 2026-10-05T21:41:11+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
-- Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `toolkit-registry.ts`, `tool-executor.ts`.
+- Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
 ## Core Principles
 - Explicit tools over implicit behavior: Leon calls declared tools/functions instead of free-form shell logic whenever possible.
 - Progressive grounding: Leon prefers context and memory tools first, then shell only when no dedicated tool can satisfy the request.

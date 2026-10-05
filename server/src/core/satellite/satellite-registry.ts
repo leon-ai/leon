@@ -12,7 +12,7 @@ import type {
   ToolExecutionInput,
   ToolExecutionResult,
   ToolRuntimeProgress
-} from '@/core/tool-executor'
+} from '@/core/tool-manager/tool-executor'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { getSatelliteArtifactRoot, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
 import { parseSatelliteContext, SATELLITE_CONTEXT_MAX_AGE_MS, type SatelliteContextSnapshot } from '@/core/satellite/satellite-context'

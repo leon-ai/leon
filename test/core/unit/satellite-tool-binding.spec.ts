@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import ToolkitRegistry from '@/core/toolkit-registry'
+import ToolkitRegistry from '@/core/tool-manager/toolkit-registry'
 import type { SatelliteToolkitDefinition } from '@/core/satellite/types'
 
 vi.mock('@/constants', () => ({ TOOLS_PATH: '/unused' }))

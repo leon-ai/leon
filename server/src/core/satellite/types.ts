@@ -2,7 +2,7 @@ import type {
   ToolExecutionInput,
   ToolExecutionResult,
   ToolRuntimeProgress
-} from '@/core/tool-executor'
+} from '@/core/tool-manager/tool-executor'
 
 export const SATELLITE_PROTOCOL_VERSION = 2
 // Visual tool results include base64 screenshots, unlike ordinary chat events.

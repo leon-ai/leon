@@ -2,7 +2,7 @@ import os from 'node:os'
 
 import { describe, expect, it, vi } from 'vitest'
 
-import ToolExecutor from '@/core/tool-executor'
+import ToolExecutor from '@/core/tool-manager/tool-executor'
 
 interface FilesystemValueNormalizer {
   normalizeFilesystemValues(value: unknown): unknown

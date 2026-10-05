@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { Artifact, ArtifactFile } from '@/core/artifacts/artifact-types'
-import type { ToolExecutionResult } from '@/core/tool-executor'
+import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 
 /**
  * Streams explicit deliverables over authenticated HTTP; screenshots retain the

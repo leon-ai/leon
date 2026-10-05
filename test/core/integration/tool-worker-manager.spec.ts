@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { ToolWorkerManager } from '@/core/tool-worker-manager'
+import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
 import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 
 let home = ''

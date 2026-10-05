@@ -5,7 +5,7 @@ import { SATELLITE_EVENTS } from '@/core/satellite/types'
 import * as artifactTransfer from '@/core/satellite/satellite-artifacts'
 import type { SatelliteToolInvocation } from '@/core/satellite/types'
 import { SATELLITE_CONTEXT_MAX_AGE_MS } from '@/core/satellite/satellite-context'
-import type { ToolExecutionResult } from '@/core/tool-executor'
+import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import {
   getActiveProfileName,
   runWithProfileContext
