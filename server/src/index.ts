@@ -50,6 +50,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { PROVIDER_REQUESTS } from '@/core/llm-manager/provider-requests'
 
 const SHUTDOWN_FORCE_TIMEOUT_MS = 5_000
 
@@ -273,6 +274,7 @@ async function bootstrap(): Promise<void> {
 
     isShuttingDown = true
     LLM_PROVIDER.dispose()
+    PROVIDER_REQUESTS.close()
 
     if (global.pythonTCPServerProcess?.pid) {
       kill(global.pythonTCPServerProcess.pid as number)

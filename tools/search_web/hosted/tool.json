@@ -3,7 +3,7 @@
   "tool_id": "hosted",
   "toolkit_id": "search_web",
   "name": "Hosted LLM Web",
-  "description": "Search and read URLs through the active provider using its configured API key. Fetch support differs from search: DeepSeek supports native search only.",
+  "description": "Search and read URLs through the active provider using its selected profile connection. Fetch support differs from search: DeepSeek supports native search only.",
   "icon_name": "global-line",
   "author": {
     "name": "Louis Grenard",
@@ -12,7 +12,7 @@
   },
   "functions": {
     "searchWeb": {
-      "description": "Search the web using the active supported provider and its configured API key. Prefer this for ordinary web searches. OpenRouter selects native search or its external fallback; Kimi returns ranked source passages for you to synthesize.",
+      "description": "Search the web using the active supported provider and its selected profile connection. Prefer this for ordinary web searches. OpenRouter selects native search or its external fallback; Kimi returns ranked source passages for you to synthesize.",
       "hooks": {
         "post_execution": {
           "response_jq": ".result.content"
@@ -59,7 +59,7 @@
       "progressive_guidance": "Kimi uses provider moonshotai and the standalone search API. Its model, temperature, and max_output_tokens options do not affect retrieval. Other providers use the selected model for a search-backed answer. If the provider/model rejects search, report the concrete error before choosing another search tool."
     },
     "searchOpenAI": {
-      "description": "Search the web using OpenAI's native hosted web search and the configured LEON_OPENAI_API_KEY.",
+      "description": "Search the web using OpenAI's native hosted web search and the selected OpenAI profile connection.",
       "hooks": {
         "post_execution": {
           "response_jq": ".result.content"
@@ -93,7 +93,7 @@
       }
     },
     "searchAnthropic": {
-      "description": "Search the web using Anthropic's native hosted web search and the configured LEON_ANTHROPIC_API_KEY.",
+      "description": "Search the web using Anthropic's native hosted web search and the selected Anthropic profile connection.",
       "hooks": {
         "post_execution": {
           "response_jq": ".result.content"
