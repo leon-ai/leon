@@ -1,0 +1,240 @@
+{
+  "orderCount": 100000,
+  "productCount": 10000,
+  "sources": [
+    {
+      "name": "orders",
+      "path": "orders.csv"
+    },
+    {
+      "name": "products",
+      "path": "products.json"
+    }
+  ],
+  "expectedRows": [
+    {
+      "category": "Beauty",
+      "region": "APAC",
+      "order_count": 1937,
+      "units": 5705,
+      "revenue_cents": 108594282
+    },
+    {
+      "category": "Beauty",
+      "region": "EU",
+      "order_count": 1696,
+      "units": 5009,
+      "revenue_cents": 94485538
+    },
+    {
+      "category": "Beauty",
+      "region": "LATAM",
+      "order_count": 1934,
+      "units": 5707,
+      "revenue_cents": 107710390
+    },
+    {
+      "category": "Beauty",
+      "region": "NA",
+      "order_count": 1935,
+      "units": 5702,
+      "revenue_cents": 110761500
+    },
+    {
+      "category": "Books",
+      "region": "APAC",
+      "order_count": 1938,
+      "units": 5715,
+      "revenue_cents": 108270722
+    },
+    {
+      "category": "Books",
+      "region": "EU",
+      "order_count": 1695,
+      "units": 4999,
+      "revenue_cents": 92577850
+    },
+    {
+      "category": "Books",
+      "region": "LATAM",
+      "order_count": 1934,
+      "units": 5693,
+      "revenue_cents": 110053334
+    },
+    {
+      "category": "Books",
+      "region": "NA",
+      "order_count": 1935,
+      "units": 5715,
+      "revenue_cents": 108327850
+    },
+    {
+      "category": "Clothing",
+      "region": "APAC",
+      "order_count": 1695,
+      "units": 4996,
+      "revenue_cents": 93361860
+    },
+    {
+      "category": "Clothing",
+      "region": "EU",
+      "order_count": 1937,
+      "units": 5708,
+      "revenue_cents": 110267812
+    },
+    {
+      "category": "Clothing",
+      "region": "LATAM",
+      "order_count": 1935,
+      "units": 5712,
+      "revenue_cents": 107806944
+    },
+    {
+      "category": "Clothing",
+      "region": "NA",
+      "order_count": 1935,
+      "units": 5705,
+      "revenue_cents": 107929059
+    },
+    {
+      "category": "Electronics",
+      "region": "APAC",
+      "order_count": 1935,
+      "units": 5704,
+      "revenue_cents": 107857408
+    },
+    {
+      "category": "Electronics",
+      "region": "EU",
+      "order_count": 1937,
+      "units": 5709,
+      "revenue_cents": 107271164
+    },
+    {
+      "category": "Electronics",
+      "region": "LATAM",
+      "order_count": 1934,
+      "units": 5709,
+      "revenue_cents": 107428932
+    },
+    {
+      "category": "Electronics",
+      "region": "NA",
+      "order_count": 1694,
+      "units": 4993,
+      "revenue_cents": 94759108
+    },
+    {
+      "category": "Grocery",
+      "region": "APAC",
+      "order_count": 1694,
+      "units": 4997,
+      "revenue_cents": 95936931
+    },
+    {
+      "category": "Grocery",
+      "region": "EU",
+      "order_count": 1938,
+      "units": 5713,
+      "revenue_cents": 108980159
+    },
+    {
+      "category": "Grocery",
+      "region": "LATAM",
+      "order_count": 1934,
+      "units": 5696,
+      "revenue_cents": 109737152
+    },
+    {
+      "category": "Grocery",
+      "region": "NA",
+      "order_count": 1935,
+      "units": 5711,
+      "revenue_cents": 107396817
+    },
+    {
+      "category": "Home",
+      "region": "APAC",
+      "order_count": 1935,
+      "units": 5703,
+      "revenue_cents": 107688743
+    },
+    {
+      "category": "Home",
+      "region": "EU",
+      "order_count": 1937,
+      "units": 5716,
+      "revenue_cents": 107695724
+    },
+    {
+      "category": "Home",
+      "region": "LATAM",
+      "order_count": 1693,
+      "units": 4994,
+      "revenue_cents": 94524954
+    },
+    {
+      "category": "Home",
+      "region": "NA",
+      "order_count": 1936,
+      "units": 5705,
+      "revenue_cents": 108544665
+    },
+    {
+      "category": "Sports",
+      "region": "APAC",
+      "order_count": 1936,
+      "units": 5713,
+      "revenue_cents": 109809144
+    },
+    {
+      "category": "Sports",
+      "region": "EU",
+      "order_count": 1938,
+      "units": 5715,
+      "revenue_cents": 108023488
+    },
+    {
+      "category": "Sports",
+      "region": "LATAM",
+      "order_count": 1934,
+      "units": 5701,
+      "revenue_cents": 107946632
+    },
+    {
+      "category": "Sports",
+      "region": "NA",
+      "order_count": 1694,
+      "units": 4991,
+      "revenue_cents": 94228120
+    },
+    {
+      "category": "Toys",
+      "region": "APAC",
+      "order_count": 1936,
+      "units": 5709,
+      "revenue_cents": 109890801
+    },
+    {
+      "category": "Toys",
+      "region": "EU",
+      "order_count": 1937,
+      "units": 5707,
+      "revenue_cents": 108381311
+    },
+    {
+      "category": "Toys",
+      "region": "LATAM",
+      "order_count": 1692,
+      "units": 4987,
+      "revenue_cents": 94189823
+    },
+    {
+      "category": "Toys",
+      "region": "NA",
+      "order_count": 1937,
+      "units": 5721,
+      "revenue_cents": 108120949
+    }
+  ]
+}
