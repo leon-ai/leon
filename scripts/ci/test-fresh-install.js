@@ -22,6 +22,7 @@ const INFERENCE_SCRIPT = 'scripts/ci/fresh-install-inferences.ts'
 const DEFAULT_LOG_PATH = '/tmp/leon-fresh-install.log'
 const MODULES_STATE_PATH = path.join('node_modules', '.modules.yaml')
 const SERVER_READY_MESSAGE = 'Server is available at '
+const INSTALL_OUTPUT_RESUME_MARKER = 'Base Setup'
 const JQ_SENTINEL_INPUT = {
   lifecycleScripts: 'available'
 }
@@ -60,12 +61,13 @@ const PROMPTS = [
     response: null,
     required: true
   },
-  {
-    name: 'voice',
-    text: 'Do you want to talk to me with your voice now?',
-    response: 'n\r',
-    required: true
-  },
+  // Voice setup is paused; retain its prompt for when the installer restores it.
+  // {
+  //   name: 'voice',
+  //   text: 'Do you want to talk to me with your voice now?',
+  //   response: 'n\r',
+  //   required: true
+  // },
   {
     name: 'finish',
     text: 'What do you want to do next?',
@@ -203,15 +205,20 @@ function runInteractiveInstall(environment, apiKey, logPath) {
       // The text prompt echoes the key. Omit that entire phase, including
       // partial terminal redraws that ordinary full-secret masking misses.
       let visibleOutput = chunk.toString()
+
       if (hidingKeyInput) {
-        const voicePrompt = PROMPTS.find((prompt) => prompt.name === 'voice').text
-        const voiceIndex = normalizeOutput(`${recentOutput}${chunk}`).indexOf(voicePrompt)
-        if (voiceIndex < 0) visibleOutput = ''
-        else {
+        // Base setup follows the questions even while optional prompts are hidden.
+        const normalizedOutput = normalizeOutput(`${recentOutput}${chunk}`)
+        const resumeIndex = normalizedOutput.indexOf(INSTALL_OUTPUT_RESUME_MARKER)
+
+        if (resumeIndex < 0) {
+          visibleOutput = ''
+        } else {
           hidingKeyInput = false
-          visibleOutput = normalizeOutput(`${recentOutput}${chunk}`).slice(voiceIndex)
+          visibleOutput = normalizedOutput.slice(resumeIndex)
         }
       }
+
       visibleOutput = visibleOutput.replaceAll(apiKey, '[REDACTED]')
       destination.write(visibleOutput)
       logStream.write(visibleOutput)
@@ -224,7 +231,10 @@ function runInteractiveInstall(environment, apiKey, logPath) {
           normalizedOutput.includes(prompt.text)
         ) {
           try {
-            if (prompt.name === 'API key') hidingKeyInput = true
+            if (prompt.name === 'API key') {
+              hidingKeyInput = true
+            }
+
             child.stdin.write(getPromptResponse(prompt, apiKey))
           } catch (error) {
             stopProcessGroup(child)
