@@ -4,7 +4,7 @@
   "toolkit_id": "system_utilities",
   "name": "Tool Executions",
   "description": "Wait for, inspect and cancel retained tool executions without repeating expensive work.",
-  "icon_name": "time-line",
+  "icon_name": "list-settings-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
