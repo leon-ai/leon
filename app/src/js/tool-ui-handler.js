@@ -1,3 +1,5 @@
+import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+
 const COMMAND_OUTPUT_MAX_DISPLAY_CHARS = 80_000
 const ANSI_ESCAPE_PATTERN =
   // eslint-disable-next-line no-control-regex
@@ -212,10 +214,15 @@ export default class ToolUIHandler {
     statusChip.className = 'tool-status-chip running'
     statusChip.textContent = 'Running'
 
+    const durationLabel = document.createElement('span')
+    durationLabel.className = 'tool-duration'
+    durationLabel.hidden = true
+
     const expandIcon = document.createElement('i')
     expandIcon.className = 'ri-arrow-down-s-line expand-icon'
 
     meta.appendChild(statusChip)
+    meta.appendChild(durationLabel)
     meta.appendChild(expandIcon)
     toolHeader.appendChild(heading)
     toolHeader.appendChild(meta)
@@ -272,6 +279,7 @@ export default class ToolUIHandler {
       title,
       subtitle,
       statusChip,
+      durationLabel,
       inputBody: inputPanel.body,
       outputBody: outputPanel.body,
       rawContent,
@@ -437,6 +445,7 @@ export default class ToolUIHandler {
     }
 
     if (data.toolPhase === 'input') {
+      toolGroupContainer.durationLabel.hidden = true
       toolGroupContainer.summary.textContent =
         data.stepLabel || data.functionName
           ? `Preparing ${title.toLowerCase()}...`
@@ -497,6 +506,17 @@ export default class ToolUIHandler {
     }
 
     if (data.toolPhase === 'output') {
+      const duration = formatToolDuration(data.durationMs)
+      const isBackground = data.output?.execution?.state === 'running'
+
+      toolGroupContainer.durationLabel.textContent = isBackground && duration
+        ? `${duration} to return`
+        : duration
+      toolGroupContainer.durationLabel.hidden = !duration
+      toolGroupContainer.durationLabel.title = isBackground
+        ? 'Time to return the execution handle; the job is still running.'
+        : 'Tool call duration, including preparation and transport.'
+
       const isError = data.status === 'error'
       const isObserved = data.status === 'observed'
       toolGroupContainer.summary.textContent =
@@ -1030,6 +1050,7 @@ export default class ToolUIHandler {
       this.handleToolOutput({
         ...sharedData,
         toolPhase: 'output',
+        durationMs: toolCall.durationMs,
         status: toolCall.status,
         message:
           toolCall.errorMessage ||

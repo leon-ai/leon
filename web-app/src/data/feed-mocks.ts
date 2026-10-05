@@ -41,6 +41,7 @@ const THINKING_DETAILS = [
   'I will use the available system and search tools, then verify the result before finishing.'
 ]
 const THINKING_DURATION_MS = 8_400
+const TOOL_CALL_DURATION_MS = 1_400
 const FOLLOW_UP_THINKING_DETAILS = [
   'The first results narrow the issue to the resolved shell configuration.',
   'I need to verify the remaining value before finalizing the change.'
@@ -72,6 +73,7 @@ function createToolCall({
     toolIconName,
     functionName,
     status,
+    ...(status === 'running' ? {} : { durationMs: TOOL_CALL_DURATION_MS }),
     input,
     ...(output === undefined ? {} : { output })
   }

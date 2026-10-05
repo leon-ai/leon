@@ -24,6 +24,7 @@ export interface FeedToolCall {
   toolIconName: string
   functionName: string
   status: FeedToolCallStatus
+  durationMs?: number
   input: JsonValue
   output?: JsonValue
 }

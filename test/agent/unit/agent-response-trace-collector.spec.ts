@@ -46,6 +46,7 @@ describe('AgentResponseTraceCollector', () => {
         id: 'tool-1',
         name: 'computer_use.cua.get_screenshot',
         status: 'success',
+        durationMs: 138,
         output: { artifact: 'screen.png' }
       }
     })
@@ -69,6 +70,7 @@ describe('AgentResponseTraceCollector', () => {
           name: 'computer_use.cua.get_screenshot',
           status: 'success',
           startedAt: 1_000,
+          durationMs: 138,
           input: { display: 0 },
           output: { artifact: 'screen.png' }
         }

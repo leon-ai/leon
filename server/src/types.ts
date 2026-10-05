@@ -132,6 +132,7 @@ export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
 export interface AgentResponseToolCall {
   id: string
   startedAt?: number
+  durationMs?: number
   name: string
   status: 'running' | 'success' | 'error'
   toolkitIconName?: string

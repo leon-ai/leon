@@ -1,5 +1,6 @@
 import { ToolConcurrency } from '@/types'
 import fs from 'node:fs'
+import { performance } from 'node:perf_hooks'
 import { saveConnection } from '@/core/connections/connection-service'
 import { ConnectionStatus } from '@/core/connections/connection-store'
 
@@ -104,6 +105,66 @@ vi.mock('@/core', () => ({
 }))
 
 const CALLABLE_TOOL_NAME = 'test__lookup__run'
+
+it.each(['success', 'error', 'background', 'throw'])(
+  'reports dispatch duration for a %s call to live cards and durable progress',
+  async (outcome) => {
+    const now = vi.spyOn(performance, 'now').mockReturnValue(1_000)
+    const onProgress = vi.fn()
+    const toolCallTitle = 'Look up the requested value'
+    const displayNames = { toolkitName: 'Test Toolkit', toolName: 'Official Lookup' }
+
+    coreMocks.resolveToolById.mockReturnValue(displayNames)
+
+    const output = outcome === 'background'
+      ? { execution: { id: 'job-1', state: 'running' } }
+      : { value: 42 }
+
+    coreMocks.executeTool.mockImplementationOnce(async (input) => {
+      input.onProgress({ message: 'Working.' })
+      now.mockReturnValue(2_234)
+
+      if (outcome === 'throw') {
+        throw new Error('Worker disconnected.')
+      }
+
+      return {
+        status: outcome === 'error' ? 'error' : 'success',
+        message: 'Result returned.',
+        data: { output }
+      }
+    })
+
+    const execution = runToolExecution(
+      'test', 'lookup', 'run', '{}', {}, undefined, toolCallTitle, onProgress
+    )
+
+    if (outcome === 'throw') {
+      await expect(execution).rejects.toThrow('Worker disconnected.')
+    } else {
+      await execution
+    }
+
+    const status = outcome === 'error' || outcome === 'throw' ? 'error' : 'success'
+    expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
+      status,
+      durationMs: 1_234
+    }))
+    expect(coreMocks.emitAnswerToChatClients).toHaveBeenLastCalledWith(
+      expect.objectContaining({ toolPhase: 'output', status, ...displayNames, durationMs: 1_234 })
+    )
+
+
+    if (outcome === 'background') {
+      const callCount = onProgress.mock.calls.length
+      const input = coreMocks.executeTool.mock.lastCall?.[0]
+      input.onProgress({ message: 'Still working.' })
+      expect(onProgress).toHaveBeenCalledTimes(callCount)
+    }
+
+    coreMocks.resolveToolById.mockReturnValue(null)
+  }
+)
 
 it('announces binary readiness only after actual preparation starts', async () => {
   const onPreparationProgress = vi.fn(async (): Promise<void> => {})

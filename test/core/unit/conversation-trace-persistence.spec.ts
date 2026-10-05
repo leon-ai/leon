@@ -309,7 +309,8 @@ describe('conversation trace persistence', () => {
       agentResponseTrace: {
         id: 'turn', planSteps: [],
         toolCalls: [{
-          id: 'tool', name: 'test.lookup', status: 'success', startedAt: 2_000
+          id: 'tool', name: 'test.lookup', status: 'success', startedAt: 2_000,
+          durationMs: 138
         }],
         progressMessages: [{
           id: 'progress',

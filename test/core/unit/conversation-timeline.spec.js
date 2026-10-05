@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { expandConversationTimeline } from '../../../app/src/js/conversation-timeline.js'
 import ToolUIHandler from '../../../app/src/js/tool-ui-handler.js'
+import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
 
 describe('conversation activity replay', () => {
   it('restores thinking and tools in time order without draft bubbles or duplicate cards', () => {
@@ -48,4 +49,17 @@ describe('conversation activity replay', () => {
     expect(handler.handleToolOutput).toHaveBeenCalledOnce()
     expect(handler.handleToolOutput).toHaveBeenCalledWith(expect.objectContaining({ toolPhase: 'input' }))
   })
+  it.each([
+    [138, '138 ms'],
+    [0, '0 ms'],
+    [1_400, '1.4 s'],
+    [130_000, '2m 10s'],
+    [119_999, '2m 0s'],
+    [undefined, ''],
+    [Number.NaN, ''],
+    [-1, '']
+  ])('formats a duration of %s as "%s"', (durationMs, expected) => {
+    expect(formatToolDuration(durationMs)).toBe(expected)
+  })
+
 })

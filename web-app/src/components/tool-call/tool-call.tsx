@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '../../data/feed'
+import { formatToolDuration } from '../../utils/format-tool-duration'
 import { Collapse } from '../collapse'
 import { JsonView } from '../json-view'
 
@@ -43,6 +44,15 @@ function formatFunctionName(functionName: string): string {
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const detailsId = useId()
+  const duration = toolCall.status === 'running'
+    ? ''
+    : formatToolDuration(toolCall.durationMs)
+  const execution = toolCall.output && typeof toolCall.output === 'object' &&
+    !Array.isArray(toolCall.output)
+    ? toolCall.output['execution']
+    : undefined
+  const isBackground = execution && typeof execution === 'object' &&
+    !Array.isArray(execution) && execution['state'] === 'running'
   const technicalTitle = [
     toolCall.toolkitName,
     toolCall.toolName,
@@ -83,6 +93,16 @@ export function ToolCall({ toolCall }: ToolCallProps) {
           className="tool-call-chevron ri-arrow-right-s-line"
           aria-hidden="true"
         />
+        {duration && (
+          <span
+            className="tool-call-duration"
+            title={isBackground
+              ? 'Time to return the execution handle; the job is still running.'
+              : 'Tool call duration, including preparation and transport.'}
+          >
+            {isBackground ? `${duration} to return` : duration}
+          </span>
+        )}
       </button>
       <Collapse id={detailsId} isOpen={isExpanded}>
         <div className="tool-call-details">

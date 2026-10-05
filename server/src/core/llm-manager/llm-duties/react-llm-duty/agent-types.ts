@@ -1,5 +1,6 @@
 import type { LLMDutyParams } from '@/core/llm-manager/llm-duty'
 import type { AgentModelFile } from '@/core/llm-manager/types'
+import type { AgentResponseToolCall } from '@/types'
 export interface AgentSkillContext {
   id: string
   name: string
@@ -28,19 +29,7 @@ export type AgentRunProgressEvent =
     }
   | {
       type: 'tool_call'
-      toolCall: {
-        id: string
-        name: string
-        status: 'running' | 'success' | 'error'
-        toolkitIconName?: string
-        toolIconName?: string
-        input?: unknown
-        output?: unknown
-        stepLabel?: string
-        errorMessage?: string
-        skillId?: string
-        nativeSkillPath?: string
-      }
+      toolCall: AgentResponseToolCall
     }
 
 export interface ReactLLMDutyParams extends LLMDutyParams {

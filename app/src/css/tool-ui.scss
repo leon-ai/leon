@@ -192,6 +192,13 @@
   flex-shrink: 0;
 }
 
+.tool-duration {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .tool-status-chip {
   display: inline-flex;
   align-items: center;

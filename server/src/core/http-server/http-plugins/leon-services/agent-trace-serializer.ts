@@ -37,6 +37,8 @@ export function serializeAgentTrace(
       id: toolCall.id,
       name: toolCall.name,
       status: toolCall.status,
+      ...(toolCall.startedAt !== undefined ? { started_at: toolCall.startedAt } : {}),
+      ...(toolCall.durationMs !== undefined ? { duration_ms: toolCall.durationMs } : {}),
       ...(toolCall.toolkitIconName
         ? { toolkit_icon_name: toolCall.toolkitIconName }
         : {}),
@@ -90,6 +92,8 @@ export function deserializeAgentTrace(
       id: toolCall.id || toolCall.name,
       name: toolCall.name,
       status: toolCall.status,
+      ...(toolCall.started_at !== undefined ? { startedAt: toolCall.started_at } : {}),
+      ...(toolCall.duration_ms !== undefined ? { durationMs: toolCall.duration_ms } : {}),
       ...(toolCall.toolkit_icon_name
         ? { toolkitIconName: toolCall.toolkit_icon_name }
         : {}),

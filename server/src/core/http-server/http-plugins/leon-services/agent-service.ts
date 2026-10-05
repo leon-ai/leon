@@ -148,6 +148,9 @@ export async function runAgent(
               id: event.toolCall.id,
               name: event.toolCall.name,
               status: event.toolCall.status,
+              ...(event.toolCall.durationMs !== undefined
+                ? { duration_ms: event.toolCall.durationMs }
+                : {}),
               ...(event.toolCall.toolkitIconName
                 ? { toolkit_icon_name: event.toolCall.toolkitIconName }
                 : {}),

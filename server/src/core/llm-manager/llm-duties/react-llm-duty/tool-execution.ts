@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { performance } from 'node:perf_hooks'
 
 import {
   BRAIN,
@@ -245,6 +246,7 @@ export function emitToolExecutionOutputToWebApp(params: {
   output: Record<string, unknown>
   status: string
   message: string
+  durationMs?: number
   toolCallTitle?: string
   stepLabel?: string
 }): void {
@@ -273,6 +275,7 @@ export function emitToolExecutionOutputToWebApp(params: {
     status: params.status,
     message: params.message,
     output: params.output,
+    ...(params.durationMs !== undefined ? { durationMs: params.durationMs } : {}),
     ...(params.toolCallTitle
       ? { toolCallTitle: params.toolCallTitle }
       : {}),
@@ -442,7 +445,15 @@ export async function runToolExecution(
   let didNotifyOwnerPreparationStarted = false
   let didObservePreparationFailure = false
   const reportedPreparationMilestones = new Set<string>()
+  let didFinishToolCall = false
+
   toolExecutionInput.onProgress = (progress): void => {
+    // A retained job keeps reporting to its execution handle after this call
+    // returns. Do not reopen the settled card with later background progress.
+    if (didFinishToolCall) {
+      return
+    }
+
     onProgressEvent?.({
       id: toolGroupId,
       name: qualifiedName,
@@ -549,9 +560,45 @@ export async function runToolExecution(
     }
   }
 
-  const toolExecutionResult =
-    await TOOL_EXECUTOR.executeTool(toolExecutionInput)
-  signal?.throwIfAborted()
+  // Streamed argument previews can appear before execution starts. Measure the
+  // actual dispatch, including preparation, queueing, and Satellite transport.
+  const executionStartedAt = performance.now()
+  let toolExecutionResult: Awaited<ReturnType<typeof TOOL_EXECUTOR.executeTool>>
+
+  try {
+    toolExecutionResult = await TOOL_EXECUTOR.executeTool(toolExecutionInput)
+    signal?.throwIfAborted()
+  } catch (error) {
+    didFinishToolCall = true
+    const durationMs = Math.max(0, performance.now() - executionStartedAt)
+    const message = error instanceof Error ? error.message : String(error)
+
+    emitToolExecutionOutputToWebApp({
+      toolkitId,
+      toolId,
+      functionName,
+      toolGroupId,
+      output: {},
+      status: 'error',
+      message,
+      durationMs,
+      ...(stepLabel ? { stepLabel } : {})
+    })
+    onProgressEvent?.({
+      id: toolGroupId,
+      name: qualifiedName,
+      status: 'error',
+      durationMs,
+      input: requestedToolInput,
+      errorMessage: message,
+      ...(stepLabel ? { stepLabel } : {})
+    })
+
+    throw error
+  }
+
+  didFinishToolCall = true
+  const durationMs = Math.max(0, performance.now() - executionStartedAt)
   const modelFiles = toolExecutionResult.data.model_files
   const observationData: Partial<typeof toolExecutionResult.data> = {
     ...toolExecutionResult.data
@@ -626,6 +673,7 @@ export async function runToolExecution(
     output: toolExecutionResult.data?.output || {},
     status: effectiveStatus,
     message: effectiveMessage,
+    durationMs,
     ...(toolCallTitle ? { toolCallTitle } : {}),
     ...(stepLabel ? { stepLabel } : {})
   })
@@ -633,6 +681,7 @@ export async function runToolExecution(
     id: toolGroupId,
     name: qualifiedName,
     status: effectiveStatus === 'error' ? 'error' : 'success',
+    durationMs,
     ...(toolDisplayContext.toolkitIconName
       ? { toolkitIconName: toolDisplayContext.toolkitIconName }
       : {}),
