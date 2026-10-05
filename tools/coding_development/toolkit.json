@@ -9,5 +9,7 @@
     "LEON_RUNTIME.md",
     "HOME.md"
   ],
-  "tools": []
+  "tools": [
+    "ast-grep"
+  ]
 }

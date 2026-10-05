@@ -1,0 +1,59 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "ast-grep",
+  "toolkit_id": "coding_development",
+  "name": "ast-grep",
+  "description": "Search code by syntax structure and return source locations, matched text and metavariable captures.",
+  "icon_name": "organization-chart",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "search": {
+      "description": "Find AST patterns in local source files without rewriting them.",
+      "progressive_guidance": "Use for structural code questions rather than plain text search. Returned native ranges have zero-based line and column positions; metaVariables contains captured nodes.",
+      "background": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "minLength": 1,
+            "description": "ast-grep syntax pattern, e.g. console.log($$$ARGS). $NAME captures one node; $$$NAME captures several."
+          },
+          "paths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Existing local paths; ~ expands to the owner home."
+          },
+          "language": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Optional native language name, e.g. TypeScript, JavaScript or Python. Omit to infer from file extensions."
+          }
+        },
+        "required": [
+          "pattern",
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-x86_64-unknown-linux-gnu.zip",
+    "linux-aarch64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-aarch64-unknown-linux-gnu.zip",
+    "macosx-x86_64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-x86_64-apple-darwin.zip",
+    "macosx-arm64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-aarch64-apple-darwin.zip",
+    "win-amd64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-x86_64-pc-windows-msvc.zip",
+    "win-arm64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-aarch64-pc-windows-msvc.zip"
+  },
+  "progressive_guidance": "Read-only, shell-free search. Respect hidden and ignore rules; do not follow recursive symlinks. Uses an empty configuration so workspace configuration cannot load custom grammars. Uses Leon-managed binaries with built-in execution and output limits. Large output fails explicitly rather than silently reporting an incomplete result as complete. Use operating_system_control.ripgrep for filename discovery and literal text search."
+}
