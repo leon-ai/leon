@@ -1,7 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest'
+import Fastify from 'fastify'
 
 import { ToolExecutionManager, ToolExecutionState, TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
 import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
+import { toolExecutionsPlugin } from '@/core/http-server/api/tool-executions'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 
 const manager = new ToolExecutionManager()
 const result: ToolExecutionResult = {
@@ -74,3 +77,46 @@ it('retains failures instead of reissuing calls', async () => {
   })
 })
 
+it('queries the entire retained JSON before bounding or paging its HTTP preview', async () => {
+  const server = Fastify()
+  await server.register(toolExecutionsPlugin, { apiVersion: 'test' })
+  const profile = getActiveProfileName()
+  const id = TOOL_EXECUTION_MANAGER.start(profile, 'one', 'test.fixture.run', async () => result)
+  await TOOL_EXECUTION_MANAGER.wait(profile, 'one', id)
+
+  try {
+    const read = await server.inject({
+      method: 'POST', url: '/api/test/tool-executions/read',
+      payload: { executionId: id, sessionId: 'one', options: { maxChars: 1 } }
+    })
+    expect(read.statusCode).toBe(200)
+    expect(read.json()).toMatchObject({ content: '{', truncated: true, nextOffsetChars: 1 })
+
+    const count = await server.inject({
+      method: 'POST', url: '/api/test/tool-executions/read',
+      payload: {
+        executionId: id, sessionId: 'one',
+        options: { jq: '.result.files | length', maxChars: 1 }
+      }
+    })
+    expect(count.statusCode).toBe(200)
+    expect(count.json()).toMatchObject({
+      content: '2', truncated: false,
+      sourceCoverage: { truncated: true, reason: 'recordLimit' }
+    })
+
+    const page = await server.inject({
+      method: 'POST', url: '/api/test/tool-executions/read',
+      payload: { executionId: id, sessionId: 'one', options: { offsetChars: 1, maxChars: 7 } }
+    })
+    expect(page.json()).toMatchObject({ content: '"result', nextOffsetChars: 8 })
+    const foreign = await server.inject({
+      method: 'POST', url: '/api/test/tool-executions/read',
+      payload: { executionId: id, sessionId: 'another-session' }
+    })
+    expect(foreign.statusCode).not.toBe(200)
+    expect(foreign.body).not.toContain('files')
+  } finally {
+    await server.close()
+  }
+})

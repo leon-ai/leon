@@ -111,6 +111,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 - When a tool can advance the request, call it now. Do not describe a future action without taking it.
 - Tool calls and tool results from this run are already present in the transcript. Never use memory, context, or filesystem tools to rediscover what happened in the current run.
 - Large tool results may include a preview and output_log_path. Read only the needed artifact section when the preview does not contain the required fact.
+- A running execution handle is unfinished work. Use system_utilities.tool_executions to wait, query retained JSON, or cancel; a wait timeout leaves the same execution running. Resolve required executions before finalizing. Filter and aggregate retained results rather than rerunning expensive discovery or copying a whole inventory into a shell.
 - Treat tool errors as observations: correct the arguments, choose another available tool, or explain the blocker.
 - Continue until the requested deliverable is complete and verified. When complete, return the final user-facing answer as plain text with no tool call.
 - Call request_clarification with one concise question only for required information, authorization, or owner action that available tools cannot resolve.
@@ -1748,6 +1749,12 @@ async function executeAgentToolCall(
     )
     params.signal?.throwIfAborted()
     const executionCompletedAt = Date.now()
+    if (result.executionHandle) {
+      // Execution controls appear only once there is a handle to manage, so
+      // continuing long work does not require another toolkit-discovery turn.
+      loadToolkitFunctions(params.catalog, 'system_utilities', 'tool_executions')
+    }
+
     execution = {
       ...result.execution,
       startedAt: executionStartedAt,

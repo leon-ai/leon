@@ -303,6 +303,38 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it('exposes execution controls immediately after a retained handle is returned', async () => {
+    coreMocks.getFlattenedTools.mockReturnValue([{
+      toolkitId: 'system_utilities', toolkitName: 'System Utilities',
+      toolkitDescription: 'Manage executions', toolId: 'tool_executions',
+      toolName: 'Tool Executions', toolDescription: 'Read retained results'
+    }])
+    coreMocks.getToolFunctions.mockReturnValue({
+      read: { description: 'Read saved results', parameters: {
+        type: 'object', properties: { executionId: { type: 'string' } },
+        required: ['executionId']
+      } }
+    })
+    const executeFunction = vi.fn().mockResolvedValue({
+      executionHandle: { id: 'retained', state: 'completed' },
+      execution: { function: callable.qualifiedName, status: 'success', observation: 'Saved results' }
+    })
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [toolCall('scan', CALLABLE_TOOL_NAME, { query: 'files' })] })
+      .mockImplementationOnce(async (_messages, tools) => {
+        expect(tools.map((tool: { function: { name: string } }) => tool.function.name))
+          .toContain('system_utilities__tool_executions__read')
+
+        return { textContent: 'Done.' }
+      })
+
+    await runAgentLoop({
+      transcript: [], catalog: createCatalog(), callModel, executeFunction,
+      loadAgentSkill: async () => null
+    })
+    expect(executeFunction).toHaveBeenCalledTimes(1)
+  })
+
   it('runs ordinary calls concurrently by default and preserves emitted history and result order', async () => {
     const catalog = createCatalog()
     catalog.functionsByToolName.set(CALLABLE_TOOL_NAME, {

@@ -1,0 +1,121 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "tool_executions",
+  "toolkit_id": "system_utilities",
+  "name": "Tool Executions",
+  "description": "Wait for, inspect and cancel retained tool executions without repeating expensive work.",
+  "icon_name": "time-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "wait": {
+      "description": "Wait for a running tool execution without restarting it; returns progress or a bounded result preview.",
+      "progressive_guidance": "Wait for the existing id until completed, failed or canceled. waitMs bounds this wait only; it does not restart or cancel work.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "executionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Exact execution.id returned by an earlier tool call in this conversation."
+          },
+          "waitMs": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 30000,
+            "description": "Wait window only. Default 10000; reaching it leaves the execution running."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "jq": {
+                "type": "string",
+                "minLength": 1,
+                "description": "jq projection of retained tool output. Ripgrep records live at .result.files or .result.matches; e.g. .result.files | length. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
+              },
+              "offsetChars": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxChars": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30000,
+                "description": "Text preview limit. Default 8000; paging reads the same retained JSON."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "executionId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "read": {
+      "description": "Query retained JSON with jq for filtering, counting or grouping, or page its textual representation.",
+      "progressive_guidance": "jq queries original retained output before preview truncation. Check sourceCoverage when counting, filtering or grouping incomplete scans. Page with offsetChars and nextOffsetChars when needed.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "executionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Exact execution.id returned by an earlier tool call in this conversation."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "jq": {
+                "type": "string",
+                "minLength": 1,
+                "description": "jq projection of retained tool output. Ripgrep records live at .result.files or .result.matches; e.g. .result.files | length. Counts cover retained records only; check returned sourceCoverage for incomplete scans."
+              },
+              "offsetChars": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxChars": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 30000,
+                "description": "Text preview limit. Default 8000; paging reads the same retained JSON."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "executionId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "cancel": {
+      "description": "Cancel the original execution and observe its state after cleanup.",
+      "progressive_guidance": "Cancel the original execution and observe its state after cleanup. Delivered input may already have taken effect; inspect its outcome before retrying.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "executionId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Exact execution.id returned by an earlier tool call in this conversation."
+          }
+        },
+        "required": [
+          "executionId"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "progressive_guidance": "Running means unfinished work. Reuse the execution id until completed, failed or canceled. A wait timeout is not an execution timeout. Results are retained for 15 minutes after completion and scoped to the same profile and conversation. jq queries retained output before preview truncation; check sourceCoverage when counting incomplete scans. Use this tool instead of restarting a scan, repeatedly reading a whole output artifact, or creating a shell script for aggregation."
+}
