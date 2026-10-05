@@ -17,6 +17,7 @@ import {
 import { recordTurnInference } from '@/core/session-manager/session-context'
 import { getClaudeSubscriptionEnvironment } from '../fellows/fellow-catalog'
 import type { ResolvedLLMTarget } from '../llm-routing'
+import { readCompletionAccounting } from '../usage-accounting'
 import {
   LLMProviders,
   type CompletionParams,
@@ -37,7 +38,12 @@ interface ClaudeResult {
   is_error?: boolean
   result?: string
   structured_output?: Record<string, unknown>
-  usage?: { input_tokens?: number, output_tokens?: number }
+  usage?: {
+    input_tokens?: number
+    output_tokens?: number
+    cache_read_input_tokens?: number
+    cache_creation_input_tokens?: number
+  }
   event?: {
     type: string
     delta?: { type: string, text?: string, thinking?: string }
@@ -272,6 +278,11 @@ export default class AnthropicClaudeCodeAdapter {
         params.onToken?.(text)
       }
 
+      const accounting = readCompletionAccounting(completed.usage)
+      // Claude's raw input count excludes cache reads and writes, unlike SDK totals.
+      const promptTokens = (completed.usage?.input_tokens || 0) +
+        (accounting.cachedInputTokens ?? 0) + (accounting.cacheWriteInputTokens ?? 0)
+
       return { data: {
         choices: [{
           finish_reason: calls?.length ? 'tool_calls' : 'stop',
@@ -285,8 +296,9 @@ export default class AnthropicClaudeCodeAdapter {
           }
         }],
         usage: {
-          prompt_tokens: completed.usage?.input_tokens || 0,
-          completion_tokens: completed.usage?.output_tokens || 0
+          prompt_tokens: promptTokens,
+          completion_tokens: completed.usage?.output_tokens || 0,
+          accounting
         }
       } } as AxiosResponse
     } catch {

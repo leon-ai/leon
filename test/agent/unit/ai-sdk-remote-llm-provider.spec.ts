@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
@@ -10,6 +10,8 @@ import OpenRouterLLMProvider from '@/core/llm-manager/llm-providers/openrouter-l
 import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provider'
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
+import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
+import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
 import { CONFIG_MANAGER } from '@/config'
 import {
   getActiveTurnInference,
@@ -130,6 +132,58 @@ function createCompletionParams(
 }
 
 describe('AISDKRemoteLLMProvider', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    [LLMProviders.MiniMax, 'openai-compatible', 'MiniMax-M3'],
+    [LLMProviders.Celeris, 'openai-compatible', 'celeris-1-magnus'],
+    [LLMProviders.SGLang, 'openai-compatible', 'local-model'],
+    [LLMProviders.LlamaCPP, 'openai-compatible', 'local-model'],
+    [LLMProviders.Cerebras, 'cerebras', 'gpt-oss-120b'],
+    [LLMProviders.MoonshotAI, 'moonshotai', 'kimi-k3'],
+    [LLMProviders.Groq, 'groq', 'openai/gpt-oss-120b']
+  ] as const)('retains incremental text and cache usage through the %s SDK adapter', async (name, flavor, model) => {
+    const usage = {
+      prompt_tokens: 100, completion_tokens: 20,
+      ...(name === LLMProviders.MoonshotAI
+        ? { cached_tokens: 80 }
+        : { prompt_tokens_details: { cached_tokens: 80 } })
+    }
+    const events = [
+      { id: 'test', choices: [{ index: 0, delta: { content: 'Yes ' } }] },
+      { id: 'test', choices: [{ index: 0, delta: { content: 'Yes ' } }] },
+      { choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage, x_groq: { usage } }
+    ]
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n',
+      { headers: { 'content-type': 'text/event-stream' } }
+    )))
+    const provider = new AISDKRemoteLLMProvider({
+      name, providerName: name, model, flavor, apiKeyEnv: 'TEST_KEY', baseURL: 'https://example.invalid/v1'
+    })
+    const onToken = vi.fn()
+    const response = await provider.runChatCompletion('Answer.', {
+      ...createCompletionParams(null),
+      shouldStream: true,
+      onToken
+    })
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(response)
+    expect(onToken.mock.calls.map(([chunk]) => chunk).join('')).toBe('Yes Yes ')
+    expect(normalized).toMatchObject({
+      usedInputTokens: 100, usedOutputTokens: 20, accounting: { cachedInputTokens: 80 }
+    })
+  })
+
+  it('distinguishes unavailable cache accounting from a reported zero', () => {
+    const inputTokens = { total: 100, cacheRead: 0, cacheWrite: 0 }
+    expect(readCompletionAccounting({ inputTokens, raw: { prompt_tokens: 100 } })).toEqual({})
+    expect(readCompletionAccounting({ inputTokens, raw: {
+      prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 0 }
+    } })).toEqual({ cachedInputTokens: 0 })
+  })
+
   it.each([
     { auth_kind: 'api_key', expected: 'https://openrouter.ai/api/v1' },
     { auth_kind: 'api_key', base_url: 'https://fellow.example.invalid/v1', expected: 'https://fellow.example.invalid/v1' },
@@ -904,4 +958,6 @@ describe('AISDKRemoteLLMProvider', () => {
       accounting: { cachedInputTokens: 80, costUSD: 0.001, costEstimated: false }
     })
   })
+
+
 })

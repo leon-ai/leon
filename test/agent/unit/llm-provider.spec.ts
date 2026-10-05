@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { LogHelper } from '@/helpers/log-helper'
 
 import LLMProvider from '@/core/llm-manager/llm-provider'
+import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
 import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
 import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
 
@@ -67,6 +68,44 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('preserves cache accounting and total input tokens on direct llama.cpp streams', async () => {
+    // Exercise the direct parser without starting a model server.
+    const provider = Object.create(LlamaCPPLLMProvider.prototype) as {
+      consumeStreamingResponse(
+        stream: Readable,
+        params: CompletionParams
+      ): Promise<Record<string, unknown>>
+    }
+    const onToken = vi.fn()
+    const chunks = [
+      { choices: [{ delta: { content: 'Hello' } }] },
+      {
+        choices: [],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 2,
+          prompt_tokens_details: { cached_tokens: 80 }
+        },
+        timings: { cache_n: 80, prompt_n: 20, predicted_n: 2 }
+      }
+    ]
+    const stream = Readable.from(chunks.map((chunk) =>
+      `data: ${JSON.stringify(chunk)}\n\n`))
+    const result = await provider.consumeStreamingResponse(stream, {
+      dutyType: LLMDuties.ReAct,
+      systemPrompt: '',
+      data: null,
+      onToken
+    })
+
+    expect(onToken).toHaveBeenCalledWith('Hello')
+    expect(result['usage']).toEqual({
+      prompt_tokens: 100,
+      completion_tokens: 2,
+      accounting: { cachedInputTokens: 80 }
+    })
+  })
+
   it('preserves owner cancellation across an attempt-level retry', async () => {
     // Exercise the real retry/cancellation path without waiting for its backoff.
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })

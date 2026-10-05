@@ -34,7 +34,10 @@ describe('Anthropic Claude Code adapter', () => {
         stdout: Readable.from([JSON.stringify({
           type: 'result', subtype: 'success', structured_output: {
             text: '', tool_calls: [{ name: 'read_note', arguments: { name: 'todo' } }]
-          }, usage: { input_tokens: 12, output_tokens: 4 }
+          }, usage: {
+            input_tokens: 12, output_tokens: 4,
+            cache_read_input_tokens: 80, cache_creation_input_tokens: 10
+          }
         }) + '\n']),
         kill: vi.fn()
       })
@@ -54,7 +57,10 @@ describe('Anthropic Claude Code adapter', () => {
     expect(result.data.choices[0].message.tool_calls[0].function).toEqual({
       name: 'read_note', arguments: '{"name":"todo"}'
     })
-    expect(result.data.usage).toEqual({ prompt_tokens: 12, completion_tokens: 4 })
+    expect(result.data.usage).toEqual({
+      prompt_tokens: 102, completion_tokens: 4,
+      accounting: { cachedInputTokens: 80, cacheWriteInputTokens: 10 }
+    })
     expect(await fs.stat(temporaryDirectory).catch(() => null)).toBeNull()
   })
 

@@ -44,16 +44,21 @@ export function readCompletionAccounting(usage: unknown): CompletionAccounting {
   const details = object(data['prompt_tokens_details'] ?? data['input_tokens_details'])
   const rawDetails = object(raw['prompt_tokens_details'] ?? raw['input_tokens_details'])
   const output = object(data['outputTokens'])
-  const outputDetails = object(data['output_tokens_details'])
-  const rawOutputDetails = object(raw['output_tokens_details'])
+  const outputDetails = object(data['output_tokens_details'] ?? data['completion_tokens_details'])
+  const rawOutputDetails = object(raw['output_tokens_details'] ?? raw['completion_tokens_details'])
+  const metadataInputDetails = object(data['promptTokensDetails'])
+  const metadataOutputDetails = object(data['completionTokensDetails'])
   const reasoningOutputTokens = count(
     normalized['reasoningOutputTokens'],
     outputDetails['reasoning_tokens'], rawOutputDetails['reasoning_tokens'],
+    outputDetails['thinking_tokens'], rawOutputDetails['thinking_tokens'],
+    metadataOutputDetails['reasoningTokens'],
     data['raw'] == null ? output['reasoning'] : undefined
   )
   const cachedInputTokens = count(
     normalized['cachedInputTokens'],
     details['cached_tokens'], rawDetails['cached_tokens'],
+    data['cached_tokens'], raw['cached_tokens'], metadataInputDetails['cachedTokens'],
     data['cache_read_input_tokens'], data['prompt_cache_hit_tokens'],
     raw['cache_read_input_tokens'], raw['prompt_cache_hit_tokens'],
     // Some compatible SDKs synthesize zero when the provider omits caching.
@@ -61,7 +66,9 @@ export function readCompletionAccounting(usage: unknown): CompletionAccounting {
   )
   const cacheWriteInputTokens = count(
     normalized['cacheWriteInputTokens'],
-    input['cacheWrite'], data['cache_creation_input_tokens'], raw['cache_creation_input_tokens']
+    details['cache_write_tokens'], rawDetails['cache_write_tokens'],
+    data['cache_creation_input_tokens'], raw['cache_creation_input_tokens'],
+    data['raw'] == null ? input['cacheWrite'] : undefined
   )
   const costUSD = count(normalized['costUSD'], data['cost'], raw['cost'])
   return {

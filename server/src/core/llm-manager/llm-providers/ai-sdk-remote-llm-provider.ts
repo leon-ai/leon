@@ -1137,6 +1137,18 @@ export default class AISDKRemoteLLMProvider {
       options.providerOptions = providerOptions as SharedV4ProviderOptions
     }
 
+    if (completionParams.promptCacheKey && this.config.providerName === LLMProviders.Anthropic) {
+      // Claude caching is opt-in; the agent already marks requests whose
+      // growing prompt prefix should be reused across iterations.
+      options.providerOptions = {
+        ...options.providerOptions,
+        anthropic: {
+          ...options.providerOptions?.['anthropic'],
+          cacheControl: { type: 'ephemeral' }
+        }
+      }
+    }
+
     return options
   }
 
