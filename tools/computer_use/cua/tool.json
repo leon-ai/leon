@@ -105,6 +105,7 @@
     },
     "health_report": {
       "description": "Diagnose driver, permissions, accessibility, and screenshot capabilities after a concrete failure. Read the reported checks and remediation hints; do not run routinely before healthy actions.",
+      "progressive_guidance": "On macOS, follow the reported permission hints for the app or executable macOS attributes Leon's embedded driver to. Granting permissions to standalone CuaDriver does not verify Leon's capture readiness.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
