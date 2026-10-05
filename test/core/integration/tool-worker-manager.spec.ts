@@ -2,6 +2,7 @@ import { ToolConcurrency } from '@/types'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
@@ -77,6 +78,7 @@ async function fixture(persistent: boolean): Promise<void> {
     await fs.writeFile(path.join(directory, 'src', 'nodejs', 'index.ts'), `
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { Tool } from '@sdk/base-tool'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
 export default class Fixture extends Tool {
@@ -176,4 +178,32 @@ it('cancels an active call cooperatively and releases its worker before another 
   expect(result.message).toContain('canceled')
   expect(await fs.readFile(path.join(home, 'disposed'), 'utf8')).toBe('a\n')
   expect((await next('a', 'two')).output['result']).toMatchObject({ count: 1 })
+})
+
+
+it.skipIf(spawnSync('rg', ['--version']).status !== 0)('executes built-in ripgrep functions through real profile workers', async () => {
+  await fixture(false)
+  const { default: ToolkitRegistry } = await import('@/core/tool-manager/toolkit-registry')
+  const registry = new ToolkitRegistry()
+  await registry.load()
+  expect(registry.getFlattenedTools()).toContainEqual(expect.objectContaining({ toolkitId: 'operating_system_control', toolId: 'ripgrep' }))
+  expect(Object.keys(registry.getToolFunctions('operating_system_control', 'ripgrep') || {})).toEqual(['search', 'listFiles'])
+  const source = path.join(home, 'sample.ts')
+  await fs.writeFile(source, 'first\nneedle\n')
+  const context = { toolkitId: 'operating_system_control', toolId: 'ripgrep',
+    profileName: 'a', conversationSessionId: 'ripgrep', parameters: {} }
+  // A cold install from two workers must publish an executable atomically.
+  const [search, files] = await Promise.all([
+    manager.execute({ ...context, functionName: 'search' },
+      ['needle', [source]], () => {}, { concurrency: ToolConcurrency.Parallel }),
+    manager.execute({ ...context, functionName: 'listFiles' },
+      [[source]], () => {}, { concurrency: ToolConcurrency.Parallel })
+  ])
+  expect(search.success, search.message).toBe(true)
+  expect(search.output['result']).toMatchObject({ truncated: false, matches: [
+    { path: { text: source }, line_number: 2, lines: { text: 'needle\n' } }
+  ] })
+  expect(files.success, files.message).toBe(true)
+  expect(files.output['result']).toMatchObject({ truncated: false, files: [{ text: source }] })
+
 })

@@ -1,0 +1,141 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "ripgrep",
+  "toolkit_id": "operating_system_control",
+  "name": "Ripgrep",
+  "description": "Fast, bounded, read-only local content search and file discovery with ripgrep. Prefer over shell rg/grep/find for filesystem search.",
+  "icon_name": "file-search-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "search": {
+      "description": "Search local file contents using ripgrep; return matching lines, 1-based line numbers, paths and byte-offset submatches.",
+      "progressive_guidance": "Choose files when only filenames are needed; rg stops after the first match in each file. Choose count for totals without collecting lines. Match records contain path, lines, line_number, absolute_offset and submatches. No multiline matching; recursively encountered binary content is skipped.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "pattern": {
+            "type": "string",
+            "description": "Literal text by default. Set options.regex=true for a Rust regex. Passed as data, never shell code."
+          },
+          "paths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Existing local file/directory paths. Prefer absolute paths; relative paths resolve against the tool process working directory."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "globs": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Include/exclude rg globs, e.g. *.ts or !vendor/**. Explicit include globs override ignore rules."
+              },
+              "hidden": {
+                "type": "boolean",
+                "description": "Include hidden files and directories. Default false."
+              },
+              "noIgnore": {
+                "type": "boolean",
+                "description": "Disable ignore rules. Default false; use only for an explicitly requested scope."
+              },
+              "ignoreCase": {
+                "type": "boolean",
+                "description": "Ignore case in file filters and content matching. Default false for search, true for listFiles."
+              },
+              "regex": {
+                "type": "boolean",
+                "description": "Interpret pattern as a Rust regex. Default false (literal text)."
+              },
+              "resultMode": {
+                "type": "string",
+                "enum": [
+                  "matches",
+                  "files",
+                  "count"
+                ],
+                "description": "Default matches: lines with locations. files: each matching file once. count: total matching lines, not occurrences."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "pattern",
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "background": true
+    },
+    "listFiles": {
+      "description": "List local files using ripgrep, optionally filtered by include/exclude globs. Filenames including newlines are preserved.",
+      "progressive_guidance": "Enumerate file paths without reading contents. Case-insensitive globs include uppercase extensions. Filenames containing newlines or non-UTF-8 bytes are preserved. files contains bounded records; summary counts returned records. Use system_utilities.tool_executions.read to query retained records; check truncation before counting. Check summary.complete before treating counts as totals.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Existing local file/directory paths. Prefer absolute paths; relative paths resolve against the tool process working directory."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "globs": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "string"
+                },
+                "description": "Include/exclude rg globs, e.g. *.ts or !vendor/**. Explicit include globs override ignore rules."
+              },
+              "hidden": {
+                "type": "boolean",
+                "description": "Include hidden files and directories. Default false."
+              },
+              "noIgnore": {
+                "type": "boolean",
+                "description": "Disable ignore rules. Default false; use only for an explicitly requested scope."
+              },
+              "ignoreCase": {
+                "type": "boolean",
+                "description": "Ignore case in file filters and content matching. Default false for search, true for listFiles."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      },
+      "background": true
+    }
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-unknown-linux-musl.tar.gz",
+    "linux-aarch64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-unknown-linux-musl.tar.gz",
+    "macosx-x86_64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-apple-darwin.tar.gz",
+    "macosx-arm64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-aarch64-apple-darwin.tar.gz",
+    "win-amd64": "https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip"
+  },
+  "progressive_guidance": "Uses Leon-managed upstream rg. Searches are read-only and shell-free, skip recursive symlinks, and respect hidden/ignore rules unless requested otherwise. Include globs override ignore rules. Literal content matching is the default; set regex for Rust regex syntax. Filename discovery ignores case by default. Uses automatic threading without sorting. File and match output is bounded. Query retained records through system_utilities.tool_executions.read. A byte/record limit or timeout sets truncated=true and summary.complete=false; counts are exact only when complete. Text uses {text} or base64 {bytes} for non-UTF-8 data."
+}

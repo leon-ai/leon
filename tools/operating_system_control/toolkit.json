@@ -13,6 +13,7 @@
   ],
   "tools": [
     "shell",
-    "file"
+    "file",
+    "ripgrep"
   ]
 }
