@@ -11,6 +11,7 @@ import OpenAILLMProvider from '@/core/llm-manager/llm-providers/openai-llm-provi
 import CelerisLLMProvider from '@/core/llm-manager/llm-providers/celeris-llm-provider'
 import MiniMaxLLMProvider from '@/core/llm-manager/llm-providers/minimax-llm-provider'
 import ZAILLMProvider from '@/core/llm-manager/llm-providers/z-ai-llm-provider'
+import GroqLLMProvider from '@/core/llm-manager/llm-providers/groq-llm-provider'
 import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-provider'
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
@@ -330,7 +331,8 @@ describe('AISDKRemoteLLMProvider', () => {
     const response = await provider.runChatCompletion('Answer.', {
       ...createCompletionParams(null),
       shouldStream: true,
-      onToken
+      onToken,
+      ...(name === LLMProviders.Groq ? { seed: 7 } : {})
     })
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(response)
     expect(onToken.mock.calls.map(([chunk]) => chunk).join('')).toBe('Yes Yes ')
@@ -1391,6 +1393,27 @@ describe('AISDKRemoteLLMProvider', () => {
     })
     expect(fetch.mock.calls[1]![0]).toMatch(/\/responses$/)
     expect(JSON.parse(fetch.mock.calls[1]![1].body).text.format.type).toBe('json_schema')
+  })
+
+  it('uses Groq Responses while preserving native seed and hidden-reasoning controls', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(Response.json({
+        id: 'response-1', object: 'response', created_at: 1, model: 'openai/gpt-oss-120b', status: 'completed',
+        output: [{ type: 'function_call', id: 'item-1', call_id: 'call-1', name: 'read_file', arguments: '{"path":"README.md"}', status: 'completed' }],
+        usage: { input_tokens: 100, output_tokens: 20, total_tokens: 120, input_tokens_details: { cached_tokens: 80 } }
+      }))
+      .mockResolvedValueOnce(Response.json(CHAT_RESPONSE))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new GroqLLMProvider({ ...TARGET, provider: LLMProviders.Groq, model: 'openai/gpt-oss-120b' })
+
+    const response = await provider.runChatCompletion('Read README.md', PARAMS)
+    expect(fetch.mock.calls[0]![0]).toMatch(/\/responses$/)
+    expect(response.data.usage.accounting.cachedInputTokens).toBe(80)
+    expect(response.data.choices[0].message.tool_calls[0].function.name).toBe('read_file')
+
+    await provider.runChatCompletion('Read README.md', { ...PARAMS, seed: 42, reasoningMode: 'off' })
+    expect(fetch.mock.calls[1]![0]).toMatch(/\/chat\/completions$/)
+    expect(JSON.parse(fetch.mock.calls[1]![1].body)).toMatchObject({ seed: 42, reasoning_format: 'hidden' })
   })
 
   it('uses the dedicated OpenRouter SDK for tool decisions and retains provider reasoning for replay', async () => {

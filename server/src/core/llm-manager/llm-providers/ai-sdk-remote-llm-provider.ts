@@ -350,6 +350,18 @@ export default class AISDKRemoteLLMProvider {
       return this.responsesModel
     }
 
+    // Groq Responses supports streaming and tool calls, but has no seed or
+    // hidden-reasoning format. Keep its native SDK for those explicit controls.
+    if (
+      this.config.flavor === 'groq' && completionParams.seed === undefined &&
+      completionParams.disableThinking !== true &&
+      completionParams.reasoningMode !== 'off' &&
+      completionParams.reasoningEffort !== 'none'
+    ) {
+      this.responsesModel ??= this.createLanguageModel('open-responses')
+      return this.responsesModel
+    }
+
     return this.languageModel
   }
 
