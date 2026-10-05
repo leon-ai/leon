@@ -379,7 +379,10 @@ export default class AISDKRemoteLLMProvider {
     if (normalizedSystemPrompt) {
       messages.push({
         role: 'system',
-        content: normalizedSystemPrompt
+        content: normalizedSystemPrompt,
+        ...(completionParams.promptCacheKey && this.config.flavor === 'openrouter'
+          ? { providerOptions: { openrouter: { cacheControl: { type: 'ephemeral' } } } }
+          : {})
       })
     }
 
@@ -1138,6 +1141,17 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
+    if (this.config.flavor === 'openrouter') {
+      const sessionId = getActiveConversationSessionId()
+      if (sessionId) {
+        // Stable session routing lets gateway providers reuse their prompt cache.
+        providerOptions['openrouter'] = {
+          ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
+          session_id: sessionId
+        }
+      }
+    }
+
     if (Object.keys(providerOptions).length > 0) {
       options.providerOptions = providerOptions as SharedV4ProviderOptions
     }
@@ -1384,6 +1398,20 @@ export default class AISDKRemoteLLMProvider {
     if (!isReasoning && !Array.isArray(reasoningDetails)) {
       return
     }
+    if (this.config.flavor === 'openrouter') {
+      // The SDK emits complete snapshots, sometimes on a tool call rather
+      // than a reasoning part. Preserve signed/encrypted entries verbatim.
+      if (Array.isArray(reasoningDetails) && reasoningDetails.length > 0) {
+        state.reasoningItems.set('openrouter-reasoning', {
+          provider: LLMProviders.OpenRouter,
+          id: 'openrouter-reasoning',
+          text: '',
+          providerOptions: { openrouter: { reasoning_details: reasoningDetails } }
+        })
+      }
+      return
+    }
+
     const itemId = providerData?.['itemId'] ?? part['id'] ??
       (part['type'] === 'reasoning' ? `reasoning-${state.reasoningItems.size}` : 'reasoning-0')
     if (typeof itemId !== 'string') {

@@ -132,6 +132,48 @@ function createCompletionParams(
   }
 }
 
+const TOOL = {
+  type: 'function' as const,
+  function: {
+    name: 'read_file',
+    parameters: { type: 'object', properties: { path: { type: 'string' } } }
+  }
+}
+const PARAMS = {
+  dutyType: LLMDuties.ReAct,
+  systemPrompt: 'Read the requested file.',
+  tools: [TOOL],
+  toolChoice: 'auto' as const,
+  reasoningMode: 'on' as const
+}
+const TARGET = {
+  label: 'Test provider',
+  isEnabled: true,
+  isLocal: false,
+  isResolved: true,
+  accountCredentials: { api_key: 'fixture-key' }
+}
+const CHAT_RESPONSE = {
+  id: 'response-1',
+  created: 1,
+  model: 'fixture-model',
+  choices: [{
+    index: 0,
+    finish_reason: 'tool_calls',
+    message: {
+      role: 'assistant',
+      content: '',
+      reasoning_content: 'Inspect the file.',
+      tool_calls: [{
+        id: 'call-1',
+        type: 'function',
+        function: { name: 'read_file', arguments: '{"path":"README.md"}' }
+      }]
+    }
+  }],
+  usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120, prompt_cache_hit_tokens: 80 }
+}
+
 describe('AISDKRemoteLLMProvider', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -247,6 +289,45 @@ describe('AISDKRemoteLLMProvider', () => {
     })
   })
 
+  it('replays OpenRouter reasoning details and retains cache usage with stable session routing', async () => {
+    const actual = await vi.importActual<typeof import('@openrouter/ai-sdk-provider')>('@openrouter/ai-sdk-provider')
+    openRouterMocks.createOpenRouter.mockImplementationOnce((...args: unknown[]) =>
+      actual.createOpenRouter(args[0] as Parameters<typeof actual.createOpenRouter>[0]) as unknown as
+        ReturnType<typeof openRouterMocks.createOpenRouter>
+    )
+    const reasoningDetails = [
+      { type: 'reasoning.text', text: '  check \n', signature: 'signature', format: 'anthropic-claude-v1', index: 0 },
+      { type: 'reasoning.encrypted', data: 'encrypted', id: 'rs_or', format: 'openai-responses-v1', index: 1 }
+    ]
+    const usage = { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120,
+      prompt_tokens_details: { cached_tokens: 80, cache_write_tokens: 10 }, cost: 0.001 }
+    const events = [
+      { id: 'or_test', choices: [{ index: 0, delta: { reasoning_details: reasoningDetails } }] },
+      { choices: [{ index: 0, delta: { content: 'Done.' }, finish_reason: 'stop' }], usage }
+    ]
+    const fetch = vi.fn().mockImplementation(async () => new Response(
+      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('') + 'data: [DONE]\n\n',
+      { headers: { 'content-type': 'text/event-stream' } }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const provider = createOpenRouterProvider('anthropic/claude-opus-5.5')
+    const params = { ...createCompletionParams(null), shouldStream: true, promptCacheKey: 'agent',
+      serviceTier: 'priority' as const }
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
+      await provider.runChatCompletion('Check.', params)
+    )
+    expect(normalized.accounting).toMatchObject({ cachedInputTokens: 80, cacheWriteInputTokens: 10, costUSD: 0.001 })
+    await provider.runChatCompletion([
+      { role: 'user', content: 'Check.' },
+      { role: 'assistant', content: '', reasoningItems: normalized.reasoningItems,
+        toolCalls: [{ id: 'tool_or', type: 'function', function: { name: 'check', arguments: '{}' } }] },
+      { role: 'tool', toolCallId: 'tool_or', toolName: 'check', content: 'Checked.' }
+    ], params)
+    const body = JSON.parse(fetch.mock.calls[1]![1].body)
+    expect(body).toMatchObject({ provider: { sort: 'throughput' }, session_id: 'media-session' })
+    expect(body.messages[0].content[0].cache_control).toEqual({ type: 'ephemeral' })
+    expect(body.messages[2].reasoning_details).toEqual(reasoningDetails)
+  })
   it.each([
     { auth_kind: 'api_key', expected: 'https://openrouter.ai/api/v1' },
     { auth_kind: 'api_key', base_url: 'https://fellow.example.invalid/v1', expected: 'https://fellow.example.invalid/v1' },
@@ -1022,5 +1103,26 @@ describe('AISDKRemoteLLMProvider', () => {
     })
   })
 
+  it('uses the dedicated OpenRouter SDK for tool decisions and retains provider reasoning for replay', async () => {
+    const actual = await vi.importActual<typeof import('@openrouter/ai-sdk-provider')>('@openrouter/ai-sdk-provider')
+    openRouterMocks.createOpenRouter.mockImplementationOnce((...args: unknown[]) =>
+      actual.createOpenRouter(args[0] as Parameters<typeof actual.createOpenRouter>[0]) as unknown as
+        ReturnType<typeof openRouterMocks.createOpenRouter>
+    )
+    const reasoningDetails = [{ type: 'reasoning.text', text: 'Inspect the file.', signature: 'signature-1', format: 'anthropic-claude-v1', index: 0 }]
+    const fixture = structuredClone(CHAT_RESPONSE)
+    const message = { ...fixture.choices[0]!.message, reasoning_details: reasoningDetails }
+    const fetch = vi.fn().mockResolvedValue(Response.json({
+      ...fixture,
+      choices: [{ ...fixture.choices[0], message }]
+    }))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new OpenRouterLLMProvider({ ...TARGET, provider: LLMProviders.OpenRouter, model: 'anthropic/claude-sonnet-5' })
+
+    const response = await provider.runChatCompletion('Read README.md', PARAMS)
+    expect(fetch.mock.calls[0]![0]).toMatch(/\/chat\/completions$/)
+    expect(response.data.choices[0].message.tool_calls[0].function.name).toBe('read_file')
+    expect(response.data.choices[0].message.reasoningItems[0].providerOptions.openrouter.reasoning_details).toEqual(reasoningDetails)
+  })
 
 })
