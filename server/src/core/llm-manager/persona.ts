@@ -346,7 +346,7 @@ export default class Persona {
     const toolExecution = await TOOL_EXECUTOR.executeTool({
       toolkitId: 'weather',
       toolId: 'openmeteo',
-      functionName: 'getCurrentConditions',
+      functionName: 'getWeather',
       parsedInput: {
         location: weatherLocationQuery
       }
@@ -363,27 +363,30 @@ export default class Persona {
           success?: boolean
           data?: {
             location?: string
-            description?: string
-            temperatureC?: string
-            observationTime?: string
+            current?: {
+              description?: string
+              temperatureC?: string
+              observationTime?: string
+            }
           }
         }
       | undefined
-    if (!toolResult?.success || !toolResult.data) {
+    const current = toolResult?.data?.current
+    if (!toolResult?.success || !current) {
       this.weatherSnapshot = null
       return
     }
 
-    const temperatureC = Number(toolResult.data.temperatureC)
-    const observationTime = toolResult.data.observationTime || ''
+    const temperatureC = Number(current.temperatureC)
+    const observationTime = current.observationTime || ''
     if (!Number.isFinite(temperatureC) || !observationTime) {
       this.weatherSnapshot = null
       return
     }
 
     this.weatherSnapshot = {
-      location: toolResult.data.location || weatherLocationQuery,
-      description: toolResult.data.description || 'Unknown',
+      location: toolResult.data?.location || weatherLocationQuery,
+      description: current.description || 'Unknown',
       temperatureC,
       observationTime
     }

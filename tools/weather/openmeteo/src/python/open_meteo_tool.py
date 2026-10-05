@@ -8,6 +8,22 @@ DEFAULT_SETTINGS = {}
 REQUIRED_SETTINGS = []
 
 
+DEFAULT_FORECAST_DAYS = 1
+CURRENT_WEATHER_VARIABLES = [
+    "temperature_2m", "relative_humidity_2m", "apparent_temperature",
+    "weather_code", "wind_speed_10m", "wind_direction_10m",
+]
+HOURLY_FORECAST_VARIABLES = [
+    *CURRENT_WEATHER_VARIABLES,
+    "precipitation_probability",
+    "precipitation",
+]
+DAILY_FORECAST_VARIABLES = [
+    "weather_code", "temperature_2m_min", "temperature_2m_max",
+    "precipitation_sum", "precipitation_probability_max", "wind_speed_10m_max",
+]
+
+
 WMO_CODE_DESCRIPTIONS: Dict[int, str] = {
     0: "Clear sky",
     1: "Mainly clear",
@@ -80,46 +96,24 @@ def _normalize_date_range(
     return start_date or supplied_boundary, end_date or supplied_boundary
 
 
-def _map_hourly_to_current(hourly: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    times = hourly.get("time")
-    if not isinstance(times, list) or not times:
-        return None
-
-    time_values = [str(time) for time in times]
-    index = 0
-
-    def value_at(key: str) -> Any:
-        values = hourly.get(key)
-        if not isinstance(values, list) or index >= len(values):
-            return None
-        return values[index]
-
-    temperature = value_at("temperature_2m")
-    humidity = value_at("relative_humidity_2m")
-    apparent_temperature = value_at("apparent_temperature")
-    weather_code = value_at("weather_code")
-    wind_speed = value_at("wind_speed_10m")
-    wind_direction = value_at("wind_direction_10m")
-
-    if (
-        temperature is None
-        or humidity is None
-        or apparent_temperature is None
-        or weather_code is None
-        or wind_speed is None
-        or wind_direction is None
-        or index >= len(time_values)
-    ):
-        return None
+def _format_current_conditions(current: Dict[str, Any], location: str) -> Dict[str, Any]:
+    """Format the current timestamp independently from forecast hours."""
+    temperature = round(current["temperature_2m"])
+    feels_like = round(current["apparent_temperature"])
+    wind_speed = round(current["wind_speed_10m"])
 
     return {
-        "temperature_2m": temperature,
-        "relative_humidity_2m": humidity,
-        "apparent_temperature": apparent_temperature,
-        "weather_code": weather_code,
-        "wind_speed_10m": wind_speed,
-        "wind_direction_10m": wind_direction,
-        "time": time_values[index],
+        "location": location,
+        "description": _get_weather_description(current["weather_code"]),
+        "temperatureC": str(temperature),
+        "temperatureF": _celsius_to_fahrenheit(temperature),
+        "feelsLikeC": str(feels_like),
+        "feelsLikeF": _celsius_to_fahrenheit(feels_like),
+        "humidity": str(current["relative_humidity_2m"]),
+        "windKmph": str(wind_speed),
+        "windMph": str(round(wind_speed * 0.621371)),
+        "windDirection": _degrees_to_compass(current["wind_direction_10m"]),
+        "observationTime": current["time"],
     }
 
 
@@ -151,68 +145,62 @@ class OpenMeteoTool(BaseTool):
     def description(self) -> str:
         return self.config.get("description", "")
 
-    def get_current_conditions(
+    def get_weather(
         self,
         location: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Return current conditions and today's forecast, or a requested interval."""
         if not location or not location.strip():
             return {"success": False, "error": "Location is required."}
 
         try:
-            geocoding_result = self._geocode(location.strip())
-            if not geocoding_result:
+            geocoding = self._geocode(location.strip())
+            if not geocoding:
                 return {"success": False, "error": "Location not found."}
 
             weather = self._fetch_weather(
-                geocoding_result["latitude"],
-                geocoding_result["longitude"],
+                geocoding["latitude"],
+                geocoding["longitude"],
                 start_date,
                 end_date,
             )
+            daily = weather.get("daily", {})
+            hourly = weather.get("hourly", {})
+            if not daily.get("time") or not hourly.get("time"):
+                return {"success": False, "error": "No forecast data available for this location."}
 
-            current = weather.get("current")
-            if not current:
-                return {
-                    "success": False,
-                    "error": "No weather data available for this location.",
-                }
-
-            temp_c = round(current.get("temperature_2m", 0))
-            feels_like_c = round(current.get("apparent_temperature", 0))
-            wind_kmph = round(current.get("wind_speed_10m", 0))
-
-            return {
-                "success": True,
-                "data": {
-                    "location": geocoding_result["display_name"],
-                    "description": _get_weather_description(
-                        current.get("weather_code", 0)
-                    ),
-                    "temperatureC": str(temp_c),
-                    "temperatureF": _celsius_to_fahrenheit(temp_c),
-                    "feelsLikeC": str(feels_like_c),
-                    "feelsLikeF": _celsius_to_fahrenheit(feels_like_c),
-                    "humidity": str(current.get("relative_humidity_2m", "")),
-                    "windKmph": str(wind_kmph),
-                    "windMph": str(round(wind_kmph * 0.621371)),
-                    "windDirection": _degrees_to_compass(
-                        current.get("wind_direction_10m", 0)
-                    ),
-                    "observationTime": current.get("time", ""),
+            data = {
+                "location": geocoding["display_name"],
+                "timezone": weather.get("timezone"),
+                "utcOffsetSeconds": weather.get("utc_offset_seconds"),
+                "dailyUnits": weather.get("daily_units"),
+                "hourlyUnits": weather.get("hourly_units"),
+                "daily": {
+                    **daily,
+                    "description": [
+                        _get_weather_description(code) for code in daily["weather_code"]
+                    ],
+                },
+                "hourly": {
+                    **hourly,
+                    "description": [
+                        _get_weather_description(code) for code in hourly["weather_code"]
+                    ],
                 },
             }
-        except Exception as error:
-            status_code = None
-            if isinstance(error, NetworkError):
-                status_code = error.response.get("status_code")
+            if weather.get("current"):
+                data["current"] = _format_current_conditions(
+                    weather["current"], geocoding["display_name"]
+                )
 
-            return {
-                "success": False,
-                "error": f"Failed to fetch weather: {str(error)}",
-                "statusCode": status_code,
-            }
+            return {"success": True, "data": data}
+        except Exception as error:
+            result = {"success": False, "error": f"Failed to fetch weather: {error}"}
+            if isinstance(error, NetworkError):
+                result["statusCode"] = error.response.get("status_code")
+            return result
 
     def _geocode(self, location: str) -> Optional[Dict[str, Any]]:
         from urllib.parse import urlencode
@@ -271,16 +259,14 @@ class OpenMeteoTool(BaseTool):
             "timezone": "auto",
         }
 
+        query_params_object["hourly"] = ",".join(HOURLY_FORECAST_VARIABLES)
+        query_params_object["daily"] = ",".join(DAILY_FORECAST_VARIABLES)
         if normalized_start_date and normalized_end_date:
-            query_params_object["hourly"] = (
-                "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m"
-            )
             query_params_object["start_date"] = normalized_start_date
             query_params_object["end_date"] = normalized_end_date
         else:
-            query_params_object["current"] = (
-                "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m"
-            )
+            query_params_object["forecast_days"] = str(DEFAULT_FORECAST_DAYS)
+            query_params_object["current"] = ",".join(CURRENT_WEATHER_VARIABLES)
 
         query_params = urlencode(query_params_object)
 
@@ -291,10 +277,4 @@ class OpenMeteoTool(BaseTool):
             }
         )
 
-        weather_data = response.get("data", {})
-        if not weather_data.get("current") and isinstance(weather_data.get("hourly"), dict):
-            current = _map_hourly_to_current(weather_data.get("hourly", {}))
-            if current:
-                weather_data["current"] = current
-
-        return weather_data
+        return response.get("data", {})

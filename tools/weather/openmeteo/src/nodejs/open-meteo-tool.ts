@@ -5,6 +5,27 @@ import { Network, NetworkError } from '@sdk/network'
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
 
+const DEFAULT_FORECAST_DAYS = 1
+const CURRENT_WEATHER_VARIABLES = [
+  'temperature_2m', 'relative_humidity_2m', 'apparent_temperature',
+  'weather_code', 'wind_speed_10m', 'wind_direction_10m'
+]
+const HOURLY_FORECAST_VARIABLES = [
+  ...CURRENT_WEATHER_VARIABLES,
+  'precipitation_probability',
+  'precipitation'
+]
+const DAILY_FORECAST_VARIABLES = [
+  'weather_code', 'temperature_2m_min', 'temperature_2m_max',
+  'precipitation_sum', 'precipitation_probability_max', 'wind_speed_10m_max'
+]
+
+interface ForecastSeries {
+  time: string[]
+  weather_code: number[]
+  [variable: string]: Array<string | number | null>
+}
+
 interface GeocodingResult {
   id: number
   name: string
@@ -28,31 +49,21 @@ interface CurrentWeather {
   time: string
 }
 
-interface HourlyWeather {
-  time: string[]
-  temperature_2m: number[]
-  relative_humidity_2m: number[]
-  apparent_temperature: number[]
-  weather_code: number[]
-  wind_speed_10m: number[]
-  wind_direction_10m: number[]
-}
-
 interface WeatherResponse {
   latitude: number
   longitude: number
   current?: CurrentWeather
-  hourly?: HourlyWeather
-  current_units?: {
-    temperature_2m: string
-    relative_humidity_2m: string
-    apparent_temperature: string
-    weather_code: string
-    wind_speed_10m: string
-    wind_direction_10m: string
-  }
+  daily?: ForecastSeries
+  daily_units?: Record<string, string>
+  hourly_units?: Record<string, string>
+  timezone?: string
+  utc_offset_seconds?: number
+  hourly?: ForecastSeries
 }
 
+/**
+ * A current timestamp formatted for both metric and imperial consumers.
+ */
 export interface WeatherConditions {
   location: string
   description: string
@@ -67,9 +78,26 @@ export interface WeatherConditions {
   observationTime: string
 }
 
+/**
+ * Current conditions and complete forecasts share location and unit metadata.
+ */
+export interface WeatherData {
+  location: string
+  timezone: string | undefined
+  utcOffsetSeconds: number | undefined
+  current?: WeatherConditions
+  dailyUnits: Record<string, string> | undefined
+  hourlyUnits: Record<string, string> | undefined
+  daily: ForecastSeries
+  hourly: ForecastSeries
+}
+
+/**
+ * Reports weather data or a concrete lookup failure.
+ */
 export interface WeatherResponseResult {
   success: boolean
-  data?: WeatherConditions
+  data?: WeatherData
   error?: string
   statusCode?: number
 }
@@ -137,7 +165,9 @@ function getWeatherDescription(code: number): string {
   return WMO_CODE_DESCRIPTIONS[code] || 'Unknown'
 }
 
-/** Ensure Open-Meteo always receives both boundaries for a requested interval. */
+/**
+ * Ensures Open-Meteo receives both boundaries for a requested interval.
+ */
 export function normalizeWeatherDateRange(
   startDate?: string,
   endDate?: string
@@ -150,41 +180,29 @@ export function normalizeWeatherDateRange(
   }
 }
 
-function mapHourlyToCurrent(hourly: HourlyWeather): CurrentWeather | null {
-  if (!hourly.time || hourly.time.length === 0) {
-    return null
-  }
-
-  const index = 0
-
-  const temperature = hourly.temperature_2m?.[index]
-  const humidity = hourly.relative_humidity_2m?.[index]
-  const apparentTemperature = hourly.apparent_temperature?.[index]
-  const weatherCode = hourly.weather_code?.[index]
-  const windSpeed = hourly.wind_speed_10m?.[index]
-  const windDirection = hourly.wind_direction_10m?.[index]
-  const time = hourly.time[index]
-
-  if (
-    temperature === undefined ||
-    humidity === undefined ||
-    apparentTemperature === undefined ||
-    weatherCode === undefined ||
-    windSpeed === undefined ||
-    windDirection === undefined ||
-    !time
-  ) {
-    return null
-  }
+/**
+ * Formats the provider's current timestamp independently from forecast hours.
+ */
+function formatCurrentConditions(
+  current: CurrentWeather,
+  location: string
+): WeatherConditions {
+  const temperature = Math.round(current.temperature_2m)
+  const feelsLike = Math.round(current.apparent_temperature)
+  const windSpeed = Math.round(current.wind_speed_10m)
 
   return {
-    temperature_2m: temperature,
-    relative_humidity_2m: humidity,
-    apparent_temperature: apparentTemperature,
-    weather_code: weatherCode,
-    wind_speed_10m: windSpeed,
-    wind_direction_10m: windDirection,
-    time
+    location,
+    description: getWeatherDescription(current.weather_code),
+    temperatureC: temperature.toString(),
+    temperatureF: celsiusToFahrenheit(temperature),
+    feelsLikeC: feelsLike.toString(),
+    feelsLikeF: celsiusToFahrenheit(feelsLike),
+    humidity: current.relative_humidity_2m.toString(),
+    windKmph: windSpeed.toString(),
+    windMph: Math.round(windSpeed * 0.621371).toString(),
+    windDirection: degreesToCompass(current.wind_direction_10m),
+    observationTime: current.time
   }
 }
 
@@ -223,71 +241,66 @@ export default class OpenMeteoTool extends Tool {
     return this.config['description']
   }
 
-  async getCurrentConditions(
+  /**
+   * Returns current conditions and today's forecast, or a requested interval.
+   */
+  async getWeather(
     location: string,
     startDate?: string,
     endDate?: string
   ): Promise<WeatherResponseResult> {
-    if (!location || !location.trim()) {
-      return {
-        success: false,
-        error: 'Location is required.'
-      }
+    if (!location?.trim()) {
+      return { success: false, error: 'Location is required.' }
     }
 
     try {
-      const geocodingResult = await this.geocode(location.trim())
-      if (!geocodingResult) {
-        return {
-          success: false,
-          error: 'Location not found.'
-        }
+      const geocoding = await this.geocode(location.trim())
+      if (!geocoding) {
+        return { success: false, error: 'Location not found.' }
       }
-
       const weather = await this.fetchWeather(
-        geocodingResult.latitude,
-        geocodingResult.longitude,
+        geocoding.latitude,
+        geocoding.longitude,
         startDate,
         endDate
       )
-
-      if (!weather.current) {
-        return {
-          success: false,
-          error: 'No weather data available for this location.'
-        }
+      if (!weather.daily?.time?.length || !weather.hourly?.time?.length) {
+        return { success: false, error: 'No forecast data available for this location.' }
       }
-
-      const current = weather.current
-      const tempC = Math.round(current.temperature_2m)
-      const feelsLikeC = Math.round(current.apparent_temperature)
-      const windKmph = Math.round(current.wind_speed_10m)
 
       return {
         success: true,
         data: {
-          location: geocodingResult.displayName,
-          description: getWeatherDescription(current.weather_code),
-          temperatureC: tempC.toString(),
-          temperatureF: celsiusToFahrenheit(tempC),
-          feelsLikeC: feelsLikeC.toString(),
-          feelsLikeF: celsiusToFahrenheit(feelsLikeC),
-          humidity: current.relative_humidity_2m.toString(),
-          windKmph: windKmph.toString(),
-          windMph: Math.round(windKmph * 0.621371).toString(),
-          windDirection: degreesToCompass(current.wind_direction_10m),
-          observationTime: current.time
+          location: geocoding.displayName,
+          timezone: weather.timezone,
+          utcOffsetSeconds: weather.utc_offset_seconds,
+          ...(weather.current
+            ? {
+                current: formatCurrentConditions(
+                  weather.current,
+                  geocoding.displayName
+                )
+              }
+            : {}),
+          dailyUnits: weather.daily_units,
+          hourlyUnits: weather.hourly_units,
+          daily: {
+            ...weather.daily,
+            description: weather.daily.weather_code.map(getWeatherDescription)
+          },
+          hourly: {
+            ...weather.hourly,
+            description: weather.hourly.weather_code.map(getWeatherDescription)
+          }
         }
       }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error)
-      const statusCode =
-        error instanceof NetworkError ? error.response.statusCode : undefined
-
+    } catch (error) {
       return {
         success: false,
-        error: `Failed to fetch weather: ${message}`,
-        statusCode
+        error: `Failed to fetch weather: ${error instanceof Error ? error.message : String(error)}`,
+        ...(error instanceof NetworkError
+          ? { statusCode: error.response.statusCode }
+          : {})
       }
     }
   }
@@ -339,18 +352,14 @@ export default class OpenMeteoTool extends Tool {
       timezone: 'auto'
     })
 
+    queryParams.set('hourly', HOURLY_FORECAST_VARIABLES.join(','))
+    queryParams.set('daily', DAILY_FORECAST_VARIABLES.join(','))
     if (normalizedDateRange.startDate && normalizedDateRange.endDate) {
-      queryParams.set(
-        'hourly',
-        'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m'
-      )
       queryParams.set('start_date', normalizedDateRange.startDate)
       queryParams.set('end_date', normalizedDateRange.endDate)
     } else {
-      queryParams.set(
-        'current',
-        'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,wind_direction_10m'
-      )
+      queryParams.set('forecast_days', String(DEFAULT_FORECAST_DAYS))
+      queryParams.set('current', CURRENT_WEATHER_VARIABLES.join(','))
     }
 
     const response = await this.weatherNetwork.request<WeatherResponse>({
@@ -358,14 +367,6 @@ export default class OpenMeteoTool extends Tool {
       method: 'GET'
     })
 
-    const weatherData = response.data
-    if (!weatherData.current && weatherData.hourly) {
-      const mappedCurrent = mapHourlyToCurrent(weatherData.hourly)
-      if (mappedCurrent) {
-        weatherData.current = mappedCurrent
-      }
-    }
-
-    return weatherData
+    return response.data
   }
 }

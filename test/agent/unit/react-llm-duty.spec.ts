@@ -2263,7 +2263,7 @@ describe('continuous agent loop', () => {
       }
     ])
     coreMocks.getToolFunctions.mockReturnValue({
-      getCurrentConditions: {
+      getWeather: {
         description: 'Get current weather conditions for a location.',
         parameters: {
           type: 'object',
@@ -2285,7 +2285,7 @@ describe('continuous agent loop', () => {
         modelTurn += 1
         if (modelTurn === 1) {
           expect(tools.map((tool) => tool.function.name)).toContain(
-            'weather__openmeteo__getCurrentConditions'
+            'weather__openmeteo__getWeather'
           )
           expect(tools.map((tool) => tool.function.name)).not.toContain(
             AGENT_TOOLKIT_LOADER_NAME
@@ -2294,7 +2294,7 @@ describe('continuous agent loop', () => {
             toolCalls: [
               toolCall(
                 'weather-call',
-                'weather__openmeteo__getCurrentConditions',
+                'weather__openmeteo__getWeather',
                 {
                   location: 'Shenzhen',
                   [AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME]: 'Check Shenzhen weather'

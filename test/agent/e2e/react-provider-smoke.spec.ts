@@ -270,7 +270,7 @@ function expectWeatherScenario(result: ProviderScenarioResult): void {
   expect(turn.finalIntent).toBe('answer')
   expect(
     turn.executionHistory.some(
-      (item) => item.function === 'weather.openmeteo.getCurrentConditions'
+      (item) => item.function === 'weather.openmeteo.getWeather'
     )
   ).toBe(true)
   expect(trace).toMatch(/shenzhen/i)

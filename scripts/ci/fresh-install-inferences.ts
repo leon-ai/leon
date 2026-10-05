@@ -25,7 +25,7 @@ const SCENARIOS = [
   {
     name: 'weather',
     input: 'What is the weather like in Shenzhen?',
-    functionName: 'weather.openmeteo.getCurrentConditions'
+    functionName: 'weather.openmeteo.getWeather'
   },
   {
     name: 'ocr',
@@ -70,7 +70,8 @@ export function verifyInference(scenario: Scenario, payload: LeonClientInterface
     assert(normalizeOcrText(payload['answer']).includes(OCR_TEXT), 'Answer did not include the extracted text')
   } else {
     assert(String(output?.data?.['location']).toLowerCase().includes('shenzhen'), 'Wrong weather location')
-    const temperature = output?.data?.['temperatureC']
+    const current = output?.data?.['current'] as { temperatureC?: unknown } | undefined
+    const temperature = current?.temperatureC
     assert(typeof temperature === 'string' && temperature.trim() && Number.isFinite(Number(temperature)), 'Missing weather temperature')
   }
 }
