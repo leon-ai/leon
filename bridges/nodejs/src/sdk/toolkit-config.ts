@@ -27,7 +27,10 @@ interface ToolConfig {
   connection?: ToolConnectionSchema
   functions: Record<
     string,
-    { description: string, input_schema: Record<string, string> }
+    {
+      description: string
+      parameters: Record<string, unknown>
+    }
   >
 }
 
