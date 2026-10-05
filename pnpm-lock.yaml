@@ -20,6 +20,9 @@ importers:
       '@ai-sdk/huggingface':
         specifier: 2.0.47
         version: 2.0.47(zod@4.3.6)
+      '@ai-sdk/minimax':
+        specifier: 3.0.48
+        version: 3.0.48(zod@4.3.6)
       '@ai-sdk/moonshotai':
         specifier: 3.0.62
         version: 3.0.62(zod@4.3.6)
@@ -299,6 +302,12 @@ packages:
     engines: {node: '>=22'}
     peerDependencies:
       zod: ^3.25.76 || ^4
+
+  '@ai-sdk/minimax@3.0.48':
+    resolution: {integrity: sha512-TKu6B4Hc62rQEMg3UU2SfCNVi1ZoqgZtIDmk4Sggt/ES8+IzohjiUOPsDRJuQCabkPXY2Wl3qZIxXNI64H+xFw==}
+    engines: {node: '>=22'}
+    peerDependencies:
+      zod: ^3.25.76 || ^4.1.8
 
   '@ai-sdk/moonshotai@3.0.62':
     resolution: {integrity: sha512-OuiSS9CyWvLBOFJSs+3dDGQC3oFdHAUhC4otcfwXCJQuGi1GLbk7s0EInYGaqT4o7VKVOjv9VdP4+ihxz2Z+qw==}
@@ -4394,6 +4403,13 @@ snapshots:
       '@ai-sdk/openai-compatible': 3.0.47(zod@4.3.6)
       '@ai-sdk/provider': 4.0.13
       '@ai-sdk/provider-utils': 5.0.39(zod@4.3.6)
+      zod: 4.3.6
+
+  '@ai-sdk/minimax@3.0.48(zod@4.3.6)':
+    dependencies:
+      '@ai-sdk/anthropic': 4.0.71(zod@4.3.6)
+      '@ai-sdk/provider': 4.0.21
+      '@ai-sdk/provider-utils': 5.0.53(zod@4.3.6)
       zod: 4.3.6
 
   '@ai-sdk/moonshotai@3.0.62(zod@4.3.6)':

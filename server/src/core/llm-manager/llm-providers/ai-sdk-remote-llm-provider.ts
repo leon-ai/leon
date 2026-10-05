@@ -17,6 +17,7 @@ import type {
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createAnthropic } from '@ai-sdk/anthropic'
+import { createMiniMax } from '@ai-sdk/minimax'
 import { createZai } from '@ai-sdk/zai'
 import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createHuggingFace } from '@ai-sdk/huggingface'
@@ -57,6 +58,7 @@ type AISDKFlavor =
   | 'openrouter'
   | 'openai-compatible'
   | 'anthropic'
+  | 'minimax'
   | 'zai'
   | 'moonshotai'
   | 'huggingface'
@@ -252,8 +254,11 @@ export default class AISDKRemoteLLMProvider {
       })
     }
 
-    if (this.config.flavor === 'anthropic') {
-      const provider = createAnthropic({
+    if (this.config.flavor === 'anthropic' || this.config.flavor === 'minimax') {
+      const createProvider = this.config.flavor === 'minimax'
+        ? createMiniMax
+        : createAnthropic
+      const provider = createProvider({
         fetch,
         apiKey,
         baseURL: this.config.baseURL,
@@ -1406,7 +1411,8 @@ export default class AISDKRemoteLLMProvider {
     part: Record<string, unknown>
   ): void {
     const metadata = part['providerMetadata'] as SharedV4ProviderOptions | undefined
-    const namespace = this.config.flavor === 'anthropic'
+    // MiniMax reuses Anthropic's signed reasoning parts and metadata namespace.
+    const namespace = this.config.flavor === 'anthropic' || this.config.flavor === 'minimax'
       ? 'anthropic'
       : this.config.flavor === 'openai-responses' ? 'openai' : this.config.providerName
     const providerData = metadata?.[namespace]

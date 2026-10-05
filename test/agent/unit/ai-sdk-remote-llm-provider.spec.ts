@@ -337,6 +337,63 @@ describe('AISDKRemoteLLMProvider', () => {
     })
   })
 
+  it.each(['anthropic', 'openai'])('preserves MiniMax %s connection media, reasoning controls and cache usage', async (protocol) => {
+    const baseURL = protocol === 'anthropic'
+      ? 'https://example.invalid/anthropic'
+      : 'https://example.invalid/v1'
+    const fetch = vi.fn().mockImplementation(async () => Response.json(
+      protocol === 'anthropic'
+        ? {
+            id: 'msg_minimax', type: 'message', role: 'assistant', model: 'MiniMax-M3',
+            content: [{ type: 'text', text: 'Done.' }], stop_reason: 'end_turn', stop_sequence: null,
+            usage: { input_tokens: 10, output_tokens: 2, cache_read_input_tokens: 80, cache_creation_input_tokens: 10 }
+          }
+        : {
+            id: 'chat_minimax', created: 1, model: 'MiniMax-M3',
+            choices: [{ index: 0, message: { role: 'assistant', content: 'Done.' }, finish_reason: 'stop' }],
+            usage: { prompt_tokens: 100, completion_tokens: 2,
+              prompt_tokens_details: { cached_tokens: 80, cache_write_tokens: 10 } }
+          }
+    ))
+    vi.stubGlobal('fetch', fetch)
+    const provider = new MiniMaxLLMProvider({
+      provider: LLMProviders.MiniMax, model: 'MiniMax-M3', label: 'MiniMax',
+      isEnabled: true, isLocal: false, isResolved: true,
+      accountCredentials: { api_key: 'minimax-account-key', base_url: baseURL }
+    })
+    const prompt: PromptOrChatHistory = [{
+      role: 'user', content: 'Look.', files: [{ mediaType: 'image/png', dataBase64: 'AA==' }]
+    }]
+    const params: CompletionParams = {
+      ...createCompletionParams(null), shouldStream: false, reasoningMode: 'on'
+    }
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(
+      await provider.runChatCompletion(prompt, params)
+    )
+    const body = JSON.parse(fetch.mock.calls[0]![1].body)
+    const content = body.messages.find((message: { role: string }) => message.role === 'user').content
+
+    expect(normalized).toMatchObject({
+      usedInputTokens: 100, usedOutputTokens: 2,
+      accounting: { cachedInputTokens: 80, cacheWriteInputTokens: 10 }
+    })
+    expect(body.thinking).toEqual({ type: 'adaptive' })
+    if (protocol === 'anthropic') {
+      expect(String(fetch.mock.calls[0]![0])).toBe(`${baseURL}/v1/messages`)
+      expect(content).toContainEqual({
+        type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AA==' }
+      })
+    } else {
+      expect(String(fetch.mock.calls[0]![0])).toBe(`${baseURL}/chat/completions`)
+      expect(body.reasoning_split).toBe(true)
+      expect(new Headers(fetch.mock.calls[0]![1].headers).get('authorization')).toBe('Bearer minimax-account-key')
+      expect(content).toContainEqual({ type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } })
+    }
+
+    await provider.runChatCompletion(prompt, { ...params, reasoningMode: 'off', disableThinking: true })
+    expect(JSON.parse(fetch.mock.calls[1]![1].body).thinking).toEqual({ type: 'disabled' })
+  })
+
   it('distinguishes unavailable cache accounting from a reported zero', () => {
     const inputTokens = { total: 100, cacheRead: 0, cacheWrite: 0 }
     expect(readCompletionAccounting({ inputTokens, raw: { prompt_tokens: 100 } })).toEqual({})
@@ -345,7 +402,7 @@ describe('AISDKRemoteLLMProvider', () => {
     } })).toEqual({ cachedInputTokens: 0 })
   })
 
-  it.each([LLMProviders.Anthropic])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
+  it.each([LLMProviders.Anthropic, LLMProviders.MiniMax])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
     const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3'
     const message = { id: 'msg_claude', type: 'message', role: 'assistant', model,
       content: [], stop_reason: null, stop_sequence: null,
@@ -473,7 +530,7 @@ describe('AISDKRemoteLLMProvider', () => {
     const minimax = new MiniMaxLLMProvider({ ...target, provider: LLMProviders.MiniMax, model: 'MiniMax-M3' }) as unknown as {
       config: { baseURL: string, flavor: string }
     }
-    expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'anthropic' })
+    expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'minimax' })
   })
 
   it('reuses account websockets and preserves cache usage, summaries and encrypted reasoning for replay', async () => {

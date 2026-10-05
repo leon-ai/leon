@@ -11,7 +11,7 @@ const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.MiniMax
 
 const ADAPTIVE_THINKING_MODEL = 'MiniMax-M3'
 
-type MiniMaxFlavor = 'anthropic' | 'openai-compatible'
+type MiniMaxFlavor = 'minimax' | 'openai-compatible'
 
 interface MiniMaxEndpoint {
   baseURL: string
@@ -21,10 +21,15 @@ interface MiniMaxEndpoint {
 function resolveMiniMaxEndpoint(configuredBaseURL: string): MiniMaxEndpoint {
   const publicBaseURL = configuredBaseURL.replace(/\/+$/, '')
 
-  if (publicBaseURL.endsWith('/anthropic')) {
+  if (
+    publicBaseURL.endsWith('/anthropic') ||
+    publicBaseURL.endsWith('/anthropic/v1')
+  ) {
     return {
-      baseURL: `${publicBaseURL}/v1`,
-      flavor: 'anthropic'
+      baseURL: publicBaseURL.endsWith('/anthropic')
+        ? `${publicBaseURL}/v1`
+        : publicBaseURL,
+      flavor: 'minimax'
     }
   }
 
@@ -53,9 +58,9 @@ function buildMiniMaxProviderOptions(
       }
     : {}
 
-  if (flavor === 'anthropic') {
+  if (flavor === 'minimax') {
     return {
-      anthropic: {
+      minimax: {
         ...thinking,
         sendReasoning: true
       }
