@@ -4,8 +4,7 @@ import path from 'node:path'
 import type { FastifyPluginAsync, FastifySchema } from 'fastify'
 import { Type } from '@sinclair/typebox'
 import type { Static } from '@sinclair/typebox'
-import jq from 'node-jq'
-import type { Json as NodeJQJson } from 'node-jq/lib/options'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 import type { APIOptions } from '@/core/http-server/http-server'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -134,10 +133,7 @@ export const postExtensionFileRead: FastifyPluginAsync<APIOptions> = async (
         )
         const filter = request.body.jq?.trim()
         const data = filter
-          ? await jq.run(filter, redactedJson as NodeJQJson, {
-              input: 'json',
-              output: 'json'
-            })
+          ? await RuntimeHelper.projectJSONValue(filter, redactedJson)
           : redactedJson
 
         return reply.send({

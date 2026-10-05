@@ -1,10 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { execFile } from 'node:child_process'
 
 import { LEON_HOME_PATH } from '@/leon-roots'
 import { SystemHelper } from '@/helpers/system-helper'
 
 const DEFAULT_POSIX_PATH = '/usr/bin:/bin:/usr/sbin:/sbin'
+const MAX_BINARY_OUTPUT_BYTES = 4 * 1_024 * 1_024
+const JSON_PROJECTION_TIMEOUT_MS = 5_000
 
 export class RuntimeHelper {
   /**
@@ -111,6 +114,86 @@ export class RuntimeHelper {
       ],
       process.execPath
     )
+  }
+
+  /**
+   * Resolve the shared JSON processor installed during Leon's base setup.
+   */
+  public static getJQBinPath(): string {
+    return path.join(this.binPath, 'jq', SystemHelper.isWindows() ? 'jq.exe' : 'jq')
+  }
+
+  /**
+   * Run a native binary without a shell, bounding output, lifetime and cancellation.
+   */
+  public static runBinary(
+    binary: string,
+    args: string[],
+    options: {
+      timeoutMs: number
+      signal?: AbortSignal
+      input?: string
+      env?: NodeJS.ProcessEnv
+      successExitCodes?: number[]
+    }
+  ): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const child = execFile(binary, args, {
+        timeout: options.timeoutMs,
+        killSignal: 'SIGKILL',
+        signal: options.signal,
+        maxBuffer: MAX_BINARY_OUTPUT_BYTES,
+        windowsHide: true,
+        env: options.env
+      }, (error, stdout) => {
+        if (error && !(typeof error.code === 'number' && options.successExitCodes?.includes(error.code))) {
+          reject(error)
+          return
+        }
+
+        resolve(stdout.trimEnd())
+      })
+
+      child.stdin?.on('error', reject)
+      child.stdin?.end(options.input)
+    })
+  }
+
+  /**
+   * Query serialized JSON with Leon's managed jq and bounded time/output.
+   */
+  public static projectJSON(filter: string, input: unknown): Promise<string> {
+    const stdin = JSON.stringify(input)
+
+    if (typeof filter !== 'string' || !filter.trim() || filter.includes('\0')) {
+      throw new Error('jq requires a non-empty filter without NUL bytes')
+    }
+    if (stdin === undefined) {
+      throw new Error('jq requires JSON input')
+    }
+
+    return this.runBinary(this.getJQBinPath(), ['--compact-output', filter], {
+      timeoutMs: JSON_PROJECTION_TIMEOUT_MS,
+      input: stdin,
+      env: {}
+    })
+  }
+
+  /**
+   * Preserve JSON values, empty selections and multi-value jq streams for callers.
+   */
+  public static async projectJSONValue(filter: string, input: unknown): Promise<unknown> {
+    const output = await this.projectJSON(filter, input)
+
+    if (!output) {
+      return undefined
+    }
+
+    try {
+      return JSON.parse(output)
+    } catch {
+      return output
+    }
   }
 
   /**

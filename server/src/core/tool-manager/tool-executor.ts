@@ -7,8 +7,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import jq from 'node-jq'
-import type { Json as NodeJQJson } from 'node-jq/lib/options'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { GLOBAL_DATA_PATH, API_VERSION } from '@/constants'
@@ -876,10 +875,7 @@ export default class ToolExecutor {
       )
     }
 
-    const projected = await jq.run(filter, resolvedInput.input, {
-      input: 'json',
-      output: 'json'
-    })
+    const projected = await RuntimeHelper.projectJSONValue(filter, resolvedInput.input)
 
     if (resolvedInput.sourceJsonFilePath) {
       await fs.promises.writeFile(
@@ -897,7 +893,7 @@ export default class ToolExecutor {
   private async resolveResponseJQInput(
     output: Record<string, unknown>
   ): Promise<{
-    input: NodeJQJson
+    input: unknown
     sourceJsonFilePath: string | null
   } | null> {
     const resultValue = output['result']
@@ -907,19 +903,19 @@ export default class ToolExecutor {
         input: {
           ...output,
           result: resolvedResult.value
-        } as NodeJQJson,
+        },
         sourceJsonFilePath: resolvedResult.sourceJsonFilePath
       }
     }
 
     return {
-      input: output as NodeJQJson,
+      input: output,
       sourceJsonFilePath: null
     }
   }
 
   private async resolveJsonLikeValue(value: unknown): Promise<{
-    value: NodeJQJson
+    value: unknown
     sourceJsonFilePath: string | null
   } | null> {
     if (value == null) {
@@ -928,7 +924,7 @@ export default class ToolExecutor {
 
     if (Array.isArray(value) || typeof value === 'object') {
       return {
-        value: value as NodeJQJson,
+        value,
         sourceJsonFilePath: null
       }
     }
@@ -985,7 +981,7 @@ export default class ToolExecutor {
     return JSON.stringify(value, null, 2)
   }
 
-  private parseJsonValue(value: string): NodeJQJson | null {
+  private parseJsonValue(value: string): unknown {
     try {
       return JSON.parse(value)
     } catch {
