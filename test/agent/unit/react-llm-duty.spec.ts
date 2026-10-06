@@ -993,28 +993,26 @@ describe('continuous agent loop', () => {
     expect(prepareContinuation).toHaveBeenCalledTimes(limit > 1 ? 1 : 0)
   })
 
-  it('prefers coding delegation with direct fallback without choosing a product', () => {
-    const skill = fs.readFileSync('skills/agent/coding-delegation/SKILL.md', 'utf8')
+  it('codes directly and keeps owner-selected delegation available', () => {
+    const skill = fs.readFileSync('skills/agent/coding/SKILL.md', 'utf8')
 
-    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding_delegation>')).toBeLessThan(
+    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding>')).toBeGreaterThanOrEqual(0)
+    expect(AGENT_SYSTEM_PROMPT.indexOf('<coding>')).toBeLessThan(
       AGENT_SYSTEM_PROMPT.indexOf('<tool_policy>')
     )
 
     expect(AGENT_SYSTEM_PROMPT).toContain(
-      'Prefer an existing coding agent for substantial coding tasks'
+      'Handle coding directly. Load the coding Agent Skill when enabled.'
     )
     expect(AGENT_SYSTEM_PROMPT).toContain(
-      'load the coding-delegation Agent Skill when enabled'
-    )
-    expect(AGENT_SYSTEM_PROMPT).toContain(
-      'work directly when the skill is disabled or unavailable, or no coding agent is available'
+      'Delegate only when the owner requests or prefers an external coding agent'
     )
     expect(skill).toContain('submitting a prompt is not completion')
     expect(skill).toContain(
       'If delegation is unavailable, explain briefly and continue directly'
     )
     expect(skill).toContain(
-      'a request for analysis or a suggested fix does not authorize edits'
+      'analysis is not authorization to edit, commit, push or publish'
     )
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Codex')
     expect(AGENT_SYSTEM_PROMPT).not.toContain('Ghostty')

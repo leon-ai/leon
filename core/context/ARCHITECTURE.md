@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-10-05T21:41:11+08:00
+- Generated at: 2026-10-06T12:00:04+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -35,7 +35,8 @@
 - Checkpoints and summaries preserve task state as transcripts grow or work resumes.
 - Tool state is separated: installed tools exist in the registry, enabled tools are not disabled by the owner, and available tools have the required settings to run.
 - Deterministic runtime guards validate and repair arguments, block duplicate calls, execute tools, and return every success or failure as a structured observation to the same loop.
-- The model batches independent calls within or across planned work. Tools run concurrently in isolated workers by default; tool-level serial declarations preserve shared sessions and instance state, bookkeeping stays ordered, and results retain their emitted transcript order.
+- The model batches independent calls within or across planned work. Tools run concurrently in isolated workers by default; tool-level serial declarations preserve shared sessions and instance state, and function-level overrides allow both in one tool. Bookkeeping stays ordered, and results retain their emitted transcript order.
+- Coding runs directly in the existing agent loop, guided by an Agent Skill and repository instructions. The file tool supports targeted patches; the shell tool supports finite commands and retained conversation-owned command sessions. External coding agents are optional owner-selected delegates.
 - Tools can opt into retained background executions. Core owns conversation/profile-scoped execution handles, cancellation and progress; system_utilities.tool_executions becomes available when a handle is returned and exposes bounded waits and queries of saved results without repeating the underlying work.
 - Plans track scope, collection coverage and verified outcomes; their worklists persist through checkpointing and continuation.
 - The agent can share progress updates alongside tool calls during longer tasks.
