@@ -11,6 +11,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import type {
   AgentToolTranscriptMessage,
   ProviderReasoningItem,
+  ProviderCompactionContext,
   OpenAITool,
   OpenAIToolCall
 } from '@/core/llm-manager/types'
@@ -253,8 +254,44 @@ interface AgentModelResult {
   textContent?: string
   reasoning?: string
   reasoningItems?: ProviderReasoningItem[]
+  compactionContext?: ProviderCompactionContext
   toolCalls?: OpenAIToolCall[]
   isTruncated?: boolean
+}
+
+/**
+ * Replaces summarized history only after an accepted response is recorded.
+ * Review and interrupted attempts must not consume the acting agent's evidence.
+ */
+function appendAgentTranscriptMessage(
+  transcript: AgentToolTranscriptMessage[],
+  message: AgentToolTranscriptMessage
+): void {
+  if (message.role === 'assistant' && message.compactionContext) {
+    const context = message.compactionContext
+    const acceptedIds = new Set(message.toolCalls?.map((call) => call.id))
+    const hasDeferredCalls = context.output.some((item) =>
+      item['type'] === 'function_call' && !acceptedIds.has(String(item['call_id']))
+    )
+    if (hasDeferredCalls) {
+      // The runtime caps tool batches. Restore evidence if the opaque window
+      // would otherwise replay calls that the runtime cannot supply results for.
+      transcript.splice(
+        0,
+        transcript.length,
+        ...context.sourceTranscript.slice(0, -1)
+      )
+      const portable = { ...message }
+      delete portable.compactionContext
+      transcript.push(portable)
+      return
+    }
+
+    transcript.splice(0, transcript.length, message)
+    return
+  }
+
+  transcript.push(message)
 }
 
 interface AgentModelCallOptions {
@@ -924,6 +961,9 @@ export async function runAgentLoop(
     // Preserve provider reasoning with its response across tool calls and resumes.
     const reasoning = {
       ...(modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}),
+      ...(modelResult.compactionContext
+        ? { compactionContext: modelResult.compactionContext }
+        : {}),
       ...(modelResult.reasoningItems?.length
         ? { reasoningItems: modelResult.reasoningItems }
         : {})
@@ -978,12 +1018,20 @@ export async function runAgentLoop(
 
           if (status === AgentCompletionStatus.Blocked) {
             const answer = `${textContent}\n\n${reason}`
-            transcript.push({ role: 'assistant', content: answer, ...reasoning })
+            appendAgentTranscriptMessage(transcript, {
+              role: 'assistant',
+              content: answer,
+              ...reasoning
+            })
             return { answer, intent: 'blocked', transcript, executionHistory, trackedSteps }
           }
         }
 
-        transcript.push({ role: 'assistant', content: textContent, ...reasoning })
+        appendAgentTranscriptMessage(transcript, {
+          role: 'assistant',
+          content: textContent,
+          ...reasoning
+        })
         return {
           answer: textContent,
           intent: 'answer',
@@ -1010,7 +1058,7 @@ export async function runAgentLoop(
     // Accompanying text describes public progress; only tool-free text proposes
     // completion. Reuse this model call rather than generating separate narration.
     if (textContent) await params.onProgressMessage?.(textContent)
-    transcript.push({
+    appendAgentTranscriptMessage(transcript, {
       role: 'assistant',
       content: [
         textContent,
@@ -1197,7 +1245,9 @@ async function finalizeAgentLoopAtLimit(
         return { answer, intent: review ? 'blocked' : 'error', transcript, executionHistory, trackedSteps }
       }
     }
-    transcript.push(...primaryOutcome.messages)
+    for (const message of primaryOutcome.messages) {
+      appendAgentTranscriptMessage(transcript, message)
+    }
     return {
       answer: primaryOutcome.answer,
       intent: primaryOutcome.intent,
@@ -1351,6 +1401,9 @@ async function attemptAgentLimitFinalization(
 
   const toolCalls = modelResult.toolCalls || []
   const reasoning = {
+    ...(modelResult.compactionContext
+      ? { compactionContext: modelResult.compactionContext }
+      : {}),
     ...(modelResult.reasoning ? { reasoning: modelResult.reasoning } : {}),
     ...(modelResult.reasoningItems?.length
       ? { reasoningItems: modelResult.reasoningItems }

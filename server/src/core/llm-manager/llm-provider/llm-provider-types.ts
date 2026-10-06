@@ -4,7 +4,8 @@ import {
   type LLMPromptAbortReason,
   type OpenAIToolCall,
   type ProviderReasoningItem,
-  type PromptOrChatHistory
+  type PromptOrChatHistory,
+  type ProviderCompactionContext
 } from '@/core/llm-manager/types'
 import { type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
 
@@ -29,6 +30,7 @@ export interface CompletionResult {
   temperature: number
   reasoning?: string
   reasoningItems?: ProviderReasoningItem[]
+  compactionContext?: ProviderCompactionContext
   finishReason?: string
   /**
    * When the model responds through its tool-calling protocol,
@@ -51,6 +53,7 @@ export interface NormalizedCompletionResult {
   toolCalls?: OpenAIToolCall[]
   reasoning?: string
   reasoningItems?: ProviderReasoningItem[]
+  compactionContext?: ProviderCompactionContext
   finishReason?: string
 }
 
@@ -66,6 +69,7 @@ export interface PromptAbortError extends Error {
  */
 export interface Provider {
   modelName?: string
+  compactionBinding?: string
   runChatCompletion: (
     promptOrChatHistory: PromptOrChatHistory,
     completionParams: CompletionParams

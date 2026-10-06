@@ -18,8 +18,10 @@ import {
   LLMDuties,
   LLMProviders,
   type CompletionParams,
-  type PromptOrChatHistory
+  type PromptOrChatHistory,
+  type AgentToolTranscriptMessage
 } from '@/core/llm-manager/types'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 import { FileHelper } from '@/helpers/file-helper'
@@ -440,6 +442,20 @@ export default class LLMProvider {
   }
 
   /**
+   * Restores portable evidence before budgeting a changed agent connection.
+   */
+  public async prepareAgentTranscript(
+    transcript: AgentToolTranscriptMessage[]
+  ): Promise<AgentToolTranscriptMessage[]> {
+    const provider = await this.resolveProviderForDuty(LLMDuties.ReAct)
+
+    return restoreCompactionSources(
+      transcript,
+      provider?.compactionBinding ?? null
+    )
+  }
+
+  /**
    * Run the completion inference
    */
   public async prompt(
@@ -476,6 +492,13 @@ export default class LLMProvider {
       }
 
       return null
+    }
+
+    if (Array.isArray(promptOrChatHistory)) {
+      promptOrChatHistory = restoreCompactionSources(
+        promptOrChatHistory,
+        provider.compactionBinding ?? null
+      )
     }
 
     prepareCompletionRequest(

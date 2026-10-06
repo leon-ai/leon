@@ -4,6 +4,7 @@ import { type NormalizedCompletionResult } from '@/core/llm-manager/llm-provider
 import {
   type CompletionParams,
   type ProviderReasoningItem,
+  type ProviderCompactionContext,
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
@@ -207,6 +208,10 @@ export function normalizeCompletionResultForOpenAICompatibleProvider(
   if (Array.isArray(message['reasoningItems'])) {
     // These items were validated at the SDK boundary and remain internal state.
     result.reasoningItems = message['reasoningItems'] as ProviderReasoningItem[]
+  }
+
+  if (message['compactionContext']) {
+    result.compactionContext = message['compactionContext'] as ProviderCompactionContext
   }
 
   const toolCallsRaw = Array.isArray(message['tool_calls'])

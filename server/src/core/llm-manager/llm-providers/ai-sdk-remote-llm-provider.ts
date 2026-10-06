@@ -43,9 +43,10 @@ import type {
   OpenAIToolCall,
   OpenAIToolChoice,
   ProviderReasoningItem,
-  PromptOrChatHistory
+  PromptOrChatHistory,
+  ProviderCompactionContext
 } from '@/core/llm-manager/types'
-import { LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import {
   canDisableLLMModelReasoning,
   getLLMModelCatalogEntry
@@ -53,6 +54,15 @@ import {
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
+import {
+  replayCompactionWindows,
+  restoreCompactionSources
+} from '@/core/llm-manager/provider-compaction'
+import {
+  CHARS_PER_TOKEN,
+  AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
+  AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 
 type AISDKFlavor =
   | 'openai-responses'
@@ -110,6 +120,7 @@ interface CallState {
   usedInputTokens: number
   usedOutputTokens: number
   finishReason?: string
+  compactionOutput?: Record<string, unknown>[]
 }
 
 
@@ -168,6 +179,39 @@ export default class AISDKRemoteLLMProvider {
     return this.model
   }
 
+  /**
+   * Binds opaque context to a model and credential without persisting secrets.
+   */
+  public get compactionBinding(): string {
+    return createInferenceMetadata({
+      provider: this.config.providerName,
+      model: this.model,
+      endpoint: null,
+      authMode: InferenceAuthMode.APIKey,
+      credentialSource: InferenceCredentialSource.AccountBinding,
+      connectionId: JSON.stringify([
+        this.config.providerName,
+        this.model,
+        this.config.baseURL,
+        this.config.credentials?.['account_id'] || this.apiKey
+      ])
+    }).connectionRef!
+  }
+
+  /**
+   * Selects replay windows already verified for this connection.
+   */
+  private getCompactionContexts(
+    transcript: AgentToolTranscriptMessage[]
+  ): ProviderCompactionContext[] {
+    return transcript.flatMap((message) =>
+      message.role === 'assistant' &&
+      message.compactionContext?.binding === this.compactionBinding
+        ? [message.compactionContext]
+        : []
+    )
+  }
+
   public dispose(): void {
     this.openAITransport?.close()
   }
@@ -198,11 +242,23 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
-  private createLanguageModel(flavor = this.config.flavor): LanguageModelV4 {
+  private createLanguageModel(
+    flavor = this.config.flavor,
+    contexts: ProviderCompactionContext[] = []
+  ): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
     const fetch: typeof globalThis.fetch = (input, init) => {
       if (this.config.flavor === 'openai-responses') {
+        if (contexts.length > 0) {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+          body['input'] = replayCompactionWindows(
+            body['input'] as Record<string, unknown>[],
+            contexts
+          )
+          init = { ...init, body: JSON.stringify(body) }
+        }
+
         return this.getOpenAITransport().fetch(input, init)
       }
 
@@ -342,7 +398,18 @@ export default class AISDKRemoteLLMProvider {
 
     throw new Error(`Unsupported AI SDK flavor: ${this.config.flavor}`)
   }
-  private getLanguageModel(completionParams: CompletionParams): LanguageModelV4 {
+  private getLanguageModel(
+    completionParams: CompletionParams,
+    prompt: PromptOrChatHistory
+  ): LanguageModelV4 {
+    if (Array.isArray(prompt) && this.config.flavor === 'openai-responses') {
+      const contexts = this.getCompactionContexts(prompt)
+      if (contexts.length > 0) {
+        // Request-local closures avoid sharing replay state between sessions.
+        return this.createLanguageModel(this.config.flavor, contexts)
+      }
+    }
+
     // The dedicated DeepSeek SDK only exposes Chat Completions and downgrades
     // JSON schemas there. Responses retains Leon's schema-constrained calls.
     if (this.config.flavor === 'deepseek' && completionParams.data) {
@@ -519,6 +586,7 @@ export default class AISDKRemoteLLMProvider {
     transcript: AgentToolTranscriptMessage[]
   ): LanguageModelV4Prompt {
     const messages: LanguageModelV4Prompt = []
+    transcript = restoreCompactionSources(transcript, this.compactionBinding)
     const supported = getLLMModelCatalogEntry(this.config.providerName as LLMProviders, this.model)?.inputMediaTypes
     // A session can change models. Keep extracted text and source references,
     // but never replay unsupported binary inputs or claim they were observed.
@@ -629,6 +697,24 @@ export default class AISDKRemoteLLMProvider {
         LanguageModelV4Prompt[number],
         { role: 'assistant' }
       >['content'] = []
+      if (message.compactionContext) {
+        const item = message.compactionContext.output.find(
+          (output) => output['type'] === 'compaction'
+        )!
+
+        content.push({
+          type: 'custom',
+          kind: 'openai.compaction',
+          providerOptions: {
+            openai: {
+              itemId: String(item['id']),
+              encryptedContent: String(item['encrypted_content'])
+            }
+          }
+        })
+        messages.push({ role: 'assistant', content })
+        continue
+      }
       const reasoningItems = (message.reasoningItems || []).filter(
         (item) => item.provider === this.config.providerName
       )
@@ -823,8 +909,17 @@ export default class AISDKRemoteLLMProvider {
   ): Record<string, unknown> {
     return {
       // Configure storage before SDK serialization so encrypted reasoning is included.
-      ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
-        ? { store: false }
+      store: false,
+      ...(completionParams.dutyType === LLMDuties.ReAct &&
+        !completionParams.disableContextCompaction
+        ? {
+            contextManagement: [
+              {
+                type: 'compaction',
+                compactThreshold: AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
+              }
+            ]
+          }
         : {}),
       ...(completionParams.promptCacheKey
         ? { promptCacheKey: completionParams.promptCacheKey }
@@ -1041,6 +1136,10 @@ export default class AISDKRemoteLLMProvider {
       this.config.shouldOmitTemperature?.(completionParams) === true
     const normalizedSchema = this.normalizeSchema(completionParams.data)
     const options: LanguageModelV4CallOptions = {
+      ...(this.config.flavor === 'openai-responses' &&
+        completionParams.dutyType === LLMDuties.ReAct
+        ? { includeRawChunks: true }
+        : {}),
       prompt: this.toTextPrompt(
         prompt,
         completionParams,
@@ -1283,6 +1382,62 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
+  /**
+   * Keeps the latest server compaction and all output after it in provider order.
+   */
+  private captureCompactionOutput(state: CallState, output: unknown): void {
+    if (this.config.flavor !== 'openai-responses' || !Array.isArray(output)) {
+      return
+    }
+
+    const index = output.findLastIndex((item) =>
+      item?.type === 'compaction' &&
+      typeof item.id === 'string' &&
+      typeof item.encrypted_content === 'string' && item.encrypted_content
+    )
+    if (index >= 0) {
+      state.compactionOutput = output.slice(index)
+    }
+  }
+
+  /**
+   * Saves provider context alongside flattened source evidence for target changes.
+   */
+  private buildCompactionContext(
+    state: CallState,
+    prompt: PromptOrChatHistory,
+    message: AgentToolTranscriptMessage
+  ): ProviderCompactionContext | undefined {
+    if (!state.compactionOutput || !Array.isArray(prompt)) {
+      return undefined
+    }
+
+    let imageCount = 0
+    const retainedText = JSON.stringify(state.compactionOutput, (key, value) => {
+      if (key === 'image_url') {
+        imageCount += 1
+        return undefined
+      }
+
+      return key === 'encrypted_content' || key === 'file_data'
+        ? undefined
+        : value
+    })
+
+    return {
+      provider: LLMProviders.OpenAI,
+      model: this.model,
+      binding: this.compactionBinding,
+      output: state.compactionOutput,
+      // Usage bounds opaque context without counting ciphertext as ordinary text.
+      estimatedTokens: Math.ceil(
+        state.usedOutputTokens + retainedText.length / CHARS_PER_TOKEN +
+        imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS
+      ),
+      sourceTranscript: [...restoreCompactionSources(prompt), message]
+    }
+  }
+
   private readFinishReason(finishReason: unknown): string | undefined {
     if (typeof finishReason === 'string') {
       return finishReason || undefined
@@ -1418,7 +1573,8 @@ export default class AISDKRemoteLLMProvider {
   }
 
   private buildOpenAICompatiblePayload(
-    state: CallState
+    state: CallState,
+    prompt: PromptOrChatHistory
   ): Record<string, unknown> {
     const toolCalls: OpenAIToolCall[] = state.toolCallOrder
       .map((toolCallId, index) => {
@@ -1441,6 +1597,16 @@ export default class AISDKRemoteLLMProvider {
           !!toolCall && toolCall.function.name.trim().length > 0
       )
 
+    const compactionContext = this.buildCompactionContext(state, prompt, {
+      role: 'assistant',
+      content: state.text,
+      ...(state.reasoning ? { reasoning: state.reasoning } : {}),
+      ...(state.reasoningItems.size > 0
+        ? { reasoningItems: [...state.reasoningItems.values()] }
+        : {}),
+      ...(toolCalls.length > 0 ? { toolCalls } : {})
+    })
+
     return {
       choices: [
         {
@@ -1449,6 +1615,7 @@ export default class AISDKRemoteLLMProvider {
             : {}),
           message: {
             content: state.text,
+            ...(compactionContext ? { compactionContext } : {}),
             ...(state.reasoning.length > 0
               ? { reasoning: state.reasoning }
               : {}),
@@ -1626,8 +1793,12 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel(completionParams)
+    const languageModel = this.getLanguageModel(completionParams, prompt)
     const result = await languageModel.doGenerate(callOptions)
+    this.captureCompactionOutput(
+      state,
+      (result.response?.body as Record<string, unknown> | undefined)?.['output']
+    )
     const content = result.content as Array<Record<string, unknown>>
 
     completionParams.onStreamEvent?.({
@@ -1688,7 +1859,7 @@ export default class AISDKRemoteLLMProvider {
 
     await this.completeMediaOutput(state)
 
-    return this.buildOpenAICompatiblePayload(state)
+    return this.buildOpenAICompatiblePayload(state, prompt)
   }
 
   private async runStreamingCompletion(
@@ -1697,8 +1868,9 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel(completionParams)
+    const languageModel = this.getLanguageModel(completionParams, prompt)
     const result = await languageModel.doStream(callOptions)
+    const outputItems: Record<string, unknown>[] = []
 
     // Clear a previous attempt's provisional text without claiming model output.
     completionParams.onToken?.('')
@@ -1713,6 +1885,21 @@ export default class AISDKRemoteLLMProvider {
     for await (const streamPart of result.stream) {
       const part = streamPart as unknown as Record<string, unknown>
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+
+      if (type === 'raw') {
+        const raw = part['rawValue'] as Record<string, unknown> | undefined
+        if (
+          raw?.['type'] === 'response.output_item.done' &&
+          typeof raw['output_index'] === 'number'
+        ) {
+          outputItems[raw['output_index']] = raw['item'] as Record<string, unknown>
+        }
+        if (raw?.['type'] === 'response.completed') {
+          const response = raw['response'] as Record<string, unknown>
+          this.captureCompactionOutput(state, response['output'])
+        }
+        continue
+      }
 
       this.appendReasoningItem(state, part)
 
@@ -1885,9 +2072,14 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
+    if (!state.compactionOutput) {
+      // Some completed events omit output; item events retain the ordered window.
+      this.captureCompactionOutput(state, outputItems)
+    }
+
     await this.completeMediaOutput(state)
 
-    return this.buildOpenAICompatiblePayload(state)
+    return this.buildOpenAICompatiblePayload(state, prompt)
   }
 
   public async runChatCompletion(

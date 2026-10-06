@@ -30,7 +30,8 @@ import {
   type AgentToolTranscriptMessage,
   type OpenAITool,
   type OpenAIToolCall,
-  type ProviderReasoningItem
+  type ProviderReasoningItem,
+  type ProviderCompactionContext
 } from '@/core/llm-manager/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
@@ -119,6 +120,7 @@ import {
   type AgentContinuityCheckpointInput,
   type AgentLoopContinuationState
 } from './react-llm-duty/agent-loop-continuation'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import {
   prepareAgentModelContext,
   resolveAgentContextCompactionTriggerTokens,
@@ -174,6 +176,7 @@ export class ReActLLMDuty extends LLMDuty {
   protected input: LLMDutyParams['input'] = null
   private completionCount = 0
   private continuationSummaryFailed = false
+  private automaticCompactionFailed = false
   private totalInputTokens = 0
   private usageAccounting: UsageAccounting | undefined
   private totalOutputTokens = 0
@@ -264,6 +267,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.firstOutputAt = null
     this.completionCount = 0
     this.continuationSummaryFailed = false
+    this.automaticCompactionFailed = false
     this.totalInputTokens = 0
     this.usageAccounting = undefined
     this.totalOutputTokens = 0
@@ -931,13 +935,19 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   /**
-   * Uses the configured agent provider for a private, non-tool summary call.
+   * Preserves native context on pause or summarizes portable context on recovery.
    */
   private async prepareContinuation(
     transcript: AgentToolTranscriptMessage[],
-    checkpointInput?: AgentContinuityCheckpointInput
+    checkpointInput?: AgentContinuityCheckpointInput,
+    restoreSourceEvidence = false
   ): Promise<AgentToolTranscriptMessage[]> {
     this.signal?.throwIfAborted()
+    if (restoreSourceEvidence) {
+      // Context recovery needs source evidence instead of opaque provider state.
+      transcript = restoreCompactionSources(transcript)
+    }
+
     return buildAgentContinuationTranscript(transcript, async (history) => {
       // A failed summary must not cause an auxiliary retry on every tool turn.
       if (this.continuationSummaryFailed) return null
@@ -954,7 +964,8 @@ export class ReActLLMDuty extends LLMDuty {
           remoteProviderErrorRetries: 0,
           shouldStream: false,
           disableThinking: true,
-          trackProviderErrors: false
+          trackProviderErrors: false,
+          disableContextCompaction: true
         })
         this.signal?.throwIfAborted()
         if (result) {
@@ -1004,9 +1015,18 @@ export class ReActLLMDuty extends LLMDuty {
     textContent?: string
     reasoning?: string
     reasoningItems?: ProviderReasoningItem[]
+    compactionContext?: ProviderCompactionContext
     isTruncated?: boolean
   } | null> {
     this.signal?.throwIfAborted()
+    if (transcript.some((message) =>
+      message.role === 'assistant' && message.compactionContext
+    )) {
+      const targetTranscript = await LLM_PROVIDER.prepareAgentTranscript(transcript)
+      this.signal?.throwIfAborted()
+      transcript.splice(0, transcript.length, ...targetTranscript)
+    }
+
     const phase: AgentPhase = options.isFinalizationAttempt
       ? 'final_answer'
       : 'agent'
@@ -1018,6 +1038,11 @@ export class ReActLLMDuty extends LLMDuty {
       ...(options.isCompletionReview ? [AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT] : [])
     ].join('\n\n')
     const providerName = getLLMProviderName()
+    if (providerName === LLMProviders.OpenAI && options.isContextRecoveryAttempt) {
+      this.automaticCompactionFailed = true
+    }
+    const providerManagesContext = providerName === LLMProviders.OpenAI &&
+      !this.automaticCompactionFailed
     const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
       ? resolveAgentContextRecoveryTriggerTokens(providerName)
       : resolveAgentContextCompactionTriggerTokens(providerName)
@@ -1025,14 +1050,21 @@ export class ReActLLMDuty extends LLMDuty {
       transcript,
       systemPrompt: activeSystemPrompt,
       tools,
-      compactionTriggerTokens: contextCompactionTriggerTokens,
+      // OpenAI measures actual request tokens and triggers compaction itself.
+      compactionTriggerTokens: providerManagesContext
+        ? Number.POSITIVE_INFINITY
+        : contextCompactionTriggerTokens,
       forceCompaction:
         options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
-    if (preparedContext.estimatedInputTokens > contextCompactionTriggerTokens) {
+    if (
+      !providerManagesContext &&
+      preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
+    ) {
       const summarized = await this.prepareContinuation(
         transcript,
-        checkpointInput
+        checkpointInput,
+        true
       )
       if (summarized !== transcript) {
         transcript.splice(0, transcript.length, ...summarized)
@@ -1045,6 +1077,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
     if (
+      !providerManagesContext &&
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
     ) {
       throw new AgentModelProviderError(
@@ -1282,6 +1315,7 @@ export class ReActLLMDuty extends LLMDuty {
         ...(reasoningUseDefaultEffort ? { reasoningUseDefaultEffort: true } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),
+        disableContextCompaction: this.automaticCompactionFailed,
         tools: preparedTools,
         toolChoice,
         signal: toolCallAbortController.signal,
@@ -1304,9 +1338,10 @@ export class ReActLLMDuty extends LLMDuty {
       if (providerError) {
         throw new AgentModelProviderError(
           providerError,
-          !options.isContextRecoveryAttempt &&
-            preparedContext.estimatedInputTokens >=
+          !options.isContextRecoveryAttempt && (
+            providerManagesContext || preparedContext.estimatedInputTokens >=
               resolveAgentContextRecoveryTriggerTokens(providerName)
+          )
         )
       }
       return null
@@ -1366,6 +1401,9 @@ export class ReActLLMDuty extends LLMDuty {
       return {
         toolCalls: normalizedToolCalls,
         textContent,
+        ...(completionResult.compactionContext
+          ? { compactionContext: completionResult.compactionContext }
+          : {}),
         ...(completionResult.reasoningItems?.length
           ? { reasoningItems: completionResult.reasoningItems }
           : {}),
@@ -1402,6 +1440,9 @@ export class ReActLLMDuty extends LLMDuty {
     )
     return {
       textContent,
+      ...(completionResult.compactionContext
+        ? { compactionContext: completionResult.compactionContext }
+        : {}),
       ...(completionResult.reasoningItems?.length
         ? { reasoningItems: completionResult.reasoningItems }
         : {}),
@@ -1425,9 +1466,15 @@ export class ReActLLMDuty extends LLMDuty {
   private safeJSONStringify(value: unknown): string {
     try {
       // Opaque replay data belongs in the provider request, not diagnostic prose.
-      return JSON.stringify(value, (key, content) =>
-        key === 'encryptedContent' ? '[provider reasoning retained]' : content
-      )
+      return JSON.stringify(value, (key, content) => {
+        if (key === 'sourceTranscript') {
+          return undefined
+        }
+
+        return key === 'encryptedContent' || key === 'encrypted_content'
+          ? '[provider context retained]'
+          : content
+      })
     } catch {
       return String(value)
     }

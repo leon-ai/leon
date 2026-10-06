@@ -56,6 +56,27 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('budgets native context tokens without counting ciphertext or source snapshots', () => {
+    const context = {
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
+      output: [{ type: 'compaction', id: 'cmp', encrypted_content: 'x'.repeat(100_000) }],
+      estimatedTokens: 500,
+      sourceTranscript: [{ role: 'user' as const, content: 'Evidence '.repeat(100_000) }]
+    }
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'assistant', content: 'Generated response', compactionContext: context,
+      reasoningItems: [{ provider: LLMProviders.OpenAI, id: 'rs', text: '', encryptedContent: 'x'.repeat(100_000) }]
+    }]
+    const prepared = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 1_000,
+      forceCompaction: true
+    })
+
+    expect(prepared.estimatedInputTokens).toBeGreaterThanOrEqual(500)
+    expect(prepared.estimatedInputTokens).toBeLessThan(1_000)
+    expect(prepared.transcript[0]).toEqual(transcript[0])
+  })
+
   it('bounds older successful UI evidence only when the full artifact is available', () => {
     const transcript: AgentToolTranscriptMessage[] = []
     for (let index = 0; index < 12; index += 1) {

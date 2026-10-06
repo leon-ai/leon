@@ -213,6 +213,13 @@ export async function buildAgentContinuationTranscript(
   const checkpoint = checkpointInput
     ? buildAgentContinuityCheckpoint(checkpointInput)
     : null
+  if (rawTranscript.some((message) =>
+    message.role === 'assistant' && message.compactionContext
+  )) {
+    // A pause persists the native window without trying to summarize ciphertext.
+    return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
+  }
+
   const parts = splitAgentTranscriptForSummary(rawTranscript)
   if (!parts) return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
 

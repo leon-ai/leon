@@ -3,8 +3,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildAgentContinuationTranscript,
   buildAgentContinuityCheckpoint,
+  createAgentLoopContinuationState,
+  isAgentLoopContinuationStateValid,
   type AgentContinuityCheckpointInput
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
@@ -68,6 +71,44 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it('persists a native window through pauses and restores source for another provider', async () => {
+    const source: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+    for (let index = 1; index <= 16; index += 1) {
+      appendToolExchange(source, index)
+    }
+
+    const context = {
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
+      output: [{ type: 'compaction', id: 'cmp', encrypted_content: 'opaque' }],
+      estimatedTokens: 100,
+      sourceTranscript: source
+    }
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'assistant', content: '', compactionContext: context },
+      { role: 'user', content: 'Publish to the staging registry.' }
+    ]
+    const summarize = vi.fn()
+    const prepared = await buildAgentContinuationTranscript(
+      transcript, summarize, createCheckpointInput()
+    )
+    const state = createAgentLoopContinuationState({
+      ...createCheckpointInput(), transcript: prepared,
+      clarificationQuestion: 'Which registry?', planWidgetId: 'release-plan'
+    })
+    const restored = JSON.parse(JSON.stringify(state))
+
+    expect(summarize).not.toHaveBeenCalled()
+    expect(isAgentLoopContinuationStateValid(restored)).toBe(true)
+    expect(restored.transcript[0].compactionContext).toEqual(context)
+    expect(restoreCompactionSources(prepared, 'connection')[0]).toEqual(transcript[0])
+    expect(restoreCompactionSources(prepared, 'other').slice(0, source.length)).toEqual(source)
+    expect(restoreCompactionSources(prepared, 'other').at(-2)?.content).toBe(
+      'Publish to the staging registry.'
+    )
+  })
+
   it('keeps a short transcript exact and adds deterministic resume state', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Prepare the release.' },

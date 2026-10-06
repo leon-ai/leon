@@ -68,6 +68,18 @@ export interface ProviderReasoningItem {
 }
 
 /**
+ * Canonical provider window plus recoverable evidence for provider changes.
+ */
+export interface ProviderCompactionContext {
+  provider: LLMProviders
+  model: string
+  binding: string
+  output: Record<string, unknown>[]
+  estimatedTokens: number
+  sourceTranscript: AgentToolTranscriptMessage[]
+}
+
+/**
  * Canonical agent transcript. Preserve tool protocol roles and attachments
  * instead of rewriting each exchange into a text-only phase prompt.
  */
@@ -82,6 +94,7 @@ export type AgentToolTranscriptMessage =
       content: string
       reasoning?: string
       reasoningItems?: ProviderReasoningItem[]
+      compactionContext?: ProviderCompactionContext
       toolCalls?: OpenAIToolCall[]
     }
   | {
@@ -227,6 +240,10 @@ export interface CompletionParams {
    * state. Useful for background/auxiliary inferences.
    */
   trackProviderErrors?: boolean
+  /**
+   * Disables automatic provider compaction during portable context recovery.
+   */
+  disableContextCompaction?: boolean
   /**
    * Internal retry budget for remote provider failures handled by the central
    * LLM provider wrapper.

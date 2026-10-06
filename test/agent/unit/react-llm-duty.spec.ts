@@ -66,7 +66,9 @@ const coreMocks = vi.hoisted(() => ({
   executeTool: vi.fn(),
   emitAnswerToChatClients: vi.fn(),
   emitToChatClients: vi.fn(),
-  prompt: vi.fn()
+  prompt: vi.fn(),
+  consumeLastProviderErrorMessage: vi.fn(),
+  prepareAgentTranscript: vi.fn(async (transcript: AgentToolTranscriptMessage[]) => transcript)
 }))
 
 vi.mock('@/core/connections/connection-service', () => ({
@@ -79,7 +81,9 @@ vi.mock('@/core', () => ({
     getCompactDutySystemPrompt: (prompt: string): string => prompt
   },
   LLM_PROVIDER: {
-    prompt: coreMocks.prompt
+    prompt: coreMocks.prompt,
+    consumeLastProviderErrorMessage: coreMocks.consumeLastProviderErrorMessage,
+    prepareAgentTranscript: coreMocks.prepareAgentTranscript
   },
   BRAIN: {
     wernicke: (
@@ -2948,6 +2952,98 @@ describe('continuous agent loop', () => {
   })
 })
 
+
+describe('agent automatic compaction', () => {
+  beforeEach(() => {
+    coreMocks.prompt.mockReset()
+  })
+
+  afterEach(() => {
+    coreMocks.prompt.mockReset()
+  })
+
+  it('lets OpenAI decide when to compact and passes returned context to the loop', async () => {
+    const source: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Evidence '.repeat(60_000) }]
+    const context = {
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
+      output: [{ type: 'compaction', id: 'cmp', encrypted_content: 'opaque' }],
+      estimatedTokens: 500, sourceTranscript: source
+    }
+    coreMocks.prompt.mockResolvedValueOnce({ output: 'Done.', compactionContext: context, usedInputTokens: 100_000, usedOutputTokens: 400 })
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({ provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
+    vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({ reasoning: 'on', speed: 'auto' })
+    const duty = new ReActLLMDuty({ input: 'Continue the task.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    const result = await duty['callAgentModel'](source, 'Follow the request.', [], { isRecoveryAttempt: false })
+
+    expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    expect(coreMocks.prompt.mock.calls[0]![0]).toEqual(source)
+    expect(result?.compactionContext).toEqual(context)
+    expect(duty['totalInputTokens']).toBe(100_000)
+    expect(duty['totalOutputTokens']).toBe(400)
+    expect(duty['safeJSONStringify'](context)).not.toContain('Evidence ')
+    expect(duty['safeJSONStringify'](context)).not.toContain('opaque')
+  })
+
+  it('recovers from source evidence and disables automatic compaction after provider rejection', async () => {
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
+    vi.spyOn(CONFIG_STATE.getModelState(), 'getAgentTarget').mockReturnValue({ provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
+    vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({ reasoning: 'on', speed: 'auto' })
+    const transcript: AgentToolTranscriptMessage[] = [{ role: 'user', content: 'Keep exact evidence.' }]
+    coreMocks.prompt.mockResolvedValueOnce(null)
+    coreMocks.consumeLastProviderErrorMessage.mockReturnValueOnce('Unsupported context_management')
+    const duty = new ReActLLMDuty({ input: 'Continue.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    await expect(duty['callAgentModel'](transcript, 'Follow the request.', [], { isRecoveryAttempt: false })).rejects.toMatchObject({ canRetryWithCompaction: true })
+    coreMocks.prompt.mockResolvedValue({ output: 'Done.' })
+    await duty['callAgentModel'](transcript, 'Follow the request.', [], { isRecoveryAttempt: true, isContextRecoveryAttempt: true })
+    await duty['callAgentModel'](transcript, 'Follow the request.', [], { isRecoveryAttempt: false })
+    expect(coreMocks.prompt.mock.calls.slice(1).every(([, params]) => params.disableContextCompaction)).toBe(true)
+  })
+
+  it.each([false, true])('records compacted responses safely when tool calls are deferred ($0)', async (deferred) => {
+    const calls = Array.from({ length: deferred ? AGENT_MAX_PARALLEL_TOOL_CALLS + 1 : 1 }, (_, index) =>
+      toolCall(`lookup-compact-${index}`, CALLABLE_TOOL_NAME, { query: String(index) })
+    )
+    const call = calls[0]!
+    const context = {
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
+      output: [{ type: 'compaction', id: 'cmp', encrypted_content: 'opaque' }, ...calls.map((item) => ({ type: 'function_call', call_id: item.id }))],
+      estimatedTokens: 100, sourceTranscript: [{ role: 'user' as const, content: 'Find Leon.' }, { role: 'assistant' as const, content: '', toolCalls: calls }]
+    }
+    const callModel = vi.fn().mockResolvedValueOnce({ toolCalls: calls, compactionContext: context })
+      .mockResolvedValueOnce({ textContent: 'Leon found.' })
+    const result = await runAgentLoop({
+      transcript: [{ role: 'user', content: 'Find Leon.' }], catalog: createCatalog(), callModel,
+      executeFunction: async () => ({ execution: { function: callable.qualifiedName, status: 'success', observation: 'Leon found.', requestedToolInput: '{}' } }),
+      loadAgentSkill: async () => null
+    })
+
+    if (deferred) {
+      expect(result.transcript[0]).toEqual({ role: 'user', content: 'Find Leon.' })
+      expect(result.transcript[1]).not.toHaveProperty('compactionContext')
+      expect(result.transcript.filter((message) => message.role === 'tool')).toHaveLength(AGENT_MAX_PARALLEL_TOOL_CALLS)
+    } else {
+      expect(result.transcript[0]).toMatchObject({ role: 'assistant', compactionContext: context })
+      expect(result.transcript[1]).toMatchObject({ role: 'tool', toolCallId: call.id })
+      expect(result.transcript.filter((message) => message.role === 'user')).toHaveLength(0)
+    }
+    expect(JSON.stringify(result.transcript)).toContain('Leon found.')
+  })
+
+  it('does not dispatch a request after owner cancellation', async () => {
+    const controller = new AbortController()
+    const reason = new Error('Owner canceled')
+    controller.abort(reason)
+    const duty = new ReActLLMDuty({ input: 'Continue.', signal: controller.signal })
+
+    await expect(duty['callAgentModel']([], 'Follow the request.', [], { isRecoveryAttempt: false })).rejects.toBe(reason)
+    expect(coreMocks.prompt).not.toHaveBeenCalled()
+  })
+})
 
 describe('model waiting progress', () => {
   beforeEach(() => {

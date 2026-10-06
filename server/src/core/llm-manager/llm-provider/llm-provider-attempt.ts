@@ -41,6 +41,7 @@ import {
   type CompletionStreamEvent,
   type OpenAIToolCall,
   type ProviderReasoningItem,
+  type ProviderCompactionContext,
   type PromptOrChatHistory
 } from '@/core/llm-manager/types'
 import { type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
@@ -458,6 +459,7 @@ export async function runCompletionAttempt(
   let toolCalls: OpenAIToolCall[] | undefined
   let reasoning: string | undefined
   let reasoningItems: ProviderReasoningItem[] | undefined
+  let compactionContext: ProviderCompactionContext | undefined
   let finishReason: string | undefined
 
   // Normalize the completion result according to the provider.
@@ -521,6 +523,7 @@ export async function runCompletionAttempt(
       toolCalls = normalized.toolCalls
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
+      compactionContext = normalized.compactionContext
       finishReason = normalized.finishReason
     } else if (
       [
@@ -554,6 +557,7 @@ export async function runCompletionAttempt(
       toolCalls = normalized.toolCalls
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
+      compactionContext = normalized.compactionContext
       finishReason = normalized.finishReason
     } else if (
       [LLMProviders.OpenAI, LLMProviders.OpenRouter].includes(
@@ -584,6 +588,7 @@ export async function runCompletionAttempt(
       toolCalls = normalized.toolCalls
       reasoning = normalized.reasoning
       reasoningItems = normalized.reasoningItems
+      compactionContext = normalized.compactionContext
       finishReason = normalized.finishReason
     } else {
       LogHelper.error(`The LLM provider "${providerName}" is not yet supported`)
@@ -699,6 +704,7 @@ export async function runCompletionAttempt(
     ...(providerTokensPerSecond ? { providerTokensPerSecond } : {}),
     ...(reasoning ? { reasoning } : {}),
     ...(reasoningItems?.length ? { reasoningItems } : {}),
+    ...(compactionContext ? { compactionContext } : {}),
     ...(finishReason ? { finishReason } : {}),
     ...(toolCalls ? { toolCalls } : {})
   }

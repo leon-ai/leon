@@ -132,7 +132,13 @@ function estimateAgentInputTokens(
   tools: OpenAITool[]
 ): number {
   let imageCount = 0
+  let compactionTokens = 0
   const serializedTranscript = JSON.stringify(transcript, (key, value) => {
+    if (value?.role === 'assistant' && value.compactionContext) {
+      compactionTokens += value.compactionContext.estimatedTokens
+      return { role: 'assistant', content: '' }
+    }
+
     if (key === 'dataBase64' && typeof value === 'string') {
       imageCount += 1
       return ''
@@ -142,6 +148,7 @@ function estimateAgentInputTokens(
 
   return (
     estimateTokens(serializedTranscript) +
+    compactionTokens +
     imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS +
     estimateTokens(systemPrompt) +
     estimateTokens(JSON.stringify(tools))

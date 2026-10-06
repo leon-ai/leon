@@ -184,6 +184,135 @@ describe('AISDKRemoteLLMProvider', () => {
     vi.unstubAllGlobals()
   })
 
+  it.each([
+    { shouldStream: false, subscription: false },
+    { shouldStream: true, subscription: false },
+    { shouldStream: true, subscription: true }
+  ])('persists and replays automatic compaction (stream=$shouldStream, subscription=$subscription)', async ({ shouldStream, subscription }) => {
+    const output = [
+      { type: 'compaction', id: 'cmp-old', encrypted_content: 'old-window' },
+      { type: 'compaction', id: 'cmp-1', encrypted_content: 'opaque-window' },
+      { type: 'reasoning', id: 'rs-retained', encrypted_content: 'opaque-reasoning', summary: [] },
+      { type: 'function_call', id: 'fc-retained', call_id: 'call-retained', name: 'read_file', arguments: '{}', status: 'completed', ...(subscription ? { namespace: 'leon' } : {}) }
+    ]
+    const response = {
+      id: 'resp-compact', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
+      output, usage: { input_tokens: 100_000, output_tokens: 200, total_tokens: 100_200 }
+    }
+    const events = [
+      { type: 'response.created', response: { ...response, output: [], status: 'in_progress' } },
+      ...output.flatMap((item, output_index) => [
+        { type: 'response.output_item.added', output_index, item },
+        { type: 'response.output_item.done', output_index, item }
+      ]),
+      { type: 'response.completed', response: subscription ? { ...response, output: [] } : response }
+    ]
+    if (subscription) {
+      accountMocks.getCredentials
+        .mockResolvedValueOnce({ access_token: 'expired-token' })
+        .mockResolvedValue({ access_token: 'fresh-token' })
+      websocketMocks.fetch.mockRejectedValueOnce(new Error('Unexpected server response: 401'))
+    }
+    websocketMocks.fetch.mockImplementation(async () => shouldStream
+      ? new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
+          headers: { 'content-type': 'text/event-stream' }
+        })
+      : Response.json(response))
+    const target = {
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
+      ...(subscription ? { accountCredentials: {
+        auth_kind: 'chatgpt', account_id: 'account', access_token: 'expired-token'
+      } } : {})
+    }
+    const provider = new OpenAILLMProvider(target)
+    const transcript: PromptOrChatHistory = [{ role: 'user', content: 'Read the file.' }]
+    const params = { ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream }
+    const result = await provider.runChatCompletion(transcript, params)
+    const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
+    const context = normalized.compactionContext!
+    const body = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
+
+    expect(body.context_management).toEqual([{ type: 'compaction', compact_threshold: 96_000 }])
+    expect(body.store).toBe(false)
+    expect(context.output).toEqual(output.slice(1))
+    expect(context.sourceTranscript[0]).toEqual(transcript[0])
+    expect(normalized.toolCalls?.[0]?.id).toBe('call-retained')
+    if (subscription) {
+      expect(accountMocks.getCredentials).toHaveBeenCalledWith('account', undefined, true)
+      expect(new Headers(websocketMocks.fetch.mock.calls.at(-1)![1].headers).get('authorization')).toBe('Bearer fresh-token')
+    }
+
+    // Resume through a fresh provider, including tool results after the window.
+    const replay = JSON.parse(JSON.stringify([
+      { role: 'assistant', content: 'Provider response', toolCalls: normalized.toolCalls, compactionContext: context },
+      { role: 'tool', toolCallId: 'call-retained', toolName: 'read_file', content: 'Retained evidence.' }
+    ]))
+    const resumed = new OpenAILLMProvider(target)
+    await resumed.runChatCompletion(replay, params)
+    const replayBody = JSON.parse(websocketMocks.fetch.mock.calls.at(-1)![1].body)
+    expect(replayBody.input.slice(1, 1 + context.output.length)).toEqual(context.output)
+    expect(replayBody.input.at(-1)).toMatchObject({ type: 'function_call_output', call_id: 'call-retained', output: 'Retained evidence.' })
+    expect(JSON.stringify(replayBody)).not.toContain('Read the file.')
+    expect(JSON.stringify(replayBody)).not.toContain('Provider response')
+    expect(replayBody.input.filter((item: Record<string, unknown>) => item['type'] === 'function_call')).toHaveLength(1)
+    const next = normalizeCompletionResultForOpenAICompatibleProvider(
+      await resumed.runChatCompletion(replay, params)
+    ).compactionContext!
+    expect(next.sourceTranscript.some((message) => message.role === 'assistant' && message.compactionContext)).toBe(false)
+    expect(JSON.stringify(next.sourceTranscript)).toContain('Retained evidence.')
+    resumed.dispose()
+    provider.dispose()
+  })
+
+  it('omits automatic compaction during portable recovery', async () => {
+    websocketMocks.fetch.mockResolvedValueOnce(Response.json({
+      id: 'resp', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
+      output: [], usage: { input_tokens: 100, output_tokens: 0, total_tokens: 100 }
+    }))
+    const provider = new OpenAILLMProvider({ ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol' })
+    await provider.runChatCompletion([{ role: 'user', content: 'Continue.' }], {
+      ...PARAMS, dutyType: LLMDuties.ReAct, shouldStream: false, disableContextCompaction: true
+    })
+    expect(JSON.parse(websocketMocks.fetch.mock.calls[0]![1].body).context_management).toBeUndefined()
+    provider.dispose()
+  })
+
+  it('restores source evidence when an opaque window belongs to a different connection', async () => {
+    websocketMocks.fetch.mockImplementation(async () => new Response('data: [DONE]\n\n', {
+      headers: { 'content-type': 'text/event-stream' }
+    }))
+    const ownerProvider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
+      accountCredentials: { api_key: 'other-key' }
+    })
+    await provider.runChatCompletion([{
+      role: 'assistant', content: '', compactionContext: {
+        provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
+        binding: ownerProvider.compactionBinding,
+        output: [{ type: 'compaction', id: 'cmp-foreign', encrypted_content: 'foreign-window' }],
+        estimatedTokens: 100,
+        sourceTranscript: [
+          { role: 'user', content: 'Exact source request.' },
+          {
+            role: 'assistant', content: 'Original result.',
+            reasoningItems: [{ provider: LLMProviders.OpenAI, id: 'rs-foreign', text: '', encryptedContent: 'foreign-reasoning' }]
+          }
+        ]
+      }
+    }], { ...PARAMS, shouldStream: true })
+
+    const body = websocketMocks.fetch.mock.calls[0]![1].body
+    expect(body).toContain('Exact source request.')
+    expect(body).not.toContain('foreign-window')
+    expect(body).not.toContain('foreign-reasoning')
+    provider.dispose()
+    ownerProvider.dispose()
+  })
+
+
   it('streams Z.ai before completion and replays exact reasoning with reported cache hits', async () => {
     let controller: ReadableStreamDefaultController<Uint8Array>
     const fetch = vi.fn().mockResolvedValue(new Response(new ReadableStream({
