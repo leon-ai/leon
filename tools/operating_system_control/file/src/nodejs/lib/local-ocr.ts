@@ -93,7 +93,10 @@ export class LocalOcr {
             const result = JSON.parse(line) as OcrResult & { error?: string }
             if (result.error || typeof result.text !== 'string') throw new Error(result.error ?? 'Invalid OCR response')
             cleanup()
-            resolve({ text: result.text, layout: result.layout })
+            resolve({
+              text: result.text,
+              ...(result.layout ? { layout: result.layout } : {})
+            })
           } catch (error) { onError(error as Error) }
         }
         const timer = setTimeout(() => onError(new Error('Local OCR timed out.')), TIMEOUT_MS)

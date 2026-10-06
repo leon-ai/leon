@@ -198,7 +198,12 @@ export class DocumentReader {
     const size = text.length + (layout ? JSON.stringify(layout).length : 0)
     if (size > MAX_CACHE_CHARS) return
     this.cache.delete(key)
-    this.cache.set(key, { signature, text, layout, size })
+    this.cache.set(key, {
+      signature,
+      text,
+      ...(layout ? { layout } : {}),
+      size
+    })
     while (this.cache.size > MAX_CACHE_ENTRIES || [...this.cache.values()].reduce((sum, item) => sum + item.size, 0) > MAX_CACHE_CHARS) {
       this.cache.delete(this.cache.keys().next().value!)
     }
