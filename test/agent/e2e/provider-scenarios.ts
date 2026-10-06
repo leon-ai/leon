@@ -15,6 +15,24 @@ export const PROVIDER_SCENARIOS = [
     testName: 'reads and follows file instructions',
     buildInput: (assetPath: string): string =>
       `There is a file waiting for you in ${assetPath}, do what it asks you to do.`
+  },
+  {
+    id: 'coding_bug',
+    testName: 'fixes a coding bug and verifies the repository',
+    buildInput: (root: string): string =>
+      `Fix the addition bug in ${root} directly using Leon's tools. Reproduce the failing test, fix the implementation, run the project test and review the diff. Follow repository instructions and preserve existing owner changes.`
+  },
+  {
+    id: 'coding_multiple_files',
+    testName: 'fixes multiple coding files while respecting instructions and owner changes',
+    buildInput: (root: string): string =>
+      `Fix the receipt in ${root} directly using Leon's tools: a 10% discount on [100, 200] must produce "Total: 270.00". Reproduce the failing test, fix the source functions, run the project test and review the diff. Follow applicable repository instructions and preserve existing owner changes.`
+  },
+  {
+    id: 'coding_session',
+    testName: 'fixes coding behavior while managing an interactive shell session',
+    buildInput: (root: string): string =>
+      `Fix the greeting in ${root} directly using Leon's tools. Reproduce the failing project test. Before editing, start pnpm run dev with shell.startSession, read SESSION_READY, and send Ada followed by a newline. Fix the source so that the greeting is "Hello, Ada!". Send Ada again and verify the corrected output in the same running session, run the project test and review the diff. Stop the session before finishing. Follow repository instructions and preserve existing owner changes.`
   }
 ] as const
 

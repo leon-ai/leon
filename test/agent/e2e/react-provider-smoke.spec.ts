@@ -2,6 +2,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import execa from 'execa'
+import type { CodingEvidence } from './coding-fixture'
 import { describe, expect, it } from 'vitest'
 
 import { PROFILE_CONFIG_PATH } from '@/leon-roots'
@@ -37,6 +38,7 @@ interface ProviderScenarioResult {
   skipped: boolean
   reason?: string
   assetPath?: string
+  coding?: CodingEvidence
   turn?: {
     input: string
     output: string
@@ -61,7 +63,7 @@ interface ProviderScenarioResult {
 
 function resolveProviderMatrix(
   providerFilter: string | null
-): typeof PROVIDER_MATRIX {
+): readonly (typeof PROVIDER_MATRIX)[number][] {
   if (!providerFilter) {
     return PROVIDER_MATRIX
   }
@@ -117,6 +119,7 @@ function summarizeScenarioResult(result: ProviderScenarioResult): string {
       skipped: result.skipped,
       reason: result.reason,
       assetPath: result.assetPath,
+      coding: result.coding,
       turn: result.turn
         ? {
             input: result.turn.input,
@@ -288,15 +291,18 @@ function expectFileInstructionsScenario(result: ProviderScenarioResult): void {
   const fileReadIndex = turn.executionHistory.findIndex(
     (item) => item.function === 'operating_system_control.file.read'
   )
-  const shellIndex = turn.executionHistory.findIndex(
+  const listingIndex = turn.executionHistory.findIndex(
     (item) =>
       item.function === 'operating_system_control.shell.executeCommand'
+      || item.function === 'operating_system_control.ripgrep.listFiles'
   )
 
   expect(turn.output.trim().length).toBeGreaterThan(0)
   expect(turn.finalIntent).toBe('answer')
   expect(fileReadIndex).toBeGreaterThanOrEqual(0)
-  expect(shellIndex).toBeGreaterThan(fileReadIndex)
+  expect(listingIndex).toBeGreaterThan(fileReadIndex)
+  expect(turn.output).toContain('README.md')
+  expect(turn.output).toContain('package.json')
   expect(trace).toContain(result.assetPath!)
   expect(trace).toMatch(/project root/i)
 }
@@ -305,6 +311,10 @@ function expectProviderScenarioResult(
   scenario: ProviderScenario,
   result: ProviderScenarioResult
 ): void {
+  if (scenario.id.startsWith('coding_')) {
+    expectCodingScenario(scenario.id, result)
+    return
+  }
   if (scenario.id === 'direct_answer') {
     expectDirectAnswerScenario(result)
     return
@@ -316,6 +326,78 @@ function expectProviderScenarioResult(
   }
 
   expectFileInstructionsScenario(result)
+}
+
+/**
+ * Assess actual repository state and process evidence independently of the answer.
+ */
+function expectCodingScenario(id: ProviderScenarioId, result: ProviderScenarioResult): void {
+  const turn = result.turn!
+  expect(turn.finalIntent).toBe('answer')
+  expect(result.coding).toMatchObject({
+    baselineFailed: true,
+    testsPassed: true,
+    protectedFilesPreserved: true,
+    stagedDiffPreserved: true,
+    headPreserved: true
+  })
+  const expectedFiles = id === 'coding_multiple_files'
+    ? ['src/price.mjs', 'src/receipt.mjs']
+    : id === 'coding_session' ? ['src/greeting.mjs'] : ['src/math.mjs']
+  expect(result.coding!.changedFiles).toEqual(expectedFiles)
+
+  const patchIndex = turn.toolCalls.findIndex((call) => call.functionName === 'patch')
+  expect(patchIndex).toBeGreaterThanOrEqual(0)
+  const before = turn.toolCalls.slice(0, patchIndex)
+  const reads = before.filter((call) => call.toolId === 'file' && call.functionName === 'read')
+  const readPaths = reads.map((call) => String(call.parsedInput?.['path'] || '').replaceAll('\\', '/'))
+  expect(readPaths.some((value) => value.endsWith('/AGENTS.md') && !value.endsWith('/src/AGENTS.md'))).toBe(true)
+  expect(readPaths.some((value) => value.endsWith('/src/AGENTS.md'))).toBe(true)
+  // Finite commands are transported as temporary scripts. The history retains
+  // the requested command and its observation, so assess those together.
+  const firstPatch = turn.executionHistory.findIndex((item) => item.function === 'operating_system_control.file.patch')
+  const lastPatch = turn.executionHistory.findLastIndex((item) => item.function === 'operating_system_control.file.patch')
+  const isProjectTest = (item: typeof turn.executionHistory[number]): boolean => {
+    const input = JSON.parse(item.requestedToolInput || '{}') as Record<string, unknown>
+    const command = String(input['command'] || '')
+    return item.function === 'operating_system_control.shell.executeCommand'
+      && command.includes('pnpm') && command.includes('test')
+  }
+  expect(firstPatch).toBeGreaterThanOrEqual(0)
+  expect(turn.executionHistory.slice(0, firstPatch).some((item) => isProjectTest(item)
+    && shellResult({ toolOutput: item.observation })['commandSucceeded'] === false)).toBe(true)
+  expect(turn.executionHistory.slice(lastPatch + 1).some((item) => isProjectTest(item)
+    && shellResult({ toolOutput: item.observation })['commandSucceeded'] === true)).toBe(true)
+
+  if (id === 'coding_session') {
+    expect(result.coding!.sessionsStopped).toBe(true)
+    expect(before.some((call) => call.functionName === 'startSession')).toBe(true)
+    expect(before.some((call) => call.functionName === 'writeSession')).toBe(true)
+    const sessionCalls = turn.toolCalls.filter((call) => call.toolId === 'shell')
+    const launches = sessionCalls.filter((call) => call.functionName === 'startSession')
+    expect(launches).toHaveLength(1)
+    const started = shellResult(launches[0]!)['data'] as Record<string, unknown>
+    const sessionId = started['sessionId']
+    expect(typeof sessionId).toBe('string')
+    for (const call of sessionCalls.filter((item) => ['readSession', 'writeSession', 'stopSession'].includes(item.functionName || ''))) {
+      expect(call.parsedInput?.['sessionId']).toBe(sessionId)
+    }
+    expect(before.some((call) => call.functionName === 'readSession'
+      && String((shellResult(call)['data'] as Record<string, unknown>)?.['output']).includes('HELLO Ada'))).toBe(true)
+    const corrected = sessionCalls.find((call) => call.functionName === 'readSession'
+      && String((shellResult(call)['data'] as Record<string, unknown>)?.['output']).includes('Hello, Ada!'))
+    expect(corrected).toBeDefined()
+    const stopped = sessionCalls.find((call) => call.functionName === 'stopSession')
+    expect(stopped).toBeDefined()
+    expect(shellResult(stopped!)['data']).toMatchObject({ running: false, status: 'stopped' })
+  }
+}
+
+function shellResult(call: { toolOutput?: string }): Record<string, unknown> {
+  const parsed = JSON.parse(call.toolOutput || '{}') as {
+    data?: { output?: { result?: Record<string, unknown> } }
+  }
+  return parsed.data?.output?.result || {}
 }
 
 describe('agent e2e', () => {

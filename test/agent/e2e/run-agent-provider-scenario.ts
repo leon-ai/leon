@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 
 import YAML from 'yaml'
+import { createCodingFixture, type CodingEvidence } from './coding-fixture'
 
 import type { LLMModelReasoning } from '../../../server/src/core/llm-manager/llm-model-catalog'
 import type { MessageLog } from '../../../server/src/types'
@@ -76,6 +77,7 @@ interface AgentRunnerResult {
   skipped: boolean
   reason?: string
   assetPath?: string
+  coding?: CodingEvidence
   turn?: AgentTurnResult
 }
 
@@ -87,6 +89,29 @@ function printResult(result: AgentRunnerResult): void {
    * structured result from mixed stdout/stderr.
    */
   console.log(`${RESULT_PREFIX}${JSON.stringify(result)}`)
+}
+
+/**
+ * Verify that successfully launched session processes actually stopped.
+ */
+function areStartedSessionsStopped(calls: AgentTurnResult['toolCalls']): boolean {
+  const pids = calls.filter((call) => call.toolId === 'shell' && call.functionName === 'startSession')
+    .map((call) => {
+      const output = JSON.parse(call.toolOutput || '{}') as {
+        data?: { output?: { result?: { success?: boolean, data?: { pid?: number } } } }
+      }
+      const result = output.data?.output?.result
+      return result?.success ? result.data?.pid : undefined
+    }).filter((pid): pid is number => typeof pid === 'number' && pid > 0)
+
+  return pids.length > 0 && pids.every((pid) => {
+    try {
+      process.kill(pid, 0)
+      return false
+    } catch (error) {
+      return (error as NodeJS.ErrnoException).code === 'ESRCH'
+    }
+  })
 }
 
 function printProgress(event: AgentProgressEvent): void {
@@ -199,6 +224,10 @@ async function prepareTestProfileConfig(
   document.setIn(['llm', 'default'], llmTarget)
   document.setIn(['llm', 'workflow'], null)
   document.setIn(['llm', 'agent'], null)
+
+  // Isolated profiles use the matrix API key, not an owner's encrypted account.
+  document.deleteIn(['llm', 'providers', llmTarget.split('/')[0], 'account'])
+
   if (reasoning) {
     document.setIn(
       ['llm', 'model_settings', llmTarget, 'reasoning'],
@@ -318,9 +347,17 @@ async function main(): Promise<void> {
     LEGACY_AGENT_HISTORY_COMPACTION_STATE_FILENAME
   )
 
+  // Keep the instruction-following fixture bounded and independent of the
+  // owner's repository size, so it tests reading and listing rather than export.
+  const instructionProjectPath = path.join(testHomePath, 'instruction-project')
+  await fs.mkdir(instructionProjectPath, { recursive: true })
+  await Promise.all([
+    fs.writeFile(path.join(instructionProjectPath, 'README.md'), '# Fixture project\n'),
+    fs.writeFile(path.join(instructionProjectPath, 'package.json'), '{"private":true}\n')
+  ])
   await fs.writeFile(
     tempAssetPath,
-    `Please list the files in this exact project root directory: ${process.cwd()}.\n`,
+    `Please list the files in this exact project root directory: ${instructionProjectPath}.\n`,
     'utf8'
   )
 
@@ -340,8 +377,14 @@ async function main(): Promise<void> {
   const { CONFIG_STATE } = await import(
     '../../../server/src/core/config-states/config-state'
   )
+  const { runWithConversationSession } = await import(
+    '../../../server/src/core/session-manager/session-context'
+  )
 
-  const input = scenario.buildInput(tempAssetPath)
+  const codingFixture = scenario.id.startsWith('coding_')
+    ? await createCodingFixture(path.join(testHomePath, 'repository'), scenario.id)
+    : null
+  const input = scenario.buildInput(codingFixture?.root || tempAssetPath)
   const toolCalls: AgentTurnResult['toolCalls'] = []
   type ExecuteTool = typeof TOOL_EXECUTOR.executeTool
   type ToolExecutionInput = Parameters<ExecuteTool>[0]
@@ -436,9 +479,11 @@ async function main(): Promise<void> {
       createConversationLoggerRecord('owner', input)
     )
 
-    const duty = new ReActLLMDuty({ input })
-    await duty.init({ force: true })
-    const result = await duty.execute()
+    const result = await runWithConversationSession({ sessionId: testRunId }, async () => {
+      const duty = new ReActLLMDuty({ input })
+      await duty.init({ force: true })
+      return duty.execute()
+    })
 
     if (!result) {
       throw new Error(
@@ -500,6 +545,14 @@ async function main(): Promise<void> {
       scenarioId: scenario.id,
       skipped: false,
       assetPath: tempAssetPath,
+      ...(codingFixture ? {
+        coding: {
+          ...await codingFixture.verify(),
+          ...(scenario.id === 'coding_session' ? {
+            sessionsStopped: areStartedSessionsStopped(toolCalls)
+          } : {})
+        }
+      } : {}),
       turn
     })
     printProgress({
