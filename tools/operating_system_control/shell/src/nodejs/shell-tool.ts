@@ -4,6 +4,9 @@ import path from 'node:path'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { isWindows } from '@sdk/utils'
+import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { ShellSessions, type SessionOptions, type SessionReadOptions } from './lib/shell-sessions'
 
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
@@ -107,8 +110,10 @@ const TERMINAL_AUTH_WRAPPERS = new Set<string>([
 ])
 
 export default class ShellTool extends Tool {
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
   private static readonly TOOLKIT = 'operating_system_control'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
+  private readonly sessions = new ShellSessions()
 
   constructor() {
     super()
@@ -142,7 +147,7 @@ export default class ShellTool extends Tool {
     const { cwd = process.cwd() } = options
     const timeoutMs = ShellTool.getTimeoutMs(options)
     const shellInvocation = ShellTool.getShellInvocation(command)
-    const analyzedCommand = await this.resolveCommandForSafetyAnalysis(command)
+    const analyzedCommand = await this.resolveCommandForSafetyAnalysis(command, cwd)
     const isSafe = await this.isSafeCommand(analyzedCommand)
 
     if (!isSafe) {
@@ -314,6 +319,94 @@ export default class ShellTool extends Tool {
         command,
         attempts
       }
+    }
+  }
+
+  /**
+   * Start a retained command using the same platform and safety checks as finite calls.
+   */
+  public async startSession(
+    command: string,
+    options: SessionOptions = {}
+  ): Promise<Record<string, unknown>> {
+    return this.sessionCall(async (owner) => {
+      const analyzed = await this.resolveCommandForSafetyAnalysis(command, options.cwd)
+      if (!await this.isSafeCommand(analyzed)) {
+        throw new Error(`Blocked unsafe shell command (${await this.getCommandRiskLevel(analyzed)} risk).`)
+      }
+      if (this.requiresVisibleTerminal(analyzed)) {
+        throw new Error('This command requires owner authentication. Use executeCommand in the visible terminal.')
+      }
+
+      const invocation = ShellTool.getShellInvocation(command)
+      // Session calls do not use Core's finite-command script transport. Install
+      // the same managed runtime functions directly in their shell invocation.
+      const functions = isWindows()
+        ? RuntimeHelper.buildManagedRuntimePowerShellFunctions()
+        : RuntimeHelper.buildManagedRuntimeShellFunctions()
+      const commandIndex = invocation.args.length - 1
+      if (invocation.args[commandIndex - 1] === '-File') {
+        invocation.args[commandIndex - 1] = '-Command'
+        invocation.args[commandIndex] = `${functions}\n& '${command.replaceAll('\'', '\'\'')}'`
+      } else {
+        invocation.args[commandIndex] = `${functions}\n${command}`
+      }
+
+      return this.sessions.start(
+        owner,
+        command,
+        invocation.binaryName,
+        invocation.args,
+        options,
+        this.executionContext?.signal
+      )
+    })
+  }
+
+  /**
+   * Inspect retained output without waiting for command completion.
+   */
+  public async readSession(
+    sessionId: string,
+    options: SessionReadOptions = {}
+  ): Promise<Record<string, unknown>> {
+    return this.sessionCall((owner) => this.sessions.read(owner, sessionId, options))
+  }
+
+  /**
+   * Send input to the command owned by the active conversation.
+   */
+  public async writeSession(sessionId: string, data: string): Promise<Record<string, unknown>> {
+    return this.sessionCall((owner) => this.sessions.write(owner, sessionId, data))
+  }
+
+  /**
+   * Stop an owned command and its descendants while keeping its final output.
+   */
+  public async stopSession(sessionId: string): Promise<Record<string, unknown>> {
+    return this.sessionCall((owner) => this.sessions.stop(owner, sessionId))
+  }
+
+  /**
+   * Retained command processes must not outlive their worker.
+   */
+  public async dispose(): Promise<void> {
+    await this.sessions.dispose()
+  }
+
+  private async sessionCall(
+    callback: (owner: string) => Record<string, unknown> | Promise<Record<string, unknown>>
+  ): Promise<Record<string, unknown>> {
+    try {
+      const context = this.executionContext
+      if (!context?.conversationSessionId) {
+        throw new Error('Shell sessions require an active conversation.')
+      }
+
+      const owner = JSON.stringify([context.profileName, context.conversationSessionId])
+      return { success: true, data: await callback(owner) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -502,13 +595,13 @@ export default class ShellTool extends Tool {
     }
   }
 
-  private async resolveCommandForSafetyAnalysis(command: string): Promise<string> {
+  private async resolveCommandForSafetyAnalysis(command: string, cwd = process.cwd()): Promise<string> {
     const trimmedCommand = command.trim()
     if (!trimmedCommand || /\s/.test(trimmedCommand)) {
       return command
     }
 
-    const resolvedPath = path.resolve(trimmedCommand)
+    const resolvedPath = path.resolve(cwd, trimmedCommand)
 
     try {
       const stats = await fs.promises.stat(resolvedPath)

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import treeKill from 'tree-kill'
 
 import {
   CODEBASE_PATH,
@@ -195,7 +196,17 @@ export class ToolWorkerManager {
   }
 
   private async stop(worker: Worker): Promise<void> {
-    const timer = setTimeout(() => worker.process.kill('SIGKILL'), SHUTDOWN_TIMEOUT_MS)
+    const timer = setTimeout(() => {
+      // A non-cooperative call can retain command children. Killing only the
+      // worker would orphan them and leave their output pipes open.
+      if (worker.process.pid) {
+        treeKill(worker.process.pid, 'SIGKILL', (error) => {
+          if (error) {
+            worker.process.kill('SIGKILL')
+          }
+        })
+      }
+    }, SHUTDOWN_TIMEOUT_MS)
     try {
       if (worker.process.connected) {
         worker.process.send({ type: 'shutdown' }, () => {})

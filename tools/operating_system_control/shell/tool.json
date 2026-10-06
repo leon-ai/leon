@@ -3,7 +3,7 @@
   "tool_id": "shell",
   "toolkit_id": "operating_system_control",
   "name": "Shell",
-  "description": "Execute commands in the active platform shell. Uses Bash-compatible shell commands on Linux/macOS and PowerShell commands on Windows.",
+  "description": "Run finite shell commands or retain command sessions with bounded output, stdin and optional PTY on the active platform.",
   "icon_name": "terminal-box-line",
   "author": {
     "name": "Louis Grenard",
@@ -13,7 +13,7 @@
   "functions": {
     "executeCommand": {
       "description": "Execute a command in the active platform shell and return the result.",
-      "progressive_guidance": "This tool waits for command completion; longRunning only extends the timeout. Run finite tasks directly. Bash commands use ordinary exit-status semantics; fail-fast behavior requires an explicit set -e. Use && for dependent operations and test optional programs/files in if conditions so expected absence is reported without aborting an inventory scan. The final command determines the exit status unless the script exits explicitly; nonzero status is reported with captured stdout and stderr. For existing background work, check its result before waiting again.",
+      "progressive_guidance": "This tool waits for command completion; longRunning only extends the timeout. Run finite tasks directly. Bash commands use ordinary exit-status semantics; fail-fast behavior requires an explicit set -e. Use && for dependent operations and test optional programs/files in if conditions so expected absence is reported without aborting an inventory scan. The final command determines the exit status unless the script exits explicitly; nonzero status is reported with captured stdout and stderr. For existing background work, check its result before waiting again. Use startSession for development servers, watchers or commands requiring stdin. Ordinary commands remain isolated and do not share a session shell or its environment.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -40,6 +40,116 @@
         "required": [
           "command"
         ]
+      }
+    },
+    "startSession": {
+      "description": "Start a retained command and immediately return a conversation-owned sessionId. Supports stdin and optional PTY.",
+      "concurrency": "serial",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Use for dev servers, watchers and interactive commands. Supply the observed project cwd. Use pipes by default, pty=true only when a TTY is needed. This starts one command, not a shared shell for later executeCommand calls. A successful start is not a passed check: inspect running, exitCode and commandSucceeded. Retain sessionId in the plan, read output with readSession, and stop owned sessions when the task finishes unless asked to keep them running. A worker restart loses live sessions; inspect before restarting commands.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "command": {
+            "type": "string",
+            "minLength": 1
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "cwd": {
+                "type": "string"
+              },
+              "pty": {
+                "type": "boolean"
+              },
+              "timeoutMs": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 86400000
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "readSession": {
+      "description": "Read bounded retained command output and its current process status using an absolute character cursor.",
+      "concurrency": "serial",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Use only a sessionId returned by startSession in this conversation. Follow nextOffsetChars; hasMore means another saved output page is available. outputLost means the requested cursor predates the retained tail. running=true is unfinished work. Reconcile exitCode, signal and commandSucceeded before reporting a completed check. Reads return immediately; avoid repeated empty polling when independent work can proceed.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "offsetChars": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "maxChars": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 40000
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "writeSession": {
+      "description": "Send bounded stdin to a running command owned by this conversation. Newlines must be included explicitly.",
+      "concurrency": "serial",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Inspect the current prompt before answering. Include a newline when submitting a line. Input can cause side effects and must stay within the authorized task; command launch checks are not a sandbox for later input. Never send owner passwords or secrets through agent stdin. Use stopSession to terminate the command rather than assuming control characters stopped its descendants.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          },
+          "data": {
+            "type": "string",
+            "maxLength": 16000
+          }
+        },
+        "required": [
+          "sessionId",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stopSession": {
+      "description": "Stop the owned command and its descendants, retaining final output and termination status.",
+      "concurrency": "serial",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Stop only sessions belonging to the current task. Inspect running=false in the returned result before claiming cleanup. Stopped or timed-out commands are not successful checks. Completed sessions can still be read until evicted or their worker shuts down.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "additionalProperties": false
       }
     }
   }
