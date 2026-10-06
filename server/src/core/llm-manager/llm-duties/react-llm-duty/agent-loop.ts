@@ -633,7 +633,11 @@ function loadToolkitFunctions(
         toolkitId: tool.toolkitId,
         toolId: tool.toolId,
         functionName,
-        concurrency: TOOLKIT_REGISTRY.getToolConcurrency(tool.toolkitId, tool.toolId),
+        concurrency: TOOLKIT_REGISTRY.getToolConcurrency(
+          tool.toolkitId,
+          tool.toolId,
+          functionName
+        ),
         functionConfig
       })
       catalog.tools.push({

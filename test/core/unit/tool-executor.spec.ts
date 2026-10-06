@@ -9,6 +9,7 @@ import { TOOL_EXECUTION_WAIT_MS } from '@/constants'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { TOOL_WORKER_MANAGER } from '@/core'
+import { ToolConcurrency } from '@/types'
 
 interface FilesystemValueNormalizer {
   normalizePossibleFilesystemPath(value: string): string
@@ -105,6 +106,8 @@ describe('ToolExecutor filesystem value normalization', () => {
     const dispatch = vi.spyOn(TOOL_WORKER_MANAGER, 'execute').mockResolvedValue({
       success: true, message: 'Done', output
     })
+    const concurrency = vi.spyOn(ToolkitRegistry.prototype, 'getToolConcurrency')
+      .mockReturnValue(ToolConcurrency.Serial)
     const result = await executor.executeTool({
       toolkitId: 'test', toolId: 'fixture', functionName: 'run',
       parsedInput: { pattern: '/api//v1', glob: './src/**' },
@@ -112,6 +115,8 @@ describe('ToolExecutor filesystem value normalization', () => {
     })
 
     expect(dispatch.mock.calls[0]?.[1]).toEqual(['/api//v1', './src/**'])
+    expect(concurrency).toHaveBeenCalledWith('test', 'fixture', 'run')
+    expect(dispatch.mock.calls[0]?.[3]).toEqual({ concurrency: ToolConcurrency.Serial })
     expect(result.data.output).toEqual(output)
   })
 

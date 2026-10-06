@@ -43,6 +43,7 @@ interface ToolkitToolDefinition {
     string,
     {
       description: string
+      concurrency?: ToolConcurrency
       progressive_guidance?: string
       parameters: Record<string, unknown>
       output_schema?: Record<string, unknown>
@@ -381,12 +382,19 @@ export default class ToolkitRegistry {
   }
 
   /**
-   * Apply tool-level ordering only to declared shared sessions.
+   * Function overrides allow finite calls and retained sessions in the same tool.
    */
-  public getToolConcurrency(toolkitId: string, toolId: string): ToolConcurrency {
+  public getToolConcurrency(
+    toolkitId: string,
+    toolId: string,
+    functionName?: string
+  ): ToolConcurrency {
     const toolkit = this._toolkits.find((item) => item.id === toolkitId)
+    const tool = toolkit?.tools?.[toolId]
 
-    return toolkit?.tools?.[toolId]?.concurrency ?? ToolConcurrency.Parallel
+    return (functionName ? tool?.functions[functionName]?.concurrency : undefined)
+      ?? tool?.concurrency
+      ?? ToolConcurrency.Parallel
   }
 
   public getToolkitContextFiles(toolkitId: string): string[] {

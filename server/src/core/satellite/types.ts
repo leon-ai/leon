@@ -35,6 +35,7 @@ export interface SatelliteToolDefinition {
     string,
     {
       description: string
+      concurrency?: ToolConcurrency
       progressive_guidance?: string
       parameters: Record<string, unknown>
       output_schema?: Record<string, unknown>

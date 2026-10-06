@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import ToolkitRegistry from '@/core/tool-manager/toolkit-registry'
 import type { SatelliteToolkitDefinition } from '@/core/satellite/types'
+import { ToolConcurrency } from '@/types'
 
 vi.mock('@/constants', () => ({ TOOLS_PATH: '/unused' }))
 vi.mock('@/config', () => ({ CONFIG_MANAGER: { getConfig: (): { satellite: { tools: Record<string, string> } } => ({
@@ -21,6 +22,33 @@ const TOOLKIT: SatelliteToolkitDefinition = {
 }
 
 describe('Satellite tool ownership', () => {
+  it('preserves per-function concurrency overrides from a Satellite manifest', () => {
+    const registry = new ToolkitRegistry()
+    registry.registerSatelliteTools('owner-device', [{
+      ...TOOLKIT,
+      tools: {
+        cua: {
+          ...TOOLKIT.tools['cua']!,
+          concurrency: ToolConcurrency.Serial,
+          functions: {
+            click: TOOLKIT.tools['cua']!.functions['click']!,
+            inspect: {
+              description: 'Inspect an isolated resource.',
+              concurrency: ToolConcurrency.Parallel,
+              parameters: {}
+            }
+          }
+        }
+      }
+    }])
+
+    expect(registry.getToolConcurrency('computer_use', 'cua', 'click')).toBe(ToolConcurrency.Serial)
+    expect(registry.getToolConcurrency('computer_use', 'cua', 'inspect')).toBe(ToolConcurrency.Parallel)
+    expect(registry.getToolConcurrency('unknown', 'tool')).toBe(ToolConcurrency.Parallel)
+    expect(registry.getToolFunctions('computer_use', 'cua')?.['inspect']?.concurrency)
+      .toBe(ToolConcurrency.Parallel)
+  })
+
   it('retains a binding before connection and after disconnect, ignoring other devices', () => {
     const registry = new ToolkitRegistry()
     expect(registry.getToolSatelliteDevice('computer_use', 'cua')).toBe('owner-device')

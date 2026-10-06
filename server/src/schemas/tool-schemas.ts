@@ -78,6 +78,12 @@ const toolFunctionSchemaObject = Type.Strict(
             'Allow agent calls to yield a retained execution handle after a bounded wait. Execution keeps its original deadline and can be waited on, queried or canceled.'
         })
       ),
+      concurrency: Type.Optional(
+        Type.Enum(ToolConcurrency, {
+          description:
+            'Override tool-level concurrency for this function. Parallel uses isolated workers; serial retains shared instance state.'
+        })
+      ),
       hooks: Type.Optional(
         Type.Strict(
           Type.Object(

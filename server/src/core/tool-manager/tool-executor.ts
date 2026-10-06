@@ -622,7 +622,13 @@ export default class ToolExecutor {
             line
           )
         },
-        { concurrency: TOOLKIT_REGISTRY.getToolConcurrency(resolvedTool.toolkitId, resolvedTool.toolId) }
+        {
+          concurrency: TOOLKIT_REGISTRY.getToolConcurrency(
+            resolvedTool.toolkitId,
+            resolvedTool.toolId,
+            functionName
+          )
+        }
       )
     let runtimeResult = await executeTool()
 
