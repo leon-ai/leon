@@ -6,6 +6,7 @@ import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
 import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
+import { contentHash, patchTextFile, type TextChange, type PatchOptions } from './lib/text-patch'
 
 const DEFAULT_MAX_CHARS = 80_000
 const MAX_CHARS = 250_000
@@ -132,6 +133,7 @@ export default class FileTool extends Tool {
     data?: {
       path: string
       content: string
+      contentHash: string
       size: number
       returnedChars: number
       totalChars: number
@@ -155,7 +157,8 @@ export default class FileTool extends Tool {
       }
     }
 
-    const content = await fs.promises.readFile(resolvedPath, 'utf8')
+    const bytes = await fs.promises.readFile(resolvedPath)
+    const content = bytes.toString('utf8')
     const totalChars = content.length
     let selectedContent = content
     let offsetChars = this.clampNumber(options.offsetChars, 0, totalChars, 0)
@@ -187,6 +190,7 @@ export default class FileTool extends Tool {
       data: {
         path: resolvedPath,
         content: returnedContent,
+        contentHash: contentHash(bytes),
         size: readable.size || 0,
         returnedChars: returnedContent.length,
         totalChars,
@@ -250,6 +254,27 @@ export default class FileTool extends Tool {
         path: resolvedPath,
         bytesWritten: Buffer.byteLength(content, 'utf8')
       }
+    }
+  }
+
+  /**
+   * Apply targeted changes without rewriting unrelated content from a stale view.
+   */
+  public async patch(
+    targetPath: string,
+    changes: TextChange[],
+    options: PatchOptions = {}
+  ): Promise<Record<string, unknown>> {
+    const resolvedPath = this.resolvePath(targetPath)
+    const readable = await this.assertReadableTextFile(resolvedPath)
+    if (!readable.success) {
+      return readable
+    }
+
+    try {
+      return { success: true, data: await patchTextFile(resolvedPath, changes, options) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 

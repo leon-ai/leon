@@ -4,7 +4,7 @@
   "toolkit_id": "operating_system_control",
   "concurrency": "serial",
   "name": "File",
-  "description": "Read text, Office documents, PDFs and images with local extraction/OCR; write and append text without shell commands.",
+  "description": "Read documents and images; read, write, append and patch local text files without shell commands.",
   "icon_name": "file-text-line",
   "author": {
     "name": "Louis Grenard",
@@ -85,6 +85,7 @@
     },
     "read": {
       "description": "Read a local text file. Rejects likely binary files. Use head, tail, or maxChars to limit output when needed.",
+      "progressive_guidance": "Use bounded reads and follow nextOffsetChars when needed. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -120,6 +121,55 @@
         "additionalProperties": false
       }
     },
+    "patch": {
+      "description": "Apply validated targeted text replacements to one existing UTF-8 file and return a bounded replacement diff.",
+      "progressive_guidance": "Read the current file first. Provide exact oldText with enough context to match once. All replacements match the original snapshot and must not overlap. Pass the read contentHash as expectedContentHash when available. Missing, ambiguous or stale matches leave the file unchanged: re-read and correct the patch. Preserve scope and repository instructions. The diff is a preview, not executable unified-diff syntax.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "oldText": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "newText": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "oldText",
+                "newText"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "expectedContentHash": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path",
+          "changes"
+        ],
+        "additionalProperties": false
+      }
+    },
     "readToolArtifact": {
       "description": "Read a previous tool output artifact from an outputLogPath listed in previous_tool_artifacts.",
       "parameters": {
@@ -149,6 +199,7 @@
     },
     "write": {
       "description": "Write text content to a local file. If the file exists, overwrite must be true.",
+      "progressive_guidance": "Prefer patch for changes to existing text. Full overwrite requires the complete current content and must preserve unrelated owner changes.",
       "parameters": {
         "type": "object",
         "properties": {
