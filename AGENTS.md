@@ -31,7 +31,7 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 ## Skills
 
 - Native skills: `skills/native/<skill>/`, with `skill.json`, `locales/`, and action entry points in `src/actions/`. Follow the selected bridge's SDK conventions. Put reusable code in `src/lib/`, widgets in `src/widgets/`, and use SDK settings/memory APIs and declared tools. Examples: `timer_skill` (Node.js), `random_number_skill` (Python).
-- Agent skills: `skills/agent/<skill>/SKILL.md`, with discovery frontmatter and concise workflow instructions; optional supporting scripts live in `scripts/`. They guide Leon's existing agent loop and tool calls. Follow `tiny-web-crawler`; do not build a second agent loop or native action manifest.
+- Agent skills: `skills/agent/<skill>/SKILL.md`, with discovery frontmatter and concise workflow instructions; optional supporting scripts live in `scripts/`. They guide Leon's existing agent loop and tool calls. Do not build a second agent loop or native action manifest.
 
 ## Context files
 
