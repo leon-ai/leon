@@ -5,7 +5,7 @@
   "name": "Browser Use CLI",
   "description": "Operate the configured signed-in browser through the upstream Browser Use CLI and its persistent Browser Harness session.",
   "progressive_guidance": "Prefer inspect/act for individual steps and run for predictable batches. Reuse observed targets and the configured browser. Helpers activate the working tab and record outcomes for shared recovery. A changed page is not task completion; inspect failure evidence before retrying or switching tools. After failure, not_sent means no input was delivered; unverifiable means it may have taken effect. Reinspect rather than replaying blindly. Leave dependency installation and daemon management to Leon.\nFor research and comparisons, prefer structured data already exposed by the relevant page or an observed read-only endpoint over repeated card scraping. Ground endpoints and request parameters in page evidence; do not guess routes or bypass access controls. Verify active search parameters before comparing results. Use run to extract, filter, sort and summarize records in one bounded call; do not manipulate UI sorting when the available data can be sorted locally. Retain source URLs, record identities, units and coverage evidence with the requested fields. Distinguish advertised result counts from records actually retrieved; follow observed pagination only within the task scope. Missing fields remain unknown, not false or excluded. Return a useful shortlist with unresolved terms rather than exhaustively collecting unrelated offers.",
-  "icon_name": "seo-line",
+  "icon_name": "window-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

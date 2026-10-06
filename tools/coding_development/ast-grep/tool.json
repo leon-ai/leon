@@ -4,7 +4,7 @@
   "toolkit_id": "coding_development",
   "name": "ast-grep",
   "description": "Search code by syntax structure and return source locations, matched text and metavariable captures.",
-  "icon_name": "organization-chart",
+  "icon_name": "node-tree",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

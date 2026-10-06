@@ -4,7 +4,7 @@
   "toolkit_id": "video_streaming",
   "name": "YT-DLP",
   "description": "Inspect video metadata without downloading media, or download videos and audio from streaming platforms using yt-dlp.",
-  "icon_name": "download-cloud-2-line",
+  "icon_name": "youtube-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
