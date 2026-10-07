@@ -82,14 +82,12 @@ describe('ConfigManager', () => {
     })
   })
 
-  it('removes migrated keys without replacing unrelated configuration', async () => {
+  it('removes optional entries without replacing unrelated configuration', async () => {
     const configManager = await loadConfigManager()
 
-    await configManager.setValue(['llm', 'media_generation'], {
-      image: { provider: 'openai', model: 'old-model' }
-    })
-    await configManager.deleteValue(['llm', 'media_generation'])
-    expect(configManager.getConfig().llm.media_generation).toBeUndefined()
+    await configManager.setValue(['llm', 'model_settings', 'test-model'], {})
+    await configManager.deleteValue(['llm', 'model_settings', 'test-model'])
+    expect(configManager.getConfig().llm.model_settings['test-model']).toBeUndefined()
     expect(configManager.getConfig().llm.default).toBeNull()
   })
 
