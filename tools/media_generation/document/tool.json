@@ -53,8 +53,8 @@
       }
     },
     "create": {
-      "description": "Create a local editable DOCX from structured content. No provider needed.",
-      "progressive_guidance": "Use media_generation.typst.compile for local PDFs. Inspect DOCX content with operating_system_control.file.readDocument; convert to PDF with an installed document renderer before claiming visual verification.",
+      "description": "Create a local editable DOCX with structured text, SVG/PNG figures and captions. No provider needed.",
+      "progressive_guidance": "Generate chart assets with media_generation.echarts.render and pass returned absolute SVG/PNG paths in content.sections.images. Images follow that section’s paragraphs; create separate sections to position figures between text blocks. SVG includes a PNG fallback for Office compatibility. Width is in display pixels and height preserves the aspect ratio. Include captions and altText. Use media_generation.typst.compile for local PDFs. Inspect DOCX content with operating_system_control.file.readDocument; convert to PDF with an installed document renderer before claiming visual verification.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -82,6 +82,35 @@
                       "type": "array",
                       "items": {
                         "type": "string"
+                      }
+                    },
+                    "images": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "description": "Absolute local SVG or PNG file path, including returned chart artifact paths."
+                          },
+                          "caption": {
+                            "type": "string"
+                          },
+                          "altText": {
+                            "type": "string",
+                            "description": "Accessible description of the chart and what it communicates."
+                          },
+                          "width": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 624,
+                            "description": "Display width in pixels. Defaults to at most 480, with preserved aspect ratio."
+                          }
+                        },
+                        "required": [
+                          "path"
+                        ],
+                        "additionalProperties": false
                       }
                     }
                   },
