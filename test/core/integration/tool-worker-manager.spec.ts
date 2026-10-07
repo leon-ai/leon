@@ -63,7 +63,7 @@ it('compiles local documents and page images into durable conversation artifacts
     text: string
   }> => {
     const result = await manager.execute({
-      toolkitId: 'media_generation', toolId, functionName,
+      toolkitId: 'media_production', toolId, functionName,
       profileName: 'a', conversationSessionId: 'documents', parameters: {}
     }, args, () => {})
 
@@ -179,7 +179,7 @@ it('compiles local documents and page images into durable conversation artifacts
     expect(xml).toContain('Quarterly profit')
 
     const invalidBatch = await manager.execute({
-      toolkitId: 'media_generation', toolId: 'echarts', functionName: 'render',
+      toolkitId: 'media_production', toolId: 'echarts', functionName: 'render',
       profileName: 'a', conversationSessionId: 'documents', parameters: {}
     }, [[charts[0], {
       name: 'Unsupported chart',
@@ -195,7 +195,7 @@ it('compiles local documents and page images into durable conversation artifacts
     await fs.writeFile(source, '#read("../outside.txt")')
 
     const rejected = await manager.execute({
-      toolkitId: 'media_generation', toolId: 'typst', functionName: 'compile',
+      toolkitId: 'media_production', toolId: 'typst', functionName: 'compile',
       profileName: 'a', conversationSessionId: 'documents', parameters: {}
     }, [source], () => {})
 

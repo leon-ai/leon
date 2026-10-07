@@ -193,7 +193,7 @@ describe('AISDKRemoteLLMProvider', () => {
       { type: 'compaction', id: 'cmp-old', encrypted_content: 'old-window' },
       { type: 'compaction', id: 'cmp-1', encrypted_content: 'opaque-window' },
       { type: 'reasoning', id: 'rs-retained', encrypted_content: 'opaque-reasoning', summary: [] },
-      { type: 'function_call', id: 'fc-retained', call_id: 'call-retained', name: 'read_file', arguments: '{}', status: 'completed', ...(subscription ? { namespace: 'leon' } : {}) }
+      { type: 'function_call', id: 'fc-retained', call_id: 'call-retained', name: 'read_file', arguments: '{}', status: 'completed'  }
     ]
     const response = {
       id: 'resp-compact', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
@@ -208,10 +208,11 @@ describe('AISDKRemoteLLMProvider', () => {
       { type: 'response.completed', response: subscription ? { ...response, output: [] } : response }
     ]
     if (subscription) {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
       accountMocks.getCredentials
-        .mockResolvedValueOnce({ access_token: 'expired-token' })
-        .mockResolvedValue({ access_token: 'fresh-token' })
-      websocketMocks.fetch.mockRejectedValueOnce(new Error('Unexpected server response: 401'))
+        .mockResolvedValueOnce({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'expired-token' })
+        .mockResolvedValue({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'fresh-token' })
+      websocketMocks.fetch.mockResolvedValueOnce(Response.json({}, { status: 401 }))
     }
     websocketMocks.fetch.mockImplementation(async () => shouldStream
       ? new Response(events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''), {
@@ -221,7 +222,7 @@ describe('AISDKRemoteLLMProvider', () => {
     const target = {
       ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
       ...(subscription ? { accountCredentials: {
-        auth_kind: 'chatgpt', account_id: 'account', access_token: 'expired-token'
+        auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', account_id: 'account', access_token: 'expired-token'
       } } : {})
     }
     const provider = new OpenAILLMProvider(target)
@@ -277,16 +278,33 @@ describe('AISDKRemoteLLMProvider', () => {
     provider.dispose()
   })
 
-  it('restores source evidence when an opaque window belongs to a different connection', async () => {
+  it.each(['connection', 'legacy endpoint', 'workspace'])('restores source evidence when compaction belongs to a different %s', async (difference) => {
     websocketMocks.fetch.mockImplementation(async () => new Response('data: [DONE]\n\n', {
       headers: { 'content-type': 'text/event-stream' }
     }))
+    const credentials = {
+      auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
+      account_id: 'openai.owner', access_token: 'owner-token'
+    }
+    if (difference !== 'connection') {
+      accountMocks.getCredentials.mockResolvedValue(credentials)
+      vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+    }
     const ownerProvider = new OpenAILLMProvider({
-      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
+      ...(difference !== 'connection' ? { accountCredentials: {
+        ...credentials,
+        chatgpt_account_id: difference === 'workspace' ? 'old-workspace' : 'workspace'
+      } } : {})
     })
+    if (difference === 'legacy endpoint') {
+      // Represents the binding saved before subscription transport migration.
+      const previous = ownerProvider as unknown as { config: { baseURL: string } }
+      previous.config.baseURL = 'https://api.openai.com/v1'
+    }
     const provider = new OpenAILLMProvider({
       ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
-      accountCredentials: { api_key: 'other-key' }
+      accountCredentials: difference === 'connection' ? { api_key: 'other-key' } : credentials
     })
     await provider.runChatCompletion([{
       role: 'assistant', content: '', compactionContext: {
@@ -755,8 +773,9 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(minimax.config).toMatchObject({ baseURL: 'https://api.minimax.io/anthropic/v1', flavor: 'minimax' })
   })
 
-  it('reuses account websockets and preserves cache usage, summaries and encrypted reasoning for replay', async () => {
-    accountMocks.getCredentials.mockResolvedValue({ access_token: 'fresh-chatgpt-token' })
+  it('preserves subscription streaming, cache usage, summaries and encrypted reasoning for replay', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+    accountMocks.getCredentials.mockResolvedValue({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'fresh-chatgpt-token' })
     const call = { type: 'function_call', id: 'fc_test', call_id: 'call_test',
       name: 'read_note', namespace: 'leon', arguments: '{"name":"todo"}', status: 'completed' }
     const reasoning = {
@@ -788,7 +807,7 @@ describe('AISDKRemoteLLMProvider', () => {
     const provider = new OpenAILLMProvider({
       provider: LLMProviders.OpenAI, model: response.model, label: `openai/${response.model}`,
       isEnabled: true, isLocal: false, isResolved: true,
-      accountCredentials: { auth_kind: 'chatgpt', access_token: 'old-chatgpt-token', account_id: 'openai.test' }
+      accountCredentials: { auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'old-chatgpt-token', account_id: 'openai.test' }
     })
     const onReasoningToken = vi.fn()
     const onStreamEvent = vi.fn()
@@ -819,17 +838,18 @@ describe('AISDKRemoteLLMProvider', () => {
       authMode: InferenceAuthMode.ChatGPTOAuth,
       credentialSource: InferenceCredentialSource.AccountBinding,
       connectionRef: expect.any(String),
-      endpoint: 'wss://api.openai.com/v1/responses'
+      endpoint: 'https://chatgpt.com/backend-api/codex/responses'
     })
     expect(JSON.stringify(inference)).not.toContain('openai.test')
     expect(JSON.stringify(inference)).not.toContain('chatgpt-token')
     expect(getActiveTurnInference()).toBeUndefined()
 
     const [url, request] = websocketMocks.fetch.mock.calls[0]!
-    expect(String(url)).toBe('https://api.openai.com/v1/responses')
+    expect(String(url)).toBe('https://chatgpt.com/backend-api/codex/responses')
     expect(new Headers(request?.headers).get('authorization')).toBe('Bearer fresh-chatgpt-token')
     const body = JSON.parse(request?.body as string)
-    expect(body).toMatchObject({ stream: true, store: false, tools: [{ type: 'namespace', name: 'leon' }] })
+    expect(body).toMatchObject({ stream: true, store: false, tools: [{ type: 'function', name: 'read_note' }] })
+    expect(new Headers(request?.headers).get('chatgpt-account-id')).toBe('workspace')
     expect(body.temperature).toBeUndefined()
     expect(body.input[0].role).toBe('developer')
     expect(body).toMatchObject({
@@ -839,14 +859,14 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(result.data.choices[0].message.tool_calls[0].function.name).toBe('read_note')
     expect(onReasoningToken).toHaveBeenCalledWith('Checking the note.')
     expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'stream-open', transport: 'websocket'
+      type: 'stream-open', transport: 'http'
     }))
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
     expect(normalized.accounting?.cachedInputTokens).toBe(1_024)
     expect(normalized.accounting?.reasoningOutputTokens).toBe(10)
     expect(normalized.reasoningItems).toEqual([{
       provider: LLMProviders.OpenAI, id: 'rs_test', text: 'Checking the note.',
-      encryptedContent: 'encrypted-test'
+      encryptedContent: 'encrypted-test', binding: provider.compactionBinding
     }])
 
     await provider.runChatCompletion([
@@ -857,7 +877,7 @@ describe('AISDKRemoteLLMProvider', () => {
     ], params)
     const replay = JSON.parse(websocketMocks.fetch.mock.calls[1]![1].body)
     expect(replay.input).toContainEqual(reasoning)
-    expect(websocketMocks.create).toHaveBeenCalledTimes(1)
+    expect(websocketMocks.create).not.toHaveBeenCalled()
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test')
     provider.dispose()
   })
@@ -906,13 +926,14 @@ describe('AISDKRemoteLLMProvider', () => {
     }
   }, 2_000)
 
-  it('refreshes a rejected websocket token once and retires sockets when credentials change', async () => {
+  it('refreshes a rejected subscription token once and uses rotated credentials on later requests', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
     accountMocks.getCredentials
-      .mockResolvedValueOnce({ access_token: 'expired-token' })
-      .mockResolvedValueOnce({ access_token: 'fresh-token' })
-      .mockResolvedValueOnce({ access_token: 'rotated-token' })
+      .mockResolvedValueOnce({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'expired-token' })
+      .mockResolvedValueOnce({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'fresh-token' })
+      .mockResolvedValueOnce({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'rotated-token' })
     websocketMocks.fetch
-      .mockRejectedValueOnce(new Error('Unexpected server response: 401'))
+      .mockResolvedValueOnce(Response.json({}, { status: 401 }))
       .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
       .mockResolvedValueOnce(new Response('data: [DONE]\n\n'))
     const provider = new OpenAILLMProvider({
@@ -923,7 +944,7 @@ describe('AISDKRemoteLLMProvider', () => {
       isLocal: false,
       isResolved: true,
       accountCredentials: {
-        auth_kind: 'chatgpt',
+        auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
         access_token: 'expired-token',
         account_id: 'openai.test'
       }
@@ -933,18 +954,19 @@ describe('AISDKRemoteLLMProvider', () => {
     await provider.runChatCompletion('Hello again.', createCompletionParams(null))
 
     expect(accountMocks.getCredentials).toHaveBeenCalledWith('openai.test', undefined, true)
-    expect(websocketMocks.create).toHaveBeenCalledTimes(3)
+    expect(websocketMocks.create).not.toHaveBeenCalled()
     expect(websocketMocks.fetch.mock.calls.map(([, request]) =>
       new Headers(request.headers).get('authorization')
     )).toEqual(['Bearer expired-token', 'Bearer fresh-token', 'Bearer rotated-token'])
-    expect(websocketMocks.close).toHaveBeenCalledTimes(2)
+    expect(websocketMocks.close).not.toHaveBeenCalled()
     expect(accountMocks.markNeedsAttention).not.toHaveBeenCalled()
     provider.dispose()
   })
 
-  it('reports reconnect after a forbidden websocket without switching accounts', async () => {
-    accountMocks.getCredentials.mockResolvedValue({ access_token: 'revoked-token' })
-    websocketMocks.fetch.mockRejectedValueOnce(new Error('Unexpected server response: 403'))
+  it('reports reconnect after a forbidden subscription response without switching accounts', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+    accountMocks.getCredentials.mockResolvedValue({ auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', access_token: 'revoked-token' })
+    websocketMocks.fetch.mockResolvedValueOnce(Response.json({}, { status: 403 }))
     const provider = new OpenAILLMProvider({
       provider: LLMProviders.OpenAI,
       model: 'gpt-6.1-sol',
@@ -953,7 +975,7 @@ describe('AISDKRemoteLLMProvider', () => {
       isLocal: false,
       isResolved: true,
       accountCredentials: {
-        auth_kind: 'chatgpt',
+        auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
         access_token: 'revoked-token',
         account_id: 'openai.test'
       }

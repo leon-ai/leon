@@ -1,0 +1,158 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "filmcraft",
+  "toolkit_id": "media_production",
+  "name": "FilmCraft",
+  "description": "Create and edit video timelines, titles, captions, colour and audio headlessly; export finished sequences and frame previews.",
+  "icon_name": "movie-2-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-0.2.1-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-0.2.1-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-cli-0.2.1-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-cli-0.2.1-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/filmcraft/releases/download/v0.2.1/filmcraft-0.2.1-windows-x64-portable.zip"
+  },
+  "progressive_guidance": "The CLI downloads automatically from the pinned release archives. Operations run headlessly without opening a window or requiring a generation-provider account. Discover command IDs and params before editing. Ordinary edits stage a source copy and publish new files. Engine commands with explicit paths can still access the local filesystem; use file, script, preference or destructive operations only when explicitly requested. Preserve originals and inspect diagnostics. A successful command is not proof of visual quality: inspect a rendered preview before delivering artwork or video.",
+  "functions": {
+    "commands": {
+      "description": "Discover timeline, media, title, caption, colour and export engine commands.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Text to search in the installed command registry."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "inspect": {
+      "description": "Inspect the project tree and active timeline sequence without modifying the project.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source file path."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "inputPath"
+        ]
+      },
+      "deduplicate_calls": false
+    },
+    "edit": {
+      "description": "Create a timeline project or edit a source copy with an ordered command sequence; attach the new .fcproj file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "An engine command ID observed through commands."
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Parameters discovered from the installed command registry."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "command"
+              ]
+            }
+          },
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute existing project/document. Omit to start a new empty project."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "steps"
+        ]
+      },
+      "progressive_guidance": "Discover file.newSequence, import and timeline commands before constructing a sequence. Use absolute selected media paths. Inspect returned item/clip IDs instead of guessing. Projects reference external media: keep source assets available. Inspect the saved project and preview relevant timeline positions before export.",
+      "deduplicate_calls": false
+    },
+    "preview": {
+      "description": "Render a frame of the active sequence to PNG and attach bounded model evidence.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source file path."
+          },
+          "timeSeconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Sequence position in seconds; defaults to zero."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "inputPath"
+        ]
+      },
+      "deduplicate_calls": false
+    },
+    "render": {
+      "description": "Export the active sequence to completed MP4, GIF or WAV and attach the result.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source file path."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "mp4",
+                  "gif",
+                  "wav"
+                ]
+              },
+              "startSeconds": {
+                "type": "number",
+                "minimum": 0
+              },
+              "endSeconds": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "inputPath"
+        ]
+      },
+      "background": true,
+      "progressive_guidance": "Defaults to MP4 and the whole active sequence. Use startSeconds/endSeconds for an explicit range. Keep referenced media available. Use ffmpeg for ordinary file conversion and encoding tasks. Export presets stay in the Leon profile. A returned execution handle must settle before claiming completion.",
+      "deduplicate_calls": false
+    }
+  }
+}

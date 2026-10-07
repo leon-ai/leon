@@ -26,6 +26,7 @@ import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 import { FileHelper } from '@/helpers/file-helper'
 import { LogHelper } from '@/helpers/log-helper'
+import { StringHelper } from '@/helpers/string-helper'
 
 const LLM_PROVIDER_NOT_READY_MESSAGE =
   'The LLM provider is not ready yet. Use the built-in command "/model <provider> <model name>" to configure a model. Just press "/" to open built-in commands.'
@@ -154,6 +155,7 @@ export default class LLMProvider {
     LogHelper.title('LLM Provider')
     LogHelper.info('Initializing LLM provider...')
     this.llamaCPPServerBootErrorMessage = null
+    this.lastProviderErrorMessage = null
 
     const modelState = CONFIG_STATE.getModelState()
     const workflowTarget = modelState.getWorkflowTarget()
@@ -206,15 +208,30 @@ export default class LLMProvider {
       agentTarget
     )
 
-    this.disposeCurrentProviders()
-    this.workflowLLMProvider = workflowTarget.isEnabled
-      ? await this.createProvider(workflowTarget)
-      : undefined
-    this.agentLLMProvider = shouldShareLocalProvider
-      ? this.workflowLLMProvider
-      : agentTarget.isEnabled
-        ? await this.createProvider(agentTarget)
+    this.dispose()
+
+    try {
+      this.workflowLLMProvider = workflowTarget.isEnabled
+        ? await this.createProvider(workflowTarget)
         : undefined
+      this.agentLLMProvider = shouldShareLocalProvider
+        ? this.workflowLLMProvider
+        : agentTarget.isEnabled
+          ? await this.createProvider(agentTarget)
+          : undefined
+    } catch (error) {
+      // Account reconnection must remain available even when model creation fails.
+      this.dispose()
+      this.lastProviderErrorMessage = StringHelper.redactSecrets(
+        error instanceof Error
+          ? error.message
+          : 'The LLM provider could not be initialized.'
+      )
+      LogHelper.error(this.lastProviderErrorMessage)
+
+      return false
+    }
+
     this.workflowLLMProviderTargetLabel = workflowTarget.isEnabled
       ? workflowTarget.label
       : null

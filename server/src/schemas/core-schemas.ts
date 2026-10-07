@@ -88,10 +88,6 @@ export const configSchemaObject = strictObject({
     default: optionalString,
     workflow: optionalString,
     agent: optionalString,
-    // Accepted only so older profiles can start and migrate into tool settings.
-    media_generation: Type.Optional(
-      Type.Record(Type.String(), Type.Unknown(), { deprecated: true })
-    ),
     model_settings: Type.Record(Type.String({ minLength: 1 }), llmModelSetting),
     providers: strictObject({
       llamacpp: llmProviderWithBaseURL,

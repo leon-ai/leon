@@ -43,17 +43,19 @@ export async function mediaEndpoint(provider: LLMProviders): Promise<ProviderCon
 
 /**
  * Executes one request without retrying billable generation submissions.
+ * Reuses a resolved connection when payload formatting depends on its auth method.
  */
 export async function providerRequest(
   provider: LLMProviders,
   endpoint: string,
   body?: unknown,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  connection?: ProviderConnection
 ): Promise<Response> {
-  const connection = await mediaEndpoint(provider)
+  const selectedConnection = connection || await mediaEndpoint(provider)
 
   return requestProvider(provider, endpoint, body, {
-    connection,
+    connection: selectedConnection,
     ...(signal ? { signal } : {})
   })
 }

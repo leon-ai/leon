@@ -64,6 +64,7 @@ export interface ProviderReasoningItem {
   id: string
   text: string
   encryptedContent?: string
+  binding?: string
   providerOptions?: SharedV4ProviderOptions
 }
 

@@ -1,4 +1,5 @@
 import { CONFIG_MANAGER } from '@/config'
+import { StringHelper } from '@/helpers/string-helper'
 import {
   getLLMProviderAccountConfig
 } from '@/core/llm-manager/llm-provider-account-configs'
@@ -89,8 +90,12 @@ export default async function setupRemoteLLM() {
     if (method === 'account') {
       try {
         return await setupModelAccount(provider.value)
-      } catch {
-        SetupUI.info('I could not connect your account. I can use an API key instead.')
+      } catch (error) {
+        SetupUI.info(StringHelper.redactSecrets(
+          error instanceof Error
+            ? error.message
+            : 'I could not connect your account. I can use an API key instead.'
+        ))
       }
     }
   }

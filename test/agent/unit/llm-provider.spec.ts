@@ -4,6 +4,8 @@ import type { AxiosResponse } from 'axios'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogHelper } from '@/helpers/log-helper'
+import { FileHelper } from '@/helpers/file-helper'
+import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
 
 import LLMProvider from '@/core/llm-manager/llm-provider'
 import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
@@ -32,8 +34,13 @@ vi.mock('@/core/config-states/config-state', () => ({
         reasoning: 'auto',
         speed: 'auto'
       }))
-    }))
+    })),
+    getRoutingModeState: vi.fn(() => ({ getRoutingMode: (): string => 'agent' }))
   }
+}))
+
+vi.mock('@/core/llm-manager/llm-accounts', () => ({
+  getModelAccountCredentials: vi.fn()
 }))
 
 vi.mock('@/core', () => ({
@@ -68,6 +75,34 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it.each([1, 2])('keeps initialization recoverable when account lookup %s fails', async (failedLookup) => {
+    const dispose = vi.fn()
+    class ReadyProvider {
+      public modelName = 'celeris-1'
+      public dispose = dispose
+    }
+    const credentials = vi.mocked(getModelAccountCredentials)
+    credentials.mockResolvedValue(null)
+    if (failedLookup === 2) {
+      credentials.mockResolvedValueOnce(null)
+    }
+    const message = 'Reconnect this account with /connection ai connect openai.saved.'
+    credentials.mockRejectedValueOnce(new Error(message))
+    vi.spyOn(FileHelper, 'dynamicImportFromFile').mockResolvedValue({ default: ReadyProvider })
+    const manager = new LLMProvider()
+
+    await expect(manager.init()).resolves.toBe(false)
+    expect(manager.isLLMProviderReady).toBe(false)
+    expect(manager.consumeLastProviderErrorMessage()).toBe(message)
+    expect(dispose).toHaveBeenCalledTimes(failedLookup - 1)
+
+    // Reconnecting can reload the existing runtime without restarting the process.
+    await expect(manager.init()).resolves.toBe(true)
+    expect(manager.isLLMProviderReady).toBe(true)
+    expect(manager.consumeLastProviderErrorMessage()).toBeNull()
+    manager.dispose()
+  })
+
   it('preserves cache accounting and total input tokens on direct llama.cpp streams', async () => {
     // Exercise the direct parser without starting a model server.
     const provider = Object.create(LlamaCPPLLMProvider.prototype) as {

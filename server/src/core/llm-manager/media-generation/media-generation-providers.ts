@@ -14,6 +14,7 @@ import {
 } from './media-generation-types'
 import {
   downloadGeneratedFile,
+  mediaEndpoint,
   providerRequest,
   readMediaBytes
 } from './media-generation-transport'
@@ -215,6 +216,11 @@ export async function generateWithProvider(
     return { remote_id: id }
   }
 
+  // Keep payload format and dispatch bound to the same selected connection.
+  const imageConnection = await mediaEndpoint(provider)
+  const subscriptionImage = provider === LLMProviders.OpenAI &&
+    Boolean(imageConnection.accountId)
+
   if (provider === LLMProviders.OpenAI && options['mode'] === 'hosted') {
     const { image_model, ...imageOptions } = options
 
@@ -236,6 +242,7 @@ export async function generateWithProvider(
             ]
           }
         ],
+        tool_choice: { type: 'image_generation' },
         tools: [
           {
             type: 'image_generation',
@@ -244,7 +251,8 @@ export async function generateWithProvider(
           }
         ]
       },
-      signal
+      signal,
+      imageConnection
     )
     const response = (await providerResponse.json()) as {
       output?: Array<{ type: string, result?: string }>
@@ -329,6 +337,7 @@ export async function generateWithProvider(
   }
 
   let imageBody: unknown = {
+    ...(subscriptionImage ? { n: 1, quality: 'auto', size: 'auto', background: 'opaque' } : {}),
     ...options,
     model,
     prompt,
@@ -339,7 +348,16 @@ export async function generateWithProvider(
       ? '/image_generation'
       : '/images/generations'
 
-  if (references.length) {
+  if (references.length && subscriptionImage) {
+    // The Codex Images endpoint accepts JSON image URLs rather than multipart files.
+    imageBody = {
+      ...(imageBody as Record<string, unknown>),
+      images: references.map((file) => ({
+        image_url: `data:${file.artifact.mime_type};base64,${file.data.toString('base64')}`
+      }))
+    }
+    imageEndpoint = '/images/edits'
+  } else if (references.length) {
     const form = new FormData()
 
     form.set('model', model)
@@ -364,13 +382,15 @@ export async function generateWithProvider(
     provider,
     imageEndpoint,
     imageBody,
-    signal
+    signal,
+    imageConnection
   )
   const response = (await providerResponse.json()) as {
     data?:
       | Array<{ b64_json?: string, url?: string }>
       | { image_base64?: string[] }
     base_resp?: { status_code: number }
+    output_format?: string
   }
 
   checkMiniMax(response)
@@ -379,6 +399,7 @@ export async function generateWithProvider(
   )
     ? response.data
     : response.data?.image_base64?.map((b64_json) => ({ b64_json })) || []
+  const format = response.output_format || String(options['output_format'] || 'png')
 
   return {
     files: await Promise.all(
@@ -386,10 +407,10 @@ export async function generateWithProvider(
         data: image.b64_json
           ? Buffer.from(image.b64_json, 'base64')
           : await downloadGeneratedFile(image.url || '', signal),
-        mime_type: `image/${String(options['output_format'] || 'png')}`,
+        mime_type: `image/${format}`,
         filename:
           input.filename ||
-          `image-${index + 1}.${String(options['output_format'] || 'png')}`
+          `image-${index + 1}.${format}`
       }))
     )
   }

@@ -1,0 +1,121 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "vectorcraft",
+  "toolkit_id": "media_production",
+  "name": "VectorCraft",
+  "description": "Create and edit vector artwork, artboards and typography headlessly; deliver native documents and SVG, PDF or PNG artifacts.",
+  "icon_name": "brush-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-cli-0.4.0-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-cli-0.4.0-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/vectorcraft/releases/download/v0.4.0/vectorcraft-0.4.0-windows-x64-portable.zip"
+  },
+  "progressive_guidance": "The CLI downloads automatically from the pinned release archives. Operations run headlessly without opening a window or requiring a generation-provider account. Discover command IDs and params before editing. Ordinary edits stage a source copy and publish new files. Engine commands with explicit paths can still access the local filesystem; use file, script, preference or destructive operations only when explicitly requested. Preserve originals and inspect diagnostics. A successful command is not proof of visual quality: inspect a rendered preview before delivering artwork or video.",
+  "functions": {
+    "commands": {
+      "description": "Discover vector commands, labels and accepted parameters, optionally filtered by text.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Text to search in the installed command registry."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "inspect": {
+      "description": "Inspect document artboards, object counts and fonts without modifying the file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source file path."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "inputPath"
+        ]
+      },
+      "deduplicate_calls": false
+    },
+    "edit": {
+      "description": "Create a vector document or edit a source copy using discovered engine commands; attach native, SVG and PNG artifacts.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "An engine command ID observed through commands."
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Parameters discovered from the installed command registry."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "command"
+              ]
+            }
+          },
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute existing project/document. Omit to start a new empty project."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "steps"
+        ]
+      },
+      "progressive_guidance": "Start new documents with the observed file.new params. Returned SVG and PNG cover the first artboard; the .vectorcraft artifact retains all artboards. Discover shape, path, style and text operations with commands. Use export for a multi-page PDF.",
+      "deduplicate_calls": false
+    },
+    "export": {
+      "description": "Export a local vector document as SVG, PDF or PNG. PNG is also attached as model evidence when bounded.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source file path."
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "svg",
+              "pdf",
+              "png"
+            ],
+            "description": "Defaults to svg. PDF includes all artboards; SVG/PNG use the first."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "inputPath"
+        ]
+      },
+      "deduplicate_calls": false
+    }
+  }
+}

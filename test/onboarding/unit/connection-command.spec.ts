@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ConnectionCommand } from '@/built-in-command/commands/connection-command/connection-command'
 import { BuiltInCommandManager } from '@/built-in-command/built-in-command-manager'
+import { LogHelper } from '@/helpers/log-helper'
 import type {
   BuiltInCommandExecutionContext,
   BuiltInCommandExecutionResult,
@@ -22,7 +23,7 @@ vi.mock('@/config', () => ({ CONFIG_MANAGER: { getProviderConfig: (): null => nu
 vi.mock('@/constants', () => ({ PROFILE_RECENTLY_USED_COMMANDS_FILE_PATH: '' }))
 vi.mock('@/core/config-states/config-state', () => ({ CONFIG_STATE: {} }))
 vi.mock('@/core/profile-runtime/profile-runtime-manager', () => ({ PROFILE_RUNTIME_MANAGER: {} }))
-vi.mock('@/helpers/log-helper', () => ({ LogHelper: { warning: vi.fn() } }))
+vi.mock('@/helpers/log-helper', () => ({ LogHelper: { error: vi.fn(), warning: vi.fn() } }))
 vi.mock('@/helpers/profile-helper', () => ({ ProfileHelper: {} }))
 vi.mock('@/core/connections/connection-store', () => ({ CONNECTION_STORE: { list: runtime.tools } }))
 vi.mock('@/core/llm-manager/llm-accounts', () => ({
@@ -133,6 +134,48 @@ describe('Connection commands', () => {
     const response = await executeAICommand('connect', id)
     expect(response.result.plain_text.join(' ')).toContain(`claude auth login, then run /connection ai use ${id}`)
     expect(runtime.signIn).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    { error: new DOMException('Sign-in ended.', 'AbortError'), reported: false },
+    { error: new Error('Authorization failed. Use /connection ai connect openai.'), reported: true }
+  ])('reports sign-in failures once and ignores cancellation (reported: $reported)', async ({ error, reported }) => {
+    let rejectSignIn!: (error: Error) => void
+    runtime.signIn.mockResolvedValue({
+      url: 'https://example.invalid/sign-in',
+      complete: new Promise<void>((_resolve, reject) => {
+        rejectSignIn = reject
+      })
+    })
+
+    const response = await executeAICommand('connect', 'openai')
+    expect(response.result.blocks[0]?.items[0]?.href).toBe('https://example.invalid/sign-in')
+    rejectSignIn(error)
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    expect(LogHelper.error).toHaveBeenCalledTimes(reported ? 1 : 0)
+    if (reported) {
+      expect(LogHelper.error).toHaveBeenCalledWith(error.message)
+    }
+    expect(LogHelper.warning).not.toHaveBeenCalled()
+    expect(runtime.providerInit).not.toHaveBeenCalled()
+  })
+
+  it('reports runtime reload failure separately after successful sign-in', async () => {
+    runtime.signIn.mockResolvedValue({
+      url: 'https://example.invalid/sign-in',
+      complete: Promise.resolve()
+    })
+    runtime.providerInit.mockRejectedValueOnce(new Error('Reload failed.'))
+
+    await executeAICommand('connect', 'openai')
+    await vi.waitFor(() => expect(LogHelper.warning).toHaveBeenCalledOnce())
+
+    expect(LogHelper.warning).toHaveBeenCalledWith(
+      'Your AI account connected, but its runtime reload did not finish. Use /connection ai to check your connection.'
+    )
+    expect(LogHelper.error).not.toHaveBeenCalled()
+    expect(runtime.managerInit).not.toHaveBeenCalled()
   })
 
   it('reloads the original profile after browser sign-in, without the session model override', async () => {

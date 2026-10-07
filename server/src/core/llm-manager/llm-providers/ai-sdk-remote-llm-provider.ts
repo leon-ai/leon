@@ -25,6 +25,7 @@ import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
 import { OpenAIResponsesTransport } from './openai-responses-transport'
+import { CHATGPT_CODEX_BASE_URL } from '../llm-accounts/chatgpt-account-config'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import { CONFIG_MANAGER } from '@/config'
@@ -165,7 +166,10 @@ export default class AISDKRemoteLLMProvider {
     if (credentials) {
       // Browser-linked accounts use official endpoints. Imported keys stay with
       // their fellow endpoint and never inherit a previous profile's proxy.
-      if (credentials['auth_kind'] === 'chatgpt' || credentials['auth_kind'] === LLMProviders.OpenRouter) {
+      if (credentials['auth_kind'] === 'chatgpt') {
+        return CHATGPT_CODEX_BASE_URL
+      }
+      if (credentials['auth_kind'] === LLMProviders.OpenRouter) {
         return provider.baseURL
       }
 
@@ -193,7 +197,13 @@ export default class AISDKRemoteLLMProvider {
         this.config.providerName,
         this.model,
         this.config.baseURL,
-        this.config.credentials?.['account_id'] || this.apiKey
+        this.config.credentials?.['account_id'] || this.apiKey,
+        ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
+          ? [
+              this.config.credentials['auth_flow'],
+              this.config.credentials['chatgpt_account_id']
+            ]
+          : [])
       ])
     }).connectionRef!
   }
@@ -716,7 +726,12 @@ export default class AISDKRemoteLLMProvider {
         continue
       }
       const reasoningItems = (message.reasoningItems || []).filter(
-        (item) => item.provider === this.config.providerName
+        (item) => item.provider === this.config.providerName &&
+          // Old subscription reasoning has no route binding. Preserve source
+          // messages, but don't replay opaque state from token-sharing grants.
+          (item.binding
+            ? item.binding === this.compactionBinding
+            : this.config.credentials?.['auth_kind'] !== 'chatgpt')
       )
       for (const item of reasoningItems) {
         content.push({
@@ -1675,7 +1690,10 @@ export default class AISDKRemoteLLMProvider {
     const item: ProviderReasoningItem = state.reasoningItems.get(itemId) || {
       provider: this.config.providerName as LLMProviders,
       id: itemId,
-      text: ''
+      text: '',
+      ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? { binding: this.compactionBinding }
+        : {})
     }
     const encryptedContent = providerData?.['reasoningEncryptedContent']
     if (typeof encryptedContent === 'string' && this.config.flavor === 'openai-responses') {
@@ -1876,7 +1894,10 @@ export default class AISDKRemoteLLMProvider {
     completionParams.onToken?.('')
     completionParams.onStreamEvent?.({
       type: 'stream-open',
-      transport: this.config.flavor === 'openai-responses' ? 'websocket' : 'http',
+      transport: this.config.flavor === 'openai-responses' &&
+        this.config.credentials?.['auth_kind'] !== 'chatgpt'
+        ? 'websocket'
+        : 'http',
       ...(result.response?.headers?.['x-request-id']
         ? { requestId: result.response.headers['x-request-id'] }
         : {})

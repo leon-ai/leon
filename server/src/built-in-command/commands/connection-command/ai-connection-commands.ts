@@ -15,6 +15,7 @@ import { LLMProviders } from '@/core/llm-manager/types'
 import { refreshActiveProfileLLMRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { LogHelper } from '@/helpers/log-helper'
+import { StringHelper } from '@/helpers/string-helper'
 
 export const AI_CONNECTION_PARAMETER_NAME = 'ai_connection'
 export const API_KEY_PARAMETER_NAME = 'api_key'
@@ -109,10 +110,22 @@ export async function executeAIConnectionCommand(
         savedAccount?.provider
       )
       // Browser consent finishes after the command has returned its link.
-      void signIn.complete.then(() =>
-        runWithProfileContext({ profileName }, refreshActiveProfileLLMRuntime)
+      void signIn.complete.then(
+        () => runWithProfileContext({ profileName }, refreshActiveProfileLLMRuntime),
+        (error: unknown) => {
+          // A reconnect replaces prior consent; only its newest link remains valid.
+          if (error instanceof Error && error.name === 'AbortError') {
+            return
+          }
+
+          LogHelper.error(StringHelper.redactSecrets(
+            error instanceof Error
+              ? error.message
+              : 'AI account sign-in did not finish. Use /connection ai to check your connection.'
+          ))
+        }
       ).catch(() => {
-        LogHelper.warning('AI account sign-in or runtime reload did not finish. Use /connection ai to check your connection.')
+        LogHelper.warning('Your AI account connected, but its runtime reload did not finish. Use /connection ai to check your connection.')
       })
       return result(`Connect ${accountProvider.accountLabel}`, [{
         label: `Continue with ${accountProvider.accountLabel}`,
