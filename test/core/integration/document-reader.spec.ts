@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { DocumentReader } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-reader'
 import { LocalOcr } from '@@/tools/operating_system_control/file/src/nodejs/lib/local-ocr'
 import { prepareDocumentSearch } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-search'
+import { UrlReader } from '@@/tools/search_web/crawlberg/src/nodejs/lib/url-reader'
 import { sliceLayout } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-layout'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
 import { LEON_TOOLKITS_PATH } from '@bridge/constants'
@@ -175,4 +176,40 @@ it('reuses prepared document text, invalidates changed inputs and reports missin
   expect(changed).toMatchObject({ complete: true, cachedDocuments: 0 })
   expect(changedPaths[0]).not.toBe(documents[0]!.textPath)
   expect(await fs.readFile(changedPaths[0]!, 'utf8')).toContain('Changed')
+})
+
+it('paginates one URL snapshot, refreshes explicitly and rejects unsafe URL forms', async () => {
+  const extract = vi.fn()
+    .mockResolvedValueOnce({
+      results: [{ content: 'First snapshot', mimeType: 'text/html' }],
+      crawlFinalUrls: ['https://example.com/final']
+    })
+    .mockResolvedValueOnce({ results: [{ content: 'Changed snapshot' }] })
+  const urls = new UrlReader(extract)
+
+  expect(await urls.read('https://example.com/page#section', { maxChars: 5 })).toMatchObject({
+    text: 'First',
+    nextOffsetChars: 5,
+    cached: false,
+    finalUrl: 'https://example.com/final',
+    content_kind: 'extracted_text'
+  })
+  expect(await urls.read('https://example.com/page', { offsetChars: 5 })).toMatchObject({
+    text: ' snapshot',
+    cached: true,
+    nextOffsetChars: null
+  })
+  expect(extract).toHaveBeenCalledTimes(1)
+  expect(await urls.read('https://example.com/page', { refresh: true })).toMatchObject({
+    text: 'Changed snapshot',
+    cached: false
+  })
+
+  await expect(urls.read('file:///etc/passwd')).rejects.toThrow('HTTP(S)')
+  await expect(urls.read('https://user:password@example.com/')).rejects.toThrow('credentials')
+  await expect(urls.read('https://example.com/page', { offsetChars: 1, refresh: true })).rejects.toThrow('Refresh')
+
+  urls.dispose()
+  await expect(urls.read('https://example.com/page', { offsetChars: 1 })).rejects.toThrow('no longer cached')
+  expect(extract).toHaveBeenCalledTimes(2)
 })
