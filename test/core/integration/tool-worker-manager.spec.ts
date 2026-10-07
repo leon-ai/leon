@@ -7,7 +7,9 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
 import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
+import { extractArchive } from '@sdk/utils'
 import { runRipgrep } from '@@/tools/operating_system_control/ripgrep/src/nodejs/lib/run-ripgrep'
+import { DocumentReader } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-reader'
 
 const LARGE_RESULT_BYTES = 4 * 1_024 * 1_024
 
@@ -36,6 +38,176 @@ it.each(['recordLimit', 'timeout', 'canceled'])(
 
 let home = ''
 let manager: ToolWorkerManager
+
+it('compiles local documents and page images into durable conversation artifacts', async () => {
+  await fixture(false)
+
+  const project = path.join(home, 'project')
+  const source = path.join(project, 'report.typ')
+  const reader = new DocumentReader()
+
+  await fs.mkdir(project)
+  await fs.writeFile(source, [
+    '#set page(width: 12cm, height: 10cm, margin: 1cm)',
+    '= Sales report',
+    '#sys.inputs.at("label")',
+    '#figure(image("chart.svg", width: 8cm), caption: [Quarterly revenue])',
+    '#pagebreak()',
+    '= Findings',
+    '#table(columns: 2, [Quarter], [Revenue], [Q1], [42])',
+    '#figure(image("profit.png", width: 8cm), caption: [Quarterly profit])'
+  ].join('\n'))
+
+  const run = async (toolId: string, functionName: string, args: unknown[]): Promise<{
+    artifacts: Array<{ path: string, filename: string, mime_type: string }>
+    text: string
+  }> => {
+    const result = await manager.execute({
+      toolkitId: 'media_generation', toolId, functionName,
+      profileName: 'a', conversationSessionId: 'documents', parameters: {}
+    }, args, () => {})
+
+    expect(result.success, JSON.stringify(result)).toBe(true)
+
+    return result.output['result'] as {
+      artifacts: Array<{ path: string, filename: string, mime_type: string }>
+      text: string
+    }
+  }
+
+  try {
+    const charts = [
+      {
+        name: 'Quarterly revenue',
+        option: {
+          title: { text: 'Quarterly revenue' },
+          xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'] },
+          yAxis: { type: 'value', name: 'Revenue' },
+          series: [{ type: 'bar', data: [42, 58, 72, 96] }]
+        }
+      },
+      {
+        name: 'Quarterly profit',
+        option: {
+          title: { text: 'Quarterly profit' },
+          xAxis: { type: 'category', data: ['Q1', 'Q2', 'Q3', 'Q4'] },
+          yAxis: { type: 'value' },
+          series: [{ type: 'line', smooth: true, data: [8, 12, 15, 21] }]
+        }
+      }
+    ]
+    const generated = await run('echarts', 'render', [charts, { width: 800, height: 400 }])
+
+    expect(generated.artifacts).toHaveLength(4)
+
+    const svg = generated.artifacts.find((artifact) => artifact.filename === 'chart-1.svg')!
+    const png = generated.artifacts.find((artifact) => artifact.filename === 'chart-2.png')!
+    const pngBytes = await fs.readFile(png.path)
+
+    expect((await fs.readFile(svg.path, 'utf8'))).toContain('Quarterly revenue')
+    expect(pngBytes.readUInt32BE(16)).toBe(1_600)
+    expect(pngBytes.readUInt32BE(20)).toBe(800)
+    await fs.copyFile(svg.path, path.join(project, 'chart.svg'))
+    await fs.copyFile(png.path, path.join(project, 'profit.png'))
+
+    const imageOnly = await run('echarts', 'render', [charts, { formats: ['png'] }])
+
+    expect(imageOnly.artifacts).toHaveLength(2)
+    expect(imageOnly.artifacts.every((artifact) => artifact.mime_type === 'image/png')).toBe(true)
+
+    const fonts = await run('typst', 'listFonts', [])
+
+    expect(fonts.text).toContain('Libertinus Serif')
+
+    const pdf = await run('typst', 'compile', [source, { inputs: { label: 'Verified total: 42' } }])
+
+    expect(pdf.artifacts).toMatchObject([{ filename: 'report.pdf', mime_type: 'application/pdf' }])
+    expect(pdf.artifacts[0]!.path).toContain(path.join(home, 'profiles', 'a', 'sessions', 'documents'))
+    expect((await reader.readPdf(pdf.artifacts[0]!.path, { pageCount: 2 })).data).toMatchObject({
+      totalPages: 2,
+      pages: [
+        { text: expect.stringContaining('Verified total: 42') },
+        { text: expect.stringContaining('Findings') }
+      ]
+    })
+
+    for (const format of ['svg', 'png']) {
+      const images = await run('typst', 'compile', [source, { format, inputs: { label: 'Image export' } }])
+
+      expect(images.artifacts).toHaveLength(2)
+
+      for (const image of images.artifacts) {
+        const bytes = await fs.readFile(image.path)
+
+        if (format === 'png') {
+          expect(bytes.subarray(1, 4).toString()).toBe('PNG')
+        } else {
+          expect(bytes.toString()).toContain('<svg')
+        }
+      }
+    }
+
+    const docx = await run('document', 'create', ['docx', {
+      title: 'Editable report',
+      sections: [{
+        heading: 'Findings',
+        paragraphs: ['Verified total: 42'],
+        images: [
+          { path: svg.path, caption: 'Quarterly revenue', altText: 'Revenue grows each quarter.' },
+          { path: png.path, caption: 'Quarterly profit' }
+        ]
+      }]
+    }])
+
+    expect(await reader.readDocument(docx.artifacts[0]!.path)).toMatchObject({
+      text: expect.stringContaining('Verified total: 42')
+    })
+
+    const wordArchive = path.join(home, 'report.zip')
+    const word = path.join(home, 'word')
+
+    await fs.copyFile(docx.artifacts[0]!.path, wordArchive)
+    await extractArchive(wordArchive, word)
+
+    const media = await fs.readdir(path.join(word, 'word', 'media'))
+    const xml = await fs.readFile(path.join(word, 'word', 'document.xml'), 'utf8')
+
+    // Verify actual Office media, not just the returned attachment metadata.
+    expect(media.filter((file) => file.endsWith('.svg'))).toHaveLength(1)
+    expect(media.filter((file) => file.endsWith('.png'))).toHaveLength(2)
+    expect(xml).toContain('Revenue grows each quarter.')
+    expect(xml).toContain('Quarterly profit')
+
+    const invalidBatch = await manager.execute({
+      toolkitId: 'media_generation', toolId: 'echarts', functionName: 'render',
+      profileName: 'a', conversationSessionId: 'documents', parameters: {}
+    }, [[charts[0], {
+      name: 'Unsupported chart',
+      option: { series: [{ type: 'unsupported-series-type', data: [1, 2] }] }
+    }]], () => {})
+
+    expect(invalidBatch.success).toBe(false)
+    expect(invalidBatch.message).toContain('Not all chart series')
+
+    // A failed import must not expose files outside the selected project or
+    // leave a successful artifact result that the agent could deliver.
+    await fs.writeFile(path.join(home, 'outside.txt'), 'Private outside content')
+    await fs.writeFile(source, '#read("../outside.txt")')
+
+    const rejected = await manager.execute({
+      toolkitId: 'media_generation', toolId: 'typst', functionName: 'compile',
+      profileName: 'a', conversationSessionId: 'documents', parameters: {}
+    }, [source], () => {})
+
+    expect(rejected.success).toBe(false)
+    expect(JSON.stringify(rejected)).toContain('project root')
+    expect(await fs.readFile(source, 'utf8')).toBe('#read("../outside.txt")')
+    expect(await fs.readdir(path.join(home, 'profiles', 'a', 'sessions', 'documents', 'artifacts', 'outputs')))
+      .toHaveLength(12)
+  } finally {
+    await reader.dispose()
+  }
+})
 
 it('isolates concurrent calls even when a tool normally retains instance state', async () => {
   await fixture(true)
