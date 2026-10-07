@@ -3,7 +3,7 @@
   "tool_id": "document",
   "toolkit_id": "media_generation",
   "name": "Document Generation",
-  "description": "Create downloadable document artifacts through configured generation providers.",
+  "description": "Create editable Word documents locally or document artifacts through configured generation providers.",
   "icon_name": "file-text-line",
   "author": {
     "name": "Louis Grenard",
@@ -21,7 +21,7 @@
     },
     "generate": {
       "description": "Generate document using the profile defaults and attach the result. No model selection is needed.",
-      "progressive_guidance": "Use this operation for ordinary requests. Core resolves the configured provider/model. Check capabilities to inspect resolved defaults or diagnose missing setup. Do not switch models after an error unless the owner requests it. Do not claim completion without returned artifacts. Defaults live in this tool’s settings. provider=inherit follows the active conversation provider, model=auto uses its recommendation. If status is selection_required, explain the limitation and ask the owner to choose among choices; do not call another provider automatically. After they choose, use generateWithModel. Use configure only if they want the choice remembered.",
+      "progressive_guidance": "Use this operation for hosted generation requests. For local PDF use typst.compile; for local DOCX use create. Core resolves the configured provider/model. Check capabilities to inspect resolved defaults or diagnose missing setup. Do not switch models after an error unless the owner requests it. Do not claim completion without returned artifacts. Defaults live in this tool’s settings. provider=inherit follows the active conversation provider, model=auto uses its recommendation. If status is selection_required, explain the limitation and ask the owner to choose among choices; do not call another provider automatically. After they choose, use generateWithModel. Use configure only if they want the choice remembered.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -53,15 +53,14 @@
       }
     },
     "create": {
-      "description": "Create a local PDF or DOCX from structured content. No provider needed.",
-      "progressive_guidance": "Inspect the output using operating_system_control.file.readPdf/readDocument. For PDF text outside the built-in Latin font, provide a font_path covering the requested language. For visual review render PDF pages with file.readPdf; convert DOCX to PDF with an installed document renderer before claiming visual verification.",
+      "description": "Create a local editable DOCX from structured content. No provider needed.",
+      "progressive_guidance": "Use media_generation.typst.compile for local PDFs. Inspect DOCX content with operating_system_control.file.readDocument; convert to PDF with an installed document renderer before claiming visual verification.",
       "parameters": {
         "type": "object",
         "properties": {
           "format": {
             "type": "string",
             "enum": [
-              "pdf",
               "docx"
             ]
           },
@@ -91,9 +90,6 @@
                   ],
                   "additionalProperties": false
                 }
-              },
-              "font_path": {
-                "type": "string"
               }
             },
             "required": [
@@ -197,5 +193,6 @@
         "additionalProperties": false
       }
     }
-  }
+  },
+  "progressive_guidance": "For local PDF creation use media_generation.typst.compile. This tool creates local DOCX or uses hosted generation through the configured provider."
 }

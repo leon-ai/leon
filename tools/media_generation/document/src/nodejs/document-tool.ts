@@ -25,14 +25,14 @@ export default class DocumentTool extends Tool {
   }
 
   /**
-   * Creates a local PDF or Word document without a generation-provider account.
+   * Creates a local Word document without a generation-provider account.
    */
   public async create(
-    format: 'pdf' | 'docx',
+    format: 'docx',
     content: DocumentContent
   ): Promise<unknown> {
-    if (!['pdf', 'docx'].includes(format)) {
-      throw new Error('Use PDF or DOCX for local documents.')
+    if (format !== 'docx') {
+      throw new Error('Use DOCX here, or media_generation.typst.compile for PDF.')
     }
 
     const temporary = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-document-'))
@@ -40,15 +40,13 @@ export default class DocumentTool extends Tool {
     try {
       const filename = path.join(temporary, `document.${format}`)
 
-      await writeDocument(filename, format, content)
+      await writeDocument(filename, content)
 
       return {
         artifacts: [
           await this.createArtifact(
             filename,
-            format === 'pdf'
-              ? 'application/pdf'
-              : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
           )
         ]
       }

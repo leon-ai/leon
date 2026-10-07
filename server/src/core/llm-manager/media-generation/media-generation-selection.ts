@@ -65,7 +65,7 @@ export class GenerationSelectionRequired extends Error {
 
   constructor(kind: MediaKind, reason: string) {
     super(
-      `${reason} Ask the owner which generation provider/model to use. Do not switch accounts automatically. ${kind === MediaKind.Document ? 'Local document.create remains available for PDF/DOCX.' : ''}`
+      `${reason} Ask the owner which generation provider/model to use. Do not switch accounts automatically. ${kind === MediaKind.Document ? 'Local typst.compile remains available for PDF and document.create for DOCX.' : ''}`
     )
     this.choices = Object.entries(MEDIA_PROVIDERS)
       .filter(

@@ -1,0 +1,99 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "typst",
+  "toolkit_id": "media_generation",
+  "name": "Typst",
+  "description": "Compile local Typst source into PDF documents or SVG/PNG page images, with no generation-provider account.",
+  "icon_name": "pages-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "progressive_guidance": "Use this tool for local PDF typesetting and document page images. Write .typ source with the file tool first, then compile, inspect and revise. Typst supports tables, equations, figures, captions, references and SVG/PNG image assets; it does not export DOCX. Use media_generation.document.create for editable Word output. Compilation itself needs no account. Preview-package imports can download missing packages; use built-in/local assets for offline work. Prefer the document-authoring skill for the complete workflow.",
+  "functions": {
+    "compile": {
+      "description": "Compile an existing local Typst project and attach the PDF or every selected SVG/PNG page.",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Pass an absolute sourcePath. rootPath limits document file reads; choose the smallest project directory containing the source, imports and selected assets. Typst is markup, not Markdown. Generate chart assets with media_generation.echarts.render, then embed returned SVG/PNG files with image and figure. Copy selected artifacts into the Typst project before compiling, or choose a rootPath containing the project and those explicitly selected assets. Use listFonts before selecting fonts; inspect returned compiler diagnostics and fix missing-font or layout warnings. Output is copied into conversation artifacts; source files are retained. Inspect PDF text/layout with file.readPdf, or SVG/PNG visually, before claiming quality. For diagrams or standalone chart images set page dimensions to fit the figure, then export svg/png. Package imports may need internet on first use.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sourcePath": {
+            "type": "string",
+            "description": "Absolute local Typst source file path."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "pdf",
+                  "svg",
+                  "png"
+                ],
+                "description": "Defaults to pdf. SVG/PNG export creates a separate artifact for every selected page."
+              },
+              "rootPath": {
+                "type": "string",
+                "description": "Absolute project directory containing the source and allowed assets/imports. Defaults to the source directory."
+              },
+              "fontPaths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Absolute local directories containing additional fonts."
+              },
+              "inputs": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "String inputs read by the source through sys.inputs."
+              },
+              "pages": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Optional physical page selection in Typst syntax, e.g. 1,3-5. Defaults to all pages. Use small selections for long SVG/PNG exports."
+              },
+              "ppi": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "PNG resolution in pixels per inch; defaults to 144."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "sourcePath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "listFonts": {
+      "description": "List font families discovered by Typst in embedded, system and optional local font directories.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "fontPaths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Absolute local directories containing additional fonts."
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-unknown-linux-musl.tar.xz",
+    "linux-aarch64": "https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-unknown-linux-musl.tar.xz",
+    "macosx-arm64": "https://github.com/typst/typst/releases/download/v0.15.1/typst-aarch64-apple-darwin.tar.xz",
+    "win-amd64": "https://github.com/typst/typst/releases/download/v0.15.1/typst-x86_64-pc-windows-msvc.zip"
+  }
+}
