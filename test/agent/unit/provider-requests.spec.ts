@@ -9,6 +9,7 @@ import HostedTool from '@@/tools/search_web/hosted/src/nodejs/hosted-tool'
 import { generateWithProvider } from '@/core/llm-manager/media-generation/media-generation-providers'
 import { listMediaCapabilities } from '@/core/llm-manager/media-generation/media-generation-catalog'
 import {
+  resolveMediaGenerationInput,
   resolveMediaGenerationTarget
 } from '@/core/llm-manager/media-generation/media-generation-selection'
 import { MediaKind } from '@/core/llm-manager/media-generation/media-generation-types'
@@ -230,6 +231,42 @@ describe('profile provider requests', () => {
     await expect(requestProvider(LLMProviders.OpenAI, '/audio/speech', {}))
       .rejects.toThrow('does not support /audio/speech')
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it.each(['settings', 'override'])('submits an owner-selected image model from %s through the bound subscription', async (source) => {
+    const model = 'owner-selected-image-model'
+
+    if (source === 'settings') {
+      mocks.settings.mockResolvedValue({ provider: LLMProviders.OpenAI, model, options: {} })
+    }
+
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({
+      data: [{ b64_json: 'aW1hZ2U=' }]
+    }))
+    const input = await resolveMediaGenerationInput({
+      session_id: 'session', kind: MediaKind.Image, prompt: 'A product photograph.',
+      ...(source === 'override' ? { provider: LLMProviders.OpenAI, model } : {})
+    })
+    const result = await generateWithProvider(input)
+
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(fetch.mock.calls[0]![0]).toBe('https://chatgpt.com/backend-api/codex/images/generations')
+    expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toMatchObject({ model })
+    expect(new Headers(fetch.mock.calls[0]![1]!.headers).get('chatgpt-account-id')).toBe('workspace')
+    expect(result.files?.[0]?.data).toEqual(Buffer.from('image'))
+  })
+
+  it('returns the provider model rejection without retrying another model or account', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({
+      error: { code: 'model_not_found', message: 'The selected image model is unavailable.' }
+    }, { status: 400 }))
+    const input = await resolveMediaGenerationInput({
+      session_id: 'session', kind: MediaKind.Image, prompt: 'A product photograph.',
+      provider: LLMProviders.OpenAI, model: 'owner-selected-image-model'
+    })
+
+    await expect(generateWithProvider(input)).rejects.toThrow('model_not_found')
+    expect(fetch).toHaveBeenCalledOnce()
   })
 
   it('edits subscription images using JSON references and the returned output format', async () => {
