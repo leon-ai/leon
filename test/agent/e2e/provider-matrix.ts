@@ -26,7 +26,7 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'anthropic',
     requiredEnv: 'LEON_ANTHROPIC_API_KEY',
-    llmTarget: 'anthropic/claude-haiku-4-5',
+    llmTarget: 'anthropic/claude-haiku-5-5',
     reasoning: 'none'
   },
   {

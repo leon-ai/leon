@@ -31,6 +31,11 @@ const CLAUDE_MODEL_FAMILIES: ClaudeModelFamily[] = [
 const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  // Haiku 5.5 rejects manual thinking budgets; older Haiku models still use them.
+  haiku: {
+    major: 5,
+    minor: 5
+  },
   mythos: {
     major: 5,
     minor: 1
@@ -51,6 +56,10 @@ const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
 const CLAUDE_SAMPLING_UNSUPPORTED_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  haiku: {
+    major: 5,
+    minor: 5
+  },
   mythos: {
     major: 5,
     minor: 1

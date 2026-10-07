@@ -642,6 +642,90 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(body.tool_choice).toBe('none')
   })
 
+  it.each([
+    {
+      model: 'claude-haiku-4-5',
+      thinking: { type: 'enabled', budget_tokens: 2_048 },
+      effort: undefined,
+      temperature: 0.5
+    },
+    {
+      model: 'claude-haiku-5-5',
+      thinking: { type: 'adaptive', display: 'summarized' },
+      effort: 'medium',
+      temperature: undefined
+    }
+  ])('uses supported thinking and sampling for $model', async ({
+    model,
+    thinking,
+    effort,
+    temperature
+  }) => {
+    const fetch = vi.fn().mockResolvedValue(Response.json({
+      id: 'msg_haiku',
+      type: 'message',
+      role: 'assistant',
+      model,
+      content: [{ type: 'text', text: 'Done.' }],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: { input_tokens: 10, output_tokens: 2 }
+    }))
+    const provider = new AnthropicLLMProvider({
+      ...TARGET,
+      provider: LLMProviders.Anthropic,
+      model
+    })
+    const params = {
+      ...PARAMS,
+      reasoningEffort: 'medium' as const,
+      thoughtTokensBudget: 2_048,
+      temperature: 0.5
+    }
+    const options = (
+      provider as unknown as ProviderWithPrivateCallOptions
+    ).buildCallOptions('Check.', params)
+
+    expect(options['temperature']).toBe(temperature)
+
+    vi.stubGlobal('fetch', fetch)
+
+    await provider.runChatCompletion('Check.', params)
+
+    const body = JSON.parse(fetch.mock.calls[0]![1].body)
+
+    expect(body.thinking).toEqual(thinking)
+    expect(body.output_config?.effort).toBe(effort)
+    expect(body.temperature).toBeUndefined()
+  })
+
+  it.each(['off', 'required'] as const)(
+    'allows Haiku 5.5 requests with %s thinking or tool choice',
+    (mode) => {
+      const provider = new AnthropicLLMProvider({
+        ...TARGET,
+        provider: LLMProviders.Anthropic,
+        model: 'claude-haiku-5-5'
+      }) as unknown as ProviderWithPrivateCallOptions
+      const options = provider.buildCallOptions('Read the file.', {
+        ...PARAMS,
+        reasoningMode: mode === 'off' ? 'off' : 'on',
+        reasoningEffort: 'max',
+        toolChoice: mode === 'required' ? 'required' : 'auto'
+      })
+
+      expect(options['providerOptions']).toEqual({
+        anthropic: {
+          thinking: { type: 'disabled' },
+          sendReasoning: true
+        }
+      })
+      expect(options['toolChoice']).toEqual({
+        type: mode === 'required' ? 'required' : 'auto'
+      })
+    }
+  )
+
   it.each([LLMProviders.Anthropic, LLMProviders.MiniMax])('preserves %s cache accounting and signed thinking through streamed tool turns', async (providerName) => {
     const model = providerName === LLMProviders.Anthropic ? 'claude-opus-5-5' : 'MiniMax-M3'
     const message = { id: 'msg_claude', type: 'message', role: 'assistant', model,

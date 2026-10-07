@@ -144,4 +144,26 @@ describe('LLM model catalog', () => {
     })
     expect(canDisableLLMModelReasoning(provider, model)).toBe(true)
   })
+
+  it.each([
+    [LLMProviders.Anthropic, 'claude-haiku-5-5'],
+    [LLMProviders.OpenRouter, 'anthropic/claude-haiku-5.5']
+  ] as const)('exposes Haiku 5.5 capabilities for %s', (provider, model) => {
+    const entry = getLLMModelCatalogEntry(provider, model)
+
+    expect(entry).toMatchObject({
+      supportsForcedToolChoice: true,
+      supportsTemperature: false,
+      reasoning: ['auto', 'none', 'low', 'medium', 'high', 'xhigh', 'max'],
+      speed: provider === LLMProviders.Anthropic
+        ? ['auto']
+        : ['auto', 'normal', 'fast']
+    })
+    expect(entry?.inputMediaTypes).toContain('application/pdf')
+    expect(canDisableLLMModelReasoning(provider, model)).toBe(true)
+
+    if (provider === LLMProviders.Anthropic) {
+      expect(entry?.defaultReasoningEffort).toBe('medium')
+    }
+  })
 })

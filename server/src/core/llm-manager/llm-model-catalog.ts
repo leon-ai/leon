@@ -238,6 +238,19 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-opus-5.5', label: 'anthropic/claude-opus-5.5', recommended: true, supportsForcedToolChoice: false, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
+   * @see https://openrouter.ai/anthropic/claude-haiku-5.5
+   */
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-haiku-5.5',
+    label: 'anthropic/claude-haiku-5.5',
+    supportsForcedToolChoice: true,
+    supportsTemperature: false,
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
    * @see https://openrouter.ai/anthropic/claude-fable-5.1
    */
   { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-fable-5.1', label: 'anthropic/claude-fable-5.1', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
@@ -403,6 +416,21 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    */
   { provider: LLMProviders.Anthropic, model: 'claude-opus-5-5', label: 'Claude Opus 5.5', recommended: true, supportsForcedToolChoice: false, defaultReasoningEffort: 'medium', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
   /**
+   * @see https://platform.claude.com/docs/en/models/haiku-5-5/overview
+   * @see https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide
+   */
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-haiku-5-5',
+    label: 'Claude Haiku 5.5',
+    supportsForcedToolChoice: true,
+    supportsTemperature: false,
+    defaultReasoningEffort: 'medium',
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
+  /**
    * @see https://platform.claude.com/docs/en/models/fable-5-1/overview
    */
   { provider: LLMProviders.Anthropic, model: 'claude-fable-5-1', label: 'Claude Fable 5.1', defaultReasoningEffort: 'high', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
@@ -436,10 +464,6 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
   { provider: LLMProviders.Anthropic, model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', defaultReasoningEffort: 'high', reasoning: OPTIONAL_MAX_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
-  /**
-   * @see https://platform.claude.com/docs/en/build-with-claude/thinking-troubleshooting Model-specific reasoning support.
-   */
-  { provider: LLMProviders.Anthropic, model: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
 
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.3
