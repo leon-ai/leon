@@ -1,0 +1,63 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "dust",
+  "toolkit_id": "system_utilities",
+  "name": "Dust",
+  "description": "Inspect disk usage and the largest files or directories without modifying them.",
+  "icon_name": "hard-drive-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "progressive_guidance": "Read STORAGE.md for general disk capacity first. Scan explicit directories only. Disk usage includes hidden entries, stays on each input filesystem and does not dereference symlinks. A bounded tree is a ranked preview, not a full inventory. Errors invalidate completeness; this tool never deletes files.",
+  "functions": {
+    "inspect": {
+      "description": "Return a bounded disk-usage tree for explicit absolute paths.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 5
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "depth": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12
+              },
+              "entries": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              },
+              "apparentSize": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-unknown-linux-musl.tar.gz",
+    "linux-aarch64": "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-aarch64-unknown-linux-musl.tar.gz",
+    "macosx-x86_64": "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-apple-darwin.tar.gz",
+    "macosx-arm64": "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-aarch64-apple-darwin.tar.gz",
+    "win-amd64": "https://github.com/bootandy/dust/releases/download/v1.2.6/dust-v1.2.6-x86_64-pc-windows-msvc.zip"
+  }
+}

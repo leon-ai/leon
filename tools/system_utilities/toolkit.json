@@ -3,8 +3,11 @@
   "name": "System Utilities",
   "description": "Utilities for system maintenance, runtime diagnostics, and managing tool executions.",
   "icon_name": "tools-line",
-  "context_files": [],
+  "context_files": [
+    "STORAGE.md"
+  ],
   "tools": [
-    "tool_executions"
+    "tool_executions",
+    "dust"
   ]
 }
