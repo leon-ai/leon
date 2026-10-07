@@ -207,7 +207,7 @@ async function createChatGPTSignIn(
 
     settled = true
     const message = `I could not finish ChatGPT sign-in during ${stage}: ${detail} Use /connection ai connect ${accountID || 'openai'} to try again.`
-    LogHelper.error(message)
+    // Command and setup callers report this controlled diagnostic once.
     reject(new Error(message))
   }
   const timer = setTimeout(() => {
@@ -224,7 +224,14 @@ async function createChatGPTSignIn(
     }
     server.close()
 
-    fail(detail || 'ChatGPT sign-in ended.')
+    if (detail) {
+      fail(detail)
+      return
+    }
+
+    // Replacing pending consent is intentional, not an authorization failure.
+    settled = true
+    reject(new DOMException('ChatGPT sign-in ended.', 'AbortError'))
   }
 
   const server = http.createServer((request, response) => {

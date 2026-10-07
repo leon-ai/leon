@@ -7,6 +7,7 @@ import {
   getRequiredLLMProviderAccountConfig
 } from '@/core/llm-manager/llm-provider-account-configs'
 import { LLMProviders } from '@/core/llm-manager/types'
+import { StringHelper } from '@/helpers/string-helper'
 
 import { SetupUI, setupConsola } from './setup-ui'
 import { createSetupStatus } from './setup-status'
@@ -101,8 +102,12 @@ export default async function setupFellows() {
       const account = await connectFellow(connection)
       SetupUI.info(`I will use your ${connection.provider} connection.`)
       return { fellowAccount: account.provider }
-    } catch {
-      SetupUI.info('I could not connect this account. Please choose another connection or continue setup.')
+    } catch (error) {
+      SetupUI.info(StringHelper.redactSecrets(
+        error instanceof Error
+          ? error.message
+          : 'I could not connect this account. Please choose another connection or continue setup.'
+      ))
     }
   }
 }

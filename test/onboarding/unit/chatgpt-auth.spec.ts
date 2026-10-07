@@ -16,6 +16,7 @@ import {
   CHATGPT_ACCOUNT_CLAIM,
   CHATGPT_CODEX_CLIENT_ID
 } from '@/core/llm-manager/llm-accounts/chatgpt-account-config'
+import { LogHelper } from '@/helpers/log-helper'
 
 const account = vi.hoisted(() => ({
   directory: '', profile: 'test-owner', publicKey: undefined as Awaited<ReturnType<typeof generateKeyPair>>['publicKey'] | undefined,
@@ -83,6 +84,8 @@ describe('ChatGPT sign-in', () => {
     pending.push(first.cancel, second.cancel)
 
     await expect(first.complete).rejects.toThrow('sign-in ended')
+    await expect(first.complete).rejects.toMatchObject({ name: 'AbortError' })
+    expect(LogHelper.error).not.toHaveBeenCalled()
     const callback = new URL(new URL(second.url).searchParams.get('redirect_uri')!)
     expect(callback.port).toBe(new URL(new URL(first.url).searchParams.get('redirect_uri')!).port)
     callback.searchParams.set('state', new URL(first.url).searchParams.get('state')!)
@@ -145,8 +148,12 @@ describe('ChatGPT sign-in', () => {
     const page = await browserFetch(callback)
 
     await expect(signIn.complete).rejects.toThrow('during token exchange: The request timed out after 30 seconds.')
+    await signIn.complete.catch((error: Error) => {
+      expect(error.message).not.toContain('private-')
+    })
     await page.text()
     expect(account.save).not.toHaveBeenCalled()
+    expect(LogHelper.error).not.toHaveBeenCalled()
   })
 
   it('distinguishes an expired browser authorization from a server request timeout', async () => {
@@ -161,7 +168,8 @@ describe('ChatGPT sign-in', () => {
       await vi.advanceTimersByTimeAsync(600_000)
       await expired
       expect(account.save).not.toHaveBeenCalled()
-      } finally {
+      expect(LogHelper.error).not.toHaveBeenCalled()
+    } finally {
       vi.useRealTimers()
     }
   })
