@@ -197,7 +197,13 @@ export default class AISDKRemoteLLMProvider {
         this.config.providerName,
         this.model,
         this.config.baseURL,
-        this.config.credentials?.['account_id'] || this.apiKey
+        this.config.credentials?.['account_id'] || this.apiKey,
+        ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
+          ? [
+              this.config.credentials['auth_flow'],
+              this.config.credentials['chatgpt_account_id']
+            ]
+          : [])
       ])
     }).connectionRef!
   }
@@ -720,7 +726,12 @@ export default class AISDKRemoteLLMProvider {
         continue
       }
       const reasoningItems = (message.reasoningItems || []).filter(
-        (item) => item.provider === this.config.providerName
+        (item) => item.provider === this.config.providerName &&
+          // Old subscription reasoning has no route binding. Preserve source
+          // messages, but don't replay opaque state from token-sharing grants.
+          (item.binding
+            ? item.binding === this.compactionBinding
+            : this.config.credentials?.['auth_kind'] !== 'chatgpt')
       )
       for (const item of reasoningItems) {
         content.push({
@@ -1679,7 +1690,10 @@ export default class AISDKRemoteLLMProvider {
     const item: ProviderReasoningItem = state.reasoningItems.get(itemId) || {
       provider: this.config.providerName as LLMProviders,
       id: itemId,
-      text: ''
+      text: '',
+      ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? { binding: this.compactionBinding }
+        : {})
     }
     const encryptedContent = providerData?.['reasoningEncryptedContent']
     if (typeof encryptedContent === 'string' && this.config.flavor === 'openai-responses') {

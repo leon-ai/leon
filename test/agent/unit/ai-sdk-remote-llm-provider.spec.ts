@@ -278,16 +278,33 @@ describe('AISDKRemoteLLMProvider', () => {
     provider.dispose()
   })
 
-  it('restores source evidence when an opaque window belongs to a different connection', async () => {
+  it.each(['connection', 'legacy endpoint', 'workspace'])('restores source evidence when compaction belongs to a different %s', async (difference) => {
     websocketMocks.fetch.mockImplementation(async () => new Response('data: [DONE]\n\n', {
       headers: { 'content-type': 'text/event-stream' }
     }))
+    const credentials = {
+      auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
+      account_id: 'openai.owner', access_token: 'owner-token'
+    }
+    if (difference !== 'connection') {
+      accountMocks.getCredentials.mockResolvedValue(credentials)
+      vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+    }
     const ownerProvider = new OpenAILLMProvider({
-      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
+      ...(difference !== 'connection' ? { accountCredentials: {
+        ...credentials,
+        chatgpt_account_id: difference === 'workspace' ? 'old-workspace' : 'workspace'
+      } } : {})
     })
+    if (difference === 'legacy endpoint') {
+      // Represents the binding saved before subscription transport migration.
+      const previous = ownerProvider as unknown as { config: { baseURL: string } }
+      previous.config.baseURL = 'https://api.openai.com/v1'
+    }
     const provider = new OpenAILLMProvider({
       ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol',
-      accountCredentials: { api_key: 'other-key' }
+      accountCredentials: difference === 'connection' ? { api_key: 'other-key' } : credentials
     })
     await provider.runChatCompletion([{
       role: 'assistant', content: '', compactionContext: {
@@ -849,7 +866,7 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(normalized.accounting?.reasoningOutputTokens).toBe(10)
     expect(normalized.reasoningItems).toEqual([{
       provider: LLMProviders.OpenAI, id: 'rs_test', text: 'Checking the note.',
-      encryptedContent: 'encrypted-test'
+      encryptedContent: 'encrypted-test', binding: provider.compactionBinding
     }])
 
     await provider.runChatCompletion([
