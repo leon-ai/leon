@@ -10,12 +10,12 @@ metadata:
 
 1. Establish the requested format, audience and content. Reuse supplied source material.
 2. Choose the creation tool based on the requested output:
-   - Charts: use `media_generation.echarts.render` with one named entry per requested chart and native ECharts JSON options. Ground the values in supplied/retrieved data, label units, and select only the requested image formats. Each chart becomes a separate SVG/PNG artifact. Use both formats when a vector document figure and raster preview are useful. Inspect a PNG preview and fix clipping or misleading axes before delivering it. Do not use image-generation models to invent or redraw quantitative charts.
-   - PDF: write a local `.typ` source with the file tool, then call `media_generation.typst.compile`. Keep the source and selected assets together in a project directory. Use the smallest `rootPath` containing that project. Built-in/local assets require no generation-provider account or package download.
-   - Editable Word: use `media_generation.document.create` with `format=docx`. Typst does not export DOCX.
+   - Charts: use `media_production.echarts.render` with one named entry per requested chart and native ECharts JSON options. Ground the values in supplied/retrieved data, label units, and select only the requested image formats. Each chart becomes a separate SVG/PNG artifact. Use both formats when a vector document figure and raster preview are useful. Inspect a PNG preview and fix clipping or misleading axes before delivering it. Do not use image-generation models to invent or redraw quantitative charts.
+   - PDF: write a local `.typ` source with the file tool, then call `media_production.typst.compile`. Keep the source and selected assets together in a project directory. Use the smallest `rootPath` containing that project. Built-in/local assets require no generation-provider account or package download.
+   - Editable Word: use `media_production.document.create` with `format=docx`. Typst does not export DOCX.
    - SVG/PNG: compile Typst with the requested format. Each selected page becomes an image artifact. For a standalone figure, set the page dimensions to fit the figure rather than exporting a full report page.
    - Plain text, CSV, Markdown and source files: use existing file writing.
-   - Hosted generation or Office formats requiring a provider: inspect `media_generation.document.capabilities`, then use `generate` with the configured defaults. Reserve `generateWithModel` for an explicitly owner-requested provider/model.
+   - Hosted generation or Office formats requiring a provider: inspect `media_production.document.capabilities`, then use `generate` with the configured defaults. Reserve `generateWithModel` for an explicitly owner-requested provider/model.
 
 If hosted generation returns `selection_required`, ask the owner to select a provider or use local Typst/DOCX creation when it satisfies the request. Save a choice with `configure` only if asked to remember it.
 

@@ -17,5 +17,5 @@
     "filmcraft",
     "lightcraft"
   ],
-  "progressive_guidance": "For local charts use echarts.render with native ECharts JSON options; return separate SVG/PNG artifacts or embed them in documents. For local PDFs and document page images use typst; for local editable Word files use document.create. Hosted generation uses the existing image, video, audio and document tools with profile defaults."
+  "progressive_guidance": "For local charts use echarts.render with native ECharts JSON options; return separate SVG/PNG artifacts or embed them in documents. For local PDFs and document page images use typst; for local editable Word files use document.create. Hosted generation uses the existing image, video, audio and document tools with profile defaults. For precise local image and layered-project edits use photocraft: discover commands, inspect the source, edit headlessly, and visually verify the returned preview. Its desktop control is optional for work in the live app. Use vectorcraft for editable vector artwork, effectcraft for motion graphics and compositions, filmcraft for timeline editing, and lightcraft for RAW development and explicitly selected photo libraries. These tools run headlessly and deliver new artifacts; load their command registries before constructing edits."
 }
