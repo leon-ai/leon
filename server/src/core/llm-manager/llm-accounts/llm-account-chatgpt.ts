@@ -93,11 +93,11 @@ async function exchange(
 /**
  * Fetch only models available to this account; prefer Leon's curated default.
  */
-export async function getChatGPTModel(
+async function getChatGPTModel(
   accessToken: string,
-  preferred = '',
-  signal?: AbortSignal,
-  chatGPTAccountID = ''
+  chatGPTAccountID: string,
+  preferred: string,
+  signal: AbortSignal
 ): Promise<string> {
   const manifest = JSON.parse(
     await fs.readFile(path.join(CODEBASE_PATH, 'package.json'), 'utf8')
@@ -110,9 +110,7 @@ export async function getChatGPTModel(
       access_token: accessToken,
       chatgpt_account_id: chatGPTAccountID
     }),
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)])
-      : AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(REQUEST_TIMEOUT_MS)]),
     redirect: 'error'
   })
   if (!response.ok) {
@@ -293,9 +291,9 @@ async function createChatGPTSignIn(
       stage = ChatGPTSignInStage.ModelDiscovery
       const model = await getChatGPTModel(
         token.access_token,
+        chatGPTAccountID,
         String(previous?.['model'] || preferredModel),
-        cancellation.signal,
-        chatGPTAccountID
+        cancellation.signal
       )
       // Verification and HTTP requests may finish after the owner cancels.
       cancellation.signal.throwIfAborted()
