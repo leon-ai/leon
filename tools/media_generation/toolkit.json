@@ -9,7 +9,8 @@
     "video",
     "audio",
     "document",
-    "typst"
+    "typst",
+    "echarts"
   ],
-  "progressive_guidance": "For local PDFs and document page images use typst; for local editable Word files use document.create. Hosted generation uses the existing image, video, audio and document tools with profile defaults."
+  "progressive_guidance": "For local charts use echarts.render with native ECharts JSON options. For local PDFs and document page images use typst; for local editable Word files use document.create. Hosted generation uses the existing image, video, audio and document tools with profile defaults."
 }
