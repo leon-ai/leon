@@ -1,4 +1,5 @@
 import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
+import { requestChatGPTAccount } from '../llm-accounts/chatgpt-account-request'
 
 const CHATGPT_UNSUPPORTED_FIELDS = [
   'background',
@@ -18,16 +19,11 @@ const CHATGPT_UNSUPPORTED_FIELDS = [
   'user',
   'previous_response_id'
 ]
-const CHATGPT_TOOL_NAMESPACE = 'leon'
 const OPENAI_UNCLOSED_TERMINAL_EVENTS = new Set([
   'response.failed',
   'response.incomplete'
 ])
-// The transport exposes rejected upgrade status only through ws's error message.
-const OPENAI_WEBSOCKET_AUTH_ERRORS = new Map([
-  ['Unexpected server response: 401', 401],
-  ['Unexpected server response: 403', 403]
-])
+
 /**
  * Shares authenticated Responses transport between inference and auxiliary requests.
  */
@@ -69,13 +65,6 @@ export class OpenAIResponsesTransport {
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit
   ): Promise<Response> {
-    const { MODEL_ACCOUNT_STORE } = await import('@/core/llm-manager/llm-accounts')
-    const id = String(this.accountId || '')
-    const credentials = await MODEL_ACCOUNT_STORE.getCredentials(id)
-    if (!credentials?.['access_token']) {
-      throw new Error('Please reconnect your ChatGPT account with /connection ai connect openai.')
-    }
-
     const body = JSON.parse(String(init?.body || '{}')) as Record<string, unknown>
     for (const field of CHATGPT_UNSUPPORTED_FIELDS) {
       delete body[field]
@@ -87,7 +76,7 @@ export class OpenAIResponsesTransport {
       ...(Array.isArray(body['include']) ? body['include'] : []),
       'reasoning.encrypted_content'
     ])]
-    // SIWC accepts developer instructions, while explicit system messages are rejected.
+    // Codex receives system instructions as developer messages.
     const items = Array.isArray(body['input'])
       ? body['input'] as Record<string, unknown>[]
       : typeof body['input'] === 'string'
@@ -97,78 +86,33 @@ export class OpenAIResponsesTransport {
       if (item['role'] === 'system') {
         return { ...item, role: 'developer' }
       }
-      // Review turns may replay calls after their function schemas are removed.
-      if (item['type'] === 'function_call') {
-        return { ...item, namespace: item['namespace'] || CHATGPT_TOOL_NAMESPACE }
-      }
 
       return item
     })
-    const tools = Array.isArray(body['tools']) ? body['tools'] : []
-    const functions = tools.filter((tool) => tool['type'] === 'function')
-    if (functions.length) {
-      // Plan usage requires function tools in a namespace; Core still executes them.
-      body['tools'] = [...tools.filter((tool) => tool['type'] !== 'function'), {
-        type: 'namespace',
-        name: CHATGPT_TOOL_NAMESPACE,
-        description: 'Leon tools',
-        tools: functions
-      }]
-      const choice = body['tool_choice'] as Record<string, unknown> | undefined
-      if (choice?.['type'] === 'function') {
-        choice['namespace'] = CHATGPT_TOOL_NAMESPACE
-      }
-    }
+    body['instructions'] ??= ''
 
-    const headers = new Headers(init?.headers)
-    headers.set('authorization', `Bearer ${String(credentials['access_token'])}`)
-
-    const request = {
-      ...init,
-      headers,
-      body: JSON.stringify(body),
-      redirect: 'error' as const
-    }
-    try {
-      return await this.fetchOpenAI(input, request)
-    } catch (error) {
-      const status = this.getOpenAIAuthenticationStatus(error)
-      if (status !== 401 && status !== 403) {
-        throw error
+    return requestChatGPTAccount(String(this.accountId), async (accountHeaders) => {
+      const headers = new Headers(init?.headers)
+      for (const [name, value] of Object.entries(accountHeaders)) {
+        headers.set(name, value)
       }
 
-      if (status === 401) {
-        // Retry authorization once before generation; never switch accounts.
-        const refreshed = await MODEL_ACCOUNT_STORE
-          .getCredentials(id, undefined, true)
-          .catch(() => null)
-        if (refreshed?.['access_token']) {
-          const refreshedHeaders = new Headers(headers)
-          refreshedHeaders.set(
-            'authorization',
-            `Bearer ${String(refreshed['access_token'])}`
-          )
+      // The WebSocket adapter drops custom headers. Codex needs its workspace
+      // header on the handshake, so use its native HTTP/SSE transport here.
+      init?.signal?.throwIfAborted()
+      this.onDispatch?.(String(input))
 
-          try {
-            return await this.fetchOpenAI(input, {
-              ...request,
-              headers: refreshedHeaders
-            })
-          } catch (retryError) {
-            if (!this.getOpenAIAuthenticationStatus(retryError)) {
-              throw retryError
-            }
-          }
-        }
-      }
-
-      await MODEL_ACCOUNT_STORE.markNeedsAttention(id)
-      throw new Error(`I need you to reconnect this account with /connection ai connect ${id}.`)
-    }
+      return globalThis.fetch(input, {
+        ...init,
+        headers,
+        body: JSON.stringify(body),
+        redirect: 'error'
+      })
+    })
   }
 
   /**
-   * Uses one OpenAI transport for keys and accounts, rotating authenticated sockets.
+   * Rotates authenticated API-key sockets when their authorization changes.
    */
   private async fetchOpenAI(
     input: Parameters<typeof globalThis.fetch>[0],
@@ -234,25 +178,6 @@ export class OpenAIResponsesTransport {
       }
       throw error
     }
-  }
-
-  /**
-   * Recognizes authentication rejection without treating transport failures as revocation.
-   */
-  private getOpenAIAuthenticationStatus(error: unknown): number | undefined {
-    if (!error || typeof error !== 'object') {
-      return undefined
-    }
-
-    const details = error as Record<string, unknown>
-    const status = details['statusCode'] ?? details['status']
-    if (status === 401 || status === 403) {
-      return status
-    }
-
-    return typeof details['message'] === 'string'
-      ? OPENAI_WEBSOCKET_AUTH_ERRORS.get(details['message'])
-      : undefined
   }
 
   private getOpenAIWebSocketFetch(): ReturnType<typeof createWebSocketFetch> {

@@ -40,6 +40,9 @@ vi.mock('@/core/llm-manager/llm-accounts', () => ({
 }))
 vi.mock('@/core/config-states/config-state', () => ({
   CONFIG_STATE: {
+    getModelState: (): object => ({
+      getAgentTarget: (): object => ({ provider: LLMProviders.OpenAI })
+    }),
     getModelSettingsState: (): object => ({
       getSettings: (): object => ({ reasoning: 'medium', speed: 'fast' })
     })
@@ -64,7 +67,7 @@ function responseStream(event: Record<string, unknown>): Response {
 describe('profile provider requests', () => {
   beforeEach(() => {
     mocks.credentials.mockResolvedValue({
-      auth_kind: 'chatgpt', account_id: 'bound-account', access_token: 'account-token'
+      auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', model: 'gpt-6.1-sol', account_id: 'bound-account', access_token: 'account-token'
     })
     mocks.create.mockImplementation(() => Object.assign(mocks.fetch, { close: mocks.close }))
   })
@@ -92,6 +95,9 @@ describe('profile provider requests', () => {
         response: { status: 'completed', output: [] } })}\n\n`
     ].join(''), { headers: { 'content-type': 'text/event-stream' } }))
     const coreFetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      if (String(input).startsWith('https://chatgpt.com/')) {
+        return mocks.fetch(input, init)
+      }
       expect(new Headers(init?.headers).get('x-leon-profile-token')).toBe('profile-token')
       if (String(input).includes('/target')) {
         return Response.json({ provider: 'openai', model: 'gpt-6', currentDateTime: '2026-10-05' })
@@ -112,7 +118,7 @@ describe('profile provider requests', () => {
     const result = await tool.fetchUrl(url)
     expect(result.content).toBe('A complete forecast.')
     expect(result.provider).toBe('openai')
-    expect(coreFetch).toHaveBeenCalledTimes(2)
+    expect(coreFetch).toHaveBeenCalledTimes(3)
     const init = mocks.fetch.mock.calls[0]![1] as RequestInit
     const body = JSON.parse(String(init.body))
     expect(new Headers(init.headers).get('authorization')).toBe('Bearer account-token')
@@ -123,7 +129,7 @@ describe('profile provider requests', () => {
     expect(body.include).toContain('reasoning.encrypted_content')
     expect(body.tools[0].type).toBe('web_search')
 
-    // Built-in media output must survive the same collector and reuse its socket.
+    // Built-in media output must survive the same subscription SSE collector.
     mocks.fetch.mockImplementationOnce(async () => responseStream({
       type: 'response.completed',
       response: { status: 'completed', output: [{ type: 'image_generation_call', result: 'image-data' }] }
@@ -134,7 +140,7 @@ describe('profile provider requests', () => {
     expect(await response.json()).toMatchObject({
       output: [{ type: 'image_generation_call', result: 'image-data' }]
     })
-    expect(mocks.create).toHaveBeenCalledTimes(1)
+    expect(mocks.create).not.toHaveBeenCalled()
   })
 
   it('rejects a broken selected account without using the spare API key', async () => {
@@ -158,6 +164,7 @@ describe('profile provider requests', () => {
   })
 
   it('reports terminal built-in failures instead of returning empty success', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(mocks.fetch)
     mocks.fetch.mockResolvedValueOnce(responseStream({
       type: 'response.failed',
       response: { error: { code: 'unsupported_tool', message: 'Tool unavailable' } }
@@ -166,6 +173,8 @@ describe('profile provider requests', () => {
     await expect(requestProvider(LLMProviders.OpenAI, '/responses', {
       model: 'gpt-6', input: 'Search.', tools: [{ type: 'web_search' }]
     })).rejects.toThrow('unsupported_tool')
-    expect(mocks.close).toHaveBeenCalled()
+    expect(mocks.close).not.toHaveBeenCalled()
   })
+
+
 })

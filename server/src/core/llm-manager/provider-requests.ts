@@ -7,6 +7,10 @@ import { createMediaProviderError } from './media-generation/media-generation-pr
 import { LLMProviders } from './types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getLLMModelDefaultReasoning } from './llm-model-catalog'
+import {
+  CHATGPT_CODEX_BASE_URL,
+  requireChatGPTCodexAccount
+} from './llm-accounts/chatgpt-account-config'
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 600_000
 const PROVIDER_CAPABILITY_HEADERS = ['anthropic-beta', 'anthropic-version']
@@ -38,6 +42,9 @@ export async function resolveProviderConnection(
   const config = getRequiredLLMProviderAccountConfig(provider)
   const credentials = await getModelAccountCredentials(provider)
   const subscription = credentials?.['auth_kind'] === 'chatgpt'
+  if (subscription) {
+    requireChatGPTCodexAccount(credentials, String(credentials['account_id']))
+  }
   const apiKey = credentials
     ? credentials['api_key'] || (subscription ? credentials['access_token'] : '')
     : CONFIG_MANAGER.getProviderAPIKey(provider)
@@ -51,11 +58,13 @@ export async function resolveProviderConnection(
   return {
     apiKey,
     baseURL: subscription
-      ? config.baseURL
+      ? CHATGPT_CODEX_BASE_URL
       : configuredBaseURL || (credentials
         ? String(credentials['base_url'] || defaultBaseURL || config.baseURL)
         : defaultBaseURL || CONFIG_MANAGER.getProviderBaseURL(provider) || config.baseURL),
-    ...(subscription ? { accountId: String(credentials['account_id']) } : {})
+    ...(subscription ? {
+      accountId: String(credentials['account_id'])
+    } : {})
   }
 }
 

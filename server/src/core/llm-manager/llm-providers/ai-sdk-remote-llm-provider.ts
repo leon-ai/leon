@@ -25,6 +25,7 @@ import { createMoonshotAI } from '@ai-sdk/moonshotai'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
 import { OpenAIResponsesTransport } from './openai-responses-transport'
+import { CHATGPT_CODEX_BASE_URL } from '../llm-accounts/chatgpt-account-config'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import { CONFIG_MANAGER } from '@/config'
@@ -165,7 +166,10 @@ export default class AISDKRemoteLLMProvider {
     if (credentials) {
       // Browser-linked accounts use official endpoints. Imported keys stay with
       // their fellow endpoint and never inherit a previous profile's proxy.
-      if (credentials['auth_kind'] === 'chatgpt' || credentials['auth_kind'] === LLMProviders.OpenRouter) {
+      if (credentials['auth_kind'] === 'chatgpt') {
+        return CHATGPT_CODEX_BASE_URL
+      }
+      if (credentials['auth_kind'] === LLMProviders.OpenRouter) {
         return provider.baseURL
       }
 
@@ -1876,7 +1880,10 @@ export default class AISDKRemoteLLMProvider {
     completionParams.onToken?.('')
     completionParams.onStreamEvent?.({
       type: 'stream-open',
-      transport: this.config.flavor === 'openai-responses' ? 'websocket' : 'http',
+      transport: this.config.flavor === 'openai-responses' &&
+        this.config.credentials?.['auth_kind'] !== 'chatgpt'
+        ? 'websocket'
+        : 'http',
       ...(result.response?.headers?.['x-request-id']
         ? { requestId: result.response.headers['x-request-id'] }
         : {})
