@@ -4,5 +4,8 @@
   "description": "Tools for file system operations.",
   "icon_name": "folders-line",
   "context_files": [],
-  "tools": []
+  "tools": [
+    "miniserve"
+  ],
+  "progressive_guidance": "Keep shared files on Leon’s host. Use miniserve for read-only LAN browser links. The host must remain running; shares expire or can be stopped."
 }

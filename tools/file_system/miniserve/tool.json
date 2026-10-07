@@ -1,0 +1,77 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "miniserve",
+  "toolkit_id": "file_system",
+  "name": "Temporary LAN Sharing",
+  "description": "Share selected files read-only on the local network until expiry or explicit revocation.",
+  "icon_name": "home-wifi-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "progressive_guidance": "Shares copy only the selected files, never expose a parent directory, do not follow symlinks, and permit no uploads or deletion. Anyone on the LAN with a returned secret URL can download it over HTTP. Links expire automatically and stop on tool shutdown. The host must stay running. Firewall and network isolation may prevent access. Use magic_wormhole for encrypted live internet transfers; these HTTP links are intended for the LAN.",
+  "functions": {
+    "start": {
+      "description": "Start a read-only LAN share of explicitly selected regular files.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "Absolute file path."
+            },
+            "minItems": 1,
+            "maxItems": 20
+          },
+          "expireSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stop": {
+      "description": "Revoke one active LAN share and remove its staged copies.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "shareId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "shareId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "list": {
+      "description": "List active shares owned by this conversation.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      }
+    }
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/svenstaro/miniserve/releases/download/v0.35.0/miniserve-0.35.0-x86_64-unknown-linux-musl",
+    "linux-aarch64": "https://github.com/svenstaro/miniserve/releases/download/v0.35.0/miniserve-0.35.0-aarch64-unknown-linux-musl",
+    "macosx-x86_64": "https://github.com/svenstaro/miniserve/releases/download/v0.35.0/miniserve-0.35.0-x86_64-apple-darwin",
+    "macosx-arm64": "https://github.com/svenstaro/miniserve/releases/download/v0.35.0/miniserve-0.35.0-aarch64-apple-darwin",
+    "win-amd64": "https://github.com/svenstaro/miniserve/releases/download/v0.35.0/miniserve-0.35.0-x86_64-pc-windows-msvc.exe"
+  },
+  "concurrency": "serial"
+}
