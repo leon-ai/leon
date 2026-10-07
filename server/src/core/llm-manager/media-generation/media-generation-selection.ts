@@ -23,9 +23,10 @@ interface GenerationTarget {
 
 async function validateTarget(
   kind: MediaKind,
-  target: GenerationTarget
+  target: GenerationTarget,
+  availableCapabilities?: Awaited<ReturnType<typeof getMediaProviderCapabilities>>
 ): Promise<GenerationTarget> {
-  const capabilities = await getMediaProviderCapabilities(target.provider)
+  const capabilities = availableCapabilities || await getMediaProviderCapabilities(target.provider)
 
   if (!capabilities.kinds.includes(kind)) {
     throw new Error(
@@ -151,7 +152,7 @@ export async function resolveMediaGenerationTarget(
     )
   }
 
-  return validateTarget(kind, { provider, model, options: settings.options })
+  return validateTarget(kind, { provider, model, options: settings.options }, capabilities)
 }
 
 /**

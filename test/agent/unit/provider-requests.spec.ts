@@ -223,9 +223,11 @@ describe('profile provider requests', () => {
     const capabilities = (await listMediaCapabilities()).find((entry) => entry['provider'] === 'openai')
     expect(capabilities).toMatchObject({ kinds: ['image'], models: { image: ['gpt-image-2'] } })
     expect(capabilities).not.toHaveProperty('hosted_image')
+    mocks.credentials.mockClear()
     expect(await resolveMediaGenerationTarget(MediaKind.Image)).toMatchObject({
       provider: LLMProviders.OpenAI, model: 'gpt-image-2'
     })
+    expect(mocks.credentials).toHaveBeenCalledOnce()
     const fetch = vi.spyOn(globalThis, 'fetch')
 
     await expect(requestProvider(LLMProviders.OpenAI, '/audio/speech', {}))
