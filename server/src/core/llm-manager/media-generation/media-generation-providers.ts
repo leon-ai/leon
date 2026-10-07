@@ -1,4 +1,3 @@
-import { getModelAccountCredentials } from '../llm-accounts'
 import fs from 'node:fs/promises'
 import {
   InferenceClient,
@@ -15,6 +14,7 @@ import {
 } from './media-generation-types'
 import {
   downloadGeneratedFile,
+  mediaEndpoint,
   providerRequest,
   readMediaBytes
 } from './media-generation-transport'
@@ -216,8 +216,10 @@ export async function generateWithProvider(
     return { remote_id: id }
   }
 
+  // Keep payload format and dispatch bound to the same selected connection.
+  const imageConnection = await mediaEndpoint(provider)
   const subscriptionImage = provider === LLMProviders.OpenAI &&
-    (await getModelAccountCredentials(provider))?.['auth_kind'] === 'chatgpt'
+    Boolean(imageConnection.accountId)
 
   if (provider === LLMProviders.OpenAI && options['mode'] === 'hosted') {
     const { image_model, ...imageOptions } = options
@@ -249,7 +251,8 @@ export async function generateWithProvider(
           }
         ]
       },
-      signal
+      signal,
+      imageConnection
     )
     const response = (await providerResponse.json()) as {
       output?: Array<{ type: string, result?: string }>
@@ -379,7 +382,8 @@ export async function generateWithProvider(
     provider,
     imageEndpoint,
     imageBody,
-    signal
+    signal,
+    imageConnection
   )
   const response = (await providerResponse.json()) as {
     data?:

@@ -269,12 +269,24 @@ describe('profile provider requests', () => {
     expect(fetch).toHaveBeenCalledOnce()
   })
 
-  it('edits subscription images using JSON references and the returned output format', async () => {
+  it.each([true, false])('keeps image edit formatting and dispatch bound when account selection changes (subscription: %s)', async (subscription) => {
     const subscriptionCredentials = {
       auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
       account_id: 'bound-account', access_token: 'account-token'
     }
-    mocks.credentials.mockResolvedValue(subscriptionCredentials)
+    const apiCredentials = { auth_kind: 'api_key', api_key: 'bound-key' }
+    const boundCredentials = subscription ? subscriptionCredentials : apiCredentials
+    let selectedCredentials = boundCredentials
+    mocks.credentials.mockImplementation(async (id: string) => {
+      if (id === LLMProviders.OpenAI) {
+        const credentials = selectedCredentials
+        selectedCredentials = subscription ? apiCredentials : subscriptionCredentials
+
+        return credentials
+      }
+
+      return boundCredentials
+    })
     mocks.artifact.mockResolvedValue({
       path: '/reference.png', artifact: { mime_type: 'image/png', filename: 'reference.png' }
     })
@@ -289,14 +301,25 @@ describe('profile provider requests', () => {
     })
 
     expect(fetch).toHaveBeenCalledOnce()
-    expect(fetch.mock.calls[0]![0]).toBe('https://chatgpt.com/backend-api/codex/images/edits')
+    expect(fetch.mock.calls[0]![0]).toBe(subscription
+      ? 'https://chatgpt.com/backend-api/codex/images/edits'
+      : 'https://api.openai.com/v1/images/edits')
     const request = fetch.mock.calls[0]![1]!
     const headers = new Headers(request.headers)
-    expect(headers.get('authorization')).toBe('Bearer account-token')
-    expect(headers.get('chatgpt-account-id')).toBe('workspace')
-    expect(JSON.parse(String(request.body))).toMatchObject({
-      images: [{ image_url: `data:image/png;base64,${Buffer.from('reference').toString('base64')}` }]
-    })
+    expect(headers.get('authorization')).toBe(subscription ? 'Bearer account-token' : 'Bearer bound-key')
+    if (subscription) {
+      expect(headers.get('chatgpt-account-id')).toBe('workspace')
+      expect(JSON.parse(String(request.body))).toMatchObject({
+        images: [{ image_url: `data:image/png;base64,${Buffer.from('reference').toString('base64')}` }]
+      })
+    } else {
+      expect(request.body).toBeInstanceOf(FormData)
+      const form = request.body as FormData
+      expect(form.get('model')).toBe('gpt-image-2')
+      const reference = form.get('image[]') as Blob
+      expect(reference.type).toBe('image/png')
+      expect(await reference.text()).toBe('reference')
+    }
     expect(result.files?.[0]).toMatchObject({ mime_type: 'image/png', filename: 'image-1.png' })
   })
 
