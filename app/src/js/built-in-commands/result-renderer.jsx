@@ -8,10 +8,10 @@ import {
   Text
 } from '@aurora'
 
-function InlineLabel({ item }) {
+function InlineLabel({ item, fontWeight }) {
   if (item.inline_link_label && item.inline_link_href) {
     return (
-      <Text>
+      <Text fontWeight={fontWeight}>
         {item.label}{' '}
         <Link href={item.inline_link_href} fontSize="md">
           {item.inline_link_label}
@@ -20,7 +20,15 @@ function InlineLabel({ item }) {
     )
   }
 
-  return <Text>{item.label}</Text>
+  return (
+    <Text fontWeight={fontWeight}>
+      {item.href && !item.value ? (
+        <Link href={item.href} fontSize="md">
+          {item.label}
+        </Link>
+      ) : item.label}
+    </Text>
+  )
 }
 
 function ToneListItem({ item }) {
@@ -83,7 +91,7 @@ function ToneListItem({ item }) {
       <ListItem>
         <div className="built-in-commands-modal__result-item">
           <div className="built-in-commands-modal__result-copy">
-            <Text fontWeight="semi-bold">{item.label}</Text>
+            <InlineLabel item={item} fontWeight="semi-bold" />
             {item.description ? <Text secondary>{item.description}</Text> : null}
           </div>
           {item.value ? (
