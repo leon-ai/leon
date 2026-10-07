@@ -9,6 +9,7 @@ import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '../types'
 import { isClaudeSubscriptionAvailable } from '../fellows/fellow-catalog'
 import { FellowAuthType, readFellowAPIKey, type FellowConnection } from '../fellows/fellow-discovery'
+import { requireChatGPTCodexAccount } from './chatgpt-account-config'
 
 const CONNECTION_CHECK_TIMEOUT_MS = 10_000
 
@@ -65,6 +66,9 @@ export async function useModelAccount(id: string, model?: string): Promise<void>
   const credentials = await MODEL_ACCOUNT_STORE.getCredentials(id)
   if (!credentials) {
     throw new Error('I could not read that account. Please connect it again.')
+  }
+  if (credentials['auth_kind'] === 'chatgpt') {
+    requireChatGPTCodexAccount(credentials, id)
   }
 
   const selectedModel = model || String(credentials['model'] || '')
@@ -168,6 +172,9 @@ export async function getModelAccountCredentials(
     const credentials = await MODEL_ACCOUNT_STORE.getCredentials(id)
     if (!credentials) {
       throw new Error('The selected connection is missing.')
+    }
+    if (credentials['auth_kind'] === 'chatgpt') {
+      requireChatGPTCodexAccount(credentials, id)
     }
     return { ...credentials, account_id: id }
   } catch {
