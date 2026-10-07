@@ -135,7 +135,7 @@ export async function resolveMediaGenerationTarget(
   if (!model) {
     throw new GenerationSelectionRequired(
       kind,
-      `Choose a ${kind} model for ${provider} in media_generation.${kind} settings.`
+      `Choose a ${kind} model for ${provider} in media_production.${kind} settings.`
     )
   }
 
