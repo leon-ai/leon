@@ -37,6 +37,8 @@ export function serveChatGPTSignInPage(
 
   response.writeHead(completion ? 200 : 400, {
     'content-type': 'text/html; charset=utf-8',
+    // This one-shot listener closes after consent; don't reuse its callback socket.
+    connection: 'close',
     'cache-control': 'no-store',
     'referrer-policy': 'no-referrer',
     'content-security-policy': `default-src 'none'; img-src data:; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; base-uri 'none'; frame-ancestors 'none'`

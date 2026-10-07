@@ -6,6 +6,7 @@ import path from 'node:path'
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 
 import { CODEBASE_PATH } from '@/leon-roots'
+import { LogHelper } from '@/helpers/log-helper'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { MODEL_ACCOUNT_STORE, useModelAccount, type LLMAccountSignIn } from './index'
 import { serveChatGPTSignInPage } from './chatgpt-sign-in-page'
@@ -32,6 +33,16 @@ const AUTH_TIMEOUT_MS = 600_000
 const REQUEST_TIMEOUT_MS = 30_000
 const LOGO_PATH = path.join(CODEBASE_PATH, 'web-app', 'public', 'img', 'logo-for-dark-bg.svg')
 const JWKS = createRemoteJWKSet(new URL(`${ISSUER}/.well-known/jwks.json`))
+
+enum ChatGPTSignInStage {
+  Listener = 'callback listener setup',
+  Authorization = 'browser authorization',
+  TokenExchange = 'token exchange',
+  IdentityVerification = 'identity verification',
+  ModelDiscovery = 'model discovery',
+  AccountSave = 'account storage',
+  AccountSelection = 'account selection'
+}
 
 interface OAuthToken {
   access_token: string
@@ -143,15 +154,34 @@ export async function startChatGPTSignIn(
   // Callers may display the URL before waiting for completion.
   void complete.catch(() => undefined)
   let consumed = false
+  let settled = false
+  let stage = ChatGPTSignInStage.Listener
   const cancellation = new AbortController()
-  const timer = setTimeout(() => cancel(), AUTH_TIMEOUT_MS)
-  const cancel = (): void => {
+  const fail = (detail: string): void => {
+    if (settled) {
+      return
+    }
+
+    settled = true
+    const message = `I could not finish ChatGPT sign-in during ${stage}: ${detail} Use /connection ai connect ${accountID || 'openai'} to try again.`
+    LogHelper.error(message)
+    reject(new Error(message))
+  }
+  const timer = setTimeout(() => {
+    cancel('Browser authorization timed out before Leon received the callback.')
+  }, AUTH_TIMEOUT_MS)
+  const cancel = (detail?: string): void => {
+    if (settled) {
+      return
+    }
+
     cancellation.abort()
     if (timer) {
       clearTimeout(timer)
     }
     server.close()
-    reject(new Error('ChatGPT sign-in ended. Use /connection ai connect openai to try again.'))
+
+    fail(detail || 'ChatGPT sign-in ended.')
   }
 
   const server = http.createServer((request, response) => {
@@ -169,7 +199,7 @@ export async function startChatGPTSignIn(
     if (callback.searchParams.has('error') || !code) {
       serveChatGPTSignInPage(response, logo)
       // Provider-supplied error descriptions can contain private data.
-      cancel()
+      cancel('OpenAI rejected browser authorization or returned no code.')
       return
     }
 
@@ -180,6 +210,7 @@ export async function startChatGPTSignIn(
     server.close()
 
     void runWithProfileContext({ profileName }, async () => {
+      stage = ChatGPTSignInStage.TokenExchange
       const token = await exchange({
         grant_type: 'authorization_code',
         client_id: CHATGPT_CODEX_CLIENT_ID,
@@ -188,6 +219,7 @@ export async function startChatGPTSignIn(
         redirect_uri: redirectURI
       }, cancellation.signal)
       cancellation.signal.throwIfAborted()
+      stage = ChatGPTSignInStage.IdentityVerification
       if (!token.id_token) {
         throw new Error('ChatGPT did not return a verified account identity.')
       }
@@ -208,6 +240,7 @@ export async function startChatGPTSignIn(
       }
 
       cancellation.signal.throwIfAborted()
+      stage = ChatGPTSignInStage.ModelDiscovery
       const model = await getChatGPTModel(
         token.access_token,
         String(previous?.['model'] || preferredModel),
@@ -216,6 +249,7 @@ export async function startChatGPTSignIn(
       )
       // Verification and HTTP requests may finish after the owner cancels.
       cancellation.signal.throwIfAborted()
+      stage = ChatGPTSignInStage.AccountSave
       const summary = await MODEL_ACCOUNT_STORE.save({
         provider: accountID || `openai.${randomUUID()}`,
         auth_type: 'oauth',
@@ -233,15 +267,30 @@ export async function startChatGPTSignIn(
         }
       })
       cancellation.signal.throwIfAborted()
+      stage = ChatGPTSignInStage.AccountSelection
       await useModelAccount(summary.provider, model)
+      settled = true
       resolve(summary)
-    }).catch(() => reject(new Error('I could not finish ChatGPT sign-in. Please try /connection ai connect openai again.')))
+    }).catch((error: unknown) => {
+      const status = error && typeof error === 'object'
+        ? (error as Record<string, unknown>)['statusCode']
+        : undefined
+      const detail = error instanceof Error && error.name === 'TimeoutError'
+          ? `The request timed out after ${REQUEST_TIMEOUT_MS / 1_000} seconds.`
+          : typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
+            ? `OpenAI returned HTTP ${status}.`
+            : 'The operation was rejected or could not be completed.'
+
+      // Report only controlled stage/status details, never the raw OAuth error.
+      fail(detail)
+    })
   })
 
   await new Promise<void>((ready, failure) => {
-    server.once('error', (error) => {
-      cancel()
-      failure(error)
+    server.once('error', () => {
+      const detail = 'The local callback listener could not be started.'
+      cancel(detail)
+      failure(new Error(detail))
     })
     server.listen(CALLBACK_PORT, '127.0.0.1', ready)
   })
@@ -269,6 +318,9 @@ export async function startChatGPTSignIn(
   for (const [key, value] of Object.entries(parameters)) {
     url.searchParams.set(key, value)
   }
+
+  stage = ChatGPTSignInStage.Authorization
+  LogHelper.info(`ChatGPT sign-in is awaiting the browser callback for profile ${profileName}.`)
 
   return { url: url.toString(), complete, cancel }
 }

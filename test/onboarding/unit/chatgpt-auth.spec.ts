@@ -75,6 +75,40 @@ afterEach(async () => {
 })
 
 describe('ChatGPT sign-in', () => {
+  it('returns a token exchange timeout without exposing raw authorization data', async () => {
+    const signIn = await startChatGPTSignIn()
+    pending.push(signIn.cancel)
+    const authorize = new URL(signIn.url)
+    const callback = new URL(authorize.searchParams.get('redirect_uri')!)
+    callback.searchParams.set('state', authorize.searchParams.get('state')!)
+    callback.searchParams.set('code', 'private-code')
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(
+      new DOMException('private-code private-token', 'TimeoutError')
+    )
+    const page = await browserFetch(callback)
+
+    await expect(signIn.complete).rejects.toThrow('during token exchange: The request timed out after 30 seconds.')
+    await page.text()
+    expect(account.save).not.toHaveBeenCalled()
+  })
+
+  it('distinguishes an expired browser authorization from a server request timeout', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const signIn = await startChatGPTSignIn()
+      pending.push(signIn.cancel)
+      const expired = expect(signIn.complete).rejects.toThrow(
+        'during browser authorization: Browser authorization timed out before Leon received the callback.'
+      )
+
+      await vi.advanceTimersByTimeAsync(600_000)
+      await expired
+      expect(account.save).not.toHaveBeenCalled()
+      } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('does not save or select an account when canceled during model lookup', async () => {
     const { publicKey, privateKey } = await generateKeyPair('RS256')
     account.publicKey = publicKey
@@ -127,7 +161,7 @@ describe('ChatGPT sign-in', () => {
 
   it.each([
     { failure: null, detail: '' },
-    { failure: 'nonce', detail: 'I could not finish ChatGPT sign-in' }
+    { failure: 'nonce', detail: 'during identity verification: The operation was rejected or could not be completed.' }
   ])('validates state, signed identity and PKCE before saving (failure: $failure)', async ({ failure, detail }) => {
     const { publicKey, privateKey } = await generateKeyPair('RS256')
     account.publicKey = publicKey
@@ -247,7 +281,7 @@ describe('ChatGPT sign-in', () => {
       await expect(signIn.complete).rejects.toThrow(
         modelStatus !== 200
           ? 'during model discovery: OpenAI returned HTTP 503.'
-          : 'I could not finish ChatGPT sign-in'
+          : 'during identity verification: The operation was rejected or could not be completed.'
       )
       expect(account.save).not.toHaveBeenCalled()
       expect(account.use).not.toHaveBeenCalled()
