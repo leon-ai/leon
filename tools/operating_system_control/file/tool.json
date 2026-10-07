@@ -38,6 +38,37 @@
         }, "required": ["path"], "additionalProperties": false
       }
     },
+    "prepareDocumentSearch": {
+      "description": "Prepare cached document text for searching across PDF, Office and other documents with the existing ripgrep tool. Returns text paths, original-file mappings and explicit coverage.",
+      "progressive_guidance": "For directories, discover files first with ripgrep.listFiles. Prepare selected documents in batches of at most 32, then pass returned paths to ripgrep.search. Map matches back using documents[].sourcePath. Extracted Markdown line numbers are not original-file line numbers. PDF page markers identify boundaries; readPdf confirms page references. OCR is opt-in for bulk preparation. Check failures, missingTextPages and nextPage before claiming full coverage. Prepared text remains in conversation artifacts.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 32
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "ocr": {
+                "type": "boolean",
+                "description": "Use existing local OCR for images and empty PDF text layers; default false."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
     "readPdf": {
       "description": "Read a bounded PDF page range with page references and reusable text extraction. Optionally attach rendered pages to the agent model.",
       "progressive_guidance": "Start with text. Request layout for block/table-cell coordinates; coordinates use the returned dimensions and units, not screenshot pixels. For charts or ambiguous table relationships, use render with the selected vision-capable model; otherwise state the limitation. OCR does not interpret charts or recover formatting. Follow text cursors; continue a page's nextLayoutOffset with startPage, pageCount=1, layoutOffset.",

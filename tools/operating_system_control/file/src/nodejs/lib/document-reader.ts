@@ -30,6 +30,14 @@ export interface ImageReadOptions extends DocumentReadOptions, LayoutReadOptions
   render?: boolean
 }
 
+export interface SearchDocument {
+  text: string
+  totalPages?: number
+  extractedPages?: number
+  missingTextPages?: number[]
+  nextPage?: number | null
+}
+
 interface ModelFile {
   dataBase64: string
   mediaType: string
@@ -81,6 +89,72 @@ export class DocumentReader {
     }
     return { path: filePath, format: 'markdown', ...this.chunk(text, options), cached: cached?.signature === signature,
       coverage: 'document text and structure; embedded images are not visually interpreted' }
+  }
+
+  /**
+   * Export complete document text, identifying PDF pages that were not searched.
+   * OCR stays opt-in for bulk searches because it can be expensive.
+   */
+  public async extractSearchText(filePath: string, ocr = false): Promise<SearchDocument> {
+    const signature = await this.signature(filePath)
+
+    if (path.extname(filePath).toLowerCase() !== '.pdf') {
+      const cached = this.cache.get(filePath)
+      const text = cached?.signature === signature
+        ? cached.text
+        : await this.extractDocument(filePath, ocr)
+
+      this.remember(filePath, signature, text)
+      return { text }
+    }
+
+    const parsed = await this.pdf.read(filePath)
+    const missingTextPages: number[] = []
+    const text: string[] = []
+
+    for (const page of parsed.pages) {
+      let content = page.markdown
+
+      if (!page.text.trim()) {
+        if (ocr) {
+          // Reuse the same local OCR cache and pagination as individual page reads.
+          const chunks: string[] = []
+          let offsetChars = 0
+
+          do {
+            const result = await this.readPdf(filePath, {
+              startPage: page.pageNum,
+              pageCount: 1,
+              offsetChars
+            })
+            const pages = result.data['pages'] as { text: string }[]
+            chunks.push(pages[0]!.text)
+            offsetChars = result.data['nextPage'] === page.pageNum
+              ? result.data['nextOffsetChars'] as number
+              : 0
+          } while (offsetChars > 0)
+
+          content = chunks.join('')
+          if (!content.trim()) {
+            missingTextPages.push(page.pageNum)
+          }
+        } else {
+          missingTextPages.push(page.pageNum)
+        }
+      }
+
+      text.push(`<!-- Page ${page.pageNum} -->\n${content}`)
+    }
+
+    return {
+      text: text.join('\n\n'),
+      totalPages: parsed.totalPages,
+      extractedPages: parsed.pages.length - missingTextPages.length,
+      missingTextPages,
+      nextPage: parsed.pages.length < parsed.totalPages
+        ? parsed.pages.length + 1
+        : null
+    }
   }
 
   /**

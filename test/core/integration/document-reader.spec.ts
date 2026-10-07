@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 import { DocumentReader } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-reader'
 import { LocalOcr } from '@@/tools/operating_system_control/file/src/nodejs/lib/local-ocr'
+import { prepareDocumentSearch } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-search'
 import { sliceLayout } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-layout'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
 import { LEON_TOOLKITS_PATH } from '@bridge/constants'
@@ -125,4 +126,53 @@ it('serializes local OCR responses, recovers after bad input and releases its wo
     ])
   } finally { await ocr.dispose() }
   await expect(ocr.recognize(Buffer.alloc(0))).rejects.toThrow('disposed')
+})
+
+it('reuses prepared document text, invalidates changed inputs and reports missing PDF text', async () => {
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-document-search-'))
+  reader = new DocumentReader(async () => ({ text: 'Recognized invoice 42' }))
+
+  const csv = path.join(directory, 'table.csv')
+  const scan = path.join(directory, 'scan.pdf')
+  const missing = path.join(directory, 'missing.docx')
+  const output = path.join(directory, 'search')
+
+  await fs.writeFile(csv, 'Item,Amount\nTravel,123.45\n')
+  await fs.writeFile(scan, pdf(''))
+
+  const first = await prepareDocumentSearch(reader, [csv, scan, missing], output)
+  const documents = first['documents'] as { sourcePath: string, textPath: string }[]
+
+  expect(first).toMatchObject({
+    complete: false,
+    cachedDocuments: 0,
+    failures: [{ sourcePath: missing }],
+    documents: [
+      { sourcePath: csv },
+      { sourcePath: scan, missingTextPages: [1], nextPage: null }
+    ]
+  })
+  expect(await fs.readFile(documents[0]!.textPath, 'utf8')).toContain('Travel')
+  expect(await prepareDocumentSearch(reader, [csv, scan], output)).toMatchObject({
+    cachedDocuments: 2,
+    paths: first['paths']
+  })
+
+  const recognized = await prepareDocumentSearch(reader, [scan], output, true)
+  const recognizedPaths = recognized['paths'] as string[]
+
+  expect(recognized).toMatchObject({
+    complete: true,
+    documents: [{ missingTextPages: [], extractedPages: 1 }]
+  })
+  expect(await fs.readFile(recognizedPaths[0]!, 'utf8')).toContain('Recognized invoice 42')
+
+  await fs.writeFile(csv, 'Item,Amount\nChanged,678.90\n')
+
+  const changed = await prepareDocumentSearch(reader, [csv], output)
+  const changedPaths = changed['paths'] as string[]
+
+  expect(changed).toMatchObject({ complete: true, cachedDocuments: 0 })
+  expect(changedPaths[0]).not.toBe(documents[0]!.textPath)
+  expect(await fs.readFile(changedPaths[0]!, 'utf8')).toContain('Changed')
 })

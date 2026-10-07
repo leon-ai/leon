@@ -5,6 +5,7 @@ import path from 'node:path'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
+import { PROFILE_SESSIONS_PATH } from '@bridge/constants'
 import type { DocumentReader, DocumentReadOptions, PDFReadOptions, ImageReadOptions } from './lib/document-reader'
 import { contentHash, patchTextFile, type TextChange, type PatchOptions } from './lib/text-patch'
 
@@ -102,6 +103,35 @@ export default class FileTool extends Tool {
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
+  }
+
+  /**
+   * Prepare document text for searches using the existing ripgrep tool.
+   */
+  public async prepareDocumentSearch(
+    paths: string[],
+    options: { ocr?: boolean } = {}
+  ): Promise<Record<string, unknown>> {
+    const sessionId = this.executionContext?.conversationSessionId
+
+    if (!sessionId) {
+      throw new Error('Document search preparation requires a conversation session.')
+    }
+
+    const { prepareDocumentSearch } = await import('./lib/document-search')
+    const directory = path.join(
+      PROFILE_SESSIONS_PATH,
+      encodeURIComponent(sessionId),
+      'artifacts',
+      'document-search'
+    )
+
+    return prepareDocumentSearch(
+      await this.getDocumentReader(),
+      paths.map((source) => this.resolvePath(source)),
+      directory,
+      options.ocr ?? false
+    )
   }
 
   /**
