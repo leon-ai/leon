@@ -3,6 +3,8 @@ import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-prov
 import { CONFIG_MANAGER } from '@/config'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { MediaKind } from './media-generation-types'
+import { getModelAccountCredentials } from '../llm-accounts'
+import { CHATGPT_CODEX_DEFAULT_IMAGE_MODEL } from '../llm-accounts/chatgpt-account-config'
 
 // Required provider parameters belong to the same catalog as model recommendations.
 export const DEFAULT_GENERATION_OPTIONS: Partial<
@@ -90,44 +92,89 @@ export const MEDIA_PROVIDERS: Partial<
 }
 
 /**
- * Exposes supported operations without claiming that an account has model access.
+ * Resolves operations for the selected credential rather than a spare API key.
  */
-export function listMediaCapabilities(): Array<Record<string, unknown>> {
-  return Object.values(LLMProviders).map((provider) => ({
-    provider,
+export async function getMediaProviderCapabilities(provider: LLMProviders): Promise<{
+  kinds: MediaKind[]
+  models: Partial<Record<MediaKind, string[]>>
+  configured: boolean
+  auth_kind?: string
+  requirement?: string
+}> {
+  const capabilities = {
     kinds: MEDIA_PROVIDERS[provider]?.kinds || [],
     models: MEDIA_PROVIDERS[provider]?.models || {},
     configured:
       provider === LLMProviders.SGLang
         ? Boolean(CONFIG_MANAGER.getProviderGenerationBaseURL(provider))
-        : hasProviderConnection(provider),
-    ...(provider === LLMProviders.OpenAI
-      ? {
-          example_options: DEFAULT_GENERATION_OPTIONS[provider],
-          hosted_image: {
-            model: 'gpt-6-astra',
-            options: { mode: 'hosted', image_model: 'gpt-image-2.5-flare' }
+        : hasProviderConnection(provider)
+  }
+  if (provider !== LLMProviders.OpenAI) {
+    return capabilities
+  }
+
+  try {
+    const credentials = await getModelAccountCredentials(provider)
+    if (credentials?.['auth_kind'] === 'chatgpt') {
+      return {
+        kinds: [MediaKind.Image],
+        models: {
+          // Recommend a default without restricting owner-selected models.
+          image: [CHATGPT_CODEX_DEFAULT_IMAGE_MODEL]
+        },
+        configured: true,
+        auth_kind: 'chatgpt'
+      }
+    }
+  } catch (error) {
+    return {
+      ...capabilities,
+      configured: false,
+      requirement: error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  return capabilities
+}
+
+/**
+ * Exposes supported operations without claiming that an account has model access.
+ */
+export async function listMediaCapabilities(): Promise<Array<Record<string, unknown>>> {
+  return Promise.all(Object.values(LLMProviders).map(async (provider) => {
+    const capabilities = await getMediaProviderCapabilities(provider)
+
+    return {
+      provider,
+      ...capabilities,
+      ...(provider === LLMProviders.OpenAI && capabilities.auth_kind !== 'chatgpt'
+        ? {
+            example_options: DEFAULT_GENERATION_OPTIONS[provider],
+            hosted_image: {
+              model: 'gpt-6-astra',
+              options: { mode: 'hosted', image_model: 'gpt-image-2.5-flare' }
+            }
           }
-        }
-      : {}),
-    ...(provider === LLMProviders.Groq
-      ? { example_options: DEFAULT_GENERATION_OPTIONS[provider] }
-      : {}),
-    ...(provider === LLMProviders.MiniMax
-      ? {
-          example_options: DEFAULT_GENERATION_OPTIONS[provider],
-          music_access:
-            'Existing eligible accounts only; set options.mode to music.'
-        }
-      : {}),
-    ...(provider === LLMProviders.SGLang
-      ? { requirement: 'A deployed SGLang Diffusion endpoint.' }
-      : {}),
-    ...(provider === LLMProviders.LlamaCPP
-      ? {
-          requirement:
-            'Use the existing local speech tools; the managed chat server has no generation endpoint.'
-        }
-      : {})
+        : {}),
+      ...(provider === LLMProviders.Groq
+        ? { example_options: DEFAULT_GENERATION_OPTIONS[provider] }
+        : {}),
+      ...(provider === LLMProviders.MiniMax
+        ? {
+            example_options: DEFAULT_GENERATION_OPTIONS[provider],
+            music_access:
+              'Existing eligible accounts only; set options.mode to music.'
+          }
+        : {}),
+      ...(provider === LLMProviders.SGLang
+        ? { requirement: 'A deployed SGLang Diffusion endpoint.' }
+        : {}),
+      ...(provider === LLMProviders.LlamaCPP
+        ? {
+            requirement:
+              'Use the existing local speech tools; the managed chat server has no generation endpoint.'
+          }
+        : {})
+    }
   }))
 }

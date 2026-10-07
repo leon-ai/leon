@@ -33,7 +33,7 @@ export const mediaGenerationPlugin: FastifyPluginAsync<APIOptions> = async (
       }
     },
     async (request) => ({
-      providers: listMediaCapabilities(),
+      providers: await listMediaCapabilities(),
       defaults: await listMediaDefaults(request.query.session_id)
     })
   )

@@ -17,6 +17,11 @@ import { requestChatGPTAccount } from './llm-accounts/chatgpt-account-request'
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 600_000
 const PROVIDER_CAPABILITY_HEADERS = ['anthropic-beta', 'anthropic-version']
+const CHATGPT_API_ENDPOINTS = new Set([
+  '/responses',
+  '/images/generations',
+  '/images/edits'
+])
 
 export interface ProviderConnection {
   baseURL: string
@@ -223,6 +228,9 @@ export async function requestProvider(
     throw new Error('Provider endpoints must be relative API paths.')
   }
   const connection = options.connection || await resolveProviderConnection(provider)
+  if (connection.accountId && !CHATGPT_API_ENDPOINTS.has(endpoint)) {
+    throw new Error(`The ChatGPT subscription connection does not support ${endpoint}.`)
+  }
   if (provider === LLMProviders.OpenAI && endpoint === '/responses' &&
     body && typeof body === 'object' && !(body instanceof FormData)) {
     const payload = { ...body } as Record<string, unknown>

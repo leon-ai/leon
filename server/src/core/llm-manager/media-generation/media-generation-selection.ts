@@ -1,11 +1,14 @@
-import { hasProviderConnection } from '../provider-requests'
 import { readGenerationSettings } from './media-generation-settings'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { CONFIG_MANAGER } from '@/config'
 import { LLMProviders } from '@/core/llm-manager/types'
-import { MEDIA_PROVIDERS, DEFAULT_GENERATION_OPTIONS } from './media-generation-catalog'
+import {
+  MEDIA_PROVIDERS,
+  DEFAULT_GENERATION_OPTIONS,
+  getMediaProviderCapabilities,
+  listMediaCapabilities
+} from './media-generation-catalog'
 import {
   MediaKind,
   type MediaGenerationInput,
@@ -18,17 +21,13 @@ interface GenerationTarget {
   options?: Record<string, unknown>
 }
 
-function isConfigured(provider: LLMProviders): boolean {
-  return provider === LLMProviders.SGLang
-    ? Boolean(CONFIG_MANAGER.getProviderGenerationBaseURL(provider))
-    : hasProviderConnection(provider)
-}
-
-function validateTarget(
+async function validateTarget(
   kind: MediaKind,
   target: GenerationTarget
-): GenerationTarget {
-  if (!MEDIA_PROVIDERS[target.provider]?.kinds.includes(kind)) {
+): Promise<GenerationTarget> {
+  const capabilities = await getMediaProviderCapabilities(target.provider)
+
+  if (!capabilities.kinds.includes(kind)) {
     throw new Error(
       `Provider ${target.provider} does not support ${kind} generation.`
     )
@@ -38,9 +37,9 @@ function validateTarget(
     throw new Error('A generation model is required.')
   }
 
-  if (!isConfigured(target.provider)) {
+  if (!capabilities.configured) {
     throw new Error(
-      `Configure credentials or a generation endpoint for ${target.provider}.`
+      capabilities.requirement || `Configure credentials or a generation endpoint for ${target.provider}.`
     )
   }
 
@@ -63,20 +62,31 @@ function defaultOptions(
 export class GenerationSelectionRequired extends Error {
   public readonly choices: Array<{ provider: LLMProviders, models: string[] }>
 
-  constructor(kind: MediaKind, reason: string) {
+  constructor(
+    kind: MediaKind,
+    reason: string,
+    choices: Array<{ provider: LLMProviders, models: string[] }>
+  ) {
     super(
       `${reason} Ask the owner which generation provider/model to use. Do not switch accounts automatically. ${kind === MediaKind.Document ? 'Local typst.compile remains available for PDF and document.create for DOCX.' : ''}`
     )
-    this.choices = Object.entries(MEDIA_PROVIDERS)
-      .filter(
-        ([provider, entry]) =>
-          entry.kinds.includes(kind) && isConfigured(provider as LLMProviders)
-      )
-      .map(([provider, entry]) => ({
-        provider: provider as LLMProviders,
-        models: entry.models[kind] || []
-      }))
+    this.choices = choices
   }
+}
+
+async function generationSelectionRequired(
+  kind: MediaKind,
+  reason: string
+): Promise<GenerationSelectionRequired> {
+  const capabilities = await listMediaCapabilities()
+  const choices = capabilities
+    .filter((entry) => entry['configured'] && (entry['kinds'] as MediaKind[]).includes(kind))
+    .map((entry) => ({
+      provider: entry['provider'] as LLMProviders,
+      models: (entry['models'] as Partial<Record<MediaKind, string[]>>)[kind] || []
+    }))
+
+  return new GenerationSelectionRequired(kind, reason, choices)
 }
 
 /**
@@ -113,27 +123,29 @@ export async function resolveMediaGenerationTarget(
       ? inheritedProvider(sessionId)
       : settings.provider
 
-  if (!provider || !MEDIA_PROVIDERS[provider]?.kinds.includes(kind)) {
-    throw new GenerationSelectionRequired(
+  const capabilities = provider ? await getMediaProviderCapabilities(provider) : null
+
+  if (!provider || !capabilities?.kinds.includes(kind)) {
+    throw await generationSelectionRequired(
       kind,
       `${provider || 'The configured LLM provider'} does not support ${kind} generation.`
     )
   }
 
-  if (!isConfigured(provider)) {
-    throw new GenerationSelectionRequired(
+  if (!capabilities.configured) {
+    throw await generationSelectionRequired(
       kind,
-      `Generation credentials or endpoint are missing for ${provider}.`
+      capabilities.requirement || `Generation credentials or endpoint are missing for ${provider}.`
     )
   }
 
   const model =
     settings.model === 'auto'
-      ? MEDIA_PROVIDERS[provider]?.models[kind]?.[0]
+      ? capabilities.models[kind]?.[0]
       : settings.model
 
   if (!model) {
-    throw new GenerationSelectionRequired(
+    throw await generationSelectionRequired(
       kind,
       `Choose a ${kind} model for ${provider} in media_production.${kind} settings.`
     )
@@ -157,9 +169,10 @@ export async function resolveMediaGenerationInput(
   }
 
   const target = explicit
-    ? validateTarget(input.kind, {
+    ? await validateTarget(input.kind, {
         provider: input.provider!,
-        model: input.model!
+        model: input.model!,
+        ...(input.options ? { options: input.options } : {})
       })
     : await resolveMediaGenerationTarget(input.kind, input.session_id)
 

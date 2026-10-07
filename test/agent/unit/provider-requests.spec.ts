@@ -7,6 +7,10 @@ import { PROVIDER_REQUESTS, requestProvider } from '@/core/llm-manager/provider-
 import { mediaEndpoint } from '@/core/llm-manager/media-generation/media-generation-transport'
 import HostedTool from '@@/tools/search_web/hosted/src/nodejs/hosted-tool'
 import { generateWithProvider } from '@/core/llm-manager/media-generation/media-generation-providers'
+import { listMediaCapabilities } from '@/core/llm-manager/media-generation/media-generation-catalog'
+import {
+  resolveMediaGenerationTarget
+} from '@/core/llm-manager/media-generation/media-generation-selection'
 import { MediaKind } from '@/core/llm-manager/media-generation/media-generation-types'
 
 const mocks = vi.hoisted(() => ({
@@ -14,7 +18,8 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
   create: vi.fn(),
   close: vi.fn(),
-  artifact: vi.fn()
+  artifact: vi.fn(),
+  settings: vi.fn()
 }))
 
 vi.mock('@/config', async (importOriginal) => {
@@ -53,6 +58,9 @@ vi.mock('@/core/config-states/config-state', () => ({
     })
   }
 }))
+vi.mock('@/core/llm-manager/media-generation/media-generation-settings', () => ({
+  readGenerationSettings: mocks.settings
+}))
 vi.mock('@/core/artifacts/artifact-store', () => ({ readArtifact: mocks.artifact }))
 vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
   createWebSocketFetch: mocks.create
@@ -76,6 +84,7 @@ describe('profile provider requests', () => {
       auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace', model: 'gpt-6.1-sol', account_id: 'bound-account', access_token: 'account-token'
     })
     mocks.create.mockImplementation(() => Object.assign(mocks.fetch, { close: mocks.close }))
+    mocks.settings.mockResolvedValue({ provider: 'inherit', model: 'auto', options: {} })
   })
 
   afterEach(() => {
@@ -207,6 +216,20 @@ describe('profile provider requests', () => {
       model: 'gpt-image-2', n: 1, prompt: 'A product photograph.'
     })
     expect(mocks.credentials).toHaveBeenCalledWith('bound-account', undefined, true)
+  })
+
+  it('recommends a subscription image default and rejects API-only routes before submission', async () => {
+    const capabilities = (await listMediaCapabilities()).find((entry) => entry['provider'] === 'openai')
+    expect(capabilities).toMatchObject({ kinds: ['image'], models: { image: ['gpt-image-2'] } })
+    expect(capabilities).not.toHaveProperty('hosted_image')
+    expect(await resolveMediaGenerationTarget(MediaKind.Image)).toMatchObject({
+      provider: LLMProviders.OpenAI, model: 'gpt-image-2'
+    })
+    const fetch = vi.spyOn(globalThis, 'fetch')
+
+    await expect(requestProvider(LLMProviders.OpenAI, '/audio/speech', {}))
+      .rejects.toThrow('does not support /audio/speech')
+    expect(fetch).not.toHaveBeenCalled()
   })
 
   it('edits subscription images using JSON references and the returned output format', async () => {
