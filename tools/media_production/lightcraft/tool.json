@@ -4,7 +4,7 @@
   "toolkit_id": "media_production",
   "name": "LightCraft",
   "description": "Develop RAW and raster photos headlessly, discover adjustment controls, and operate on an explicitly selected photo library.",
-  "icon_name": "camera-line",
+  "icon_name": "color-filter-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",

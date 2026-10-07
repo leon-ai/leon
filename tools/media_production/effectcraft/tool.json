@@ -4,7 +4,7 @@
   "toolkit_id": "media_production",
   "name": "EffectCraft",
   "description": "Create and edit motion-graphics compositions, effects and keyframes headlessly; render previews and finished media.",
-  "icon_name": "magic-line",
+  "icon_name": "video-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
