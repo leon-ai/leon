@@ -1,15 +1,20 @@
+import fs from 'node:fs/promises'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LLMProviders } from '@/core/llm-manager/types'
 import { PROVIDER_REQUESTS, requestProvider } from '@/core/llm-manager/provider-requests'
 import { mediaEndpoint } from '@/core/llm-manager/media-generation/media-generation-transport'
 import HostedTool from '@@/tools/search_web/hosted/src/nodejs/hosted-tool'
+import { generateWithProvider } from '@/core/llm-manager/media-generation/media-generation-providers'
+import { MediaKind } from '@/core/llm-manager/media-generation/media-generation-types'
 
 const mocks = vi.hoisted(() => ({
   credentials: vi.fn(),
   fetch: vi.fn(),
   create: vi.fn(),
-  close: vi.fn()
+  close: vi.fn(),
+  artifact: vi.fn()
 }))
 
 vi.mock('@/config', async (importOriginal) => {
@@ -48,6 +53,7 @@ vi.mock('@/core/config-states/config-state', () => ({
     })
   }
 }))
+vi.mock('@/core/artifacts/artifact-store', () => ({ readArtifact: mocks.artifact }))
 vi.mock('@vercel/ai-sdk-openai-websocket-fetch', () => ({
   createWebSocketFetch: mocks.create
 }))
@@ -176,5 +182,72 @@ describe('profile provider requests', () => {
     expect(mocks.close).not.toHaveBeenCalled()
   })
 
+  it('generates a native Codex image using the selected workspace and refreshes only rejected authorization', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(Response.json({}, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ data: [{ b64_json: 'aW1hZ2U=' }] }))
+    mocks.credentials.mockResolvedValue({
+      auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
+      account_id: 'bound-account', access_token: 'account-token', model: 'gpt-6.1-sol'
+    })
+    const result = await generateWithProvider({
+      session_id: 'session', provider: LLMProviders.OpenAI, kind: MediaKind.Image,
+      model: 'gpt-image-2', prompt: 'A product photograph.'
+    })
 
+    expect(result.files?.[0]?.data).toEqual(Buffer.from('image'))
+    expect(fetch.mock.calls[0]![0]).toBe('https://chatgpt.com/backend-api/codex/images/generations')
+    const headers = new Headers(fetch.mock.calls[0]![1]!.headers)
+    expect(headers.get('authorization')).toBe('Bearer account-token')
+    expect(headers.get('chatgpt-account-id')).toBe('workspace')
+    expect(headers.get('x-codex-image-turn-id')).toBeTruthy()
+    expect(new Headers(fetch.mock.calls[1]![1]!.headers).get('x-codex-image-turn-id'))
+      .toBe(headers.get('x-codex-image-turn-id'))
+    expect(JSON.parse(String(fetch.mock.calls[0]![1]!.body))).toMatchObject({
+      model: 'gpt-image-2', n: 1, prompt: 'A product photograph.'
+    })
+    expect(mocks.credentials).toHaveBeenCalledWith('bound-account', undefined, true)
+  })
+
+  it('edits subscription images using JSON references and the returned output format', async () => {
+    const subscriptionCredentials = {
+      auth_kind: 'chatgpt', auth_flow: 'codex', chatgpt_account_id: 'workspace',
+      account_id: 'bound-account', access_token: 'account-token'
+    }
+    mocks.credentials.mockResolvedValue(subscriptionCredentials)
+    mocks.artifact.mockResolvedValue({
+      path: '/reference.png', artifact: { mime_type: 'image/png', filename: 'reference.png' }
+    })
+    vi.spyOn(fs, 'readFile').mockResolvedValueOnce(Buffer.from('reference'))
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({
+      output_format: 'png', data: [{ b64_json: 'aW1hZ2U=' }]
+    }))
+    const result = await generateWithProvider({
+      session_id: 'session', provider: LLMProviders.OpenAI, kind: MediaKind.Image,
+      model: 'gpt-image-2', prompt: 'Improve the product lighting.',
+      reference_artifact_ids: ['reference'], options: { output_format: 'webp' }
+    })
+
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(fetch.mock.calls[0]![0]).toBe('https://chatgpt.com/backend-api/codex/images/edits')
+    const request = fetch.mock.calls[0]![1]!
+    const headers = new Headers(request.headers)
+    expect(headers.get('authorization')).toBe('Bearer account-token')
+    expect(headers.get('chatgpt-account-id')).toBe('workspace')
+    expect(JSON.parse(String(request.body))).toMatchObject({
+      images: [{ image_url: `data:image/png;base64,${Buffer.from('reference').toString('base64')}` }]
+    })
+    expect(result.files?.[0]).toMatchObject({ mime_type: 'image/png', filename: 'image-1.png' })
+  })
+
+  it('rejects legacy token-sharing accounts before native image submission', async () => {
+    mocks.credentials.mockResolvedValueOnce({
+      auth_kind: 'chatgpt', access_token: 'legacy-token', account_id: 'bound-account'
+    })
+    const fetch = vi.spyOn(globalThis, 'fetch')
+
+    await expect(requestProvider(LLMProviders.OpenAI, '/images/generations', {}))
+      .rejects.toThrow('/connection ai connect bound-account')
+    expect(fetch).not.toHaveBeenCalled()
+  })
 })

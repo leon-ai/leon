@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+
 import { CONFIG_MANAGER } from '@/config'
 import { getModelAccountCredentials } from './llm-accounts'
 import { getRequiredLLMProviderAccountConfig } from './llm-provider-account-configs'
@@ -11,6 +13,7 @@ import {
   CHATGPT_CODEX_BASE_URL,
   requireChatGPTCodexAccount
 } from './llm-accounts/chatgpt-account-config'
+import { requestChatGPTAccount } from './llm-accounts/chatgpt-account-request'
 
 const PROVIDER_REQUEST_TIMEOUT_MS = 600_000
 const PROVIDER_CAPABILITY_HEADERS = ['anthropic-beta', 'anthropic-version']
@@ -262,27 +265,39 @@ export async function requestProvider(
       headers[name] = value
     }
   }
+  if (connection.accountId && endpoint !== '/responses') {
+    headers['x-codex-image-turn-id'] = randomUUID()
+  }
+  const dispatch = async (accountHeaders?: Record<string, string>): Promise<Response> => {
+    // Retain the fresh credential for redaction if a later provider response fails.
+    Object.assign(headers, accountHeaders)
+    signal.throwIfAborted()
+
+    return fetch(`${options.anthropicCompatibility
+      ? new URL('/anthropic/v1', baseURL).href
+      : baseURL}${endpoint}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        ...headers,
+        ...(body === undefined || body instanceof FormData
+          ? {}
+          : { 'content-type': 'application/json' })
+      },
+      ...(body === undefined ? {} : {
+        body: body instanceof FormData ? body : JSON.stringify(body)
+      }),
+      signal,
+      redirect: 'error'
+    })
+  }
   const response = provider === LLMProviders.OpenAI && endpoint === '/responses' &&
     body && typeof body === 'object' && !(body instanceof FormData)
     ? await PROVIDER_REQUESTS.responses(
         { ...connection, baseURL }, body as Record<string, unknown>, signal
       )
-    : await fetch(`${options.anthropicCompatibility
-      ? new URL('/anthropic/v1', baseURL).href
-      : baseURL}${endpoint}`, {
-        method: body === undefined ? 'GET' : 'POST',
-        headers: {
-          ...headers,
-          ...(body === undefined || body instanceof FormData
-            ? {}
-            : { 'content-type': 'application/json' })
-        },
-        ...(body === undefined ? {} : {
-          body: body instanceof FormData ? body : JSON.stringify(body)
-        }),
-        signal,
-        redirect: 'error'
-      })
+    : connection.accountId
+      ? await requestChatGPTAccount(connection.accountId, dispatch)
+      : await dispatch()
 
   if (!response.ok) {
     throw await createMediaProviderError(
