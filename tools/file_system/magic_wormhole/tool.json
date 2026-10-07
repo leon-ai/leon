@@ -1,0 +1,72 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "magic_wormhole",
+  "toolkit_id": "file_system",
+  "name": "Magic Wormhole",
+  "description": "Send a selected file securely over the internet without an account or cloud storage. Returns a one-time code and browser receiver link; the host stays online.",
+  "icon_name": "file-cloud-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "share": {
+      "description": "Start an encrypted one-recipient internet transfer and return its one-time code and browser receiver link. The sender stays online.",
+      "progressive_guidance": "For files above 512 MiB, use Chrome/Edge with the browserHomeUrl and click Receive after entering the code, or use a compatible Wormhole client. Automatic receiver links can lack the browser gesture required by the save picker. Public relay availability and browser limits still apply.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filePath": {
+            "type": "string",
+            "description": "Absolute path to one explicitly selected regular file. No file-size cap; bundle multiple files before sharing."
+          },
+          "expireSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 86400,
+            "description": "Maximum lifetime, including transfer time. Defaults to one hour."
+          }
+        },
+        "required": [
+          "filePath"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false
+    },
+    "list": {
+      "description": "List this conversation's transfers and their status: waiting (possibly transferring), completed, failed, expired or stopped. Completion means the transfer finished, not that a recipient has opened the file.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false
+    },
+    "stop": {
+      "description": "Stop this conversation's active transfer, revoke its code and remove the staged file. Files already received cannot be revoked.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "transferId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "transferId"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false
+    }
+  },
+  "concurrency": "serial",
+  "progressive_guidance": "Uses the upstream Rusty Wormhole CLI with end-to-end encryption and a single-use, four-word code. The sender must remain online; this is live transfer, not temporary cloud storage. Share only files selected for transfer. A staged snapshot is cleaned after completion, failure, expiry, stop or worker shutdown. Codes and links are bearer secrets. Use miniserve for LAN browser links. Browser reception relies on an independent hosted client: wormhole.page. Its fallback is capped at 512 MiB; larger browser transfers require supported disk saving in Chrome/Edge. Upstream prebuilt binaries currently cover Linux x86_64, macOS arm64 and Windows x86_64.",
+  "binaries": {
+    "linux-x86_64": "https://github.com/magic-wormhole/magic-wormhole.rs/releases/download/0.8.1/magic-wormhole-cli-x86_64-unknown-linux-gnu.tgz",
+    "macosx-arm64": "https://github.com/magic-wormhole/magic-wormhole.rs/releases/download/0.8.1/magic-wormhole-cli-aarch64-apple-darwin.tgz",
+    "win-amd64": "https://github.com/magic-wormhole/magic-wormhole.rs/releases/download/0.8.1/magic-wormhole-cli-x86_64-pc-windows-gnu.tgz"
+  }
+}

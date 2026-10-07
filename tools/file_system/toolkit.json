@@ -5,7 +5,8 @@
   "icon_name": "folders-line",
   "context_files": [],
   "tools": [
-    "miniserve"
+    "miniserve",
+    "magic_wormhole"
   ],
-  "progressive_guidance": "Keep shared files on Leon’s host. Use miniserve for read-only LAN browser links. The host must remain running; shares expire or can be stopped."
+  "progressive_guidance": "Keep shared files on Leon’s host. Use miniserve for read-only LAN browser links and magic_wormhole for encrypted live internet transfers. Both require the host to remain running; shares expire or can be stopped. These tools do not upload files into third-party cloud storage."
 }
