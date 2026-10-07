@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@firecrawl/anydoc": "0.2.4",
     "@llamaindex/liteparse": "2.14.6",
-    "@napi-rs/canvas": "1.0.9"
+    "@napi-rs/canvas": "1.0.9",
+    "@xberg-io/xberg": "1.3.4"
   }
 }

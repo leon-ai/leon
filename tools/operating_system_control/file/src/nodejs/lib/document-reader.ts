@@ -38,7 +38,7 @@ interface ModelFile {
 
 /**
  * Local extraction and OCR belong to the file tool, not the model provider.
- * AnyDoc converts Office documents; LiteParse and RapidOCR handle PDF pages.
+ * Xberg converts Office documents; LiteParse and RapidOCR handle PDF pages.
  */
 export class DocumentReader {
   private readonly cache = new Map<string, { signature: string, text: string, layout?: DocumentLayout, size: number }>()
@@ -75,13 +75,52 @@ export class DocumentReader {
         }
         text = parsed.pages.map((page) => page.markdown).join('\n\n')
       } else {
-        const { toMarkdown } = await import('@firecrawl/anydoc')
-        text = await toMarkdown(filePath)
+        text = await this.extractDocument(filePath)
       }
       this.remember(filePath, signature, text)
     }
     return { path: filePath, format: 'markdown', ...this.chunk(text, options), cached: cached?.signature === signature,
       coverage: 'document text and structure; embedded images are not visually interpreted' }
+  }
+
+  /**
+   * Keep PDF rendering and OCR on Leon's existing readers instead of Xberg defaults.
+   */
+  private async extractDocument(filePath: string, ocr = false): Promise<string> {
+    const { extract } = await import('@xberg-io/xberg')
+    const output = await extract({ uri: filePath }, {
+      useCache: false,
+      disableOcr: true,
+      outputFormat: 'markdown'
+    })
+    const document = output.results?.[0]
+
+    if (output.errors?.length) {
+      throw new Error(output.errors.map((error) => error.message).join('; '))
+    }
+
+    if (!document || output.results?.length !== 1) {
+      throw new Error('Document extraction returned no content.')
+    }
+
+    if (document.mimeType?.startsWith('image/')) {
+      if (!ocr) {
+        throw new Error('Image text requires OCR. Repeat with ocr=true.')
+      }
+
+      const chunks: string[] = []
+      let offsetChars: number | null = 0
+
+      while (offsetChars !== null) {
+        const result = await this.readImage(filePath, { offsetChars })
+        chunks.push(result.data['text'] as string)
+        offsetChars = result.data['nextOffsetChars'] as number | null
+      }
+
+      return chunks.join('')
+    }
+
+    return document.content ?? ''
   }
 
   /**

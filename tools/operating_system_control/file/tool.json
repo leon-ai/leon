@@ -25,7 +25,7 @@
   },
   "functions": {
     "readDocument": {
-      "description": "Extract PDF with LiteParse, or Word, Excel, PowerPoint, OpenDocument, EPUB, RTF and CSV with AnyDoc, as cached local Markdown.",
+      "description": "Extract PDF with LiteParse, or Word, Excel, PowerPoint, OpenDocument, EPUB, RTF and CSV with Xberg, as cached local Markdown.",
       "progressive_guidance": "Follow nextOffsetChars for full coverage and reuse extracted facts. If requiresPageRead is returned, use readPdf. Embedded images and charts are not interpreted by text conversion.",
       "parameters": {
         "type": "object",
