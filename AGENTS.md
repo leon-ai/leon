@@ -38,6 +38,13 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Maintain generated context through `server/src/core/context-manager/context-files/`. Update the relevant generator and regenerate through the context manager; do not maintain a separate hand-edited generated copy.
 - Keep `LEON.md` and `ARCHITECTURE.md` limited to major behavioral/architectural facts. Tool usage details belong in tool guidance; task workflows belong in skills.
 
+## Comments, documentation and tests
+
+- Explain Leon's lasting requirements: what behavior is needed, why the code or configuration exists, and how it serves Leon. Write for a contributor who has never seen the task, conversation, bug report or PR.
+- Do not use comments, documentation or tests as a record of the current change. Avoid upgrade narratives, incidental version details, temporary debugging context, and explanations centered on the specific incident that prompted the work. Keep change history in commit messages, PR descriptions or dedicated migration notes.
+- Tests must express a lasting, observable contract through their names, fixtures and assertions. A bug can reveal a missing contract, but reproducing an incident alone is not a reason to add or keep a test. Preserve distinct contracts; remove redundant or obsolete cases.
+- Before adding or editing any comment, documentation or test, check: would this still explain a necessary behavior to someone who knows nothing about the introducing change? If not, rewrite it around the general requirement or omit it.
+
 ## Code style
 
 - Use braced, multiline control flow. Do not put an if, loop, try/catch, or function body on one line. Split long calls, object literals, and nested conditions across lines so the code is easy to scan; follow the surrounding style.
@@ -45,7 +52,6 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Avoid hardcoded behavioral keywords, regex rules, paths, and configuration when existing schemas/settings/utilities provide them.
 - Put file-local constants near the top; shared server constants belong in `server/src/constants.ts`. Use numeric separators (`3_600`) and enums for meaningful states.
 - Comment non-trivial decisions and edge cases, not obvious assignments. Use `//` for JS/TS implementation comments, including multiline implementation comments; preserve existing double-slash comments. Use multiline JSDoc for exported APIs and reusable helpers, never single-line `/** ... */`. Use Python comments/docstrings where appropriate.
-- Keep documentation and code/configuration comments focused on lasting behavior, rationale, and constraints. Avoid narrating the current change or adding incidental dependency/version facts that will quickly become stale. Include such details only when readers need them to understand an active compatibility constraint. Documentation and comments should remain useful without knowing the change that introduced them.
 - In `web-app/`, inspect installed TanStack packages first: Router for routing, Query for server state, Virtual for long lists. Propose a missing package before adding it; avoid custom replacements when an installed package fits.
 
 JSDoc format:
