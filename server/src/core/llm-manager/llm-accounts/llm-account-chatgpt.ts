@@ -8,6 +8,7 @@ import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { CODEBASE_PATH } from '@/leon-roots'
 import { LogHelper } from '@/helpers/log-helper'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { PROFILE_RUNTIME_MANAGER } from '@/core/profile-runtime/profile-runtime-manager'
 import { MODEL_ACCOUNT_STORE, useModelAccount, type LLMAccountSignIn } from './index'
 import { serveChatGPTSignInPage } from './chatgpt-sign-in-page'
 import { getLLMModelCatalogEntries } from '../llm-model-catalog'
@@ -50,6 +51,14 @@ interface OAuthToken {
   id_token?: string
   expires_in: number
   scope?: string
+}
+
+interface ChatGPTSignInAttempt extends LLMAccountSignIn {
+  closed: Promise<void>
+}
+
+interface ChatGPTSignInRuntime {
+  attempt: Promise<ChatGPTSignInAttempt> | null
 }
 
 async function exchange(
@@ -128,13 +137,47 @@ export async function getChatGPTModel(
 }
 
 /**
+ * Replace only this profile's pending consent before binding its callback port.
+ */
+export async function startChatGPTSignIn(accountID?: string, preferredModel = ''): Promise<LLMAccountSignIn> {
+  const runtime = PROFILE_RUNTIME_MANAGER.getService<ChatGPTSignInRuntime>(
+    'chatgpt-sign-in',
+    () => ({ attempt: null })
+  )
+  const previous = runtime.attempt
+  const attempt = (async (): Promise<ChatGPTSignInAttempt> => {
+    const pending = await previous?.catch(() => undefined)
+    if (pending) {
+      pending.cancel()
+      // Listener setup is serialized even when reconnect commands arrive together.
+      await pending.closed
+    }
+
+    return createChatGPTSignIn(accountID, preferredModel)
+  })()
+  runtime.attempt = attempt
+
+  const clear = (): void => {
+    if (runtime.attempt === attempt) {
+      runtime.attempt = null
+    }
+  }
+  void attempt.then(async (signIn) => {
+    await Promise.allSettled([signIn.complete, signIn.closed])
+    clear()
+  }, clear)
+
+  return attempt
+}
+
+/**
  * Authorize a ChatGPT subscription through Codex OAuth on a loopback listener.
  * Fellow account tokens are never copied or exchanged on their behalf.
  */
-export async function startChatGPTSignIn(
+async function createChatGPTSignIn(
   accountID?: string,
   preferredModel = ''
-): Promise<LLMAccountSignIn> {
+): Promise<ChatGPTSignInAttempt> {
   const profileName = getActiveProfileName()
   const previous = accountID ? await MODEL_ACCOUNT_STORE.getCredentials(accountID, undefined, false, false) : null
   if (accountID && (!previous || previous['auth_kind'] !== 'chatgpt')) {
@@ -285,10 +328,16 @@ export async function startChatGPTSignIn(
       fail(detail)
     })
   })
+  const closed = new Promise<void>((resolveClose) => {
+    server.once('close', resolveClose)
+  })
 
   await new Promise<void>((ready, failure) => {
-    server.once('error', () => {
-      const detail = 'The local callback listener could not be started.'
+    server.once('error', (error) => {
+      const detail = (error as NodeJS.ErrnoException).code === 'EADDRINUSE'
+        ? `Port ${CALLBACK_PORT} is already in use by another profile or application. Finish that sign-in or close its listener, then reconnect.`
+        : 'The local callback listener could not be started.'
+
       cancel(detail)
       failure(new Error(detail))
     })
@@ -322,7 +371,7 @@ export async function startChatGPTSignIn(
   stage = ChatGPTSignInStage.Authorization
   LogHelper.info(`ChatGPT sign-in is awaiting the browser callback for profile ${profileName}.`)
 
-  return { url: url.toString(), complete, cancel }
+  return { url: url.toString(), complete, cancel, closed }
 }
 
 /**

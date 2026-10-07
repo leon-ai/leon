@@ -75,6 +75,63 @@ afterEach(async () => {
 })
 
 describe('ChatGPT sign-in', () => {
+  it('serializes concurrent reconnects and rejects the retired browser state', async () => {
+    const [first, second] = await Promise.all([
+      startChatGPTSignIn(),
+      startChatGPTSignIn()
+    ])
+    pending.push(first.cancel, second.cancel)
+
+    await expect(first.complete).rejects.toThrow('sign-in ended')
+    const callback = new URL(new URL(second.url).searchParams.get('redirect_uri')!)
+    expect(callback.port).toBe(new URL(new URL(first.url).searchParams.get('redirect_uri')!).port)
+    callback.searchParams.set('state', new URL(first.url).searchParams.get('state')!)
+    callback.searchParams.set('code', 'retired-code')
+    const exchange = vi.spyOn(globalThis, 'fetch')
+    const page = await browserFetch(callback)
+
+    expect(page.status).toBe(400)
+    await page.text()
+    expect(exchange).not.toHaveBeenCalled()
+    expect(account.save).not.toHaveBeenCalled()
+  })
+
+  it('reports an occupied port without retiring a different profile sign-in', async () => {
+    const first = await startChatGPTSignIn()
+    pending.push(first.cancel)
+    let firstEnded = false
+    void first.complete.catch(() => {
+      firstEnded = true
+    })
+    account.profile = 'another-owner'
+    vi.mocked(http.Server.prototype.listen).mockImplementationOnce(function (
+      this: http.Server
+    ): http.Server {
+      queueMicrotask(() => {
+        this.emit('error', Object.assign(new Error('listen EADDRINUSE'), {
+          code: 'EADDRINUSE'
+        }))
+      })
+
+      return this
+    })
+
+    await expect(startChatGPTSignIn()).rejects.toThrow(
+      'Port 1455 is already in use by another profile or application.'
+    )
+
+    expect(firstEnded).toBe(false)
+    const callback = new URL(new URL(first.url).searchParams.get('redirect_uri')!)
+    const page = await browserFetch(callback)
+    expect(page.status).toBe(400)
+    await page.text()
+    first.cancel()
+    await expect(first.complete).rejects.toThrow('sign-in ended')
+
+    const retry = await startChatGPTSignIn()
+    pending.push(retry.cancel)
+  })
+
   it('returns a token exchange timeout without exposing raw authorization data', async () => {
     const signIn = await startChatGPTSignIn()
     pending.push(signIn.cancel)
