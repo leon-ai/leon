@@ -226,7 +226,11 @@ describe('ChatGPT sign-in', () => {
 
   it.each([
     { failure: null, detail: '' },
-    { failure: 'nonce', detail: 'during identity verification: The operation was rejected or could not be completed.' }
+    { failure: 'nonce', detail: 'The signed ID token nonce does not match this sign-in.' },
+    { failure: 'workspace', detail: 'The signed ID token contains no ChatGPT workspace identity.' },
+    { failure: 'audience', detail: 'Signed ID token validation failed (ERR_JWT_CLAIM_VALIDATION_FAILED; claim aud).' },
+    { failure: 'signature', detail: 'Signed ID token validation failed (ERR_JWS_SIGNATURE_VERIFICATION_FAILED).' },
+    { failure: 'expiration', detail: 'Signed ID token validation failed (ERR_JWT_EXPIRED; claim exp).' }
   ])('validates state, signed identity and PKCE before saving (failure: $failure)', async ({ failure, detail }) => {
     const { publicKey, privateKey } = await generateKeyPair('RS256')
     account.publicKey = publicKey
@@ -298,6 +302,9 @@ describe('ChatGPT sign-in', () => {
   })
 
   it.each([
+    { legacy: true, sameOwner: true, modelStatus: 200 },
+    { legacy: true, sameOwner: false, modelStatus: 200 },
+    { legacy: true, sameOwner: true, modelStatus: 503 },
     { legacy: false, sameOwner: true, modelStatus: 200 },
     { legacy: false, sameOwner: false, modelStatus: 200 }
   ])('reconnects expired credentials after verification (legacy=$legacy, same subject=$sameOwner, models HTTP=$modelStatus)', async ({ legacy, sameOwner, modelStatus }) => {
@@ -346,7 +353,7 @@ describe('ChatGPT sign-in', () => {
       await expect(signIn.complete).rejects.toThrow(
         modelStatus !== 200
           ? 'during model discovery: OpenAI returned HTTP 503.'
-          : 'during identity verification: The operation was rejected or could not be completed.'
+          : 'Sign in with the ChatGPT account already saved for this connection.'
       )
       expect(account.save).not.toHaveBeenCalled()
       expect(account.use).not.toHaveBeenCalled()

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import http from 'node:http'
 import path from 'node:path'
 
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { createRemoteJWKSet, errors, jwtVerify } from 'jose'
 
 import { CODEBASE_PATH } from '@/leon-roots'
 import { LogHelper } from '@/helpers/log-helper'
@@ -269,7 +269,8 @@ async function createChatGPTSignIn(
       cancellation.signal.throwIfAborted()
       stage = ChatGPTSignInStage.IdentityVerification
       if (!token.id_token) {
-        throw new Error('ChatGPT did not return a verified account identity.')
+        fail('OpenAI returned no signed ID token.')
+        return
       }
       const { payload } = await jwtVerify(token.id_token, JWKS, {
         issuer: ISSUER,
@@ -280,11 +281,23 @@ async function createChatGPTSignIn(
       const scopes = (token.scope || SCOPES).split(' ')
       const account = payload[CHATGPT_ACCOUNT_CLAIM] as Record<string, unknown> | undefined
       const chatGPTAccountID = account?.['chatgpt_account_id']
-      // Codex may omit nonce; verify it whenever the signed token includes one.
-      if (typeof chatGPTAccountID !== 'string' || !chatGPTAccountID ||
-        (payload['nonce'] !== undefined && payload['nonce'] !== nonce) ||
-        (previous && payload.sub !== previous['subject'])) {
-        throw new Error('I need permission to use the selected ChatGPT account.')
+      if (typeof chatGPTAccountID !== 'string' || !chatGPTAccountID) {
+        fail('The signed ID token contains no ChatGPT workspace identity.')
+        return
+      }
+
+      // Codex grants may omit nonce; state and PKCE still bind the exchange.
+      if (payload['nonce'] !== undefined && payload['nonce'] !== nonce) {
+        fail('The signed ID token nonce does not match this sign-in.')
+        return
+      }
+
+      // Subject IDs are comparable only within the OAuth client that issued them.
+      // Explicit browser consent replaces legacy grants under their existing ID.
+      if (previous?.['client_id'] === CHATGPT_CODEX_CLIENT_ID &&
+        payload.sub !== previous['subject']) {
+        fail('Sign in with the ChatGPT account already saved for this connection.')
+        return
       }
 
       cancellation.signal.throwIfAborted()
@@ -323,7 +336,12 @@ async function createChatGPTSignIn(
       const status = error && typeof error === 'object'
         ? (error as Record<string, unknown>)['statusCode']
         : undefined
-      const detail = error instanceof Error && error.name === 'TimeoutError'
+      const claim = error instanceof errors.JWTClaimValidationFailed || error instanceof errors.JWTExpired
+        ? error.claim
+        : undefined
+      const detail = error instanceof errors.JOSEError
+        ? `Signed ID token validation failed (${error.code}${claim ? `; claim ${claim}` : ''}).`
+        : error instanceof Error && error.name === 'TimeoutError'
           ? `The request timed out after ${REQUEST_TIMEOUT_MS / 1_000} seconds.`
           : typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599
             ? `OpenAI returned HTTP ${status}.`
