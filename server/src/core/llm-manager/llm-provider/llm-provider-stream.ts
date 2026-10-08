@@ -10,6 +10,7 @@ import {
 } from '@/core/llm-manager/llm-provider/llm-provider-response'
 import { type NormalizedCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
+import { recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import {
   LLMProviders,
   type CompletionParams,
@@ -104,6 +105,7 @@ export async function normalizeStreamingCompletionResult(
     usage: Record<string, unknown>,
     type: 'chat' | 'responses'
   ): void => {
+    recordInferenceUsage(usage)
     accounting = { ...accounting, ...readCompletionAccounting(usage) }
     const inputTokens =
       type === 'chat'

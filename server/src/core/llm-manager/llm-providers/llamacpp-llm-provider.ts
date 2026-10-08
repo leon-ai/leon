@@ -28,6 +28,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
 import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const DEFAULT_LLAMACPP_BASE_URL =
@@ -417,9 +418,9 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     let text = ''
     let reasoning = ''
-    let promptTokens = 0
+    let promptTokens: number | undefined
     let hasPromptUsage = false
-    let completionTokens = 0
+    let completionTokens: number | undefined
     let accounting: CompletionAccounting = {}
     let predictedPerSecond = 0
     let predictedMs = 0
@@ -465,6 +466,12 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
           predictedMs = timings['predicted_ms'] as number
         }
       }
+
+      recordInferenceUsage({
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        accounting
+      })
 
       const choices = Array.isArray(chunk['choices'])
         ? (chunk['choices'] as Array<Record<string, unknown>>)

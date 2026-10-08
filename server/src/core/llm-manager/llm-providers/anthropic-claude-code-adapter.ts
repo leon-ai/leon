@@ -18,6 +18,7 @@ import { recordTurnInference } from '@/core/session-manager/session-context'
 import { getClaudeSubscriptionEnvironment } from '../fellows/fellow-catalog'
 import type { ResolvedLLMTarget } from '../llm-routing'
 import { readCompletionAccounting } from '../llm-usage/usage-accounting'
+import { recordInferenceUsage } from '../llm-usage/usage-context'
 import {
   LLMProviders,
   type CompletionParams,
@@ -215,6 +216,20 @@ export default class AnthropicClaudeCodeAdapter {
         const message = JSON.parse(line) as ClaudeResult
         if (message.type === 'result') {
           completed = message
+
+          if (message.usage) {
+            const accounting = readCompletionAccounting(message.usage)
+
+            recordInferenceUsage({
+              prompt_tokens: message.usage.input_tokens === undefined
+                ? undefined
+                : message.usage.input_tokens +
+                  (accounting.cachedInputTokens ?? 0) +
+                  (accounting.cacheWriteInputTokens ?? 0),
+              completion_tokens: message.usage.output_tokens,
+              accounting
+            })
+          }
         }
 
         const event = message.event
@@ -322,8 +337,10 @@ export default class AnthropicClaudeCodeAdapter {
           }
         }],
         usage: {
-          prompt_tokens: promptTokens,
-          completion_tokens: completed.usage?.output_tokens || 0,
+          prompt_tokens: completed.usage?.input_tokens === undefined
+            ? undefined
+            : promptTokens,
+          completion_tokens: completed.usage?.output_tokens,
           accounting
         }
       } } as AxiosResponse

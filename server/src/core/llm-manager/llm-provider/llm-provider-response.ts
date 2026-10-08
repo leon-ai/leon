@@ -8,6 +8,7 @@ import {
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
 import { readCompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import { LogHelper } from '@/helpers/log-helper'
 
 /**
@@ -139,6 +140,8 @@ export function normalizeCompletionResultForOpenAICompatibleProvider(
     typeof parsedCompletionResult['timings'] === 'object'
       ? (parsedCompletionResult['timings'] as Record<string, unknown>)
       : {}
+
+  recordInferenceUsage(usage)
 
   const contentField = message['content']
   const normalizedContent =
@@ -525,6 +528,8 @@ export function normalizeCompletionResultForOpenAIResponsesProvider(
     typeof parsedCompletionResult['usage'] === 'object'
       ? (parsedCompletionResult['usage'] as Record<string, unknown>)
       : {}
+
+  recordInferenceUsage(usage)
 
   const toolCalls = extractOpenAIResponsesToolCalls(parsedCompletionResult)
   const result: NormalizedCompletionResult = {

@@ -11,6 +11,11 @@ import LLMProvider from '@/core/llm-manager/llm-provider'
 import LlamaCPPLLMProvider from '@/core/llm-manager/llm-providers/llamacpp-llm-provider'
 import { normalizeStreamingCompletionResult } from '@/core/llm-manager/llm-provider/llm-provider-stream'
 import { LLMDuties, LLMProviders, type CompletionParams } from '@/core/llm-manager/types'
+import { appendInferenceUsage } from '@/core/llm-manager/llm-usage/usage-ledger'
+
+vi.mock('@/core/llm-manager/llm-usage/usage-ledger', () => ({
+  appendInferenceUsage: vi.fn().mockResolvedValue(undefined)
+}))
 
 const celerisTarget = {
   provider: 'celeris',
@@ -254,6 +259,10 @@ describe('LLMProvider', () => {
       expect(await result).toBeNull()
       expect(attempts).toHaveLength(2)
       expect(attempts.map((params) => params.timeout)).toEqual([120_000, 120_000])
+      expect(vi.mocked(appendInferenceUsage).mock.calls).toHaveLength(2)
+      expect(vi.mocked(appendInferenceUsage).mock.calls.every(([, record]) =>
+        record.outcome !== 'completed' && Object.keys(record.usage).length === 0
+      )).toBe(true)
       expect(LogHelper.warning).toHaveBeenCalledWith(
         expect.stringContaining(`Provider connection failed (${code})`)
       )
@@ -454,6 +463,34 @@ describe('LLMProvider', () => {
     celerisTarget.provider = LLMProviders.Celeris
   })
 
+  it('retains reported stream usage when the response ends unsuccessfully', async () => {
+    const stream = Readable.from((async function* (): AsyncGenerator<string> {
+      yield 'data: {"choices":[],"usage":{"prompt_tokens":100,"completion_tokens":20}}\n\n'
+      throw new Error('Provider stream disconnected')
+    })())
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+
+    state.agentLLMProvider = {
+      modelName: 'celeris-1',
+      runChatCompletion: vi.fn().mockResolvedValue({ data: stream })
+    }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+
+    await expect(manager.prompt('Hello', {
+      dutyType: LLMDuties.ReAct,
+      systemPrompt: '',
+      shouldStream: true,
+      maxRetries: 0,
+      remoteProviderErrorRetries: 0
+    })).resolves.toBeNull()
+    expect(appendInferenceUsage).toHaveBeenCalledOnce()
+    expect(appendInferenceUsage).toHaveBeenCalledWith('test', expect.objectContaining({
+      outcome: 'failed',
+      usage: { inputTokens: 100, outputTokens: 20 }
+    }))
+  })
+
   it.each([LLMProviders.Celeris, LLMProviders.DeepSeek])('normalizes a %s OpenAI-compatible completion', async (provider) => {
     celerisTarget.provider = provider
     const runChatCompletion = vi.fn().mockResolvedValue({
@@ -498,6 +535,13 @@ describe('LLMProvider', () => {
       finishReason: 'stop'
     })
     expect(runChatCompletion.mock.calls[0]![1].maxTokens).toBeUndefined()
+    expect(appendInferenceUsage).toHaveBeenLastCalledWith('test', expect.objectContaining({
+      provider,
+      model: 'celeris-1',
+      purpose: LLMDuties.ReAct,
+      outcome: 'completed',
+      usage: { inputTokens: 12, outputTokens: 5 }
+    }))
     await manager.prompt('Explicit bounded request', {
       dutyType: LLMDuties.ReAct, systemPrompt: '', maxTokens: 128,
       maxRetries: 0, remoteProviderErrorRetries: 0

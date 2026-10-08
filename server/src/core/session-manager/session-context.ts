@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { recordInferenceUsageMetadata } from '@/core/llm-manager/llm-usage/usage-context'
 
 import type {
   InferenceMetadata,
@@ -20,7 +21,11 @@ const conversationSessionStorage =
   new AsyncLocalStorage<StoredConversationSessionContext>()
 
 export function getActiveConversationSessionId(): string | null {
-  return conversationSessionStorage.getStore()?.sessionId || null
+  const context = conversationSessionStorage.getStore()
+
+  return context?.profileName === getActiveProfileName()
+    ? context.sessionId
+    : null
 }
 
 export function getActiveConversationSessionModelTarget(): string | null {
@@ -31,6 +36,8 @@ export function getActiveConversationSessionModelTarget(): string | null {
  * Collects distinct dispatched routes in the current asynchronous turn only.
  */
 export function recordTurnInference(inference: InferenceMetadata): void {
+  recordInferenceUsageMetadata(inference)
+
   const context = conversationSessionStorage.getStore()
 
   if (!context || context.profileName !== getActiveProfileName()) {

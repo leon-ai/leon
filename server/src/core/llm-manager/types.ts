@@ -20,6 +20,15 @@ export enum LLMDuties {
   NLUParaphraser = 'nlu-paraphraser'*/
 }
 
+export enum InferencePurpose {
+  SessionTitle = 'session-title',
+  Memory = 'memory',
+  OwnerProfile = 'owner-profile',
+  SelfModel = 'self-model',
+  Pulse = 'pulse',
+  ContextCompaction = 'context-compaction'
+}
+
 export enum LLMProviders {
   LlamaCPP = 'llamacpp',
   SGLang = 'sglang',
@@ -213,6 +222,7 @@ export interface CompletionAttemptTiming {
 
 export interface CompletionParams {
   dutyType: LLMDuties
+  usagePurpose?: InferencePurpose
   systemPrompt: string
   maxTokens?: number | undefined
   thoughtTokensBudget?: number | undefined

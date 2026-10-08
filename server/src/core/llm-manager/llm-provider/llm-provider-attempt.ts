@@ -49,6 +49,7 @@ import {
 } from '@/core/llm-manager/types'
 import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { LogHelper } from '@/helpers/log-helper'
+import { recordInferenceUsageOutcome } from '@/core/llm-manager/llm-usage/usage-context'
 
 const LEADING_EMPTY_THINKING_BLOCK_PATTERN = /^(?:\s*<think>\s*<\/think>)+\s*/i
 
@@ -113,6 +114,10 @@ export async function runCompletionAttempt(
       : completionParams.timeout
   )
   const logAttempt = (outcome: string, error?: unknown): void => {
+    if (outcome !== 'started') {
+      recordInferenceUsageOutcome(outcome)
+    }
+
     const timing: CompletionAttemptTiming = {
       attemptId,
       startedAt: completionStartedAt,

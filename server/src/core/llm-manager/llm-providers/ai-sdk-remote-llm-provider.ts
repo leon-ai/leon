@@ -54,7 +54,8 @@ import {
 } from '@/core/llm-manager/llm-model-catalog'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
-import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import type { CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { readProviderUsage, recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import {
   replayCompactionWindows,
   restoreCompactionSources
@@ -118,8 +119,8 @@ interface CallState {
     }
   >
   toolCallOrder: string[]
-  usedInputTokens: number
-  usedOutputTokens: number
+  usedInputTokens: number | undefined
+  usedOutputTokens: number | undefined
   finishReason?: string
   compactionOutput?: Record<string, unknown>[]
 }
@@ -1392,8 +1393,8 @@ export default class AISDKRemoteLLMProvider {
       reasoningItems: new Map(),
       toolCallsById: {},
       toolCallOrder: [],
-      usedInputTokens: 0,
-      usedOutputTokens: 0
+      usedInputTokens: undefined,
+      usedOutputTokens: undefined
     }
   }
 
@@ -1446,7 +1447,7 @@ export default class AISDKRemoteLLMProvider {
       output: state.compactionOutput,
       // Usage bounds opaque context without counting ciphertext as ordinary text.
       estimatedTokens: Math.ceil(
-        state.usedOutputTokens + retainedText.length / CHARS_PER_TOKEN +
+        (state.usedOutputTokens ?? 0) + retainedText.length / CHARS_PER_TOKEN +
         imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS
       ),
       sourceTranscript: [...restoreCompactionSources(prompt), message]
@@ -1479,33 +1480,14 @@ export default class AISDKRemoteLLMProvider {
       return
     }
 
-    const usageObject = usage as Record<string, unknown>
-    state.accounting = { ...state.accounting, ...readCompletionAccounting(usage) }
-    const readTokenCount = (value: unknown): number | undefined => {
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        return value
-      }
-      if (value && typeof value === 'object') {
-        const objectValue = value as Record<string, unknown>
-        const total = objectValue['total']
-        if (typeof total === 'number' && Number.isFinite(total)) {
-          return total
-        }
-      }
+    const { inputTokens, outputTokens, ...accounting } = readProviderUsage(usage)
 
-      return undefined
-    }
-
-    const inputTokens =
-      readTokenCount(usageObject['inputTokens']) ??
-      readTokenCount(usageObject['input_tokens']) ??
-      readTokenCount(usageObject['promptTokens']) ??
-      readTokenCount(usageObject['prompt_tokens'])
-    const outputTokens =
-      readTokenCount(usageObject['outputTokens']) ??
-      readTokenCount(usageObject['output_tokens']) ??
-      readTokenCount(usageObject['completionTokens']) ??
-      readTokenCount(usageObject['completion_tokens'])
+    state.accounting = { ...state.accounting, ...accounting }
+    recordInferenceUsage({
+      prompt_tokens: inputTokens,
+      completion_tokens: outputTokens,
+      accounting
+    })
 
     if (typeof inputTokens === 'number' && Number.isFinite(inputTokens)) {
       state.usedInputTokens = inputTokens
@@ -1642,6 +1624,7 @@ export default class AISDKRemoteLLMProvider {
         }
       ],
       usage: {
+        // Preserve absence rather than turning unreported usage into zero.
         prompt_tokens: state.usedInputTokens,
         completion_tokens: state.usedOutputTokens,
         accounting: state.accounting ?? {}

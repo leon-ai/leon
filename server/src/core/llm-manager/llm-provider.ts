@@ -24,6 +24,8 @@ import {
 import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getModelAccountCredentials } from '@/core/llm-manager/llm-accounts'
+import { trackInferenceUsage } from '@/core/llm-manager/llm-usage'
+import { getActiveInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { FileHelper } from '@/helpers/file-helper'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
@@ -524,18 +526,27 @@ export default class LLMProvider {
       this.getTargetForDuty(completionParams.dutyType)
     )
 
-    return runCompletionAttempt(
-      provider,
-      providerName,
-      promptOrChatHistory,
-      completionParams,
-      measureExecutionTimeLabel,
-      (params) => this.prompt(promptOrChatHistory, params),
-      (message, preserveExisting) => {
-        if (!preserveExisting || !this.lastProviderErrorMessage) {
-          this.lastProviderErrorMessage = message
+    return trackInferenceUsage(
+      {
+        provider: providerName,
+        model: provider.modelName ||
+          this.getTargetForDuty(completionParams.dutyType).model,
+        purpose: completionParams.usagePurpose || getActiveInferencePurpose() ||
+          completionParams.dutyType || LLMDuties.Inference
+      },
+      () => runCompletionAttempt(
+        provider,
+        providerName,
+        promptOrChatHistory,
+        completionParams,
+        measureExecutionTimeLabel,
+        (params) => this.prompt(promptOrChatHistory, params),
+        (message, preserveExisting) => {
+          if (!preserveExisting || !this.lastProviderErrorMessage) {
+            this.lastProviderErrorMessage = message
+          }
         }
-      }
+      )
     )
   }
 }
