@@ -38,6 +38,7 @@ import setupUV from './setup-uv'
 import setupJQ from './setup-jq'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
 import setupPythonBridgeEnv from './setup-python-bridge-env'
+import setupMigrations from './setup-migrations'
 import setupToolsDependencies from './setup-tools-dependencies'
 import setupToolsSettings from './setup-tools-settings'
 import setupSkills from './setup-skills/setup-skills'
@@ -329,6 +330,8 @@ async function syncLLMSetupChoice(preferences) {
         'Skipping Python TCP server setup because it is running in CI'
       )
     }
+    currentStep = 'setupMigrations'
+    await setupMigrations()
     currentStep = 'setupToolsDependencies'
     await setupToolsDependencies()
     currentStep = 'setupToolsSettings'
