@@ -13,6 +13,7 @@ import { StatusCommand } from '@/built-in-command/commands/status-command/status
 import { StopCommand } from '@/built-in-command/commands/stop-command/stop-command'
 import { ToolCommand } from '@/built-in-command/commands/tool-command/tool-command'
 import { VoiceCommand } from '@/built-in-command/commands/voice-command/voice-command'
+import { UsageCommand } from '@/built-in-command/commands/usage-command/usage-command'
 
 const WHITELISTED_BUILT_IN_COMMAND_NAMES = [
   'status',
@@ -28,7 +29,8 @@ const WHITELISTED_BUILT_IN_COMMAND_NAMES = [
   'skill',
   'stop',
   'tool',
-  'voice'
+  'voice',
+  'usage'
 ]
 
 const BUILT_IN_COMMANDS = [
@@ -45,6 +47,7 @@ const BUILT_IN_COMMANDS = [
   new StopCommand(),
   new ToolCommand(),
   new VoiceCommand(),
+  new UsageCommand(),
   new HelpCommand()
 ]
   .filter((command) =>
