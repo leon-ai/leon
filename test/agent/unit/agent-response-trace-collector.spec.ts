@@ -2,8 +2,71 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { AgentResponseTraceCollector } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-response-trace-collector'
 import { deserializeAgentTrace, serializeAgentTrace } from '@/core/http-server/http-plugins/leon-services/agent-trace-serializer'
+import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 
 describe('AgentResponseTraceCollector', () => {
+  it('separates argument preparation from dispatch and preserves both timestamps through replay', () => {
+    const collector = new AgentResponseTraceCollector()
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+    const toolCall = { id: 'tool', name: 'test.lookup' }
+
+    collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'preparing' } })
+    const preparing = collector.snapshot({})
+
+    expect(preparing.toolCalls[0]).toMatchObject({ preparationStartedAt: 1_000 })
+    expect(preparing.toolCalls[0]).not.toHaveProperty('startedAt')
+
+    now.mockReturnValue(20_000)
+    collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'running' } })
+    now.mockReturnValue(20_050)
+    collector.record({ type: 'tool_call', toolCall: {
+      ...toolCall, status: 'success', durationMs: 50
+    } })
+    const finished = collector.snapshot({})
+
+    expect(finished.toolCalls[0]).toMatchObject({
+      preparationStartedAt: 1_000, startedAt: 20_000, durationMs: 50
+    })
+    expect(deserializeAgentTrace(serializeAgentTrace(finished, false)).toolCalls)
+      .toEqual(finished.toolCalls)
+    expect(preparing.toolCalls[0]?.status).toBe('preparing')
+
+    collector.record({ type: 'tool_call', toolCall: {
+      id: 'canceled', name: 'test.lookup', status: 'preparing'
+    } })
+    collector.interrupt()
+    expect(collector.snapshot({}).toolCalls[1]).toMatchObject({ status: 'error' })
+    expect(collector.snapshot({}).toolCalls[1]).not.toHaveProperty('startedAt')
+  })
+
+  it('retains separate inference attempts and their latest timing across replay and reset', () => {
+    const collector = new AgentResponseTraceCollector()
+    const attempt = {
+      attemptId: 'attempt-1', startedAt: 1_000, provider: LLMProviders.OpenAI,
+      duty: LLMDuties.ReAct, phase: 'agent' as const, transport: 'http' as const,
+      outcome: 'started', elapsedMs: 0, inferenceTimeoutMs: 120_000,
+      streamIdleTimeoutMs: 30_000, lastEvent: 'dispatched'
+    }
+
+    collector.recordInference(attempt)
+    const pending = collector.snapshot({})
+    collector.recordInference({ ...attempt, outcome: 'LLMStreamIdleTimeout', elapsedMs: 30_000 })
+    collector.recordInference({
+      ...attempt, attemptId: 'attempt-2', startedAt: 31_000,
+      outcome: 'completed', elapsedMs: 5_000, streamOpenMs: 100,
+      generationStartMs: 4_000, firstToolInputMs: 4_000, lastEvent: 'finish'
+    })
+    const finished = collector.snapshot({})
+
+    expect(finished.inferences).toHaveLength(2)
+    expect(finished.inferences?.[0]?.outcome).toBe('LLMStreamIdleTimeout')
+    expect(pending.inferences?.[0]?.outcome).toBe('started')
+    expect(deserializeAgentTrace(serializeAgentTrace(finished, false)).inferences)
+      .toEqual(finished.inferences)
+    collector.reset()
+    expect(collector.snapshot({}).inferences).toBeUndefined()
+  })
+
   it('preserves ordered commentary through replay and HTTP history without duplicating it', () => {
     const collector = new AgentResponseTraceCollector()
     const first = { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }

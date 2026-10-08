@@ -44,7 +44,8 @@ function formatFunctionName(functionName: string): string {
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const detailsId = useId()
-  const duration = toolCall.status === 'running'
+  const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
+  const duration = isActive
     ? ''
     : formatToolDuration(toolCall.durationMs)
   const execution = toolCall.output && typeof toolCall.output === 'object' &&
@@ -83,18 +84,21 @@ export function ToolCall({ toolCall }: ToolCallProps) {
         aria-controls={detailsId}
         onClick={() => setIsExpanded((isOpen) => !isOpen)}
       >
-        {toolCall.status === 'running' ? (
+        {isActive ? (
           <span className="tool-call-running-content">
             {headingLayer()}
             {headingLayer('tool-call-wave', true)}
           </span>
         ) : headingLayer()}
+        {toolCall.status === 'preparing' && (
+          <span className="tool-call-duration">Preparing call</span>
+        )}
         {duration && (
           <span
             className="tool-call-duration"
             title={isBackground
               ? 'Time to return the execution handle; the job is still running.'
-              : 'Tool call duration, including preparation and transport.'}
+              : 'Execution time, including tool setup and transport.'}
           >
             {isBackground ? `${duration} to return` : duration}
           </span>

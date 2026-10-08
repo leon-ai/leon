@@ -28,7 +28,7 @@ export function expandConversationTimeline(messages) {
       for (const toolCall of trace.toolCalls || []) {
         activities.set(`tool:${trace.id || ''}:${toolCall.id}`, {
           who: 'leon',
-          sentAt: toolCall.startedAt ?? message.sentAt,
+          sentAt: toolCall.preparationStartedAt ?? toolCall.startedAt ?? message.sentAt,
           toolCall
         })
       }

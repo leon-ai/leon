@@ -177,6 +177,34 @@ export interface CompletionStreamEvent {
   preliminary?: boolean
 }
 
+/**
+ * Attempt timings distinguish transport waits, generation and retries without prompt content.
+ */
+export interface CompletionAttemptTiming {
+  attemptId: string
+  startedAt: number
+  provider: LLMProviders
+  model?: string | undefined
+  duty: LLMDuties
+  reasoningEffort?: LLMReasoningEffort | undefined
+  serviceTier?: LLMServiceTier | undefined
+  transport: 'http' | 'websocket' | 'local'
+  outcome: string
+  connectionErrorCode?: string | undefined
+  requestId?: string | undefined
+  responseId?: string | undefined
+  elapsedMs: number
+  inferenceTimeoutMs: number
+  streamIdleTimeoutMs: number
+  generationStartMs?: number | undefined
+  streamOpenMs?: number | undefined
+  firstEventMs?: number | undefined
+  firstTokenMs?: number | undefined
+  firstToolInputMs?: number | undefined
+  lastEvent: string
+  idleMs?: number | undefined
+}
+
 export interface CompletionParams {
   dutyType: LLMDuties
   systemPrompt: string
@@ -200,6 +228,10 @@ export interface CompletionParams {
   onToken?: (tokens: Token[] | string) => void
   onReasoningToken?: (reasoningChunk: string) => void
   onStreamEvent?: (event: CompletionStreamEvent) => void
+  /**
+   * Reports dispatch and terminal timings for every attempt, including retries.
+   */
+  onAttempt?: (timing: CompletionAttemptTiming) => void
   /**
    * Provisional function arguments for display while the model is generating.
    * Execute only the completed tool calls returned by the completion.

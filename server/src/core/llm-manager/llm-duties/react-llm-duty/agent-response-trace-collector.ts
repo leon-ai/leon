@@ -24,6 +24,10 @@ export class AgentResponseTraceCollector {
   private readonly planSteps = new Map<string, AgentResponsePlanStep>()
   private readonly planTransitions: AgentResponsePlanTransition[] = []
   private readonly toolCalls = new Map<string, AgentResponseToolCall>()
+  private readonly inferences = new Map<
+    string,
+    NonNullable<AgentResponseTrace['inferences']>[number]
+  >()
 
   public reset(id?: string): void {
     this.id = id
@@ -33,6 +37,7 @@ export class AgentResponseTraceCollector {
     this.planSteps.clear()
     this.planTransitions.length = 0
     this.toolCalls.clear()
+    this.inferences.clear()
   }
 
   public record(event: AgentRunProgressEvent): void {
@@ -63,11 +68,28 @@ export class AgentResponseTraceCollector {
     }
 
     const existingToolCall = this.toolCalls.get(event.toolCall.id)
-    this.toolCalls.set(event.toolCall.id, {
+    const toolCall = {
       ...existingToolCall,
-      ...event.toolCall,
-      startedAt: existingToolCall?.startedAt ?? Date.now()
-    })
+      ...event.toolCall
+    }
+
+    // Argument streaming can be long; execution time starts at dispatch.
+    if (toolCall.status === 'preparing') {
+      toolCall.preparationStartedAt ??= Date.now()
+    } else if (toolCall.status === 'running' || toolCall.preparationStartedAt === undefined) {
+      toolCall.startedAt ??= Date.now()
+    }
+
+    this.toolCalls.set(event.toolCall.id, toolCall)
+  }
+
+  /**
+   * Keep each retry separate while replacing its initial timing with its outcome.
+   */
+  public recordInference(
+    timing: NonNullable<AgentResponseTrace['inferences']>[number]
+  ): void {
+    this.inferences.set(timing.attemptId, { ...timing })
   }
 
   /**
@@ -88,7 +110,7 @@ export class AgentResponseTraceCollector {
    */
   public interrupt(): void {
     for (const toolCall of this.toolCalls.values()) {
-      if (toolCall.status === 'running') {
+      if (toolCall.status === 'preparing' || toolCall.status === 'running') {
         toolCall.status = 'error'
         toolCall.errorMessage = 'The turn ended before this function completed.'
       }
@@ -98,6 +120,11 @@ export class AgentResponseTraceCollector {
   public snapshot(metrics: Record<string, unknown>): AgentResponseTrace {
     return {
       ...(this.id ? { id: this.id } : {}),
+      ...(this.inferences.size > 0
+        ? {
+            inferences: [...this.inferences.values()].map((timing) => ({ ...timing }))
+          }
+        : {}),
       ...(this.progressMessages.size > 0
         ? {
             progressMessages: [...this.progressMessages.values()].map((message) => ({ ...message }))

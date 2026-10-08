@@ -17,6 +17,7 @@ import type { Artifact } from '@/core/artifacts/artifact-types'
 import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
 import type { UsageAccounting } from '@/core/llm-manager/usage-accounting'
 import type { TurnInference } from '@/core/llm-manager/inference-metadata'
+import type { CompletionAttemptTiming } from '@/core/llm-manager/types'
 
 export type Languages = typeof LANG_CONFIGS
 export type LongLanguageCode = keyof Languages
@@ -131,13 +132,14 @@ export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
 
 export interface AgentResponseToolCall {
   id: string
+  preparationStartedAt?: number
   startedAt?: number
   durationMs?: number
   name: string
   toolCallTitle?: string
   toolkitName?: string
   toolName?: string
-  status: 'running' | 'success' | 'error'
+  status: 'preparing' | 'running' | 'success' | 'error'
   toolkitIconName?: string
   toolIconName?: string
   input?: unknown
@@ -153,6 +155,7 @@ export interface AgentResponseToolCall {
  */
 export interface AgentResponseTrace {
   id?: string
+  inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' })[]
   progressMessages?: { id: string, content: string, createdAt: number }[]
   reasoning?: {
     id: string

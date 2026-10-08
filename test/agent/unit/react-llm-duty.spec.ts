@@ -611,6 +611,12 @@ describe('continuous agent loop', () => {
     const call = toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'weather' })
     coreMocks.prompt
       .mockImplementationOnce(async (_messages, params) => {
+        params.onAttempt({
+          attemptId: 'weather-attempt', startedAt: 1_000, provider: LLMProviders.OpenAI,
+          duty: 'react', transport: 'http', outcome: 'completed', elapsedMs: 500,
+          inferenceTimeoutMs: 120_000, streamIdleTimeoutMs: 30_000,
+          streamOpenMs: 50, firstToolInputMs: 300, lastEvent: 'finish'
+        })
         params.onReasoningToken('Checking ')
         params.onReasoningToken('the weather.')
         params.onToolCall(call)
@@ -634,8 +640,15 @@ describe('continuous agent loop', () => {
     )
     expect(duty['responseTraceCollector'].snapshot({}).toolCalls[0]).toMatchObject({
       ...displayNames,
-      status: 'running'
+      status: 'preparing',
+      preparationStartedAt: 1_000
     })
+    expect(duty['responseTraceCollector'].snapshot({}).inferences).toEqual([
+      expect.objectContaining({
+        attemptId: 'weather-attempt', phase: 'agent', elapsedMs: 500,
+        streamOpenMs: 50, firstToolInputMs: 300
+      })
+    ])
     duty['closeStreamedToolCalls']()
     expect(duty['responseTraceCollector'].snapshot({}).toolCalls[0]).toMatchObject({
       ...displayNames,
@@ -3146,16 +3159,18 @@ describe('model waiting progress', () => {
     }
   })
 
-  it.each(['streaming', 'completed', 'canceled'])(
+  it.each(['streaming', 'tool-input', 'completed', 'canceled'])(
     'does not add waiting notices to a %s request',
     async (state) => {
       let finish!: (result: { output: string }) => void
       let emitToken!: (token: string) => void
+      let emitToolCall!: (call: OpenAIToolCall) => void
       const response = new Promise((resolve) => {
         finish = resolve
       })
       coreMocks.prompt.mockImplementationOnce((_messages, params) => {
         emitToken = params.onToken
+        emitToolCall = params.onToolCall
         return response
       })
       const controller = new AbortController()
@@ -3163,12 +3178,15 @@ describe('model waiting progress', () => {
       Object.assign(duty, { writeAgentPromptLog: vi.fn() })
       const pending = duty['callAgentModel'](
         [{ role: 'user', content: 'Find video files.' }], 'Follow the request.',
-        createCatalog().tools, { isRecoveryAttempt: false }
+        createCatalog().tools, { isRecoveryAttempt: false },
+        undefined, createCatalog().functionsByToolName
       ).then(() => null, (error) => error)
 
       try {
         if (state === 'streaming') {
           emitToken('Found video files. ')
+        } else if (state === 'tool-input') {
+          emitToolCall(toolCall('preview', CALLABLE_TOOL_NAME, { query: 'files' }))
         } else if (state === 'completed') {
           finish({ output: 'Done.' })
           await pending
@@ -3178,7 +3196,9 @@ describe('model waiting progress', () => {
 
         await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
         expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toBeUndefined()
-        expect(coreMocks.emitAnswerToChatClients).not.toHaveBeenCalled()
+        expect(coreMocks.emitAnswerToChatClients.mock.calls.some(([payload]) =>
+          payload.historyMode === 'system_widget'
+        )).toBe(false)
       } finally {
         finish({ output: 'Done.' })
         const error = await pending
@@ -3189,6 +3209,35 @@ describe('model waiting progress', () => {
       }
     }
   )
+
+  it('suppresses identical wait notices across inferences while allowing a new milestone notice', async () => {
+    const duty = new ReActLLMDuty({ input: 'Inspect and verify files.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    for (const label of ['Inspect files', 'Inspect files', 'Verify files']) {
+      let finish!: (result: { output: string }) => void
+      coreMocks.prompt.mockReturnValueOnce(new Promise((resolve) => {
+        finish = resolve
+      }))
+      const pending = duty['callAgentModel']([], 'Follow the request.', [],
+        { isRecoveryAttempt: false }, {
+          originalInput: 'Inspect and verify files.',
+          trackedSteps: [{ label, status: 'in_progress' }],
+          executionHistory: [], loadedToolkitIds: [], activeSkillId: null
+        })
+
+      await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
+      finish({ output: 'Ready.' })
+      await pending
+    }
+
+    expect(duty['responseTraceCollector'].snapshot({}).progressMessages?.map(
+      (message) => message.content
+    )).toEqual([
+      'I’m working through “Inspect files” and deciding the next action.',
+      'I’m working through “Verify files” and deciding the next action.'
+    ])
+  })
 })
 
 describe('plan state', () => {

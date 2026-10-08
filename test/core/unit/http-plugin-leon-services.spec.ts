@@ -604,6 +604,23 @@ describe('HTTP plugin Leon services', () => {
   })
 
   it('streams agent commentary and includes it in the final trace', async () => {
+    const inferences = [{
+      attemptId: 'attempt', startedAt: 1_000, provider: 'openai', duty: 'react',
+      phase: 'agent', transport: 'http', outcome: 'completed', elapsedMs: 900,
+      inferenceTimeoutMs: 120_000, streamIdleTimeoutMs: 30_000, lastEvent: 'finish'
+    }]
+    mocks.agentDutyResult = {
+      output: 'Done.',
+      data: {
+        agentResponseTrace: {
+          inferences, planSteps: [], toolCalls: [{
+            id: 'tool-1', name: 'system_utilities.tool_executions.read',
+            toolkitName: 'System Utilities', toolName: 'Tool Executions',
+            preparationStartedAt: 1_600, startedAt: 2_000, status: 'success'
+          }]
+        }
+      }
+    }
     mocks.executeAgent.mockImplementationOnce(async () => {
       const onProgress = mocks.agentDutyParams.at(-1)?.['onProgressEvent'] as (
         event: Record<string, unknown>
@@ -637,6 +654,10 @@ describe('HTTP plugin Leon services', () => {
       turn_id: 'turn-1', response_id: 'turn-1', data: { message: progress }
     })
     expect(turn.response_trace.progress_messages).toEqual([progress])
+    expect(turn.response_trace.inferences).toEqual(inferences)
+    expect(turn.response_trace.tool_calls[0]).toMatchObject({
+      preparation_started_at: 1_600, started_at: 2_000
+    })
     const toolCall = {
       toolkit_name: 'System Utilities',
       tool_name: 'Tool Executions'

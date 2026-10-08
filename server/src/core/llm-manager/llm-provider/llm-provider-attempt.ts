@@ -39,6 +39,7 @@ import {
   LLMProviders,
   type CompletionParams,
   type CompletionStreamEvent,
+  type CompletionAttemptTiming,
   type OpenAIToolCall,
   type ProviderReasoningItem,
   type ProviderCompactionContext,
@@ -88,12 +89,13 @@ export async function runCompletionAttempt(
   const completionStartedAt = Date.now()
   let generationStartedAt: number | null = null
   let firstTokenAt: number | undefined
+  let firstToolInputAt: number | undefined
   let accounting: CompletionAccounting | undefined
   let firstEventAt: number | undefined
   let streamOpenedAt: number | undefined
   let lastEventAt: number | undefined
   let lastEvent = 'dispatched'
-  let transport: string = isRemoteProvider
+  let transport: CompletionAttemptTiming['transport'] = isRemoteProvider
     ? providerName === LLMProviders.OpenAI && shouldStreamOutput
       ? 'websocket'
       : 'http'
@@ -109,16 +111,15 @@ export async function runCompletionAttempt(
       : completionParams.timeout
   )
   const logAttempt = (outcome: string, error?: unknown): void => {
-    const details = JSON.stringify({
+    const timing: CompletionAttemptTiming = {
       attemptId,
-      startedAt: new Date(completionStartedAt).toISOString(),
+      startedAt: completionStartedAt,
       provider: providerName,
       model: provider.modelName,
       duty: completionParams.dutyType,
       reasoningEffort: completionParams.reasoningEffort,
       serviceTier: completionParams.serviceTier,
       transport,
-      accounting,
       outcome,
       connectionErrorCode: getConnectionErrorCode(error),
       requestId,
@@ -138,8 +139,16 @@ export async function runCompletionAttempt(
       firstTokenMs: firstTokenAt === undefined
         ? undefined
         : firstTokenAt - completionStartedAt,
+      firstToolInputMs: firstToolInputAt === undefined
+        ? undefined
+        : firstToolInputAt - completionStartedAt,
       lastEvent,
       idleMs: lastEventAt === undefined ? undefined : Date.now() - lastEventAt
+    }
+    const details = JSON.stringify({
+      ...timing,
+      startedAt: new Date(completionStartedAt).toISOString(),
+      accounting
     })
 
     if (outcome === 'started' || outcome === 'completed') {
@@ -148,6 +157,8 @@ export async function runCompletionAttempt(
       // Keep failed-attempt identifiers and timings in the profile error log.
       LogHelper.error(`LLM attempt ${details}`)
     }
+
+    completionParams.onAttempt?.(timing)
   }
   // Attempt-level diagnosis can retry, but owner cancellation must survive it.
   const callerAbortSignal = completionParams.cancellationSignal
@@ -236,6 +247,13 @@ export async function runCompletionAttempt(
     transport = event.transport ?? transport
     requestId = event.requestId ?? requestId
     responseId = event.responseId ?? responseId
+
+    if (
+      event.type === 'tool-input-start' || event.type === 'tool-input-delta' ||
+      event.type === 'tool-call-delta' || event.type === 'tool-call'
+    ) {
+      firstToolInputAt ??= Date.now()
+    }
 
     if (event.type === 'stream-open') {
       streamOpenedAt = Date.now()
@@ -623,6 +641,7 @@ export async function runCompletionAttempt(
   } catch (e) {
     clearStreamStallTimeout()
     rejectStreamStall = null
+    logAttempt('failed', e)
     LogHelper.title('LLM Provider')
     LogHelper.error(`Failed to normalize completion result: ${String(e)}`)
     LogHelper.timeEnd(measureExecutionTimeLabel)

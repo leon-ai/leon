@@ -135,6 +135,7 @@ export function emitToolExecutionInputToWebApp(params: {
   functionName: string
   toolInput: string
   toolGroupId: string
+  status?: 'preparing' | 'running'
   toolCallTitle?: string
   stepLabel?: string
 }): void {
@@ -157,6 +158,7 @@ export function emitToolExecutionInputToWebApp(params: {
     isToolOutput: true,
     toolDisplayMode: 'activity_card',
     toolPhase: 'input',
+    status: params.status || 'running',
     ...displayContext,
     toolGroupId: params.toolGroupId,
     functionName: params.functionName,

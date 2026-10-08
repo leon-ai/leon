@@ -10,6 +10,7 @@ import Brain from '@/core/brain/brain'
 import PulseManager from '@/core/pulse-manager'
 import { CONFIG_MANAGER } from '@/config'
 import { ParaphraseLLMDuty } from '@/core/llm-manager/llm-duties/paraphrase-llm-duty'
+import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import type { LLMAnswerMetrics, MessageLog } from '@/types'
 import {
   getActiveTurnInference,
@@ -308,8 +309,15 @@ describe('conversation trace persistence', () => {
       who: 'leon', message: '', messageId: 'turn', isAddedToHistory: false,
       agentResponseTrace: {
         id: 'turn', planSteps: [],
+        inferences: [{
+          attemptId: 'attempt', startedAt: 1_000, provider: LLMProviders.OpenAI,
+          duty: LLMDuties.ReAct, phase: 'agent', transport: 'http', outcome: 'completed',
+          elapsedMs: 900, inferenceTimeoutMs: 120_000, streamIdleTimeoutMs: 30_000,
+          streamOpenMs: 50, firstToolInputMs: 600, lastEvent: 'finish'
+        }],
         toolCalls: [{
           id: 'tool', name: 'test.lookup', status: 'success', startedAt: 2_000,
+          preparationStartedAt: 1_600,
           toolCallTitle: 'Look up the requested value',
           toolkitName: 'Test Toolkit',
           toolName: 'Official Lookup',

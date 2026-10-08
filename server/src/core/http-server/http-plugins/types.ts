@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
 import type { APIOptions } from '@/core/http-server/http-server'
 import type { AgentModelFile } from '@/core/llm-manager/types'
 import type { TurnInference } from '@/core/llm-manager/inference-metadata'
-import type { ConversationWidgetData } from '@/types'
+import type { AgentResponseTrace, ConversationWidgetData } from '@/types'
 
 export interface HTTPPluginAuthConfig {
   enabled: boolean
@@ -46,11 +46,12 @@ export interface HTTPPluginToolCall {
   tool_call_title?: string
   toolkit_name?: string
   tool_name?: string
-  status: 'running' | 'success' | 'error'
+  status: 'preparing' | 'running' | 'success' | 'error'
   toolkit_icon_name?: string
   tool_icon_name?: string
   observation?: string
   started_at?: number
+  preparation_started_at?: number
   completed_at?: number
   duration_ms?: number
   step_label?: string
@@ -72,6 +73,7 @@ export interface HTTPPluginPlanTransition extends HTTPPluginPlanStep {
 }
 
 export interface HTTPPluginAgentTrace {
+  inferences?: AgentResponseTrace['inferences']
   reasoning_summary?: string
   progress_messages?: { id: string, content: string, created_at: number }[]
   plan_steps: HTTPPluginPlanStep[]

@@ -20,7 +20,7 @@ import type {
   HTTPPluginToolCall
 } from '../types'
 import { publishAgentEvent } from './agent-event-channel'
-import { deserializeAgentTrace } from './agent-trace-serializer'
+import { deserializeAgentTrace, serializeAgentTrace } from './agent-trace-serializer'
 import {
   elapsedMilliseconds,
   normalizeConversationSession,
@@ -232,7 +232,11 @@ export async function runAgent(
             ...toolCall
           })
         }
+        const durableTrace = data['agentResponseTrace']
+          ? serializeAgentTrace(data['agentResponseTrace'] as AgentResponseTrace, false)
+          : null
         const trace: HTTPPluginAgentTrace = {
+          ...durableTrace,
           reasoning_summary: reasoningSummary,
           ...(progressMessages.size > 0
             ? { progress_messages: [...progressMessages.values()] }
@@ -241,7 +245,7 @@ export async function runAgent(
           ...(planTransitions.length > 0
             ? { plan_transitions: planTransitions }
             : {}),
-          tool_calls: [...toolCalls.values()],
+          tool_calls: durableTrace?.tool_calls || [...toolCalls.values()],
           metrics
         }
         finalTrace = trace

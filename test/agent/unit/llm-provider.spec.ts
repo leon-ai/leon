@@ -281,6 +281,7 @@ describe('LLMProvider', () => {
 
       try {
         const attempts: CompletionParams[] = []
+        const onAttempt = vi.fn()
         const runChatCompletion = vi.fn((_prompt, params: CompletionParams) => {
           attempts.push(params)
           params.onStreamEvent?.({ type: 'stream-open', transport: 'http', requestId: 'req-test' })
@@ -311,7 +312,8 @@ describe('LLMProvider', () => {
           systemPrompt: '',
           shouldStream: true,
           timeout: 120_000,
-          maxRetries: 1
+          maxRetries: 1,
+          onAttempt
         })
 
         await vi.advanceTimersByTimeAsync(0)
@@ -344,6 +346,18 @@ describe('LLMProvider', () => {
         expect(result?.firstTokenAt).toBeGreaterThan(0)
         expect(LogHelper.error).toHaveBeenCalledWith(expect.stringContaining('req-test'))
         expect(LogHelper.error).toHaveBeenCalledWith(expect.stringContaining('LLMStreamIdleTimeout'))
+        const timings = onAttempt.mock.calls.map(([timing]) => timing)
+
+        expect(timings.map((timing) => timing.outcome)).toEqual([
+          'started', 'LLMStreamIdleTimeout', 'started', 'completed'
+        ])
+        expect(timings[1]).toMatchObject({
+          attemptId: timings[0].attemptId,
+          streamOpenMs: 0,
+          generationStartMs: 40_000,
+          ...(output === 'tool' ? { firstToolInputMs: 40_000 } : { firstTokenMs: 40_000 })
+        })
+        expect(timings[3].attemptId).not.toBe(timings[0].attemptId)
       } finally {
         vi.useRealTimers()
       }

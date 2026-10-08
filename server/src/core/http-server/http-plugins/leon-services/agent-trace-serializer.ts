@@ -10,6 +10,9 @@ export function serializeAgentTrace(
   includeDeveloperProvenance: boolean
 ): HTTPPluginAgentTrace {
   return {
+    ...(trace.inferences
+      ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
+      : {}),
     ...(trace.progressMessages
       ? {
           progress_messages: trace.progressMessages.map((message) => ({
@@ -42,6 +45,9 @@ export function serializeAgentTrace(
         ? { tool_call_title: toolCall.toolCallTitle }
         : {}),
       status: toolCall.status,
+      ...(toolCall.preparationStartedAt !== undefined
+        ? { preparation_started_at: toolCall.preparationStartedAt }
+        : {}),
       ...(toolCall.startedAt !== undefined ? { started_at: toolCall.startedAt } : {}),
       ...(toolCall.durationMs !== undefined ? { duration_ms: toolCall.durationMs } : {}),
       ...(toolCall.toolkitIconName
@@ -72,6 +78,9 @@ export function deserializeAgentTrace(
   trace: HTTPPluginAgentTrace
 ): AgentResponseTrace {
   return {
+    ...(trace.inferences
+      ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
+      : {}),
     ...(trace.progress_messages
       ? {
           progressMessages: trace.progress_messages.map((message) => ({
@@ -102,6 +111,9 @@ export function deserializeAgentTrace(
         ? { toolCallTitle: toolCall.tool_call_title }
         : {}),
       status: toolCall.status,
+      ...(toolCall.preparation_started_at !== undefined
+        ? { preparationStartedAt: toolCall.preparation_started_at }
+        : {}),
       ...(toolCall.started_at !== undefined ? { startedAt: toolCall.started_at } : {}),
       ...(toolCall.duration_ms !== undefined ? { durationMs: toolCall.duration_ms } : {}),
       ...(toolCall.toolkit_icon_name

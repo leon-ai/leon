@@ -191,6 +191,7 @@ export class ReActLLMDuty extends LLMDuty {
 
   private executionStartedAt = 0
   private firstOutputAt: number | null = null
+  private lastModelWaitProgress = ''
   private readonly streamedToolCalls = new Map<string, {
     callable: AgentCallableFunction
     groupId: string
@@ -265,6 +266,7 @@ export class ReActLLMDuty extends LLMDuty {
 
     this.executionStartedAt = Date.now()
     this.firstOutputAt = null
+    this.lastModelWaitProgress = ''
     this.completionCount = 0
     this.continuationSummaryFailed = false
     this.automaticCompactionFailed = false
@@ -1174,6 +1176,7 @@ export class ReActLLMDuty extends LLMDuty {
     let completionResult: Awaited<ReturnType<typeof LLM_PROVIDER.prompt>>
     let completed = false
     let hasStartedAnswer = false
+    let hasStartedToolCall = false
     let hasSentWaitNotice = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
     let diagnosisTimer: NodeJS.Timeout | null = null
@@ -1182,7 +1185,7 @@ export class ReActLLMDuty extends LLMDuty {
     const emitWaitNotice = (): void => {
       if (
         completed || this.signal?.aborted ||
-        hasStartedAnswer || hasSentWaitNotice
+        hasStartedAnswer || hasStartedToolCall || hasSentWaitNotice
       ) {
         return
       }
@@ -1190,9 +1193,15 @@ export class ReActLLMDuty extends LLMDuty {
       // Reuse public task state without an extra inference request or private
       // reasoning. One notice is enough while the same request remains pending.
       hasSentWaitNotice = true
-      void this.emitProgress(
-        this.getModelWaitProgress(transcript, options, checkpointInput)
-      )
+      const message = this.getModelWaitProgress(transcript, options, checkpointInput)
+
+      // Repeated inferences within the same milestone add no new owner information.
+      if (message === this.lastModelWaitProgress) {
+        return
+      }
+
+      this.lastModelWaitProgress = message
+      void this.emitProgress(message)
     }
 
     waitNoticeTimer = setTimeout(() => {
@@ -1238,6 +1247,10 @@ export class ReActLLMDuty extends LLMDuty {
         maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
+        onAttempt: (timing): void => {
+          this.responseTraceCollector.recordInference({ ...timing, phase })
+          this.scheduleTraceSave()
+        },
         ...(!options.isCompletionReview
           ? {
               onToken: (token: unknown): void => {
@@ -1255,6 +1268,7 @@ export class ReActLLMDuty extends LLMDuty {
                 if (event.type === 'stream-open') {
                   // A retry replaces any unfinished previews from its predecessor.
                   this.closeStreamedToolCalls()
+                  hasStartedToolCall = false
                 }
               },
               onToolCall: (call): void => {
@@ -1270,6 +1284,7 @@ export class ReActLLMDuty extends LLMDuty {
                 }
 
                 const groupId = previous?.groupId || `agent_${StringHelper.random(12)}`
+                hasStartedToolCall = true
                 this.streamedToolCalls.set(call.id, { callable, groupId, input })
                 this.firstOutputAt ??= Date.now()
                 this.reportProgressEvent({
@@ -1277,14 +1292,15 @@ export class ReActLLMDuty extends LLMDuty {
                   toolCall: {
                     id: groupId,
                     name: callable.qualifiedName,
-                    status: 'running',
+                    status: 'preparing',
                     input
                   }
                 })
                 emitToolExecutionInputToWebApp({
                   ...callable,
                   toolGroupId: groupId,
-                  toolInput: input
+                  toolInput: input,
+                  status: 'preparing'
                 })
               }
             }

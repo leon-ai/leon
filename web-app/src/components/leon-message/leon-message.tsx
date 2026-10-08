@@ -50,6 +50,9 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   }
 
   const toolsAreActive = activity.toolCalls.some((toolCall) =>
+    toolCall.status === 'preparing' || toolCall.status === 'running'
+  )
+  const toolsAreRunning = activity.toolCalls.some((toolCall) =>
     toolCall.status === 'running'
   )
   const toolCount = activity.toolCalls.length
@@ -60,7 +63,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
     })}>
       <ProcessGroup
         active={toolsAreActive}
-        activeLabel="Using tools..."
+        activeLabel={toolsAreRunning ? 'Using tools...' : 'Preparing tool calls...'}
         ariaLabel="Leon’s tool usage"
         completedLabel={`Used ${toolCount} ${
           toolCount === 1 ? 'tool' : 'tools'

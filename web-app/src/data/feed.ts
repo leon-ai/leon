@@ -6,7 +6,7 @@ export type FeedPlanStepStatus =
   | 'completed'
   | 'error'
 
-export type FeedToolCallStatus = 'running' | 'success' | 'error'
+export type FeedToolCallStatus = 'preparing' | 'running' | 'success' | 'error'
 
 export type JsonValue =
   | string

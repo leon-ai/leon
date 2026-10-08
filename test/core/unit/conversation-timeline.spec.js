@@ -10,7 +10,10 @@ describe('conversation activity replay', () => {
     const laterReasoning = {
       id: 'r2', text: 'Reading the result', phase: 'agent', startedAt: 5
     }
-    const toolCall = { id: 't1', name: 'test.lookup', status: 'running', startedAt: 3 }
+    const toolCall = {
+      id: 't1', name: 'test.lookup', status: 'running',
+      preparationStartedAt: 3, startedAt: 4
+    }
     const progress = {
       id: 'progress', content: 'One item is verified; more remain.', createdAt: 4
     }
@@ -42,15 +45,15 @@ describe('conversation activity replay', () => {
     expect(legacy[1].string).toBe('Old answer')
   })
 
-  it('does not turn an in-progress tool into a completed result on reload', () => {
+  it.each(['preparing', 'running'])('preserves a %s tool on reload without marking it complete', (status) => {
     const handler = Object.create(ToolUIHandler.prototype)
     handler.handleToolOutput = vi.fn()
     handler.replayAgentResponseTrace({ toolCalls: [{
-      id: 't1', name: 'test.lookup', status: 'running', toolCallTitle: 'Look up the requested value'
+      id: 't1', name: 'test.lookup', status, toolCallTitle: 'Look up the requested value'
     }] })
     expect(handler.handleToolOutput).toHaveBeenCalledOnce()
     expect(handler.handleToolOutput).toHaveBeenCalledWith(expect.objectContaining({
-      toolPhase: 'input', toolCallTitle: 'Look up the requested value'
+      toolPhase: 'input', status, toolCallTitle: 'Look up the requested value'
     }))
   })
 

@@ -445,12 +445,16 @@ export default class ToolUIHandler {
     }
 
     if (data.toolPhase === 'input') {
+      const isPreparing = data.status === 'preparing'
+
       toolGroupContainer.durationLabel.hidden = true
-      toolGroupContainer.summary.textContent =
-        data.stepLabel || data.functionName
-          ? `Preparing ${title.toLowerCase()}...`
-          : 'Preparing tool activity...'
-      this.setStatusChip(toolGroupContainer.statusChip, 'running')
+      toolGroupContainer.summary.textContent = isPreparing
+        ? `Preparing the call for ${title.toLowerCase()}...`
+        : `Running ${title.toLowerCase()}...`
+      this.setStatusChip(
+        toolGroupContainer.statusChip,
+        isPreparing ? 'preparing' : 'running'
+      )
 
       const parsedInput = this.parseToolInput(data.toolInput)
       toolGroupContainer.rawInput = parsedInput ?? data.toolInput ?? null
@@ -463,7 +467,9 @@ export default class ToolUIHandler {
       if (!toolGroupContainer.rawOutput) {
         this.renderPlaceholder(
           toolGroupContainer.outputBody,
-          'Waiting for function output...'
+          isPreparing
+            ? 'Generating function input...'
+            : 'Waiting for function output...'
         )
       }
     }
@@ -515,7 +521,7 @@ export default class ToolUIHandler {
       toolGroupContainer.durationLabel.hidden = !duration
       toolGroupContainer.durationLabel.title = isBackground
         ? 'Time to return the execution handle; the job is still running.'
-        : 'Tool call duration, including preparation and transport.'
+        : 'Execution time, including tool setup and transport.'
 
       const isError = data.status === 'error'
       const isObserved = data.status === 'observed'
@@ -893,7 +899,15 @@ export default class ToolUIHandler {
    * Update the status chip for the activity card.
    */
   setStatusChip(chip, status) {
-    chip.classList.remove('running', 'success', 'error', 'selected', 'observed')
+    chip.classList.remove(
+      'preparing', 'running', 'success', 'error', 'selected', 'observed'
+    )
+
+    if (status === 'preparing') {
+      chip.classList.add('preparing')
+      chip.textContent = 'Preparing'
+      return
+    }
 
     if (status === 'error') {
       chip.classList.add('error')
@@ -1056,10 +1070,11 @@ export default class ToolUIHandler {
       this.handleToolOutput({
         ...sharedData,
         toolPhase: 'input',
+        status: toolCall.status === 'preparing' ? 'preparing' : 'running',
         toolInput: serializedInput,
         answer: serializedInput
       })
-      if (toolCall.status === 'running') {
+      if (toolCall.status === 'preparing' || toolCall.status === 'running') {
         continue
       }
       this.handleToolOutput({
