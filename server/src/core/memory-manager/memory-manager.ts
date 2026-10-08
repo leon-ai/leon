@@ -4,7 +4,7 @@ import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import { gzipSync } from 'node:zlib'
 
-import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, LLMProviders, InferencePurpose } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
@@ -1534,6 +1534,7 @@ No markdown. No explanation.`
       const { LLM_PROVIDER } = await import('@/core')
       const completion = await LLM_PROVIDER.prompt(prompt, {
         dutyType: LLMDuties.Inference,
+        usagePurpose: InferencePurpose.Memory,
         systemPrompt:
           'Extract stable long-term user memory candidates. Be strict and concise.',
         data: EXTRACT_PERSISTENT_MEMORY_SCHEMA,

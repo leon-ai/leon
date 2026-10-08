@@ -7,6 +7,7 @@ import type { MessageLog } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import {
   LLMDuties,
+  InferencePurpose,
   LLMProviders,
   type CompletionParams
 } from '@/core/llm-manager/types'
@@ -441,6 +442,7 @@ export class ConversationSessionManager {
     const titleResult = await this.runWithSession(sessionId, () =>
       LLM_PROVIDER.prompt(message, {
         dutyType: LLMDuties.Inference,
+        usagePurpose: InferencePurpose.SessionTitle,
         systemPrompt: SESSION_TITLE_SYSTEM_PROMPT,
         maxTokens: SESSION_TITLE_MAX_TOKENS,
         timeout: SESSION_TITLE_TIMEOUT_MS,

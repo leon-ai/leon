@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 
 import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
+import { InferencePurpose } from '@/core/llm-manager/types'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -677,6 +678,7 @@ export default class SelfModelManager {
       ].join('\n')
 
       const result = await runInference({
+        usagePurpose: InferencePurpose.SelfModel,
         prompt,
         systemPrompt: [
           'You maintain your private self-model.',

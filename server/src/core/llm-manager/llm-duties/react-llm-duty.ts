@@ -28,6 +28,7 @@ import {
 import {
   LLMDuties,
   LLMProviders,
+  InferencePurpose,
   type AgentToolTranscriptMessage,
   type OpenAITool,
   type OpenAIToolCall,
@@ -960,6 +961,7 @@ export class ReActLLMDuty extends LLMDuty {
           ...(this.signal ? { cancellationSignal: this.signal } : {}),
           dutyType: LLMDuties.ReAct,
           systemPrompt: AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT,
+          usagePurpose: InferencePurpose.ContextCompaction,
           temperature: 0,
           maxTokens: AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
           timeout: AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,

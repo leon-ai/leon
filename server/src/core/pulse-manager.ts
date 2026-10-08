@@ -8,6 +8,8 @@ import type Brain from '@/core/brain/brain'
 import { LEON_PULSE_INTERVAL_MS } from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
+import { InferencePurpose } from '@/core/llm-manager/types'
+import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -893,6 +895,7 @@ export default class PulseManager {
     ].join('\n')
 
     const result = await runInference({
+      usagePurpose: InferencePurpose.Pulse,
       prompt,
       systemPrompt: [
         'You maintain Leon\'s autonomous pulse queue.',
@@ -1077,7 +1080,7 @@ export default class PulseManager {
         input
       })
       await duty.init()
-      const result = await duty.execute()
+      const result = await runWithInferencePurpose(InferencePurpose.Pulse, () => duty.execute())
       output = typeof result?.output === 'string' ? result.output : ''
       const resultData =
         result?.data && typeof result.data === 'object'
@@ -1333,6 +1336,7 @@ export default class PulseManager {
     ].join('\n')
 
     const result = await runInference({
+      usagePurpose: InferencePurpose.Pulse,
       prompt,
       systemPrompt: [
         'You classify the owner\'s reaction to Leon\'s recent autonomous pulse action.',

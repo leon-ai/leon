@@ -1,7 +1,7 @@
 import { CONVERSATION_LOGGER, LLM_PROVIDER } from '@/core'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
-import { LLMDuties, type LLMProviders } from '@/core/llm-manager/types'
+import { LLMDuties, InferencePurpose, type LLMProviders } from '@/core/llm-manager/types'
 import type { PostTurnMaintenanceTask } from '@/core/post-turn-maintenance-queue'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { LogHelper } from '@/helpers/log-helper'
@@ -519,6 +519,7 @@ export class AgentHistoryManager {
     const baseCompletionParams = {
       dutyType: LLMDuties.ReAct,
       systemPrompt: AGENT_HISTORY_COMPACTION_SYSTEM_PROMPT,
+      usagePurpose: InferencePurpose.ContextCompaction,
       temperature: 0,
       disableThinking: true,
       trackProviderErrors: false
