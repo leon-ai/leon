@@ -2,9 +2,9 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import treeKill from 'tree-kill'
 
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { terminateProcessTree } from '@sdk/utils/process'
 
 const MAX_SESSIONS = 64
 const MAX_OUTPUT_CHARS = 256_000
@@ -286,15 +286,13 @@ export class ShellSessions {
           }
         }
       } else {
-        await new Promise<void>((resolve, reject) => {
-          treeKill(session.pid, signal, (error) => {
-            if (error && session.alive) {
-              reject(error)
-            } else {
-              resolve()
-            }
-          })
-        })
+        try {
+          await terminateProcessTree(session.pid, signal)
+        } catch (error) {
+          if (session.alive) {
+            throw error
+          }
+        }
       }
     }
 
