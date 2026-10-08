@@ -1,0 +1,179 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "hyperframes",
+  "toolkit_id": "media_production",
+  "name": "Hyperframes",
+  "description": "Create polished social videos and motion graphics with HTML/CSS and seekable animation; inspect scenes, verify timing and layout, and render local MP4 artifacts.",
+  "icon_name": "video-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "progressive_guidance": "Use this tool for social promos, kinetic typography and motion graphics. Leon authors HTML with the file tool; Hyperframes owns frame timing and rendering. Work in a new project or a copy of supplied source. Dependencies are installed beside the tool through Leon setup; Chrome is found or downloaded by the pinned CLI. Local rendering needs no provider account. Tool execution disables telemetry, automatic updates and external agent-skill installation. Author index.html with a directly visible root (no template wrapper), data-composition-id, data-width, data-height, finite data-duration and optional data-fps. Size the root with width/height 100%, not fixed CSS pixels. Use the supplied local assets/gsap.min.js and local fonts declared with @font-face; resolve media files before rendering. Register exactly one paused GSAP timeline per composition at window.__timelines[compositionId] after building it, including inside document.fonts.ready. Root and timeline IDs must match. Place multi-scene content in compositions/*.html as template-wrapped sub-compositions, with their style/script inside the template; mount them through data-composition-src, a matching data-composition-id, a stable unique HTML id, and explicit data-start/data-duration. All asset URLs inside sub-compositions resolve from the project root: use assets/... rather than ../assets/.... Keep connected endpoints and their connector in the same coordinate space and synchronized visibility interval. Prefer nodes and edges in one local SVG; SVG path coordinates belong to its viewBox, not the screen. For DOM-derived endpoints convert screen positions through the inverse getScreenCTM() before writing path coordinates. Scene timelines use local seconds. Use class clip with declared timing for timeline elements; Hyperframes owns clip visibility and media playback. Animate inner elements using x/y/scale/rotation/opacity; compute layout-derived tween values once after fonts are ready and before registering the timeline; avoid function-valued measurements, CSS transform conflicts, layout-property tweens, display/visibility/autoAlpha tweens on clips, wall-clock timers, unseeded randomness and network fetches during capture. Every audio needs an id; do not add crossorigin to media. inspect returns absolute scene times. Run a full strict check on the final source. Clear errors and warnings, inspect scene midpoints and transition seams, and watch the rendered video with sound. A static preview or passing check alone does not verify animation or visual quality.",
+  "functions": {
+    "catalog": {
+      "description": "Find reusable motion-graphics scenes, transitions and effects in the upstream catalog.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Describe the desired visual or motion, such as a kinetic headline reveal."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "query"
+        ]
+      },
+      "deduplicate_calls": false
+    },
+    "create": {
+      "description": "Scaffold a new HTML composition project and supply local GSAP assets.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute new project directory; existing directories are rejected."
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "portrait",
+              "landscape",
+              "square"
+            ],
+            "description": "Defaults to portrait (1080x1920)."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "projectPath"
+        ]
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Read the returned entryPath, scenePaths and assets/theme.css together. The scaffold supplies two valid template-wrapped scenes, matching host IDs, root-relative assets and paused timelines. Replace its example story and styling; keep the composition contract. The scaffold is not finished artwork. Keep fonts and media local."
+    },
+    "add": {
+      "description": "Install a discovered catalog component or scene into the working project.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing index.html."
+          },
+          "item": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Item name observed through catalog."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "projectPath",
+          "item"
+        ]
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Read the returned integration snippet and installed files. Adapt the component to the brief; do not assemble unrelated effects merely because they are available."
+    },
+    "inspect": {
+      "description": "Inspect composition tracks, source files and absolute scene timing without editing.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing index.html."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "projectPath"
+        ]
+      },
+      "deduplicate_calls": false
+    },
+    "check": {
+      "description": "Run full strict browser verification of composition contracts, layout and animation.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing index.html."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "projectPath"
+        ]
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Require scope=full, complete=true and checks.ok=true before delivery. Inspect findings and browser coverage. Visual review remains necessary.",
+      "background": true
+    },
+    "preview": {
+      "description": "Capture exact-time PNG frames and attach a bounded preview for visual review.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing index.html."
+          },
+          "times": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "items": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "Explicit seconds within the composition: scene midpoints and nearby transition positions."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "projectPath",
+          "times"
+        ]
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Use inspect to determine duration and scene boundaries. Review up to eight frames per call. Capture neighboring frames around important animation to catch clipping, poor staging or discontinuities. PNG artifacts retain full resolution.",
+      "background": true
+    },
+    "render": {
+      "description": "Render a completed local composition to MP4 and attach the finished video.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing index.html."
+          },
+          "quality": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "looks",
+              "delivery"
+            ],
+            "description": "Defaults to delivery. Use draft only for an explicitly useful iteration preview."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "projectPath"
+        ]
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Run a complete full check and inspect relevant preview frames first. Review the rendered MP4 for motion, pacing and sound. Retained execution handles are pending work: wait without resubmitting.",
+      "background": true
+    }
+  }
+}

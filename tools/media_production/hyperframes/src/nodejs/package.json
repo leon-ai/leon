@@ -1,0 +1,11 @@
+{
+  "name": "@leon-ai/hyperframes-tool",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@ffprobe-installer/ffprobe": "2.1.2",
+    "ffmpeg-static": "5.2.0",
+    "gsap": "3.14.2",
+    "hyperframes": "0.8.140"
+  }
+}

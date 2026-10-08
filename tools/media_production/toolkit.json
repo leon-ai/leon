@@ -8,9 +8,9 @@
     "image",
     "photocraft",
     "vectorcraft",
-    "effectcraft",
+    "hyperframes",
     "filmcraft",
     "lightcraft"
   ],
-  "progressive_guidance": "Use image for hosted image generation with profile defaults. Use photocraft for precise local image and layered-project edits: discover commands, inspect the source, edit headlessly, and visually verify the returned preview. Its desktop control is optional for work in the live app. Use vectorcraft for editable vector artwork, effectcraft for motion graphics and compositions, filmcraft for timeline editing, and lightcraft for RAW development and explicitly selected photo libraries. These tools run headlessly and deliver new artifacts. Load the Craft tools command registries before constructing edits. Use the document toolkit for Word documents, PDFs, charts; use music_audio tools for speech and audio processing."
+  "progressive_guidance": "Use image for hosted image generation with profile defaults. Use photocraft for precise local image and layered-project edits: discover commands, inspect the source, edit headlessly, and visually verify the returned preview. Its desktop control is optional for work in the live app. Use vectorcraft for editable vector artwork, hyperframes for HTML/CSS social videos and motion graphics, filmcraft for timeline editing, and lightcraft for RAW development and explicitly selected photo libraries. These tools run headlessly and deliver new artifacts. Load the Craft tools command registries before constructing edits. For Hyperframes, author local HTML projects with the file tool, reuse suitable catalog scenes, and check layout plus preview animation before rendering. Use the document toolkit for Word documents, PDFs, charts; use music_audio tools for speech and audio processing."
 }

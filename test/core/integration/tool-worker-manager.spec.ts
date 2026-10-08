@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { afterEach, expect, it, vi } from 'vitest'
 
 import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
@@ -38,6 +39,140 @@ it.each(['recordLimit', 'timeout', 'canceled'])(
 
 let home = ''
 let manager: ToolWorkerManager
+
+it('renders seekable HTML motion into durable profile artifacts and returns actionable validation findings', async () => {
+  await fixture(false)
+
+  const project = path.join(home, 'motion-project')
+  const source = path.join(project, 'index.html')
+  const context = {
+    toolkitId: 'media_production', toolId: 'hyperframes',
+    profileName: 'a', conversationSessionId: 'motion', parameters: {}
+  }
+  const run = (functionName: string, args: unknown[]): Promise<ToolRuntimeResult> =>
+    manager.execute({ ...context, functionName }, args, () => {})
+  const created = await run('create', [project, 'landscape'])
+
+  expect(created.success, created.message).toBe(true)
+  expect((await fs.stat(path.join(project, 'assets', 'gsap.min.js'))).size)
+    .toBeGreaterThan(0)
+  const scaffold = await run('check', [project])
+
+  expect(scaffold.success, scaffold.message).toBe(true)
+  expect(scaffold.output['result']).toMatchObject({
+    scope: 'full', complete: true,
+    checks: { ok: true, browserSkipped: false }
+  })
+  expect((await run('inspect', [project])).output['result']).toMatchObject({
+    timeline: { timeline: { duration: 6 } }
+  })
+
+  const html = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<style>
+html, body { margin: 0; width: 100%; height: 100%; }
+#root { position: relative; width: 100%; height: 100%; background: #101010; }
+#marker { position: absolute; left: 20px; top: 30px; width: 30px; height: 30px; background: #ee3a85; }
+</style><script src="assets/gsap.min.js"></script></head>
+<body><div id="root" data-composition-id="motion" data-start="0" data-duration="1" data-width="320" data-height="180" data-fps="12">
+<div id="marker" class="clip" data-start="0" data-duration="1" data-track-index="0"></div>
+</div><script>
+const timeline = gsap.timeline({ paused: true });
+timeline.fromTo('#marker', { x: 0 }, { x: 100, duration: 1, ease: 'none' }, 0);
+window.__timelines.motion = timeline;
+</script></body></html>`
+
+  await fs.writeFile(source, html)
+
+  const duplicate = await run('create', [project])
+
+  expect(duplicate.success).toBe(false)
+  expect(await fs.readFile(source, 'utf8')).toBe(html)
+
+  const inspected = await run('inspect', [project])
+
+  expect(inspected.success, inspected.message).toBe(true)
+  expect(inspected.output['result']).toMatchObject({
+    timeline: { timeline: { duration: 1 } }
+  })
+
+  const checked = await run('check', [project])
+
+  expect(checked.success, checked.message).toBe(true)
+  expect(checked.output['result']).toMatchObject({
+    scope: 'full', complete: true, checks: { ok: true, browserSkipped: false }
+  })
+  const preview = await run('preview', [project, [0, 0.5]])
+
+  expect(preview.success, preview.message).toBe(true)
+  expect(preview.modelFiles).toMatchObject([{ mediaType: 'image/png' }])
+  expect(preview.output['result']).toMatchObject({
+    modelPreviewAttached: true,
+    artifacts: [
+      { mime_type: 'image/png', filename: expect.any(String) },
+      { mime_type: 'image/png', filename: expect.any(String) }
+    ]
+  })
+
+  const rendered = await run('render', [project, 'draft'])
+
+  expect(rendered.success, rendered.message).toBe(true)
+
+  const artifact = (rendered.output['result'] as {
+    artifacts: Array<{ path: string, mime_type: string }>
+  }).artifacts[0]!
+  const require = createRequire(path.resolve(
+    'tools/media_production/hyperframes/src/nodejs/package.json'
+  ))
+  const ffmpeg = require('ffmpeg-static') as string
+  const ffprobe = require('@ffprobe-installer/ffprobe') as { path: string }
+  const metadata = spawnSync(ffprobe.path, [
+    '-v', 'error', '-show_entries',
+    'format=duration:stream=codec_name,width,height,r_frame_rate',
+    '-of', 'json', artifact.path
+  ], { encoding: 'utf8' })
+
+  expect(artifact.mime_type).toBe('video/mp4')
+  expect(artifact.path).toContain(path.join(
+    home, 'profiles', 'a', 'sessions', 'motion', 'artifacts', 'outputs'
+  ))
+  expect(metadata.status, metadata.stderr).toBe(0)
+  expect(JSON.parse(metadata.stdout)).toMatchObject({
+    format: { duration: '1.000000' },
+    streams: [{ codec_name: 'h264', width: 320, height: 180, r_frame_rate: '12/1' }]
+  })
+
+  // Verify motion in the encoded video, not merely in the source timeline:
+  // the marker must leave its initial pixel by the midpoint frame.
+  const frames = spawnSync(ffmpeg, [
+    '-v', 'error', '-i', artifact.path,
+    '-vf', 'select=eq(n\\,0)+eq(n\\,6)', '-vsync', '0',
+    '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'
+  ])
+  const frameBytes = 320 * 180 * 3
+  const pixel = (35 * 320 + 25) * 3
+
+  expect(frames.status, frames.stderr.toString()).toBe(0)
+  expect(frames.stdout.length).toBe(frameBytes * 2)
+  expect(frames.stdout[pixel]).toBeGreaterThan(180)
+  expect(frames.stdout[frameBytes + pixel]).toBeLessThan(30)
+  expect(await fs.readFile(source, 'utf8')).toBe(html)
+
+  await fs.writeFile(source, html.replace('window.__timelines.motion = timeline;', ''))
+
+  const invalid = await run('check', [project])
+
+  expect(invalid.success, invalid.message).toBe(true)
+  expect(invalid.output['result']).toMatchObject({
+    scope: 'full', complete: false,
+    checks: {
+      ok: false, browserSkipped: true,
+      lint: { findings: expect.arrayContaining([
+        expect.objectContaining({ severity: 'error' })
+      ]) }
+    }
+  })
+})
 
 it('compiles local documents and page images into durable conversation artifacts', async () => {
   await fixture(false)
