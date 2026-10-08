@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 
-import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
+import type { TranscriptionOutput } from './lib/transcription-schema'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { Network } from '@sdk/network'

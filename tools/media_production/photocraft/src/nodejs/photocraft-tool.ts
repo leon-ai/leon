@@ -321,6 +321,9 @@ export default class PhotoCraftTool extends Tool {
     }
   }
 
+  /**
+   * Resolves an owner-selected regular file before invoking the app.
+   */
   private async resolveSource(inputPath: string): Promise<string> {
     if (!path.isAbsolute(inputPath)) {
       throw new Error('inputPath must be an absolute local file path.')

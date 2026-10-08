@@ -1,3 +1,6 @@
+/**
+ * A timed speech segment with an optional speaker identity.
+ */
 export interface TranscriptionSegment {
   // Start time in seconds
   from: number
@@ -12,6 +15,9 @@ export interface TranscriptionSegment {
   speaker: string | null
 }
 
+/**
+ * Structured speech output consumed by transcript and audio workflows.
+ */
 export interface TranscriptionOutput {
   // Total audio duration in seconds
   duration: number

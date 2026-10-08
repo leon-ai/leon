@@ -242,6 +242,73 @@ it('delivers a large result before retiring a one-shot worker', async () => {
   expect(await fs.readFile(path.join(home, 'disposed'), 'utf8')).toBe('a\n')
 })
 
+it('preserves vector sources, publishes complete output batches and cleans workspaces after failures', async () => {
+  await fixture(false)
+  const source = path.join(home, 'source.vectorcraft')
+  const toolDirectory = path.join(home, 'profiles', 'a', 'tools', 'fixture', 'vector')
+
+  await fs.mkdir(path.join(toolDirectory, 'src', 'nodejs'), { recursive: true })
+  await fs.writeFile(path.join(toolDirectory, 'tool.json'), '{}')
+  await fs.writeFile(path.join(toolDirectory, 'src', 'nodejs', 'index.ts'), `
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import VectorCraftTool from '@@/tools/media_production/vectorcraft/src/nodejs/vectorcraft-tool'
+
+export default class Fixture extends VectorCraftTool {
+  async runCli(args) {
+    const project = args[args.indexOf('--export') + 1]
+    const source = args[args.indexOf('--in') + 1]
+    const directory = path.dirname(project)
+
+    await fs.writeFile(path.join(process.env.LEON_HOME, 'workspace-path'), directory)
+    await fs.writeFile(source, 'Edited copy')
+    await fs.writeFile(project, 'Edited copy')
+    const parameters = args.flatMap((arg, index) =>
+      arg === '--params' ? [JSON.parse(args[index + 1])] : []
+    )
+    const fail = parameters.some((params) => params.fail)
+
+    for (const params of parameters) {
+      if (params.path) {
+        await fs.writeFile(params.path, fail ? '' : 'Preview content')
+      }
+    }
+
+    return { stdout: '{}', stderr: '' }
+  }
+}
+`)
+  await fs.writeFile(source, 'Original content')
+  const context = {
+    toolkitId: 'fixture', toolId: 'vector', functionName: 'edit',
+    profileName: 'a', conversationSessionId: 'workspace', parameters: {}
+  }
+  const result = await manager.execute(context, [[{ command: 'fixture.edit' }], source], () => {})
+
+  expect(result.success, result.message).toBe(true)
+  expect(result.output['result']).toMatchObject({ modelPreviewAttached: true })
+  const output = result.output['result'] as { artifacts: Array<{ path: string }> }
+
+  expect(output.artifacts).toHaveLength(3)
+  expect(await fs.readFile(output.artifacts[0]!.path, 'utf8')).toBe('Edited copy')
+  expect(await fs.readFile(source, 'utf8')).toBe('Original content')
+  expect(result.modelFiles).toMatchObject([{ mediaType: 'image/png' }])
+  const workspace = await fs.readFile(path.join(home, 'workspace-path'), 'utf8')
+
+  expect(await fs.stat(workspace).catch(() => null)).toBeNull()
+  const failed = await manager.execute(context, [
+    [{ command: 'fixture.edit', params: { fail: true } }], source
+  ], () => {})
+
+  expect(failed.success).toBe(false)
+  const failedWorkspace = await fs.readFile(path.join(home, 'workspace-path'), 'utf8')
+
+  expect(await fs.stat(failedWorkspace).catch(() => null)).toBeNull()
+  expect(await fs.readFile(source, 'utf8')).toBe('Original content')
+  expect(await fs.readdir(path.join(home, 'profiles', 'a', 'sessions', 'workspace', 'artifacts', 'outputs')))
+    .toHaveLength(3)
+})
+
 it('runs two workers at once and cancellation affects only the selected call', async () => {
   await fixture(true)
   const firstController = new AbortController()
