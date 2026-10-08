@@ -1,0 +1,11 @@
+{
+  "name": "@leon-ai/slidev-tool",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@iconify-json/lucide": "1.2.141",
+    "@slidev/cli": "53.0.0",
+    "@slidev/theme-default": "0.25.0",
+    "playwright-chromium": "1.64.0"
+  }
+}

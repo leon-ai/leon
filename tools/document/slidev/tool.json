@@ -1,0 +1,229 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "slidev",
+  "toolkit_id": "document",
+  "name": "Slidev",
+  "description": "Create and open animated browser presentations with icons, motion and speaker notes; inspect click states and export requested downloads.",
+  "icon_name": "slideshow-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "progressive_guidance": "Use Slidev for presentations and animated slide decks. Work in a dedicated project or copy supplied source. create supplies editable slides.md, style.css, public/ assets and pinned package.json. The scaffold is a starting point: owner requests for theme, layout, colors, typography, icons and animation override its defaults. Replace or remove scaffold styles and components as needed; do not preserve them against the owner’s design choices. Additional themes require compatible installed dependencies. Author with the file tool; separate slides with --- and use YAML frontmatter for layouts and transitions. Built-in layouts: cover, section, default, two-cols (use ::right:: for the second column). Use <lucide-icon-name /> from the installed Lucide collection. Use CSS or v-motion for purposeful animation and v-click for staged reveals when appropriate. Keep icons, fonts and images local; the scaffold disables remote font downloads. Put selected chart/image assets in public/ and reference /filename. Use document.echarts for grounded charts and media_production tools for images; never invent quantitative evidence. Custom CSS and Vue components are supported. For literal code containing Vue interpolation or HTML, use fenced code blocks or <pre v-pre><code> with HTML-escaped text; do not place raw code in Vue-parsed markup. Keep HTML tags balanced. Use short headlines, generous spacing, a coherent palette and purposeful motion. inspect exposes parsed content and notes. check visits all slide/click states (up to 240). It returns overflow, missing-image, request and runtime findings; it does not judge aesthetics or verify the complete motion path. preview returns up to six specific states with model images; compare early/late waitMs states for meaningful motion, and adjacent click steps when the owner requested staged reveals. Use present after verification to start or reuse a native Slidev server and open the deck in the host’s default browser. Return audienceUrl and presenterUrl with navigation controls. Do not substitute export for opening a presentation. present and stop are conversation-owned live sessions, not pending background execution handles. Stop the returned sessionId when the owner finishes; worker/server shutdown also closes it. URLs are loopback on the machine running the tool, including Satellite: they are not remote client links. For a remote server use Slidev on the owner’s device through Satellite with the project available there; never silently expose the server publicly. browserOpened reports the OS opener result; if false explain browserError and the host-local scope, and use the existing browser/computer tools on that same device to verify or open the deck. Presenter view has notes and navigation synchronized with audience view. Space/Right advances reveals/slides, Left goes back, f toggles fullscreen. Export only requested download formats. Web export preserves browser animation and is delivered as a ZIP with serve.mjs; extract and run node serve.mjs, then open its printed localhost URL. It can also be hosted as a static site. PDF/PNG/PPTX exports are static; withClicks creates separate states, not native PowerPoint animation. Normal PPTX contains slide images; pptx-editable rebuilds supported text/shapes and rasterizes unsupported elements, so inspect fidelity. Source ZIP is optional (includeSource=true) and contains speaker notes; keep it private when notes should be private. Shared web builds omit notes by default. HTML is downloaded rather than executed inside Leon. Dependencies are installed by Leon setup; no provider account is required. Retained execution handles are pending work: wait without resubmitting.",
+  "functions": {
+    "create": {
+      "description": "Create a new styled presentation project with local icon support.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute new project directory; existing directories are rejected."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "projectPath",
+          "title"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Read slides.md and style.css together, then replace example content with the requested story. Preserve the safe literal-code pattern (fenced blocks or pre v-pre with escaped text), automatic meaningful motion, fully visible content and a cohesive visual direction."
+    },
+    "inspect": {
+      "description": "Inspect slide titles, Markdown, notes, layouts and explicitly declared click counts.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing slides.md."
+          }
+        },
+        "required": [
+          "projectPath"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Actual computed click totals are returned by preview and check; declaredClicks may be absent."
+    },
+    "check": {
+      "description": "Check the whole deck or selected repair slides for overflow, missing assets and runtime failures.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing slides.md."
+          }
+        },
+        "required": [
+          "projectPath"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Check the entire deck before presenting. Inspect checkedStates, findings, errors and failedRequests. Visual review remains necessary.",
+      "background": true
+    },
+    "preview": {
+      "description": "Capture selected slide/click states as PNG artifacts and attach bounded model previews.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing slides.md."
+          },
+          "states": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "items": {
+              "type": "object",
+              "properties": {
+                "slide": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "click": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Zero means before the first reveal; defaults to zero."
+                },
+                "waitMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000,
+                  "description": "Delay after navigation/click before capture; defaults to 750. Compare early/late values to inspect motion."
+                }
+              },
+              "required": [
+                "slide"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "projectPath",
+          "states"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Check frame content, typography, contrast and clipping. Inspect meaningful animation and click states. All full images remain downloadable even when the model evidence budget is reached.",
+      "background": true
+    },
+    "present": {
+      "description": "Start or reuse a managed Slidev presentation and open its native audience or presenter view.",
+      "concurrency": "serial",
+      "deduplicate_calls": false,
+      "background": true,
+      "progressive_guidance": "Run check and visually inspect previews first. By default opens audience view in the tool host’s default browser. Use view=presenter to open notes and synchronized controls. If the owner specifies a browser, use openBrowser=false and open the returned URL with the existing browser tool in that browser. Keep both links in the response. A returned sessionId owns a running server; it is not a pending execution handle. browserOpened only confirms OS opening succeeded; verify the visible deck with the browser tool before claiming it appeared. Loopback URLs work on the tool host only; remote owners need device-side execution through Satellite or an explicitly configured access path. Do not return downloads instead of presenting.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing slides.md on the machine executing this tool."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "view": {
+                "type": "string",
+                "enum": [
+                  "audience",
+                  "presenter"
+                ],
+                "description": "Defaults to audience; presenter includes notes and next-slide preview."
+              },
+              "openBrowser": {
+                "type": "boolean",
+                "description": "Defaults to true. False starts/reuses the server and returns links without opening a browser."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "projectPath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "stop": {
+      "description": "Stop a live presentation owned by this conversation and release its server.",
+      "concurrency": "serial",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "description": "Session identifier returned by present."
+          }
+        },
+        "required": [
+          "sessionId"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "export": {
+      "description": "Export requested web/PDF/PNG/PPTX downloads, optionally with an editable source archive.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "projectPath": {
+            "type": "string",
+            "description": "Absolute working project directory containing slides.md."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "web",
+                  "pdf",
+                  "png",
+                  "pptx",
+                  "pptx-editable"
+                ],
+                "description": "Defaults to web, the format preserving browser animation."
+              },
+              "withClicks": {
+                "type": "boolean",
+                "description": "Static exports can include a separate page per click state; defaults to false."
+              },
+              "includeNotes": {
+                "type": "boolean",
+                "description": "Include speaker notes in the shared web deck; defaults to false. Requested source ZIPs always include notes."
+              },
+              "includeSource": {
+                "type": "boolean",
+                "description": "Attach an editable source ZIP, including speaker notes; defaults to false."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "projectPath"
+        ],
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false,
+      "progressive_guidance": "Use present to open and play the deck; export creates downloads and starts no server. Run check and inspect previews first. Export only formats requested by the owner. includeSource defaults to false; request it only when an editable archive is wanted. Web ZIP includes a local viewer: extract, run node serve.mjs and open its printed URL. Source ZIP can be edited and reopened with present after extraction. Do not promise native PowerPoint animation or claim the browser deck plays directly inside Leon.",
+      "background": true
+    }
+  }
+}

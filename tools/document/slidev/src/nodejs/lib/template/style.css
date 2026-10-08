@@ -1,0 +1,97 @@
+:root {
+  --slidev-theme-primary: #67e8c4;
+  --leon-ink: #101a2c;
+  --leon-muted: #b4c3d9;
+}
+
+.slidev-layout {
+  background: radial-gradient(ellipse at 95% 0%, #183b43, transparent 48%), var(--leon-ink);
+  color: #f4f7fc;
+  font-size: 26px;
+  line-height: 1.5;
+  padding: 68px 76px;
+}
+
+.slidev-layout h1 {
+  font-size: 54px;
+  font-weight: 750;
+  line-height: 1.12;
+  letter-spacing: -0.04em;
+  margin: 20px 0 32px;
+  max-width: 1050px;
+}
+
+.slidev-layout p {
+  color: var(--leon-muted);
+  line-height: 1.55;
+}
+
+.slidev-layout.cover h1,
+.slidev-layout.section h1 {
+  font-size: 76px;
+  max-width: 1000px;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--slidev-theme-primary);
+  font-size: 16px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.signature {
+  margin-top: 56px;
+  font-size: 16px;
+  color: var(--leon-muted);
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  margin-top: 44px;
+}
+
+.card,
+.spotlight {
+  padding: 30px;
+  border: 1px solid #40566d;
+  border-radius: 20px;
+  background: #18283c;
+}
+
+.card svg,
+.spotlight svg {
+  width: 40px;
+  height: 40px;
+  color: var(--slidev-theme-primary);
+}
+
+.card h3 {
+  margin: 22px 0 12px;
+  font-size: 28px;
+}
+
+.card p,
+.spotlight p {
+  font-size: 22px;
+}
+
+.slidev-layout.two-cols {
+  gap: 48px;
+}
+
+.spotlight {
+  margin-top: 40px;
+}
+
+.spotlight pre {
+  font-size: 18px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+

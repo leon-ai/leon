@@ -1,13 +1,14 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Document",
-  "description": "Create documents and charts, and deliver downloadable conversation artifacts.",
+  "description": "Create documents and charts, open animated browser presentations, and export requested files.",
   "icon_name": "file-text-line",
   "context_files": [],
   "tools": [
     "document",
     "typst",
-    "echarts"
+    "echarts",
+    "slidev"
   ],
-  "progressive_guidance": "Use document.create for local editable Word files, typst.compile for local PDFs and document page images, and echarts.render with native ECharts JSON options for data charts. Charts are separate SVG/PNG artifacts that can be embedded in documents or media projects. Hosted document generation uses configured profile defaults. Prefer the document-authoring skill, inspect the resulting content and layout, and revise before delivery."
+  "progressive_guidance": "Use document.create for local editable Word files, typst.compile for local PDFs and document page images, and echarts.render with native ECharts JSON options for data charts. Charts are separate SVG/PNG artifacts that can be embedded in documents or media projects. Hosted document generation uses configured profile defaults. Prefer the document-authoring skill, inspect the resulting content and layout, and revise before delivery. Use slidev for animated browser presentations, local icons, slide/click previews and PDF/PNG/PPTX exports. Use slidev.present to open the verified deck with native audience/presenter views; export only requested downloads and include source archives only when requested. Presentation links are local to the execution host; use Satellite for owner-device presentation when needed. Browser decks preserve motion; Office and PDF exports are static. Inspect layouts and animation states before delivery."
 }

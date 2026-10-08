@@ -2,7 +2,7 @@ import { ToolConcurrency } from '@/types'
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { spawnSync } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -39,6 +39,233 @@ it.each(['recordLimit', 'timeout', 'canceled'])(
 
 let home = ''
 let manager: ToolWorkerManager
+
+it('delivers animated browser presentations, static exports and editable sources through profile workers', async () => {
+  await fixture(false)
+
+  const project = path.join(home, 'presentation')
+  const context = {
+    toolkitId: 'document', toolId: 'slidev',
+    profileName: 'a', conversationSessionId: 'presentation', parameters: {}
+  }
+  const run = async (functionName: string, args: unknown[]): Promise<Record<string, unknown>> => {
+    const result = await manager.execute(
+      { ...context, functionName }, args, () => {},
+      { concurrency: ['present', 'stop'].includes(functionName) ? ToolConcurrency.Serial : ToolConcurrency.Parallel }
+    )
+
+    expect(result.success, JSON.stringify(result)).toBe(true)
+
+    return { ...result.output['result'] as Record<string, unknown>, modelFiles: result.modelFiles }
+  }
+  const created = await run('create', [project, 'Leon mechanisms'])
+  await expect(fs.stat(path.join(project, 'pnpm-workspace.yaml'))).rejects.toThrow()
+  const source = created['entryPath'] as string
+  const markdown = `---
+theme: default
+title: Leon mechanisms
+fonts:
+  provider: none
+monaco: false
+twoslash: false
+mcp: false
+canvasWidth: 1280
+aspectRatio: 16/9
+---
+
+# Ground, act, verify
+
+<lucide-shield-check />
+
+<div v-click id="reveal">Tools return inspectable evidence.</div>
+
+<!-- Private speaker note for the presenter. -->
+
+---
+
+# Profile isolation
+
+Every profile owns its settings, sessions and artifacts.
+`
+
+  await fs.writeFile(source, markdown)
+  await fs.writeFile(path.join(project, '.env'), 'PRIVATE_FIXTURE=secret')
+
+  const duplicate = await manager.execute({ ...context, functionName: 'create' }, [project, 'Duplicate'], () => {})
+
+  expect(duplicate.success).toBe(false)
+  expect(await fs.readFile(source, 'utf8')).toBe(markdown)
+
+  const inspected = await run('inspect', [project])
+
+  expect(inspected).toMatchObject({ title: 'Leon mechanisms', slideCount: 2 })
+
+  const preview = await run('preview', [project, [{ slide: 1, click: 0 }, { slide: 1, click: 1 }]])
+
+  expect(preview, JSON.stringify(preview)).toMatchObject({ ok: true, modelPreviewCount: 2, checkedStates: 2 })
+  expect(preview['modelFiles']).toHaveLength(2)
+  expect(preview['states']).toMatchObject([{ totalClicks: 1 }, { totalClicks: 1 }])
+
+  const previews = preview['artifacts'] as Array<{ path: string }>
+
+  expect((await fs.readFile(previews[0]!.path)).equals(await fs.readFile(previews[1]!.path))).toBe(false)
+
+  const checked = await run('check', [project])
+
+  expect(checked).toMatchObject({ ok: true, checkedStates: 3, findingCount: 0 })
+
+  for (const format of ['pdf', 'png', 'pptx', 'pptx-editable']) {
+    const exported = await run('export', [project, { format, withClicks: true }])
+    const artifacts = exported['artifacts'] as Array<{ path: string, filename: string }>
+    const primary = await fs.readFile(artifacts[0]!.path)
+
+    expect(exported['animated']).toBe(false)
+    expect(primary.length).toBeGreaterThan(100)
+    expect(artifacts.some((artifact) => artifact.filename === 'presentation-source.zip')).toBe(false)
+
+    if (format === 'pdf') {
+      expect(primary.subarray(0, 4).toString()).toBe('%PDF')
+    } else if (format === 'png') {
+      expect(primary.subarray(1, 4).toString()).toBe('PNG')
+      expect(artifacts).toHaveLength(3)
+    } else {
+      const unpacked = path.join(home, format)
+      const archive = path.join(home, `${format}.zip`)
+
+      await fs.copyFile(artifacts[0]!.path, archive)
+      await extractArchive(archive, unpacked)
+      expect(await fs.readdir(path.join(unpacked, 'ppt', 'slides'))).toContain('slide3.xml')
+
+      if (format === 'pptx-editable') {
+        expect(await fs.readFile(path.join(unpacked, 'ppt', 'slides', 'slide1.xml'), 'utf8')).toContain('Ground, act, verify')
+      }
+    }
+  }
+
+  const web = await run('export', [project, { includeSource: true }])
+  const artifacts = web['artifacts'] as Array<{ path: string, filename: string }>
+  const viewer = path.join(home, 'viewer')
+  const editable = path.join(home, 'editable')
+
+  expect(web['animated']).toBe(true)
+  expect(web).not.toHaveProperty('presentationUrl')
+  expect(artifacts[0]!.path).toContain(path.join(home, 'profiles', 'a', 'sessions', 'presentation'))
+  await extractArchive(artifacts[0]!.path, viewer)
+  await extractArchive(artifacts[1]!.path, editable)
+  expect(await fs.readFile(path.join(editable, 'slides.md'), 'utf8')).toBe(markdown)
+  expect(await fs.stat(path.join(editable, '.env')).catch(() => null)).toBeNull()
+
+  const require = createRequire(path.resolve('tools/document/slidev/src/nodejs/package.json'))
+  const { chromium } = require('playwright-chromium') as typeof import('../../../tools/document/slidev/src/nodejs/node_modules/playwright-chromium')
+  const browser = await chromium.launch()
+  const server = spawn(process.execPath, [path.join(viewer, 'serve.mjs'), '0'], { stdio: ['ignore', 'pipe', 'pipe'] })
+
+  try {
+    const url = await new Promise<string>((resolve, reject) => {
+      server.once('error', reject)
+      server.once('exit', (code) => reject(new Error(`Viewer exited with ${code}`)))
+      server.stdout.once('data', (data: Buffer) => resolve(data.toString().trim().replace('Present at ', '')))
+    })
+    const page = await browser.newPage()
+
+    await page.addInitScript(() => localStorage.setItem('slidev-wake-lock', 'false'))
+    await page.goto(url, { waitUntil: 'networkidle' })
+    await expect.poll(() => page.locator('#reveal').evaluate((element) => getComputedStyle(element).opacity)).toBe('0')
+    expect(await page.locator('.slidev-page-1 .slidev-layout svg').count()).toBeGreaterThan(0)
+    await page.keyboard.press('ArrowRight')
+    await expect.poll(() => page.locator('#reveal').evaluate((element) => getComputedStyle(element).opacity)).toBe('1')
+    await page.keyboard.press('ArrowRight')
+    await expect.poll(() => page.locator('.slidev-page-2').isVisible()).toBe(true)
+
+    // Observe OS opening requests without launching an application in the test.
+    if (process.platform === 'linux' || process.platform === 'darwin') {
+      const bin = path.join(home, 'bin')
+      const opener = path.join(bin, process.platform === 'darwin' ? 'open' : 'xdg-open')
+
+      await fs.mkdir(bin)
+      await fs.writeFile(opener, `#!/usr/bin/env node
+require('node:fs').appendFileSync(require('node:path').join(process.env.LEON_HOME, 'opened-urls'), process.argv[2] + '\\n')
+`, { mode: 0o755 })
+      vi.stubEnv('PATH', `${bin}${path.delimiter}${process.env['PATH']}`)
+      vi.stubEnv('DISPLAY', ':fixture')
+    }
+
+    const live = await run('present', [project, { openBrowser: false }])
+    const audienceUrl = live['audienceUrl'] as string
+    const presenterUrl = live['presenterUrl'] as string
+    const sessionId = live['sessionId'] as string
+
+    expect(live).toMatchObject({ running: true, reused: false, browserOpened: false, urlScope: 'tool-host' })
+    expect(await run('present', [project, { openBrowser: false }])).toMatchObject({
+      sessionId, audienceUrl, presenterUrl, reused: true
+    })
+
+    if (process.platform === 'linux' || process.platform === 'darwin') {
+      expect(await fs.stat(path.join(home, 'opened-urls')).catch(() => null)).toBeNull()
+      expect(await run('present', [project])).toMatchObject({ browserOpened: true, url: audienceUrl })
+      expect(await run('present', [project, { view: 'presenter' }])).toMatchObject({
+        browserOpened: true, url: presenterUrl, reused: true
+      })
+      expect((await fs.readFile(path.join(home, 'opened-urls'), 'utf8')).trim().split('\n'))
+        .toEqual([audienceUrl, presenterUrl])
+
+      const opener = path.join(home, 'bin', process.platform === 'darwin' ? 'open' : 'xdg-open')
+
+      await fs.writeFile(opener, '#!/usr/bin/env node\nprocess.exit(1)\n')
+      expect(await run('present', [project])).toMatchObject({
+        running: true, reused: true, browserOpened: false, browserError: expect.any(String)
+      })
+    }
+
+    for (const other of [
+      { ...context, conversationSessionId: 'another-conversation' },
+      { ...context, profileName: 'b' }
+    ]) {
+      const denied = await manager.execute(
+        { ...other, functionName: 'stop' }, [sessionId], () => {},
+        { concurrency: ToolConcurrency.Serial }
+      )
+
+      expect(denied.success).toBe(false)
+      expect(denied.message).toContain('unavailable in this conversation')
+    }
+
+    await page.goto(audienceUrl, { waitUntil: 'networkidle' })
+    await expect.poll(() => page.locator('#reveal').evaluate((element) => getComputedStyle(element).opacity)).toBe('0')
+    await page.keyboard.press('ArrowRight')
+    await expect.poll(() => page.locator('#reveal').evaluate((element) => getComputedStyle(element).opacity)).toBe('1')
+
+    const presenter = await browser.newPage()
+
+    await presenter.addInitScript(() => localStorage.setItem('slidev-wake-lock', 'false'))
+    await presenter.goto(presenterUrl, { waitUntil: 'networkidle' })
+    await expect.poll(() => presenter.locator('body').innerText()).toContain('Private speaker note for the presenter.')
+    await presenter.keyboard.press('ArrowRight')
+    await presenter.keyboard.press('ArrowRight')
+    await expect.poll(() => presenter.evaluate('window.__slidev__.nav.currentSlideNo')).toBe(2)
+    await expect.poll(() => page.evaluate('window.__slidev__.nav.currentSlideNo')).toBe(2)
+
+    expect(await run('stop', [sessionId])).toMatchObject({ running: false })
+    await expect.poll(() => fetch(audienceUrl).then(() => true, () => false)).toBe(false)
+
+    const restarted = await run('present', [project, { openBrowser: false }])
+
+    expect(restarted['sessionId']).not.toBe(sessionId)
+    await manager.dispose()
+    await expect.poll(() => fetch(restarted['audienceUrl'] as string).then(() => true, () => false)).toBe(false)
+    manager = new ToolWorkerManager()
+  } finally {
+    server.kill()
+    await browser.close()
+  }
+
+  await fs.writeFile(source, markdown.replace(
+    'Every profile owns',
+    '<img :src="\'/missing.png\'" />\n\nEvery profile owns'
+  ))
+
+  expect(await run('check', [project])).toMatchObject({ ok: false })
+}, 300_000)
 
 it('renders seekable HTML motion into durable profile artifacts and returns actionable validation findings', async () => {
   await fixture(false)
