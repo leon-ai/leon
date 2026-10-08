@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
+import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import type {
   AgentCallableFunction,
   AgentToolCatalog,
@@ -21,6 +23,7 @@ import {
   AGENT_TOOLKIT_LOADER_NAME,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
+  AgentModelResponseTimeoutError,
   buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentToolCatalog,
   evaluateAgentToolkitPreloadCost,
@@ -47,11 +50,13 @@ import {
   AGENT_MAX_PARALLEL_TOOL_CALLS,
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
-  AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
+  AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
+  AGENT_MODEL_RESPONSE_TIMEOUT_MS
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import {
   LLMDuties,
   LLMProviders,
+  CompletionFailureKind,
   type AgentToolTranscriptMessage,
   type ProviderReasoningItem,
   type OpenAIToolCall,
@@ -3191,7 +3196,7 @@ describe('model response status', () => {
     }
   )
 
-  it('reopens waiting for a retry with the new attempt timestamp', async () => {
+  it('reports retries without resetting the total elapsed time', async () => {
     let finish!: (result: { output: string }) => void
     let params!: CompletionParams
     coreMocks.prompt.mockImplementationOnce((_messages, input) => {
@@ -3211,19 +3216,113 @@ describe('model response status', () => {
       elapsedMs: 0, inferenceTimeoutMs: 120_000, streamIdleTimeoutMs: 30_000,
       lastEvent: 'dispatched'
     }
+    const startedAt = Date.now()
     try {
       params.onAttempt?.(attempt)
       params.onStreamEvent?.({ type: 'tool-input-start' })
-      params.onAttempt?.({ ...attempt, outcome: 'failed' })
+      params.onAttempt?.({ ...attempt, outcome: 'failed', failureKind: CompletionFailureKind.Timeout })
+      expect(statuses().at(-1)).toMatchObject({
+        state: ModelResponseState.Retrying, retryReason: CompletionFailureKind.Timeout
+      })
       await vi.advanceTimersByTimeAsync(1_000)
       params.onAttempt?.({ ...attempt, attemptId: 'attempt-2', startedAt: Date.now() })
-      expect(statuses().at(-1)).toMatchObject({ state: ModelResponseState.Waiting, startedAt: Date.now() })
+      expect(statuses().at(-1)).toMatchObject({
+        state: ModelResponseState.Waiting, startedAt, attempt: 2,
+        deadlineAt: startedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS,
+        retryReason: CompletionFailureKind.Timeout, lastActivityAt: null
+      })
       params.onStreamEvent?.({ type: 'stream-open' })
       expect(statuses().at(-1)?.state).toBe(ModelResponseState.Connected)
+      expect(statuses().at(-1)?.lastActivityAt).toBe(Date.now())
     } finally {
       finish({ output: 'Done.' })
       await pending
     }
+  })
+
+  it.each(['timeout', 'empty'])('bounds %s retries and silent reasoning while saving progress without another inference', async (firstResponse) => {
+    vi.spyOn(LogHelper, 'timeEnd').mockImplementation(() => {})
+    const attempts: CompletionParams[] = []
+    const runChatCompletion = vi.fn((_history, params: CompletionParams) => {
+      attempts.push(params)
+      params.onStreamEvent?.({ type: 'stream-open' })
+      params.onStreamEvent?.({ type: 'response-metadata' })
+      if (attempts.length === 1 && firstResponse === 'empty') {
+        params.onStreamEvent?.({ type: 'finish' })
+        return Promise.resolve({ data: {
+          choices: [{ message: { content: '' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 0, completion_tokens: 0 }
+        } })
+      }
+      if (attempts.length === 2) {
+        params.onStreamEvent?.({ type: 'reasoning-start' })
+      }
+      return new Promise(() => {})
+    })
+    coreMocks.prompt.mockImplementation((history, params) => runCompletionAttempt(
+      { modelName: 'test-model', runChatCompletion }, LLMProviders.OpenAI, history,
+      { ...params, data: params.data ?? null, remoteProviderErrorRetries: 0 } as PreparedCompletionParams,
+      'deadline-test', (retryParams) => coreMocks.prompt(history, retryParams), vi.fn()
+    ))
+    const duty = new ReActLLMDuty({ input: 'Verify the saved results.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const priorExecution = {
+      function: 'example.verify', status: 'success', observation: 'Verified the first result.'
+    }
+    const trackedSteps = [{ label: 'Publish verified results', status: 'in_progress' as const }]
+    const pending = runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Verify the saved results.' }],
+      catalog: createCatalog(), initialExecutionHistory: [priorExecution],
+      initialTrackedSteps: trackedSteps,
+      callModel: (messages, tools, options, checkpoint) => duty['callAgentModel'](
+        messages, 'Follow the request.', tools, options, checkpoint
+      ),
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    await vi.advanceTimersByTimeAsync(120_001)
+    expect(attempts).toHaveLength(2)
+    expect(attempts[0]?.signal?.aborted).toBe(firstResponse === 'timeout')
+    expect(attempts[1]?.signal?.aborted).toBe(false)
+    await vi.advanceTimersByTimeAsync(AGENT_MODEL_RESPONSE_TIMEOUT_MS - 120_001)
+    const result = await pending
+    expect(attempts.at(-1)?.signal?.aborted).toBe(true)
+    expect(result.intent).toBe('error')
+    expect(result.answer).toContain('timed out across all attempts')
+    expect(result.answer).toContain('Publish verified results')
+    expect(result.answer).not.toContain('May I continue')
+    expect(result.executionHistory).toEqual([priorExecution])
+    expect(result.trackedSteps).toEqual(trackedSteps)
+    expect(statuses().at(-1)?.state).toBe(ModelResponseState.Completed)
+    const inferenceCount = coreMocks.prompt.mock.calls.length
+    await duty['prepareContinuation'](result.transcript, {
+      originalInput: 'Verify the saved results.',
+      trackedSteps,
+      executionHistory: [priorExecution],
+      loadedToolkitIds: [],
+      activeSkillId: null
+    })
+    expect(coreMocks.prompt).toHaveBeenCalledTimes(inferenceCount)
+    expect(duty['responseTraceCollector'].snapshot({}).inferences?.at(-1)?.failureKind).toBe(CompletionFailureKind.Timeout)
+  })
+
+  it.each(['review', 'finalization'])('retains task state without restarting exhausted %s recovery', async (phase) => {
+    const trackedSteps = [{ label: 'Verify the deliverable', status: 'in_progress' as const }]
+    const callModel = vi.fn(async (_messages, _tools, options) => {
+      if (!options.isCompletionReview && !options.isFinalizationAttempt) {
+        return { textContent: 'Proposed result.' }
+      }
+      throw new AgentModelResponseTimeoutError()
+    })
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [{ role: 'user', content: 'Verify the deliverable.' }],
+      catalog: createCatalog(), initialTrackedSteps: trackedSteps, callModel,
+      ...(phase === 'finalization' ? { maxIterations: 0, finishingIterations: 0 } : {}),
+      executeFunction: vi.fn(), loadAgentSkill: async () => null
+    })
+    expect(result.intent).not.toBe('answer')
+    expect(result.answer).toContain('timed out across all attempts')
+    expect(result.trackedSteps).toEqual(trackedSteps)
+    expect(callModel).toHaveBeenCalledTimes(phase === 'review' ? 2 : 1)
   })
 })
 

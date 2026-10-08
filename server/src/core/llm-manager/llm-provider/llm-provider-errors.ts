@@ -173,7 +173,7 @@ export function getConnectionErrorCode(error: unknown): string | undefined {
 /**
  * Separate inference deadlines from failures to establish a connection.
  */
-function isTimeoutLikeError(error: unknown): boolean {
+export function isTimeoutLikeError(error: unknown): boolean {
   if (getConnectionErrorCode(error)) {
     return false
   }

@@ -43,6 +43,7 @@ import { CONFIG_MANAGER } from '@/config'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 
 const TRACE_SAVE_INTERVAL_MS = 1_000
+const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
 
 function getLLMProviderName(): LLMProviders {
   const provider = CONFIG_STATE.getModelState().getAgentProvider()
@@ -57,6 +58,7 @@ function getLLMProviderName(): LLMProviders {
 import {
   AGENT_TEMPERATURE,
   AGENT_INFERENCE_TIMEOUT_MS,
+  AGENT_MODEL_RESPONSE_TIMEOUT_MS,
   AGENT_TIMEOUT_MAX_RETRIES,
   CHARS_PER_TOKEN,
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
@@ -97,6 +99,7 @@ import {
   AGENT_COMPLETION_REVIEW_SCHEMA,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
+  AgentModelResponseTimeoutError,
   buildAgentProgressiveGuidanceSystemPrompt,
   buildAgentConnectionGuidance,
   buildAgentToolCatalog,
@@ -1177,23 +1180,38 @@ export class ReActLLMDuty extends LLMDuty {
     let diagnosisTimer: NodeJS.Timeout | null = null
     const toolCallAbortController = new AbortController()
 
+    const modelResponseStartedAt = Date.now()
+    const modelResponseDeadlineAt = modelResponseStartedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
     const modelStatus: ModelResponseStatus = {
       requestId: randomUUID(),
       sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
-      startedAt: Date.now(),
-      state: ModelResponseState.Waiting
+      startedAt: modelResponseStartedAt,
+      state: ModelResponseState.Waiting,
+      attempt: 1,
+      deadlineAt: modelResponseDeadlineAt
     }
+    let modelAttempt = 0
+    let lastActivityUpdateAt = 0
+    const responseAbortController = new AbortController()
+    const cancellationSignal = AbortSignal.any([
+      responseAbortController.signal,
+      ...(this.signal ? [this.signal] : [])
+    ])
+    // The same signal reaches every retry, so extending an attempt cannot
+    // extend the owner's total wait or start another recovery cycle.
+    const abortModelResponse = (): void => {
+      responseAbortController.abort(new AgentModelResponseTimeoutError())
+    }
+    let responseDeadlineTimer = setTimeout(abortModelResponse, AGENT_MODEL_RESPONSE_TIMEOUT_MS)
     // Abort signals may be delivered from another request's context.
     const emitModelStatus = AsyncResource.bind((
-      state: ModelResponseState,
-      startedAt = modelStatus.startedAt
+      state: ModelResponseState
     ): void => {
-      if (this.signal?.aborted && state !== ModelResponseState.Completed) {
+      if (cancellationSignal.aborted && state !== ModelResponseState.Completed) {
         return
       }
 
       modelStatus.state = state
-      modelStatus.startedAt = startedAt
       SOCKET_SERVER.emitToChatClients('model-response-status', { ...modelStatus }, {
         sessionId: modelStatus.sessionId
       })
@@ -1251,12 +1269,28 @@ export class ReActLLMDuty extends LLMDuty {
           this.responseTraceCollector.recordInference({ ...timing, phase })
           this.scheduleTraceSave()
           if (timing.outcome === 'started') {
-            emitModelStatus(ModelResponseState.Waiting, timing.startedAt)
-          } else {
+            // A completed but empty response can retry after its finish event.
+            // Every attempt still consumes the original request's deadline.
+            clearTimeout(responseDeadlineTimer)
+            responseDeadlineTimer = setTimeout(
+              abortModelResponse, Math.max(0, modelResponseDeadlineAt - Date.now())
+            )
+            modelAttempt += 1
+            modelStatus.attempt = modelAttempt
+            modelStatus.lastActivityAt = null
+            emitModelStatus(ModelResponseState.Waiting)
+          } else if (timing.outcome === 'completed') {
             clearModelStatus()
+          } else {
+            modelStatus.retryReason = timing.failureKind
+            emitModelStatus(ModelResponseState.Retrying)
           }
         },
         onStreamEvent: (event): void => {
+          if (event.type === 'finish') {
+            // Provider generation is done; local artifact work has its own lifecycle.
+            clearTimeout(responseDeadlineTimer)
+          }
           if (event.type === 'stream-open' && !options.isCompletionReview) {
             // A retry replaces any unfinished previews from its predecessor.
             this.closeStreamedToolCalls()
@@ -1266,6 +1300,7 @@ export class ReActLLMDuty extends LLMDuty {
             return
           }
 
+          modelStatus.lastActivityAt = Date.now()
           if (event.type === 'stream-open' || event.type === 'reasoning-end') {
             emitModelStatus(ModelResponseState.Connected)
           } else if (event.type === 'reasoning-start') {
@@ -1277,6 +1312,9 @@ export class ReActLLMDuty extends LLMDuty {
             ))
           ) {
             clearModelStatus()
+          } else if (Date.now() - lastActivityUpdateAt >= MODEL_ACTIVITY_UPDATE_INTERVAL_MS) {
+            lastActivityUpdateAt = Date.now()
+            emitModelStatus(modelStatus.state)
           }
         },
         ...(!options.isCompletionReview
@@ -1354,10 +1392,19 @@ export class ReActLLMDuty extends LLMDuty {
         tools: preparedTools,
         toolChoice,
         signal: toolCallAbortController.signal,
-        ...(this.signal ? { cancellationSignal: this.signal } : {})
+        cancellationSignal
       })
+    } catch (error) {
+      if (error instanceof AgentModelResponseTimeoutError) {
+        // Preserve the checkpoint without another request to the unavailable model.
+        this.continuationSummaryFailed = true
+        this.answerStream.discard()
+      }
+
+      throw error
     } finally {
       completed = true
+      clearTimeout(responseDeadlineTimer)
       this.signal?.removeEventListener('abort', clearModelStatus)
       clearModelStatus()
       if (waitNoticeTimer) {

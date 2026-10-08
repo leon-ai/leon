@@ -13,6 +13,7 @@ import {
   formatPromptErrorForLog,
   getConnectionErrorCode,
   isPromptAbortReason,
+  isTimeoutLikeError,
   prepareCompletionRetry,
   safeSerialize,
   truncateForLog,
@@ -37,6 +38,7 @@ import type {
 } from '@/core/llm-manager/llm-provider/llm-provider-types'
 import {
   LLMProviders,
+  CompletionFailureKind,
   type CompletionParams,
   type CompletionStreamEvent,
   type CompletionAttemptTiming,
@@ -121,6 +123,11 @@ export async function runCompletionAttempt(
       serviceTier: completionParams.serviceTier,
       transport,
       outcome,
+      ...(error ? {
+        failureKind: isTimeoutLikeError(error)
+          ? CompletionFailureKind.Timeout
+          : CompletionFailureKind.Provider
+      } : {}),
       connectionErrorCode: getConnectionErrorCode(error),
       requestId,
       responseId,
@@ -224,6 +231,10 @@ export async function runCompletionAttempt(
     lastEvent = type
   }
   const onTokenWithStreamStart = (chunk: OnTokenChunk): void => {
+    if (abortController.signal.aborted) {
+      return
+    }
+
     if (chunk.length > 0) {
       firstTokenAt ??= Date.now()
       recordActivity('text-delta')
@@ -234,6 +245,10 @@ export async function runCompletionAttempt(
     userOnToken?.(chunk)
   }
   const onReasoningTokenWithStreamStart = (reasoningChunk: string): void => {
+    if (abortController.signal.aborted) {
+      return
+    }
+
     if (reasoningChunk.length > 0) {
       recordActivity('reasoning-delta')
       markStreamStarted()
@@ -244,6 +259,10 @@ export async function runCompletionAttempt(
     userOnReasoningToken?.(reasoningChunk)
   }
   const onStreamEvent = (event: CompletionStreamEvent): void => {
+    if (abortController.signal.aborted) {
+      return
+    }
+
     transport = event.transport ?? transport
     requestId = event.requestId ?? requestId
     responseId = event.responseId ?? responseId
@@ -467,8 +486,6 @@ export async function runCompletionAttempt(
     return null
   }
 
-  removeCallerAbortListener()
-
   let usedInputTokens = 0
   let usedOutputTokens = 0
   let generationDurationMs = 0
@@ -522,7 +539,7 @@ export async function runCompletionAttempt(
       const normalized = (await Promise.race([
         normalizeStreamingCompletionResult(
           streamResponse,
-          completionParams,
+          completionParamsWithAbort,
           providerName
         ),
         streamStallTimeoutPromise,
@@ -610,6 +627,7 @@ export async function runCompletionAttempt(
       finishReason = normalized.finishReason
     } else {
       LogHelper.error(`The LLM provider "${providerName}" is not yet supported`)
+      removeCallerAbortListener()
       return null
     }
 
@@ -639,15 +657,18 @@ export async function runCompletionAttempt(
       }
     }
   } catch (e) {
+    removeCallerAbortListener()
     clearStreamStallTimeout()
     rejectStreamStall = null
     logAttempt('failed', e)
+    completionParams.cancellationSignal?.throwIfAborted()
     LogHelper.title('LLM Provider')
     LogHelper.error(`Failed to normalize completion result: ${String(e)}`)
     LogHelper.timeEnd(measureExecutionTimeLabel)
 
     return null
   }
+  removeCallerAbortListener()
   clearStreamStallTimeout()
   rejectStreamStall = null
 

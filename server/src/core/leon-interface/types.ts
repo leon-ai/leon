@@ -1,5 +1,5 @@
 import type { RoutingMode } from '@/types'
-import type { AgentModelFile } from '@/core/llm-manager/types'
+import type { AgentModelFile, CompletionFailureKind } from '@/core/llm-manager/types'
 
 export const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
 
@@ -66,6 +66,7 @@ export enum ModelResponseState {
   Waiting = 'waiting',
   Connected = 'connected',
   Reasoning = 'reasoning',
+  Retrying = 'retrying',
   Completed = 'completed'
 }
 
@@ -77,6 +78,10 @@ export interface ModelResponseStatus {
   sessionId: string
   startedAt: number
   state: ModelResponseState
+  attempt?: number
+  deadlineAt?: number
+  lastActivityAt?: number | null
+  retryReason?: CompletionFailureKind | undefined
 }
 
 export type LeonClientInterfaceSuggestionsPayload = string[]

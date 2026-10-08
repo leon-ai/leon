@@ -177,6 +177,11 @@ export interface CompletionStreamEvent {
   preliminary?: boolean
 }
 
+export enum CompletionFailureKind {
+  Timeout = 'timeout',
+  Provider = 'provider'
+}
+
 /**
  * Attempt timings distinguish transport waits, generation and retries without prompt content.
  */
@@ -190,6 +195,7 @@ export interface CompletionAttemptTiming {
   serviceTier?: LLMServiceTier | undefined
   transport: 'http' | 'websocket' | 'local'
   outcome: string
+  failureKind?: CompletionFailureKind | undefined
   connectionErrorCode?: string | undefined
   requestId?: string | undefined
   responseId?: string | undefined

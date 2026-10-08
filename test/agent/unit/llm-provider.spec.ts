@@ -75,6 +75,37 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('keeps request cancellation active while consuming a returned stream', async () => {
+    vi.useFakeTimers()
+    const stream = new Readable({ read(): void {} })
+    try {
+      const controller = new AbortController()
+      const onToken = vi.fn()
+      const runChatCompletion = vi.fn().mockResolvedValue({ data: stream })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Hello', {
+        dutyType: LLMDuties.ReAct, systemPrompt: '', shouldStream: true,
+        cancellationSignal: controller.signal, onToken
+      }).then(() => null, (error) => error)
+      stream.push('data: {"choices":[{"delta":{"content":"Partial"}}]}\n\n')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onToken).toHaveBeenCalledWith('Partial')
+      const reason = new Error('Model response deadline exceeded')
+      controller.abort(reason)
+      expect(await pending).toBe(reason)
+      expect(runChatCompletion).toHaveBeenCalledOnce()
+      stream.push('data: {"choices":[{"delta":{"content":"Late"}}]}\n\n')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(onToken).toHaveBeenCalledOnce()
+    } finally {
+      stream.destroy()
+      vi.useRealTimers()
+    }
+  })
+
   it.each([1, 2])('keeps initialization recoverable when account lookup %s fails', async (failedLookup) => {
     const dispose = vi.fn()
     class ReadyProvider {

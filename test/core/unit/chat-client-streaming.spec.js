@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Client from '../../../app/src/js/client.js'
 import { ModelResponseState } from '../../../server/src/core/leon-interface/types.ts'
+import { CompletionFailureKind } from '../../../server/src/core/llm-manager/types.ts'
 
 vi.mock('socket.io-client', () => ({ io: vi.fn() }))
 vi.mock('../../../app/src/js/chatbot', () => ({ default: vi.fn() }))
@@ -159,4 +160,26 @@ describe('chat client answer streams', () => {
       expect(vi.getTimerCount()).toBe(0)
     }
   )
+
+  it('shows the retry reason, provider silence and remaining total budget', () => {
+    const status = {
+      requestId: 'request-a', sessionId: 'session-a',
+      startedAt: Date.now() - 120_000, deadlineAt: Date.now() + 60_000,
+      state: ModelResponseState.Retrying, attempt: 1,
+      retryReason: CompletionFailureKind.Timeout, lastActivityAt: Date.now() - 117_000
+    }
+    const update = handlers.get('leon:model-response-status')
+    const element = bubbles.get('#model-response-status')
+    update(status)
+    expect(element.textContent).toContain('Retrying model response')
+    expect(element.textContent).toContain('Previous attempt timed out')
+    expect(element.textContent).toContain('Last provider activity: 1m 57s ago')
+    update({ ...status, state: ModelResponseState.Waiting, attempt: 2, lastActivityAt: null })
+    vi.advanceTimersByTime(1_000)
+    expect(element.textContent).toContain('Attempt 2')
+    expect(element.textContent).toContain('Elapsed: 2m 1s')
+    expect(element.textContent).toContain('Time left: 59 s')
+    expect(element.textContent).toContain('No provider activity yet')
+    expect(client.chatbot.saveBubble).not.toHaveBeenCalled()
+  })
 })

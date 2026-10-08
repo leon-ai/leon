@@ -205,6 +205,16 @@ export class AgentModelProviderError extends Error {
   }
 }
 
+/**
+ * Ends exhausted model recovery while preserving the task's execution state.
+ */
+export class AgentModelResponseTimeoutError extends Error {
+  constructor() {
+    super('The model response timed out across all attempts. The task is incomplete; the session retains the work done so far.')
+    this.name = 'AgentModelResponseTimeoutError'
+  }
+}
+
 export interface AgentCallableFunction {
   qualifiedName: string
   toolkitId: string
@@ -889,6 +899,11 @@ export async function runAgentLoop(
         params.signal?.throwIfAborted()
       } catch (error) {
         params.signal?.throwIfAborted()
+        if (error instanceof AgentModelResponseTimeoutError) {
+          return createResumableAgentResult(
+            'timeout', transcript, executionHistory, trackedSteps
+          )
+        }
         if (
           error instanceof AgentModelProviderError &&
           error.canRetryWithCompaction &&
@@ -1203,8 +1218,16 @@ async function reviewAgentCompletion(
         return { status, reason }
       }
       LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
-    } catch {
+    } catch (error) {
       params.signal?.throwIfAborted()
+      if (error instanceof AgentModelResponseTimeoutError) {
+        return {
+          status: AgentCompletionStatus.Blocked,
+          reason: buildResumableAgentAnswer(
+            'timeout', transcript, state.executionHistory, state.trackedSteps
+          )
+        }
+      }
       LogHelper.warning(`Agent completion review failed (attempt ${attempt + 1})`)
     }
     if (attempt < AGENT_COMPLETION_REVIEW_ATTEMPTS - 1) {
@@ -1267,7 +1290,7 @@ async function finalizeAgentLoopAtLimit(
 
 interface AgentLimitFinalizationOutcome {
   answer: string
-  intent: 'answer' | 'clarification'
+  intent: 'answer' | 'clarification' | 'error'
   messages: AgentToolTranscriptMessage[]
 }
 
@@ -1364,6 +1387,15 @@ async function attemptAgentLimitFinalization(
       params.signal?.throwIfAborted()
     } catch (error) {
       params.signal?.throwIfAborted()
+      if (error instanceof AgentModelResponseTimeoutError) {
+        return {
+          answer: buildResumableAgentAnswer(
+            'timeout', modelTranscript, executionHistory, trackedSteps
+          ),
+          intent: 'error',
+          messages: []
+        }
+      }
       if (!(error instanceof AgentModelProviderError) || !error.canRetryWithCompaction) {
         return null
       }
@@ -1445,7 +1477,7 @@ async function attemptAgentLimitFinalization(
 }
 
 function createResumableAgentResult(
-  failureKind: 'context' | 'synthesis',
+  failureKind: 'context' | 'synthesis' | 'timeout',
   transcript: AgentToolTranscriptMessage[],
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
@@ -1458,7 +1490,7 @@ function createResumableAgentResult(
   )
   return {
     answer,
-    intent: 'clarification',
+    intent: failureKind === 'timeout' ? 'error' : 'clarification',
     transcript,
     executionHistory,
     trackedSteps
@@ -1466,12 +1498,14 @@ function createResumableAgentResult(
 }
 
 function buildResumableAgentAnswer(
-  failureKind: 'context' | 'synthesis',
+  failureKind: 'context' | 'synthesis' | 'timeout',
   transcript: AgentToolTranscriptMessage[],
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
 ): string {
-  const explanation = failureKind === 'context'
+  const explanation = failureKind === 'timeout'
+    ? new AgentModelResponseTimeoutError().message
+    : failureKind === 'context'
     ? 'I could not finish because the model could not process the collected information. The task is incomplete; the session retains the work done so far.'
     : 'I could not finish because the model failed to produce the final response. I cannot confirm that the task is complete. The session retains the work done so far.'
   const originalRequest = transcript.find(
@@ -1498,8 +1532,9 @@ function buildResumableAgentAnswer(
     ...(reportedPlan.length > 0
       ? [['Reported plan:', ...reportedPlan].join('\n')]
       : []),
-    `Next, I will: ${nextAction}.`,
-    'May I continue with that next step?'
+    ...(failureKind === 'timeout'
+      ? [`Next unfinished step: ${nextAction}.`]
+      : [`Next, I will: ${nextAction}.`, 'May I continue with that next step?'])
   ].join('\n\n')
 }
 

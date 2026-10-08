@@ -5,6 +5,7 @@ import VoiceEnergy from './voice-energy'
 import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
 import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+import { CompletionFailureKind } from '../../../server/src/core/llm-manager/types.ts'
 import {
   LEON_CLIENT_INTERFACE_EVENTS as LEON_EVENTS,
   LEON_CLIENT_INTERFACE_PROTOCOL_VERSION,
@@ -15,7 +16,12 @@ const MODEL_STATUS_INTERVAL_MS = 1_000
 const MODEL_STATUS_LABELS = {
   [ModelResponseState.Waiting]: 'Waiting for model response',
   [ModelResponseState.Connected]: 'Waiting for model response (stream connected)',
-  [ModelResponseState.Reasoning]: 'Model is reasoning'
+  [ModelResponseState.Reasoning]: 'Model is reasoning',
+  [ModelResponseState.Retrying]: 'Retrying model response'
+}
+const MODEL_RETRY_LABELS = {
+  [CompletionFailureKind.Timeout]: 'Previous attempt timed out',
+  [CompletionFailureKind.Provider]: 'Previous attempt failed'
 }
 
 export default class Client {
@@ -132,8 +138,26 @@ export default class Client {
       return
     }
 
-    const elapsed = formatToolDuration(Math.max(0, Date.now() - status.startedAt))
-    element.textContent = `${MODEL_STATUS_LABELS[status.state]} · Elapsed: ${elapsed}`
+    const now = Date.now()
+    const elapsed = formatToolDuration(Math.max(0, now - status.startedAt))
+    const parts = [MODEL_STATUS_LABELS[status.state]]
+    if (status.attempt) {
+      parts.push(`Attempt ${status.attempt}`)
+    }
+    if (MODEL_RETRY_LABELS[status.retryReason]) {
+      parts.push(MODEL_RETRY_LABELS[status.retryReason])
+    }
+    parts.push(`Elapsed: ${elapsed}`)
+    if (status.lastActivityAt) {
+      parts.push(`Last provider activity: ${formatToolDuration(Math.max(0, now - status.lastActivityAt))} ago`)
+    } else if (status.attempt) {
+      parts.push('No provider activity yet')
+    }
+    if (status.deadlineAt) {
+      parts.push(`Time left: ${formatToolDuration(Math.max(0, status.deadlineAt - now))}`)
+    }
+
+    element.textContent = parts.join(' · ')
     element.hidden = false
   }
 
