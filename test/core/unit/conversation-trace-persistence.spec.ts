@@ -208,6 +208,7 @@ describe('conversation trace persistence', () => {
   })
 
   it('restores one structured widget after replacement without adding it to model history', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
     const logger = new ConversationLogger({
       loggerName: 'test',
       fileName: 'conversation_log.json',
@@ -233,6 +234,7 @@ describe('conversation trace persistence', () => {
     }
 
     await logger.upsert(record, { sessionId: 'first' })
+    now.mockReturnValue(2_000)
     await logger.upsert(record, { sessionId: 'first' })
     const logs = await logger.loadAll({ sessionId: 'first' })
 
@@ -248,6 +250,7 @@ describe('conversation trace persistence', () => {
     })
 
     expect(history?.widget).toEqual(widget)
+    expect(history?.sentAt).toBe(1_000)
     expect(JSON.parse(history?.string || '')).toEqual(widget)
     const [fallback] = ConversationHistoryHelper.toHistoryItems(visible, {
       supportsWidgets: false
@@ -255,6 +258,61 @@ describe('conversation trace persistence', () => {
 
     expect(fallback?.string).toBe('Connect Spotify')
     expect(fallback?.widget).toEqual(widget)
+    expect(await logger.loadAll({ sessionId: 'second' })).toHaveLength(0)
+  })
+
+  it('replays one updated plan at its display time after intervening messages', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(4_000)
+    const logger = new ConversationLogger({
+      loggerName: 'test',
+      fileName: 'conversation_log.json',
+      nbOfLogsToKeep: 100,
+      nbOfLogsToLoad: 100
+    })
+    const widget = {
+      id: 'plan-first',
+      widget: 'PlanWidget',
+      actionName: '',
+      onFetch: null,
+      historyMode: 'system_widget' as const,
+      fallbackText: 'Check the result',
+      supportedEvents: [],
+      componentTree: { component: 'WidgetWrapper', props: { children: [] } },
+      sentAt: 1_000
+    }
+    const record = {
+      who: 'leon' as const,
+      message: widget.fallbackText,
+      messageId: widget.id,
+      isAddedToHistory: false,
+      widget
+    }
+
+    await logger.upsert(record, { sessionId: 'first', sentAt: widget.sentAt })
+    await logger.upsert({
+      who: 'owner', message: 'Continue', messageId: 'owner', isAddedToHistory: true
+    }, { sessionId: 'first', sentAt: 2_000 })
+    const updatedWidget = {
+      ...widget,
+      sentAt: 3_000,
+      replaceMessageId: widget.id,
+      fallbackText: 'Report the result'
+    }
+    await logger.upsert({
+      ...record, widget: updatedWidget, message: updatedWidget.fallbackText
+    }, { sessionId: 'first', sentAt: updatedWidget.sentAt })
+
+    const logs = await logger.loadAll({ sessionId: 'first' })
+    const history = ConversationHistoryHelper.toHistoryItems(logs, {
+      supportsWidgets: true
+    }).sort((a, b) => a.sentAt - b.sentAt)
+
+    expect(logs).toHaveLength(2)
+    expect(logs.filter(ConversationHistoryHelper.isAddedToHistory))
+      .toEqual([expect.objectContaining({ messageId: 'owner' })])
+    expect(history.map((item) => item.messageId)).toEqual(['owner', widget.id])
+    expect(history[1]?.sentAt).toBe(updatedWidget.sentAt)
+    expect(history[1]?.widget).toEqual(updatedWidget)
     expect(await logger.loadAll({ sessionId: 'second' })).toHaveLength(0)
   })
 

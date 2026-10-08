@@ -38,6 +38,7 @@ import {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-plan'
 import { findDuplicateToolInputMatch } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-helpers'
 import { runToolExecution } from '@/core/llm-manager/llm-duties/react-llm-duty/tool-execution'
+import { emitPlanWidget } from '@/core/llm-manager/llm-duties/react-llm-duty/plan-widget'
 import {
   createAgentLoopContinuationState,
   isAgentLoopContinuationStateValid
@@ -120,6 +121,24 @@ vi.mock('@/core', () => ({
 }))
 
 const CALLABLE_TOOL_NAME = 'test__lookup__run'
+
+it('emits plan replacements with their current display time and a stable message ID', () => {
+  const now = vi.spyOn(Date, 'now').mockReturnValue(1_000)
+  emitPlanWidget([], null, 'plan-first', false)
+
+  expect(coreMocks.emitAnswerToChatClients).toHaveBeenLastCalledWith(
+    expect.objectContaining({ id: 'plan-first', widget: 'PlanWidget', sentAt: 1_000 })
+  )
+
+  now.mockReturnValue(3_000)
+  emitPlanWidget([], null, 'plan-first', true)
+
+  expect(coreMocks.emitAnswerToChatClients).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      id: 'plan-first', widget: 'PlanWidget', replaceMessageId: 'plan-first', sentAt: 3_000
+    })
+  )
+})
 
 it.each(['success', 'error', 'background', 'throw'])(
   'reports title and dispatch duration for a %s call to live cards and durable progress',

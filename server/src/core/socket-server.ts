@@ -633,7 +633,13 @@ export default class SocketServer {
             isAddedToHistory: false,
             widget: answerDataRecord as never
           },
-          sessionId ? { sessionId } : undefined
+          {
+            ...(sessionId ? { sessionId } : {}),
+            ...(typeof answerDataRecord['sentAt'] === 'number' &&
+            Number.isFinite(answerDataRecord['sentAt'])
+              ? { sentAt: answerDataRecord['sentAt'] }
+              : {})
+          }
         )
       }
     }

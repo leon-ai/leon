@@ -260,7 +260,8 @@ export function buildPlanComponentTree(
 /**
  * Emits or updates the plan widget via socket. On first call it creates
  * a new message; subsequent calls replace the same message using
- * replaceMessageId so the plan list updates in-place.
+ * replaceMessageId so only the latest plan is shown. Its display time keeps
+ * conversation history aligned with live updates at the end of the feed.
  */
 export function emitPlanWidget(
   steps: TrackedPlanStep[],
@@ -282,6 +283,7 @@ export function emitPlanWidget(
   const widgetData: Record<string, unknown> = {
     id: planWidgetId,
     widget: 'PlanWidget',
+    sentAt: Date.now(),
     componentTree,
     supportedEvents: [],
     fallbackText: activeStep

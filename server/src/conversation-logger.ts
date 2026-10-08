@@ -30,6 +30,7 @@ interface LoadParams {
 interface UpsertParams {
   replaceMessageId?: string | null
   refreshSentAt?: boolean
+  sentAt?: number
   sessionId?: string
 }
 
@@ -254,19 +255,21 @@ export class ConversationLogger {
                 ...existingConversationLog,
                 ...newRecord,
                 messageId: targetMessageId,
-                // The final answer replaces the draft trace, at its actual answer time.
-                sentAt: params?.refreshSentAt || (
-                  !existingConversationLog.isAddedToHistory && newRecord.isAddedToHistory
+                // Keep replay order aligned with the time an update was displayed.
+                sentAt: params?.sentAt ?? (
+                  params?.refreshSentAt || (
+                    !existingConversationLog.isAddedToHistory && newRecord.isAddedToHistory
+                  )
+                    ? Date.now()
+                    : existingConversationLog.sentAt
                 )
-                  ? Date.now()
-                  : existingConversationLog.sentAt
               }
             }
           } else {
             conversationLogs.push({
               ...newRecord,
               messageId: targetMessageId,
-              sentAt: Date.now()
+              sentAt: params?.sentAt ?? Date.now()
             })
           }
         } else {
@@ -276,7 +279,7 @@ export class ConversationLogger {
 
           conversationLogs.push({
             ...newRecord,
-            sentAt: Date.now()
+            sentAt: params?.sentAt ?? Date.now()
           })
         }
 
