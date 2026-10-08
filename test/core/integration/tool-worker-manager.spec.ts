@@ -218,6 +218,9 @@ Every profile owns its settings, sessions and artifacts.
   await extractArchive(artifacts[0]!.path, viewer)
   await extractArchive(artifacts[1]!.path, editable)
   expect(await fs.readFile(path.join(editable, 'slides.md'), 'utf8')).toBe(markdown)
+  expect(await fs.readFile(path.join(editable, '.pnpmfile.mjs'), 'utf8')).toBe(
+    await fs.readFile(path.join(project, '.pnpmfile.mjs'), 'utf8')
+  )
   expect(await fs.stat(path.join(editable, '.env')).catch(() => null)).toBeNull()
 
   const require = createRequire(path.resolve('tools/document/slidev/src/nodejs/package.json'))

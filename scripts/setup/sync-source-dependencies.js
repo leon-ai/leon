@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { createHash } from 'node:crypto'
+import { pathToFileURL } from 'node:url'
 
 import execa from 'execa'
 import YAML from 'yaml'
@@ -20,14 +22,17 @@ import {
 
 const PACKAGE_JSON_FILE_NAME = 'package.json'
 const PNPM_WORKSPACE_FILE_NAME = 'pnpm-workspace.yaml'
+const PNPM_HOOK_FILE_NAME = '.pnpmfile.mjs'
 const PYPROJECT_FILE_NAME = 'pyproject.toml'
 const SYNC_STAMP_FILE_NAME = '.last-source-deps-sync'
 const NODE_MODULES_DIR_NAME = 'node_modules'
 const VENV_DIR_NAME = '.venv'
-const PNPM_BUILD_ENV_KEYS = {
+const PNPM_POLICY_ENV_KEYS = {
   allowBuilds: 'pnpm_config_allow_builds',
   dangerouslyAllowAllBuilds: 'pnpm_config_dangerously_allow_all_builds',
-  sideEffectsCache: 'pnpm_config_side_effects_cache'
+  sideEffectsCache: 'pnpm_config_side_effects_cache',
+  overrides: 'pnpm_config_overrides',
+  minimumReleaseAgeExclude: 'pnpm_config_minimum_release_age_exclude'
 }
 
 const isFileEmpty = async (filePath) => {
@@ -40,32 +45,53 @@ const getSyncStampPath = (sourcePath) => {
   return path.join(sourcePath, SYNC_STAMP_FILE_NAME)
 }
 
-const isSyncCurrent = async (configPaths, stampPath, dependencyPath) => {
+const isSyncCurrent = async (fingerprint, stampPath, dependencyPath) => {
   if (
     !fs.existsSync(stampPath) ||
-    configPaths.some((configPath) => !fs.existsSync(configPath)) ||
     !fs.existsSync(dependencyPath)
   ) {
     return false
   }
 
-  const [configStats, stampStat] = await Promise.all([
-    Promise.all(configPaths.map((configPath) => fs.promises.stat(configPath))),
-    fs.promises.stat(stampPath)
-  ])
-
-  return configStats.every((configStat) => configStat.mtimeMs <= stampStat.mtimeMs)
+  return await fs.promises.readFile(stampPath, 'utf8') === fingerprint
 }
 
 /**
- * Carry root build permissions into standalone installs, including profile sources.
+ * Detect manifest, policy and hook edits even when timestamps have not advanced.
  */
-const getNodejsBuildEnvironment = async (workspacePath) => {
-  const config = YAML.parse(await fs.promises.readFile(workspacePath, 'utf8')) || {}
+const getSyncFingerprint = async (sourcePath, configPaths) => {
+  const hash = createHash('sha256').update(sourcePath)
+
+  for (const configPath of configPaths) {
+    hash.update('\0').update(await fs.promises.readFile(configPath))
+  }
+
+  return hash.digest('hex')
+}
+
+/**
+ * Combine shared build policy with source-owned configuration before installation.
+ */
+const getNodejsInstallEnvironment = async (workspacePath, hookPath, fingerprint) => {
+  let config = YAML.parse(await fs.promises.readFile(workspacePath, 'utf8')) || {}
   const environment = RuntimeHelper.getManagedNodeEnvironment()
 
-  // JSON preserves structured allowBuilds rules; CLI flags only handle scalars.
-  for (const [setting, environmentKey] of Object.entries(PNPM_BUILD_ENV_KEYS)) {
+  if (fs.existsSync(hookPath)) {
+    // Source configuration must be in place before pnpm discovers projects, so
+    // a nested install cannot adopt its ancestor workspace's dependencies.
+    const hookURL = pathToFileURL(hookPath)
+
+    hookURL.searchParams.set('configuration', fingerprint)
+
+    const { hooks } = await import(hookURL.href)
+
+    if (hooks?.updateConfig) {
+      config = await hooks.updateConfig(config)
+    }
+  }
+
+  // JSON preserves structured permissions and dependency resolution rules.
+  for (const [setting, environmentKey] of Object.entries(PNPM_POLICY_ENV_KEYS)) {
     if (Object.hasOwn(config, setting)) {
       environment[environmentKey] = JSON.stringify(config[setting])
     }
@@ -74,8 +100,8 @@ const getNodejsBuildEnvironment = async (workspacePath) => {
   return environment
 }
 
-const markSourceDependenciesAsSynced = async (sourcePath) => {
-  await fs.promises.writeFile(getSyncStampPath(sourcePath), `${Date.now()}`)
+const markSourceDependenciesAsSynced = async (sourcePath, fingerprint) => {
+  await fs.promises.writeFile(getSyncStampPath(sourcePath), fingerprint)
 }
 
 /**
@@ -92,25 +118,34 @@ const getMissingNodejsDependencies = (manifest, nodeModulesPath) => {
  * Sync Node.js dependencies next to the source that declares them.
  */
 export const syncNodejsSourceDependencies = async (sourcePath) => {
+  sourcePath = path.resolve(sourcePath)
+
   const packageJSONPath = path.join(sourcePath, PACKAGE_JSON_FILE_NAME)
   const nodeModulesPath = path.join(sourcePath, NODE_MODULES_DIR_NAME)
   const stampPath = getSyncStampPath(sourcePath)
   const workspacePath = path.join(CODEBASE_PATH, PNPM_WORKSPACE_FILE_NAME)
+  const hookPath = path.join(sourcePath, PNPM_HOOK_FILE_NAME)
+  const configPaths = [
+    packageJSONPath,
+    workspacePath,
+    ...(fs.existsSync(hookPath) ? [hookPath] : [])
+  ]
 
   if (!fs.existsSync(packageJSONPath) || (await isFileEmpty(packageJSONPath))) {
     return
   }
 
   const manifest = JSON.parse(await fs.promises.readFile(packageJSONPath, 'utf8'))
+  const fingerprint = await getSyncFingerprint(sourcePath, configPaths)
 
   if (
-    await isSyncCurrent([packageJSONPath, workspacePath], stampPath, nodeModulesPath) &&
+    await isSyncCurrent(fingerprint, stampPath, nodeModulesPath) &&
     getMissingNodejsDependencies(manifest, nodeModulesPath).length === 0
   ) {
     return
   }
 
-  const environment = await getNodejsBuildEnvironment(workspacePath)
+  const environment = await getNodejsInstallEnvironment(workspacePath, hookPath, fingerprint)
 
   // A failed repair must not leave an earlier success stamp behind.
   await fs.promises.rm(stampPath, { force: true })
@@ -118,7 +153,6 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
 
   const installArgs = [
     'install',
-    // Keep dependencies beside their source without requiring nested workspaces.
     '--ignore-workspace',
     '--lockfile-dir',
     sourcePath,
@@ -135,7 +169,7 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
     throw new Error(`Dependency installation in "${sourcePath}" did not link: ${missingDependencies.join(', ')}`)
   }
 
-  await markSourceDependenciesAsSynced(sourcePath)
+  await markSourceDependenciesAsSynced(sourcePath, fingerprint)
 }
 
 /**

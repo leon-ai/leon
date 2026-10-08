@@ -15,6 +15,8 @@ import { PresentationSessions, PresentationView } from './lib/presentation-sessi
 const CLI_PATH = fileURLToPath(new URL('./lib/cli.mjs', import.meta.url))
 const TEMPLATE_PATH = fileURLToPath(new URL('./lib/template/', import.meta.url))
 const MANIFEST_PATH = fileURLToPath(new URL('./package.json', import.meta.url))
+const PNPM_HOOK_FILE_NAME = '.pnpmfile.mjs'
+const PNPM_HOOK_PATH = fileURLToPath(new URL(`./${PNPM_HOOK_FILE_NAME}`, import.meta.url))
 const SOURCE_EXCLUSIONS = new Set(['node_modules', 'dist'])
 const DEFAULT_SETTINGS = { timeout_ms: 600_000 }
 const MAX_PREVIEW_STATES = 6
@@ -131,6 +133,7 @@ export default class SlidevTool extends Tool {
       path.join(TEMPLATE_PATH, 'style.css'),
       path.join(projectPath, 'style.css')
     )
+    await fs.copyFile(PNPM_HOOK_PATH, path.join(projectPath, PNPM_HOOK_FILE_NAME))
     await fs.writeFile(path.join(projectPath, 'package.json'), JSON.stringify({
       name: 'leon-presentation',
       private: true,
@@ -295,9 +298,12 @@ export default class SlidevTool extends Tool {
         const filename = 'presentation-source.zip'
 
         await createZipArchive(path.dirname(entry), path.join(directory, filename), {
-          exclude: (relative) => relative.split('/').some((part) =>
-            part.startsWith('.') || SOURCE_EXCLUSIONS.has(part)
-          )
+          // Standalone projects need the install hook, while other hidden files
+          // and local dependency/build directories remain private.
+          exclude: (relative) => relative !== PNPM_HOOK_FILE_NAME &&
+            relative.split('/').some((part) =>
+              part.startsWith('.') || SOURCE_EXCLUSIONS.has(part)
+            )
         })
         files.push(filename)
       }
