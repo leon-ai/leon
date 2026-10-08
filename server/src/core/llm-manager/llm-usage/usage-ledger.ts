@@ -5,8 +5,10 @@ import { createInterface } from 'node:readline'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import type { InferenceMetadata } from '../inference-metadata'
 import type { InferenceUsage } from './usage-context'
+import type { UsageAccounting } from './usage-accounting'
 
-const USAGE_DIRECTORY = 'usage'
+export const USAGE_DIRECTORY = 'usage'
+export const HISTORICAL_USAGE_FILENAME = 'history.jsonl'
 const USAGE_FILE_EXTENSION = '.jsonl'
 
 export interface InferenceUsageRecord {
@@ -20,6 +22,10 @@ export interface InferenceUsageRecord {
   outcome: string
   inference?: InferenceMetadata
   usage: InferenceUsage
+  historical?: {
+    completionCount?: number
+    accounting?: UsageAccounting
+  }
 }
 
 export interface InferenceUsageQuery {
@@ -54,9 +60,10 @@ export async function appendInferenceUsage(
  * Streams only the selected profile's records without loading the ledger in memory.
  */
 export async function* readInferenceUsage(
-  query: InferenceUsageQuery
+  query: InferenceUsageQuery,
+  profilePaths = getProfilePaths()
 ): AsyncGenerator<InferenceUsageRecord> {
-  const directory = path.join(getProfilePaths().logs, USAGE_DIRECTORY)
+  const directory = path.join(profilePaths.logs, USAGE_DIRECTORY)
   let files: string[]
 
   try {
@@ -77,8 +84,10 @@ export async function* readInferenceUsage(
     const day = file.slice(0, -USAGE_FILE_EXTENSION.length)
 
     if (
-      (query.from !== undefined && day < usageDay(query.from)) ||
-      (query.until !== undefined && day > usageDay(query.until - 1))
+      file !== HISTORICAL_USAGE_FILENAME && (
+        (query.from !== undefined && day < usageDay(query.from)) ||
+        (query.until !== undefined && day > usageDay(query.until - 1))
+      )
     ) {
       continue
     }

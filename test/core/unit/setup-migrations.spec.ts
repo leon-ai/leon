@@ -10,6 +10,8 @@ import { parse, stringify } from 'yaml'
 import { getProfilePaths, type ProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { runProfileMigrations } from '@@/scripts/setup/setup-migrations'
 import migrateMediaToolSettings from '@@/scripts/setup/migrations/20261008-migrate-media-tool-settings'
+import migrateInferenceUsage from '@@/scripts/setup/migrations/20261009-backfill-inference-usage'
+import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 
 const FIRST = '20261001-first.js'
 const SECOND = '20261002-second.js'
@@ -61,6 +63,124 @@ export default async function migrate(profilePaths) {
 async function completed(profile: ProfilePaths): Promise<string[]> {
   return JSON.parse(await fs.readFile(path.join(profile.root, RECEIPTS_FILENAME), 'utf8')).completed
 }
+
+async function usageRecords(profile: ProfilePaths): Promise<InferenceUsageRecord[]> {
+  const records: InferenceUsageRecord[] = []
+
+  for await (const record of readInferenceUsage({}, profile)) {
+    records.push(record)
+  }
+
+  return records
+}
+
+it('imports profile history once, preserving saved totals and excluding live-ledger overlap', async () => {
+  await fixture()
+  const profile = pathsFor('a')
+  const session = path.join(profile.sessions, 'conversation')
+  const timestamp = Date.parse('2026-10-01T12:00:00Z')
+  const messages = [
+    {
+      who: 'leon', sentAt: timestamp, messageId: 'saved-turn', message: 'Private content',
+      inference: {
+        provider: 'openai', model: 'saved-model', authMode: 'chatgpt_oauth',
+        credentialSource: 'account_binding', connectionRef: '012345abcdef',
+        endpoint: 'https://provider.example/responses?secret=private'
+      },
+      llmMetrics: {
+        inputTokens: 100, outputTokens: 20, completionCount: 3,
+        usageAccounting: {
+          cachedInputTokens: 60, cacheReadCompletionCount: 2, cacheWriteInputTokens: 0,
+          costUSD: 0.5, costCompletionCount: 2, estimatedCostCompletionCount: 0,
+          costSources: ['provider-reported']
+        }
+      },
+      agentResponseTrace: { metrics: { inputTokens: 100, outputTokens: 20 } }
+    },
+    {
+      who: 'leon', sentAt: timestamp + 1, messageId: 'no-route',
+      llmMetrics: { inputTokens: 30, outputTokens: 5 }
+    },
+    {
+      who: 'leon', sentAt: timestamp + 2, messageId: 'multiple-routes',
+      inference: [{ provider: 'openai', model: 'first' }, { provider: 'anthropic', model: 'second' }],
+      agentResponseTrace: { metrics: { inputTokens: 40, outputTokens: 10 } }
+    },
+    {
+      who: 'leon', sentAt: timestamp + 3, messageId: 'estimated-price',
+      llmMetrics: {
+        inputTokens: 0, outputTokens: 0,
+        usageAccounting: {
+          cachedInputTokens: 0, cacheReadCompletionCount: 0, cacheWriteInputTokens: 0,
+          costUSD: 99, costCompletionCount: 1, estimatedCostCompletionCount: 1,
+          costSources: ['estimate']
+        }
+      }
+    },
+    { who: 'owner', sentAt: timestamp, llmMetrics: { inputTokens: 100, outputTokens: 20 } },
+    { who: 'leon', sentAt: timestamp + 4, agentResponseTrace: { metrics: { durationMs: 50 } } },
+    {
+      who: 'leon', sentAt: timestamp + 10, messageId: 'live-turn',
+      llmMetrics: { inputTokens: 500, outputTokens: 50 }
+    }
+  ]
+
+  await fs.mkdir(session, { recursive: true })
+  await fs.mkdir(path.join(profile.logs, 'usage'), { recursive: true })
+  await fs.writeFile(path.join(session, 'conversation_log.json'), JSON.stringify(messages))
+  await fs.writeFile(path.join(profile.root, 'conversation_log.json'), JSON.stringify(messages))
+  const livePath = path.join(profile.logs, 'usage', '2026-10-01.jsonl')
+  const live = JSON.stringify({
+    id: 'live-attempt', startedAt: timestamp + 5, finishedAt: timestamp + 9,
+    sessionId: 'conversation', provider: 'openai', model: 'current-model',
+    purpose: 'react', outcome: 'completed', usage: { inputTokens: 500, outputTokens: 50 }
+  }) + '\n'
+
+  await fs.writeFile(livePath, live)
+  await migrateInferenceUsage(profile)
+  const records = await usageRecords(profile)
+  const imported = records.filter((record) => record.historical)
+
+  expect(imported).toHaveLength(4)
+  expect(imported[0]).toMatchObject({
+    sessionId: 'conversation', provider: 'openai', model: 'saved-model',
+    inference: { connectionRef: '012345abcdef', endpoint: 'https://provider.example/responses' },
+    historical: { completionCount: 3, accounting: { costCompletionCount: 2 } },
+    usage: { inputTokens: 100, outputTokens: 20, cachedInputTokens: 60, costUSD: 0.5 }
+  })
+  expect(imported[1]).toMatchObject({ provider: 'unknown', model: 'unknown', historical: {} })
+  expect(imported[2]).toMatchObject({ provider: 'unknown', model: 'unknown' })
+  expect(imported[3]?.usage).toEqual({ inputTokens: 0, outputTokens: 0 })
+  expect(JSON.stringify(records)).not.toContain('Private content')
+  expect(JSON.stringify(records)).not.toContain('secret=private')
+  expect(await fs.readFile(livePath, 'utf8')).toBe(live)
+
+  await migrateInferenceUsage(profile)
+  expect(await usageRecords(profile)).toEqual(records)
+  await migrateInferenceUsage(pathsFor('b'))
+  expect(await usageRecords(pathsFor('b'))).toEqual([])
+})
+
+it('publishes historical usage only after all source conversations have been read successfully', async () => {
+  await fixture()
+  const profile = pathsFor('a')
+  const session = path.join(profile.sessions, 'broken')
+
+  await fs.mkdir(session, { recursive: true })
+  const filename = path.join(session, 'conversation_log.json')
+
+  await fs.writeFile(filename, '{')
+  await expect(migrateInferenceUsage(profile)).rejects.toThrow()
+  expect(await usageRecords(profile)).toEqual([])
+  expect(await fs.readdir(path.join(profile.logs, 'usage'))).toEqual([])
+
+  await fs.writeFile(filename, JSON.stringify([{
+    who: 'leon', sentAt: Date.parse('2026-10-01T12:00:00Z'),
+    llmMetrics: { inputTokens: 10, outputTokens: 2 }
+  }]))
+  await migrateInferenceUsage(profile)
+  expect(await usageRecords(profile)).toHaveLength(1)
+})
 
 it('runs migrations in filename order once per profile and discovers newly added IDs', async () => {
   await fixture()
