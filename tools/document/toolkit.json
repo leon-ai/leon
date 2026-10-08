@@ -1,0 +1,13 @@
+{
+  "$schema": "../../schemas/toolkit-schemas/toolkit.json",
+  "name": "Document",
+  "description": "Create documents and charts, and deliver downloadable conversation artifacts.",
+  "icon_name": "file-text-line",
+  "context_files": [],
+  "tools": [
+    "document",
+    "typst",
+    "echarts"
+  ],
+  "progressive_guidance": "Use document.create for local editable Word files, typst.compile for local PDFs and document page images, and echarts.render with native ECharts JSON options for data charts. Charts are separate SVG/PNG artifacts that can be embedded in documents or media projects. Hosted document generation uses configured profile defaults. Prefer the document-authoring skill, inspect the resulting content and layout, and revise before delivery."
+}

@@ -15,15 +15,12 @@ import {
 import {
   downloadGeneratedFile,
   mediaEndpoint,
-  providerRequest,
-  readMediaBytes
+  providerRequest
 } from './media-generation-transport'
 import { generateHostedDocument } from './media-generation-hosted-documents'
 
 interface ProviderResult {
-  files?: GeneratedFile[]
-  remote_id?: string
-  failed?: boolean
+  files: GeneratedFile[]
 }
 
 function checkMiniMax(result: { base_resp?: { status_code: number } }): void {
@@ -93,26 +90,11 @@ export async function generateWithProvider(
       ...(endpointUrl ? { endpointUrl } : {})
     }
     const requestOptions = signal ? { signal } : {}
-    let blob: Blob
-    let extension: string
-
-    switch (kind) {
-      case MediaKind.Image:
-        blob = await client.textToImage(args, {
-          outputType: 'blob',
-          ...requestOptions
-        })
-        extension = 'png'
-        break
-      case MediaKind.Video:
-        blob = await client.textToVideo(args, requestOptions)
-        extension = 'mp4'
-        break
-      default:
-        blob = await client.textToSpeech(args, requestOptions)
-        extension = 'wav'
-        break
-    }
+    const blob = await client.textToImage(args, {
+      outputType: 'blob',
+      ...requestOptions
+    })
+    const extension = 'png'
 
     return {
       files: [
@@ -123,97 +105,6 @@ export async function generateWithProvider(
         }
       ]
     }
-  }
-
-  if (kind === MediaKind.Audio) {
-    if (provider === LLMProviders.MiniMax) {
-      const { mode, ...audioOptions } = options
-      const music = mode === 'music'
-      const providerResponse = await providerRequest(
-        provider,
-        music ? '/music_generation' : '/t2a_v2',
-        {
-          ...audioOptions,
-          model,
-          ...(music ? { prompt } : { text: prompt }),
-          stream: false,
-          output_format: 'hex'
-        },
-        signal
-      )
-      const response = (await providerResponse.json()) as {
-        data?: { audio?: string }
-        base_resp?: { status_code: number }
-        extra_info?: { audio_format?: string }
-      }
-
-      checkMiniMax(response)
-      if (!response.data?.audio) {
-        throw new Error('Provider returned no audio.')
-      }
-
-      const format = response.extra_info?.audio_format || 'mp3'
-
-      return {
-        files: [
-          {
-            data: Buffer.from(response.data.audio, 'hex'),
-            mime_type: format === 'mp3' ? 'audio/mpeg' : `audio/${format}`,
-            filename: input.filename || `generated.${format}`
-          }
-        ]
-      }
-    }
-
-    const response = await providerRequest(
-      provider,
-      '/audio/speech',
-      { ...options, model, input: prompt },
-      signal
-    )
-    const mime =
-      response.headers.get('content-type')?.split(';')[0] || 'audio/mpeg'
-
-    return {
-      files: [
-        {
-          data: await readMediaBytes(response),
-          mime_type: mime,
-          filename:
-            input.filename ||
-            `generated.${String(options['response_format'] || 'mp3')}`
-        }
-      ]
-    }
-  }
-
-  if (kind === MediaKind.Video) {
-    const endpoint =
-      provider === LLMProviders.ZAI
-        ? '/videos/generations'
-        : provider === LLMProviders.MiniMax
-          ? '/video_generation'
-          : '/videos'
-    const providerResponse = await providerRequest(
-      provider,
-      endpoint,
-      { ...options, model, prompt },
-      signal
-    )
-    const response = (await providerResponse.json()) as {
-      id?: string
-      task_id?: string
-      base_resp?: { status_code: number }
-    }
-
-    checkMiniMax(response)
-    const id = response.id || response.task_id
-
-    if (!id) {
-      throw new Error('Provider returned no video job identifier.')
-    }
-
-    return { remote_id: id }
   }
 
   // Keep payload format and dispatch bound to the same selected connection.
@@ -414,98 +305,4 @@ export async function generateWithProvider(
       }))
     )
   }
-}
-
-/**
- * Polls one stored job. Provider URLs/IDs are never accepted from clients.
- */
-export async function pollProviderVideo(
-  provider: LLMProviders,
-  remoteId: string,
-  signal?: AbortSignal
-): Promise<ProviderResult> {
-  const id = encodeURIComponent(remoteId)
-  const endpoint =
-    provider === LLMProviders.ZAI
-      ? `/async-result/${id}`
-      : provider === LLMProviders.MiniMax
-        ? `/query/video_generation?task_id=${id}`
-        : `/videos/${id}`
-  const providerResponse = await providerRequest(
-    provider,
-    endpoint,
-    undefined,
-    signal
-  )
-  const response = (await providerResponse.json()) as {
-    status?: string
-    task_status?: string
-    video_result?: Array<{ url: string }>
-    file_id?: string
-    unsigned_urls?: string[]
-    base_resp?: { status_code: number }
-  }
-
-  checkMiniMax(response)
-  const status = response.task_status || response.status
-
-  if (
-    ['failed', 'FAIL', 'Fail', 'cancelled', 'expired'].includes(status || '')
-  ) {
-    return { failed: true }
-  }
-
-  if (!['completed', 'SUCCESS', 'Success'].includes(status || '')) {
-    return { remote_id: remoteId }
-  }
-
-  let files: GeneratedFile[]
-
-  if (provider === LLMProviders.ZAI) {
-    files = await Promise.all(
-      (response.video_result || []).map(async (video, index) => ({
-        data: await downloadGeneratedFile(video.url, signal),
-        mime_type: 'video/mp4',
-        filename: `video-${index + 1}.mp4`
-      }))
-    )
-  } else if (provider === LLMProviders.MiniMax) {
-    const metadataResponse = await providerRequest(
-      provider,
-      `/files/retrieve?file_id=${encodeURIComponent(response.file_id || '')}`,
-      undefined,
-      signal
-    )
-    const metadata = (await metadataResponse.json()) as {
-      file: { download_url: string }
-    }
-
-    files = [
-      {
-        data: await downloadGeneratedFile(metadata.file.download_url, signal),
-        mime_type: 'video/mp4',
-        filename: 'video.mp4'
-      }
-    ]
-  } else {
-    files = await Promise.all(
-      Array.from(
-        { length: response.unsigned_urls?.length || 1 },
-        async (_, index) => ({
-          data: await readMediaBytes(
-            await providerRequest(
-              provider,
-              `/videos/${id}/content?index=${index}`,
-              undefined,
-              signal
-            )
-          ),
-          mime_type: 'video/mp4',
-          filename: `video-${index + 1}.mp4`
-        })
-      )
-    )
-  }
-
-  return { files }
 }

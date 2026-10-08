@@ -1,6 +1,5 @@
 import {
   generateMedia,
-  getMediaGeneration,
   listMediaCapabilities,
   listMediaDefaults,
   readGenerationSettings,
@@ -228,7 +227,6 @@ export function createHTTPPluginLeonServices(): HTTPPluginLeonServices {
     subscribeAgentEvents,
     handleConnectionSetup,
     generateMedia,
-    getMediaGeneration,
     listMediaCapabilities,
     listMediaDefaults,
     readGenerationSettings,

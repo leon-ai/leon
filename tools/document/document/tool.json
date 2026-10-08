@@ -1,0 +1,227 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "document",
+  "toolkit_id": "document",
+  "name": "Document Generation",
+  "description": "Create editable Word documents locally or document artifacts through configured generation providers.",
+  "icon_name": "file-text-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "capabilities": {
+      "description": "Inspect resolved profile defaults, setup errors, configured providers and supported generation models.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      }
+    },
+    "generate": {
+      "description": "Generate document using the profile defaults and attach the result. No model selection is needed.",
+      "progressive_guidance": "Use this operation for hosted generation requests. For local PDF use typst.compile; for local DOCX use create. Core resolves the configured provider/model. Check capabilities to inspect resolved defaults or diagnose missing setup. Do not switch models after an error unless the owner requests it. Do not claim completion without returned artifacts. Defaults live in this tool’s settings. provider=inherit follows the active conversation provider, model=auto uses its recommendation. If status is selection_required, explain the limitation and ask the owner to choose among choices; do not call another provider automatically. After they choose, use generateWithModel. Use configure only if they want the choice remembered.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string"
+              },
+              "options": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Provider-specific document options such as output format."
+              }
+            },
+            "required": [
+              "prompt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "create": {
+      "description": "Create a local editable DOCX with structured text, SVG/PNG figures and captions. No provider needed.",
+      "progressive_guidance": "Generate chart assets with document.echarts.render and pass returned absolute SVG/PNG paths in content.sections.images. Images follow that section’s paragraphs; create separate sections to position figures between text blocks. SVG includes a PNG fallback for Office compatibility. Width is in display pixels and height preserves the aspect ratio. Include captions and altText. Use document.typst.compile for local PDFs. Inspect DOCX content with operating_system_control.file.readDocument; convert to PDF with an installed document renderer before claiming visual verification.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": [
+              "docx"
+            ]
+          },
+          "content": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "sections": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "heading": {
+                      "type": "string"
+                    },
+                    "paragraphs": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "images": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "path": {
+                            "type": "string",
+                            "description": "Absolute local SVG or PNG file path, including returned chart artifact paths."
+                          },
+                          "caption": {
+                            "type": "string"
+                          },
+                          "altText": {
+                            "type": "string",
+                            "description": "Accessible description of the chart and what it communicates."
+                          },
+                          "width": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 624,
+                            "description": "Display width in pixels. Defaults to at most 480, with preserved aspect ratio."
+                          }
+                        },
+                        "required": [
+                          "path"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": [
+                    "paragraphs"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "title",
+              "sections"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "format",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "generateWithModel": {
+      "description": "Generate document using an explicitly owner-requested provider and model. Use generate for ordinary requests.",
+      "progressive_guidance": "Use only when the owner explicitly requested a provider and model. Do not choose a model from memory or use this operation merely to bypass profile defaults. Check capabilities first. Use an output-capable model, not an input-only vision model. Reuse the owner’s configured account. Do not claim completion without returned artifacts. For image edits/reference generation use the selected provider’s reference-image options. For documents use format pdf, docx, xlsx or pptx.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "input": {
+            "type": "object",
+            "properties": {
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "openai",
+                  "anthropic",
+                  "openrouter",
+                  "zai",
+                  "minimax",
+                  "groq",
+                  "huggingface",
+                  "sglang"
+                ]
+              },
+              "model": {
+                "type": "string"
+              },
+              "prompt": {
+                "type": "string"
+              },
+              "filename": {
+                "type": "string"
+              },
+              "options": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Provider-specific document options such as output format."
+              }
+            },
+            "required": [
+              "provider",
+              "model",
+              "prompt"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "input"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "configure": {
+      "description": "Save generation preferences only when the owner asks to remember/change them. Use inherit + auto to follow the conversation provider.",
+      "progressive_guidance": "Never save a provider switch without the owner's request. A pinned model requires its explicit provider. Credentials are reused from the provider account; do not request or store API keys here. Options replace saved output options.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "inherit",
+              "openai",
+              "anthropic",
+              "openrouter",
+              "zai",
+              "minimax",
+              "groq",
+              "huggingface",
+              "sglang"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "description": "Model ID, or auto for this provider's recommendation."
+          },
+          "options": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Default document output parameters such as format."
+          }
+        },
+        "required": [
+          "provider"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "progressive_guidance": "For local PDF creation use document.typst.compile. This tool creates local DOCX or uses hosted generation through the configured provider."
+}

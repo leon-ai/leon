@@ -37,7 +37,7 @@
               "options": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Provider-specific options, e.g. voice, size, duration, reference images; document format; MiniMax audio mode=music."
+                "description": "Provider-specific image options such as size, quality and reference images."
               },
               "reference_artifact_ids": {
                 "type": "array",
@@ -94,7 +94,7 @@
               "options": {
                 "type": "object",
                 "additionalProperties": true,
-                "description": "Provider-specific options, e.g. voice, size, duration, reference images; document format; MiniMax audio mode=music."
+                "description": "Provider-specific image options such as size, quality and reference images."
               },
               "reference_artifact_ids": {
                 "type": "array",
@@ -146,7 +146,7 @@
           "options": {
             "type": "object",
             "additionalProperties": true,
-            "description": "Default output parameters such as size/quality, duration/resolution, voice or document format."
+            "description": "Default image output parameters such as size and quality."
           }
         },
         "required": [

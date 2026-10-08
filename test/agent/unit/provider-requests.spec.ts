@@ -59,7 +59,8 @@ vi.mock('@/core/config-states/config-state', () => ({
     })
   }
 }))
-vi.mock('@/core/llm-manager/media-generation/media-generation-settings', () => ({
+vi.mock('@/core/llm-manager/media-generation/media-generation-settings', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/core/llm-manager/media-generation/media-generation-settings')>(),
   readGenerationSettings: mocks.settings
 }))
 vi.mock('@/core/artifacts/artifact-store', () => ({ readArtifact: mocks.artifact }))

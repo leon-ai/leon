@@ -1,11 +1,9 @@
-import { readGenerationSettings } from './media-generation-settings'
+import { readGenerationSettings, getGenerationToolkit } from './media-generation-settings'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { LLMProviders } from '@/core/llm-manager/types'
 import {
-  MEDIA_PROVIDERS,
-  DEFAULT_GENERATION_OPTIONS,
   getMediaProviderCapabilities,
   listMediaCapabilities
 } from './media-generation-catalog'
@@ -45,16 +43,6 @@ async function validateTarget(
   }
 
   return target
-}
-
-function defaultOptions(
-  kind: MediaKind,
-  target: GenerationTarget
-): Record<string, unknown> {
-  // Speech defaults must not leak into another model, such as MiniMax music.
-  return target.model === MEDIA_PROVIDERS[target.provider]?.models[kind]?.[0]
-    ? DEFAULT_GENERATION_OPTIONS[target.provider]?.[kind] || {}
-    : {}
 }
 
 /**
@@ -148,7 +136,7 @@ export async function resolveMediaGenerationTarget(
   if (!model) {
     throw await generationSelectionRequired(
       kind,
-      `Choose a ${kind} model for ${provider} in media_production.${kind} settings.`
+      `Choose a ${kind} model for ${provider} in ${getGenerationToolkit(kind)}.${kind} settings.`
     )
   }
 
@@ -181,7 +169,6 @@ export async function resolveMediaGenerationInput(
     ...input,
     ...target,
     options: {
-      ...defaultOptions(input.kind, target),
       ...target.options,
       ...input.options
     }
@@ -204,7 +191,7 @@ export async function listMediaDefaults(
             kind,
             {
               ...target,
-              options: { ...defaultOptions(kind, target), ...target.options }
+              options: target.options || {}
             }
           ]
         } catch (error) {

@@ -10,7 +10,17 @@ export interface GenerationSettings {
   options: Record<string, unknown>
 }
 
-const TOOLKIT = 'media_production'
+const GENERATION_TOOLKITS: Record<MediaKind, string> = {
+  [MediaKind.Image]: 'media_production',
+  [MediaKind.Document]: 'document'
+}
+
+/**
+ * Resolves settings in the toolkit that owns each generation tool.
+ */
+export function getGenerationToolkit(kind: MediaKind): string {
+  return GENERATION_TOOLKITS[kind]
+}
 
 function validateSettings(kind: MediaKind, settings: GenerationSettings): void {
   if (
@@ -49,7 +59,7 @@ export async function readGenerationSettings(
   kind: MediaKind
 ): Promise<GenerationSettings> {
   const settings = ToolkitConfig.loadToolSettings(
-    TOOLKIT,
+    getGenerationToolkit(kind),
     kind,
     {},
     true,
@@ -70,7 +80,7 @@ export async function saveGenerationSettings(
 ): Promise<GenerationSettings> {
   validateSettings(kind, settings)
   ToolkitConfig.saveToolSettings(
-    TOOLKIT,
+    getGenerationToolkit(kind),
     kind,
     { ...settings },
     getActiveProfileName()

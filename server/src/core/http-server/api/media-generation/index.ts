@@ -4,7 +4,6 @@ import { Type } from '@sinclair/typebox'
 import type { APIOptions } from '@/core/http-server/http-server'
 import {
   generateMedia,
-  getMediaGeneration,
   listMediaCapabilities,
   listMediaDefaults,
   saveGenerationSettings
@@ -79,10 +78,5 @@ export const mediaGenerationPlugin: FastifyPluginAsync<APIOptions> = async (
       }
     },
     async (request) => generateMedia(request.body)
-  )
-  fastify.get<{ Params: { sessionId: string, jobId: string } }>(
-    `${root}/:sessionId/:jobId`,
-    async (request) =>
-      getMediaGeneration(request.params.sessionId, request.params.jobId)
   )
 }

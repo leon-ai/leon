@@ -3,16 +3,12 @@ import type { LLMProviders } from '@/core/llm-manager/types'
 
 export enum MediaKind {
   Image = 'image',
-  Video = 'video',
-  Audio = 'audio',
   Document = 'document'
 }
 
 export enum GenerationStatus {
-  Pending = 'pending',
   SelectionRequired = 'selection_required',
-  Completed = 'completed',
-  Failed = 'failed'
+  Completed = 'completed'
 }
 
 export interface MediaGenerationInput {
@@ -35,7 +31,6 @@ export interface ResolvedMediaGenerationInput extends MediaGenerationInput {
 export interface MediaGenerationResult {
   status: GenerationStatus
   artifacts: Artifact[]
-  job_id?: string
   error?: string
   choices?: Array<{ provider: LLMProviders, models: string[] }>
 }

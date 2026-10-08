@@ -264,7 +264,6 @@ export interface HTTPPluginSaveConnectionInput {
 export interface HTTPPluginLeonServices {
   readonly profileId: string
   generateMedia: typeof import('@/core/llm-manager/media-generation/media-generation-service').generateMedia
-  getMediaGeneration: typeof import('@/core/llm-manager/media-generation/media-generation-service').getMediaGeneration
   readGenerationSettings: typeof import('@/core/llm-manager/media-generation/media-generation-service').readGenerationSettings
   saveGenerationSettings: typeof import('@/core/llm-manager/media-generation/media-generation-service').saveGenerationSettings
   listMediaDefaults: typeof import('@/core/llm-manager/media-generation/media-generation-service').listMediaDefaults
