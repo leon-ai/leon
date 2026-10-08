@@ -27,7 +27,7 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
-import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
+import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const DEFAULT_LLAMACPP_BASE_URL =

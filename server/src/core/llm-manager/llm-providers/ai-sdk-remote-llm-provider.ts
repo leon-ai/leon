@@ -54,7 +54,7 @@ import {
 } from '@/core/llm-manager/llm-model-catalog'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
-import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
+import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import {
   replayCompactionWindows,
   restoreCompactionSources

@@ -17,7 +17,7 @@ import {
 import { recordTurnInference } from '@/core/session-manager/session-context'
 import { getClaudeSubscriptionEnvironment } from '../fellows/fellow-catalog'
 import type { ResolvedLLMTarget } from '../llm-routing'
-import { readCompletionAccounting } from '../usage-accounting'
+import { readCompletionAccounting } from '../llm-usage/usage-accounting'
 import {
   LLMProviders,
   type CompletionParams,

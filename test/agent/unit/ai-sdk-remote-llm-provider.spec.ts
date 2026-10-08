@@ -17,7 +17,7 @@ import DeepSeekLLMProvider from '@/core/llm-manager/llm-providers/deepseek-llm-p
 import AnthropicLLMProvider from '@/core/llm-manager/llm-providers/anthropic-llm-provider'
 import HuggingFaceLLMProvider from '@/core/llm-manager/llm-providers/huggingface-llm-provider'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
-import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
+import { readCompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { CONFIG_MANAGER } from '@/config'
 import {
   getActiveTurnInference,

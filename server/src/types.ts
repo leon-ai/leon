@@ -15,7 +15,7 @@ import type { Artifact } from '@/core/artifacts/artifact-types'
  */
 
 import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
-import type { UsageAccounting } from '@/core/llm-manager/usage-accounting'
+import type { UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import type { TurnInference } from '@/core/llm-manager/inference-metadata'
 import type { CompletionAttemptTiming } from '@/core/llm-manager/types'
 

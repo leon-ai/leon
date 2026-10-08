@@ -7,7 +7,7 @@ import {
   type PromptOrChatHistory,
   type ProviderCompactionContext
 } from '@/core/llm-manager/types'
-import { type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
+import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 
 /**
  * Public completion result returned to Leon duties.

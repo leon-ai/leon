@@ -47,7 +47,7 @@ import {
   type ProviderCompactionContext,
   type PromptOrChatHistory
 } from '@/core/llm-manager/types'
-import { type CompletionAccounting } from '@/core/llm-manager/usage-accounting'
+import { type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { LogHelper } from '@/helpers/log-helper'
 
 const LEADING_EMPTY_THINKING_BLOCK_PATTERN = /^(?:\s*<think>\s*<\/think>)+\s*/i

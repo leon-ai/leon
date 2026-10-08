@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/usage-accounting'
+import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { randomUUID } from 'node:crypto'
 import { AsyncResource } from 'node:async_hooks'
 import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'

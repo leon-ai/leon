@@ -1,5 +1,5 @@
 import { LLMProviders } from '@/core/llm-manager/types'
-import { accumulateUsageAccounting, type CompletionAccounting, type UsageAccounting } from '@/core/llm-manager/usage-accounting'
+import { accumulateUsageAccounting, type CompletionAccounting, type UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 
 import type { AgentPhase } from './agent-types'
 

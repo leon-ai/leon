@@ -7,7 +7,7 @@ import {
   type ProviderCompactionContext,
   type OpenAIToolCall
 } from '@/core/llm-manager/types'
-import { readCompletionAccounting } from '@/core/llm-manager/usage-accounting'
+import { readCompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { LogHelper } from '@/helpers/log-helper'
 
 /**

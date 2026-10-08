@@ -1,4 +1,4 @@
-import { readUsageAccounting } from '@/core/llm-manager/usage-accounting'
+import { readUsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import type {
   NLPSkill,
   NLPUtterance,

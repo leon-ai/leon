@@ -18,7 +18,7 @@ import {
 import {
   readCompletionAccounting,
   type CompletionAccounting
-} from '@/core/llm-manager/usage-accounting'
+} from '@/core/llm-manager/llm-usage/usage-accounting'
 
 /**
  * Recognize Node streams and provider async iterables.
