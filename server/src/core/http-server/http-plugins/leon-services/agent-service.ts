@@ -144,46 +144,12 @@ export async function runAgent(
               return
             }
 
+            const serialized = serializeAgentTrace({
+              planSteps: [], toolCalls: [event.toolCall]
+            }, true).tool_calls[0]!
             const toolCall: HTTPPluginToolCall = {
-              id: event.toolCall.id,
-              name: event.toolCall.name,
-              ...(event.toolCall.toolkitName
-                ? { toolkit_name: event.toolCall.toolkitName }
-                : {}),
-              ...(event.toolCall.toolName
-                ? { tool_name: event.toolCall.toolName }
-                : {}),
-              ...(event.toolCall.toolCallTitle
-                ? { tool_call_title: event.toolCall.toolCallTitle }
-                : {}),
-              status: event.toolCall.status,
-              ...(event.toolCall.durationMs !== undefined
-                ? { duration_ms: event.toolCall.durationMs }
-                : {}),
-              ...(event.toolCall.toolkitIconName
-                ? { toolkit_icon_name: event.toolCall.toolkitIconName }
-                : {}),
-              ...(event.toolCall.toolIconName
-                ? { tool_icon_name: event.toolCall.toolIconName }
-                : {}),
-              ...(event.toolCall.input !== undefined
-                ? { input: event.toolCall.input }
-                : {}),
-              ...(event.toolCall.output !== undefined
-                ? { output: event.toolCall.output }
-                : {}),
-              ...(event.toolCall.stepLabel
-                ? { step_label: event.toolCall.stepLabel }
-                : {}),
-              ...(event.toolCall.errorMessage
-                ? { error_message: event.toolCall.errorMessage }
-                : {}),
-              ...(event.toolCall.skillId
-                ? { skill_id: event.toolCall.skillId }
-                : {}),
-              ...(event.toolCall.nativeSkillPath
-                ? { native_skill_path: event.toolCall.nativeSkillPath }
-                : {})
+              ...toolCalls.get(event.toolCall.id),
+              ...serialized
             }
             if (event.toolCall.status === 'running') {
               if (!toolStartedAt.has(event.toolCall.id)) {

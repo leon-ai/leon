@@ -131,6 +131,15 @@ it.each(['success', 'error', 'background', 'throw'])(
 
     coreMocks.executeTool.mockImplementationOnce(async (input) => {
       input.onProgress({ message: 'Working.' })
+      input.onProgress({ key: 'bridges.tools.command_started', message: 'Executing command.' })
+      input.onProgress({
+        key: 'bridges.tools.command_output_delta', message: 'First line\n',
+        data: { output: 'First line\n' }
+      })
+      input.onProgress({
+        key: 'bridges.tools.command_output_delta', message: 'Second line\n',
+        data: { output: 'Second line\n' }
+      })
       now.mockReturnValue(2_234)
 
       if (outcome === 'throw') {
@@ -155,6 +164,16 @@ it.each(['success', 'error', 'background', 'throw'])(
     }
 
     const status = outcome === 'error' || outcome === 'throw' ? 'error' : 'success'
+    expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(expect.objectContaining({
+      toolPhase: 'progress', message: 'Executing command.'
+    }))
+    expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(expect.objectContaining({
+      toolPhase: 'output_delta', outputDelta: 'Second line\n'
+    }))
+    expect(onProgress).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'running', commandOutput: 'First line\nSecond line\n',
+      lastOutputAt: expect.any(Number)
+    }))
     expect(onProgress).toHaveBeenLastCalledWith(expect.objectContaining({
       status,
       toolCallTitle,

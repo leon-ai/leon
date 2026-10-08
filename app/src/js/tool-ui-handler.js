@@ -1,6 +1,7 @@
 import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
 
 const COMMAND_OUTPUT_MAX_DISPLAY_CHARS = 80_000
+const LIVE_PROGRESS_INTERVAL_MS = 1_000
 const ANSI_ESCAPE_PATTERN =
   // eslint-disable-next-line no-control-regex
   /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))/g
@@ -243,8 +244,12 @@ export default class ToolUIHandler {
     )
     const outputPanel = this.createActivityPanel(
       'Result',
-      'What the function returned'
+      'Live output and the final result'
     )
+    const liveProgress = document.createElement('div')
+    liveProgress.className = 'tool-live-progress'
+    liveProgress.hidden = true
+    outputPanel.panel.appendChild(liveProgress)
 
     sections.appendChild(inputPanel.panel)
     sections.appendChild(outputPanel.panel)
@@ -280,6 +285,7 @@ export default class ToolUIHandler {
       subtitle,
       statusChip,
       durationLabel,
+      liveProgress,
       inputBody: inputPanel.body,
       outputBody: outputPanel.body,
       rawContent,
@@ -447,10 +453,10 @@ export default class ToolUIHandler {
     if (data.toolPhase === 'input') {
       const isPreparing = data.status === 'preparing'
 
-      toolGroupContainer.durationLabel.hidden = true
-      toolGroupContainer.summary.textContent = isPreparing
-        ? `Preparing the call for ${title.toLowerCase()}...`
-        : `Running ${title.toLowerCase()}...`
+      toolGroupContainer.summary.textContent = data.progressMessage ||
+        (isPreparing
+          ? `Preparing the call for ${title.toLowerCase()}...`
+          : `Running ${title.toLowerCase()}...`)
       this.setStatusChip(
         toolGroupContainer.statusChip,
         isPreparing ? 'preparing' : 'running'
@@ -469,17 +475,39 @@ export default class ToolUIHandler {
           toolGroupContainer.outputBody,
           isPreparing
             ? 'Generating function input...'
-            : 'Waiting for function output...'
+            : 'Function is running. Output will appear here as it arrives.'
         )
+      }
+
+      if (data.commandOutput) {
+        toolGroupContainer.commandOutputText = this.mergeCommandOutput(
+          '', data.commandOutput
+        )
+        this.renderCommandOutputLog(
+          toolGroupContainer.outputBody, toolGroupContainer.commandOutputText
+        )
+        toolGroupContainer.rawOutput = {
+          output: toolGroupContainer.commandOutputText
+        }
+      }
+
+      if (isPreparing) {
+        this.stopLiveProgress(toolGroupContainer)
+      } else {
+        this.startLiveProgress(toolGroupContainer, data)
       }
     }
 
-    if (data.toolPhase === 'preparation') {
+    if (data.toolPhase === 'preparation' || data.toolPhase === 'progress') {
       const progressMessage = data.message || data.answer || ''
       this.setStatusChip(toolGroupContainer.statusChip, 'running')
+      this.startLiveProgress(toolGroupContainer, data)
 
       if (progressMessage) {
         toolGroupContainer.summary.textContent = progressMessage
+      }
+
+      if (progressMessage && data.toolPhase === 'preparation') {
         toolGroupContainer.preparationLog.push(progressMessage)
         this.renderPreparationLog(
           toolGroupContainer.outputBody,
@@ -496,6 +524,7 @@ export default class ToolUIHandler {
       this.setStatusChip(toolGroupContainer.statusChip, 'running')
 
       if (outputDelta) {
+        toolGroupContainer.lastOutputAt = data.lastOutputAt ?? Date.now()
         toolGroupContainer.summary.textContent = 'Receiving command output...'
         toolGroupContainer.commandOutputText = this.mergeCommandOutput(
           toolGroupContainer.commandOutputText,
@@ -509,9 +538,11 @@ export default class ToolUIHandler {
           output: toolGroupContainer.commandOutputText
         }
       }
+      this.startLiveProgress(toolGroupContainer, data)
     }
 
     if (data.toolPhase === 'output') {
+      this.stopLiveProgress(toolGroupContainer)
       const duration = formatToolDuration(data.durationMs)
       const isBackground = data.output?.execution?.state === 'running'
 
@@ -550,6 +581,45 @@ export default class ToolUIHandler {
     if (toolGroupContainer.isNew) {
       toolGroupContainer.isNew = false
     }
+  }
+
+  /**
+   * Keep elapsed time visible even when a command produces no output.
+   */
+  startLiveProgress(card, data) {
+    card.startedAt ??= data.startedAt ?? Date.now()
+    card.lastOutputAt ??= data.lastOutputAt
+    card.liveProgress.hidden = false
+    this.updateLiveProgress(card)
+
+    if (!card.progressTimer) {
+      card.progressTimer = setInterval(() => {
+        this.updateLiveProgress(card)
+      }, LIVE_PROGRESS_INTERVAL_MS)
+    }
+  }
+
+  /**
+   * Describe output silence without claiming that the process is stalled.
+   */
+  updateLiveProgress(card) {
+    const now = Date.now()
+    const elapsed = formatToolDuration(Math.max(0, now - card.startedAt))
+    const quiet = formatToolDuration(Math.max(0, now - (card.lastOutputAt ?? card.startedAt)))
+    card.liveProgress.textContent = `Elapsed: ${elapsed} · No new output for ${quiet}`
+    card.durationLabel.textContent = elapsed
+    card.durationLabel.title = 'Elapsed time since tool dispatch.'
+    card.durationLabel.hidden = false
+  }
+
+  /**
+   * Release timers when an activity settles or leaves the conversation.
+   */
+  stopLiveProgress(card) {
+    clearInterval(card.progressTimer)
+    card.progressTimer = null
+    card.liveProgress.hidden = true
+    card.durationLabel.hidden = true
   }
 
   updateAgentSkillActivityCard(activityContainer, data) {
@@ -661,7 +731,10 @@ export default class ToolUIHandler {
     }
 
     let output = currentOutput || ''
-    let replaceCurrentLine = false
+    let replaceCurrentLine = output.endsWith('\r')
+    if (replaceCurrentLine) {
+      output = output.slice(0, -1)
+    }
 
     for (const char of cleanChunk) {
       if (char === '\r') {
@@ -682,6 +755,11 @@ export default class ToolUIHandler {
       }
 
       output += char
+    }
+
+    // A carriage return can arrive at a chunk boundary before its replacement.
+    if (replaceCurrentLine) {
+      output += '\r'
     }
 
     if (output.length <= COMMAND_OUTPUT_MAX_DISPLAY_CHARS) {
@@ -1071,6 +1149,10 @@ export default class ToolUIHandler {
         ...sharedData,
         toolPhase: 'input',
         status: toolCall.status === 'preparing' ? 'preparing' : 'running',
+        startedAt: toolCall.startedAt,
+        lastOutputAt: toolCall.lastOutputAt,
+        commandOutput: toolCall.commandOutput,
+        progressMessage: toolCall.progressMessage,
         toolInput: serializedInput,
         answer: serializedInput
       })
@@ -1097,6 +1179,11 @@ export default class ToolUIHandler {
    * Clear all tool groups.
    */
   clearToolGroups() {
+    for (const card of this.toolGroups.values()) {
+      if (card.mode === 'activity_card') {
+        this.stopLiveProgress(card)
+      }
+    }
     this.toolGroups.clear()
   }
 
@@ -1120,6 +1207,9 @@ export default class ToolUIHandler {
   removeToolGroup(groupId) {
     const toolGroup = this.toolGroups.get(groupId)
     if (toolGroup) {
+      if (toolGroup.mode === 'activity_card') {
+        this.stopLiveProgress(toolGroup)
+      }
       toolGroup.container.remove()
       this.toolGroups.delete(groupId)
     }

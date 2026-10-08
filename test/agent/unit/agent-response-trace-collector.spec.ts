@@ -18,6 +18,10 @@ describe('AgentResponseTraceCollector', () => {
 
     now.mockReturnValue(20_000)
     collector.record({ type: 'tool_call', toolCall: { ...toolCall, status: 'running' } })
+    collector.record({ type: 'tool_call', toolCall: {
+      ...toolCall, status: 'running', commandOutput: 'Python fixture\n',
+      lastOutputAt: 20_010, progressMessage: 'Checking remote access.'
+    } })
     now.mockReturnValue(20_050)
     collector.record({ type: 'tool_call', toolCall: {
       ...toolCall, status: 'success', durationMs: 50
@@ -25,7 +29,9 @@ describe('AgentResponseTraceCollector', () => {
     const finished = collector.snapshot({})
 
     expect(finished.toolCalls[0]).toMatchObject({
-      preparationStartedAt: 1_000, startedAt: 20_000, durationMs: 50
+      preparationStartedAt: 1_000, startedAt: 20_000, durationMs: 50,
+      commandOutput: 'Python fixture\n', lastOutputAt: 20_010,
+      progressMessage: 'Checking remote access.'
     })
     expect(deserializeAgentTrace(serializeAgentTrace(finished, false)).toolCalls)
       .toEqual(finished.toolCalls)

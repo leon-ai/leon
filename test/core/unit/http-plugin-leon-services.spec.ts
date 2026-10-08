@@ -616,7 +616,9 @@ describe('HTTP plugin Leon services', () => {
           inferences, planSteps: [], toolCalls: [{
             id: 'tool-1', name: 'system_utilities.tool_executions.read',
             toolkitName: 'System Utilities', toolName: 'Tool Executions',
-            preparationStartedAt: 1_600, startedAt: 2_000, status: 'success'
+            preparationStartedAt: 1_600, startedAt: 2_000, status: 'success',
+            commandOutput: 'First line\nSecond line\n', lastOutputAt: 2_500,
+            progressMessage: 'Receiving command output...'
           }]
         }
       }
@@ -628,6 +630,14 @@ describe('HTTP plugin Leon services', () => {
       onProgress({
         type: 'progress_message',
         message: { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }
+      })
+      onProgress({
+        type: 'tool_call',
+        toolCall: {
+          id: 'tool-1', name: 'system_utilities.tool_executions.read',
+          status: 'running', commandOutput: 'First line\nSecond line\n',
+          lastOutputAt: 2_500, progressMessage: 'Receiving command output...'
+        }
       })
       onProgress({
         type: 'tool_call',
@@ -656,15 +666,20 @@ describe('HTTP plugin Leon services', () => {
     expect(turn.response_trace.progress_messages).toEqual([progress])
     expect(turn.response_trace.inferences).toEqual(inferences)
     expect(turn.response_trace.tool_calls[0]).toMatchObject({
-      preparation_started_at: 1_600, started_at: 2_000
+      preparation_started_at: 1_600, started_at: 2_000,
+      command_output: 'First line\nSecond line\n', last_output_at: 2_500,
+      progress_message: 'Receiving command output...'
     })
     const toolCall = {
       toolkit_name: 'System Utilities',
       tool_name: 'Tool Executions'
     }
     expect(turn.response_trace.tool_calls[0]).toMatchObject(toolCall)
-    expect(events.find((event) => event['type'] === 'tool_call')).toMatchObject({
-      data: { tool_call: toolCall }
+    expect(events.filter((event) => event['type'] === 'tool_call').at(-1)).toMatchObject({
+      data: { tool_call: {
+        ...toolCall, command_output: 'First line\nSecond line\n', last_output_at: 2_500,
+        progress_message: 'Receiving command output...'
+      } }
     })
     expect(events.filter((event) => event['type'] === 'final_answer')).toHaveLength(1)
   })

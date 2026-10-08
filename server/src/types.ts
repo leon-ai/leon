@@ -144,6 +144,9 @@ export interface AgentResponseToolCall {
   toolIconName?: string
   input?: unknown
   output?: unknown
+  commandOutput?: string
+  lastOutputAt?: number
+  progressMessage?: string
   stepLabel?: string
   errorMessage?: string
   skillId?: string

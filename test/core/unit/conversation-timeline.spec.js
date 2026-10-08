@@ -79,6 +79,7 @@ describe('conversation activity replay', () => {
         subtitle: {},
         summary: {},
         statusChip: {},
+        liveProgress: {},
         durationLabel: { hidden: true }
       }
       handler.setStatusChip = vi.fn()
@@ -111,6 +112,84 @@ describe('conversation activity replay', () => {
       )
     }
   )
+
+  it('streams output in the result panel, tracks silence, and stops timers on completion and removal', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(10_000)
+    const handler = Object.create(ToolUIHandler.prototype)
+    const card = {
+      mode: 'activity_card', title: {}, summary: {}, statusChip: {},
+      liveProgress: {}, durationLabel: {}, commandOutputText: '',
+      outputBody: {}, container: { remove: vi.fn() }
+    }
+    handler.toolGroups = new Map([['t1', card]])
+    handler.setStatusChip = vi.fn()
+    handler.renderOutputPreview = vi.fn()
+    handler.renderValuePreview = vi.fn()
+    handler.renderPlaceholder = vi.fn()
+    handler.renderCommandOutputLog = vi.fn()
+    handler.renderRawData = vi.fn()
+
+    try {
+      handler.updateActivityCard(card, { toolPhase: 'input', status: 'preparing' }, 'run')
+      expect(card.liveProgress.hidden).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+
+      handler.updateActivityCard(card, { toolPhase: 'input', status: 'running' }, 'run')
+      vi.advanceTimersByTime(3_000)
+      expect(card.summary.textContent).toBe('Running run...')
+      expect(card.liveProgress.textContent).toBe('Elapsed: 3 s · No new output for 3 s')
+
+      handler.updateActivityCard(card, {
+        toolPhase: 'output_delta', outputDelta: 'Python fixture\nDownloading 10%\r'
+      }, 'run')
+      handler.updateActivityCard(card, {
+        toolPhase: 'output_delta', outputDelta: 'Downloading 20%'
+      }, 'run')
+      expect(handler.renderCommandOutputLog).toHaveBeenLastCalledWith(
+        card.outputBody, 'Python fixture\nDownloading 20%'
+      )
+      vi.advanceTimersByTime(2_000)
+      expect(card.liveProgress.textContent).toBe('Elapsed: 5 s · No new output for 2 s')
+      expect(vi.getTimerCount()).toBe(1)
+
+      handler.updateActivityCard(card, {
+        toolPhase: 'progress', message: 'Checking remote access.'
+      }, 'run')
+      expect(card.summary.textContent).toBe('Checking remote access.')
+      handler.updateActivityCard(card, {
+        toolPhase: 'output', status: 'success', durationMs: 5_000
+      }, 'run')
+      expect(card.liveProgress.hidden).toBe(true)
+      expect(card.durationLabel.textContent).toBe('5 s')
+      expect(vi.getTimerCount()).toBe(0)
+
+      handler.startLiveProgress(card, {})
+      handler.removeToolGroup('t1')
+      expect(vi.getTimerCount()).toBe(0)
+      handler.toolGroups.set('t1', card)
+      handler.startLiveProgress(card, {})
+      handler.clearToolGroups()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.clearAllTimers()
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores live output and original timestamps when replaying an unfinished call', () => {
+    const handler = Object.create(ToolUIHandler.prototype)
+    handler.handleToolOutput = vi.fn()
+    handler.replayAgentResponseTrace({ toolCalls: [{
+      id: 't1', name: 'test.lookup', status: 'running',
+      startedAt: 1_000, lastOutputAt: 3_000,
+      commandOutput: 'First line\nSecond line\n', progressMessage: 'Receiving command output...'
+    }] })
+    expect(handler.handleToolOutput).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      toolPhase: 'input', status: 'running', startedAt: 1_000, lastOutputAt: 3_000,
+      commandOutput: 'First line\nSecond line\n', progressMessage: 'Receiving command output...'
+    }))
+  })
 
   it('uses readable toolkit and tool labels when older traces lack display names', () => {
     const handler = Object.create(ToolUIHandler.prototype)

@@ -57,6 +57,9 @@ export interface HTTPPluginToolCall {
   step_label?: string
   input?: unknown
   output?: unknown
+  command_output?: string
+  last_output_at?: number
+  progress_message?: string
   error_message?: string
   skill_id?: string
   native_skill_path?: string

@@ -58,6 +58,9 @@ export function serializeAgentTrace(
         : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
+      ...(toolCall.commandOutput !== undefined ? { command_output: toolCall.commandOutput } : {}),
+      ...(toolCall.lastOutputAt !== undefined ? { last_output_at: toolCall.lastOutputAt } : {}),
+      ...(toolCall.progressMessage ? { progress_message: toolCall.progressMessage } : {}),
       ...(toolCall.stepLabel ? { step_label: toolCall.stepLabel } : {}),
       ...(toolCall.errorMessage
         ? { error_message: toolCall.errorMessage }
@@ -124,6 +127,9 @@ export function deserializeAgentTrace(
         : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
+      ...(toolCall.command_output !== undefined ? { commandOutput: toolCall.command_output } : {}),
+      ...(toolCall.last_output_at !== undefined ? { lastOutputAt: toolCall.last_output_at } : {}),
+      ...(toolCall.progress_message ? { progressMessage: toolCall.progress_message } : {}),
       ...(toolCall.step_label ? { stepLabel: toolCall.step_label } : {}),
       ...(toolCall.error_message
         ? { errorMessage: toolCall.error_message }

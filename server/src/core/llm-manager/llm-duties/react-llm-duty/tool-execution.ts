@@ -32,6 +32,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
+const COMMAND_OUTPUT_MAX_TRACE_CHARS = 80_000
 const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
   'bridges.tools.creating_bins_directory',
   'bridges.tools.binary_not_found',
@@ -159,6 +160,7 @@ export function emitToolExecutionInputToWebApp(params: {
     toolDisplayMode: 'activity_card',
     toolPhase: 'input',
     status: params.status || 'running',
+    ...(params.status !== 'preparing' ? { startedAt: Date.now() } : {}),
     ...displayContext,
     toolGroupId: params.toolGroupId,
     functionName: params.functionName,
@@ -170,12 +172,13 @@ export function emitToolExecutionInputToWebApp(params: {
   })
 }
 
-function emitToolPreparationProgressToWebApp(params: {
+function emitToolProgressToWebApp(params: {
   toolkitId: string
   toolId: string
   functionName: string
   toolGroupId: string
   message: string
+  phase: 'preparation' | 'progress'
   toolCallTitle?: string
   stepLabel?: string
 }): void {
@@ -188,7 +191,7 @@ function emitToolPreparationProgressToWebApp(params: {
     answer: message,
     isToolOutput: true,
     toolDisplayMode: 'activity_card',
-    toolPhase: 'preparation',
+    toolPhase: params.phase,
     ...getToolDisplayContext(
       params.toolkitId,
       params.toolId,
@@ -454,12 +457,24 @@ export async function runToolExecution(
   let didObservePreparationFailure = false
   const reportedPreparationMilestones = new Set<string>()
   let didFinishToolCall = false
+  let commandOutput = ''
 
   toolExecutionInput.onProgress = (progress): void => {
     // A retained job keeps reporting to its execution handle after this call
     // returns. Do not reopen the settled card with later background progress.
     if (didFinishToolCall) {
       return
+    }
+
+    const isOutputDelta = progress.key === 'bridges.tools.command_output_delta'
+    const outputDelta = isOutputDelta
+      ? typeof progress.data?.['output'] === 'string'
+        ? progress.data['output']
+        : progress.message
+      : ''
+    if (outputDelta) {
+      // Keep a bounded tail for reconnects without growing every saved turn.
+      commandOutput = (commandOutput + outputDelta).slice(-COMMAND_OUTPUT_MAX_TRACE_CHARS)
     }
 
     onProgressEvent?.({
@@ -477,19 +492,18 @@ export async function runToolExecution(
         : {}),
       input: requestedToolInput,
       output: progress.data || progress.message,
+      ...(outputDelta
+        ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving command output...' }
+        : { progressMessage: progress.message }),
       ...(stepLabel ? { stepLabel } : {})
     })
-    if (progress.key === 'bridges.tools.command_output_delta') {
-      const output =
-        typeof progress.data?.['output'] === 'string'
-          ? progress.data['output']
-          : progress.message
+    if (isOutputDelta) {
       emitToolExecutionOutputDeltaToWebApp({
         toolkitId,
         toolId,
         functionName,
         toolGroupId,
-        output,
+        output: outputDelta,
         ...(toolCallTitle ? { toolCallTitle } : {}),
         ...(stepLabel ? { stepLabel } : {})
       })
@@ -519,15 +533,26 @@ export async function runToolExecution(
         TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key)
       )
     ) {
+      emitToolProgressToWebApp({
+        toolkitId,
+        toolId,
+        functionName,
+        toolGroupId,
+        message: progress.message,
+        phase: 'progress',
+        ...(toolCallTitle ? { toolCallTitle } : {}),
+        ...(stepLabel ? { stepLabel } : {})
+      })
       return
     }
 
-    emitToolPreparationProgressToWebApp({
+    emitToolProgressToWebApp({
       toolkitId,
       toolId,
       functionName,
       toolGroupId,
       message: progress.message,
+      phase: 'preparation',
       ...(toolCallTitle ? { toolCallTitle } : {}),
       ...(stepLabel ? { stepLabel } : {})
     })

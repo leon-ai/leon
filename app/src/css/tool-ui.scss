@@ -295,6 +295,13 @@
   min-height: 72px;
 }
 
+.tool-live-progress {
+  padding: 0 14px 14px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .tool-output-summary {
   margin-bottom: 10px;
   color: rgba(255, 255, 255, 0.86);
