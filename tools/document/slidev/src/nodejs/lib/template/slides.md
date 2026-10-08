@@ -5,6 +5,7 @@ layout: cover
 colorSchema: dark
 aspectRatio: 16/9
 canvasWidth: 1280
+transition: fade
 fonts:
   provider: none
   sans: DejaVu Sans
@@ -47,7 +48,9 @@ One clear idea, supported by a concrete example.
   <div class="card"><lucide-circle-check /><h3>Verify</h3><p>Inspect the outcome before delivery.</p></div>
 </div>
 
+<div class="handoff" :class="{ 'is-active': $slidev.nav.currentSlideNo === 3 }" role="img" aria-label="Evidence moves from understanding through action to verification"><span class="handoff-packet"></span></div>
 
+<!-- The moving packet represents the evidence handed between stages. All stages remain visible while explaining the flow. -->
 
 ---
 layout: two-cols

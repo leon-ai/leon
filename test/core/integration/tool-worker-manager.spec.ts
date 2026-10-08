@@ -40,6 +40,67 @@ it.each(['recordLimit', 'timeout', 'canceled'])(
 let home = ''
 let manager: ToolWorkerManager
 
+it('keeps scaffold slides readable while evidence handoffs animate without click steps', async () => {
+  await fixture(false)
+
+  const project = path.join(home, 'presentation')
+  const context = {
+    toolkitId: 'document', toolId: 'slidev',
+    profileName: 'a', conversationSessionId: 'presentation', parameters: {}
+  }
+  const run = async (functionName: string, args: unknown[]): Promise<Record<string, unknown>> => {
+    const result = await manager.execute(
+      { ...context, functionName }, args, () => {},
+      { concurrency: ToolConcurrency.Serial }
+    )
+
+    expect(result.success, JSON.stringify(result)).toBe(true)
+
+    return result.output['result'] as Record<string, unknown>
+  }
+
+  await run('create', [project, 'Evidence handoffs'])
+  const checked = await run('check', [project])
+
+  expect(checked, JSON.stringify(checked)).toMatchObject({
+    ok: true, scope: 'full', complete: true, checkedStates: 5, findingCount: 0
+  })
+
+  const live = await run('present', [project, { openBrowser: false }])
+  const require = createRequire(path.resolve('tools/document/slidev/src/nodejs/package.json'))
+  const { chromium } = require('playwright-chromium') as typeof import('../../../tools/document/slidev/src/nodejs/node_modules/playwright-chromium')
+  const browser = await chromium.launch()
+
+  try {
+    const page = await browser.newPage()
+
+    await page.addInitScript(() => localStorage.setItem('slidev-wake-lock', 'false'))
+    await page.goto(live['audienceUrl'] as string, { waitUntil: 'networkidle' })
+
+    for (let slide = 1; slide <= 5; slide += 1) {
+      await expect.poll(() => page.evaluate('window.__slidev__.nav.currentSlideNo')).toBe(slide)
+      expect(await page.evaluate('window.__slidev__.nav.clicksTotal')).toBe(0)
+
+      if (slide === 3) {
+        const cards = page.locator('.slidev-page-3 .card')
+        const packet = page.locator('.slidev-page-3 .handoff-packet')
+        const position = await packet.evaluate((element) => getComputedStyle(element).left)
+
+        expect(await cards.count()).toBe(3)
+        expect(await cards.evaluateAll((elements) => elements.every((element) => getComputedStyle(element).opacity === '1'))).toBe(true)
+        await expect.poll(() => packet.evaluate((element) => getComputedStyle(element).left)).not.toBe(position)
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        expect(await packet.evaluate((element) => getComputedStyle(element).animationName)).toBe('none')
+        expect(await cards.first().isVisible()).toBe(true)
+      }
+
+      await page.keyboard.press('ArrowRight')
+    }
+  } finally {
+    await browser.close()
+  }
+}, 60_000)
+
 it('delivers animated browser presentations, static exports and editable sources through profile workers', async () => {
   await fixture(false)
 

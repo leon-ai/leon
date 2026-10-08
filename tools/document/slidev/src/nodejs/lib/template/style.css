@@ -95,3 +95,55 @@
   white-space: pre-wrap;
 }
 
+.handoff {
+  position: relative;
+  height: 3px;
+  margin: 32px 17% 0;
+  background: #40566d;
+}
+
+.handoff::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: -5px;
+  width: 12px;
+  height: 12px;
+  border-top: 3px solid var(--slidev-theme-primary);
+  border-right: 3px solid var(--slidev-theme-primary);
+  transform: rotate(45deg);
+}
+
+.handoff-packet {
+  position: absolute;
+  top: -5px;
+  left: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--slidev-theme-primary);
+}
+
+.handoff.is-active .handoff-packet {
+  animation: evidence-handoff 3s ease-in-out infinite;
+}
+
+@keyframes evidence-handoff {
+  0%, 15% {
+    left: 0;
+  }
+
+  45%, 55% {
+    left: 50%;
+  }
+
+  85%, 100% {
+    left: calc(100% - 12px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handoff.is-active .handoff-packet {
+    animation: none;
+  }
+}
