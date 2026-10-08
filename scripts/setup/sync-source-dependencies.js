@@ -116,8 +116,12 @@ const getMissingNodejsDependencies = (manifest, nodeModulesPath) => {
 
 /**
  * Sync Node.js dependencies next to the source that declares them.
+ * Notify onInstall before an installation and optionally stream installer output via stdio.
  */
-export const syncNodejsSourceDependencies = async (sourcePath) => {
+export const syncNodejsSourceDependencies = async (
+  sourcePath,
+  { onInstall, stdio = 'pipe' } = {}
+) => {
   sourcePath = path.resolve(sourcePath)
 
   const packageJSONPath = path.join(sourcePath, PACKAGE_JSON_FILE_NAME)
@@ -147,6 +151,8 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
 
   const environment = await getNodejsInstallEnvironment(workspacePath, hookPath, fingerprint)
 
+  onInstall?.()
+
   // A failed repair must not leave an earlier success stamp behind.
   await fs.promises.rm(stampPath, { force: true })
   await fs.promises.rm(nodeModulesPath, { recursive: true, force: true })
@@ -161,7 +167,8 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
 
   await execa(PNPM_RUNTIME_BIN_PATH, installArgs, {
     cwd: sourcePath,
-    env: environment
+    env: environment,
+    stdio
   })
 
   const missingDependencies = getMissingNodejsDependencies(manifest, nodeModulesPath)
@@ -174,8 +181,12 @@ export const syncNodejsSourceDependencies = async (sourcePath) => {
 
 /**
  * Sync Python dependencies into a .venv next to the source that declares them.
+ * Notify onInstall before an installation and optionally stream installer output via stdio.
  */
-export const syncPythonSourceDependencies = async (sourcePath) => {
+export const syncPythonSourceDependencies = async (
+  sourcePath,
+  { onInstall, stdio = 'pipe' } = {}
+) => {
   const manifestPath = path.join(sourcePath, PYPROJECT_FILE_NAME)
   const venvPath = path.join(sourcePath, VENV_DIR_NAME)
   const stampPath = getSyncStampPath(sourcePath)
@@ -192,6 +203,8 @@ export const syncPythonSourceDependencies = async (sourcePath) => {
 
   const dependencies = await getPyprojectDependencies(sourcePath)
 
+  onInstall?.()
+
   await fs.promises.rm(stampPath, { force: true })
   await fs.promises.rm(venvPath, { recursive: true, force: true })
   await execa(UV_RUNTIME_BIN_PATH, [
@@ -199,7 +212,7 @@ export const syncPythonSourceDependencies = async (sourcePath) => {
       '--python',
       PYTHON_RUNTIME_BIN_PATH,
       venvPath
-    ], { cwd: sourcePath })
+    ], { cwd: sourcePath, stdio })
 
   if (dependencies.length > 0) {
     await execa(UV_RUNTIME_BIN_PATH, [
@@ -208,7 +221,7 @@ export const syncPythonSourceDependencies = async (sourcePath) => {
         '--python',
         getProjectVenvPythonPath(sourcePath),
         ...dependencies
-      ], { cwd: sourcePath })
+      ], { cwd: sourcePath, stdio })
   }
 
   await fs.promises.writeFile(stampPath, path.resolve(sourcePath))

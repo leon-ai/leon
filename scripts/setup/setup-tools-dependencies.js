@@ -4,6 +4,7 @@ import path from 'node:path'
 import { PROFILE_TOOLS_PATH, TOOLS_PATH } from '@/constants'
 
 import { createSetupStatus } from './setup-status'
+import { SetupUI } from './setup-ui'
 import {
   syncNodejsSourceDependencies,
   syncPythonSourceDependencies
@@ -12,7 +13,7 @@ import {
 const NODEJS_SOURCE_PATH = path.join('src', 'nodejs')
 const PYTHON_SOURCE_PATH = path.join('src', 'python')
 
-const getToolSourcePaths = async (toolsPath) => {
+const getToolPaths = async (toolsPath) => {
   if (!fs.existsSync(toolsPath)) {
     return []
   }
@@ -20,7 +21,7 @@ const getToolSourcePaths = async (toolsPath) => {
   const toolkitEntries = await fs.promises.readdir(toolsPath, {
     withFileTypes: true
   })
-  const sourcePaths = []
+  const toolPaths = []
 
   for (const toolkitEntry of toolkitEntries) {
     if (!toolkitEntry.isDirectory()) {
@@ -42,14 +43,11 @@ const getToolSourcePaths = async (toolsPath) => {
         continue
       }
 
-      sourcePaths.push(
-        path.join(toolPath, NODEJS_SOURCE_PATH),
-        path.join(toolPath, PYTHON_SOURCE_PATH)
-      )
+      toolPaths.push(toolPath)
     }
   }
 
-  return sourcePaths
+  return toolPaths
 }
 
 /**
@@ -59,15 +57,42 @@ export default async function setupToolsDependencies() {
   const status = createSetupStatus('Setting up tool dependencies...').start()
 
   try {
-    const sourcePaths = [
-      ...(await getToolSourcePaths(TOOLS_PATH)),
-      ...(await getToolSourcePaths(PROFILE_TOOLS_PATH))
+    const toolPaths = [
+      ...(await getToolPaths(TOOLS_PATH)),
+      ...(await getToolPaths(PROFILE_TOOLS_PATH))
     ]
 
-    for (const sourcePath of sourcePaths) {
-      // A Node.js wrapper may depend on a Python CLI; manifests determine what to install.
-      await syncNodejsSourceDependencies(sourcePath)
-      await syncPythonSourceDependencies(sourcePath)
+    for (const [index, toolPath] of toolPaths.entries()) {
+      const toolName = path.join(
+        path.basename(path.dirname(toolPath)),
+        path.basename(toolPath)
+      )
+      const progress = `Tool dependencies (${index + 1}/${toolPaths.length}): ${toolName}`
+      const getInstallOptions = (language) => ({
+        stdio: ['ignore', 'inherit', 'inherit'],
+        onInstall() {
+          // Installer output owns the terminal while downloads and builds run.
+          status.pause()
+          SetupUI.aside(`${progress} — installing ${language} dependencies...`)
+        }
+      })
+
+      status.text = `${progress} — checking...`
+      status.start()
+
+      for (const sourceFolder of [NODEJS_SOURCE_PATH, PYTHON_SOURCE_PATH]) {
+        const sourcePath = path.join(toolPath, sourceFolder)
+
+        // A Node.js wrapper may depend on a Python CLI; manifests determine what to install.
+        await syncNodejsSourceDependencies(
+          sourcePath,
+          getInstallOptions('Node.js')
+        )
+        await syncPythonSourceDependencies(
+          sourcePath,
+          getInstallOptions('Python')
+        )
+      }
     }
 
     status.succeed('Tool dependencies: ready')

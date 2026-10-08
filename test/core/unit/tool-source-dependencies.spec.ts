@@ -61,8 +61,13 @@ it('uses both existing dependency installers for nested built-in and profile too
   for (const tool of tools) {
     for (const language of ['nodejs', 'python']) {
       const source = path.join(tool, 'src', language)
-      expect(fixture.node).toHaveBeenCalledWith(source)
-      expect(fixture.python).toHaveBeenCalledWith(source)
+      const installOptions = expect.objectContaining({
+        onInstall: expect.any(Function),
+        stdio: ['ignore', 'inherit', 'inherit']
+      })
+
+      expect(fixture.node).toHaveBeenCalledWith(source, installOptions)
+      expect(fixture.python).toHaveBeenCalledWith(source, installOptions)
     }
   }
   expect(fixture.node).toHaveBeenCalledTimes(6)
