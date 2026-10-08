@@ -61,8 +61,8 @@ async function inspectBrowser(options) {
   function observations() {
     return {
       ok: finished && findings.length === 0 && errors.size === 0 && failedRequests.size === 0,
-      scope: action === 'preview' ? 'selected' : 'full',
-      complete: finished,
+      scope: action === 'preview' ? 'selected' : parameters.slides ? 'targeted' : 'full',
+      complete: finished && !parameters.slides,
       states,
       checkedStates: states.length,
       findings: findings.slice(0, MAX_FINDINGS),
@@ -160,9 +160,15 @@ async function inspectBrowser(options) {
         states.push({ ...selected, waitMs: state.waitMs ?? DEFAULT_WAIT_MS, filename })
       }
     } else {
-      const slides = Array.from({ length: options.data.slides.length }, (_, index) => index + 1)
+      const slides = parameters.slides
+        ? [...new Set(parameters.slides)]
+        : Array.from({ length: options.data.slides.length }, (_, index) => index + 1)
 
       for (const slide of slides) {
+        if (slide > options.data.slides.length) {
+          throw new Error(`Slide ${slide} does not exist.`)
+        }
+
         const initial = await selectState(slide, 0)
 
         for (let click = 0; click <= initial.totalClicks; click += 1) {

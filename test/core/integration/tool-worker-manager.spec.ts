@@ -63,7 +63,11 @@ it('keeps scaffold slides readable while evidence handoffs animate without click
   const checked = await run('check', [project])
 
   expect(checked, JSON.stringify(checked)).toMatchObject({
-    ok: true, scope: 'full', complete: true, checkedStates: 5, findingCount: 0
+    ok: true, scope: 'full', complete: true, checkedStates: 5, findingCount: 0,
+    durationMs: expect.any(Number)
+  })
+  expect(await run('check', [project, { slides: [3] }])).toMatchObject({
+    ok: true, scope: 'targeted', complete: false, checkedStates: 1, findingCount: 0
   })
 
   const live = await run('present', [project, { openBrowser: false }])
@@ -326,6 +330,15 @@ require('node:fs').appendFileSync(require('node:path').join(process.env.LEON_HOM
   ))
 
   expect(await run('check', [project])).toMatchObject({ ok: false })
+  expect(await run('check', [project, { slides: [1] }])).toMatchObject({
+    ok: true, scope: 'targeted', complete: false, checkedStates: 2
+  })
+  expect(await run('check', [project, { slides: [2] }])).toMatchObject({
+    ok: false, scope: 'targeted', complete: false, checkedStates: 1
+  })
+  expect(await run('check', [project, { slides: [3] }])).toMatchObject({
+    ok: false, complete: false, errors: expect.arrayContaining(['Slide 3 does not exist.'])
+  })
 }, 300_000)
 
 it('renders seekable HTML motion into durable profile artifacts and returns actionable validation findings', async () => {
@@ -348,7 +361,7 @@ it('renders seekable HTML motion into durable profile artifacts and returns acti
 
   expect(scaffold.success, scaffold.message).toBe(true)
   expect(scaffold.output['result']).toMatchObject({
-    scope: 'full', complete: true,
+    scope: 'full', complete: true, durationMs: expect.any(Number),
     checks: { ok: true, browserSkipped: false }
   })
   expect((await run('inspect', [project])).output['result']).toMatchObject({
@@ -390,10 +403,21 @@ window.__timelines.motion = timeline;
   expect(checked.output['result']).toMatchObject({
     scope: 'full', complete: true, checks: { ok: true, browserSkipped: false }
   })
+  expect((await run('check', [project, { mode: 'lint' }])).output['result']).toMatchObject({
+    scope: 'lint', complete: false, checks: { ok: true, browserSkipped: true }
+  })
+  expect((await run('check', [project, { mode: 'targeted', times: [0.5] }])).output['result']).toMatchObject({
+    scope: 'targeted', complete: false,
+    checks: { ok: true, browserSkipped: false, layout: { samples: [0.5] } }
+  })
+  expect((await run('check', [project, { mode: 'targeted', times: [] }])).success).toBe(false)
+  expect((await run('check', [project, { mode: 'targeted', times: [0.5, 2] }])).success).toBe(false)
+  expect((await run('check', [project, { times: [0.5] }])).success).toBe(false)
+
   const preview = await run('preview', [project, [0, 0.5]])
 
   expect(preview.success, preview.message).toBe(true)
-  expect(preview.modelFiles).toMatchObject([{ mediaType: 'image/png' }])
+  expect(preview.modelFiles).toMatchObject([{ mediaType: 'image/jpeg' }])
   expect(preview.output['result']).toMatchObject({
     modelPreviewAttached: true,
     artifacts: [
@@ -405,6 +429,7 @@ window.__timelines.motion = timeline;
   const rendered = await run('render', [project, 'draft'])
 
   expect(rendered.success, rendered.message).toBe(true)
+  expect(rendered.output['result']).toMatchObject({ durationMs: expect.any(Number) })
 
   const artifact = (rendered.output['result'] as {
     artifacts: Array<{ path: string, mime_type: string }>
@@ -459,6 +484,9 @@ window.__timelines.motion = timeline;
         expect.objectContaining({ severity: 'error' })
       ]) }
     }
+  })
+  expect((await run('check', [project, { mode: 'lint' }])).output['result']).toMatchObject({
+    scope: 'lint', complete: false, checks: { ok: false, browserSkipped: true }
   })
 })
 

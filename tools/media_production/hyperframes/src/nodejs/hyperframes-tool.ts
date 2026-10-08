@@ -13,12 +13,30 @@ const MAX_MODEL_PREVIEW_BYTES = 8_388_608
 const CLI_PATH = fileURLToPath(new URL('./lib/cli.mjs', import.meta.url))
 const TEMPLATE_PATH = fileURLToPath(new URL('./lib/template/', import.meta.url))
 const require = createRequire(import.meta.url)
-const DEFAULT_SETTINGS = { timeout_ms: 600_000 }
+const DEFAULT_SETTINGS = { timeout_ms: 600_000, workers: 2 }
+const MAX_WORKERS = 8
 const MAX_PREVIEW_FRAMES = 8
 const CANVAS_SIZES = {
   portrait: { width: 1_080, height: 1_920 },
   landscape: { width: 1_920, height: 1_080 },
   square: { width: 1_080, height: 1_080 }
+}
+
+/**
+ * Repair passes can validate source or selected times; delivery needs full coverage.
+ */
+export enum CheckMode {
+  Lint = 'lint',
+  Targeted = 'targeted',
+  Full = 'full'
+}
+
+/**
+ * Selected timestamps are only valid for a targeted repair check.
+ */
+export interface CheckOptions {
+  mode?: CheckMode
+  times?: number[]
 }
 
 /**
@@ -180,15 +198,70 @@ export default class HyperframesTool extends Tool {
   /**
    * Returns actionable lint, runtime, layout and contrast findings before export.
    */
-  public async check(projectPath: string): Promise<unknown> {
+  public async check(
+    projectPath: string,
+    options: CheckOptions = {}
+  ): Promise<unknown> {
+    const mode = options.mode ?? CheckMode.Full
+
+    if (!Object.values(CheckMode).includes(mode)) {
+      throw new Error('Use lint, targeted or full for the check mode.')
+    }
+
+    if (mode === CheckMode.Targeted) {
+      if (
+        !Array.isArray(options.times) ||
+        options.times.length < 1 || options.times.length > MAX_PREVIEW_FRAMES
+      ) {
+        throw new Error(`Targeted checks require between 1 and ${MAX_PREVIEW_FRAMES} timestamps.`)
+      }
+
+      for (const seconds of options.times) {
+        this.validateTime(seconds)
+      }
+    } else if (options.times !== undefined) {
+      throw new Error('Timestamp selection is only supported by targeted checks.')
+    }
+
     const project = await this.resolveProject(projectPath)
-    const output = await this.runCli(['check', '--json', '--strict', '--at-transitions'], project)
-    const checks = JSON.parse(output.stdout)
+
+    // Repair passes preserve strict findings without sampling every transition.
+    // Their successful results still cannot establish complete delivery coverage.
+    const args = mode === CheckMode.Lint
+      ? ['lint', '--json']
+      : [
+          'check', '--json', '--strict',
+          ...(mode === CheckMode.Full
+            ? ['--at-transitions']
+            : ['--at', options.times!.join(',')])
+        ]
+    const output = await this.runCli(args, project)
+    const report = JSON.parse(output.stdout)
+    const checks = mode === CheckMode.Lint
+      ? {
+          ok: report.ok && report.warningCount === 0,
+          strict: true,
+          browserSkipped: true,
+          lint: report
+        }
+      : report
+
+    // The CLI can drop out-of-range selections; a repair pass must not silently
+    // claim success for timestamps it never inspected.
+    if (
+      mode === CheckMode.Targeted &&
+      typeof checks.layout?.duration === 'number' &&
+      options.times!.some((time) => time > checks.layout.duration)
+    ) {
+      throw new Error(`Selected timestamps must be within the ${checks.layout.duration}-second composition.`)
+    }
 
     return {
-      scope: 'full',
-      complete: !checks.browserSkipped && Boolean(checks.layout?.samples?.length),
+      scope: mode,
+      complete: mode === CheckMode.Full &&
+        !checks.browserSkipped && Boolean(checks.layout?.samples?.length),
       checks,
+      durationMs: output.durationMs,
       diagnostics: output.stderr
     }
   }
@@ -224,13 +297,17 @@ export default class HyperframesTool extends Tool {
         throw new Error('The renderer did not produce every requested preview.')
       }
 
+      const contactSheet = path.join(directory, 'contact-sheet.jpg')
+      const evidence = await fs.stat(contactSheet).catch(() => null)
+      // A contact sheet bounds model evidence while full-resolution frames
+      // remain available as downloadable artifacts for closer inspection.
       const files = await this.publishFiles(filenames.map((filename) => ({
         path: path.join(directory, filename),
         filename,
         mimeType: 'image/png'
-      })), path.join(directory, filenames[0]!))
+      })), evidence?.isFile() ? contactSheet : undefined, 'image/jpeg')
 
-      return { ...files, times, diagnostics: output.stderr }
+      return { ...files, times, durationMs: output.durationMs, diagnostics: output.stderr }
     })
   }
 
@@ -245,18 +322,30 @@ export default class HyperframesTool extends Tool {
       throw new Error('Use draft, looks or delivery for render quality.')
     }
 
+    const workers = this.settings['workers']
+
+    if (
+      typeof workers !== 'number' ||
+      !Number.isInteger(workers) ||
+      workers < 1 ||
+      workers > MAX_WORKERS
+    ) {
+      throw new Error(`workers must be an integer from 1 to ${MAX_WORKERS}.`)
+    }
+
     const project = await this.resolveProject(projectPath)
 
     return this.withWorkspace(async (directory) => {
       const target = path.join(directory, 'composition.mp4')
       const output = await this.runCli([
-        'render', '--output', target, '--quality', quality
+        'render', '--output', target, '--quality', quality,
+        '--workers', String(workers)
       ], project)
       const files = await this.publishFiles([
         { path: target, filename: 'composition.mp4', mimeType: 'video/mp4' }
       ])
 
-      return { ...files, renderSummary: output.stdout, diagnostics: output.stderr }
+      return { ...files, durationMs: output.durationMs, renderSummary: output.stdout, diagnostics: output.stderr }
     })
   }
 
@@ -266,6 +355,7 @@ export default class HyperframesTool extends Tool {
   private async runCli(args: string[], cwd?: string): Promise<{
     stdout: string
     stderr: string
+    durationMs: number
   }> {
     const timeout = this.settings['timeout_ms']
 
@@ -275,6 +365,7 @@ export default class HyperframesTool extends Tool {
 
     let stdout = ''
     let stderr = ''
+    const startedAt = performance.now()
 
     try {
       await this.executeCommand({
@@ -303,7 +394,7 @@ export default class HyperframesTool extends Tool {
       }
     }
 
-    return { stdout, stderr }
+    return { stdout, stderr, durationMs: Math.round(performance.now() - startedAt) }
   }
 
   private validateProjectPath(projectPath: string): void {

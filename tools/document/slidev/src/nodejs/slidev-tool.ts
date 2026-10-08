@@ -49,6 +49,13 @@ export interface PreviewState {
 }
 
 /**
+ * Selected slides cover repair work; omitting selection checks the entire deck.
+ */
+export interface CheckOptions {
+  slides?: number[]
+}
+
+/**
  * Export options for delivery and printable click-step handouts.
  */
 export interface ExportOptions {
@@ -153,10 +160,25 @@ export default class SlidevTool extends Tool {
   /**
    * Visits every slide and click step, reporting runtime and visible layout defects.
    */
-  public async check(projectPath: string): Promise<unknown> {
+  public async check(
+    projectPath: string,
+    options: CheckOptions = {}
+  ): Promise<unknown> {
+    if (
+      options.slides !== undefined && (
+        !Array.isArray(options.slides) || options.slides.length < 1 ||
+        options.slides.length > MAX_PREVIEW_STATES ||
+        options.slides.some((slide) => !Number.isSafeInteger(slide) || slide < 1)
+      )
+    ) {
+      throw new Error(`Select between 1 and ${MAX_PREVIEW_STATES} positive slide numbers.`)
+    }
+
     const entry = await this.resolveEntry(projectPath)
 
-    return this.withWorkspace(async (directory) => this.runCli('check', entry, directory))
+    return this.withWorkspace(async (directory) => this.runCli('check', entry, directory, {
+      slides: options.slides
+    }))
   }
 
   /**
@@ -303,6 +325,7 @@ export default class SlidevTool extends Tool {
 
     const resultPath = path.join(directory, 'result.json')
     let diagnostics = ''
+    const startedAt = performance.now()
 
     await this.executeCommand({
       binaryName: RuntimeHelper.getNodeBinPath(),
@@ -318,7 +341,7 @@ export default class SlidevTool extends Tool {
 
     const result = JSON.parse(await fs.readFile(resultPath, 'utf8')) as Record<string, unknown>
 
-    return { ...result, diagnostics }
+    return { ...result, durationMs: Math.round(performance.now() - startedAt), diagnostics }
   }
 
   private validateProjectPath(projectPath: string): void {
