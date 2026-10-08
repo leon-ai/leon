@@ -6,9 +6,7 @@ import { ConnectionStatus } from '@/core/connections/connection-store'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { BRAIN } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
-import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
 import type {
@@ -51,12 +49,15 @@ import {
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
-import type {
-  AgentToolTranscriptMessage,
-  ProviderReasoningItem,
-  OpenAIToolCall
+import {
+  LLMDuties,
+  LLMProviders,
+  type AgentToolTranscriptMessage,
+  type ProviderReasoningItem,
+  type OpenAIToolCall,
+  type CompletionParams
 } from '@/core/llm-manager/types'
-import { LLMProviders } from '@/core/llm-manager/types'
+import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'
 
 const coreMocks = vi.hoisted(() => ({
   getFlattenedTools: vi.fn(),
@@ -3077,7 +3078,7 @@ describe('agent automatic compaction', () => {
   })
 })
 
-describe('model waiting progress', () => {
+describe('model response status', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
@@ -3086,21 +3087,10 @@ describe('model waiting progress', () => {
     const modelState = CONFIG_STATE.getModelState()
     vi.spyOn(modelState, 'getAgentProvider').mockReturnValue(LLMProviders.OpenAI)
     vi.spyOn(modelState, 'getAgentTarget').mockReturnValue({
-      provider: LLMProviders.OpenAI,
-      model: 'gpt-6-sol'
+      provider: LLMProviders.OpenAI, model: 'gpt-6-sol'
     })
     vi.spyOn(CONFIG_STATE.getModelSettingsState(), 'getSettings').mockReturnValue({
       reasoning: 'on', speed: 'auto'
-    })
-    const answers = JSON.parse(fs.readFileSync('core/data/en/answers.json', 'utf8')).answers
-    vi.spyOn(BRAIN, 'wernicke').mockImplementation((key, _fallback, values = {}) => {
-      const answer = answers[key][0]
-
-      if (Object.keys(values).length === 0) {
-        return answer
-      }
-
-      return StringHelper.findAndMap(answer, values)
     })
     vi.spyOn(LogHelper, 'warning').mockImplementation(() => {})
   })
@@ -3109,119 +3099,91 @@ describe('model waiting progress', () => {
     vi.useRealTimers()
   })
 
-  it.each([
-    ['initial', 'I’m reviewing your request and working out the next action.'],
-    ['step', 'I’m working through “Group extensions and show examples” and deciding the next action.'],
-    ['progress', 'I’m checking the results and next steps. My latest update was: The file inventory is saved. I’ll review the extension groups.'],
-    ['review', 'I’m checking the results against your request before wrapping up.'],
-    ['final', 'I’m putting together your answer from the available results.'],
-    ['recovery', 'I’m reviewing the available results to work out how to continue.']
-  ])('describes the %s stage once and keeps diagnostics out of owner progress', async (stage, expected) => {
+  const statuses = (): ModelResponseStatus[] => coreMocks.emitToChatClients.mock.calls
+    .filter(([event]) => event === 'model-response-status')
+    .map(([, status]) => status)
+
+  it.each([false, true])('reports observed stream activity without adding chat history (review=%s)', async (review) => {
     let finish!: (result: { output: string }) => void
-    coreMocks.prompt.mockReturnValueOnce(new Promise((resolve) => {
-      finish = resolve
-    }))
-    const duty = new ReActLLMDuty({ input: 'Group video files by extension.' })
-    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
-    const transcript: AgentToolTranscriptMessage[] = [
-      { role: 'user', content: 'Group video files by extension.' },
-      {
-        role: 'assistant', content: '',
-        reasoning: 'Private reasoning must not become progress.'
-      }
-    ]
-
-    if (stage === 'progress') {
-      transcript.push({
-        role: 'assistant',
-        content: 'The file inventory is saved. I’ll review the extension groups.',
-        toolCalls: [toolCall('groups', CALLABLE_TOOL_NAME, { query: 'groups' })]
+    let params!: CompletionParams
+    coreMocks.prompt.mockImplementationOnce((_messages, input) => {
+      params = input
+      return new Promise((resolve) => {
+        finish = resolve
       })
-    }
-
-    const pending = duty['callAgentModel'](
-      transcript, 'Follow the request.', createCatalog().tools,
-      {
-        isRecoveryAttempt: stage === 'recovery',
-        isCompletionReview: stage === 'review',
-        isFinalizationAttempt: stage === 'final'
-      },
-      {
-        originalInput: 'Group video files by extension.',
-        trackedSteps: stage === 'initial' || stage === 'progress' ? [] : [{
-          label: 'Group extensions and show examples', status: 'in_progress'
-        }],
-        executionHistory: [], loadedToolkitIds: [], activeSkillId: null
-      }
-    )
+    })
+    const duty = new ReActLLMDuty({ input: 'Inspect the files.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+      isRecoveryAttempt: false, isCompletionReview: review
+    })
 
     try {
-      await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
-      expect(duty['responseTraceCollector'].snapshot({}).progressMessages?.map(
-        (message) => message.content
-      )).toEqual([expected])
-      expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledWith(
-        expect.objectContaining({ answer: expected, historyMode: 'system_widget' })
-      )
-
-      await vi.advanceTimersByTimeAsync(
-        AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS - AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS
-      )
-      expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toHaveLength(1)
+      expect(statuses().at(-1)?.state).toBe(ModelResponseState.Waiting)
+      params.onStreamEvent?.({ type: 'stream-open' })
+      params.onStreamEvent?.({ type: 'reasoning-start' })
+      await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
+      expect(statuses().map((status) => status.state)).toEqual([
+        ModelResponseState.Waiting, ModelResponseState.Connected, ModelResponseState.Reasoning
+      ])
+      expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toBeUndefined()
+      expect(coreMocks.emitAnswerToChatClients.mock.calls.some(([payload]) =>
+        payload.historyMode === 'system_widget'
+      )).toBe(false)
       expect(LogHelper.warning).toHaveBeenCalledWith(
         expect.stringContaining('approximate input tokens=')
       )
       expect(coreMocks.prompt).toHaveBeenCalledOnce()
     } finally {
-      finish({ output: 'The groups are ready.' })
+      finish({ output: 'Done.' })
       await pending
     }
+    expect(statuses().at(-1)?.state).toBe(ModelResponseState.Completed)
+    expect(new Set(statuses().map((status) => status.requestId)).size).toBe(1)
   })
 
-  it.each(['streaming', 'tool-input', 'completed', 'canceled'])(
-    'does not add waiting notices to a %s request',
-    async (state) => {
+  it.each(['text', 'tool-input', 'internal-tool', 'completed', 'failed', 'canceled'])(
+    'clears model waiting on %s and ignores late stream events', async (state) => {
       let finish!: (result: { output: string }) => void
-      let emitToken!: (token: string) => void
-      let emitToolCall!: (call: OpenAIToolCall) => void
-      const response = new Promise((resolve) => {
-        finish = resolve
-      })
-      coreMocks.prompt.mockImplementationOnce((_messages, params) => {
-        emitToken = params.onToken
-        emitToolCall = params.onToolCall
-        return response
+      let fail!: (error: Error) => void
+      let params!: CompletionParams
+      coreMocks.prompt.mockImplementationOnce((_messages, input) => {
+        params = input
+        return new Promise((resolve, reject) => {
+          finish = resolve
+          fail = reject
+        })
       })
       const controller = new AbortController()
-      const duty = new ReActLLMDuty({ input: 'Find video files.', signal: controller.signal })
+      const duty = new ReActLLMDuty({ input: 'Inspect files.', signal: controller.signal })
       Object.assign(duty, { writeAgentPromptLog: vi.fn() })
-      const pending = duty['callAgentModel'](
-        [{ role: 'user', content: 'Find video files.' }], 'Follow the request.',
-        createCatalog().tools, { isRecoveryAttempt: false },
-        undefined, createCatalog().functionsByToolName
-      ).then(() => null, (error) => error)
-
+      const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+        isRecoveryAttempt: false
+      }).then(() => null, (error) => error)
       try {
-        if (state === 'streaming') {
-          emitToken('Found video files. ')
+        if (state === 'text') {
+          params.onToken?.('Found the files.')
         } else if (state === 'tool-input') {
-          emitToolCall(toolCall('preview', CALLABLE_TOOL_NAME, { query: 'files' }))
+          params.onStreamEvent?.({ type: 'tool-input-start' })
+        } else if (state === 'internal-tool') {
+          params.onToolCall?.(toolCall('plan', AGENT_PLAN_TOOL_NAME, {}))
         } else if (state === 'completed') {
           finish({ output: 'Done.' })
+          await pending
+        } else if (state === 'failed') {
+          fail(new Error('Provider failed.'))
           await pending
         } else {
           controller.abort(new Error('Owner canceled.'))
         }
-
-        await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
-        expect(duty['responseTraceCollector'].snapshot({}).progressMessages).toBeUndefined()
-        expect(coreMocks.emitAnswerToChatClients.mock.calls.some(([payload]) =>
-          payload.historyMode === 'system_widget'
-        )).toBe(false)
+        expect(statuses().at(-1)?.state).toBe(ModelResponseState.Completed)
+        const count = statuses().length
+        params.onStreamEvent?.({ type: 'reasoning-start' })
+        await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
+        expect(statuses()).toHaveLength(count)
       } finally {
         finish({ output: 'Done.' })
         const error = await pending
-
         if (state === 'canceled') {
           expect(error).toBe(controller.signal.reason)
         }
@@ -3229,33 +3191,39 @@ describe('model waiting progress', () => {
     }
   )
 
-  it('suppresses identical wait notices across inferences while allowing a new milestone notice', async () => {
-    const duty = new ReActLLMDuty({ input: 'Inspect and verify files.' })
-    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
-
-    for (const label of ['Inspect files', 'Inspect files', 'Verify files']) {
-      let finish!: (result: { output: string }) => void
-      coreMocks.prompt.mockReturnValueOnce(new Promise((resolve) => {
+  it('reopens waiting for a retry with the new attempt timestamp', async () => {
+    let finish!: (result: { output: string }) => void
+    let params!: CompletionParams
+    coreMocks.prompt.mockImplementationOnce((_messages, input) => {
+      params = input
+      return new Promise((resolve) => {
         finish = resolve
-      }))
-      const pending = duty['callAgentModel']([], 'Follow the request.', [],
-        { isRecoveryAttempt: false }, {
-          originalInput: 'Inspect and verify files.',
-          trackedSteps: [{ label, status: 'in_progress' }],
-          executionHistory: [], loadedToolkitIds: [], activeSkillId: null
-        })
-
-      await vi.advanceTimersByTimeAsync(AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
-      finish({ output: 'Ready.' })
+      })
+    })
+    const duty = new ReActLLMDuty({ input: 'Inspect files.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+      isRecoveryAttempt: false
+    })
+    const attempt = {
+      attemptId: 'attempt-1', startedAt: Date.now(), provider: LLMProviders.OpenAI,
+      duty: LLMDuties.ReAct, transport: 'http' as const, outcome: 'started',
+      elapsedMs: 0, inferenceTimeoutMs: 120_000, streamIdleTimeoutMs: 30_000,
+      lastEvent: 'dispatched'
+    }
+    try {
+      params.onAttempt?.(attempt)
+      params.onStreamEvent?.({ type: 'tool-input-start' })
+      params.onAttempt?.({ ...attempt, outcome: 'failed' })
+      await vi.advanceTimersByTimeAsync(1_000)
+      params.onAttempt?.({ ...attempt, attemptId: 'attempt-2', startedAt: Date.now() })
+      expect(statuses().at(-1)).toMatchObject({ state: ModelResponseState.Waiting, startedAt: Date.now() })
+      params.onStreamEvent?.({ type: 'stream-open' })
+      expect(statuses().at(-1)?.state).toBe(ModelResponseState.Connected)
+    } finally {
+      finish({ output: 'Done.' })
       await pending
     }
-
-    expect(duty['responseTraceCollector'].snapshot({}).progressMessages?.map(
-      (message) => message.content
-    )).toEqual([
-      'I’m working through “Inspect files” and deciding the next action.',
-      'I’m working through “Verify files” and deciding the next action.'
-    ])
   })
 })
 

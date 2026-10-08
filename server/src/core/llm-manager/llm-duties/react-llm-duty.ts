@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/usage-accounting'
 import { randomUUID } from 'node:crypto'
+import { AsyncResource } from 'node:async_hooks'
+import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'
 
 import {
   DEFAULT_INIT_PARAMS,
@@ -18,7 +20,6 @@ import {
   TOOLKIT_REGISTRY,
   CONTEXT_MANAGER,
   SELF_MODEL_MANAGER,
-  BRAIN,
   CONVERSATION_LOGGER,
   SOCKET_SERVER,
   TOOL_CALL_LOGGER,
@@ -132,7 +133,6 @@ import { AgentResponseTraceCollector } from './react-llm-duty/agent-response-tra
 import { AgentSessionState } from './react-llm-duty/agent-session-state'
 
 const AGENT_PROMPT_CACHE_KEY = 'leon-agent'
-const MODEL_WAIT_PROGRESS_CONTEXT_MAX_CHARS = 240
 const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
   'length',
   'max_tokens',
@@ -191,7 +191,6 @@ export class ReActLLMDuty extends LLMDuty {
 
   private executionStartedAt = 0
   private firstOutputAt: number | null = null
-  private lastModelWaitProgress = ''
   private readonly streamedToolCalls = new Map<string, {
     callable: AgentCallableFunction
     groupId: string
@@ -266,7 +265,6 @@ export class ReActLLMDuty extends LLMDuty {
 
     this.executionStartedAt = Date.now()
     this.firstOutputAt = null
-    this.lastModelWaitProgress = ''
     this.completionCount = 0
     this.continuationSummaryFailed = false
     this.automaticCompactionFailed = false
@@ -1175,34 +1173,38 @@ export class ReActLLMDuty extends LLMDuty {
 
     let completionResult: Awaited<ReturnType<typeof LLM_PROVIDER.prompt>>
     let completed = false
-    let hasStartedAnswer = false
-    let hasStartedToolCall = false
-    let hasSentWaitNotice = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
     let diagnosisTimer: NodeJS.Timeout | null = null
     const toolCallAbortController = new AbortController()
 
-    const emitWaitNotice = (): void => {
-      if (
-        completed || this.signal?.aborted ||
-        hasStartedAnswer || hasStartedToolCall || hasSentWaitNotice
-      ) {
-        return
-      }
-
-      // Reuse public task state without an extra inference request or private
-      // reasoning. One notice is enough while the same request remains pending.
-      hasSentWaitNotice = true
-      const message = this.getModelWaitProgress(transcript, options, checkpointInput)
-
-      // Repeated inferences within the same milestone add no new owner information.
-      if (message === this.lastModelWaitProgress) {
-        return
-      }
-
-      this.lastModelWaitProgress = message
-      void this.emitProgress(message)
+    const modelStatus: ModelResponseStatus = {
+      requestId: randomUUID(),
+      sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
+      startedAt: Date.now(),
+      state: ModelResponseState.Waiting
     }
+    // Abort signals may be delivered from another request's context.
+    const emitModelStatus = AsyncResource.bind((
+      state: ModelResponseState,
+      startedAt = modelStatus.startedAt
+    ): void => {
+      if (this.signal?.aborted && state !== ModelResponseState.Completed) {
+        return
+      }
+
+      modelStatus.state = state
+      modelStatus.startedAt = startedAt
+      SOCKET_SERVER.emitToChatClients('model-response-status', { ...modelStatus }, {
+        sessionId: modelStatus.sessionId
+      })
+    })
+    const clearModelStatus = (): void => {
+      if (modelStatus.state !== ModelResponseState.Completed) {
+        emitModelStatus(ModelResponseState.Completed)
+      }
+    }
+    this.signal?.addEventListener('abort', clearModelStatus, { once: true })
+    emitModelStatus(ModelResponseState.Waiting)
 
     waitNoticeTimer = setTimeout(() => {
       if (completed || this.signal?.aborted) {
@@ -1212,7 +1214,6 @@ export class ReActLLMDuty extends LLMDuty {
       LogHelper.warning(
         `callAgentModel: pending > ${AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
       )
-      emitWaitNotice()
     }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
 
     diagnosisTimer = setTimeout(() => {
@@ -1227,7 +1228,6 @@ export class ReActLLMDuty extends LLMDuty {
         phase,
         toolChoice
       )
-      emitWaitNotice()
     }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
 
     try {
@@ -1250,28 +1250,48 @@ export class ReActLLMDuty extends LLMDuty {
         onAttempt: (timing): void => {
           this.responseTraceCollector.recordInference({ ...timing, phase })
           this.scheduleTraceSave()
+          if (timing.outcome === 'started') {
+            emitModelStatus(ModelResponseState.Waiting, timing.startedAt)
+          } else {
+            clearModelStatus()
+          }
+        },
+        onStreamEvent: (event): void => {
+          if (event.type === 'stream-open' && !options.isCompletionReview) {
+            // A retry replaces any unfinished previews from its predecessor.
+            this.closeStreamedToolCalls()
+          }
+
+          if (modelStatus.state === ModelResponseState.Completed) {
+            return
+          }
+
+          if (event.type === 'stream-open' || event.type === 'reasoning-end') {
+            emitModelStatus(ModelResponseState.Connected)
+          } else if (event.type === 'reasoning-start') {
+            emitModelStatus(ModelResponseState.Reasoning)
+          } else if (
+            event.type === 'finish' || (!options.isCompletionReview && (
+              event.type === 'tool-input-start' || event.type === 'tool-input-delta' ||
+              event.type === 'tool-call-delta' || event.type === 'tool-call'
+            ))
+          ) {
+            clearModelStatus()
+          }
         },
         ...(!options.isCompletionReview
           ? {
               onToken: (token: unknown): void => {
                 if (typeof token === 'string') {
-                  if (!token) {
-                    hasStartedAnswer = false
-                  } else if (token.trim()) {
-                    hasStartedAnswer = true
+                  if (token.trim()) {
+                    clearModelStatus()
                   }
 
                   this.answerStream.push(token)
                 }
               },
-              onStreamEvent: (event): void => {
-                if (event.type === 'stream-open') {
-                  // A retry replaces any unfinished previews from its predecessor.
-                  this.closeStreamedToolCalls()
-                  hasStartedToolCall = false
-                }
-              },
               onToolCall: (call): void => {
+                clearModelStatus()
                 const callable = functionsByToolName?.get(call.function.name)
                 if (!callable) {
                   return
@@ -1284,7 +1304,6 @@ export class ReActLLMDuty extends LLMDuty {
                 }
 
                 const groupId = previous?.groupId || `agent_${StringHelper.random(12)}`
-                hasStartedToolCall = true
                 this.streamedToolCalls.set(call.id, { callable, groupId, input })
                 this.firstOutputAt ??= Date.now()
                 this.reportProgressEvent({
@@ -1339,6 +1358,8 @@ export class ReActLLMDuty extends LLMDuty {
       })
     } finally {
       completed = true
+      this.signal?.removeEventListener('abort', clearModelStatus)
+      clearModelStatus()
       if (waitNoticeTimer) {
         clearTimeout(waitNoticeTimer)
       }
@@ -1740,56 +1761,6 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     LogHelper.debug('Prompt reasoning [tools]: none')
-  }
-
-  /**
-   * Describes the known task stage while a model request remains pending.
-   */
-  private getModelWaitProgress(
-    transcript: AgentToolTranscriptMessage[],
-    options: {
-      isCompletionReview?: boolean
-      isFinalizationAttempt?: boolean
-      isRecoveryAttempt: boolean
-    },
-    checkpointInput?: AgentContinuityCheckpointInput
-  ): string {
-    if (options.isCompletionReview) {
-      return BRAIN.wernicke('react.tool_call.reviewing_completion')
-    }
-
-    if (options.isFinalizationAttempt) {
-      return BRAIN.wernicke('react.tool_call.preparing_answer')
-    }
-
-    if (options.isRecoveryAttempt) {
-      return BRAIN.wernicke('react.tool_call.recovering')
-    }
-
-    const activeStep = checkpointInput?.trackedSteps.find(
-      (step) => step.status === 'in_progress'
-    )
-
-    if (activeStep) {
-      return BRAIN.wernicke('react.tool_call.working_step', '', {
-        '{{ step }}': activeStep.label.slice(0, MODEL_WAIT_PROGRESS_CONTEXT_MAX_CHARS)
-      })
-    }
-
-    // Assistant text accompanying tool calls is the public progress already
-    // shown by the loop. Tool output and reasoning are not progress summaries.
-    const progress = transcript.findLast((message) =>
-      message.role === 'assistant' && message.toolCalls?.length &&
-      message.content.trim()
-    )?.content
-
-    if (progress) {
-      return BRAIN.wernicke('react.tool_call.reviewing_progress', '', {
-        '{{ progress }}': progress.trim().slice(0, MODEL_WAIT_PROGRESS_CONTEXT_MAX_CHARS)
-      })
-    }
-
-    return BRAIN.wernicke('react.tool_call.waiting')
   }
 
   /**

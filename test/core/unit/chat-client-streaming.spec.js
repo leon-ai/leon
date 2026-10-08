@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Client from '../../../app/src/js/client.js'
+import { ModelResponseState } from '../../../server/src/core/leon-interface/types.ts'
 
 vi.mock('socket.io-client', () => ({ io: vi.fn() }))
 vi.mock('../../../app/src/js/chatbot', () => ({ default: vi.fn() }))
@@ -16,6 +17,7 @@ describe('chat client answer streams', () => {
     vi.useFakeTimers()
     handlers = new Map()
     bubbles = new Map()
+    bubbles.set('#model-response-status', { hidden: true, textContent: '' })
     vi.stubGlobal('window', {})
     vi.stubGlobal('document', {
       querySelector: (selector) => bubbles.get(selector.split('.').pop()),
@@ -27,8 +29,10 @@ describe('chat client answer streams', () => {
       history: null,
       _answerGenerationId: 'xxx',
       _activeStreamGenerationId: null,
+      activeSessionId: 'session-a',
       chatbot: {
         init: vi.fn(),
+        isTyping: vi.fn(),
         scrollDown: vi.fn(),
         saveBubble: vi.fn(),
         formatMessage: (text) => text,
@@ -109,4 +113,50 @@ describe('chat client answer streams', () => {
       expect.objectContaining({ string: 'The request failed.', save: true })
     )
   })
+
+  it('shows elapsed provider activity without adding bubbles and ignores stale or other-session completions', () => {
+    const element = bubbles.get('#model-response-status')
+    const status = {
+      requestId: 'request-a', sessionId: 'session-a', startedAt: Date.now(),
+      state: ModelResponseState.Waiting
+    }
+    const update = handlers.get('leon:model-response-status')
+    update(status)
+    vi.advanceTimersByTime(20_000)
+    expect(element.textContent).toBe('Waiting for model response · Elapsed: 20 s')
+    update({ ...status, state: ModelResponseState.Connected })
+    expect(element.textContent).toContain('stream connected')
+    update({ ...status, state: ModelResponseState.Reasoning })
+    expect(element.textContent).toBe('Model is reasoning · Elapsed: 20 s')
+    update({ ...status, sessionId: 'session-b' })
+    update({ ...status, requestId: 'old-request', state: ModelResponseState.Completed })
+    expect(element.hidden).toBe(false)
+    expect(vi.getTimerCount()).toBe(1)
+    expect(client.chatbot.createBubble).not.toHaveBeenCalled()
+    expect(client.chatbot.saveBubble).not.toHaveBeenCalled()
+    update({ ...status, state: ModelResponseState.Completed })
+    expect(element.hidden).toBe(true)
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it.each(['disconnect', 'turn-end', 'session-change'])(
+    'clears transient status on %s', async (event) => {
+      handlers.get('leon:model-response-status')({
+        requestId: 'request', sessionId: 'session-a', startedAt: Date.now(),
+        state: ModelResponseState.Waiting
+      })
+      if (event === 'disconnect') {
+        handlers.get('disconnect')()
+      } else if (event === 'turn-end') {
+        handlers.get('leon:is-typing')(false)
+      } else {
+        client.socket.emit = vi.fn()
+        client.chatbot.setSessionId = vi.fn()
+        client.chatbot.loadFeed = vi.fn()
+        await client.setActiveSession('session-b')
+      }
+      expect(bubbles.get('#model-response-status').hidden).toBe(true)
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
 })

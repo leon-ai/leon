@@ -12,6 +12,7 @@ export const LEON_CLIENT_INTERFACE_EVENTS = {
   suggest: 'leon:suggest',
   llmToken: 'leon:llm-token',
   llmReasoningToken: 'leon:llm-reasoning-token',
+  modelResponseStatus: 'leon:model-response-status',
   toolProgress: 'leon:tool-progress',
   ownerUtterance: 'leon:owner-utterance',
   error: 'leon:error'
@@ -60,6 +61,23 @@ export interface LeonClientInterfaceUtterancePayload {
 export type LeonClientInterfaceAnswerPayload = Record<string, unknown> | string
 
 export type LeonClientInterfaceTypingPayload = boolean
+
+export enum ModelResponseState {
+  Waiting = 'waiting',
+  Connected = 'connected',
+  Reasoning = 'reasoning',
+  Completed = 'completed'
+}
+
+/**
+ * Transient request activity without model reasoning content or chat history.
+ */
+export interface ModelResponseStatus {
+  requestId: string
+  sessionId: string
+  startedAt: number
+  state: ModelResponseState
+}
 
 export type LeonClientInterfaceSuggestionsPayload = string[]
 

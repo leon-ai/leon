@@ -4,19 +4,18 @@ import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
+import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+import {
+  LEON_CLIENT_INTERFACE_EVENTS as LEON_EVENTS,
+  LEON_CLIENT_INTERFACE_PROTOCOL_VERSION,
+  ModelResponseState
+} from '../../../server/src/core/leon-interface/types.ts'
 
-const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
-const LEON_EVENTS = {
-  init: 'leon:init',
-  utterance: 'leon:utterance',
-  ready: 'leon:ready',
-  answer: 'leon:answer',
-  isTyping: 'leon:is-typing',
-  suggest: 'leon:suggest',
-  llmToken: 'leon:llm-token',
-  llmReasoningToken: 'leon:llm-reasoning-token',
-  ownerUtterance: 'leon:owner-utterance',
-  error: 'leon:error'
+const MODEL_STATUS_INTERVAL_MS = 1_000
+const MODEL_STATUS_LABELS = {
+  [ModelResponseState.Waiting]: 'Waiting for model response',
+  [ModelResponseState.Connected]: 'Waiting for model response (stream connected)',
+  [ModelResponseState.Reasoning]: 'Model is reasoning'
 }
 
 export default class Client {
@@ -41,6 +40,8 @@ export default class Client {
     this._isVoiceModeEnabled = false
     this._hasSentInitMessages = false
     this._chatbotInitPromise = null
+    this._modelResponseStatus = null
+    this._modelResponseStatusTimer = null
     // this._ttsAudioContextes = {}
   }
 
@@ -82,6 +83,7 @@ export default class Client {
       return
     }
 
+    this.clearModelResponseStatus()
     this.activeSessionId = sessionId
     this._activeStreamGenerationId = null
     this._answerGenerationId = 'xxx'
@@ -90,6 +92,67 @@ export default class Client {
     this.socket.emit('session-change', sessionId)
     await this.chatbot.loadFeed()
     this.chatbot.scrollDown({ force: true })
+  }
+
+  /**
+   * Render request activity separately from durable conversation messages.
+   */
+  setModelResponseStatus(status) {
+    if (status.sessionId && this.activeSessionId && status.sessionId !== this.activeSessionId) {
+      return
+    }
+
+    if (status.state === ModelResponseState.Completed) {
+      this.clearModelResponseStatus(status.requestId)
+      return
+    }
+
+    if (!MODEL_STATUS_LABELS[status.state]) {
+      return
+    }
+
+    this._modelResponseStatus = status
+    this.chatbot.isTyping('leon', true)
+    this.renderModelResponseStatus()
+
+    if (!this._modelResponseStatusTimer) {
+      this._modelResponseStatusTimer = setInterval(() => {
+        this.renderModelResponseStatus()
+      }, MODEL_STATUS_INTERVAL_MS)
+    }
+  }
+
+  /**
+   * Keep elapsed time advancing while the provider remains silent.
+   */
+  renderModelResponseStatus() {
+    const element = document.querySelector('#model-response-status')
+    const status = this._modelResponseStatus
+    if (!element || !status) {
+      return
+    }
+
+    const elapsed = formatToolDuration(Math.max(0, Date.now() - status.startedAt))
+    element.textContent = `${MODEL_STATUS_LABELS[status.state]} · Elapsed: ${elapsed}`
+    element.hidden = false
+  }
+
+  /**
+   * Ignore stale completions and release timers when the viewed request ends.
+   */
+  clearModelResponseStatus(requestId) {
+    if (requestId && this._modelResponseStatus?.requestId !== requestId) {
+      return
+    }
+
+    clearInterval(this._modelResponseStatusTimer)
+    this._modelResponseStatusTimer = null
+    this._modelResponseStatus = null
+    const element = document.querySelector('#model-response-status')
+    if (element) {
+      element.hidden = true
+      element.textContent = ''
+    }
   }
 
   async sendInitMessages() {
@@ -187,6 +250,12 @@ export default class Client {
           supportsVoice: true
         }
       })
+    })
+    this.socket.on('disconnect', () => {
+      this.clearModelResponseStatus()
+    })
+    this.socket.on(LEON_EVENTS.modelResponseStatus, (status) => {
+      this.setModelResponseStatus(status)
     })
 
     /**
@@ -381,6 +450,9 @@ export default class Client {
     })
 
     this.socket.on(LEON_EVENTS.isTyping, (data) => {
+      if (data === false) {
+        this.clearModelResponseStatus()
+      }
       this.chatbot.isTyping('leon', data)
     })
 

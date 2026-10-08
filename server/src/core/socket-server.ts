@@ -404,6 +404,11 @@ export default class SocketServer {
       return
     }
 
+    if (eventName === 'model-response-status') {
+      chatClient.socket.emit(LEON_CLIENT_INTERFACE_EVENTS.modelResponseStatus, payload)
+      return
+    }
+
     if (eventName === 'owner-utterance') {
       const ownerMessagePayload = payload as Record<string, unknown> | null
       const message =

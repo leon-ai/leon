@@ -608,6 +608,13 @@ textarea::-webkit-scrollbar-thumb {
   background-color: var(--white-color);
   transform: scale(1);
 }
+
+#model-response-status {
+  margin-left: 10px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
 #is-typing .circle:nth-child(1) {
   animation: typing 0.2s linear infinite alternate;
   background-color: #0071f0;

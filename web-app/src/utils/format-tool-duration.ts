@@ -2,7 +2,7 @@ const MILLISECONDS_PER_SECOND = 1_000
 const SECONDS_PER_MINUTE = 60
 
 /**
- * Formats completed call durations for both Leon clients; old traces stay blank.
+ * Formats elapsed durations for Leon clients; missing timings stay blank.
  */
 export function formatToolDuration(durationMs?: number): string {
   if (
