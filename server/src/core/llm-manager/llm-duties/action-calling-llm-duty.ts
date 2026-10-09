@@ -23,6 +23,7 @@ interface ActionCallingWorkflowContext {
 }
 
 interface ActionCallingLLMDutyParams {
+  signal?: AbortSignal
   input: LLMDutyParams['input']
   skillName: string
   workflowContext?: ActionCallingWorkflowContext
@@ -84,6 +85,7 @@ Rules:
   private readonly skillName: string
   private readonly workflowContext: ActionCallingWorkflowContext | null
   private readonly history: MessageLog[]
+  private readonly signal: AbortSignal | undefined
   protected input: LLMDutyParams['input'] = null
 
   constructor(params: ActionCallingLLMDutyParams) {
@@ -100,6 +102,7 @@ Rules:
     this.skillName = params.skillName
     this.workflowContext = params.workflowContext || null
     this.history = params.history || []
+    this.signal = params.signal
   }
 
   private parseOptionalParameters(
@@ -401,6 +404,7 @@ Rules:
   }
 
   public async execute(): Promise<LLMDutyResult | null> {
+    this.signal?.throwIfAborted()
     LogHelper.title(this.name)
     LogHelper.info('Executing...')
 
@@ -408,6 +412,7 @@ Rules:
       const skillConfig = await SkillDomainHelper.getNewSkillConfig(
         this.skillName
       ) as unknown as ActionCallingSkillConfig | null
+      this.signal?.throwIfAborted()
       const {
         action_notes: actionNotes = [],
         actions,
@@ -449,9 +454,12 @@ Rules:
         maxTokens: config.maxTokens,
         thoughtTokensBudget: config.thoughtTokensBudget,
         disableThinking: true,
+        ...(this.signal ? { cancellationSignal: this.signal } : {}),
         tools: openAITools,
         toolChoice: 'auto'
       })
+
+      this.signal?.throwIfAborted()
 
       if (!completionResult) {
         return null
@@ -540,6 +548,7 @@ usedOutputTokens: ${completionResult.usedOutputTokens}`)
         modelCalls: 1
       } as unknown as LLMDutyResult
     } catch (e) {
+      this.signal?.throwIfAborted()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${e}`)
     }

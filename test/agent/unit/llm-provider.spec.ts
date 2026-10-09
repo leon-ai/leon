@@ -80,6 +80,49 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('waits for canceled provider cleanup before releasing the caller', async () => {
+    const controller = new AbortController()
+    let finish!: () => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const runChatCompletion = vi.fn(async (_prompt, params) => {
+      entered()
+      await new Promise<void>((resolve) => {
+        finish = resolve
+      })
+      expect(params.signal.aborted).toBe(true)
+      throw controller.signal.reason
+    })
+    const manager = new LLMProvider()
+    const state = manager as unknown as LLMProviderTestState
+    state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+    state.agentLLMProviderTargetLabel = celerisTarget.label
+    let settled = false
+    const pending = manager
+      .prompt('Choose an action', {
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        shouldStream: false,
+        cancellationSignal: controller.signal
+      })
+      .catch((error) => {
+        settled = true
+        return error
+      })
+
+    await started
+    const reason = new Error('Owner canceled')
+    controller.abort(reason)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    finish()
+    expect(await pending).toBe(reason)
+    expect(runChatCompletion).toHaveBeenCalledOnce()
+  })
+
   it('keeps request cancellation active while consuming a returned stream', async () => {
     vi.useFakeTimers()
     const stream = new Readable({ read(): void {} })
@@ -187,12 +230,22 @@ describe('LLMProvider', () => {
       const signals: AbortSignal[] = []
       const runChatCompletion = vi.fn((_prompt, params) => {
         signals.push(params.signal)
+        if (params.signal.aborted) {
+          return Promise.reject(params.signal.reason)
+        }
         queueMicrotask(() => {
           if (signals.length === 1) {
             attempt.abort({ shouldRetry: true, retryStrategy: 'timeout', source: 'agent_tool_call_diagnosis', delayMs: 1 })
-          } else owner.abort(reason)
+          } else {
+            owner.abort(reason)
+          }
         })
-        return new Promise((_resolve, reject) => params.signal.addEventListener('abort', () => reject(params.signal.reason), { once: true }))
+        return new Promise((_resolve, reject) => {
+          params.signal.addEventListener('abort', () => {
+            // Provider cleanup settles after the caller receives cancellation.
+            queueMicrotask(() => reject(params.signal.reason))
+          }, { once: true })
+        })
       })
       const manager = new LLMProvider()
       const state = manager as unknown as LLMProviderTestState

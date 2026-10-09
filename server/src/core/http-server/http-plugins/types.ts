@@ -99,6 +99,7 @@ export interface HTTPPluginRunAgentResult {
 }
 
 export interface HTTPPluginRunControlledSkillInput {
+  signal?: AbortSignal
   query: string
   skill_name: string
   /**

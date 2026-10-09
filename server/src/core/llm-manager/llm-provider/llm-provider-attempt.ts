@@ -447,6 +447,10 @@ export async function runCompletionAttempt(
     }
     clearStreamStallTimeout()
     rejectStreamStall = null
+    if (completionParams.cancellationSignal?.aborted) {
+      // Keep the caller's worker occupied until the aborted provider has cleaned up.
+      await rawResultPromise.catch(() => undefined)
+    }
     completionParams.cancellationSignal?.throwIfAborted()
 
     LogHelper.title('LLM Provider')

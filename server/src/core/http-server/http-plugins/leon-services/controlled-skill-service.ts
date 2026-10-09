@@ -46,6 +46,7 @@ const CONTROLLED_CONTEXT_UTTERANCE_LIMIT = 4
 export async function runControlledSkill(
   input: HTTPPluginRunControlledSkillInput
 ): Promise<HTTPPluginRunControlledSkillResult> {
+  input.signal?.throwIfAborted()
   const totalStartedAt = performance.now()
   const profileName = input.profile_id?.trim() || getActiveProfileName()
 
@@ -56,6 +57,7 @@ export async function runControlledSkill(
   return runWithProfileContext({ profileName }, async () => {
     const profileStartedAt = performance.now()
     await ensureActiveProfileRuntime()
+    input.signal?.throwIfAborted()
     const profileActivationMs = elapsedMilliseconds(profileStartedAt)
     const query = input.query.trim()
     const skillName = input.skill_name.trim()
@@ -65,6 +67,7 @@ export async function runControlledSkill(
       type: HTTPPluginAgentEvent['type'],
       data: Record<string, unknown>
     ): void => {
+      input.signal?.throwIfAborted()
       publishAgentEvent(getActiveProfileName(), {
         session_id: sessionId,
         turn_id: requestId,
@@ -96,6 +99,7 @@ export async function runControlledSkill(
         const history = await CONVERSATION_LOGGER.load({
           nbOfLogsToLoad: CONTROLLED_HISTORY_LIMIT
         })
+        input.signal?.throwIfAborted()
         const historyLoadMs = elapsedMilliseconds(historyStartedAt)
         const recentUtterances = history
           .filter((message) => message.who === 'owner')
@@ -103,6 +107,7 @@ export async function runControlledSkill(
           .slice(-CONTROLLED_CONTEXT_UTTERANCE_LIMIT)
         const currentContext = NLU.nluProcessResult.context
         const duty = new ActionCallingLLMDuty({
+          ...(input.signal ? { signal: input.signal } : {}),
           input: query,
           skillName,
           history,
@@ -123,7 +128,10 @@ export async function runControlledSkill(
 
         const inferenceStartedAt = performance.now()
         await duty.init()
+        input.signal?.throwIfAborted()
         const dutyResult = await duty.execute()
+        // A canceled inference cannot become successful history or a runnable action.
+        input.signal?.throwIfAborted()
         const inferenceDurationMs = elapsedMilliseconds(inferenceStartedAt)
         const dutyUsage = dutyResult as (LLMDutyResult & {
           usedInputTokens?: number
@@ -178,6 +186,7 @@ export async function runControlledSkill(
         if (input.response_locale_parameter) {
           const parameterName = input.response_locale_parameter
           const skillConfig = await SkillDomainHelper.getNewSkillConfig(skillName)
+          input.signal?.throwIfAborted()
           const actions = skillConfig?.actions as Record<string, {
             parameters?: Record<string, { enum?: string[] }>
           }> | undefined
@@ -214,6 +223,7 @@ export async function runControlledSkill(
           },
           { sessionId }
         )
+        input.signal?.throwIfAborted()
         let persistenceMs = elapsedMilliseconds(ownerPersistenceStartedAt)
         CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(sessionId, query)
 
@@ -227,10 +237,12 @@ export async function runControlledSkill(
           await NLUProcessResultUpdater.update({
             new: { actionArguments: action.input }
           })
+          input.signal?.throwIfAborted()
           // The HTTP caller owns delivery. Muting avoids the socket/TTS
           // paraphrase pass while still executing and collecting the action.
           BRAIN.isMuted = true
           const processedData = await BRAIN.runSkillAction(NLU.nluProcessResult)
+          input.signal?.throwIfAborted()
           answer = getSkillAnswerText(
             processedData.lastOutputFromSkill?.answer
           )
@@ -275,6 +287,7 @@ export async function runControlledSkill(
             },
             { sessionId }
           )
+          input.signal?.throwIfAborted()
           persistenceMs += elapsedMilliseconds(answerPersistenceStartedAt)
         }
 

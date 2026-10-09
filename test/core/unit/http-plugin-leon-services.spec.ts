@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   sessions: new Map<string, Set<string>>(),
   agentDutyParams: [] as Array<Record<string, unknown>>,
   executeAgent: vi.fn(),
-  controlledDutyParams: [] as Array<Record<string, unknown>>,
+  controlledPrompt: vi.fn(),
   controlledDutyOutputs: [] as Array<Array<Record<string, unknown>>>,
   agentDutyResult: {
     output: 'Acknowledged.',
@@ -125,8 +125,10 @@ vi.mock('@/core', () => ({
     )
   },
   LLM_MANAGER: {
-    isLLMEnabled: true
+    isLLMEnabled: true,
+    coreLLMDuties: { 'action-calling': { temperature: 0 } }
   },
+  LLM_PROVIDER: { prompt: mocks.controlledPrompt },
   NLU: {
     get nluProcessResult(): Record<string, unknown> {
       return mocks.nluProcessResult
@@ -221,21 +223,24 @@ vi.mock('@/core/session-manager', () => ({
   }
 }))
 
-vi.mock('@/core/llm-manager/llm-duties/action-calling-llm-duty', () => ({
-  ActionCallingLLMDuty: class {
-    constructor(params: Record<string, unknown>) {
-      mocks.controlledDutyParams.push(params)
-    }
-
-    async init(): Promise<void> {}
-
-    async execute(): Promise<Record<string, unknown>> {
-      return {
-        output: JSON.stringify(mocks.controlledDutyOutputs.shift() || [
-          { status: 'not_found' }
-        ])
+vi.mock('@/helpers/skill-domain-helper', () => ({
+  SkillDomainHelper: {
+    getNewSkillConfig: vi.fn(async () => ({
+      actions: {
+        start_timer: {
+          type: 'logic',
+          description: 'Start a timer.',
+          parameters: {
+            duration_minutes: { type: 'number', description: 'Duration.' }
+          }
+        },
+        fallback_to_agent: {
+          type: 'logic',
+          description: 'Continue in agent mode.',
+          parameters: {}
+        }
       }
-    }
+    }))
   }
 }))
 
@@ -320,8 +325,10 @@ describe('HTTP plugin Leon services', () => {
     mocks.nextSessionId = 0
     mocks.sessions.clear()
     mocks.agentDutyParams.length = 0
-    mocks.controlledDutyParams.length = 0
     mocks.controlledDutyOutputs.length = 0
+    mocks.controlledPrompt.mockReset().mockImplementation(async () => ({
+      output: JSON.stringify(mocks.controlledDutyOutputs.shift() || [{ status: 'not_found' }])
+    }))
     mocks.agentDutyResult = {
       output: 'Acknowledged.',
       data: {
@@ -384,6 +391,62 @@ describe('HTTP plugin Leon services', () => {
       { who: 'owner', message: 'Start a timer for 15 minutes.' },
       { who: 'leon', message: 'Done — I’ve applied that.' }
     ])
+  })
+
+  it('cancels controlled inference before action execution, history and completion', async () => {
+    const controller = new AbortController()
+    const events: Array<{ type: string }> = []
+    const unsubscribe = await subscribeAgentEvents(
+      { profile_id: 'owner-cancellation' },
+      (event) => {
+        events.push(event)
+      }
+    )
+    let finish!: (result: Record<string, unknown>) => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    mocks.controlledPrompt.mockImplementationOnce(async (_prompt, params) => {
+      expect(params.cancellationSignal).toBe(controller.signal)
+      entered()
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    })
+    const reason = new Error('Caller disconnected')
+    let settled = false
+    const pending = runControlledSkill({
+      profile_id: 'owner-cancellation',
+      query: 'Start a timer for 15 minutes.',
+      skill_name: 'timer_skill',
+      create_session: true,
+      signal: controller.signal
+    }).catch((error) => {
+      settled = true
+      return error
+    })
+
+    try {
+      await started
+      controller.abort(reason)
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      finish({
+        output: JSON.stringify({
+          status: 'success',
+          name: 'start_timer',
+          arguments: { duration_minutes: 15 }
+        })
+      })
+      expect(await pending).toBe(reason)
+      expect(mocks.skillActions).toHaveLength(0)
+      expect(mocks.persistedMessages).toHaveLength(0)
+      expect(events.map((event) => event.type)).not.toContain('final_answer')
+      expect(events.map((event) => event.type)).not.toContain('tool_call')
+    } finally {
+      unsubscribe()
+    }
   })
 
   it('leaves an explicit fallback action uncommitted for agent mode', async () => {
