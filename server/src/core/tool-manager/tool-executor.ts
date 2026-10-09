@@ -611,7 +611,8 @@ export default class ToolExecutor {
             token: `${getActiveProfileName()}:${readStoredProfileToken(getActiveProfileName())}`
           },
           ...(Object.keys(connections).length ? { connections } : {}),
-          ...(input.signal ? { signal: input.signal } : {})
+          ...(input.signal ? { signal: input.signal } : {}),
+          ...(input.onProgress ? { onProgress: input.onProgress } : {})
         },
         argsArray,
         (line) => {

@@ -358,7 +358,8 @@ export default class ShellTool extends Tool {
         invocation.binaryName,
         invocation.args,
         options,
-        this.executionContext?.signal
+        this.executionContext?.signal,
+        this.executionContext?.onProgress
       )
     })
   }

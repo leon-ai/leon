@@ -10,8 +10,10 @@ import {
   NODEJS_BRIDGE_TOOL_RUNTIME_SRC_PATH
 } from '@/constants'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ToolConcurrency } from '@/types'
-import type { ToolExecutionContext, ToolRuntimeResult } from '@sdk/tool-runtime-types'
+import type { ToolExecutionContext, ToolRuntimeProgress, ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { ToolRuntimeLifetime, type ToolWorkerResponse } from '@bridge/tool-runtime-types'
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
@@ -21,10 +23,15 @@ const TSX_LOADER_URL = import.meta.resolve('tsx')
 interface Worker {
   process: ChildProcess
   closed: Promise<void>
-  result?: (message: ToolWorkerResponse) => void
+  result?: (message: Extract<ToolWorkerResponse, { type: 'result' }>) => void
   fail?: (message: string) => void
   log?: (line: string) => void
   diagnostics: string
+  progress: Map<string, {
+    receive: (progress: ToolRuntimeProgress) => void
+    streams: Set<string>
+    returned: boolean
+  }>
 }
 
 /**
@@ -106,6 +113,7 @@ export class ToolWorkerManager {
     const worker: Worker = {
       process: child,
       diagnostics: '',
+      progress: new Map(),
       closed: new Promise((resolve) => child.once('close', () => resolve()))
     }
     let pendingLine = ''
@@ -124,10 +132,39 @@ export class ToolWorkerManager {
     child.on('message', (message: ToolWorkerResponse) => {
       if (message.type === 'result') {
         worker.result?.(message)
+      } else if (message.type === 'progress') {
+        const subscription = worker.progress.get(message.requestId)
+        if (!subscription) {
+          return
+        }
+
+        if (message.progress.stream) {
+          const { id, state } = message.progress.stream
+          if (state === 'running') {
+            subscription.streams.add(id)
+          } else {
+            subscription.streams.delete(id)
+          }
+        }
+
+        subscription.receive(message.progress)
+        if (subscription.returned && subscription.streams.size === 0) {
+          worker.progress.delete(message.requestId)
+        }
       }
     })
     child.on('error', (error) => worker.fail?.(error.message))
     child.on('close', () => {
+      for (const subscription of worker.progress.values()) {
+        for (const id of subscription.streams) {
+          subscription.receive({
+            source: 'log',
+            message: 'The tool worker stopped before the retained command completed.',
+            stream: { id, state: 'failed' }
+          })
+        }
+      }
+      worker.progress.clear()
       if (this.workers.get(key) === worker) {
         this.workers.delete(key)
       }
@@ -153,6 +190,21 @@ export class ToolWorkerManager {
       ...(isolated ? [randomUUID()] : [])
     ])
     const worker = this.workers.get(key) ?? this.create(context, key)
+    const requestId = randomUUID()
+    // A persistent worker may serve another conversation while earlier work
+    // still emits output. Correlate progress with the original call and owner.
+    const subscription = {
+      streams: new Set<string>(),
+      returned: false,
+      receive: (progress: ToolRuntimeProgress): void => {
+        runWithProfileContext({ profileName: context.profileName }, () =>
+          runWithConversationSession({ sessionId: context.conversationSessionId || '' }, () =>
+            context.onProgress?.(progress)
+          )
+        )
+      }
+    }
+    worker.progress.set(requestId, subscription)
     worker.log = log
     worker.diagnostics = ''
     const abort = (): void => {
@@ -178,13 +230,17 @@ export class ToolWorkerManager {
       const callContext = { ...context }
       delete callContext.onProgress
       delete callContext.signal
-      worker.process.send({ type: 'execute', context: callContext, args }, (error) => {
+      worker.process.send({ type: 'execute', requestId, context: callContext, args }, (error) => {
         if (error) {
           worker.fail?.(error.message)
         }
       })
     })
     context.signal?.removeEventListener('abort', abort)
+    subscription.returned = true
+    if (subscription.streams.size === 0) {
+      worker.progress.delete(requestId)
+    }
     if (retire || context.signal?.aborted) {
       this.workers.delete(key)
       await this.stop(worker)

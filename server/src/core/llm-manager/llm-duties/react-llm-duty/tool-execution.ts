@@ -14,6 +14,7 @@ import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { LEON_HOME_PATH } from '@/leon-roots'
+import type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
 
 import { DUTY_NAME } from './agent-constants'
 import { buildBoundedToolObservation } from './agent-context-budget'
@@ -318,11 +319,7 @@ export async function runToolExecution(
     retainExecution: boolean
     toolInput: string
     parsedInput?: Record<string, unknown>
-    onProgress?: (progress: {
-      message: string
-      key?: string
-      data?: Record<string, unknown>
-    }) => void
+    onProgress?: (progress: ToolRuntimeProgress) => void
   } = {
     ...(signal ? { signal } : {}),
     toolId,
@@ -458,13 +455,53 @@ export async function runToolExecution(
   const reportedPreparationMilestones = new Set<string>()
   let didFinishToolCall = false
   let commandOutput = ''
+  let progressStream: ToolRuntimeProgress['stream']
+  let completedStreamProgress: ToolRuntimeProgress | undefined
 
   toolExecutionInput.onProgress = (progress): void => {
-    // A retained job keeps reporting to its execution handle after this call
-    // returns. Do not reopen the settled card with later background progress.
-    if (didFinishToolCall) {
+    // Explicit streams belong to retained work; ordinary reports still end
+    // when their call returns so unrelated reports cannot reopen settled cards.
+    if (didFinishToolCall && !progress.stream) {
       return
     }
+
+    if (progress.stream) {
+      progressStream = progress.stream
+      if (progress.stream.state !== 'running') {
+        completedStreamProgress = progress
+        const status = progress.stream.state === 'completed' ? 'success' : 'error'
+        const output = progress.data || {}
+        const durationMs = Math.max(0, performance.now() - executionStartedAt)
+        emitToolExecutionOutputToWebApp({
+          toolkitId,
+          toolId,
+          functionName,
+          toolGroupId,
+          output,
+          status,
+          message: progress.message,
+          durationMs,
+          ...(toolCallTitle ? { toolCallTitle } : {}),
+          ...(stepLabel ? { stepLabel } : {})
+        })
+        onProgressEvent?.({
+          id: toolGroupId,
+          name: qualifiedName,
+          toolkitName: toolDisplayContext.toolkitName,
+          toolName: toolDisplayContext.toolName,
+          status,
+          input: requestedToolInput,
+          output,
+          durationMs,
+          commandOutput,
+          progressMessage: progress.message,
+          ...(toolCallTitle ? { toolCallTitle } : {}),
+          ...(stepLabel ? { stepLabel } : {})
+        })
+        return
+      }
+    }
+
 
     const isOutputDelta = progress.key === 'bridges.tools.command_output_delta'
     const outputDelta = isOutputDelta
@@ -705,14 +742,25 @@ export async function runToolExecution(
     )
   }
 
+  const isStreamRunning = progressStream?.state === 'running'
+  const displayedOutput = progressStream
+    ? { ...(completedStreamProgress?.data || toolOutput), execution: progressStream }
+    : toolOutput
+  const displayedStatus = isStreamRunning
+    ? 'running'
+    : progressStream?.state === 'failed' ? 'error' : effectiveStatus
+  const displayedMessage = isStreamRunning
+    ? 'The command is running. Output will appear as it arrives.'
+    : completedStreamProgress?.message || effectiveMessage
+
   emitToolExecutionOutputToWebApp({
     toolkitId,
     toolId,
     functionName,
     toolGroupId,
-    output: toolExecutionResult.data?.output || {},
-    status: effectiveStatus,
-    message: effectiveMessage,
+    output: displayedOutput,
+    status: displayedStatus,
+    message: displayedMessage,
     durationMs,
     ...(toolCallTitle ? { toolCallTitle } : {}),
     ...(stepLabel ? { stepLabel } : {})
@@ -723,7 +771,7 @@ export async function runToolExecution(
     toolkitName: toolDisplayContext.toolkitName,
     toolName: toolDisplayContext.toolName,
     ...(toolCallTitle ? { toolCallTitle } : {}),
-    status: effectiveStatus === 'error' ? 'error' : 'success',
+    status: isStreamRunning ? 'running' : displayedStatus === 'error' ? 'error' : 'success',
     durationMs,
     ...(toolDisplayContext.toolkitIconName
       ? { toolkitIconName: toolDisplayContext.toolkitIconName }
@@ -732,7 +780,7 @@ export async function runToolExecution(
       ? { toolIconName: toolDisplayContext.toolIconName }
       : {}),
     input: requestedToolInput,
-    output: toolExecutionResult.data?.output || {},
+    output: displayedOutput,
     ...(stepLabel ? { stepLabel } : {}),
     ...(effectiveStatus === 'error'
       ? { errorMessage: effectiveMessage }

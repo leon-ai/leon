@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { terminateProcessTree } from '@sdk/utils/process'
+import type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
 
 const MAX_SESSIONS = 64
 const MAX_OUTPUT_CHARS = 256_000
@@ -14,6 +15,8 @@ const MAX_INPUT_CHARS = 16_000
 const DEFAULT_TIMEOUT_MS = 86_400_000
 const STOP_GRACE_MS = 500
 const STOP_TIMEOUT_MS = 2_000
+const OUTPUT_PROGRESS_INTERVAL_MS = 2_000
+const OUTPUT_PROGRESS_MAX_CHARS = 16_000
 
 enum SessionStatus {
   Running = 'running',
@@ -69,7 +72,8 @@ export class ShellSessions {
     binary: string,
     args: string[],
     options: SessionOptions,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    onProgress?: (progress: ToolRuntimeProgress) => void
   ): Promise<Record<string, unknown>> {
     if (!owner || !command.trim() || signal?.aborted) {
       throw new Error('An active conversation and a non-empty command are required.')
@@ -109,11 +113,34 @@ export class ShellSessions {
         throw new Error('Session input is not ready.')
       }
     }
+    let pendingOutput = ''
+    let progressTimer: NodeJS.Timeout | undefined
+    const stream = { id: session.id, state: 'running' as const }
+    const flushOutput = (): void => {
+      clearTimeout(progressTimer)
+      progressTimer = undefined
+      if (!pendingOutput) {
+        return
+      }
+      onProgress?.({
+        source: 'report',
+        key: 'bridges.tools.command_output_delta',
+        message: pendingOutput,
+        data: { output: pendingOutput },
+        stream
+      })
+      pendingOutput = ''
+    }
     const append = (data: string): void => {
       const combined = session.output + data
       const removed = Math.max(0, combined.length - MAX_OUTPUT_CHARS)
       session.offset += removed
       session.output = combined.slice(removed)
+      // Keep live updates bounded independently of retained output pages.
+      if (onProgress) {
+        pendingOutput = (pendingOutput + data).slice(-OUTPUT_PROGRESS_MAX_CHARS)
+        progressTimer ??= setTimeout(flushOutput, OUTPUT_PROGRESS_INTERVAL_MS)
+      }
     }
     const complete = (code: number | null, exitSignal: string | number | null): void => {
       session.alive = false
@@ -122,6 +149,17 @@ export class ShellSessions {
       clearTimeout(session.timer)
       if (session.status === SessionStatus.Running) {
         session.status = SessionStatus.Exited
+      }
+      flushOutput()
+      const succeeded = session.exitCode === 0 && session.status === SessionStatus.Exited
+      // A failed spawn closes before the session is registered or exposed.
+      if (this.sessions.has(session.id)) {
+        onProgress?.({
+          source: 'log',
+          message: succeeded ? 'The command completed.' : `The command ended with status ${session.status} and exit code ${code}.`,
+          data: { result: { success: true, data: this.read(owner, session.id) } },
+          stream: { id: session.id, state: succeeded ? 'completed' : 'failed' }
+        })
       }
       finish()
     }
@@ -173,6 +211,11 @@ export class ShellSessions {
     }
 
     this.sessions.set(session.id, session)
+    onProgress?.({
+      source: 'log',
+      message: 'The command is running. Output will appear as it arrives.',
+      stream
+    })
     if (signal?.aborted) {
       await this.terminate(session, SessionStatus.Stopped)
       throw new Error('Session launch canceled.')

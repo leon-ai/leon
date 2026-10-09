@@ -14,6 +14,7 @@ import type {
   ToolRuntimeProgress
 } from '@/core/tool-manager/tool-executor'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { getSatelliteArtifactRoot, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
 import { parseSatelliteContext, SATELLITE_CONTEXT_MAX_AGE_MS, type SatelliteContextSnapshot } from '@/core/satellite/satellite-context'
 
@@ -42,6 +43,8 @@ interface PendingInvocation {
   removeAbortListener: () => void
   conversationSessionId?: string
   receivingResult?: boolean
+  returned?: boolean
+  streams: Set<string>
 }
 
 class SatelliteRegistry {
@@ -153,6 +156,7 @@ class SatelliteRegistry {
         deviceId: input.deviceId,
         resolve,
         reject,
+        streams: new Set(),
         ...(input.onProgress ? { onProgress: input.onProgress } : {}),
         timeout,
         transport: connection.transport,
@@ -185,11 +189,24 @@ class SatelliteRegistry {
       return
     }
 
-    // Socket events run outside the invocation's request scope. Restore the
-    // profile so downstream progress stays isolated to the correct owner.
+    if (payload.progress.stream) {
+      const { id, state } = payload.progress.stream
+      if (state === 'running') {
+        pending.streams.add(id)
+      } else {
+        pending.streams.delete(id)
+      }
+    }
+
+    // Retained progress must keep both its profile and conversation owner.
     runWithProfileContext({ profileName: pending.profileName }, () => {
-      pending.onProgress?.(payload.progress)
+      runWithConversationSession({ sessionId: pending.conversationSessionId || '' }, () => {
+        pending.onProgress?.(payload.progress)
+      })
     })
+    if (pending.returned && pending.streams.size === 0) {
+      this.pendingInvocations.delete(payload.invocationId)
+    }
   }
 
   public handleResult(
@@ -224,7 +241,10 @@ class SatelliteRegistry {
       if (this.pendingInvocations.get(payload.invocationId) !== pending) return
       clearTimeout(pending.timeout)
       pending.removeAbortListener()
-      this.pendingInvocations.delete(payload.invocationId)
+      pending.returned = true
+      if (pending.streams.size === 0) {
+        this.pendingInvocations.delete(payload.invocationId)
+      }
       pending.resolve(result)
     }).catch((error: unknown) => {
       this.cancelInvocation(payload.invocationId, new Error(
@@ -243,6 +263,13 @@ class SatelliteRegistry {
     this.pendingInvocations.delete(invocationId)
     clearTimeout(pending.timeout)
     pending.removeAbortListener()
+    for (const id of pending.streams) {
+      runWithProfileContext({ profileName: pending.profileName }, () => {
+        runWithConversationSession({ sessionId: pending.conversationSessionId || '' }, () => {
+          pending.onProgress?.({ source: 'log', message: error.message, stream: { id, state: 'failed' } })
+        })
+      })
+    }
     try {
       pending.transport.emit(SATELLITE_EVENTS.cancelTool, { invocationId })
     } catch {

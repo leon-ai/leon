@@ -13,7 +13,7 @@
   "functions": {
     "executeCommand": {
       "description": "Execute a command in the active platform shell and return the result.",
-      "progressive_guidance": "This tool waits for command completion; longRunning only extends the timeout. Run finite tasks directly. Bash commands use ordinary exit-status semantics; fail-fast behavior requires an explicit set -e. Use && for dependent operations and test optional programs/files in if conditions so expected absence is reported without aborting an inventory scan. The final command determines the exit status unless the script exits explicitly; nonzero status is reported with captured stdout and stderr. For existing background work, check its result before waiting again. Use startSession for development servers, watchers or commands requiring stdin. Ordinary commands remain isolated and do not share a session shell or its environment.",
+      "progressive_guidance": "This tool waits for command completion; longRunning only extends the timeout. Run finite tasks directly. Bash commands use ordinary exit-status semantics; fail-fast behavior requires an explicit set -e. Use && for dependent operations and test optional programs/files in if conditions so expected absence is reported without aborting an inventory scan. The final command determines the exit status unless the script exits explicitly; nonzero status is reported with captured stdout and stderr. For existing background work, check its result before waiting again. Use startSession for development servers, watchers or commands requiring stdin. Ordinary commands remain isolated and do not share a session shell or its environment. Keep stdout and stderr attached to the tool for progress. For downloads and other long tasks, use startSession instead of redirecting output to a file and waiting for a separate completion probe.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -43,10 +43,10 @@
       }
     },
     "startSession": {
-      "description": "Start a retained command and immediately return a conversation-owned sessionId. Supports stdin and optional PTY.",
+      "description": "Start a retained command and immediately return a conversation-owned sessionId. Streams live output and completion to the app; supports stdin and optional PTY.",
       "concurrency": "serial",
       "deduplicate_calls": false,
-      "progressive_guidance": "Use for dev servers, watchers and interactive commands. Supply the observed project cwd. Use pipes by default, pty=true only when a TTY is needed. This starts one command, not a shared shell for later executeCommand calls. A successful start is not a passed check: inspect running, exitCode and commandSucceeded. Retain sessionId in the plan, read output with readSession, and stop owned sessions when the task finishes unless asked to keep them running. A worker restart loses live sessions; inspect before restarting commands.",
+      "progressive_guidance": "Use for downloads, dev servers, watchers and interactive commands. Keep stdout and stderr attached so progress streams to the app; do not redirect them to a log file to hide the running command output. Supply the observed project cwd. Use pipes by default, pty=true only when a TTY is needed. This starts one command, not a shared shell for later executeCommand calls. A successful start is not a passed check: inspect running, exitCode and commandSucceeded. Retain sessionId in the plan, read output with readSession, and stop owned sessions when the task finishes unless asked to keep them running. A worker restart loses live sessions; inspect before restarting commands.",
       "parameters": {
         "type": "object",
         "properties": {

@@ -165,7 +165,15 @@ const run = async (): Promise<void> => {
         activeCall = new AbortController()
         const result = await runWithConversationSession(
           { sessionId: request.context.conversationSessionId || '' },
-          () => execute({ ...request.context, signal: activeCall!.signal }, request.args)
+          () => execute({
+            ...request.context,
+            signal: activeCall!.signal,
+            onProgress: (progress) => {
+              if (process.connected) {
+                process.send?.({ type: 'progress', requestId: request.requestId, progress }, () => {})
+              }
+            }
+          }, request.args)
         )
         activeCall = undefined
         const lifetime = toolInstance?.runtimeLifetime ?? ToolRuntimeLifetime.Call

@@ -542,9 +542,13 @@ export default class ToolUIHandler {
     }
 
     if (data.toolPhase === 'output') {
-      this.stopLiveProgress(toolGroupContainer)
       const duration = formatToolDuration(data.durationMs)
       const isBackground = data.output?.execution?.state === 'running'
+      if (data.status === 'running') {
+        this.startLiveProgress(toolGroupContainer, data)
+      } else {
+        this.stopLiveProgress(toolGroupContainer)
+      }
 
       toolGroupContainer.durationLabel.textContent = isBackground && duration
         ? `${duration} to return`
@@ -565,7 +569,7 @@ export default class ToolUIHandler {
             : 'The function completed.')
       this.setStatusChip(
         toolGroupContainer.statusChip,
-        isError ? 'error' : isObserved ? 'observed' : 'success'
+        data.status === 'running' ? 'running' : isError ? 'error' : isObserved ? 'observed' : 'success'
       )
 
       const outputPayload = {
@@ -573,7 +577,13 @@ export default class ToolUIHandler {
         output: data.output
       }
       toolGroupContainer.rawOutput = outputPayload
-      this.renderOutputPreview(toolGroupContainer.outputBody, data)
+      if (toolGroupContainer.commandOutputText) {
+        this.renderCommandOutputLog(
+          toolGroupContainer.outputBody, toolGroupContainer.commandOutputText
+        )
+      } else {
+        this.renderOutputPreview(toolGroupContainer.outputBody, data)
+      }
     }
 
     this.renderRawData(toolGroupContainer)
