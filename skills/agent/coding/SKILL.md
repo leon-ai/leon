@@ -16,7 +16,7 @@ For requested delegation, use the owner's preferred available agent and interfac
 
 1. Establish the exact workspace and working directory from the request and live observations. Read relevant manifests and nearby implementations; use existing helpers before adding abstractions.
 2. Before editing, discover and read applicable `AGENTS.md` files from the repository root through each target directory. Deeper instructions apply only within their directory and take precedence over broader project rules. For a non-Git workspace, use the owner-selected workspace boundary; do not inherit unrelated parent-directory instructions.
-3. Record the workspace, applicable instruction paths and constraints in the persistent plan. Before editing a new directory, discover its nested instructions. After compaction or continuation, reload applicable instruction files before further edits; summaries are not substitutes for their full current content.
+3. Record the workspace, applicable instruction paths, constraints and acceptance criteria from the request and supplied references in plan details. Pair each criterion with its required check. Before editing a new directory, discover its nested instructions. After compaction or continuation, reload applicable instruction files before further edits; summaries are not substitutes for their full current content.
 4. Inspect Git status and existing staged/unstaged diffs. Record unrelated changed and untracked files and preserve their content. Do not reset, clean, stage or commit owner work without authorization. Use an isolated worktree when concurrent work or the requested workflow warrants it.
 
 ## Investigate and change
@@ -30,7 +30,8 @@ For requested delegation, use the owner's preferred available agent and interfac
 
 ## Verify and finish
 
-1. Run the checks required by project instructions and those relevant to the changed behavior. Inspect actual exit codes and diagnostics. Changes after a successful check make that proof stale; rerun affected checks.
-2. Review the final diff against the original task and initial owner changes. Remove accidental edits without discarding owner work. Verify unrelated staged, unstaged and untracked content remains intact.
-3. Stop command sessions owned by this task unless the owner asked to keep them running. Inspect returned termination status; clean up on failures too.
-4. Report what changed, which checks passed or failed, and any remaining blocker. Do not claim completion from an edit acknowledgement, running process or unavailable check. Suggest a commit message when the repository requires one, but do not commit unless asked.
+1. Run the checks required by project instructions and those relevant to the changed behavior. Inspect actual exit codes and diagnostics; record each criterion's observed outcome and evidence in plan details. Changes after a successful check make affected proof stale; rerun those checks.
+2. For UI work, visually inspect supplied references and the final rendered page at the requested viewports. Compare required layout, typography, assets and content; exercise affected interactions. A build or screenshot file alone does not prove visual conformance. Fix observed mismatches and reinspect affected results; derive checks from the actual brief and references, not assumed template conventions.
+3. Review the final diff against the original task and initial owner changes. Remove accidental edits without discarding owner work. Verify unrelated staged, unstaged and untracked content remains intact.
+4. Stop command sessions owned by this task unless the owner asked to keep them running. Inspect returned termination status; clean up on failures too.
+5. Reconcile all acceptance criteria before reporting completion. Use available tools to resolve missing evidence; disclose requirements that could not be verified. Report what changed, which checks passed or failed, and any remaining blocker. Do not claim completion from an edit acknowledgement, running process or unavailable check. Suggest a commit message when the repository requires one, but do not commit unless asked.
