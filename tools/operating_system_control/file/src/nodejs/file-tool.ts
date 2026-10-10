@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
 
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
@@ -254,35 +255,112 @@ export default class FileTool extends Tool {
     })
   }
 
+  /**
+   * Preserve the exact existing bytes before replacing a file's entire content.
+   */
   public async write(
     targetPath: string,
     content: string,
     options: WriteOptions = {}
   ): Promise<{
     success: boolean
-    data?: { path: string, bytesWritten: number }
+    data?: {
+      path: string
+      bytesWritten: number
+      backupPath?: string
+      backupContentHash?: string
+    }
     error?: string
   }> {
     const resolvedPath = this.resolvePath(targetPath)
-
-    if (fs.existsSync(resolvedPath) && options.overwrite !== true) {
-      return {
-        success: false,
-        error: 'File already exists. Set overwrite=true to replace it.'
-      }
-    }
 
     if (options.createParents) {
       await fs.promises.mkdir(path.dirname(resolvedPath), { recursive: true })
     }
 
-    await fs.promises.writeFile(resolvedPath, content, 'utf8')
+    // Exclusive creation also protects a file created after destination discovery.
+    try {
+      await fs.promises.writeFile(resolvedPath, content, { encoding: 'utf8', flag: 'wx' })
+
+      return {
+        success: true,
+        data: {
+          path: resolvedPath,
+          bytesWritten: Buffer.byteLength(content, 'utf8')
+        }
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+        throw error
+      }
+    }
+
+    if (options.overwrite !== true) {
+      return {
+        success: false,
+        error: 'File already exists. Read it first and prefer patch for edits. For a full replacement, use overwrite=true; the original will be preserved automatically.'
+      }
+    }
+
+    const stat = await fs.promises.lstat(resolvedPath)
+    if (!stat.isFile() || stat.nlink > 1) {
+      return {
+        success: false,
+        error: 'Full replacement requires a regular file without hard-link aliases.'
+      }
+    }
+
+    const original = await fs.promises.readFile(resolvedPath)
+    const originalHash = contentHash(original)
+    const backupPath = `${resolvedPath}.${randomUUID()}.bak`
+    const temporaryPath = path.join(
+      path.dirname(resolvedPath),
+      `.${path.basename(resolvedPath)}.${randomUUID()}.tmp`
+    )
+
+    // Save beside the destination so the owner can recover it without session state.
+    await fs.promises.writeFile(backupPath, original, { flag: 'wx', mode: stat.mode })
+
+    try {
+      const temporary = await fs.promises.open(temporaryPath, 'wx', stat.mode)
+      try {
+        await temporary.writeFile(content, 'utf8')
+        await temporary.chmod(stat.mode)
+        await temporary.sync()
+      } finally {
+        await temporary.close()
+      }
+
+      // As with patches, detect intervening edits before replacing the directory entry.
+      const currentStat = await fs.promises.lstat(resolvedPath)
+      if (currentStat.ino !== stat.ino || currentStat.dev !== stat.dev
+        || contentHash(await fs.promises.readFile(resolvedPath)) !== originalHash) {
+        throw new Error('File changed while preparing the replacement. Read it again.')
+      }
+
+      await fs.promises.rename(temporaryPath, resolvedPath)
+    } catch (error) {
+      return {
+        success: false,
+        data: {
+          path: resolvedPath,
+          bytesWritten: 0,
+          backupPath,
+          backupContentHash: originalHash
+        },
+        error: error instanceof Error ? error.message : String(error)
+      }
+    } finally {
+      await fs.promises.rm(temporaryPath, { force: true })
+    }
 
     return {
       success: true,
       data: {
         path: resolvedPath,
-        bytesWritten: Buffer.byteLength(content, 'utf8')
+        bytesWritten: Buffer.byteLength(content, 'utf8'),
+        backupPath,
+        backupContentHash: originalHash
       }
     }
   }

@@ -229,8 +229,8 @@
       }
     },
     "write": {
-      "description": "Write text content to a local file. If the file exists, overwrite must be true.",
-      "progressive_guidance": "Prefer patch for changes to existing text. Full overwrite requires the complete current content and must preserve unrelated owner changes.",
+      "description": "Create or fully replace a local text file; overwrite=true saves original bytes in a unique adjacent backup.",
+      "progressive_guidance": "Verify the returned backupPath against backupContentHash. Full replacement rejects symbolic and hard-link aliases.",
       "parameters": {
         "type": "object",
         "properties": {
@@ -244,7 +244,8 @@
             "type": "object",
             "properties": {
               "overwrite": {
-                "type": "boolean"
+                "type": "boolean",
+                "description": "Enable automatic backup and full replacement; default false."
               },
               "createParents": {
                 "type": "boolean"
