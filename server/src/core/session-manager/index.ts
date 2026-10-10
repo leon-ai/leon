@@ -9,7 +9,8 @@ import {
   LLMDuties,
   InferencePurpose,
   LLMProviders,
-  type CompletionParams
+  type CompletionParams,
+  type AgentToolTranscriptMessage
 } from '@/core/llm-manager/types'
 import {
   getActiveConversationSessionId,
@@ -70,6 +71,12 @@ interface SessionUpdateInput {
   title?: string
   isPinned?: boolean
   modelTarget?: string | null
+}
+
+interface PendingAgentMessage {
+  prepare: () => Promise<AgentToolTranscriptMessage>
+  resolve: (consumed: boolean) => void
+  reject: (error: unknown) => void
 }
 
 function now(): number {
@@ -183,6 +190,79 @@ export class ConversationSessionManager {
   public readonly events = new EventEmitter()
   private index: ConversationSessionIndex | null = null
   private readonly sessionQueues = new Map<string, Promise<void>>()
+  private readonly agentMessageQueues = new Map<string, PendingAgentMessage[]>()
+
+  /**
+   * Lets an active agent consume owner messages at safe execution boundaries.
+   * Unconsumed messages return to ordinary session processing when the run ends.
+   */
+  public openAgentTurn(sessionId: string): {
+    drainOwnerMessages: () => Promise<AgentToolTranscriptMessage[]>
+    close: () => void
+  } {
+    if (this.agentMessageQueues.has(sessionId)) {
+      throw new Error('An agent turn is already active in this session.')
+    }
+
+    const pending: PendingAgentMessage[] = []
+    this.agentMessageQueues.set(sessionId, pending)
+
+    return {
+      drainOwnerMessages: async (): Promise<AgentToolTranscriptMessage[]> => {
+        const messages: AgentToolTranscriptMessage[] = []
+
+        while (pending.length > 0) {
+          const entry = pending.shift()!
+
+          try {
+            messages.push(await entry.prepare())
+            entry.resolve(true)
+          } catch (error) {
+            // Invalid incoming messages fail their sender without ending the agent.
+            entry.reject(error)
+          }
+        }
+
+        return messages
+      },
+      close: (): void => {
+        if (this.agentMessageQueues.get(sessionId) !== pending) {
+          return
+        }
+
+        this.agentMessageQueues.delete(sessionId)
+
+        for (const entry of pending.splice(0)) {
+          entry.resolve(false)
+        }
+      }
+    }
+  }
+
+  /**
+   * Queues a message for the current agent, or leaves it to normal turn routing.
+   */
+  public queueAgentMessage(
+    sessionId: string,
+    prepare: () => Promise<AgentToolTranscriptMessage>
+  ): Promise<boolean> | null {
+    const pending = this.agentMessageQueues.get(sessionId)
+
+    if (!pending) {
+      return null
+    }
+
+    return new Promise((resolve, reject) => {
+      pending.push({ prepare, resolve, reject })
+    })
+  }
+
+  /**
+   * Keeps live typing active while follow-up messages join an agent turn.
+   */
+  public isAgentTurnActive(sessionId: string): boolean {
+    return this.agentMessageQueues.has(sessionId)
+  }
 
   public ensureReady(): ConversationSessionIndex {
     if (this.index) {

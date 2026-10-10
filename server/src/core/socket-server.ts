@@ -832,6 +832,42 @@ export default class SocketServer {
     )
 
     try {
+      // Explicit routing requests remain separate turns. Ordinary messages can
+      // steer the current agent without running a second NLU operation in parallel.
+      const commandContext = utteranceData.commandContext
+      const hasRoutingOverride = Boolean(
+        commandContext?.forcedRoutingMode ||
+        commandContext?.forcedSkillName ||
+        commandContext?.forcedToolName
+      )
+      const queuedMessage = hasRoutingOverride
+        ? null
+        : CONVERSATION_SESSION_MANAGER.queueAgentMessage(
+            sessionId,
+            async () => {
+              const prepared = await prepareOwnerAttachments(
+                utterance,
+                utteranceData.attachments,
+                sessionId
+              )
+
+              BRAIN.setIsTalkingWithVoice(false, { shouldInterrupt: true })
+              BRAIN.isMuted = false
+
+              await NLU.recordOwnerMessage(prepared.query, ownerMessageId)
+
+              return {
+                role: 'user',
+                content: prepared.query,
+                ...(prepared.files.length > 0 ? { files: prepared.files } : {})
+              }
+            }
+          )
+
+      if (queuedMessage && await queuedMessage) {
+        return
+      }
+
       await CONVERSATION_SESSION_MANAGER.runWithSession(
         sessionId,
         async () => {
@@ -885,7 +921,9 @@ export default class SocketServer {
         })
       }
     } finally {
-      this.emitToChatClients('is-typing', false, { sessionId })
+      if (!CONVERSATION_SESSION_MANAGER.isAgentTurnActive(sessionId)) {
+        this.emitToChatClients('is-typing', false, { sessionId })
+      }
     }
   }
 

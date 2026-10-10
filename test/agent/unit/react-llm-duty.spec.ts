@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
+import { ConversationSessionManager } from '@/core/session-manager'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
@@ -426,6 +427,214 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it.each(['tool', 'answer'])(
+    'reconsiders a proposed %s when owner messages arrive during model generation',
+    async (responseKind) => {
+      const manager = new ConversationSessionManager()
+      const turn = manager.openAgentTurn('steering')
+      const receipts: Array<Promise<boolean>> = []
+      const files = [{ mediaType: 'image/png', dataBase64: 'aW1hZ2U=' }]
+      const prepare = vi.fn(async () => ({
+        role: 'user' as const,
+        content: 'Use this reference.',
+        files
+      }))
+      const executeFunction = vi.fn()
+      const applied = vi.fn()
+      const transcript: AgentToolTranscriptMessage[] = []
+      const callModel = vi.fn()
+        .mockImplementationOnce(async () => {
+          receipts.push(manager.queueAgentMessage('steering', prepare)!)
+          receipts.push(manager.queueAgentMessage('steering', async () => ({
+            role: 'user', content: 'Keep the answer brief.'
+          }))!)
+
+          return responseKind === 'tool'
+            ? { toolCalls: [toolCall('stale', CALLABLE_TOOL_NAME, { query: 'old' })] }
+            : { textContent: 'An answer without the new instructions.' }
+        })
+        .mockImplementationOnce(async (messages) => {
+          expect(messages).toEqual([
+            { role: 'user', content: 'Use this reference.', files },
+            { role: 'user', content: 'Keep the answer brief.' }
+          ])
+
+          return { textContent: 'Updated answer.' }
+        })
+
+      try {
+        const result = await runAgentLoop({
+          transcript, catalog: createCatalog(), callModel, executeFunction,
+          drainOwnerMessages: turn.drainOwnerMessages,
+          onOwnerMessagesApplied: applied,
+          loadAgentSkill: async () => null
+        })
+
+        expect(result.answer).toBe('Updated answer.')
+        expect(executeFunction).not.toHaveBeenCalled()
+        expect(callModel).toHaveBeenCalledTimes(2)
+        expect(prepare).toHaveBeenCalledTimes(1)
+        expect(applied).toHaveBeenCalledTimes(1)
+        expect(await Promise.all(receipts)).toEqual([true, true])
+      } finally {
+        turn.close()
+      }
+    }
+  )
+
+  it('settles a running parallel batch before skipping unstarted calls and applying owner instructions', async () => {
+    const catalog = createCatalog()
+    const serialName = 'test__lookup__serial'
+    catalog.functionsByToolName.set(serialName, {
+      ...callable,
+      concurrency: ToolConcurrency.Serial
+    })
+    const pending: AgentToolTranscriptMessage[] = []
+    const finished: string[] = []
+    const transcript: AgentToolTranscriptMessage[] = []
+    const executeFunction = vi.fn(async (_fn, input) => {
+      const { query } = JSON.parse(input)
+
+      if (query === 'one') {
+        pending.push({ role: 'user', content: 'Stop the remaining lookups.' })
+      }
+
+      await Promise.resolve()
+      finished.push(query)
+
+      return { execution: {
+        function: callable.qualifiedName, status: 'success', observation: input
+      } }
+    })
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [
+        toolCall('one', CALLABLE_TOOL_NAME, { query: 'one' }),
+        toolCall('two', CALLABLE_TOOL_NAME, { query: 'two' }),
+        toolCall('barrier', serialName, { query: 'barrier' }),
+        toolCall('three', CALLABLE_TOOL_NAME, { query: 'three' })
+      ] })
+      .mockImplementationOnce(async (messages) => {
+        expect(finished).toEqual(['one', 'two'])
+        expect(messages.filter((message: AgentToolTranscriptMessage) => message.role === 'tool'))
+          .toEqual([
+            expect.objectContaining({ toolCallId: 'one' }),
+            expect.objectContaining({ toolCallId: 'two' }),
+            expect.objectContaining({ toolCallId: 'barrier', content: expect.stringContaining('skipped') }),
+            expect.objectContaining({ toolCallId: 'three', content: expect.stringContaining('skipped') })
+          ])
+        expect(messages.at(-1)).toEqual({ role: 'user', content: 'Stop the remaining lookups.' })
+
+        return { textContent: 'Stopped.' }
+      })
+
+    const result = await runAgentLoop({
+      transcript, catalog, callModel, executeFunction,
+      drainOwnerMessages: async () => pending.splice(0),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.answer).toBe('Stopped.')
+    expect(executeFunction).toHaveBeenCalledTimes(2)
+    expect(result.executionHistory).toHaveLength(2)
+    expect(callModel).toHaveBeenCalledTimes(2)
+  })
+
+  it('reconsiders an ending when owner input arrives during completion review', async () => {
+    const pending: AgentToolTranscriptMessage[] = []
+    let reviewed = false
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ toolCalls: [toolCall('lookup', CALLABLE_TOOL_NAME, { query: 'one' })] })
+      .mockResolvedValueOnce({ textContent: 'Original answer.' })
+      .mockImplementationOnce(async (_messages, _tools, options) => {
+        expect(options.isCompletionReview).toBe(true)
+        pending.push({ role: 'user', content: 'Also explain the result.' })
+        reviewed = true
+
+        return { textContent: JSON.stringify({ status: 'complete', reason: 'Verified.' }) }
+      })
+      .mockImplementationOnce(async (messages, _tools, options) => {
+        expect(reviewed).toBe(true)
+        expect(options.isCompletionReview).toBeUndefined()
+        expect(messages.at(-1)).toEqual({ role: 'user', content: 'Also explain the result.' })
+
+        return { textContent: 'Answer with explanation.' }
+      })
+      .mockResolvedValueOnce({ textContent: JSON.stringify({ status: 'complete', reason: 'Verified.' }) })
+
+    const result = await runAgentLoopWithCompletionReview({
+      transcript: [], catalog: createCatalog(), callModel,
+      executeFunction: async () => ({ execution: {
+        function: callable.qualifiedName, status: 'success', observation: 'Verified result.'
+      } }),
+      drainOwnerMessages: async () => pending.splice(0),
+      loadAgentSkill: async () => null
+    })
+
+    expect(result.answer).toBe('Answer with explanation.')
+    expect(result.transcript.some((message) => message.content === 'Original answer.')).toBe(false)
+  })
+
+  it('retains owner updates and attachments when final synthesis retries with reduced evidence', async () => {
+    const files = [{ mediaType: 'image/png', dataBase64: 'aW1hZ2U=' }]
+    const update: AgentToolTranscriptMessage = {
+      role: 'user', content: 'Explain this reference instead.', files
+    }
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Original request.' },
+      {
+        role: 'assistant', content: '',
+        toolCalls: [toolCall('old', CALLABLE_TOOL_NAME, { query: 'old' })]
+      },
+      { role: 'tool', toolCallId: 'old', toolName: CALLABLE_TOOL_NAME, content: 'Earlier result.' },
+      update
+    ]
+    const callModel = vi.fn()
+      .mockResolvedValueOnce({ isTruncated: true, textContent: 'Partial answer.' })
+      .mockImplementationOnce(async (messages) => {
+        expect(messages.at(-1)).toEqual(update)
+        expect(messages.filter((message: AgentToolTranscriptMessage) => message.role === 'tool'))
+          .toEqual([])
+
+        return { textContent: 'Reference explained.' }
+      })
+
+    const result = await runAgentLoop({
+      transcript, catalog: createCatalog(), callModel,
+      executeFunction: vi.fn(), loadAgentSkill: async () => null,
+      maxIterations: 0
+    })
+
+    expect(result.answer).toBe('Reference explained.')
+  })
+
+  it('rechecks owner input received during synthesis without renewing the tool budget', async () => {
+    const pending: AgentToolTranscriptMessage[] = []
+    const executeFunction = vi.fn()
+    const callModel = vi.fn()
+      .mockImplementationOnce(async () => {
+        pending.push({ role: 'user', content: 'Use a shorter explanation.' })
+
+        return { textContent: 'Stale explanation.' }
+      })
+      .mockImplementationOnce(async (messages, tools, options) => {
+        expect(messages.at(-1)).toEqual({ role: 'user', content: 'Use a shorter explanation.' })
+        expect(options.isFinalizationAttempt).toBe(true)
+        expect(tools.map((tool: { function: { name: string } }) => tool.function.name))
+          .toEqual([AGENT_CLARIFICATION_TOOL_NAME])
+
+        return { textContent: 'Short explanation.' }
+      })
+
+    const result = await runAgentLoop({
+      transcript: [], catalog: createCatalog(), callModel, executeFunction,
+      drainOwnerMessages: async () => pending.splice(0),
+      loadAgentSkill: async () => null, maxIterations: 0
+    })
+
+    expect(result.answer).toBe('Short explanation.')
+    expect(executeFunction).not.toHaveBeenCalled()
+  })
+
   it('exposes execution controls immediately after a retained handle is returned', async () => {
     coreMocks.getFlattenedTools.mockReturnValue([{
       toolkitId: 'system_utilities', toolkitName: 'System Utilities',

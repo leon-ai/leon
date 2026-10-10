@@ -1412,6 +1412,30 @@ export default class NLU {
   }
 
   /**
+   * Persists owner input and observes feedback for both routed and active turns.
+   */
+  public async recordOwnerMessage(
+    utterance: NLPUtterance,
+    ownerMessageId?: string
+  ): Promise<void> {
+    await CONVERSATION_LOGGER.push({
+      who: 'owner',
+      message: utterance,
+      isAddedToHistory: true,
+      ...(ownerMessageId ? { messageId: ownerMessageId } : {})
+    })
+
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(sessionId, utterance)
+    void PULSE_MANAGER.observeOwnerUtterance(utterance).catch(
+      (error: unknown) => {
+        LogHelper.title('NLU')
+        LogHelper.warning(`Failed to observe pulse owner feedback: ${error}`)
+      }
+    )
+  }
+
+  /**
    * Classify the utterance,
    * pick up the right classification
    * and extract entities
@@ -1447,28 +1471,7 @@ export default class NLU {
               options?.forcedToolName
             )
 
-            await CONVERSATION_LOGGER.push({
-              who: 'owner',
-              message: utterance,
-              isAddedToHistory: true,
-              ...(options?.ownerMessageId
-                ? { messageId: options.ownerMessageId }
-                : {})
-            })
-            const currentSessionId =
-              CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
-            CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(
-              currentSessionId,
-              utterance
-            )
-            void PULSE_MANAGER.observeOwnerUtterance(utterance).catch(
-              (error: unknown) => {
-                LogHelper.title('NLU')
-                LogHelper.warning(
-                  `Failed to observe pulse owner feedback: ${error}`
-                )
-              }
-            )
+            await this.recordOwnerMessage(utterance, options?.ownerMessageId)
 
             await NLUProcessResultUpdater.update({
               new: {

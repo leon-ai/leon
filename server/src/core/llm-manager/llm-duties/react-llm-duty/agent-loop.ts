@@ -109,6 +109,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 
 <agent_loop>
 - Work directly from the user request and the complete conversation transcript.
+- Owner messages received during execution update the active request. Apply the latest instructions before choosing further actions, preserving completed work unless the owner changes or cancels the task.
 - When a tool can advance the request, call it now. Do not describe a future action without taking it.
 - Tool calls and tool results from this run are already present in the transcript. Never use memory, context, or filesystem tools to rediscover what happened in the current run.
 - Large tool results may include a preview and output_log_path. Read only the needed artifact section when the preview does not contain the required fact.
@@ -154,7 +155,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </response_policy>`
 
 export const AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT = `<execution_limit_checkpoint>
-The operational iteration budget is exhausted. Address the original owner request now using the evidence already present in the transcript.
+The operational iteration budget is exhausted. Address the owner request and subsequent owner updates now using the evidence already present in the transcript.
 
 - No operational tools are available in this checkpoint.
 - If the evidence is sufficient, return the complete user-facing answer as plain text with no tool call.
@@ -338,6 +339,8 @@ export interface AgentLoopParams {
   onAgentSkillLoaded?: (context: AgentSkillContext) => void
   onPlanUpdated?: (steps: TrackedPlanStep[]) => void
   onProgressMessage?: (message: string) => Promise<void> | void
+  drainOwnerMessages?: () => Promise<AgentToolTranscriptMessage[]>
+  onOwnerMessagesApplied?: () => void
   initialExecutionHistory?: ExecutionRecord[]
   initialTrackedSteps?: TrackedPlanStep[]
   allowDirectAnswerHandoff?: boolean
@@ -838,6 +841,9 @@ export async function runAgentLoop(
 
   for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
+    if (await appendPendingOwnerMessages(params, transcript)) {
+      requiresToolAction = false
+    }
     // Continue an unfinished authorized run once, with bounded resume context.
     // This is a bounded finishing pass, not a new task or a renewed permission.
     if (iteration === mainIterations && finishingIterations > 0) {
@@ -967,6 +973,13 @@ export async function runAgentLoop(
       isOutputRecoveryAttempt = Boolean(modelResult.isTruncated)
     }
 
+    // A response selected without the newest owner instructions must not dispatch
+    // tools or publish a final answer. Reconsider it through the existing loop.
+    if (await appendPendingOwnerMessages(params, transcript)) {
+      requiresToolAction = false
+      continue
+    }
+
     const emittedToolCalls = modelResult.toolCalls || []
     const toolCalls = emittedToolCalls.slice(
       0,
@@ -1004,6 +1017,11 @@ export async function runAgentLoop(
             params, transcript, textContent, remainingIterations - 1,
             { executionHistory, trackedSteps }, hasUsedContextRecovery
           )
+          if (await appendPendingOwnerMessages(params, transcript)) {
+            requiresToolAction = false
+            continue
+          }
+
           if (!review) {
             return {
               answer: 'I could not verify whether the task is complete because the completion check failed.',
@@ -1091,7 +1109,18 @@ export async function runAgentLoop(
 
     let terminalSignal: FinalResponseSignal | undefined
     let planUpdated = false
+    let wasSteered = false
     for (let callIndex = 0; callIndex < toolCalls.length;) {
+      if (await appendPendingOwnerMessages(
+        params,
+        transcript,
+        toolCalls.slice(callIndex)
+      )) {
+        wasSteered = true
+        requiresToolAction = false
+        break
+      }
+
       const toolCall = toolCalls[callIndex]!
       if (terminalSignal) {
         // Providers require one result for every emitted tool call. Complete
@@ -1145,6 +1174,11 @@ export async function runAgentLoop(
     }
 
     if (terminalSignal) {
+      if (wasSteered || await appendPendingOwnerMessages(params, transcript)) {
+        requiresToolAction = false
+        continue
+      }
+
       return {
         answer: terminalSignal.draft,
         intent: terminalSignal.intent,
@@ -1163,6 +1197,38 @@ export async function runAgentLoop(
     executionHistory,
     trackedSteps
   )
+}
+
+/**
+ * Applies queued owner instructions after settling any unstarted call results.
+ * Running batches settle before this boundary so their evidence stays ordered.
+ */
+async function appendPendingOwnerMessages(
+  params: AgentLoopParams,
+  transcript: AgentToolTranscriptMessage[],
+  unstartedCalls: OpenAIToolCall[] = []
+): Promise<boolean> {
+  params.signal?.throwIfAborted()
+  const messages = await params.drainOwnerMessages?.()
+  params.signal?.throwIfAborted()
+
+  if (!messages?.length) {
+    return false
+  }
+
+  for (const call of unstartedCalls) {
+    transcript.push({
+      role: 'tool',
+      toolCallId: call.id,
+      toolName: call.function.name,
+      content: 'Tool call skipped because new owner instructions require reassessment.'
+    })
+  }
+
+  transcript.push(...messages)
+  params.onOwnerMessagesApplied?.()
+
+  return true
 }
 
 /**
@@ -1247,6 +1313,8 @@ async function finalizeAgentLoopAtLimit(
   executionHistory: ExecutionRecord[],
   trackedSteps: TrackedPlanStep[]
 ): Promise<AgentLoopResult> {
+  await appendPendingOwnerMessages(params, transcript)
+
   const primaryOutcome = await attemptAgentLimitFinalization(
     params,
     transcript,
@@ -1259,6 +1327,12 @@ async function finalizeAgentLoopAtLimit(
       const review = await reviewAgentCompletion(
         params, transcript, primaryOutcome.answer, 0, { executionHistory, trackedSteps }
       )
+      if (await appendPendingOwnerMessages(params, transcript)) {
+        return createResumableAgentResult(
+          'synthesis', transcript, executionHistory, trackedSteps
+        )
+      }
+
       if (!review || review.status !== AgentCompletionStatus.Complete || !isAgentPlanComplete(trackedSteps)) {
         // A partial answer must preserve continuation state in the caller.
         const answer = review?.status === AgentCompletionStatus.Complete && !isAgentPlanComplete(trackedSteps)
@@ -1318,17 +1392,22 @@ function buildAgentLimitRecoveryTranscript(
       }))
   }
 
-  return [{
-    role: 'assistant',
-    content: [
-      '<original_owner_request>',
-      originalRequest,
-      '</original_owner_request>',
-      '<finalization_recovery_checkpoint>',
-      JSON.stringify(checkpoint),
-      '</finalization_recovery_checkpoint>'
-    ].join('\n')
-  }]
+  return [
+    {
+      role: 'assistant',
+      content: [
+        '<original_owner_request>',
+        originalRequest,
+        '</original_owner_request>',
+        '<finalization_recovery_checkpoint>',
+        JSON.stringify(checkpoint),
+        '</finalization_recovery_checkpoint>'
+      ].join('\n')
+    },
+    // Keep later instructions and their attachments authoritative when tool
+    // evidence is reduced for a synthesis retry.
+    ...transcript.filter((message) => message.role === 'user').slice(1)
+  ]
 }
 
 function getClarificationSignal(
@@ -1385,6 +1464,11 @@ async function attemptAgentLimitFinalization(
         { executionHistory, trackedSteps }
       )
       params.signal?.throwIfAborted()
+      if (await appendPendingOwnerMessages(params, modelTranscript)) {
+        modelResult = null
+        currentTranscript = modelTranscript
+        continue
+      }
     } catch (error) {
       params.signal?.throwIfAborted()
       if (error instanceof AgentModelResponseTimeoutError) {

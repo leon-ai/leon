@@ -45,6 +45,7 @@ import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { CONFIG_MANAGER } from '@/config'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
 
 const TRACE_SAVE_INTERVAL_MS = 1_000
 const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
@@ -310,6 +311,13 @@ export class ReActLLMDuty extends LLMDuty {
       summary: 'Understanding your request'
     })
 
+    // Background duties without a bound conversation must not consume messages
+    // addressed to the profile's currently selected chat session.
+    const activeSessionId = getActiveConversationSessionId()
+    const agentTurn = activeSessionId
+      ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId)
+      : null
+
     try {
       const { messageLogs: history } =
         await ReActLLMDuty.historyManager.loadPreparedHistory()
@@ -501,6 +509,11 @@ export class ReActLLMDuty extends LLMDuty {
       )
 
       const result = await runAgentLoop({
+        ...(agentTurn ? { drainOwnerMessages: agentTurn.drainOwnerMessages } : {}),
+        onOwnerMessagesApplied: () => {
+          this.answerStream.discard()
+          this.closeStreamedToolCalls()
+        },
         ...(this.signal ? { signal: this.signal } : {}),
         transcript,
         catalog,
@@ -706,6 +719,7 @@ export class ReActLLMDuty extends LLMDuty {
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
     } finally {
+      agentTurn?.close()
       this.closeStreamedToolCalls()
 
       if (this.traceSaveTimer) {
