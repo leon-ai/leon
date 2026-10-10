@@ -32,7 +32,7 @@ interface AppendOptions {
 
 export default class FileTool extends Tool {
   public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
-  private static readonly TOOLKIT = 'operating_system_control'
+  private static readonly TOOLKIT = 'file_system'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
   private documentReader?: DocumentReader
 

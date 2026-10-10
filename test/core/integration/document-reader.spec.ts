@@ -4,11 +4,11 @@ import path from 'node:path'
 
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { DocumentReader } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-reader'
-import { LocalOcr } from '@@/tools/operating_system_control/file/src/nodejs/lib/local-ocr'
-import { prepareDocumentSearch } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-search'
+import { DocumentReader } from '@@/tools/file_system/file/src/nodejs/lib/document-reader'
+import { LocalOcr } from '@@/tools/file_system/file/src/nodejs/lib/local-ocr'
+import { prepareDocumentSearch } from '@@/tools/file_system/file/src/nodejs/lib/document-search'
 import { UrlReader } from '@@/tools/search_web/crawlberg/src/nodejs/lib/url-reader'
-import { sliceLayout } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-layout'
+import { sliceLayout } from '@@/tools/file_system/file/src/nodejs/lib/document-layout'
 import { prepareOwnerAttachments } from '@/core/owner-attachments'
 import { LEON_TOOLKITS_PATH } from '@bridge/constants'
 
@@ -22,7 +22,7 @@ let reader: DocumentReader
 // Prepared through FileTool.getResourcePath, not RapidOCR's private cache.
 const resolveOcrResources = async (): Promise<string[]> => [
   'PaddleOCR-v6-small-det', 'PaddleOCR-v6-small-rec', 'RapidOCR-text-orientation'
-].map((resource) => path.join(LEON_TOOLKITS_PATH, 'operating_system_control', 'assets', resource))
+].map((resource) => path.join(LEON_TOOLKITS_PATH, 'file_system', 'assets', resource))
 
 afterEach(async () => {
   await reader?.dispose()

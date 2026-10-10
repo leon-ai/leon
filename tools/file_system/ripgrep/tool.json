@@ -1,7 +1,7 @@
 {
   "$schema": "../../../schemas/tool-schemas/tool.json",
   "tool_id": "ripgrep",
-  "toolkit_id": "operating_system_control",
+  "toolkit_id": "file_system",
   "name": "Ripgrep",
   "description": "Fast, bounded, read-only local content search and file discovery with ripgrep. Prefer over shell rg/grep/find for filesystem search.",
   "icon_name": "file-search-line",

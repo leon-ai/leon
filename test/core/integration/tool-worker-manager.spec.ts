@@ -9,8 +9,8 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ToolWorkerManager } from '@/core/tool-manager/tool-worker-manager'
 import type { ToolRuntimeResult } from '@sdk/tool-runtime-types'
 import { extractArchive } from '@sdk/utils'
-import { runRipgrep } from '@@/tools/operating_system_control/ripgrep/src/nodejs/lib/run-ripgrep'
-import { DocumentReader } from '@@/tools/operating_system_control/file/src/nodejs/lib/document-reader'
+import { runRipgrep } from '@@/tools/file_system/ripgrep/src/nodejs/lib/run-ripgrep'
+import { DocumentReader } from '@@/tools/file_system/file/src/nodejs/lib/document-reader'
 
 const LARGE_RESULT_BYTES = 4 * 1_024 * 1_024
 
@@ -925,11 +925,11 @@ it.skipIf(spawnSync('rg', ['--version']).status !== 0)('executes built-in ripgre
   const { default: ToolkitRegistry } = await import('@/core/tool-manager/toolkit-registry')
   const registry = new ToolkitRegistry()
   await registry.load()
-  expect(registry.getFlattenedTools()).toContainEqual(expect.objectContaining({ toolkitId: 'operating_system_control', toolId: 'ripgrep' }))
-  expect(Object.keys(registry.getToolFunctions('operating_system_control', 'ripgrep') || {})).toEqual(['search', 'listFiles'])
+  expect(registry.getFlattenedTools()).toContainEqual(expect.objectContaining({ toolkitId: 'file_system', toolId: 'ripgrep' }))
+  expect(Object.keys(registry.getToolFunctions('file_system', 'ripgrep') || {})).toEqual(['search', 'listFiles'])
   const source = path.join(home, 'sample.ts')
   await fs.writeFile(source, 'first\nneedle\n')
-  const context = { toolkitId: 'operating_system_control', toolId: 'ripgrep',
+  const context = { toolkitId: 'file_system', toolId: 'ripgrep',
     profileName: 'a', conversationSessionId: 'ripgrep', parameters: {} }
   // A cold install from two workers must publish an executable atomically.
   const [search, files] = await Promise.all([

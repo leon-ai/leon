@@ -1,7 +1,7 @@
 {
   "$schema": "../../../schemas/tool-schemas/tool.json",
   "tool_id": "file",
-  "toolkit_id": "operating_system_control",
+  "toolkit_id": "file_system",
   "concurrency": "serial",
   "name": "File",
   "description": "Read documents and images; read, write, append and patch local text files without shell commands.",

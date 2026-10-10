@@ -1,8 +1,8 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Operating System Control",
-  "description": "Tools for interacting with and controlling the operating system.",
-  "progressive_guidance": "Read occupied destinations; patch updates without changing unrelated content. A requested output path does not authorize discarding its contents: save an exact, unique recoverable copy before full replacement, including shell writes. Resolve ordinary collisions without owner confirmation. Verify the new output and preserved bytes before completion; retain and briefly report the saved copy. If evidence is missing, verify or recover with tools.",
+  "description": "Run shell commands and manage command sessions on the operating system.",
+  "progressive_guidance": "Prefer dedicated tools over shell commands when they cover the task. Use file_system.file for file reads and edits and file_system.ripgrep for file discovery and content search. Read occupied destinations; patch updates without changing unrelated content. A requested output path does not authorize discarding its contents: save an exact, unique recoverable copy before full replacement, including shell writes. Resolve ordinary collisions without owner confirmation. Verify the new output and preserved bytes before completion; retain and briefly report the saved copy. If evidence is missing, verify or recover with tools.",
   "icon_name": "terminal-box-line",
   "context_files": [
     "LEON.md",
@@ -13,8 +13,6 @@
     "STORAGE.md"
   ],
   "tools": [
-    "shell",
-    "file",
-    "ripgrep"
+    "shell"
   ]
 }

@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 
-import { contentHash, patchTextFile } from '@@/tools/operating_system_control/file/src/nodejs/lib/text-patch'
+import { contentHash, patchTextFile } from '@@/tools/file_system/file/src/nodejs/lib/text-patch'
 
 let directory = ''
 

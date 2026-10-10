@@ -2262,13 +2262,13 @@ describe('continuous agent loop', () => {
       findDuplicateToolInputMatch(
         [
           {
-            function: 'operating_system_control.file.readToolArtifact',
+            function: 'file_system.file.readToolArtifact',
             status: 'success',
             observation: 'Artifact prefix read.',
             requestedToolInput: previousInput
           }
         ],
-        'operating_system_control.file.readToolArtifact',
+        'file_system.file.readToolArtifact',
         'Read artifact',
         candidateInput
       )
@@ -2540,11 +2540,11 @@ describe('continuous agent loop', () => {
         toolDescription: 'Read a file.'
       },
       {
-        toolkitId: 'operating_system_control',
-        toolkitName: 'Operating System Control',
-        toolkitDescription: 'Control the local operating system.',
-        toolId: 'file',
-        toolName: 'File',
+        toolkitId: 'document',
+        toolkitName: 'Document',
+        toolkitDescription: 'Read and create local documents.',
+        toolId: 'document',
+        toolName: 'Document',
         toolDescription: 'Read or write local files.'
       }
     ])

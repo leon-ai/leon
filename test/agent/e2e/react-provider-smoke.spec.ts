@@ -289,12 +289,12 @@ function expectFileInstructionsScenario(result: ProviderScenarioResult): void {
   const turn = result.turn!
   const trace = collectTurnTrace(turn)
   const fileReadIndex = turn.executionHistory.findIndex(
-    (item) => item.function === 'operating_system_control.file.read'
+    (item) => item.function === 'file_system.file.read'
   )
   const listingIndex = turn.executionHistory.findIndex(
     (item) =>
       item.function === 'operating_system_control.shell.executeCommand'
-      || item.function === 'operating_system_control.ripgrep.listFiles'
+      || item.function === 'file_system.ripgrep.listFiles'
   )
 
   expect(turn.output.trim().length).toBeGreaterThan(0)
@@ -355,8 +355,8 @@ function expectCodingScenario(id: ProviderScenarioId, result: ProviderScenarioRe
   expect(readPaths.some((value) => value.endsWith('/src/AGENTS.md'))).toBe(true)
   // Finite commands are transported as temporary scripts. The history retains
   // the requested command and its observation, so assess those together.
-  const firstPatch = turn.executionHistory.findIndex((item) => item.function === 'operating_system_control.file.patch')
-  const lastPatch = turn.executionHistory.findLastIndex((item) => item.function === 'operating_system_control.file.patch')
+  const firstPatch = turn.executionHistory.findIndex((item) => item.function === 'file_system.file.patch')
+  const lastPatch = turn.executionHistory.findLastIndex((item) => item.function === 'file_system.file.patch')
   const isProjectTest = (item: typeof turn.executionHistory[number]): boolean => {
     const input = JSON.parse(item.requestedToolInput || '{}') as Record<string, unknown>
     const command = String(input['command'] || '')

@@ -30,7 +30,7 @@ const SCENARIOS = [
   {
     name: 'ocr',
     input: `Read the text in this image using OCR: ${OCR_PATH}`,
-    functionName: 'operating_system_control.file.readImage'
+    functionName: 'file_system.file.readImage'
   }
 ] as const
 

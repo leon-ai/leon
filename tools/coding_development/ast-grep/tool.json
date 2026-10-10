@@ -55,5 +55,5 @@
     "win-amd64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-x86_64-pc-windows-msvc.zip",
     "win-arm64": "https://github.com/ast-grep/ast-grep/releases/download/0.45.3/app-aarch64-pc-windows-msvc.zip"
   },
-  "progressive_guidance": "Read-only, shell-free search. Respect hidden and ignore rules; do not follow recursive symlinks. Uses an empty configuration so workspace configuration cannot load custom grammars. Uses Leon-managed binaries with built-in execution and output limits. Large output fails explicitly rather than silently reporting an incomplete result as complete. Use operating_system_control.ripgrep for filename discovery and literal text search."
+  "progressive_guidance": "Read-only, shell-free search. Respect hidden and ignore rules; do not follow recursive symlinks. Uses an empty configuration so workspace configuration cannot load custom grammars. Uses Leon-managed binaries with built-in execution and output limits. Large output fails explicitly rather than silently reporting an incomplete result as complete. Use file_system.ripgrep for filename discovery and literal text search."
 }

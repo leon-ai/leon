@@ -54,7 +54,7 @@
     },
     "create": {
       "description": "Create a local editable DOCX with structured text, SVG/PNG figures and captions. No provider needed.",
-      "progressive_guidance": "Generate chart assets with document.echarts.render and pass returned absolute SVG/PNG paths in content.sections.images. Images follow that section’s paragraphs; create separate sections to position figures between text blocks. SVG includes a PNG fallback for Office compatibility. Width is in display pixels and height preserves the aspect ratio. Include captions and altText. Use document.typst.compile for local PDFs. Inspect DOCX content with operating_system_control.file.readDocument; convert to PDF with an installed document renderer before claiming visual verification.",
+      "progressive_guidance": "Generate chart assets with document.echarts.render and pass returned absolute SVG/PNG paths in content.sections.images. Images follow that section’s paragraphs; create separate sections to position figures between text blocks. SVG includes a PNG fallback for Office compatibility. Width is in display pixels and height preserves the aspect ratio. Include captions and altText. Use document.typst.compile for local PDFs. Inspect DOCX content with file_system.file.readDocument; convert to PDF with an installed document renderer before claiming visual verification.",
       "parameters": {
         "type": "object",
         "properties": {

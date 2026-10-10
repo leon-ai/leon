@@ -1,12 +1,14 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "File System",
-  "description": "Tools for file system operations.",
+  "description": "Read, write, patch, search, discover, attach and share local files, documents and images.",
   "icon_name": "folders-line",
   "context_files": [],
   "tools": [
+    "file",
+    "ripgrep",
     "miniserve",
     "magic_wormhole"
   ],
-  "progressive_guidance": "Keep shared files on Leon’s host. Use miniserve for read-only LAN browser links and magic_wormhole for encrypted live internet transfers. Both require the host to remain running; shares expire or can be stopped. These tools do not upload files into third-party cloud storage."
+  "progressive_guidance": "Use file for reading local text, documents and images, writing or patching text, and attaching completed files. Use ripgrep for file discovery and content search; prepare document text with file.prepareDocumentSearch before searching extracted content. Read occupied destinations; patch updates without changing unrelated content. A requested output path does not authorize discarding its contents: save an exact, unique recoverable copy before full replacement, including shell writes. Resolve ordinary collisions without owner confirmation. Verify the new output and preserved bytes before completion; retain and briefly report the saved copy. If evidence is missing, verify or recover with tools. Keep shared files on Leon’s host. Use miniserve for read-only LAN browser links and magic_wormhole for encrypted live internet transfers. Both require the host to remain running; shares expire or can be stopped. These tools do not upload files into third-party cloud storage."
 }

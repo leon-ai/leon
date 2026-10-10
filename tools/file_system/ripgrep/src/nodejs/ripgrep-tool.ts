@@ -75,7 +75,7 @@ export default class RipgrepTool extends Tool {
   }
 
   get toolkit(): string {
-    return 'operating_system_control'
+    return 'file_system'
   }
 
   get description(): string {
