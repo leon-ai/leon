@@ -970,6 +970,28 @@ export default class Chatbot {
     )
     const tokenFormatter = new Intl.NumberFormat()
     const timestampMarkup = this.formatTimestampMarkup(sentAt)
+    let contextMarkup = ''
+
+    if (Number.isFinite(metrics.contextUsedTokens)) {
+      const estimateLabel = metrics.contextUsageEstimated ? '~' : ''
+      const usedTokens = tokenFormatter.format(metrics.contextUsedTokens)
+      const hasContextWindow = Number.isFinite(metrics.contextWindowTokens) &&
+        metrics.contextWindowTokens > 0 && Number.isFinite(metrics.contextUsagePercent)
+      const contextLabel = hasContextWindow
+        ? `${estimateLabel}${metrics.contextUsagePercent.toFixed(1)}% context`
+        : `${estimateLabel}${usedTokens} context tok`
+      const contextTitle = hasContextWindow
+        ? `Latest model request: ${estimateLabel}${usedTokens} / ${tokenFormatter.format(metrics.contextWindowTokens)} input tokens`
+        : `Latest model request: ${estimateLabel}${usedTokens} input tokens; context capacity unknown`
+
+      contextMarkup = `
+        <span class="bubble-metric-item" title="${contextTitle}">
+          <i class="ri-database-2-line" aria-hidden="true"></i>
+          <span>${contextLabel}</span>
+        </span>
+      `.trim()
+    }
+
     const accounting = metrics.usageAccounting
     const calls = Number(metrics.completionCount || 0)
     const accountingLabels = []
@@ -997,6 +1019,7 @@ export default class Chatbot {
         <span>${tokensPerSecond.toFixed(2)} t/s</span>
       </span>
       ${timestampMarkup}
+      ${contextMarkup}
       ${accountingMarkup}
     `.trim()
   }

@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { LogHelper } from '@/helpers/log-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
 import { runCompletionAttempt } from '@/core/llm-manager/llm-provider/llm-provider-attempt'
 import type { PreparedCompletionParams } from '@/core/llm-manager/llm-provider/llm-provider-types'
@@ -3127,6 +3128,81 @@ describe('model response status', () => {
   const statuses = (): ModelResponseStatus[] => coreMocks.emitToChatClients.mock.calls
     .filter(([event]) => event === 'model-response-status')
     .map(([, status]) => status)
+
+  it('retains the prepared prompt estimate when an adapter reports no input usage', async () => {
+    coreMocks.prompt.mockResolvedValueOnce({
+      output: 'Done.',
+      usedInputTokens: 0
+    })
+    const duty = new ReActLLMDuty({ input: 'Inspect the files.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+
+    await duty['callAgentModel']([], 'Follow the request.', [], {
+      isRecoveryAttempt: false
+    })
+
+    const preparedUsage = statuses()[0]?.contextUsage
+
+    expect(preparedUsage?.contextUsedTokens).toBeGreaterThan(0)
+    expect(preparedUsage?.contextUsageEstimated).toBe(true)
+    expect(statuses().at(-1)?.contextUsage).toEqual(preparedUsage)
+  })
+
+  it('keeps latest prompt occupancy isolated per session and active model', async () => {
+    vi.mocked(CONFIG_STATE.getModelState().getAgentTarget).mockRestore()
+    coreMocks.prompt
+      .mockResolvedValueOnce({ output: 'First answer.', usedInputTokens: 105_000 })
+      .mockResolvedValueOnce({ output: 'Second answer.', usedInputTokens: 200_000 })
+      .mockResolvedValueOnce({ output: 'Continued answer.', usedInputTokens: 42_000 })
+    const firstContext = {
+      sessionId: 'first-session',
+      modelTarget: 'openai/gpt-6.1-sol'
+    }
+    const secondContext = {
+      sessionId: 'second-session',
+      modelTarget: 'minimax/MiniMax-M3'
+    }
+    const first = new ReActLLMDuty({ input: 'First request.' })
+    const second = new ReActLLMDuty({ input: 'Second request.' })
+    Object.assign(first, { writeAgentPromptLog: vi.fn() })
+    Object.assign(second, { writeAgentPromptLog: vi.fn() })
+    const callOptions = { isRecoveryAttempt: false }
+
+    await Promise.all([
+      runWithConversationSession(firstContext, () =>
+        first['callAgentModel']([], 'Follow the first request.', [], callOptions)
+      ),
+      runWithConversationSession(secondContext, () =>
+        second['callAgentModel']([], 'Follow the second request.', [], callOptions)
+      )
+    ])
+
+    expect(statuses().find((status) => status.sessionId === firstContext.sessionId)
+      ?.contextUsage?.contextUsageEstimated).toBe(true)
+    expect(statuses().findLast((status) => status.sessionId === firstContext.sessionId)
+      ?.contextUsage).toEqual({
+      contextUsedTokens: 105_000,
+      contextWindowTokens: 1_050_000,
+      contextUsagePercent: 10,
+      contextUsageEstimated: false
+    })
+    expect(statuses().findLast((status) => status.sessionId === secondContext.sessionId)
+      ?.contextUsage).toEqual({
+      contextUsedTokens: 200_000,
+      contextWindowTokens: 1_000_000,
+      contextUsagePercent: 20,
+      contextUsageEstimated: false
+    })
+
+    await runWithConversationSession(firstContext, () =>
+      first['callAgentModel']([], 'Follow the compacted transcript.', [], callOptions)
+    )
+
+    expect(first['contextUsage']?.contextUsagePercent).toBe(4)
+    expect(first['totalInputTokens']).toBe(147_000)
+    expect(second['contextUsage']?.contextUsagePercent).toBe(20)
+    expect(coreMocks.prompt).toHaveBeenCalledTimes(3)
+  })
 
   it.each([false, true])('reports observed stream activity without adding chat history (review=%s)', async (review) => {
     let finish!: (result: { output: string }) => void

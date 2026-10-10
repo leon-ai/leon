@@ -16,6 +16,7 @@ import type { Artifact } from '@/core/artifacts/artifact-types'
 
 import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
 import type { UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import type { ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
 import type { TurnInference } from '@/core/llm-manager/inference-metadata'
 import type { CompletionAttemptTiming } from '@/core/llm-manager/types'
 
@@ -96,7 +97,7 @@ export interface ConversationWidgetData {
   historyMode: ConversationWidgetHistoryMode
 }
 
-export interface LLMAnswerMetrics {
+export interface LLMAnswerMetrics extends Partial<ContextUsageMetrics> {
   usageAccounting?: UsageAccounting | undefined
   completionCount?: number
   inputTokens: number

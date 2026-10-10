@@ -1,5 +1,6 @@
 import type { RoutingMode } from '@/types'
 import type { AgentModelFile, CompletionFailureKind } from '@/core/llm-manager/types'
+import type { ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
 
 export const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
 
@@ -74,6 +75,7 @@ export enum ModelResponseState {
  * Transient request activity without model reasoning content or chat history.
  */
 export interface ModelResponseStatus {
+  contextUsage?: ContextUsageMetrics
   requestId: string
   sessionId: string
   startedAt: number

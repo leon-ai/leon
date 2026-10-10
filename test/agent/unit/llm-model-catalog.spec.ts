@@ -9,8 +9,27 @@ import {
   LLM_MODEL_SPEED_VALUES
 } from '@/core/llm-manager/llm-model-catalog'
 import { LLMProviders } from '@/core/llm-manager/types'
+import {
+  LOCAL_LLM_CONTEXT_WINDOW_TOKENS,
+  resolveModelContextWindowTokens
+} from '@/core/llm-manager/model-context-windows'
 
 describe('LLM model catalog', () => {
+  it('resolves known capacities without assigning a default to independently hosted models', () => {
+    expect(resolveModelContextWindowTokens(LLMProviders.OpenAI, 'gpt-6.1-sol'))
+      .toBe(1_050_000)
+    expect(resolveModelContextWindowTokens(LLMProviders.MiniMax, 'MiniMax-M3'))
+      .toBe(1_000_000)
+    expect(resolveModelContextWindowTokens(LLMProviders.OpenRouter, 'minimax/minimax-m3'))
+      .toBe(1_048_576)
+    expect(resolveModelContextWindowTokens(LLMProviders.LlamaCPP, 'local.gguf'))
+      .toBe(LOCAL_LLM_CONTEXT_WINDOW_TOKENS)
+    expect(resolveModelContextWindowTokens(LLMProviders.SGLang, 'custom-model'))
+      .toBeUndefined()
+    expect(resolveModelContextWindowTokens(LLMProviders.OpenAI, 'custom-model'))
+      .toBeUndefined()
+  })
+
   it('contains unique provider/model entries with auto defaults', () => {
     const targetKeys = LLM_MODEL_CATALOG.map(
       (entry) => `${entry.provider}/${entry.model}`

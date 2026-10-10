@@ -42,6 +42,8 @@ export interface LLMModelCatalogEntry {
   recommended?: boolean
   supportsForcedToolChoice?: boolean
   supportsTemperature?: boolean
+  // Verified endpoint capacity; omitted when the limit is unknown.
+  contextWindowTokens?: number
   // Verified inline inputs supported by both this endpoint and Leon's adapter.
   // null means unverified; [] means no native media through this adapter.
   inputMediaTypes: readonly string[] | null
@@ -150,37 +152,91 @@ const ROUTABLE_SPEED = [
 /**
  * Leon's curated model catalog. Runtime discovery is deliberately avoided so
  * setup and command autocomplete remain deterministic and work offline.
+ * Context capacities stay specific to each provider route.
+ *
+ * @see https://openrouter.ai/api/v1/models
+ * @see https://developers.openai.com/api/docs/models
+ * @see https://platform.claude.com/docs/en/models/overview
+ * @see https://platform.minimax.io/docs/guides/text-generation
  */
 export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://api-docs.deepseek.com/quick_start/pricing/
    * @see https://api-docs.deepseek.com/guides/thinking_mode/
    */
-  { provider: LLMProviders.DeepSeek, model: 'deepseek-flash', label: 'DeepSeek-V4.1-Flash', recommended: true, defaultReasoningEffort: 'high', reasoning: DEEPSEEK_REASONING, speed: AUTO_SPEED, inputMediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] },
+  {
+    provider: LLMProviders.DeepSeek,
+    model: 'deepseek-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'DeepSeek-V4.1-Flash',
+    recommended: true,
+    defaultReasoningEffort: 'high',
+    reasoning: DEEPSEEK_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif']
+  },
 
   /**
    * @see https://docs.celeris.ai/models Fast diffusion model for short agentic calls.
    */
-  { provider: LLMProviders.Celeris, model: 'celeris-1', label: 'Celeris 1', recommended: true, reasoning: AUTO_REASONING, speed: AUTO_SPEED, inputMediaTypes: ['image/png', 'image/jpeg'] },
+  {
+    provider: LLMProviders.Celeris,
+    model: 'celeris-1',
+    contextWindowTokens: 131_072,
+    label: 'Celeris 1',
+    recommended: true,
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: ['image/png', 'image/jpeg']
+  },
   /**
    * @see https://docs.celeris.ai/making-requests#reasoning
    */
-  { provider: LLMProviders.Celeris, model: 'celeris-1-magnus', label: 'Celeris 1 Magnus', defaultReasoningEffort: 'low', reasoning: MAGNUS_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.Celeris,
+    model: 'celeris-1-magnus',
+    contextWindowTokens: 131_072,
+    label: 'Celeris 1 Magnus',
+    defaultReasoningEffort: 'low',
+    reasoning: MAGNUS_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
 
   /**
    * @see https://openrouter.ai/openai/gpt-6-astra
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-astra', label: 'openai/gpt-6-astra', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6-astra',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6-astra',
+    recommended: true,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-6-astra-pro
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-astra-pro', label: 'openai/gpt-6-astra-pro', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6-astra-pro',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6-astra-pro',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-6.1-sol
    */
   {
     provider: LLMProviders.OpenRouter,
     model: 'openai/gpt-6.1-sol',
+    contextWindowTokens: 1_050_000,
     label: 'openai/gpt-6.1-sol',
     reasoning: MANDATORY_XHIGH_REASONING,
     speed: ROUTABLE_SPEED,
@@ -190,59 +246,155 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://openrouter.ai/openai/gpt-6-sol
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-sol', label: 'openai/gpt-6-sol', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6-sol',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6-sol',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-6-sol-pro
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-sol-pro', label: 'openai/gpt-6-sol-pro', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6-sol-pro',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6-sol-pro',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-6-luna
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-luna', label: 'openai/gpt-6-luna', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6-luna',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6-luna',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-6-luna-pro
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-6-luna-pro', label: 'openai/gpt-6-luna-pro', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-6-luna-pro',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-6-luna-pro',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-5.6-sol Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.6-sol', label: 'openai/gpt-5.6-sol', reasoning: OPENAI_GPT_56_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-5.6-sol',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-5.6-sol',
+    reasoning: OPENAI_GPT_56_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-5.6-terra Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.6-terra', label: 'openai/gpt-5.6-terra', reasoning: OPENAI_GPT_56_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-5.6-terra',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-5.6-terra',
+    reasoning: OPENAI_GPT_56_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-5.6-luna Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.6-luna', label: 'openai/gpt-5.6-luna', reasoning: OPENAI_GPT_56_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-5.6-luna',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-5.6-luna',
+    reasoning: OPENAI_GPT_56_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-5.5 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.5', label: 'openai/gpt-5.5', reasoning: OPENAI_GPT_55_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-5.5',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-5.5',
+    reasoning: OPENAI_GPT_55_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-5.4 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.4', label: 'openai/gpt-5.4', reasoning: OPENAI_GPT_54_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-5.4',
+    contextWindowTokens: 1_050_000,
+    label: 'openai/gpt-5.4',
+    reasoning: OPENAI_GPT_54_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/openai/gpt-5.4-mini Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'openai/gpt-5.4-mini', label: 'openai/gpt-5.4-mini', reasoning: OPENAI_GPT_54_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'openai/gpt-5.4-mini',
+    contextWindowTokens: 400_000,
+    label: 'openai/gpt-5.4-mini',
+    reasoning: OPENAI_GPT_54_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-opus-5.5
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-opus-5.5', label: 'anthropic/claude-opus-5.5', recommended: true, supportsForcedToolChoice: false, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-opus-5.5',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-opus-5.5',
+    recommended: true,
+    supportsForcedToolChoice: false,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-haiku-5.5
    */
   {
     provider: LLMProviders.OpenRouter,
     model: 'anthropic/claude-haiku-5.5',
+    contextWindowTokens: 1_000_000,
     label: 'anthropic/claude-haiku-5.5',
     supportsForcedToolChoice: true,
     supportsTemperature: false,
@@ -253,115 +405,304 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://openrouter.ai/anthropic/claude-fable-5.1
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-fable-5.1', label: 'anthropic/claude-fable-5.1', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-fable-5.1',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-fable-5.1',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-fable-5 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-fable-5', label: 'anthropic/claude-fable-5', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-fable-5',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-fable-5',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-opus-5 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-opus-5', label: 'anthropic/claude-opus-5', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-opus-5',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-opus-5',
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-opus-4.8 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-opus-4.8', label: 'anthropic/claude-opus-4.8', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-opus-4.8',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-opus-4.8',
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-opus-4.7 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-opus-4.7', label: 'anthropic/claude-opus-4.7', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-opus-4.7',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-opus-4.7',
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-opus-4.6 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-opus-4.6', label: 'anthropic/claude-opus-4.6', reasoning: OPTIONAL_MAX_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-opus-4.6',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-opus-4.6',
+    reasoning: OPTIONAL_MAX_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/anthropic/claude-sonnet-4.6 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'anthropic/claude-sonnet-4.6', label: 'anthropic/claude-sonnet-4.6', reasoning: OPTIONAL_MAX_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'anthropic/claude-sonnet-4.6',
+    contextWindowTokens: 1_000_000,
+    label: 'anthropic/claude-sonnet-4.6',
+    reasoning: OPTIONAL_MAX_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://openrouter.ai/google/gemini-3.8-flash
    */
-  { provider: LLMProviders.OpenRouter, model: 'google/gemini-3.8-flash', label: 'google/gemini-3.8-flash', reasoning: GEMINI_38_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: MULTIMODAL_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'google/gemini-3.8-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'google/gemini-3.8-flash',
+    reasoning: GEMINI_38_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: MULTIMODAL_INPUTS
+  },
   /**
    * @see https://openrouter.ai/google/gemini-3.5-flash-lite Reasoning is mandatory for this endpoint.
    */
-  { provider: LLMProviders.OpenRouter, model: 'google/gemini-3.5-flash-lite', label: 'google/gemini-3.5-flash-lite', reasoning: AUTO_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: MULTIMODAL_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'google/gemini-3.5-flash-lite',
+    contextWindowTokens: 1_048_576,
+    label: 'google/gemini-3.5-flash-lite',
+    reasoning: AUTO_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: MULTIMODAL_INPUTS
+  },
   /**
    * @see https://openrouter.ai/meta/muse-spark-1.3
    */
-  { provider: LLMProviders.OpenRouter, model: 'meta/muse-spark-1.3', label: 'meta/muse-spark-1.3', reasoning: MUSE_13_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: MULTIMODAL_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'meta/muse-spark-1.3',
+    contextWindowTokens: 1_048_576,
+    label: 'meta/muse-spark-1.3',
+    reasoning: MUSE_13_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: MULTIMODAL_INPUTS
+  },
   /**
    * @see https://openrouter.ai/qwen/qwen3.8-flash
    */
-  { provider: LLMProviders.OpenRouter, model: 'qwen/qwen3.8-flash', label: 'qwen/qwen3.8-flash', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: VIDEO_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'qwen/qwen3.8-flash',
+    contextWindowTokens: 1_000_000,
+    label: 'qwen/qwen3.8-flash',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: VIDEO_INPUTS
+  },
   /**
    * @see https://openrouter.ai/xiaomi/mimo-v2.6-pro Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.6-pro', label: 'xiaomi/mimo-v2.6-pro', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: AUDIO_VIDEO_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'xiaomi/mimo-v2.6-pro',
+    contextWindowTokens: 1_050_000,
+    label: 'xiaomi/mimo-v2.6-pro',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: AUDIO_VIDEO_INPUTS
+  },
   /**
    * @see https://openrouter.ai/xiaomi/mimo-v2.6-flash
    */
-  { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.6-flash', label: 'xiaomi/mimo-v2.6-flash', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: AUDIO_VIDEO_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'xiaomi/mimo-v2.6-flash',
+    contextWindowTokens: 1_050_000,
+    label: 'xiaomi/mimo-v2.6-flash',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: AUDIO_VIDEO_INPUTS
+  },
   /**
    * @see https://openrouter.ai/xiaomi/mimo-v2.6-pro-ultraspeed Dedicated model, distinct from OpenRouter fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'xiaomi/mimo-v2.6-pro-ultraspeed', label: 'xiaomi/mimo-v2.6-pro-ultraspeed', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: AUDIO_VIDEO_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'xiaomi/mimo-v2.6-pro-ultraspeed',
+    contextWindowTokens: 1_048_576,
+    label: 'xiaomi/mimo-v2.6-pro-ultraspeed',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: AUDIO_VIDEO_INPUTS
+  },
   /**
    * @see https://openrouter.ai/z-ai/glm-5.3
    */
-  { provider: LLMProviders.OpenRouter, model: 'z-ai/glm-5.3', label: 'z-ai/glm-5.3', reasoning: GLM_53_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'z-ai/glm-5.3',
+    contextWindowTokens: 1_048_576,
+    label: 'z-ai/glm-5.3',
+    reasoning: GLM_53_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://openrouter.ai/z-ai/glm-5.3-flash
    */
-  { provider: LLMProviders.OpenRouter, model: 'z-ai/glm-5.3-flash', label: 'z-ai/glm-5.3-flash', reasoning: GLM_53_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: VIDEO_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'z-ai/glm-5.3-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'z-ai/glm-5.3-flash',
+    reasoning: GLM_53_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: VIDEO_INPUTS
+  },
   /**
    * @see https://openrouter.ai/z-ai/glm-5.2 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'z-ai/glm-5.2', label: 'z-ai/glm-5.2', reasoning: OPENROUTER_GLM_52_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'z-ai/glm-5.2',
+    contextWindowTokens: 1_048_576,
+    label: 'z-ai/glm-5.2',
+    reasoning: OPENROUTER_GLM_52_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://openrouter.ai/z-ai/glm-5.1 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'z-ai/glm-5.1', label: 'z-ai/glm-5.1', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'z-ai/glm-5.1',
+    contextWindowTokens: 204_800,
+    label: 'z-ai/glm-5.1',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://openrouter.ai/z-ai/glm-5-turbo Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'z-ai/glm-5-turbo', label: 'z-ai/glm-5-turbo', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'z-ai/glm-5-turbo',
+    contextWindowTokens: 202_752,
+    label: 'z-ai/glm-5-turbo',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://openrouter.ai/moonshotai/kimi-k3 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'moonshotai/kimi-k3', label: 'moonshotai/kimi-k3', reasoning: OPENROUTER_KIMI_K3_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: VIDEO_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'moonshotai/kimi-k3',
+    contextWindowTokens: 1_048_576,
+    label: 'moonshotai/kimi-k3',
+    reasoning: OPENROUTER_KIMI_K3_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: VIDEO_INPUTS
+  },
   /**
    * @see https://openrouter.ai/moonshotai/kimi-k2.6 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'moonshotai/kimi-k2.6', label: 'moonshotai/kimi-k2.6', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'moonshotai/kimi-k2.6',
+    contextWindowTokens: 262_144,
+    label: 'moonshotai/kimi-k2.6',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
   /**
    * @see https://openrouter.ai/minimax/minimax-m3 Model-specific reasoning support.
    * @see https://openrouter.ai/docs/guides/routing/model-variants/nitro Model-specific fast routing.
    */
-  { provider: LLMProviders.OpenRouter, model: 'minimax/minimax-m3', label: 'minimax/minimax-m3', reasoning: TOGGLE_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: VIDEO_INPUTS },
+  {
+    provider: LLMProviders.OpenRouter,
+    model: 'minimax/minimax-m3',
+    contextWindowTokens: 1_048_576,
+    label: 'minimax/minimax-m3',
+    reasoning: TOGGLE_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: VIDEO_INPUTS
+  },
 
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-6-astra
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-6-astra', label: 'GPT-6 Astra', recommended: true, reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-6-astra',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-6 Astra',
+    recommended: true,
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-6.1-sol
    */
   {
     provider: LLMProviders.OpenAI,
     model: 'gpt-6.1-sol',
+    contextWindowTokens: 1_050_000,
     label: 'GPT-6.1 Sol',
     defaultReasoningEffort: 'medium',
     reasoning: MANDATORY_XHIGH_REASONING,
@@ -372,49 +713,135 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-6-sol
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-6-sol', label: 'GPT-6 Sol', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-6-sol',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-6 Sol',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-6-luna
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-6-luna', label: 'GPT-6 Luna', reasoning: OPENAI_GPT_6_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-6-luna',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-6 Luna',
+    reasoning: OPENAI_GPT_6_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.6-sol Model-specific reasoning support.
    * @see https://developers.openai.com/api/docs/guides/fast-mode Model-specific fast service tier.
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', reasoning: OPENAI_GPT_56_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-5.6-sol',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-5.6 Sol',
+    reasoning: OPENAI_GPT_56_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.6-terra Model-specific reasoning support.
    * @see https://developers.openai.com/api/docs/guides/fast-mode Model-specific fast service tier.
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', reasoning: OPENAI_GPT_56_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-5.6-terra',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-5.6 Terra',
+    reasoning: OPENAI_GPT_56_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.6-luna Model-specific reasoning support.
    * @see https://developers.openai.com/api/docs/guides/fast-mode Model-specific fast service tier.
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', reasoning: OPENAI_GPT_56_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-5.6-luna',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-5.6 Luna',
+    reasoning: OPENAI_GPT_56_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.5 Model-specific reasoning support.
    * @see https://developers.openai.com/api/docs/guides/fast-mode Model-specific fast service tier.
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-5.5', label: 'GPT-5.5', reasoning: OPENAI_GPT_55_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-5.5',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-5.5',
+    reasoning: OPENAI_GPT_55_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.4 Model-specific reasoning support.
    * @see https://developers.openai.com/api/docs/guides/fast-mode Model-specific fast service tier.
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-5.4', label: 'GPT-5.4', reasoning: OPENAI_GPT_54_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-5.4',
+    contextWindowTokens: 1_050_000,
+    label: 'GPT-5.4',
+    reasoning: OPENAI_GPT_54_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.4-mini Model-specific reasoning support.
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-5.4-mini', label: 'GPT-5.4 mini', reasoning: OPENAI_GPT_54_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-5.4-mini',
+    contextWindowTokens: 400_000,
+    label: 'GPT-5.4 mini',
+    reasoning: OPENAI_GPT_54_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://developers.openai.com/api/docs/models/gpt-5.4-nano Model-specific reasoning support.
    */
-  { provider: LLMProviders.OpenAI, model: 'gpt-5.4-nano', label: 'GPT-5.4 nano', reasoning: OPENAI_GPT_54_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.OpenAI,
+    model: 'gpt-5.4-nano',
+    contextWindowTokens: 400_000,
+    label: 'GPT-5.4 nano',
+    reasoning: OPENAI_GPT_54_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
 
   /**
    * @see https://platform.claude.com/docs/en/models/opus-5-5/overview
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-5-5', label: 'Claude Opus 5.5', recommended: true, supportsForcedToolChoice: false, defaultReasoningEffort: 'medium', reasoning: MANDATORY_XHIGH_REASONING, speed: ROUTABLE_SPEED, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-opus-5-5',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Opus 5.5',
+    recommended: true,
+    supportsForcedToolChoice: false,
+    defaultReasoningEffort: 'medium',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/models/haiku-5-5/overview
    * @see https://platform.claude.com/docs/en/models/haiku-5-5/migration-guide
@@ -422,6 +849,7 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   {
     provider: LLMProviders.Anthropic,
     model: 'claude-haiku-5-5',
+    contextWindowTokens: 1_000_000,
     label: 'Claude Haiku 5.5',
     supportsForcedToolChoice: true,
     supportsTemperature: false,
@@ -433,83 +861,245 @@ export const LLM_MODEL_CATALOG: readonly LLMModelCatalogEntry[] = [
   /**
    * @see https://platform.claude.com/docs/en/models/fable-5-1/overview
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-fable-5-1', label: 'Claude Fable 5.1', defaultReasoningEffort: 'high', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-fable-5-1',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Fable 5.1',
+    defaultReasoningEffort: 'high',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/models/mythos-5-1/overview
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-mythos-5-1', label: 'Claude Mythos 5.1 (invite only)', defaultReasoningEffort: 'high', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, supportsForcedToolChoice: false, supportsTemperature: false, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-mythos-5-1',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Mythos 5.1 (invite only)',
+    defaultReasoningEffort: 'high',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    supportsForcedToolChoice: false,
+    supportsTemperature: false,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-fable-5', label: 'Claude Fable 5', defaultReasoningEffort: 'high', reasoning: MANDATORY_XHIGH_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-fable-5',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Fable 5',
+    defaultReasoningEffort: 'high',
+    reasoning: MANDATORY_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    * @see https://platform.claude.com/docs/en/build-with-claude/fast-mode Model-specific fast mode.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-5', label: 'Claude Opus 5', defaultReasoningEffort: 'high', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-opus-5',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Opus 5',
+    defaultReasoningEffort: 'high',
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    * @see https://platform.claude.com/docs/en/build-with-claude/fast-mode Model-specific fast mode.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-8', label: 'Claude Opus 4.8', defaultReasoningEffort: 'high', reasoning: OPTIONAL_XHIGH_REASONING, speed: ROUTABLE_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-opus-4-8',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Opus 4.8',
+    defaultReasoningEffort: 'high',
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: ROUTABLE_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-7', label: 'Claude Opus 4.7', defaultReasoningEffort: 'high', reasoning: OPTIONAL_XHIGH_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-opus-4-7',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Opus 4.7',
+    defaultReasoningEffort: 'high',
+    reasoning: OPTIONAL_XHIGH_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-opus-4-6', label: 'Claude Opus 4.6', defaultReasoningEffort: 'high', reasoning: OPTIONAL_MAX_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-opus-4-6',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Opus 4.6',
+    defaultReasoningEffort: 'high',
+    reasoning: OPTIONAL_MAX_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
   /**
    * @see https://platform.claude.com/docs/en/build-with-claude/effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.Anthropic, model: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', defaultReasoningEffort: 'high', reasoning: OPTIONAL_MAX_REASONING, speed: AUTO_SPEED, inputMediaTypes: DOCUMENT_INPUTS },
+  {
+    provider: LLMProviders.Anthropic,
+    model: 'claude-sonnet-4-6',
+    contextWindowTokens: 1_000_000,
+    label: 'Claude Sonnet 4.6',
+    defaultReasoningEffort: 'high',
+    reasoning: OPTIONAL_MAX_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: DOCUMENT_INPUTS
+  },
 
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.3
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5.3', label: 'GLM-5.3', recommended: true, defaultReasoningEffort: 'max', reasoning: GLM_53_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.ZAI,
+    model: 'glm-5.3',
+    contextWindowTokens: 1_048_576,
+    label: 'GLM-5.3',
+    recommended: true,
+    defaultReasoningEffort: 'max',
+    reasoning: GLM_53_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://docs.z.ai/guides/vlm/glm-5.3-flash
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5.3-flash', label: 'GLM-5.3-Flash', defaultReasoningEffort: 'max', reasoning: GLM_53_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  {
+    provider: LLMProviders.ZAI,
+    model: 'glm-5.3-flash',
+    contextWindowTokens: 1_048_576,
+    label: 'GLM-5.3-Flash',
+    defaultReasoningEffort: 'max',
+    reasoning: GLM_53_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.2 Model-specific reasoning support.
    * @see https://docs.z.ai/guides/overview/concept-param#reasoning_effort Model-specific reasoning effort values.
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5.2', label: 'GLM-5.2', defaultReasoningEffort: 'max', reasoning: ZAI_GLM_52_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.ZAI,
+    model: 'glm-5.2',
+    contextWindowTokens: 1_048_576,
+    label: 'GLM-5.2',
+    defaultReasoningEffort: 'max',
+    reasoning: ZAI_GLM_52_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://docs.z.ai/guides/llm/glm-5.1 Model-specific reasoning support.
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5.1', label: 'GLM-5.1', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.ZAI,
+    model: 'glm-5.1',
+    contextWindowTokens: 202_752,
+    label: 'GLM-5.1',
+    reasoning: TOGGLE_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://docs.z.ai/guides/llm/glm-5-turbo Model-specific reasoning support.
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5-turbo', label: 'GLM-5-Turbo', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.ZAI,
+    model: 'glm-5-turbo',
+    contextWindowTokens: 202_752,
+    label: 'GLM-5-Turbo',
+    reasoning: TOGGLE_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
   /**
    * @see https://docs.z.ai/guides/llm/glm-5 Model-specific reasoning support.
    */
-  { provider: LLMProviders.ZAI, model: 'glm-5', label: 'GLM-5', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.ZAI,
+    model: 'glm-5',
+    contextWindowTokens: 202_752,
+    label: 'GLM-5',
+    reasoning: TOGGLE_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
 
   /**
    * @see https://platform.minimax.io/docs/api-reference/text-openai-api Model-specific reasoning support.
    * @see https://platform.minimax.io/docs/api-reference/text-openai-api Provider speed tier; not exposed by every supported AI SDK flavor.
    */
-  { provider: LLMProviders.MiniMax, model: 'MiniMax-M3', label: 'MiniMax-M3', recommended: true, reasoning: TOGGLE_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  {
+    provider: LLMProviders.MiniMax,
+    model: 'MiniMax-M3',
+    contextWindowTokens: 1_000_000,
+    label: 'MiniMax-M3',
+    recommended: true,
+    reasoning: TOGGLE_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
   /**
    * @see https://platform.minimax.io/docs/api-reference/text-openai-api Model-specific reasoning support.
    * @see https://platform.minimax.io/docs/api-reference/text-openai-api Provider speed tier; not exposed by every supported AI SDK flavor.
    */
-  { provider: LLMProviders.MiniMax, model: 'MiniMax-M2.7', label: 'MiniMax-M2.7', reasoning: AUTO_REASONING, speed: AUTO_SPEED, inputMediaTypes: [] },
+  {
+    provider: LLMProviders.MiniMax,
+    model: 'MiniMax-M2.7',
+    contextWindowTokens: 204_800,
+    label: 'MiniMax-M2.7',
+    reasoning: AUTO_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: []
+  },
 
   /**
    * @see https://platform.kimi.ai/docs/guide/use-reasoning-effort Model-specific reasoning support.
    */
-  { provider: LLMProviders.MoonshotAI, model: 'kimi-k3', label: 'Kimi K3', recommended: true, reasoning: MOONSHOT_KIMI_K3_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  {
+    provider: LLMProviders.MoonshotAI,
+    model: 'kimi-k3',
+    contextWindowTokens: 1_048_576,
+    label: 'Kimi K3',
+    recommended: true,
+    reasoning: MOONSHOT_KIMI_K3_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
   /**
    * @see https://platform.kimi.ai/docs/guide/kimi-k2-6-quickstart Model-specific reasoning support.
    */
-  { provider: LLMProviders.MoonshotAI, model: 'kimi-k2.6', label: 'Kimi K2.6', reasoning: TOGGLE_REASONING, speed: AUTO_SPEED, inputMediaTypes: IMAGE_INPUTS },
+  {
+    provider: LLMProviders.MoonshotAI,
+    model: 'kimi-k2.6',
+    contextWindowTokens: 262_144,
+    label: 'Kimi K2.6',
+    reasoning: TOGGLE_REASONING,
+    speed: AUTO_SPEED,
+    inputMediaTypes: IMAGE_INPUTS
+  },
 
   /**
    * @see https://router.huggingface.co/v1/models

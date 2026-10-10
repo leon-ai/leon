@@ -1,5 +1,6 @@
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
 import { readUsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { readContextUsage } from '@/core/llm-manager/llm-usage/context-usage'
 import type {
   AgentResponseTrace,
   ConversationHistoryItem,
@@ -94,6 +95,7 @@ export class ConversationHistoryHelper {
     }
 
     const normalizedMetrics: LLMAnswerMetrics = {
+      ...readContextUsage(record),
       usageAccounting: readUsageAccounting(record['usageAccounting']),
       inputTokens,
       outputTokens,

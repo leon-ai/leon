@@ -76,6 +76,10 @@ describe('conversation trace persistence', () => {
     const paraphrase = vi.spyOn(ParaphraseLLMDuty.prototype, 'execute')
     const output = 'I checked your upcoming calendar and prepared your meeting notes.'
     const llmMetrics: LLMAnswerMetrics = {
+      contextUsedTokens: 50,
+      contextWindowTokens: 1_000,
+      contextUsagePercent: 5,
+      contextUsageEstimated: false,
       completionCount: 2, inputTokens: 100, outputTokens: 20, totalTokens: 120,
       durationMs: 1_000, tokensPerSecond: 20, ttftMs: 100,
       usageAccounting: {

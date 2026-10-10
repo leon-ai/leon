@@ -1,6 +1,8 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { captureContextUsage, type ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
+import { resolveModelContextWindowTokens } from '@/core/llm-manager/model-context-windows'
 import { randomUUID } from 'node:crypto'
 import { AsyncResource } from 'node:async_hooks'
 import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'
@@ -48,7 +50,7 @@ const TRACE_SAVE_INTERVAL_MS = 1_000
 const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
 
 function getLLMProviderName(): LLMProviders {
-  const provider = CONFIG_STATE.getModelState().getAgentProvider()
+  const provider = CONFIG_STATE.getModelState().getAgentTarget().provider
 
   if (!provider) {
     throw new Error('The agent LLM provider is disabled.')
@@ -184,6 +186,7 @@ export class ReActLLMDuty extends LLMDuty {
   private continuationSummaryFailed = false
   private automaticCompactionFailed = false
   private totalInputTokens = 0
+  private contextUsage: ContextUsageMetrics | undefined
   private usageAccounting: UsageAccounting | undefined
   private totalOutputTokens = 0
   private totalVisibleOutputTokens = 0
@@ -275,6 +278,7 @@ export class ReActLLMDuty extends LLMDuty {
     this.continuationSummaryFailed = false
     this.automaticCompactionFailed = false
     this.totalInputTokens = 0
+    this.contextUsage = undefined
     this.usageAccounting = undefined
     this.totalOutputTokens = 0
     this.totalVisibleOutputTokens = 0
@@ -1186,7 +1190,18 @@ export class ReActLLMDuty extends LLMDuty {
 
     const modelResponseStartedAt = Date.now()
     const modelResponseMaximumDeadlineAt = modelResponseStartedAt + AGENT_MODEL_RESPONSE_MAX_DURATION_MS
+    const contextWindowTokens = resolveModelContextWindowTokens(
+      agentTarget.provider,
+      agentTarget.model
+    )
+    // Only the active transcript describes context occupancy; auxiliary summaries
+    // still contribute to turn accounting without replacing this snapshot.
+    this.contextUsage = captureContextUsage({
+      estimatedInputTokens: preparedContext.estimatedInputTokens,
+      contextWindowTokens
+    })
     const modelStatus: ModelResponseStatus = {
+      contextUsage: this.contextUsage,
       requestId: randomUUID(),
       sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
       startedAt: modelResponseStartedAt,
@@ -1434,6 +1449,18 @@ export class ReActLLMDuty extends LLMDuty {
         signal: toolCallAbortController.signal,
         cancellationSignal
       })
+      if (completionResult) {
+        this.contextUsage = captureContextUsage({
+          // Agent prompts include system instructions. A zero count from an
+          // adapter means usage is unavailable, rather than an empty prompt.
+          usedInputTokens: completionResult.usedInputTokens || undefined,
+          estimatedInputTokens: preparedContext.estimatedInputTokens,
+          contextWindowTokens
+        })
+        modelStatus.contextUsage = this.contextUsage
+        emitModelStatus(ModelResponseState.Completed)
+      }
+
       if (!completionResult && lastAttemptFailureKind === CompletionFailureKind.Timeout) {
         throw new AgentModelResponseTimeoutError()
       }
@@ -1930,6 +1957,7 @@ export class ReActLLMDuty extends LLMDuty {
     )
 
     const llmMetrics = deriveLLMMetrics({
+      contextUsage: this.contextUsage,
       usageAccounting: this.usageAccounting,
       completionCount: this.completionCount,
       providerName: getLLMProviderName(),

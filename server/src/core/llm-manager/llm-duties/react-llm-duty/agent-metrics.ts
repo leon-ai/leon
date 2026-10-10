@@ -1,5 +1,6 @@
 import { LLMProviders } from '@/core/llm-manager/types'
 import { accumulateUsageAccounting, type CompletionAccounting, type UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import type { ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
 
 import type { AgentPhase } from './agent-types'
 
@@ -49,7 +50,7 @@ export interface PhaseMetricSnapshot extends RawPhaseMetric {
 
 export type PhaseMetricSnapshots = Record<AgentPhase, PhaseMetricSnapshot>
 
-export interface DerivedLLMMetrics {
+export interface DerivedLLMMetrics extends Partial<ContextUsageMetrics> {
   usageAccounting?: UsageAccounting | undefined
   completionCount: number
   inputTokens: number
@@ -89,6 +90,7 @@ export interface MeasureVisibleOutputOptions {
 }
 
 interface DeriveLLMMetricsOptions extends MeasureVisibleOutputOptions {
+  contextUsage?: ContextUsageMetrics | undefined
   turnTtftMs?: number | undefined
   usageAccounting?: UsageAccounting | undefined
   completionCount: number
@@ -493,6 +495,7 @@ export function deriveLLMMetrics(
   })
   return {
     completionCount: options.completionCount,
+    ...options.contextUsage,
     usageAccounting: options.usageAccounting,
     inputTokens: options.totalInputTokens,
     outputTokens: options.totalOutputTokens,
