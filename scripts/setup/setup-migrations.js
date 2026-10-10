@@ -9,7 +9,8 @@ import { getProfilePaths, isValidProfileName } from '@/core/profile-runtime/prof
 import { createSetupStatus } from './setup-status'
 
 const MIGRATIONS_PATH = fileURLToPath(new URL('./migrations/', import.meta.url))
-const MIGRATION_FILENAME_PATTERN = /^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*\.js$/
+const MIGRATION_FILENAME_PATTERN = /^\d{16}-[a-z0-9]+(?:-[a-z0-9]+)*\.js$/
+const PREVIOUS_MIGRATION_FILENAME_PATTERN = /^\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*\.js$/
 const RECEIPTS_FILENAME = '.setup-migrations.json'
 const LOCK_DIRECTORY = '.setup-migrations.lock'
 const MAX_LOCK_ATTEMPTS = 3
@@ -141,7 +142,12 @@ async function readCompletedMigrations(receiptsPath) {
 
   if (
     !Array.isArray(receipts?.completed) ||
-    receipts.completed.some((id) => typeof id !== 'string' || !MIGRATION_FILENAME_PATTERN.test(id))
+    receipts.completed.some((id) =>
+      typeof id !== 'string' || (
+        !MIGRATION_FILENAME_PATTERN.test(id) &&
+        !PREVIOUS_MIGRATION_FILENAME_PATTERN.test(id)
+      )
+    )
   ) {
     throw new Error(`Invalid setup migration records: ${receiptsPath}.`)
   }
@@ -169,7 +175,8 @@ async function saveCompletedMigrations(receiptsPath, completed) {
 }
 
 /**
- * Apply pending migrations in filename order and record each successful result.
+ * Apply pending migrations from oldest to newest UTC filename timestamp.
+ * Record each successful result so completed work is never repeated.
  * A failed or interrupted migration remains pending and must be safe to retry.
  * @param {import('@/core/profile-runtime/profile-paths').ProfilePaths} profilePaths
  * @param {string} migrationsPath
@@ -180,7 +187,7 @@ export async function runProfileMigrations(profilePaths, migrationsPath = MIGRAT
 
   for (const migration of migrations) {
     if (!MIGRATION_FILENAME_PATTERN.test(migration.name)) {
-      throw new Error(`Migration filenames must use YYYYMMDD-description.js: ${migration.name}.`)
+      throw new Error(`Migration filenames must use YYYYMMDDHHmmssSS-description.js in UTC: ${migration.name}.`)
     }
   }
 
@@ -197,10 +204,23 @@ export async function runProfileMigrations(profilePaths, migrationsPath = MIGRAT
         continue
       }
 
-      const { default: migrate } = await import(pathToFileURL(path.join(migrationsPath, name)).href)
+      const { default: migrate, previousIds = [] } = await import(
+        pathToFileURL(path.join(migrationsPath, name)).href
+      )
 
       if (typeof migrate !== 'function') {
         throw new Error(`Migration ${name} must export a default migrate(profilePaths) function.`)
+      }
+
+      // Completed work keeps its identity when a migration filename changes.
+      if (previousIds.some((id) => completed.has(id))) {
+        for (const id of previousIds) {
+          completed.delete(id)
+        }
+
+        completed.add(name)
+        await saveCompletedMigrations(receiptsPath, completed)
+        continue
       }
 
       try {
@@ -230,7 +250,8 @@ export default async function setupMigrations() {
 
   try {
     const profiles = await fs.readdir(LEON_PROFILES_PATH, { withFileTypes: true })
-    let appliedCount = 0
+    const appliedMigrations = new Set()
+    let affectedProfileCount = 0
 
     for (const profile of profiles.sort((left, right) => left.name.localeCompare(right.name, 'en'))) {
       if (!profile.isDirectory() || !isValidProfileName(profile.name)) {
@@ -239,10 +260,26 @@ export default async function setupMigrations() {
 
       const applied = await runProfileMigrations(getProfilePaths(profile.name))
 
-      appliedCount += applied.length
+      if (applied.length === 0) {
+        continue
+      }
+
+      affectedProfileCount += 1
+
+      // Count migration identities separately from the profiles they changed.
+      for (const migrationId of applied) {
+        appliedMigrations.add(migrationId)
+      }
     }
 
-    status.succeed(`Setup migrations: ready (${appliedCount} applied)`)
+    const migrationCount = appliedMigrations.size
+    const migrationLabel = migrationCount === 1 ? 'migration' : 'migrations'
+    const profileLabel = affectedProfileCount === 1 ? 'profile' : 'profiles'
+    const summary = migrationCount === 0
+      ? 'no pending migrations'
+      : `${migrationCount} ${migrationLabel} applied across ${affectedProfileCount} ${profileLabel}`
+
+    status.succeed(`Setup migrations: ready (${summary})`)
   } catch (error) {
     status.fail('Failed to apply setup migrations')
     throw error

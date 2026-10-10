@@ -3,9 +3,13 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { parseDocument } from 'yaml'
 
+export const previousIds = ['20261008-migrate-media-tool-settings.js']
+
 const TOOL_MOVES = [
-  { toolkit: 'file_system', tool: 'file', sources: ['operating_system_control'] },
-  { toolkit: 'file_system', tool: 'ripgrep', sources: ['operating_system_control'] }
+  { toolkit: 'media_production', tool: 'image', sources: ['media_generation'] },
+  { toolkit: 'document', tool: 'document', sources: ['media_production', 'media_generation'] },
+  { toolkit: 'document', tool: 'typst', sources: ['media_production', 'media_generation'] },
+  { toolkit: 'document', tool: 'echarts', sources: ['media_production', 'media_generation'] }
 ]
 
 const TOOL_IDS = new Map(TOOL_MOVES.flatMap(({ toolkit, tool, sources }) =>

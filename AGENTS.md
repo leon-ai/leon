@@ -15,6 +15,13 @@ Read [ARCHITECTURE.md](core/context/ARCHITECTURE.md) for runtime boundaries and 
 - Agent e2e tests must use `pnpm test:agent:e2e -- -t openai` unless the owner explicitly requests other providers.
 - Suggest a commit message matching `scripts/commit-msg.js`; do not commit unless asked.
 
+## Setup migrations
+
+- Keep migration implementations self-contained under `scripts/setup/migrations/`. Do not introduce shared migration helpers or import another migration's implementation.
+- Name migrations `YYYYMMDDHHmmssSS-description.js` using UTC, a fixed-width 16-digit timestamp, and a lowercase kebab-case description. `SS` is hundredths of a second. Generate the timestamp with `date -u +%Y%m%d%H%M%S%2N`; never use local time.
+- The setup runner executes pending migrations from oldest to newest filename timestamp and records completion separately for each profile. Export a default `async migrate(profilePaths)` function and make it safe to retry after interruption.
+- Preserve published migration filenames. If a rename is necessary, export the former filenames in `previousIds` so completed work is recognized without running it again.
+
 ## Tools
 
 - Keep application/device-specific behavior in tools, orchestration in skills, and generic execution/transport in Core. Follow `tools/video_streaming/ffmpeg/` and the parent SDK classes before implementing a tool.

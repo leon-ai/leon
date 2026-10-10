@@ -9,13 +9,13 @@ import { parse, stringify } from 'yaml'
 
 import { getProfilePaths, type ProfilePaths } from '@/core/profile-runtime/profile-paths'
 import { runProfileMigrations } from '@@/scripts/setup/setup-migrations'
-import migrateMediaToolSettings from '@@/scripts/setup/migrations/20261008-migrate-media-tool-settings'
-import migrateInferenceUsage from '@@/scripts/setup/migrations/20261009-backfill-inference-usage'
+import migrateMediaToolSettings from '@@/scripts/setup/migrations/2026100812124300-migrate-media-tool-settings'
+import migrateInferenceUsage from '@@/scripts/setup/migrations/2026100823413300-backfill-inference-usage'
 import { readInferenceUsage, type InferenceUsageRecord } from '@/core/llm-manager/llm-usage/usage-ledger'
 
-const FIRST = '20261001-first.js'
-const SECOND = '20261002-second.js'
-const THIRD = '20261003-third.js'
+const FIRST = '2026100120203102-z-first.js'
+const SECOND = '2026100120203103-a-second.js'
+const THIRD = '2026100200000000-third.js'
 const RECEIPTS_FILENAME = '.setup-migrations.json'
 const LOCK_DIRECTORY = '.setup-migrations.lock'
 
@@ -48,10 +48,16 @@ function pathsFor(name: string): ProfilePaths {
   ])) as unknown as ProfilePaths
 }
 
-async function migration(name: string, operation = ''): Promise<void> {
+async function migration(
+  name: string,
+  operation = '',
+  previousIds: string[] = []
+): Promise<void> {
   await fs.writeFile(path.join(migrationsPath, name), `
 import fs from 'node:fs/promises'
 import path from 'node:path'
+
+export const previousIds = ${JSON.stringify(previousIds)}
 
 export default async function migrate(profilePaths) {
   await fs.appendFile(path.join(profilePaths.root, 'trace'), ${JSON.stringify(`${name}\n`)})
@@ -182,7 +188,7 @@ it('publishes historical usage only after all source conversations have been rea
   expect(await usageRecords(profile)).toHaveLength(1)
 })
 
-it('runs migrations in filename order once per profile and discovers newly added IDs', async () => {
+it('runs migrations from oldest to newest UTC timestamp once per profile and discovers newly added IDs', async () => {
   await fixture()
   await migration(SECOND)
   await migration(FIRST)
@@ -197,7 +203,7 @@ it('runs migrations in filename order once per profile and discovers newly added
   expect(await runProfileMigrations(secondProfile, migrationsPath)).toEqual([FIRST, SECOND])
 
   // Completion is a set of IDs: an earlier-dated addition is still pending.
-  const added = '20260930-added.js'
+  const added = '2026093023595999-added.js'
 
   await migration(added)
   expect(await runProfileMigrations(firstProfile, migrationsPath)).toEqual([added])
@@ -229,6 +235,23 @@ it('retains successful checkpoints, stops on failure and retries only pending mi
   expect(await completed(profile)).toEqual([FIRST, SECOND, THIRD])
   expect(await fs.readFile(path.join(profile.root, 'trace'), 'utf8'))
     .toBe(`${FIRST}\n${SECOND}\n${SECOND}\n${THIRD}\n`)
+})
+
+it('recognizes completed migrations by their previous filenames without repeating their work', async () => {
+  await fixture()
+  const profile = pathsFor('a')
+  const previousId = '20261001-original.js'
+
+  await migration(FIRST, 'throw new Error(\'Completed work must not execute\')', [previousId])
+  await migration(SECOND)
+  await fs.writeFile(path.join(profile.root, RECEIPTS_FILENAME), JSON.stringify({
+    completed: [previousId]
+  }))
+
+  expect(await runProfileMigrations(profile, migrationsPath)).toEqual([SECOND])
+  expect(await completed(profile)).toEqual([FIRST, SECOND])
+  expect(await fs.readFile(path.join(profile.root, 'trace'), 'utf8')).toBe(`${SECOND}\n`)
+  expect(await runProfileMigrations(profile, migrationsPath)).toEqual([])
 })
 
 it('preserves the previous completion records when a checkpoint cannot be published', async () => {
@@ -362,13 +385,22 @@ it.each(['{', '{"completed":null}'])('refuses to replay migrations when completi
   expect(await fs.stat(path.join(profile.root, LOCK_DIRECTORY)).catch(() => null)).toBeNull()
 })
 
-it('requires dated filenames and a callable migration entry point', async () => {
+it('requires UTC timestamp filenames and a callable migration entry point', async () => {
   await fixture()
   const profile = pathsFor('a')
 
-  await migration('undated.js')
-  await expect(runProfileMigrations(profile, migrationsPath)).rejects.toThrow('YYYYMMDD-description.js')
-  await fs.unlink(path.join(migrationsPath, 'undated.js'))
+  for (const filename of [
+    'undated.js',
+    '20261001-date-only.js',
+    '20261001202031020-milliseconds.js',
+    '2026100120203102+0800-local-time.js'
+  ]) {
+    await migration(filename)
+    await expect(runProfileMigrations(profile, migrationsPath))
+      .rejects.toThrow('YYYYMMDDHHmmssSS-description.js in UTC')
+    await fs.unlink(path.join(migrationsPath, filename))
+  }
+
   await fs.writeFile(path.join(migrationsPath, FIRST), 'export default 42')
 
   await expect(runProfileMigrations(profile, migrationsPath)).rejects.toThrow('default migrate(profilePaths)')

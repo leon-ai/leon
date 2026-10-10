@@ -11,6 +11,8 @@ import { readProviderUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import { readUsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
 import { createInferenceMetadata } from '@/core/llm-manager/inference-metadata'
 
+export const previousIds = ['20261009-backfill-inference-usage.js']
+
 const CONVERSATION_FILENAME = 'conversation_log.json'
 const UNKNOWN_ROUTE = 'unknown'
 
