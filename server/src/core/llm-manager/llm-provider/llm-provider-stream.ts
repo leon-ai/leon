@@ -497,6 +497,8 @@ export async function normalizeStreamingCompletionResult(
   }
 
   for await (const chunk of responseStream as AsyncIterable<unknown>) {
+    completionParams.onStreamEvent?.({ type: 'transport-activity', transport: 'http' })
+
     if (chunk && typeof chunk === 'object' && !Buffer.isBuffer(chunk)) {
       const parsedChunk = chunk as Record<string, unknown>
       if (isResponsesAPIProvider) {

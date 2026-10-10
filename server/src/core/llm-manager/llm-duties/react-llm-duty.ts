@@ -29,6 +29,7 @@ import {
   LLMDuties,
   LLMProviders,
   InferencePurpose,
+  CompletionFailureKind,
   type AgentToolTranscriptMessage,
   type OpenAITool,
   type OpenAIToolCall,
@@ -60,6 +61,7 @@ import {
   AGENT_TEMPERATURE,
   AGENT_INFERENCE_TIMEOUT_MS,
   AGENT_MODEL_RESPONSE_TIMEOUT_MS,
+  AGENT_MODEL_RESPONSE_MAX_DURATION_MS,
   AGENT_TIMEOUT_MAX_RETRIES,
   CHARS_PER_TOKEN,
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
@@ -1183,28 +1185,45 @@ export class ReActLLMDuty extends LLMDuty {
     const toolCallAbortController = new AbortController()
 
     const modelResponseStartedAt = Date.now()
-    const modelResponseDeadlineAt = modelResponseStartedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    const modelResponseMaximumDeadlineAt = modelResponseStartedAt + AGENT_MODEL_RESPONSE_MAX_DURATION_MS
     const modelStatus: ModelResponseStatus = {
       requestId: randomUUID(),
       sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
       startedAt: modelResponseStartedAt,
       state: ModelResponseState.Waiting,
       attempt: 1,
-      deadlineAt: modelResponseDeadlineAt
+      deadlineAt: modelResponseStartedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
     }
     let modelAttempt = 0
+    let lastAttemptFailureKind: CompletionFailureKind | undefined
     let lastActivityUpdateAt = 0
     const responseAbortController = new AbortController()
     const cancellationSignal = AbortSignal.any([
       responseAbortController.signal,
       ...(this.signal ? [this.signal] : [])
     ])
-    // The same signal reaches every retry, so extending an attempt cannot
-    // extend the owner's total wait or start another recovery cycle.
+    // Retries share cancellation and the hard cap, but each gets a usable wait.
     const abortModelResponse = (): void => {
       responseAbortController.abort(new AgentModelResponseTimeoutError())
     }
     let responseDeadlineTimer = setTimeout(abortModelResponse, AGENT_MODEL_RESPONSE_TIMEOUT_MS)
+    const renewModelResponseDeadline = (
+      timeout = AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    ): void => {
+      if (cancellationSignal.aborted) {
+        return
+      }
+
+      modelStatus.deadlineAt = Math.min(
+        modelResponseMaximumDeadlineAt,
+        Date.now() + Math.max(AGENT_MODEL_RESPONSE_TIMEOUT_MS, timeout)
+      )
+      clearTimeout(responseDeadlineTimer)
+      responseDeadlineTimer = setTimeout(
+        abortModelResponse,
+        Math.max(0, modelStatus.deadlineAt - Date.now())
+      )
+    }
     // Abort signals may be delivered from another request's context.
     const emitModelStatus = AsyncResource.bind((
       state: ModelResponseState
@@ -1270,13 +1289,11 @@ export class ReActLLMDuty extends LLMDuty {
         onAttempt: (timing): void => {
           this.responseTraceCollector.recordInference({ ...timing, phase })
           this.scheduleTraceSave()
+          if (timing.outcome !== 'started') {
+            lastAttemptFailureKind = timing.failureKind
+          }
           if (timing.outcome === 'started') {
-            // A completed but empty response can retry after its finish event.
-            // Every attempt still consumes the original request's deadline.
-            clearTimeout(responseDeadlineTimer)
-            responseDeadlineTimer = setTimeout(
-              abortModelResponse, Math.max(0, modelResponseDeadlineAt - Date.now())
-            )
+            renewModelResponseDeadline(timing.inferenceTimeoutMs)
             modelAttempt += 1
             modelStatus.attempt = modelAttempt
             modelStatus.lastActivityAt = null
@@ -1289,9 +1306,19 @@ export class ReActLLMDuty extends LLMDuty {
           }
         },
         onStreamEvent: (event): void => {
+          if (cancellationSignal.aborted) {
+            return
+          }
+
           if (event.type === 'finish') {
             // Provider generation is done; local artifact work has its own lifecycle.
             clearTimeout(responseDeadlineTimer)
+          } else if (
+            event.type === 'tool-input-delta' || event.type === 'tool-call-delta' ||
+            event.type === 'tool-call' || event.type === 'tool-result' ||
+            event.type === 'file'
+          ) {
+            renewModelResponseDeadline()
           }
           if (event.type === 'stream-open' && !options.isCompletionReview) {
             // A retry replaces any unfinished previews from its predecessor.
@@ -1319,17 +1346,42 @@ export class ReActLLMDuty extends LLMDuty {
             emitModelStatus(modelStatus.state)
           }
         },
+        onToken: (token: unknown): void => {
+          if (cancellationSignal.aborted || typeof token !== 'string') {
+            return
+          }
+
+          if (token.length > 0) {
+            renewModelResponseDeadline()
+          }
+
+          if (!options.isCompletionReview) {
+            if (token.trim()) {
+              clearModelStatus()
+            }
+
+            this.answerStream.push(token)
+          }
+        },
+        onReasoningToken: (reasoningChunk: string): void => {
+          if (cancellationSignal.aborted) {
+            return
+          }
+
+          if (reasoningChunk.length > 0) {
+            renewModelResponseDeadline()
+          }
+
+          if (shouldEmitReasoning && reasoningGenerationId) {
+            if (reasoningChunk) {
+              this.firstOutputAt ??= Date.now()
+            }
+
+            this.emitReasoningToken(reasoningChunk, reasoningGenerationId, phase)
+          }
+        },
         ...(!options.isCompletionReview
           ? {
-              onToken: (token: unknown): void => {
-                if (typeof token === 'string') {
-                  if (token.trim()) {
-                    clearModelStatus()
-                  }
-
-                  this.answerStream.push(token)
-                }
-              },
               onToolCall: (call): void => {
                 clearModelStatus()
                 const callable = functionsByToolName?.get(call.function.name)
@@ -1371,20 +1423,6 @@ export class ReActLLMDuty extends LLMDuty {
         ...(shouldEmitReasoning && inferencePolicy.reasoningSummary
           ? { reasoningSummary: inferencePolicy.reasoningSummary }
           : {}),
-        ...(shouldEmitReasoning && reasoningGenerationId
-          ? {
-              onReasoningToken: (reasoningChunk: string): void => {
-                if (reasoningChunk) {
-                  this.firstOutputAt ??= Date.now()
-                }
-                this.emitReasoningToken(
-                  reasoningChunk,
-                  reasoningGenerationId,
-                  phase
-                )
-              }
-            }
-          : {}),
         reasoningMode,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(reasoningUseDefaultEffort ? { reasoningUseDefaultEffort: true } : {}),
@@ -1396,6 +1434,9 @@ export class ReActLLMDuty extends LLMDuty {
         signal: toolCallAbortController.signal,
         cancellationSignal
       })
+      if (!completionResult && lastAttemptFailureKind === CompletionFailureKind.Timeout) {
+        throw new AgentModelResponseTimeoutError()
+      }
     } catch (error) {
       if (error instanceof AgentModelResponseTimeoutError) {
         // Preserve the checkpoint without another request to the unavailable model.

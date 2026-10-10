@@ -52,7 +52,8 @@ import {
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
   AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME,
-  AGENT_MODEL_RESPONSE_TIMEOUT_MS
+  AGENT_MODEL_RESPONSE_TIMEOUT_MS,
+  AGENT_MODEL_RESPONSE_MAX_DURATION_MS
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 import {
   LLMDuties,
@@ -3247,7 +3248,7 @@ describe('model response status', () => {
       params.onAttempt?.({ ...attempt, attemptId: 'attempt-2', startedAt: Date.now() })
       expect(statuses().at(-1)).toMatchObject({
         state: ModelResponseState.Waiting, startedAt, attempt: 2,
-        deadlineAt: startedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS,
+        deadlineAt: Date.now() + AGENT_MODEL_RESPONSE_TIMEOUT_MS,
         retryReason: CompletionFailureKind.Timeout, lastActivityAt: null
       })
       params.onStreamEvent?.({ type: 'stream-open' })
@@ -3257,6 +3258,90 @@ describe('model response status', () => {
       finish({ output: 'Done.' })
       await pending
     }
+  })
+
+  it.each(['text', 'reasoning', 'tool-input', 'review'])(
+    'allows productive %s beyond the initial response deadline', async (output) => {
+      let params!: CompletionParams
+      let finish!: (result: { output: string }) => void
+      coreMocks.prompt.mockImplementationOnce((_messages, input) => {
+        params = input
+        return new Promise((resolve) => {
+          finish = resolve
+        })
+      })
+      const duty = new ReActLLMDuty({ input: 'Build the deliverable.' })
+      Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+      const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+        isRecoveryAttempt: false,
+        isCompletionReview: output === 'review'
+      })
+
+      try {
+        for (
+          let elapsed = 0;
+          elapsed < AGENT_MODEL_RESPONSE_TIMEOUT_MS + 60_000;
+          elapsed += 20_000
+        ) {
+          await vi.advanceTimersByTimeAsync(20_000)
+          if (output === 'tool-input') {
+            params.onStreamEvent?.({ type: 'tool-input-delta' })
+          } else if (output === 'reasoning') {
+            params.onReasoningToken?.('Planning the next step.')
+          } else {
+            params.onToken?.('Generated content.')
+          }
+        }
+
+        expect(params.cancellationSignal?.aborted).toBe(false)
+        expect(coreMocks.prompt).toHaveBeenCalledOnce()
+        if (output === 'review') {
+          expect(coreMocks.emitAnswerToChatClients).not.toHaveBeenCalled()
+        }
+      } finally {
+        finish({ output: 'Done.' })
+        await pending
+      }
+      expect(vi.getTimerCount()).toBe(0)
+    }
+  )
+
+  it('caps productive generation and ignores output after cancellation', async () => {
+    let params!: CompletionParams
+    let finish!: (result: { output: string }) => void
+    coreMocks.prompt.mockImplementationOnce((_messages, input: CompletionParams) => {
+      params = input
+      return new Promise((resolve, reject) => {
+        finish = resolve
+        input.cancellationSignal?.addEventListener('abort', () => {
+          reject(input.cancellationSignal?.reason)
+        }, { once: true })
+      })
+    })
+    const duty = new ReActLLMDuty({ input: 'Build the deliverable.' })
+    Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+    const pending = duty['callAgentModel']([], 'Follow the request.', [], {
+      isRecoveryAttempt: false
+    }).then(() => null, (error) => error)
+
+    for (
+      let elapsed = 0;
+      elapsed < AGENT_MODEL_RESPONSE_MAX_DURATION_MS;
+      elapsed += 20_000
+    ) {
+      params.onToken?.('Generated content.')
+      await vi.advanceTimersByTimeAsync(20_000)
+    }
+
+    expect(await pending).toBeInstanceOf(AgentModelResponseTimeoutError)
+    const count = coreMocks.emitAnswerToChatClients.mock.calls.length
+    params.onToken?.('Late output')
+    params.onReasoningToken?.('Late reasoning')
+    params.onStreamEvent?.({ type: 'transport-activity' })
+    finish({ output: 'Late result' })
+    expect(coreMocks.emitAnswerToChatClients).toHaveBeenCalledTimes(count)
+    expect(coreMocks.prompt).toHaveBeenCalledOnce()
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it.each(['timeout', 'empty'])('bounds %s retries and silent reasoning while saving progress without another inference', async (firstResponse) => {
@@ -3302,11 +3387,15 @@ describe('model response status', () => {
     expect(attempts).toHaveLength(2)
     expect(attempts[0]?.signal?.aborted).toBe(firstResponse === 'timeout')
     expect(attempts[1]?.signal?.aborted).toBe(false)
-    await vi.advanceTimersByTimeAsync(AGENT_MODEL_RESPONSE_TIMEOUT_MS - 120_001)
+    // A retry gets its own inference wait instead of the original deadline's remainder.
+    expect(statuses().at(-1)?.deadlineAt).toBeGreaterThan(
+      statuses()[0]!.startedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    )
+    await vi.advanceTimersByTimeAsync(AGENT_MODEL_RESPONSE_MAX_DURATION_MS + 1_000)
     const result = await pending
     expect(attempts.at(-1)?.signal?.aborted).toBe(true)
     expect(result.intent).toBe('error')
-    expect(result.answer).toContain('timed out across all attempts')
+    expect(result.answer).toContain('exceeded its time limit')
     expect(result.answer).toContain('Publish verified results')
     expect(result.answer).not.toContain('May I continue')
     expect(result.executionHistory).toEqual([priorExecution])
@@ -3339,7 +3428,7 @@ describe('model response status', () => {
       executeFunction: vi.fn(), loadAgentSkill: async () => null
     })
     expect(result.intent).not.toBe('answer')
-    expect(result.answer).toContain('timed out across all attempts')
+    expect(result.answer).toContain('exceeded its time limit')
     expect(result.trackedSteps).toEqual(trackedSteps)
     expect(callModel).toHaveBeenCalledTimes(phase === 'review' ? 2 : 1)
   })

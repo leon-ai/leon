@@ -66,6 +66,7 @@ const STREAM_OUTPUT_EVENTS = new Set([
 ])
 
 const REMOTE_STREAM_IDLE_TIMEOUT_MS = 30_000
+const PROVIDER_CANCELLATION_CLEANUP_TIMEOUT_MS = 1_000
 
 /**
  * Execute one prepared completion, preserving cancellation and retry boundaries.
@@ -97,6 +98,8 @@ export async function runCompletionAttempt(
   let firstEventAt: number | undefined
   let streamOpenedAt: number | undefined
   let lastEventAt: number | undefined
+  let lastTransportActivityAt: number | undefined
+  let lastOutputAt: number | undefined
   let lastEvent = 'dispatched'
   let transport: CompletionAttemptTiming['transport'] = isRemoteProvider
     ? providerName === LLMProviders.OpenAI && shouldStreamOutput
@@ -155,7 +158,13 @@ export async function runCompletionAttempt(
         ? undefined
         : firstToolInputAt - completionStartedAt,
       lastEvent,
-      idleMs: lastEventAt === undefined ? undefined : Date.now() - lastEventAt
+      idleMs: lastEventAt === undefined ? undefined : Date.now() - lastEventAt,
+      transportIdleMs: lastTransportActivityAt === undefined
+        ? undefined
+        : Date.now() - lastTransportActivityAt,
+      outputIdleMs: lastOutputAt === undefined
+        ? undefined
+        : Date.now() - lastOutputAt
     }
     const details = JSON.stringify({
       ...timing,
@@ -243,6 +252,7 @@ export async function runCompletionAttempt(
     if (chunk.length > 0) {
       firstTokenAt ??= Date.now()
       recordActivity('text-delta')
+      lastOutputAt = Date.now()
       markStreamStarted()
       resetStreamStallTimeout()
     }
@@ -256,6 +266,7 @@ export async function runCompletionAttempt(
 
     if (reasoningChunk.length > 0) {
       recordActivity('reasoning-delta')
+      lastOutputAt = Date.now()
       markStreamStarted()
       // Reasoning can include silent computation between visible summaries.
       resetStreamStallTimeout(completionParams.timeout)
@@ -279,7 +290,11 @@ export async function runCompletionAttempt(
       firstToolInputAt ??= Date.now()
     }
 
-    if (event.type === 'stream-open') {
+    if (event.type === 'transport-activity') {
+      // Heartbeats prove connection activity, not model progress. They must not
+      // keep an unproductive inference alive indefinitely.
+      lastTransportActivityAt = Date.now()
+    } else if (event.type === 'stream-open') {
       streamOpenedAt = Date.now()
     } else if (event.type !== 'stream-start') {
       recordActivity(event.type)
@@ -310,6 +325,7 @@ export async function runCompletionAttempt(
       isReasoning = false
       resetStreamStallTimeout()
     } else if (STREAM_OUTPUT_EVENTS.has(event.type)) {
+      lastOutputAt = Date.now()
       markStreamStarted()
       resetStreamStallTimeout()
     }
@@ -322,6 +338,11 @@ export async function runCompletionAttempt(
     onToken: onTokenWithStreamStart,
     onReasoningToken: onReasoningTokenWithStreamStart,
     onStreamEvent,
+    onToolCall: (call: OpenAIToolCall): void => {
+      if (!abortController.signal.aborted) {
+        completionParams.onToolCall?.(call)
+      }
+    },
     signal: abortController.signal
   }
 
@@ -448,8 +469,20 @@ export async function runCompletionAttempt(
     clearStreamStallTimeout()
     rejectStreamStall = null
     if (completionParams.cancellationSignal?.aborted) {
-      // Keep the caller's worker occupied until the aborted provider has cleaned up.
-      await rawResultPromise.catch(() => undefined)
+      // Allow transport cleanup, but a provider ignoring abort must not prevent
+      // Leon from saving task progress and releasing the caller.
+      let cleanupTimer: NodeJS.Timeout | undefined
+
+      try {
+        await Promise.race([
+          rawResultPromise.catch(() => undefined),
+          new Promise<void>((resolve) => {
+            cleanupTimer = setTimeout(resolve, PROVIDER_CANCELLATION_CLEANUP_TIMEOUT_MS)
+          })
+        ])
+      } finally {
+        clearTimeout(cleanupTimer)
+      }
     }
     completionParams.cancellationSignal?.throwIfAborted()
 

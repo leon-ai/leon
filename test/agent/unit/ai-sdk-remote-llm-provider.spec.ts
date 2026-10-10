@@ -885,7 +885,7 @@ describe('AISDKRemoteLLMProvider', () => {
       { type: 'response.completed', response }
     ]
     websocketMocks.fetch.mockImplementation(async () => new Response(
-      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+      `: keep-alive\n\n${events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join('')}`,
       { headers: { 'content-type': 'text/event-stream' } }
     ))
     const provider = new OpenAILLMProvider({
@@ -945,6 +945,9 @@ describe('AISDKRemoteLLMProvider', () => {
     expect(onStreamEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'stream-open', transport: 'http'
     }))
+    expect(onStreamEvent).toHaveBeenCalledWith({
+      type: 'transport-activity', transport: 'http'
+    })
     const normalized = normalizeCompletionResultForOpenAICompatibleProvider(result)
     expect(normalized.accounting?.cachedInputTokens).toBe(1_024)
     expect(normalized.accounting?.reasoningOutputTokens).toBe(10)

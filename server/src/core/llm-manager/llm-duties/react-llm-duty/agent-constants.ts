@@ -37,8 +37,9 @@ export const AGENT_TOOL_CALL_TITLE_ARGUMENT_NAME = '_leonToolCallTitle'
 export const AGENT_TOOL_CALL_TITLE_MAX_CHARS = 72
 export const AGENT_TEMPERATURE = 0.2
 export const AGENT_INFERENCE_TIMEOUT_MS = 120_000
-// One request shares this budget across inference, stream activity and retries.
+// Productive output and new attempts renew the response deadline within a hard cap.
 export const AGENT_MODEL_RESPONSE_TIMEOUT_MS = 180_000
+export const AGENT_MODEL_RESPONSE_MAX_DURATION_MS = 600_000
 export const AGENT_TIMEOUT_MAX_RETRIES = 2
 export const AGENT_CONTEXT_WINDOW_BUDGET_RATIO = 0.75
 export const AGENT_CONTEXT_RECOVERY_BUDGET_RATIO = 0.5

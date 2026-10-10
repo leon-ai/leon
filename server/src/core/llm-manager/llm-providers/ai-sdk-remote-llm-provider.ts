@@ -255,11 +255,14 @@ export default class AISDKRemoteLLMProvider {
 
   private createLanguageModel(
     flavor = this.config.flavor,
-    contexts: ProviderCompactionContext[] = []
+    contexts: ProviderCompactionContext[] = [],
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
-    const fetch: typeof globalThis.fetch = (input, init) => {
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      let response: Response
+
       if (this.config.flavor === 'openai-responses') {
         if (contexts.length > 0) {
           const body = JSON.parse(String(init?.body)) as Record<string, unknown>
@@ -270,13 +273,41 @@ export default class AISDKRemoteLLMProvider {
           init = { ...init, body: JSON.stringify(body) }
         }
 
-        return this.getOpenAITransport().fetch(input, init)
+        response = await this.getOpenAITransport().fetch(input, init)
+      } else {
+        init?.signal?.throwIfAborted()
+        this.recordInference(input instanceof Request ? input.url : String(input))
+
+        response = await globalThis.fetch(input, init)
       }
 
-      init?.signal?.throwIfAborted()
-      this.recordInference(input instanceof Request ? input.url : String(input))
+      if (!onStreamEvent || !response.body || !response.ok) {
+        return response
+      }
 
-      return globalThis.fetch(input, init)
+      // Observe bytes before SDK parsing discards SSE comments and heartbeats.
+      // The observer belongs to this request, never to the shared provider.
+      const body = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+        transform: (chunk, controller): void => {
+          if (chunk.byteLength > 0 && !init?.signal?.aborted) {
+            onStreamEvent({
+              type: 'transport-activity',
+              transport: this.config.flavor === 'openai-responses' &&
+                this.config.credentials?.['auth_kind'] !== 'chatgpt'
+                ? 'websocket'
+                : 'http'
+            })
+          }
+
+          controller.enqueue(chunk)
+        }
+      }))
+
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      })
     }
 
     if (this.config.flavor === 'openai-responses') {
@@ -411,21 +442,15 @@ export default class AISDKRemoteLLMProvider {
   }
   private getLanguageModel(
     completionParams: CompletionParams,
-    prompt: PromptOrChatHistory
+    prompt: PromptOrChatHistory,
+    onStreamEvent?: CompletionParams['onStreamEvent']
   ): LanguageModelV4 {
-    if (Array.isArray(prompt) && this.config.flavor === 'openai-responses') {
-      const contexts = this.getCompactionContexts(prompt)
-      if (contexts.length > 0) {
-        // Request-local closures avoid sharing replay state between sessions.
-        return this.createLanguageModel(this.config.flavor, contexts)
-      }
-    }
+    let flavor = this.config.flavor
 
     // The dedicated DeepSeek SDK only exposes Chat Completions and downgrades
     // JSON schemas there. Responses retains Leon's schema-constrained calls.
     if (this.config.flavor === 'deepseek' && completionParams.data) {
-      this.responsesModel ??= this.createLanguageModel('open-responses')
-      return this.responsesModel
+      flavor = 'open-responses'
     }
 
     // Groq Responses supports streaming and tool calls, but has no seed or
@@ -436,7 +461,19 @@ export default class AISDKRemoteLLMProvider {
       completionParams.reasoningMode !== 'off' &&
       completionParams.reasoningEffort !== 'none'
     ) {
-      this.responsesModel ??= this.createLanguageModel('open-responses')
+      flavor = 'open-responses'
+    }
+
+    const contexts = Array.isArray(prompt) && this.config.flavor === 'openai-responses'
+      ? this.getCompactionContexts(prompt)
+      : []
+
+    if (contexts.length > 0 || onStreamEvent) {
+      return this.createLanguageModel(flavor, contexts, onStreamEvent)
+    }
+
+    if (flavor === 'open-responses') {
+      this.responsesModel ??= this.createLanguageModel(flavor)
       return this.responsesModel
     }
 
@@ -1869,7 +1906,11 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel(completionParams, prompt)
+    const languageModel = this.getLanguageModel(
+      completionParams,
+      prompt,
+      completionParams.onStreamEvent
+    )
     const result = await languageModel.doStream(callOptions)
     const outputItems: Record<string, unknown>[] = []
 

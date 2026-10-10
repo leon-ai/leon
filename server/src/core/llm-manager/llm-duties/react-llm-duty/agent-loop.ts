@@ -210,7 +210,7 @@ export class AgentModelProviderError extends Error {
  */
 export class AgentModelResponseTimeoutError extends Error {
   constructor() {
-    super('The model response timed out across all attempts. The task is incomplete; the session retains the work done so far.')
+    super('The model response exceeded its time limit. The task is incomplete; the session retains the work done so far.')
     this.name = 'AgentModelResponseTimeoutError'
   }
 }

@@ -80,6 +80,51 @@ interface LLMProviderTestState {
 }
 
 describe('LLMProvider', () => {
+  it('releases cancellation after bounded cleanup when the provider ignores abort', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const controller = new AbortController()
+      const onToken = vi.fn()
+      const onToolCall = vi.fn()
+      let params!: CompletionParams
+      const runChatCompletion = vi.fn((_prompt, input: CompletionParams) => {
+        params = input
+        return new Promise(() => {})
+      })
+      const manager = new LLMProvider()
+      const state = manager as unknown as LLMProviderTestState
+      state.agentLLMProvider = { modelName: 'celeris-1', runChatCompletion }
+      state.agentLLMProviderTargetLabel = celerisTarget.label
+      const pending = manager.prompt('Choose an action', {
+        dutyType: LLMDuties.ReAct,
+        systemPrompt: '',
+        cancellationSignal: controller.signal,
+        onToken,
+        onToolCall
+      }).then(() => null, (error) => error)
+
+      await vi.advanceTimersByTimeAsync(0)
+      const reason = new Error('Owner canceled')
+      controller.abort(reason)
+      await vi.advanceTimersByTimeAsync(1_000)
+
+      expect(await pending).toBe(reason)
+      params.onToken?.('Late output')
+      params.onToolCall?.({
+        id: 'late-call',
+        type: 'function',
+        function: { name: 'read_file', arguments: '{}' }
+      })
+      expect(onToken).not.toHaveBeenCalled()
+      expect(onToolCall).not.toHaveBeenCalled()
+      expect(runChatCompletion).toHaveBeenCalledOnce()
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('waits for canceled provider cleanup before releasing the caller', async () => {
     const controller = new AbortController()
     let finish!: () => void
@@ -429,6 +474,7 @@ describe('LLMProvider', () => {
         progress()
         await vi.advanceTimersByTimeAsync(29_000)
         expect(attempts).toHaveLength(1)
+        attempts[0]!.onStreamEvent?.({ type: 'transport-activity' })
         await vi.advanceTimersByTimeAsync(1_001)
 
         const result = await pending
@@ -448,6 +494,8 @@ describe('LLMProvider', () => {
           attemptId: timings[0].attemptId,
           streamOpenMs: 0,
           generationStartMs: 40_000,
+          transportIdleMs: 1_000,
+          outputIdleMs: 30_000,
           ...(output === 'tool' ? { firstToolInputMs: 40_000 } : { firstTokenMs: 40_000 })
         })
         expect(timings[3].attemptId).not.toBe(timings[0].attemptId)

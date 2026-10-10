@@ -218,6 +218,8 @@ export interface CompletionAttemptTiming {
   firstToolInputMs?: number | undefined
   lastEvent: string
   idleMs?: number | undefined
+  transportIdleMs?: number | undefined
+  outputIdleMs?: number | undefined
 }
 
 export interface CompletionParams {
