@@ -207,6 +207,47 @@ describe('agent loop continuation', () => {
     )
   })
 
+  it('retains document image exchanges across summaries without orphaning tool results', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Inspect the documents and save their metadata.' }
+    ]
+    for (let index = 1; index <= 20; index += 1) {
+      appendToolExchange(transcript, index)
+      if (index <= 3) {
+        const assistant = transcript.at(-2)!
+        const tool = transcript.at(-1)!
+        if (assistant.role === 'assistant' && assistant.toolCalls && tool.role === 'tool') {
+          assistant.toolCalls[0]!.function.name = 'file_system__file__readPdf'
+          tool.toolName = 'file_system__file__readPdf'
+          tool.content = JSON.stringify({ path: `/tmp/document-${index}.pdf` })
+          tool.files = [{ dataBase64: `page-${index}`, mediaType: 'image/png' }]
+        }
+      }
+    }
+
+    const result = await buildAgentContinuationTranscript(
+      transcript,
+      vi.fn().mockResolvedValue('Document metadata extracted and saved.')
+    )
+    const visualResults = result.filter((message) =>
+      message.role === 'tool' && message.files?.length
+    )
+
+    expect(visualResults.map((message) =>
+      message.role === 'tool' ? message.toolCallId : null
+    )).toEqual(['call-2', 'call-3'])
+    for (const message of visualResults) {
+      if (message.role === 'tool') {
+        expect(result.some((candidate) =>
+          candidate.role === 'assistant' && candidate.toolCalls?.some((call) =>
+            call.id === message.toolCallId
+          )
+        )).toBe(true)
+      }
+    }
+    expect(result.slice(-16)).toEqual(transcript.slice(-16))
+  })
+
   it('hands exact older outcomes and failures to the summary before reducing text', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Download all requested documents.' }

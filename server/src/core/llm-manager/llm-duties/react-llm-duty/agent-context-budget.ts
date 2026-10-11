@@ -14,7 +14,7 @@ import {
   AGENT_CONTEXT_RECOVERY_BUDGET_RATIO,
   AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
-  AGENT_RECENT_COMPUTER_USE_IMAGE_LIMIT,
+  AGENT_RECENT_TOOL_IMAGE_LIMIT,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
@@ -156,22 +156,39 @@ function estimateAgentInputTokens(
 }
 
 /**
- * Keeps recent browser and desktop screenshots while retaining textual results.
+ * Keeps recent tool images and the latest inspection batch without changing
+ * saved evidence, textual results, or owner attachments.
  */
-function retainRecentComputerUseImages(
+function retainRecentToolImages(
   transcript: AgentToolTranscriptMessage[]
 ): AgentToolTranscriptMessage[] {
   const retainedImageIndexes = new Set<number>()
   for (
     let index = transcript.length - 1;
-    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_COMPUTER_USE_IMAGE_LIMIT;
+    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_TOOL_IMAGE_LIMIT;
     index -= 1
   ) {
     const message = transcript[index]
     if (
       message?.role === 'tool' &&
-      UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) &&
-      message.files?.length
+      message.files?.some((file) => file.mediaType.startsWith('image/'))
+    ) {
+      retainedImageIndexes.add(index)
+    }
+  }
+
+  // Parallel inspections must reach the model together, even when their batch
+  // exceeds the historical image limit.
+  const latestImageExchange = findCompletedToolExchanges(transcript).findLast(
+    (exchange) => exchange.toolMessages.some((message) =>
+      message.files?.some((file) => file.mediaType.startsWith('image/'))
+    )
+  )
+  if (latestImageExchange) {
+    for (
+      let index = latestImageExchange.startIndex + 1;
+      index <= latestImageExchange.endIndex;
+      index += 1
     ) {
       retainedImageIndexes.add(index)
     }
@@ -180,19 +197,20 @@ function retainRecentComputerUseImages(
   return transcript.map((message, index) => {
     if (
       message.role !== 'tool' ||
-      !UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) ||
-      !message.files?.length ||
+      !message.files?.some((file) => file.mediaType.startsWith('image/')) ||
       retainedImageIndexes.has(index)
     ) {
       return message
     }
 
-    return {
-      role: message.role,
-      toolCallId: message.toolCallId,
-      toolName: message.toolName,
-      content: message.content
-    }
+    const { files, ...textMessage } = message
+    const retainedFiles = files.filter((file) =>
+      !file.mediaType.startsWith('image/')
+    )
+
+    return retainedFiles.length > 0
+      ? { ...textMessage, files: retainedFiles }
+      : textMessage
   })
 }
 
@@ -355,11 +373,11 @@ export function splitAgentTranscriptForSummary(
 
   // Keep a bounded visual reference even when the recent tail is text-only.
   // Retain whole exchanges so parallel tool results never become orphaned.
-  const boundedTranscript = retainRecentComputerUseImages(transcript)
+  const boundedTranscript = retainRecentToolImages(transcript)
   const visual = findCompletedToolExchanges(boundedTranscript)
     .filter((exchange) =>
       exchange.endIndex < boundary && exchange.toolMessages.some((message) =>
-        UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) && message.files?.length
+        message.files?.some((file) => file.mediaType.startsWith('image/'))
       )
     )
     .flatMap((exchange) =>
@@ -447,7 +465,7 @@ function pruneInactiveToolkitSchemas(
 export function prepareAgentModelContext(
   params: AgentModelContextParams
 ): PreparedAgentModelContext {
-  const imageBoundedTranscript = retainRecentComputerUseImages(
+  const imageBoundedTranscript = retainRecentToolImages(
     params.transcript
   )
   const estimatedInputTokensBeforePreparation = estimateAgentInputTokens(
