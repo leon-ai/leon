@@ -159,7 +159,7 @@ function estimateAgentInputTokens(
  * Keeps recent tool images and the latest inspection batch without changing
  * saved evidence, textual results, or owner attachments.
  */
-function retainRecentToolImages(
+export function retainRecentToolImages(
   transcript: AgentToolTranscriptMessage[]
 ): AgentToolTranscriptMessage[] {
   const retainedImageIndexes = new Set<number>()

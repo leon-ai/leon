@@ -3,6 +3,7 @@ import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 import type { ExecutionRecord, TrackedPlanStep } from './agent-types'
 import {
   createAgentTextPreview,
+  retainRecentToolImages,
   splitAgentTranscriptForSummary
 } from './agent-context-budget'
 import { parseToolCallArguments } from './agent-utils'
@@ -284,7 +285,7 @@ export function createAgentLoopContinuationState(
       ? { loadedFunctionNames: [...params.loadedFunctionNames] }
       : {}),
     activeSkillId: params.activeSkillId,
-    transcript: structuredClone(params.transcript)
+    transcript: structuredClone(retainRecentToolImages(params.transcript))
   }
 }
 

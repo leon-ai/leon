@@ -71,6 +71,37 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it('saves exact pause evidence and plan state while bounding reloadable tool images', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+
+    for (let index = 1; index <= 20; index += 1) {
+      appendToolExchange(transcript, index)
+      transcript.at(-1)!.files = [
+        { dataBase64: `page-${index}`, mediaType: 'image/png' }
+      ]
+    }
+
+    const checkpoint = createCheckpointInput()
+    const state = createAgentLoopContinuationState({
+      ...checkpoint,
+      transcript,
+      clarificationQuestion: 'Which registry?',
+      planWidgetId: 'release-plan'
+    })
+    const restored: typeof state = JSON.parse(JSON.stringify(state))
+
+    expect(isAgentLoopContinuationStateValid(restored)).toBe(true)
+    expect(restored.trackedSteps).toEqual(checkpoint.trackedSteps)
+    expect(restored.executionHistory).toEqual(checkpoint.executionHistory)
+    expect(restored.transcript.map((message) => ({ ...message, files: undefined })))
+      .toEqual(transcript.map((message) => ({ ...message, files: undefined })))
+    expect(restored.transcript.filter((message) => message.files))
+      .toEqual(transcript.slice(-4).filter((message) => message.files))
+    expect(transcript.filter((message) => message.files)).toHaveLength(20)
+  })
+
   it('persists a native window through pauses and restores source for another provider', async () => {
     const source: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Prepare the release.' }

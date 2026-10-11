@@ -694,16 +694,8 @@ export class ReActLLMDuty extends LLMDuty {
             loadedToolkitIds: catalog.loadedToolkitIds,
             loadedToolNames: catalog.loadedToolNames,
             loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
-            transcript: await this.prepareContinuation(result.transcript, {
-              originalInput,
-              clarificationQuestion: result.answer,
-              trackedSteps,
-              executionHistory,
-              loadedToolkitIds: catalog.loadedToolkitIds,
-              loadedToolNames: catalog.loadedToolNames,
-              loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
-              activeSkillId: caller.agentSkillContext?.id ?? null
-            }),
+            // Persist pause state directly; resumed inference compacts it when needed.
+            transcript: result.transcript,
             activeSkillId: caller.agentSkillContext?.id ?? null
           })
         )
