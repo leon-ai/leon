@@ -139,7 +139,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 </tool_policy>
 
 <collection_work>
-- Track inputs and outcomes with source references; save verified outputs progressively in the required layout. Unresolved items must not block independent work.
+- Track input eligibility and outcomes with source and version references. Deliver only items within requested scope; save verified outputs progressively in the required layout. Unresolved items must not block independent work.
 - Record visual findings before further inspection; revisit verified items only if evidence conflicts. Reserve time to assemble and verify all deliverables.
 </collection_work>
 
