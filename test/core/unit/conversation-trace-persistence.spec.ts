@@ -14,6 +14,7 @@ import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
 import type { LLMAnswerMetrics, MessageLog } from '@/types'
 import {
   getActiveTurnInference,
+  getActiveConversationSessionId,
   recordTurnInference,
   runWithConversationSession
 } from '@/core/session-manager/session-context'
@@ -24,7 +25,7 @@ import {
 } from '@/core/llm-manager/inference-metadata'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 
-const sessions = vi.hoisted(() => ({ root: '' }))
+const sessions = vi.hoisted(() => ({ root: '', selectedSession: 'pulse-session' }))
 const answerRuntime = vi.hoisted(() => ({
   CONVERSATION_LOGGER: null as ConversationLogger | null,
   NLU: { currentResponseRoute: 'controlled', nluResult: {} },
@@ -40,7 +41,15 @@ vi.mock('@/core', () => {
 })
 vi.mock('@/core/session-manager', () => ({
   CONVERSATION_SESSION_MANAGER: {
-    resolveConversationLogPath: (sessionId: string): string => `${sessions.root}/${sessionId}.json`,
+    getCurrentSessionId: (): string => getActiveConversationSessionId() || sessions.selectedSession,
+    runWithSession: async (sessionId: string, callback: () => Promise<void>): Promise<void> => {
+      await runWithConversationSession({ sessionId }, callback)
+    },
+    resolveConversationLogPath: (sessionId: string): string => {
+      const ownerSession = sessionId || getActiveConversationSessionId() || sessions.selectedSession
+
+      return `${sessions.root}/${ownerSession}.json`
+    },
     updateSessionFromLogs: vi.fn()
   }
 }))
@@ -51,6 +60,7 @@ vi.mock('@/helpers/log-helper', () => ({
 describe('conversation trace persistence', () => {
   beforeEach(async () => {
     sessions.root = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-trace-'))
+    sessions.selectedSession = 'pulse-session'
   })
 
   afterEach(async () => {
@@ -59,79 +69,98 @@ describe('conversation trace persistence', () => {
     await fs.rm(sessions.root, { recursive: true, force: true })
   })
 
-  it('delivers pulse metrics and trace through the ordinary answer queue and history', async () => {
-    vi.useFakeTimers()
-    const config = CONFIG_MANAGER.getConfig()
-    vi.spyOn(CONFIG_MANAGER, 'getConfig').mockReturnValue({
-      ...config,
-      runtime: { ...config.runtime, pulse_enabled: false }
-    })
-    const logger = new ConversationLogger({
-      loggerName: 'test', fileName: 'conversation_log.json',
-      nbOfLogsToKeep: 100, nbOfLogsToLoad: 100
-    })
-    answerRuntime.CONVERSATION_LOGGER = logger
-    const brain = new Brain()
-    const pulse = new PulseManager()
-    const paraphrase = vi.spyOn(ParaphraseLLMDuty.prototype, 'execute')
-    const output = 'I checked your upcoming calendar and prepared your meeting notes.'
-    const llmMetrics: LLMAnswerMetrics = {
-      contextUsedTokens: 50,
-      contextWindowTokens: 1_000,
-      contextUsagePercent: 5,
-      contextUsageEstimated: false,
-      completionCount: 2, inputTokens: 100, outputTokens: 20, totalTokens: 120,
-      durationMs: 1_000, tokensPerSecond: 20, ttftMs: 100,
-      usageAccounting: {
-        cachedInputTokens: 80, cacheReadCompletionCount: 1,
-        cacheWriteInputTokens: 0, costUSD: 0,
-        costCompletionCount: 0, estimatedCostCompletionCount: 0, costSources: []
-      }
-    }
-    const agentResponseTrace = { id: 'pulse-turn', metrics: llmMetrics }
-    Object.assign(pulse, {
-      persist: vi.fn(),
-      loadCoreNodes: async () => ({
-        ...answerRuntime,
-        BRAIN: brain,
-        MEMORY_MANAGER: { observeTurn: vi.fn() }
-      }),
-      loadReActLLMDuty: async () => ({
-        ReActLLMDuty: class {
-          public async init(): Promise<void> {
-            return
-          }
-
-          public async execute(): Promise<unknown> {
-            return { output, data: { llmMetrics, agentResponseTrace } }
-          }
-        }
+  it.each(['answer', 'cancelled'])(
+    'keeps pulse execution and its %s outcome in the owning session',
+    async (finalIntent) => {
+      vi.useFakeTimers()
+      const config = CONFIG_MANAGER.getConfig()
+      vi.spyOn(CONFIG_MANAGER, 'getConfig').mockReturnValue({
+        ...config,
+        runtime: { ...config.runtime, pulse_enabled: false }
       })
-    })
-    const matter = {
-      id: 'pulse-matter', fingerprint: 'meeting-notes', intentKey: 'prepare',
-      targetScope: 'calendar', turnPrompt: 'Prepare meeting notes.',
-      summary: 'Prepare meeting notes', why: 'An upcoming meeting', notifyOwner: true
-    } as Parameters<PulseManager['executeMatter']>[1]
-    const state = {
-      matters: [matter], recentOutcomes: [], suppressionPolicies: [], recentTicks: []
-    } as Parameters<PulseManager['executeMatter']>[0]
+      const logger = new ConversationLogger({
+        loggerName: 'test', fileName: 'conversation_log.json',
+        nbOfLogsToKeep: 100, nbOfLogsToLoad: 100
+      })
+      answerRuntime.CONVERSATION_LOGGER = logger
+      const brain = new Brain()
+      const pulse = new PulseManager()
+      const paraphrase = vi.spyOn(ParaphraseLLMDuty.prototype, 'execute')
+      const output = finalIntent === 'cancelled'
+        ? 'Stopped.'
+        : 'I checked your upcoming calendar and prepared your meeting notes.'
+      const llmMetrics: LLMAnswerMetrics = {
+        contextUsedTokens: 50,
+        contextWindowTokens: 1_000,
+        contextUsagePercent: 5,
+        contextUsageEstimated: false,
+        completionCount: 2, inputTokens: 100, outputTokens: 20, totalTokens: 120,
+        durationMs: 1_000, tokensPerSecond: 20, ttftMs: 100,
+        usageAccounting: {
+          cachedInputTokens: 80, cacheReadCompletionCount: 1,
+          cacheWriteInputTokens: 0, costUSD: 0,
+          costCompletionCount: 0, estimatedCostCompletionCount: 0, costSources: []
+        }
+      }
+      const agentResponseTrace = { id: 'pulse-turn', metrics: llmMetrics }
+      Object.assign(pulse, {
+        persist: vi.fn(),
+        loadCoreNodes: async () => ({
+          ...answerRuntime,
+          BRAIN: brain,
+          MEMORY_MANAGER: { observeTurn: vi.fn() }
+        }),
+        loadReActLLMDuty: async () => ({
+          ReActLLMDuty: class {
+            public async init(): Promise<void> {
+              return
+            }
 
-    await pulse['executeMatter'](state, matter)
+            public async execute(): Promise<unknown> {
+              expect(getActiveConversationSessionId()).toBe('pulse-session')
+              sessions.selectedSession = 'other-session'
 
-    expect(answerRuntime.SOCKET_SERVER.emitAnswerToChatClients)
-      .toHaveBeenCalledExactlyOnceWith({ answer: output, llmMetrics, agentResponseTrace })
-    const history = ConversationHistoryHelper.toHistoryItems(
-      await logger.loadAll(), { supportsWidgets: false }
-    )
-    expect(history).toHaveLength(1)
-    expect(history[0]).toMatchObject({
-      originalString: output, llmMetrics, agentResponseTrace
-    })
-    expect(paraphrase).not.toHaveBeenCalled()
-    expect(answerRuntime.POST_TURN_MAINTENANCE_QUEUE.enqueue.mock.calls.map(([label]) => label))
-      .toEqual(['pulse self-model reflection', 'session title generation'])
-  })
+              return { output, data: { finalIntent, llmMetrics, agentResponseTrace } }
+            }
+          }
+        })
+      })
+      const matter = {
+        id: 'pulse-matter', fingerprint: 'meeting-notes', intentKey: 'prepare',
+        targetScope: 'calendar', turnPrompt: 'Prepare meeting notes.',
+      summary: 'Prepare meeting notes', why: 'An upcoming meeting',
+      notifyOwner: finalIntent === 'answer'
+      } as Parameters<PulseManager['executeMatter']>[1]
+      const state = {
+        matters: [matter], recentOutcomes: [], suppressionPolicies: [], recentTicks: []
+      } as Parameters<PulseManager['executeMatter']>[0]
+
+      await pulse['executeMatter'](state, matter)
+
+      expect(answerRuntime.SOCKET_SERVER.emitAnswerToChatClients)
+        .toHaveBeenCalledExactlyOnceWith({ answer: output, llmMetrics, agentResponseTrace })
+      const history = ConversationHistoryHelper.toHistoryItems(
+        await logger.loadAll({ sessionId: 'pulse-session' }), { supportsWidgets: false }
+      )
+      expect(history).toHaveLength(1)
+      expect(history[0]).toMatchObject({
+        originalString: output, llmMetrics, agentResponseTrace
+      })
+      expect(paraphrase).not.toHaveBeenCalled()
+      expect(await logger.loadAll({ sessionId: 'other-session' })).toEqual([])
+      expect(matter.status).toBe(finalIntent === 'cancelled' ? 'declined' : 'completed')
+      if (finalIntent === 'cancelled') {
+        expect(state.suppressionPolicies[0]).toMatchObject({
+          lastOutcome: 'declined',
+          declineCount: 1
+        })
+        expect(Date.parse(state.suppressionPolicies[0]!.suppressedUntil!)).toBeGreaterThan(Date.now())
+      }
+
+      expect(answerRuntime.POST_TURN_MAINTENANCE_QUEUE.enqueue.mock.calls.map(([label]) => label))
+        .toEqual(['pulse self-model reflection', 'session title generation'])
+    }
+  )
 
   it('persists distinct turn routes without credentials and keeps older attribution unknown', async () => {
     const logger = new ConversationLogger({

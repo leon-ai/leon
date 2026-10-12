@@ -20,6 +20,7 @@ import type {
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop'
 import {
   AGENT_CLARIFICATION_TOOL_NAME,
+  AGENT_CANCELLATION_TOOL_NAME,
   AGENT_PLAN_TOOL_NAME,
   AGENT_SKILL_TOOL_NAME,
   AGENT_TOOLKIT_LOADER_NAME,
@@ -427,6 +428,84 @@ function runAgentLoop(params: AgentLoopParams): ReturnType<typeof runAgentLoopWi
 }
 
 describe('continuous agent loop', () => {
+  it.each(['model', 'tool', 'review'])(
+    'interrupts %s work for owner cancellation and ends without reviewing unfinished plans',
+    async (phase) => {
+      const manager = new ConversationSessionManager()
+      const turn = manager.openAgentTurn('cancel-session')
+      const receipts: Array<Promise<boolean>> = []
+      const originalSignal = turn.getOwnerMessageSignal()
+      const interrupt = (): never => {
+        receipts.push(manager.queueAgentMessage('cancel-session', async () => ({
+          role: 'user', content: 'Stop the current task.'
+        }))!)
+        originalSignal.throwIfAborted()
+
+        throw new Error('Owner input must interrupt the active execution.')
+      }
+      const executeFunction = vi.fn(async () => interrupt())
+      const callModel = vi.fn()
+        .mockImplementationOnce(async () => {
+          if (phase === 'model') {
+            interrupt()
+          }
+
+          if (phase === 'review') {
+            return { textContent: 'The research is complete.' }
+          }
+
+          return { toolCalls: [
+            toolCall('running', CALLABLE_TOOL_NAME, { query: 'original' }),
+            toolCall('unstarted-plan', AGENT_PLAN_TOOL_NAME, {
+              steps: [{ label: 'Finish the research', status: 'completed' }]
+            })
+          ] }
+        })
+        .mockImplementation(async (messages, _tools, options) => {
+          if (options.isCompletionReview) {
+            interrupt()
+          }
+
+          expect(messages.at(-1)).toMatchObject({
+            role: 'user', content: 'Stop the current task.'
+          })
+          expect(turn.getOwnerMessageSignal().aborted).toBe(false)
+
+          return { toolCalls: [
+            toolCall('unwanted', CALLABLE_TOOL_NAME, { query: 'more work' }),
+            toolCall('cancel', AGENT_CANCELLATION_TOOL_NAME, {
+              acknowledgment: 'Stopped.'
+            })
+          ] }
+        })
+
+      try {
+        const result = await runAgentLoopWithCompletionReview({
+          transcript: [{ role: 'user', content: 'Research the topic.' }],
+          catalog: createCatalog(),
+          initialTrackedSteps: [{ label: 'Finish the research', status: 'in_progress' }],
+          callModel,
+          executeFunction,
+          drainOwnerMessages: turn.drainOwnerMessages,
+          getOwnerMessageSignal: turn.getOwnerMessageSignal,
+          loadAgentSkill: async () => null
+        })
+
+        expect(result).toMatchObject({ intent: 'cancelled', answer: 'Stopped.' })
+        expect(callModel).toHaveBeenCalledTimes(phase === 'review' ? 3 : 2)
+        expect(executeFunction).toHaveBeenCalledTimes(phase === 'tool' ? 1 : 0)
+        expect(await Promise.all(receipts)).toEqual([true])
+        expect(result.trackedSteps[0]?.status).toBe('in_progress')
+        expect(result.transcript.filter((message) => message.role === 'tool')
+          .map((message) => message.toolCallId)).toEqual(phase === 'tool'
+          ? ['running', 'unstarted-plan', 'unwanted', 'cancel']
+          : ['unwanted', 'cancel'])
+      } finally {
+        turn.close()
+      }
+    }
+  )
+
   it.each(['tool', 'answer'])(
     'reconsiders a proposed %s when owner messages arrive during model generation',
     async (responseKind) => {
@@ -620,7 +699,7 @@ describe('continuous agent loop', () => {
         expect(messages.at(-1)).toEqual({ role: 'user', content: 'Use a shorter explanation.' })
         expect(options.isFinalizationAttempt).toBe(true)
         expect(tools.map((tool: { function: { name: string } }) => tool.function.name))
-          .toEqual([AGENT_CLARIFICATION_TOOL_NAME])
+          .toEqual([AGENT_CLARIFICATION_TOOL_NAME, AGENT_CANCELLATION_TOOL_NAME])
 
         return { textContent: 'Short explanation.' }
       })
@@ -1890,52 +1969,62 @@ describe('continuous agent loop', () => {
     })
   })
 
-  it('uses a tools-restricted finalization checkpoint at the iteration limit', async () => {
-    const callModel = vi.fn(async (messages, tools, options) => {
-      if (!options.isFinalizationAttempt) {
-        return {
-          toolCalls: [
-            toolCall('lookup-before-limit', CALLABLE_TOOL_NAME, {
-              query: 'Leon'
-            })
-          ]
+  it.each(['answer', 'cancelled'])(
+    'allows the %s outcome at the iteration limit without further operational work',
+    async (intent) => {
+      const callModel = vi.fn(async (messages, tools, options) => {
+        if (!options.isFinalizationAttempt) {
+          return {
+            toolCalls: [
+              toolCall('lookup-before-limit', CALLABLE_TOOL_NAME, {
+                query: 'Leon'
+              })
+            ]
+          }
         }
-      }
 
-      expect(messages.at(-1)).toMatchObject({
-        role: 'tool',
-        content: 'Found enough evidence.'
+        expect(messages.at(-1)).toMatchObject({
+          role: 'tool',
+          content: 'Found enough evidence.'
+        })
+        expect(tools.map((tool) => tool.function.name)).toEqual([
+          AGENT_CLARIFICATION_TOOL_NAME,
+          AGENT_CANCELLATION_TOOL_NAME
+        ])
+        return intent === 'cancelled'
+          ? { toolCalls: [toolCall('cancel-limit', AGENT_CANCELLATION_TOOL_NAME, {
+              acknowledgment: 'Stopped.'
+            })] }
+          : { textContent: 'Here is the complete supported answer.' }
       })
-      expect(tools.map((tool) => tool.function.name)).toEqual([
-        AGENT_CLARIFICATION_TOOL_NAME
-      ])
-      return { textContent: 'Here is the complete supported answer.' }
-    })
 
-    const result = await runAgentLoop({
-      transcript: [{ role: 'user', content: 'Find the answer.' }],
-      catalog: createCatalog(),
-      maxIterations: 1,
-      callModel,
-      executeFunction: async () => ({
-        execution: {
-          function: callable.qualifiedName,
-          status: 'success',
-          observation: 'Found enough evidence.',
-          requestedToolInput: JSON.stringify({ query: 'Leon' })
-        }
-      }),
-      loadAgentSkill: async () => null
-    })
+      const result = await runAgentLoop({
+        transcript: [{ role: 'user', content: 'Find the answer.' }],
+        catalog: createCatalog(),
+        maxIterations: 1,
+        callModel,
+        executeFunction: async () => ({
+          execution: {
+            function: callable.qualifiedName,
+            status: 'success',
+            observation: 'Found enough evidence.',
+            requestedToolInput: JSON.stringify({ query: 'Leon' })
+          }
+        }),
+        loadAgentSkill: async () => null
+      })
 
-    expect(callModel).toHaveBeenCalledTimes(2)
-    expect(callModel.mock.calls[1]?.[2]).toEqual({
-      isRecoveryAttempt: false,
-      isFinalizationAttempt: true
-    })
-    expect(result.intent).toBe('answer')
-    expect(result.answer).toBe('Here is the complete supported answer.')
-  })
+      expect(callModel).toHaveBeenCalledTimes(2)
+      expect(callModel.mock.calls[1]?.[2]).toEqual({
+        isRecoveryAttempt: false,
+        isFinalizationAttempt: true
+      })
+      expect(result.intent).toBe(intent)
+      expect(result.answer).toBe(intent === 'cancelled'
+        ? 'Stopped.'
+        : 'Here is the complete supported answer.')
+    }
+  )
 
   it('offers alternatives and saves a continuation when work is incomplete', async () => {
     const callModel = vi.fn(async (_messages, _tools, options) => {
@@ -2047,7 +2136,8 @@ describe('continuous agent loop', () => {
         expect(messages[0]?.content).toContain('<original_owner_request>')
         expect(messages[0]?.content).toContain('Verified evidence.')
         expect(tools.map((tool) => tool.function.name)).toEqual([
-          AGENT_CLARIFICATION_TOOL_NAME
+          AGENT_CLARIFICATION_TOOL_NAME,
+          AGENT_CANCELLATION_TOOL_NAME
         ])
         expect(options).toEqual({
           isRecoveryAttempt: true,
@@ -3452,7 +3542,7 @@ describe('model response status', () => {
     expect(new Set(statuses().map((status) => status.requestId)).size).toBe(1)
   })
 
-  it.each(['text', 'tool-input', 'internal-tool', 'completed', 'failed', 'canceled'])(
+  it.each(['text', 'tool-input', 'internal-tool', 'completed', 'failed', 'canceled', 'owner-update'])(
     'clears model waiting on %s and ignores late stream events', async (state) => {
       let finish!: (result: { output: string }) => void
       let fail!: (error: Error) => void
@@ -3465,8 +3555,15 @@ describe('model response status', () => {
         })
       })
       const controller = new AbortController()
+      const manager = new ConversationSessionManager()
+      const turn = manager.openAgentTurn('model-status')
+      const receipts: Array<Promise<boolean>> = []
       const duty = new ReActLLMDuty({ input: 'Inspect files.', signal: controller.signal })
-      Object.assign(duty, { writeAgentPromptLog: vi.fn() })
+      Object.assign(duty, {
+        writeAgentPromptLog: vi.fn(),
+        getOwnerMessageSignal: turn.getOwnerMessageSignal,
+        agentTurnSignal: turn.signal
+      })
       const pending = duty['callAgentModel']([], 'Follow the request.', [], {
         isRecoveryAttempt: false
       }).then(() => null, (error) => error)
@@ -3483,6 +3580,11 @@ describe('model response status', () => {
         } else if (state === 'failed') {
           fail(new Error('Provider failed.'))
           await pending
+        } else if (state === 'owner-update') {
+          receipts.push(manager.queueAgentMessage('model-status', async () => ({
+            role: 'user', content: 'Stop the current task.'
+          }))!)
+          expect(params.cancellationSignal?.aborted).toBe(true)
         } else {
           controller.abort(new Error('Owner canceled.'))
         }
@@ -3497,6 +3599,11 @@ describe('model response status', () => {
         if (state === 'canceled') {
           expect(error).toBe(controller.signal.reason)
         }
+        if (state === 'owner-update') {
+          expect(error).toBe(turn.getOwnerMessageSignal().reason)
+        }
+        turn.close()
+        expect(await Promise.all(receipts)).toEqual(state === 'owner-update' ? [false] : [])
       }
     }
   )

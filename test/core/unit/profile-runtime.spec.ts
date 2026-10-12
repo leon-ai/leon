@@ -122,6 +122,8 @@ describe('profile runtime', () => {
     )
 
     try {
+      const firstSignal = firstTurn.getOwnerMessageSignal()
+      const secondSignal = secondTurn.getOwnerMessageSignal()
       const firstReceipt = runWithProfileContext(
         { profileName: 'queue-a' },
         () => CONVERSATION_SESSION_MANAGER.queueAgentMessage('shared-id', async () => ({
@@ -129,6 +131,9 @@ describe('profile runtime', () => {
           content: `${getActiveProfileName()}:${CONVERSATION_SESSION_MANAGER.getCurrentSessionId()}`
         }))!
       )
+      expect(firstSignal.aborted).toBe(true)
+      expect(secondSignal.aborted).toBe(false)
+
       const secondReceipt = runWithProfileContext(
         { profileName: 'queue-b' },
         () => CONVERSATION_SESSION_MANAGER.queueAgentMessage('shared-id', async () => ({
@@ -151,9 +156,14 @@ describe('profile runtime', () => {
       expect(firstMessages).toEqual([{ role: 'user', content: 'queue-a:shared-id' }])
       expect(inactiveReceipt).toBeNull()
       expect(await firstReceipt).toBe(true)
+      expect(firstTurn.getOwnerMessageSignal().aborted).toBe(false)
+      expect(firstTurn.getOwnerMessageSignal()).not.toBe(firstSignal)
       expect(await secondTurn.drainOwnerMessages()).toEqual([{ role: 'user', content: 'Second profile.' }])
       expect(await secondReceipt).toBe(true)
       expect(await firstTurn.drainOwnerMessages()).toEqual([])
+      firstTurn.cancelExecutions()
+      expect(firstTurn.signal.aborted).toBe(true)
+      expect(secondTurn.signal.aborted).toBe(false)
     } finally {
       firstTurn.close()
       secondTurn.close()

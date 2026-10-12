@@ -207,6 +207,7 @@ export class ReActLLMDuty extends LLMDuty {
     input: string
   }>()
   private hasExplicitMemoryWrite = false
+  private hasOwnerMessages = false
   private hasFinalizedAnswer = false
   private readonly answerStream = new AgentAnswerStream((payload) => {
     if (payload.token) {
@@ -224,6 +225,8 @@ export class ReActLLMDuty extends LLMDuty {
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
   private readonly signal: AbortSignal | undefined
+  private getOwnerMessageSignal: (() => AbortSignal) | undefined
+  private agentTurnSignal: AbortSignal | undefined
   private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
@@ -291,6 +294,7 @@ export class ReActLLMDuty extends LLMDuty {
     }
     this.finalAnswerMetrics = null
     this.hasExplicitMemoryWrite = false
+    this.hasOwnerMessages = false
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
@@ -317,6 +321,8 @@ export class ReActLLMDuty extends LLMDuty {
     const agentTurn = activeSessionId
       ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId)
       : null
+    this.getOwnerMessageSignal = agentTurn?.getOwnerMessageSignal
+    this.agentTurnSignal = agentTurn?.signal
 
     try {
       const { messageLogs: history } =
@@ -509,8 +515,12 @@ export class ReActLLMDuty extends LLMDuty {
       )
 
       const result = await runAgentLoop({
-        ...(agentTurn ? { drainOwnerMessages: agentTurn.drainOwnerMessages } : {}),
+        ...(agentTurn ? {
+          drainOwnerMessages: agentTurn.drainOwnerMessages,
+          getOwnerMessageSignal: agentTurn.getOwnerMessageSignal
+        } : {}),
         onOwnerMessagesApplied: () => {
+          this.hasOwnerMessages = true
           this.answerStream.discard()
           this.closeStreamedToolCalls()
         },
@@ -622,7 +632,7 @@ export class ReActLLMDuty extends LLMDuty {
                 }
               })
             },
-            this.signal,
+            this.getExecutionSignal(),
             (message) => this.emitProgress(message),
             preview?.groupId
           )
@@ -677,13 +687,17 @@ export class ReActLLMDuty extends LLMDuty {
 
       executionHistory.push(...result.executionHistory)
       trackedSteps = result.trackedSteps.map((step) => ({ ...step }))
+      if (result.intent === 'cancelled') {
+        agentTurn?.cancelExecutions()
+      }
+
       this.hasExplicitMemoryWrite = executionHistory.some(
         (execution) =>
           execution.status === 'success' &&
           execution.function === 'structured_knowledge.memory.write'
       )
 
-      if (result.intent !== 'answer') {
+      if (result.intent !== 'answer' && result.intent !== 'cancelled') {
         this.saveAgentLoopContinuation(
           createAgentLoopContinuationState({
             originalInput,
@@ -712,6 +726,8 @@ export class ReActLLMDuty extends LLMDuty {
       return null
     } finally {
       agentTurn?.close()
+      this.getOwnerMessageSignal = undefined
+      this.agentTurnSignal = undefined
       this.closeStreamedToolCalls()
 
       if (this.traceSaveTimer) {
@@ -734,6 +750,20 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     return this.safeJSONStringify(input)
+  }
+
+  /**
+   * Interrupts stale work for owner steering without canceling the conversation turn.
+   */
+  private getExecutionSignal(): AbortSignal | undefined {
+    const signals = [this.signal, this.agentTurnSignal, this.getOwnerMessageSignal?.()]
+      .filter((signal): signal is AbortSignal => Boolean(signal))
+
+    if (signals.length > 1) {
+      return AbortSignal.any(signals)
+    }
+
+    return signals[0]
   }
 
   /**
@@ -1035,7 +1065,8 @@ export class ReActLLMDuty extends LLMDuty {
     compactionContext?: ProviderCompactionContext
     isTruncated?: boolean
   } | null> {
-    this.signal?.throwIfAborted()
+    const executionSignal = this.getExecutionSignal()
+    executionSignal?.throwIfAborted()
     if (transcript.some((message) =>
       message.role === 'assistant' && message.compactionContext
     )) {
@@ -1221,7 +1252,7 @@ export class ReActLLMDuty extends LLMDuty {
     const responseAbortController = new AbortController()
     const cancellationSignal = AbortSignal.any([
       responseAbortController.signal,
-      ...(this.signal ? [this.signal] : [])
+      ...(executionSignal ? [executionSignal] : [])
     ])
     // Retries share cancellation and the hard cap, but each gets a usable wait.
     const abortModelResponse = (): void => {
@@ -1263,11 +1294,11 @@ export class ReActLLMDuty extends LLMDuty {
         emitModelStatus(ModelResponseState.Completed)
       }
     }
-    this.signal?.addEventListener('abort', clearModelStatus, { once: true })
+    executionSignal?.addEventListener('abort', clearModelStatus, { once: true })
     emitModelStatus(ModelResponseState.Waiting)
 
     waitNoticeTimer = setTimeout(() => {
-      if (completed || this.signal?.aborted) {
+      if (completed || cancellationSignal.aborted) {
         return
       }
       this.logTitle(phase)
@@ -1277,7 +1308,7 @@ export class ReActLLMDuty extends LLMDuty {
     }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
 
     diagnosisTimer = setTimeout(() => {
-      if (completed || this.signal?.aborted) {
+      if (completed || cancellationSignal.aborted) {
         return
       }
 
@@ -1481,7 +1512,7 @@ export class ReActLLMDuty extends LLMDuty {
     } finally {
       completed = true
       clearTimeout(responseDeadlineTimer)
-      this.signal?.removeEventListener('abort', clearModelStatus)
+      executionSignal?.removeEventListener('abort', clearModelStatus)
       clearModelStatus()
       if (waitNoticeTimer) {
         clearTimeout(waitNoticeTimer)
@@ -1491,7 +1522,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
 
-    this.signal?.throwIfAborted()
+    executionSignal?.throwIfAborted()
     if (!completionResult) {
       LogHelper.debug('callAgentModel: no completion result returned')
       const providerError = LLM_PROVIDER.consumeLastProviderErrorMessage()
@@ -1992,6 +2023,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: normalizedOutput,
       data: {
         hasExplicitMemoryWrite: this.hasExplicitMemoryWrite,
+        hasOwnerMessages: this.hasOwnerMessages,
         finalIntent: this.finalResponseIntent,
         llmMetrics,
         agentResponseTrace,

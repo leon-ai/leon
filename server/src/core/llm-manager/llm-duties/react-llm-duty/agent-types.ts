@@ -89,6 +89,7 @@ export interface TrackedPlanStep {
 
 export type FinalPhaseIntent =
   | 'answer'
+  | 'cancelled'
   | 'clarification'
   | 'blocked'
   | 'error'

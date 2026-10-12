@@ -5,12 +5,16 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import type { AgentResponseTrace, LLMAnswerMetrics, MessageLog } from '@/types'
 import type Brain from '@/core/brain/brain'
+import type { FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
+import { AgentSessionState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
+import { isAgentLoopContinuationStateValid } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { LEON_PULSE_INTERVAL_MS } from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
 import { InferencePurpose } from '@/core/llm-manager/types'
 import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -250,6 +254,7 @@ function defaultPulseState(isEnabled: boolean): PulseState {
 }
 
 export default class PulseManager {
+  private readonly agentSessionState = new AgentSessionState()
   private state: PulseState | null = null
   private intervalId: NodeJS.Timeout | null = null
   private initialTimerId: NodeJS.Timeout | null = null
@@ -1051,6 +1056,40 @@ export default class PulseManager {
     state: PulseState,
     matter: PulseMatter
   ): Promise<void> {
+    // Capture ownership before waiting: changing the selected chat must not move work.
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+
+    await CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, async () => {
+      const core = await this.loadCoreNodes()
+      const conversation = await core.CONVERSATION_LOGGER.load({ nbOfLogsToLoad: 8 })
+      const continuation = this.agentSessionState.getContinuationStore().load()
+
+      // Proactive work must not displace an owner task waiting to resume.
+      if (
+        this.hasRecentOwnerActivity(conversation) ||
+        (continuation && isAgentLoopContinuationStateValid(continuation))
+      ) {
+        this.pushTickRecord(
+          state,
+          'skipped',
+          'Owner activity takes priority over pulse work',
+          matter.id
+        )
+        this.persist()
+        return
+      }
+
+      await this.executeSessionMatter(state, matter)
+    })
+  }
+
+  /**
+   * Runs proactive work in the conversation's ordinary agent and answer lifecycle.
+   */
+  private async executeSessionMatter(
+    state: PulseState,
+    matter: PulseMatter
+  ): Promise<void> {
     matter.status = 'running'
     matter.updatedAt = new Date().toISOString()
     this.persist()
@@ -1065,9 +1104,9 @@ export default class PulseManager {
     ].join('\n')
 
     let output = ''
+    let shouldNotifyOwner = matter.notifyOwner
     let answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace'> = {}
-    let finalIntent: 'answer' | 'clarification' | 'cancelled' | 'blocked' | 'error' =
-      'answer'
+    let finalIntent: FinalPhaseIntent = 'answer'
     let toolExecutions: Array<{
       functionName: string
       status: 'success' | 'error'
@@ -1089,8 +1128,11 @@ export default class PulseManager {
 
       finalIntent =
         typeof resultData['finalIntent'] === 'string'
-          ? (resultData['finalIntent'] as typeof finalIntent)
+          ? (resultData['finalIntent'] as FinalPhaseIntent)
           : 'answer'
+
+      // A direct owner reply requires an answer even when the initiative was quiet.
+      shouldNotifyOwner ||= resultData['hasOwnerMessages'] === true
       answerMetadata = {
         ...(resultData['llmMetrics']
           ? { llmMetrics: resultData['llmMetrics'] as LLMAnswerMetrics }
@@ -1114,6 +1156,18 @@ export default class PulseManager {
     if (finalIntent === 'answer') {
       matter.status = 'completed'
       this.upsertSuppressionPolicy(state, matter, 'completed', nowIso)
+      state.lastExecutionAt = nowIso
+    } else if (finalIntent === 'cancelled') {
+      matter.status = 'declined'
+      matter.ownerFeedback = 'decline'
+      matter.ownerFeedbackAt = nowIso
+
+      const policy = this.upsertSuppressionPolicy(state, matter, 'declined', nowIso)
+      policy.declineCount += 1
+      policy.suppressedUntil = toIsoString(
+        nowTs + this.getDeclineCooldownMs(policy.declineCount)
+      )
+      this.applySuppressionToPendingMatters(state, matter.fingerprint, nowIso)
       state.lastExecutionAt = nowIso
     } else {
       matter.status = 'failed'
@@ -1143,7 +1197,7 @@ export default class PulseManager {
       )
     }
 
-    if (output && matter.notifyOwner) {
+    if (output && (shouldNotifyOwner || finalIntent === 'cancelled')) {
       await this.surfacePulseMessage(state, matter, output, answerMetadata)
     }
 
@@ -1154,10 +1208,16 @@ export default class PulseManager {
     )
     this.pushTickRecord(
       state,
-      finalIntent === 'answer' ? 'executed' : 'failed',
+      finalIntent === 'answer'
+        ? 'executed'
+        : finalIntent === 'cancelled'
+          ? 'skipped'
+          : 'failed',
       finalIntent === 'answer'
         ? `Completed pulse matter: ${matter.summary}`
-        : `Pulse matter failed: ${matter.summary}`,
+        : finalIntent === 'cancelled'
+          ? `Pulse matter canceled: ${matter.summary}`
+          : `Pulse matter failed: ${matter.summary}`,
       matter.id
     )
     this.persist()

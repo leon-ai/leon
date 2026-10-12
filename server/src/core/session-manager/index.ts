@@ -190,14 +190,21 @@ export class ConversationSessionManager {
   public readonly events = new EventEmitter()
   private index: ConversationSessionIndex | null = null
   private readonly sessionQueues = new Map<string, Promise<void>>()
-  private readonly agentMessageQueues = new Map<string, PendingAgentMessage[]>()
+  private readonly agentMessageQueues = new Map<string, {
+    pending: PendingAgentMessage[]
+    controller: AbortController
+  }>()
 
   /**
-   * Lets an active agent consume owner messages at safe execution boundaries.
+   * Interrupts stale execution so the active agent can apply owner messages.
+   * Explicit cancellation also ends retained executions from the same turn.
    * Unconsumed messages return to ordinary session processing when the run ends.
    */
   public openAgentTurn(sessionId: string): {
+    signal: AbortSignal
     drainOwnerMessages: () => Promise<AgentToolTranscriptMessage[]>
+    getOwnerMessageSignal: () => AbortSignal
+    cancelExecutions: () => void
     close: () => void
   } {
     if (this.agentMessageQueues.has(sessionId)) {
@@ -205,9 +212,17 @@ export class ConversationSessionManager {
     }
 
     const pending: PendingAgentMessage[] = []
-    this.agentMessageQueues.set(sessionId, pending)
+    const turn = { pending, controller: new AbortController() }
+    const executionController = new AbortController()
+    this.agentMessageQueues.set(sessionId, turn)
 
     return {
+      signal: executionController.signal,
+      // Retained executions may outlive the message revision that started them.
+      cancelExecutions: (): void => {
+        executionController.abort(new Error('Task canceled by the owner.'))
+      },
+      getOwnerMessageSignal: (): AbortSignal => turn.controller.signal,
       drainOwnerMessages: async (): Promise<AgentToolTranscriptMessage[]> => {
         const messages: AgentToolTranscriptMessage[] = []
 
@@ -223,10 +238,15 @@ export class ConversationSessionManager {
           }
         }
 
+        // Each reassessment gets a fresh signal after all queued input is applied.
+        if (turn.controller.signal.aborted) {
+          turn.controller = new AbortController()
+        }
+
         return messages
       },
       close: (): void => {
-        if (this.agentMessageQueues.get(sessionId) !== pending) {
+        if (this.agentMessageQueues.get(sessionId) !== turn) {
           return
         }
 
@@ -246,14 +266,16 @@ export class ConversationSessionManager {
     sessionId: string,
     prepare: () => Promise<AgentToolTranscriptMessage>
   ): Promise<boolean> | null {
-    const pending = this.agentMessageQueues.get(sessionId)
+    const turn = this.agentMessageQueues.get(sessionId)
 
-    if (!pending) {
+    if (!turn) {
       return null
     }
 
     return new Promise((resolve, reject) => {
-      pending.push({ prepare, resolve, reject })
+      turn.pending.push({ prepare, resolve, reject })
+      // Stop stale inference and running tools before choosing the next action.
+      turn.controller.abort(new Error('New owner instructions require reassessment.'))
     })
   }
 

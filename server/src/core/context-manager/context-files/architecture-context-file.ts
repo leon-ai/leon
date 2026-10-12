@@ -56,6 +56,7 @@ export class ArchitectureContextFile extends ContextFile {
       '- Leon has a living personality and a changing mood that influence its tone and behavior.',
       '- A bounded private self-model/diary is updated after turns, promotes repeated habits into stable behavioral principles, and injects only a compact snapshot into the first agent request.',
       '- A periodic pulse manager can generate autonomous agent matters from memory, context deltas, and the private self-model, persist them to `PULSE.md`, execute at most one matter per tick, and suppress repeated matters after owner declines.',
+      '- Pulse work uses the owning conversation\'s ordinary agent turn, transcript, tool execution and answer lifecycle. Owner messages interrupt stale work to redirect or cancel the task; cancellation ends execution without completion review or automatic continuation.',
       '## Context Intelligence',
       '- Leon maintains runtime context files (system, activity, browser, network, workspace, habits, inventory, media, architecture, identity).',
       '- Leon uses `structured_knowledge.context.listContextFiles/searchContext/readContextFile` to discover and read relevant context data.',

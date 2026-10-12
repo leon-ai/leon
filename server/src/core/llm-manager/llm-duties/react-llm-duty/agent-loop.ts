@@ -43,6 +43,7 @@ import { parseToolCallArguments, validateToolInput } from './agent-utils'
 
 export const AGENT_PLAN_TOOL_NAME = 'update_plan'
 export const AGENT_CLARIFICATION_TOOL_NAME = 'request_clarification'
+export const AGENT_CANCELLATION_TOOL_NAME = 'cancel_task'
 export const AGENT_SKILL_TOOL_NAME = 'load_agent_skill'
 export const AGENT_TOOLKIT_LOADER_NAME = 'load_toolkit'
 
@@ -110,6 +111,7 @@ export const AGENT_SYSTEM_PROMPT = `You are an autonomous agent with tools.
 <agent_loop>
 - Work directly from the user request and the complete conversation transcript.
 - Owner messages received during execution update the active request. Apply the latest instructions before choosing further actions, preserving completed work unless the owner changes or cancels the task.
+- When the owner cancels the active task, call cancel_task with a brief acknowledgment in the owner's language. Do not perform more work, reconcile the plan, or claim the task was completed. Cancellation ends the task and cannot be resumed automatically.
 - When a tool can advance the request, call it now. Do not describe a future action without taking it.
 - Tool calls and tool results from this run are already present in the transcript. Never use memory, context, or filesystem tools to rediscover what happened in the current run.
 - Large tool results may include a preview and output_log_path. Read only the needed artifact section when the preview does not contain the required fact.
@@ -345,6 +347,7 @@ export interface AgentLoopParams {
   onPlanUpdated?: (steps: TrackedPlanStep[]) => void
   onProgressMessage?: (message: string) => Promise<void> | void
   drainOwnerMessages?: () => Promise<AgentToolTranscriptMessage[]>
+  getOwnerMessageSignal?: () => AbortSignal
   onOwnerMessagesApplied?: () => void
   initialExecutionHistory?: ExecutionRecord[]
   initialTrackedSteps?: TrackedPlanStep[]
@@ -408,7 +411,7 @@ export function buildAgentToolCatalog(
       forcedTool.toolkitId,
       forcedTool.toolId
     )
-    tools.push(createClarificationTool())
+    tools.push(createClarificationTool(), createCancellationTool())
     return catalog
   }
 
@@ -445,6 +448,7 @@ export function buildAgentToolCatalog(
   tools.push(
     createAgentPlanTool(AGENT_PLAN_TOOL_NAME),
     createClarificationTool(),
+    createCancellationTool(),
     createAgentSkillTool()
   )
 
@@ -844,7 +848,7 @@ export async function runAgentLoop(
     enableAgentPlanTracking(params.catalog)
   }
 
-  for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
+  agentIterations: for (let iteration = 0; iteration < iterationLimit; iteration += 1) {
     params.signal?.throwIfAborted()
     if (await appendPendingOwnerMessages(params, transcript)) {
       requiresToolAction = false
@@ -910,6 +914,11 @@ export async function runAgentLoop(
         params.signal?.throwIfAborted()
       } catch (error) {
         params.signal?.throwIfAborted()
+        if (await appendPendingOwnerMessages(params, transcript)) {
+          requiresToolAction = false
+          continue agentIterations
+        }
+
         if (error instanceof AgentModelResponseTimeoutError) {
           return createResumableAgentResult(
             'timeout', transcript, executionHistory, trackedSteps
@@ -1112,7 +1121,11 @@ export async function runAgentLoop(
       toolCalls: toolCalls.map(redactConnectionSetupCall)
     })
 
-    let terminalSignal: FinalResponseSignal | undefined
+    // Cancellation takes precedence over every operational call in the response.
+    const cancellationCall = toolCalls.find((call) => getCancellationSignal(call))
+    let terminalSignal: FinalResponseSignal | undefined = cancellationCall
+      ? getCancellationSignal(cancellationCall) || undefined
+      : undefined
     let planUpdated = false
     let wasSteered = false
     for (let callIndex = 0; callIndex < toolCalls.length;) {
@@ -1134,7 +1147,9 @@ export async function runAgentLoop(
           role: 'tool',
           toolCallId: toolCall.id,
           toolName: toolCall.function.name,
-          content: 'Tool call skipped because an earlier call ended this agent run.'
+          content: toolCall.id === cancellationCall?.id
+            ? 'Task canceled by the owner.'
+            : 'Tool call skipped because an earlier call ended this agent run.'
         })
         callIndex += 1
         continue
@@ -1214,10 +1229,11 @@ async function appendPendingOwnerMessages(
   unstartedCalls: OpenAIToolCall[] = []
 ): Promise<boolean> {
   params.signal?.throwIfAborted()
+  const wasInterrupted = params.getOwnerMessageSignal?.().aborted
   const messages = await params.drainOwnerMessages?.()
   params.signal?.throwIfAborted()
 
-  if (!messages?.length) {
+  if (!messages?.length && !wasInterrupted) {
     return false
   }
 
@@ -1230,7 +1246,7 @@ async function appendPendingOwnerMessages(
     })
   }
 
-  transcript.push(...messages)
+  transcript.push(...(messages || []))
   params.onOwnerMessagesApplied?.()
 
   return true
@@ -1291,6 +1307,10 @@ async function reviewAgentCompletion(
       LogHelper.warning(`Agent completion review returned an unusable response (attempt ${attempt + 1})`)
     } catch (error) {
       params.signal?.throwIfAborted()
+      if (params.getOwnerMessageSignal?.().aborted) {
+        return null
+      }
+
       if (error instanceof AgentModelResponseTimeoutError) {
         return {
           status: AgentCompletionStatus.Blocked,
@@ -1369,7 +1389,7 @@ async function finalizeAgentLoopAtLimit(
 
 interface AgentLimitFinalizationOutcome {
   answer: string
-  intent: 'answer' | 'clarification' | 'error'
+  intent: FinalPhaseIntent
   messages: AgentToolTranscriptMessage[]
 }
 
@@ -1413,6 +1433,22 @@ function buildAgentLimitRecoveryTranscript(
     // evidence is reduced for a synthesis retry.
     ...transcript.filter((message) => message.role === 'user').slice(1)
   ]
+}
+
+/**
+ * Carries owner cancellation as a terminal outcome without completion review.
+ */
+function getCancellationSignal(toolCall: OpenAIToolCall): FinalResponseSignal | null {
+  if (toolCall.function.name !== AGENT_CANCELLATION_TOOL_NAME) {
+    return null
+  }
+
+  const acknowledgment = parseStringArgument(toolCall.function.arguments, 'acknowledgment')
+  if (!acknowledgment) {
+    return null
+  }
+
+  return { intent: 'cancelled', draft: acknowledgment }
 }
 
 function getClarificationSignal(
@@ -1464,7 +1500,7 @@ async function attemptAgentLimitFinalization(
       params.signal?.throwIfAborted()
       modelResult = await params.callModel(
         currentTranscript,
-        [createClarificationTool()],
+        [createClarificationTool(), createCancellationTool()],
         options,
         { executionHistory, trackedSteps }
       )
@@ -1476,6 +1512,12 @@ async function attemptAgentLimitFinalization(
       }
     } catch (error) {
       params.signal?.throwIfAborted()
+      if (await appendPendingOwnerMessages(params, modelTranscript)) {
+        modelResult = null
+        currentTranscript = modelTranscript
+        continue
+      }
+
       if (error instanceof AgentModelResponseTimeoutError) {
         return {
           answer: buildResumableAgentAnswer(
@@ -1493,12 +1535,13 @@ async function attemptAgentLimitFinalization(
       continue
     }
     const toolCalls = modelResult?.toolCalls || []
-    const hasValidClarification =
-      toolCalls.length === 1 && Boolean(getClarificationSignal(toolCalls[0]!))
+    const hasValidHandoff = toolCalls.length === 1 && Boolean(
+      getClarificationSignal(toolCalls[0]!) || getCancellationSignal(toolCalls[0]!)
+    )
     if (
       modelResult &&
       !modelResult.isTruncated &&
-      (modelResult.textContent?.trim() || hasValidClarification)
+      (modelResult.textContent?.trim() || hasValidHandoff)
     ) {
       break
     }
@@ -1541,13 +1584,16 @@ async function attemptAgentLimitFinalization(
       : null
   }
 
-  const clarificationSignal =
-    toolCalls.length === 1 ? getClarificationSignal(toolCalls[0]!) : null
-  if (!clarificationSignal) return null
+  const handoffSignal = toolCalls.length === 1
+    ? getClarificationSignal(toolCalls[0]!) || getCancellationSignal(toolCalls[0]!)
+    : null
+  if (!handoffSignal) {
+    return null
+  }
 
   return {
-    answer: clarificationSignal.draft,
-    intent: 'clarification',
+    answer: handoffSignal.draft,
+    intent: handoffSignal.intent,
     messages: [
       {
         role: 'assistant',
@@ -1558,8 +1604,10 @@ async function attemptAgentLimitFinalization(
       {
         role: 'tool',
         toolCallId: toolCalls[0]!.id,
-        toolName: AGENT_CLARIFICATION_TOOL_NAME,
-        content: 'Clarification requested. Wait for the owner response.'
+        toolName: toolCalls[0]!.function.name,
+        content: handoffSignal.intent === 'cancelled'
+          ? 'Task canceled by the owner.'
+          : 'Clarification requested. Wait for the owner response.'
       }
     ]
   }
@@ -1678,7 +1726,22 @@ async function executeAgentToolBatch(
   // in emitted order, after every worker settles (including cancellation).
   const outcomes = await Promise.allSettled(batch.map(async (call) => {
     const history = [...executionHistory]
-    const result = await executeAgentToolCall(call, params, history, trackedSteps)
+    let result: Awaited<ReturnType<typeof executeAgentToolCall>>
+
+    try {
+      result = await executeAgentToolCall(call, params, history, trackedSteps)
+    } catch (error) {
+      params.signal?.throwIfAborted()
+      if (!params.getOwnerMessageSignal?.().aborted) {
+        throw error
+      }
+
+      // Settle every call before applying new input, including interrupted workers.
+      result = {
+        content: 'Tool execution interrupted by new owner instructions. Already-delivered input may have executed; inspect its effects before retrying.',
+        trackedSteps
+      }
+    }
 
     return { call, result, records: history.slice(executionHistory.length) }
   }))
@@ -1710,6 +1773,15 @@ async function executeAgentToolCall(
   trackedSteps: TrackedPlanStep[]
   signal?: FinalResponseSignal
 }> {
+  if (toolCall.function.name === AGENT_CANCELLATION_TOOL_NAME) {
+    const signal = getCancellationSignal(toolCall)
+    if (!signal) {
+      return { content: 'Cancellation rejected: acknowledgment is required.', trackedSteps }
+    }
+
+    return { content: 'Task canceled by the owner.', trackedSteps, signal }
+  }
+
   if (toolCall.function.name === CONNECTION_SETUP_TOOL_NAME) {
     const input = parseToolCallArguments(toolCall.function.arguments) || {}
     if (!getPendingConnectionProviders(executionHistory).includes(String(input['provider']))) {
@@ -2054,6 +2126,32 @@ function parseStringArrayArgument(input: string, key: string): string[] {
       .filter(Boolean)
   } catch {
     return []
+  }
+}
+
+/**
+ * Lets the agent end canceled work through the same protocol as other handoffs.
+ */
+function createCancellationTool(): OpenAITool {
+  return {
+    type: 'function',
+    function: {
+      name: AGENT_CANCELLATION_TOOL_NAME,
+      description:
+        'End the active task when the owner asks to stop or cancel it. Use this instead of a normal final answer so unfinished work is canceled rather than reviewed or saved for automatic continuation. Do not call other tools alongside cancellation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          acknowledgment: {
+            type: 'string',
+            minLength: 1,
+            description: 'Brief cancellation acknowledgment in the owner\'s language.'
+          }
+        },
+        required: ['acknowledgment'],
+        additionalProperties: false
+      }
+    }
   }
 }
 

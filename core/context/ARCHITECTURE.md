@@ -1,6 +1,6 @@
 > Routing and tool execution, client and profile runtimes, Satellite and computer use, agent loop, context, memory, and reliability. Leon-native skills are layered as Skills -> Actions -> Tools -> Functions (-> Binaries).
 # ARCHITECTURE
-- Generated at: 2026-10-06T12:00:04+08:00
+- Generated at: 2026-10-12T19:49:57+08:00
 - Leon-native layer model: `Skills -> Actions -> Tools -> Functions (-> Binaries)`.
 - Routing model: agent mode is the default and runs the continuous agent loop, optionally following selected agent skills; smart mode auto-selects the best path; controlled mode runs deterministic Leon-native skills/actions.
 - Core runtime: `core/brain/brain.ts`, `llm-duties/react-llm-duty.ts`, `tool-manager/toolkit-registry.ts`, `tool-manager/tool-executor.ts`.
@@ -47,6 +47,7 @@
 - Leon has a living personality and a changing mood that influence its tone and behavior.
 - A bounded private self-model/diary is updated after turns, promotes repeated habits into stable behavioral principles, and injects only a compact snapshot into the first agent request.
 - A periodic pulse manager can generate autonomous agent matters from memory, context deltas, and the private self-model, persist them to `PULSE.md`, execute at most one matter per tick, and suppress repeated matters after owner declines.
+- Pulse work uses the owning conversation's ordinary agent turn, transcript, tool execution and answer lifecycle. Owner messages interrupt stale work to redirect or cancel the task; cancellation ends execution without completion review or automatic continuation.
 ## Context Intelligence
 - Leon maintains runtime context files (system, activity, browser, network, workspace, habits, inventory, media, architecture, identity).
 - Leon uses `structured_knowledge.context.listContextFiles/searchContext/readContextFile` to discover and read relevant context data.
