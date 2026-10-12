@@ -23,8 +23,7 @@
     "checks": [
       {
         "source": 0,
-        "field": "directory",
-        "template": "push(\"{value}\")"
+        "field": "directory"
       },
       {
         "source": 0,
@@ -107,16 +106,7 @@
     "checks": [
       {
         "source": 0,
-        "field": "directory",
-        "template": "const app = \"{value}\""
-      },
-      {
-        "source": 0,
-        "value": "path.join(xdgData!, app)"
-      },
-      {
-        "source": 0,
-        "value": "path.join(xdgConfig!, app)"
+        "field": "directory"
       },
       {
         "source": 1,
@@ -274,8 +264,7 @@
       },
       {
         "source": 0,
-        "field": "accountStores.agent",
-        "template": "{value}"
+        "field": "accountStores.agent"
       },
       {
         "source": 2,
@@ -312,8 +301,7 @@
     "checks": [
       {
         "source": 0,
-        "field": "directory",
-        "template": "NodeOS.homedir(), \"{value}\""
+        "field": "directory"
       },
       {
         "source": 1,
@@ -322,7 +310,6 @@
       {
         "source": 2,
         "field": "files.0.0",
-        "template": "{value}",
         "basename": true
       },
       {
