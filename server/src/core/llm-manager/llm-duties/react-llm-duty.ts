@@ -1,5 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { captureContextUsage, type ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
+import { resolveModelContextWindowTokens } from '@/core/llm-manager/model-context-windows'
+import { randomUUID } from 'node:crypto'
+import { AsyncResource } from 'node:async_hooks'
+import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'
 
 import {
   DEFAULT_INIT_PARAMS,
@@ -17,7 +23,6 @@ import {
   CONTEXT_MANAGER,
   SELF_MODEL_MANAGER,
   CONVERSATION_LOGGER,
-  BRAIN,
   SOCKET_SERVER,
   TOOL_CALL_LOGGER,
   POST_TURN_MAINTENANCE_QUEUE
@@ -25,25 +30,28 @@ import {
 import {
   LLMDuties,
   LLMProviders,
-  type LLMPromptAbortReason,
+  InferencePurpose,
+  CompletionFailureKind,
   type AgentToolTranscriptMessage,
   type OpenAITool,
-  type OpenAIToolCall
+  type OpenAIToolCall,
+  type ProviderReasoningItem,
+  type ProviderCompactionContext
 } from '@/core/llm-manager/types'
-import { ContextStateStore } from '@/core/context-manager/context-state-store'
-import type { MessageLog } from '@/types'
-import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
-import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
-import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { isLocalLLMProvider } from '@/core/llm-manager/model-context-windows'
+import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { CONFIG_MANAGER } from '@/config'
-import type { PostTurnMaintenanceTask } from '@/core/post-turn-maintenance-queue'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+
+const TRACE_SAVE_INTERVAL_MS = 1_000
+const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
 
 function getLLMProviderName(): LLMProviders {
-  const provider = CONFIG_STATE.getModelState().getAgentProvider()
+  const provider = CONFIG_STATE.getModelState().getAgentTarget().provider
 
   if (!provider) {
     throw new Error('The agent LLM provider is disabled.')
@@ -55,72 +63,83 @@ function getLLMProviderName(): LLMProviders {
 import {
   AGENT_TEMPERATURE,
   AGENT_INFERENCE_TIMEOUT_MS,
+  AGENT_MODEL_RESPONSE_TIMEOUT_MS,
+  AGENT_MODEL_RESPONSE_MAX_DURATION_MS,
   AGENT_TIMEOUT_MAX_RETRIES,
   CHARS_PER_TOKEN,
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
-  AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS,
-  AGENT_HISTORY_COMPACTION_MAX_TOKENS,
-  AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS,
-  AGENT_HISTORY_COMPACTION_SYSTEM_PROMPT,
-  AGENT_LOCAL_PROVIDER_HISTORY_LOGS,
-  AGENT_LOCAL_PROVIDER_HISTORY_COMPACTION_POINT,
-  AGENT_REMOTE_PROVIDER_HISTORY_LOGS,
-  AGENT_REMOTE_PROVIDER_HISTORY_COMPACTION_POINT,
-  AGENT_MAX_ITERATIONS
-} from './react-llm-duty/constants'
+  AGENT_MAX_ITERATIONS,
+  AGENT_FINISHING_ITERATIONS,
+  AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
+  AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
+  AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT
+} from './react-llm-duty/agent-constants'
 import type {
   ReactLLMDutyParams,
   ExecutionRecord,
-  TrackedPlanStep,
-  PlanStepStatus,
   LLMCaller,
   FinalResponseSignal,
   AgentPhase,
   AgentSkillContext,
   AgentRunProgressEvent
-} from './react-llm-duty/types'
+} from './react-llm-duty/agent-types'
+import { AGENT_PLAN_GUIDANCE } from './react-llm-duty/agent-plan'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
+import { AgentAnswerStream } from './react-llm-duty/agent-answer-stream'
 import {
   getAgentInferencePolicy,
-  formatAgentInferencePolicyForLog
+  formatAgentInferencePolicyForLog,
+  type AgentInferencePolicy
 } from './react-llm-duty/agent-policy'
-import { runToolExecution } from './react-llm-duty/tool-execution'
+import { parseToolCallArguments } from './react-llm-duty/agent-utils'
+import {
+  runToolExecution,
+  getToolDisplayContext,
+  emitToolExecutionInputToWebApp,
+  emitToolExecutionOutputToWebApp
+} from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
+  AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
+  AGENT_COMPLETION_REVIEW_SCHEMA,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
-  buildAgentConvergenceSystemPrompt,
+  AgentModelResponseTimeoutError,
+  buildAgentProgressiveGuidanceSystemPrompt,
+  buildAgentConnectionGuidance,
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
+  evaluateAgentToolkitPreloadCost,
+  findHighConfidenceAgentToolkitId,
   runAgentLoop
 } from './react-llm-duty/agent-loop'
+import type { AgentCallableFunction } from './react-llm-duty/agent-loop'
 import { buildToolkitContextSection } from './react-llm-duty/agent-helpers'
-import {
-  buildCompactedHistoryMessage,
-  findMessageSequenceStart,
-  formatHistoryForCompaction,
-  hasHistoryCompactionContent,
-  normalizeHistoryCompactionSummary
-} from './react-llm-duty/history-compaction'
 import {
   type AccumulatedLLMMetricsState,
   type FinalAnswerMetricsSnapshot,
   type RawPhaseMetrics,
   deriveLLMMetrics,
   observeCompletionMetrics
-} from './react-llm-duty/metrics'
+} from './react-llm-duty/agent-metrics'
 import {
   createAgentLoopContinuationState,
+  buildAgentContinuationTranscript,
   isAgentLoopContinuationStateValid,
+  type AgentContinuityCheckpointInput,
   type AgentLoopContinuationState
 } from './react-llm-duty/agent-loop-continuation'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import {
   prepareAgentModelContext,
   resolveAgentContextCompactionTriggerTokens,
   resolveAgentContextRecoveryTriggerTokens,
   resolveAgentMaxOutputTokens
 } from './react-llm-duty/agent-context-budget'
+import { AgentHistoryManager } from './react-llm-duty/agent-history-manager'
+import { AgentResponseTraceCollector } from './react-llm-duty/agent-response-trace-collector'
+import { AgentSessionState } from './react-llm-duty/agent-session-state'
 
 const AGENT_PROMPT_CACHE_KEY = 'leon-agent'
 const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
@@ -129,18 +148,6 @@ const TRUNCATED_COMPLETION_FINISH_REASONS = new Set([
   'max_output_tokens',
   'incomplete'
 ])
-
-const AGENT_CONTINUATION_STATE_FILENAME = '.agent-loop-continuation-state.json'
-// Preserve existing rolling summaries across the loop migration.
-const AGENT_HISTORY_COMPACTION_STATE_FILENAME =
-  '.react-history-compaction-state.json'
-const AGENT_SESSION_STATE_FILENAME_SEPARATOR = '--'
-
-type AgentHistoryCompactionScope = 'local' | 'remote'
-
-interface PreparedAgentHistory {
-  messageLogs: MessageLog[]
-}
 
 function emitAgentSkillActivityToWebApp(
   agentSkillContext: AgentSkillContext
@@ -166,50 +173,22 @@ function emitAgentSkillActivityToWebApp(
   })
 }
 
-interface AgentHistoryCompactionProviderState {
-  summary: string | null
-  summarySentAt: number | null
-  tail: MessageLog[]
-  newMessagesSinceCompaction: number
-}
-
-interface AgentHistoryCompactionState {
-  version: 1
-  local: AgentHistoryCompactionProviderState
-  remote: AgentHistoryCompactionProviderState
-}
-
-interface AgentHistoryCompactionConfig {
-  historyLimit: number
-  compactionBatchSize: number
-}
-
-function createEmptyHistoryCompactionProviderState(): AgentHistoryCompactionProviderState {
-  return {
-    summary: null,
-    summarySentAt: null,
-    tail: [],
-    newMessagesSinceCompaction: 0
-  }
-}
-
-const AGENT_HISTORY_COMPACTION_STATE_FALLBACK: AgentHistoryCompactionState = {
-  version: 1,
-  local: createEmptyHistoryCompactionProviderState(),
-  remote: createEmptyHistoryCompactionProviderState()
-}
-
 export class ReActLLMDuty extends LLMDuty {
   private static instance: ReActLLMDuty
-  private static readonly continuationStateStores =
-    new Map<string, ContextStateStore<AgentLoopContinuationState | null>>()
-  private static readonly historyCompactionStateStores =
-    new Map<string, ContextStateStore<AgentHistoryCompactionState>>()
+  private static readonly sessionState = new AgentSessionState()
+  private static readonly historyManager = new AgentHistoryManager(
+    'Agent LLM Duty',
+    ReActLLMDuty.sessionState
+  )
   protected systemPrompt: LLMDutyParams['systemPrompt'] = null
   protected readonly name = 'Agent LLM Duty'
   protected input: LLMDutyParams['input'] = null
   private completionCount = 0
+  private continuationSummaryFailed = false
+  private automaticCompactionFailed = false
   private totalInputTokens = 0
+  private contextUsage: ContextUsageMetrics | undefined
+  private usageAccounting: UsageAccounting | undefined
   private totalOutputTokens = 0
   private totalVisibleOutputTokens = 0
   private totalOutputChars = 0
@@ -221,15 +200,34 @@ export class ReActLLMDuty extends LLMDuty {
   private finalAnswerMetrics: FinalAnswerMetricsSnapshot | null = null
 
   private executionStartedAt = 0
+  private firstOutputAt: number | null = null
+  private readonly streamedToolCalls = new Map<string, {
+    callable: AgentCallableFunction
+    groupId: string
+    input: string
+  }>()
   private hasExplicitMemoryWrite = false
-  private reasoningGenerationId: string | null = null
+  private hasOwnerMessages = false
   private hasFinalizedAnswer = false
+  private readonly answerStream = new AgentAnswerStream((payload) => {
+    if (payload.token) {
+      this.firstOutputAt ??= Date.now()
+    }
+    SOCKET_SERVER.emitToChatClients('llm-token', payload)
+  })
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
+  private readonly responseTraceCollector = new AgentResponseTraceCollector()
+  private traceSaveTimer: ReturnType<typeof setTimeout> | null = null
+  private persistResponseTrace: (() => Promise<void>) | null = null
   private activeAgentSkillContext: AgentSkillContext | null
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
+  private readonly signal: AbortSignal | undefined
+  private getOwnerMessageSignal: (() => AbortSignal) | undefined
+  private agentTurnSignal: AbortSignal | undefined
+  private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
 
@@ -244,6 +242,8 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     this.input = params.input
+    this.files = params.files
+    this.signal = params.signal
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
@@ -252,7 +252,8 @@ export class ReActLLMDuty extends LLMDuty {
     this.systemPrompt = this.appendAdditionalInstructions(
       PERSONA.getCompactDutySystemPrompt(AGENT_SYSTEM_PROMPT, {
         includePersonality: false,
-        includeMood: false
+        includeMood: false,
+        cacheFriendly: true
       })
     )
   }
@@ -260,6 +261,7 @@ export class ReActLLMDuty extends LLMDuty {
   public async init(
     params: LLMDutyInitParams = DEFAULT_INIT_PARAMS
   ): Promise<void> {
+    this.signal?.throwIfAborted()
     if (!TOOLKIT_REGISTRY.isLoaded) {
       await TOOLKIT_REGISTRY.load()
     }
@@ -270,12 +272,18 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   public async execute(): Promise<LLMDutyResult | null> {
+    this.signal?.throwIfAborted()
     LogHelper.title(this.name)
     LogHelper.info('Executing...')
 
     this.executionStartedAt = Date.now()
+    this.firstOutputAt = null
     this.completionCount = 0
+    this.continuationSummaryFailed = false
+    this.automaticCompactionFailed = false
     this.totalInputTokens = 0
+    this.contextUsage = undefined
+    this.usageAccounting = undefined
     this.totalOutputTokens = 0
     this.totalVisibleOutputTokens = 0
     this.totalOutputChars = 0
@@ -286,17 +294,39 @@ export class ReActLLMDuty extends LLMDuty {
     }
     this.finalAnswerMetrics = null
     this.hasExplicitMemoryWrite = false
-    this.reasoningGenerationId = StringHelper.random(6, { onlyLetters: true })
+    this.hasOwnerMessages = false
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
-    this.onProgressEvent?.({
+    const traceId = randomUUID()
+    this.responseTraceCollector.reset(traceId)
+    // Capture the session and profile-bound writer before any deferred saves.
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    const upsert = CONVERSATION_LOGGER.upsert
+    this.persistResponseTrace = (): Promise<void> => upsert({
+      who: 'leon',
+      message: '',
+      messageId: traceId,
+      isAddedToHistory: false,
+      agentResponseTrace: this.responseTraceCollector.snapshot({})
+    }, { sessionId })
+    this.reportProgressEvent({
       type: 'reasoning_summary',
       summary: 'Understanding your request'
     })
 
+    // Background duties without a bound conversation must not consume messages
+    // addressed to the profile's currently selected chat session.
+    const activeSessionId = getActiveConversationSessionId()
+    const agentTurn = activeSessionId
+      ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId)
+      : null
+    this.getOwnerMessageSignal = agentTurn?.getOwnerMessageSignal
+    this.agentTurnSignal = agentTurn?.signal
+
     try {
-      const { messageLogs: history } = await this.loadPreparedHistory()
+      const { messageLogs: history } =
+        await ReActLLMDuty.historyManager.loadPreparedHistory()
 
       const ownerInput = this.getInputAsText(this.input)
       const continuation = this.consumeAgentLoopContinuation()
@@ -309,6 +339,15 @@ export class ReActLLMDuty extends LLMDuty {
       const executionHistory: ExecutionRecord[] = []
       let emittedAgentSkillActivityId: string | null = null
       const caller = this.createLLMCaller()
+      if (continuation?.activeSkillId) {
+        const skill = await SkillDomainHelper.getAgentSkillExecutionContext(
+          continuation.activeSkillId
+        )
+        if (!skill) {
+          throw new Error('The active Agent Skill is no longer available.')
+        }
+        caller.setAgentSkillContext(skill)
+      }
       const emitActiveAgentSkillActivity = (): void => {
         const activeAgentSkillContext = caller.agentSkillContext
 
@@ -335,7 +374,7 @@ export class ReActLLMDuty extends LLMDuty {
         const dutyResult = this.makeDutyResult(answer)
         POST_TURN_MAINTENANCE_QUEUE.enqueueIfNeeded(
           'agent history compaction',
-          () => this.prepareHistoryCompactionAfterAnswer(
+          () => ReActLLMDuty.historyManager.prepareHistoryCompactionAfterAnswer(
             planWidgetIdValue,
             trackedSteps
           )
@@ -344,11 +383,59 @@ export class ReActLLMDuty extends LLMDuty {
         return dutyResult
       }
 
-      const catalog = buildAgentToolCatalog(
+      const progressiveToolkitLoading =
+        CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
+      const matchedToolkitId =
+        !continuation &&
+        !this.activeForcedToolName &&
+        !caller.agentSkillContext &&
+        progressiveToolkitLoading
+          ? findHighConfidenceAgentToolkitId(originalInput)
+          : null
+      let catalog = buildAgentToolCatalog(
         this.activeForcedToolName,
         continuation?.loadedToolkitIds,
-        CONFIG_MANAGER.getConfig().runtime.progressive_toolkit_loading
+        progressiveToolkitLoading,
+        continuation?.loadedFunctionNames,
+        continuation?.loadedToolNames
       )
+
+      let preloadedToolkitContext = ''
+      if (matchedToolkitId) {
+        const candidateCatalog = buildAgentToolCatalog(
+          this.activeForcedToolName,
+          [matchedToolkitId],
+          progressiveToolkitLoading
+        )
+        const candidateToolkitContext = [
+          `<preloaded_toolkit toolkit_id="${matchedToolkitId}">`,
+          'Use available function schemas directly. For functions still listed in load_toolkit, select their schemas before constructing calls.',
+          buildToolkitContextSection(caller, matchedToolkitId),
+          '</preloaded_toolkit>'
+        ].join('\n')
+        const cost = evaluateAgentToolkitPreloadCost(
+          catalog,
+          candidateCatalog,
+          candidateToolkitContext,
+          this.estimateTokensFromText.bind(this)
+        )
+
+        if (
+          cost.shouldPreload &&
+          candidateCatalog.loadedToolkitIds.has(matchedToolkitId)
+        ) {
+          catalog = candidateCatalog
+          preloadedToolkitContext = candidateToolkitContext
+          LogHelper.info(
+            `Preloaded high-confidence agent toolkit: ${matchedToolkitId} | added_tokens=${cost.additionalPayloadTokens} | routing_budget=${cost.normalRoutingPayloadTokens}`
+          )
+        } else {
+          LogHelper.info(
+            `Skipped high-confidence agent toolkit preload: ${matchedToolkitId} | added_tokens=${cost.additionalPayloadTokens} | routing_budget=${cost.normalRoutingPayloadTokens}`
+          )
+        }
+      }
+
       if (catalog.tools.length === 0) {
         return finalize(
           `The tool "${this.activeForcedToolName}" is not available.`,
@@ -361,7 +448,8 @@ export class ReActLLMDuty extends LLMDuty {
           AGENT_SYSTEM_PROMPT,
           {
             includePersonality: true,
-            includeMood: true
+            includeMood: true,
+            cacheFriendly: true
           }
         )
       )
@@ -370,19 +458,51 @@ export class ReActLLMDuty extends LLMDuty {
       const transcript = continuation
         ? structuredClone(continuation.transcript)
         : buildAgentTranscriptHistory(history, ownerInput)
+
       if (continuation) {
+        // Refresh setup facts after owner interaction without putting credentials in the transcript.
+        const connectionProviders = continuation.executionHistory.flatMap(
+          (execution) => {
+            const observation = parseToolCallArguments(execution.observation)
+            const providers = observation?.['required_connections']
+
+            return observation?.['connection_required'] === true &&
+              Array.isArray(providers)
+              ? providers.filter(
+                  (provider): provider is string => typeof provider === 'string'
+                )
+              : []
+          }
+        )
+        const connectionContext =
+          connectionProviders.length > 0
+            ? [
+                '<current_connection_context>',
+                JSON.stringify(await getConnectionRequirements(connectionProviders)),
+                '</current_connection_context>'
+              ].join('\n')
+            : ''
+
         transcript.push({
           role: 'user',
+          ...(this.files?.length ? { files: this.files } : {}),
           content: [
             '<clarification_response>',
             ownerInput,
-            '</clarification_response>'
-          ].join('\n')
+            '</clarification_response>',
+            connectionContext
+          ]
+            .filter(Boolean)
+            .join('\n')
         })
       } else {
+        const agentRequest = await this.buildAgentRequest(caller, originalInput)
         transcript.push({
           role: 'user',
-          content: await this.buildAgentRequest(caller, originalInput)
+          ...(this.files?.length ? { files: this.files } : {}),
+          content: [agentRequest, preloadedToolkitContext]
+            .filter(Boolean)
+            .join('\n\n')
         })
       }
 
@@ -395,9 +515,30 @@ export class ReActLLMDuty extends LLMDuty {
       )
 
       const result = await runAgentLoop({
+        ...(agentTurn ? {
+          drainOwnerMessages: agentTurn.drainOwnerMessages,
+          getOwnerMessageSignal: agentTurn.getOwnerMessageSignal
+        } : {}),
+        onOwnerMessagesApplied: () => {
+          this.hasOwnerMessages = true
+          this.answerStream.discard()
+          this.closeStreamedToolCalls()
+        },
+        ...(this.signal ? { signal: this.signal } : {}),
         transcript,
         catalog,
-        maxIterations: AGENT_MAX_ITERATIONS,
+        maxIterations: CONFIG_MANAGER.getConfig().runtime.agent_max_iterations ?? AGENT_MAX_ITERATIONS,
+        finishingIterations: AGENT_FINISHING_ITERATIONS,
+        prepareContinuation: (state) =>
+          this.prepareContinuation(state.transcript, {
+            originalInput,
+            trackedSteps: state.trackedSteps,
+            executionHistory: state.executionHistory,
+            loadedToolkitIds: catalog.loadedToolkitIds,
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
+            activeSkillId: caller.agentSkillContext?.id ?? null
+          }),
         ...(continuation
           ? {
               initialExecutionHistory: continuation.executionHistory,
@@ -406,16 +547,68 @@ export class ReActLLMDuty extends LLMDuty {
           : {}),
         allowDirectAnswerHandoff:
           Boolean(this.activeForcedToolName) || this.allowDirectAnswerHandoff,
-        callModel: async (messages, tools, options) => {
-          // Intermediate text is buffered until a final text-only response.
+        callModel: async (messages, tools, options, state) => {
+          // Loaded guidance and skills must survive compaction and pauses.
+          const activeSkill = caller.agentSkillContext
+          const progressiveGuidance =
+            buildAgentProgressiveGuidanceSystemPrompt(catalog)
+
+          // Reviewers need task-specific constraints and evidence, not the acting
+          // agent's persona and general workflow. Keep the clock for relative
+          // dates and preserve trusted integration guidance.
+          const baseSystemPrompt = options.isCompletionReview
+            ? this.appendAdditionalInstructions(PERSONA.getContextInfo())
+            : agentSystemPrompt
+          const prompt = [
+            baseSystemPrompt,
+            progressiveGuidance,
+            buildAgentConnectionGuidance(state.executionHistory),
+            ...(state.trackedSteps.length ? [
+              AGENT_PLAN_GUIDANCE,
+              '<current_plan>',
+              JSON.stringify(state.trackedSteps),
+              'This is the latest reported plan, not proof of completion. Reconcile it with tool evidence as milestones change; use collection scope, coverage and item outcomes to choose remaining work. Do not reopen verified items or infer missing items in an observed empty range.',
+              ...(options.requiresPlanReconciliation ? [
+                'Several operational turns have passed without an accepted plan update. Compare this plan with existing tool evidence now. Use update_plan to record verified milestones and item outcomes, the actual active step, and unresolved mappings or blockers. Do not infer completion from successful input, repeat completed work, or mark work complete merely to satisfy this reminder. If the same step is genuinely still active, retain it and briefly record why; ask the owner only for missing information or access.'
+              ] : []),
+              '</current_plan>'
+            ] : []),
+            ...(activeSkill
+              ? [
+                  '<active_agent_skill>',
+                  `Name: ${activeSkill.name}`,
+                  `Path: ${activeSkill.skillPath}`,
+                  activeSkill.instructions,
+                  '</active_agent_skill>'
+                ]
+              : [])
+          ]
+            .filter(Boolean)
+            .join('\n')
+
           return this.callAgentModel(
             messages,
-            agentSystemPrompt,
+            prompt,
             tools,
-            options
+            options,
+            {
+              originalInput,
+              trackedSteps: state.trackedSteps,
+              executionHistory: state.executionHistory,
+              loadedToolkitIds: catalog.loadedToolkitIds,
+              loadedToolNames: catalog.loadedToolNames,
+              loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
+              activeSkillId: caller.agentSkillContext?.id ?? null
+            },
+            catalog.functionsByToolName
           )
         },
-        executeFunction: async (callable, toolInput, toolCallTitle) => {
+        executeFunction: async (callable, toolInput, toolCallTitle, toolCallId) => {
+          const preview = toolCallId ? this.streamedToolCalls.get(toolCallId) : undefined
+          if (toolCallId) {
+            this.streamedToolCalls.delete(toolCallId)
+          }
+
           const toolResult = await runToolExecution(
             callable.toolkitId,
             callable.toolId,
@@ -426,7 +619,7 @@ export class ReActLLMDuty extends LLMDuty {
             toolCallTitle,
             (event) => {
               const agentSkill = caller.agentSkillContext
-              this.onProgressEvent?.({
+              this.reportProgressEvent({
                 type: 'tool_call',
                 toolCall: {
                   ...event,
@@ -438,15 +631,13 @@ export class ReActLLMDuty extends LLMDuty {
                     : {})
                 }
               })
-            }
+            },
+            this.getExecutionSignal(),
+            (message) => this.emitProgress(message),
+            preview?.groupId
           )
 
-          return {
-            execution: toolResult.execution,
-            ...(toolResult.handoffSignal
-              ? { handoffSignal: toolResult.handoffSignal }
-              : {})
-          }
+          return toolResult
         },
         loadToolkitContext: (toolkitId) =>
           buildToolkitContextSection(caller, toolkitId),
@@ -458,6 +649,11 @@ export class ReActLLMDuty extends LLMDuty {
           caller.setAgentSkillContext(context)
           emitActiveAgentSkillActivity()
         },
+        onProgressMessage: async (message) => {
+          // Existing hosts display reasoning_summary as a public activity summary.
+          this.reportProgressEvent({ type: 'reasoning_summary', summary: message })
+          await this.emitProgress(message, this.answerStream.finish())
+        },
         onPlanUpdated: (steps) => {
           trackedSteps = steps.map((step) => ({ ...step }))
           emitPlanWidget(
@@ -468,7 +664,7 @@ export class ReActLLMDuty extends LLMDuty {
           )
           hasPlanningWidget = true
           for (const [index, step] of trackedSteps.entries()) {
-            this.onProgressEvent?.({
+            this.reportProgressEvent({
               type: 'plan_step',
               step: {
                 id: `plan-${index + 1}`,
@@ -481,7 +677,7 @@ export class ReActLLMDuty extends LLMDuty {
             (step) => step.status === 'in_progress'
           )
           if (activeStep) {
-            this.onProgressEvent?.({
+            this.reportProgressEvent({
               type: 'reasoning_summary',
               summary: activeStep.label
             })
@@ -491,13 +687,17 @@ export class ReActLLMDuty extends LLMDuty {
 
       executionHistory.push(...result.executionHistory)
       trackedSteps = result.trackedSteps.map((step) => ({ ...step }))
+      if (result.intent === 'cancelled') {
+        agentTurn?.cancelExecutions()
+      }
+
       this.hasExplicitMemoryWrite = executionHistory.some(
         (execution) =>
           execution.status === 'success' &&
           execution.function === 'structured_knowledge.memory.write'
       )
 
-      if (result.intent === 'clarification') {
+      if (result.intent !== 'answer' && result.intent !== 'cancelled') {
         this.saveAgentLoopContinuation(
           createAgentLoopContinuationState({
             originalInput,
@@ -505,578 +705,39 @@ export class ReActLLMDuty extends LLMDuty {
             planWidgetId: planWidgetIdValue,
             trackedSteps,
             executionHistory,
-            loadedToolkitIds: catalog.loadedToolkitIds
+            loadedToolkitIds: catalog.loadedToolkitIds,
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
+            // Persist pause state directly; resumed inference compacts it when needed.
+            transcript: result.transcript,
+            activeSkillId: caller.agentSkillContext?.id ?? null
           })
         )
       }
 
+      this.signal?.throwIfAborted()
       return finalize(result.answer, result.intent)
     } catch (error) {
+      this.answerStream.discard()
+      this.responseTraceCollector.interrupt()
+      this.signal?.throwIfAborted()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
-    }
-  }
+    } finally {
+      agentTurn?.close()
+      this.getOwnerMessageSignal = undefined
+      this.agentTurnSignal = undefined
+      this.closeStreamedToolCalls()
 
-  private async loadPreparedHistory(): Promise<PreparedAgentHistory> {
-    const historyConfig = this.getHistoryCompactionConfig()
-    const historyScope = this.getHistoryCompactionScope()
-    const conversationLogs = this.getHistoryEligibleConversationLogs(
-      await CONVERSATION_LOGGER.loadAll()
-    )
-    const currentState = this.loadHistoryCompactionProviderState(historyScope)
-    const synchronizedState = this.synchronizeHistoryCompactionState(
-      conversationLogs,
-      currentState
-    )
-
-    if (synchronizedState.shouldPersist) {
-      this.saveHistoryCompactionProviderState(historyScope, synchronizedState.state)
-    }
-
-    return this.buildPreparedHistory(
-      this.buildHistoryForCurrentTurn(
-        conversationLogs,
-        synchronizedState.state,
-        historyConfig
-      )
-    )
-  }
-
-  private getHistoryCompactionScope(): AgentHistoryCompactionScope {
-    return isLocalLLMProvider(getLLMProviderName())
-      ? 'local'
-      : 'remote'
-  }
-
-  private getHistoryCompactionConfig(): AgentHistoryCompactionConfig {
-    if (isLocalLLMProvider(getLLMProviderName())) {
-      return {
-        historyLimit: AGENT_LOCAL_PROVIDER_HISTORY_LOGS,
-        compactionBatchSize: AGENT_LOCAL_PROVIDER_HISTORY_COMPACTION_POINT
+      if (this.traceSaveTimer) {
+        clearTimeout(this.traceSaveTimer)
+        this.traceSaveTimer = null
       }
+      // Drain snapshots before the caller persists the final answer, including aborts.
+      await this.persistResponseTrace?.()
+      this.persistResponseTrace = null
     }
-
-    return {
-      historyLimit: AGENT_REMOTE_PROVIDER_HISTORY_LOGS,
-      compactionBatchSize: AGENT_REMOTE_PROVIDER_HISTORY_COMPACTION_POINT
-    }
-  }
-
-  private getSessionStateFilename(filename: string): string {
-    const sessionId = getActiveConversationSessionId()
-
-    if (!sessionId) {
-      return filename
-    }
-
-    return `${filename}${AGENT_SESSION_STATE_FILENAME_SEPARATOR}${sessionId}`
-  }
-
-  private getContinuationStateStore(): ContextStateStore<AgentLoopContinuationState | null> {
-    const filename = this.getSessionStateFilename(AGENT_CONTINUATION_STATE_FILENAME)
-    const storeKey = `${getActiveProfileName()}:${filename}`
-    const existingStore = ReActLLMDuty.continuationStateStores.get(storeKey)
-
-    if (existingStore) {
-      return existingStore
-    }
-
-    const store = new ContextStateStore<AgentLoopContinuationState | null>(
-      filename,
-      null
-    )
-
-    ReActLLMDuty.continuationStateStores.set(storeKey, store)
-
-    return store
-  }
-
-  private getHistoryCompactionStateStore(): ContextStateStore<AgentHistoryCompactionState> {
-    const filename = this.getSessionStateFilename(
-      AGENT_HISTORY_COMPACTION_STATE_FILENAME
-    )
-    const storeKey = `${getActiveProfileName()}:${filename}`
-    const existingStore = ReActLLMDuty.historyCompactionStateStores.get(storeKey)
-
-    if (existingStore) {
-      return existingStore
-    }
-
-    const store = new ContextStateStore<AgentHistoryCompactionState>(
-      filename,
-      AGENT_HISTORY_COMPACTION_STATE_FALLBACK
-    )
-
-    ReActLLMDuty.historyCompactionStateStores.set(storeKey, store)
-
-    return store
-  }
-
-  private getHistoryEligibleConversationLogs(
-    conversationLogs: MessageLog[]
-  ): MessageLog[] {
-    return conversationLogs.filter(
-      (conversationLog) => ConversationHistoryHelper.isAddedToHistory(conversationLog)
-    )
-  }
-
-  private loadHistoryCompactionProviderState(
-    scope: AgentHistoryCompactionScope
-  ): AgentHistoryCompactionProviderState {
-    const persistedState = this.getHistoryCompactionStateStore().load()
-    return this.normalizeHistoryCompactionProviderState(persistedState?.[scope])
-  }
-
-  private normalizeHistoryCompactionProviderState(
-    value: unknown
-  ): AgentHistoryCompactionProviderState {
-    const record =
-      value && typeof value === 'object'
-        ? (value as Record<string, unknown>)
-        : null
-
-    return {
-      summary: normalizeHistoryCompactionSummary(record?.['summary']),
-      summarySentAt:
-        typeof record?.['summarySentAt'] === 'number'
-          ? record['summarySentAt']
-          : null,
-      newMessagesSinceCompaction:
-        typeof record?.['newMessagesSinceCompaction'] === 'number' &&
-        Number.isFinite(record['newMessagesSinceCompaction']) &&
-        record['newMessagesSinceCompaction'] >= 0
-          ? Math.floor(record['newMessagesSinceCompaction'])
-          : 0,
-      tail: this.normalizeMessageLogs(record?.['tail'])
-    }
-  }
-
-  private saveHistoryCompactionProviderState(
-    scope: AgentHistoryCompactionScope,
-    providerState: AgentHistoryCompactionProviderState
-  ): void {
-    const persistedState = this.getHistoryCompactionStateStore().load()
-    const nextState: AgentHistoryCompactionState = {
-      version: 1,
-      local:
-        scope === 'local'
-          ? providerState
-          : this.normalizeHistoryCompactionProviderState(persistedState?.local),
-      remote:
-        scope === 'remote'
-          ? providerState
-          : this.normalizeHistoryCompactionProviderState(persistedState?.remote)
-    }
-
-    this.getHistoryCompactionStateStore().save(nextState)
-  }
-
-  private normalizeMessageLogs(value: unknown): MessageLog[] {
-    if (!Array.isArray(value)) {
-      return []
-    }
-
-    return value.flatMap((item) => {
-      const record =
-        item && typeof item === 'object'
-          ? (item as Record<string, unknown>)
-          : null
-
-      if (
-        !record ||
-        (record['who'] !== 'owner' && record['who'] !== 'leon') ||
-        typeof record['sentAt'] !== 'number' ||
-        typeof record['message'] !== 'string'
-      ) {
-        return []
-      }
-
-      return [
-        {
-          who: record['who'],
-          sentAt: record['sentAt'],
-          message: record['message'],
-          isAddedToHistory:
-            typeof record['isAddedToHistory'] === 'boolean'
-              ? record['isAddedToHistory']
-              : true
-        }
-      ]
-    })
-  }
-
-  private hasStoredHistoryCompactionState(
-    state: AgentHistoryCompactionProviderState
-  ): boolean {
-    return Boolean(
-      hasHistoryCompactionContent(state.summary) ||
-        state.summarySentAt !== null ||
-        state.tail.length > 0 ||
-        state.newMessagesSinceCompaction > 0
-    )
-  }
-
-  private areMessageLogsEqual(left: MessageLog[], right: MessageLog[]): boolean {
-    if (left.length !== right.length) {
-      return false
-    }
-
-    return left.every((message, index) => {
-      const otherMessage = right[index]
-
-      return (
-        otherMessage &&
-        message.who === otherMessage.who &&
-        message.sentAt === otherMessage.sentAt &&
-        message.message === otherMessage.message
-      )
-    })
-  }
-
-  private areHistoryCompactionStatesEqual(
-    left: AgentHistoryCompactionProviderState,
-    right: AgentHistoryCompactionProviderState
-  ): boolean {
-    return (
-      left.summary === right.summary &&
-      left.summarySentAt === right.summarySentAt &&
-      left.newMessagesSinceCompaction === right.newMessagesSinceCompaction &&
-      this.areMessageLogsEqual(left.tail, right.tail)
-    )
-  }
-
-  private rebuildHistoryCompactionStateFromBoundary(
-    conversationLogs: MessageLog[],
-    currentState: AgentHistoryCompactionProviderState
-  ): AgentHistoryCompactionProviderState {
-    if (
-      !hasHistoryCompactionContent(currentState.summary) ||
-      currentState.summarySentAt === null
-    ) {
-      return createEmptyHistoryCompactionProviderState()
-    }
-
-    const rebuiltTail = conversationLogs.filter(
-      (conversationLog) => conversationLog.sentAt > currentState.summarySentAt!
-    )
-
-    return {
-      summary: currentState.summary,
-      summarySentAt: currentState.summarySentAt,
-      tail: rebuiltTail,
-      newMessagesSinceCompaction: rebuiltTail.length
-    }
-  }
-
-  private synchronizeHistoryCompactionState(
-    conversationLogs: MessageLog[],
-    currentState: AgentHistoryCompactionProviderState
-  ): {
-    state: AgentHistoryCompactionProviderState
-    shouldPersist: boolean
-  } {
-    const emptyState = createEmptyHistoryCompactionProviderState()
-
-    if (!hasHistoryCompactionContent(currentState.summary)) {
-      return {
-        state: emptyState,
-        shouldPersist:
-          this.hasStoredHistoryCompactionState(currentState) &&
-          !this.areHistoryCompactionStatesEqual(currentState, emptyState)
-      }
-    }
-
-    if (currentState.tail.length === 0) {
-      const rebuiltState = this.rebuildHistoryCompactionStateFromBoundary(
-        conversationLogs,
-        currentState
-      )
-
-      return {
-        state: rebuiltState,
-        shouldPersist: !this.areHistoryCompactionStatesEqual(
-          currentState,
-          rebuiltState
-        )
-      }
-    }
-
-    const tailStartIndex = findMessageSequenceStart(conversationLogs, currentState.tail)
-    if (tailStartIndex === -1) {
-      const rebuiltState = this.rebuildHistoryCompactionStateFromBoundary(
-        conversationLogs,
-        currentState
-      )
-
-      LogHelper.title(this.name)
-      LogHelper.debug(
-        'History compaction tail mismatch; rebuilding from compaction boundary'
-      )
-
-      return {
-        state: rebuiltState,
-        shouldPersist: !this.areHistoryCompactionStatesEqual(
-          currentState,
-          rebuiltState
-        )
-      }
-    }
-
-    const synchronizedState: AgentHistoryCompactionProviderState = {
-      summary: currentState.summary,
-      summarySentAt: currentState.summarySentAt,
-      tail: conversationLogs.slice(tailStartIndex),
-      newMessagesSinceCompaction:
-        currentState.newMessagesSinceCompaction +
-        (conversationLogs.length - tailStartIndex - currentState.tail.length)
-    }
-
-    return {
-      state: synchronizedState,
-      shouldPersist: !this.areHistoryCompactionStatesEqual(
-        currentState,
-        synchronizedState
-      )
-    }
-  }
-
-  private buildHistoryForCurrentTurn(
-    conversationLogs: MessageLog[],
-    state: AgentHistoryCompactionProviderState,
-    config: AgentHistoryCompactionConfig
-  ): MessageLog[] {
-    if (hasHistoryCompactionContent(state.summary)) {
-      return this.buildHistoryFromCompactionState({
-        ...state,
-        tail: state.tail.slice(-(config.historyLimit - 1))
-      })
-    }
-
-    return conversationLogs.slice(-config.historyLimit)
-  }
-
-  private getStateForPostAnswerCompaction(
-    conversationLogs: MessageLog[],
-    synchronizedState: AgentHistoryCompactionProviderState
-  ): AgentHistoryCompactionProviderState {
-    if (hasHistoryCompactionContent(synchronizedState.summary)) {
-      return synchronizedState
-    }
-
-    return {
-      summary: null,
-      summarySentAt: null,
-      tail: [...conversationLogs],
-      newMessagesSinceCompaction: conversationLogs.length
-    }
-  }
-
-  private async rollHistoryCompactionState(
-    state: AgentHistoryCompactionProviderState,
-    config: AgentHistoryCompactionConfig
-  ): Promise<AgentHistoryCompactionProviderState | null> {
-    const hadCompactedSummary = hasHistoryCompactionContent(state.summary)
-    let nextSummary = state.summary
-    let nextSummarySentAt = state.summarySentAt
-    let nextTail = [...state.tail]
-    let nextNewMessagesSinceCompaction = state.newMessagesSinceCompaction
-    let compactedBatches = 0
-    let compactedMessages = 0
-
-    while (
-      hadCompactedSummary
-        ? nextNewMessagesSinceCompaction >= config.compactionBatchSize
-        : nextTail.length >= config.historyLimit
-    ) {
-      const batch = nextTail.slice(0, config.compactionBatchSize)
-
-      LogHelper.title(this.name)
-      LogHelper.debug(
-        `History compaction triggering: batch=${batch.length} tail=${nextTail.length} threshold=${
-          hadCompactedSummary
-            ? config.compactionBatchSize
-            : config.historyLimit
-        } new_messages=${nextNewMessagesSinceCompaction}`
-      )
-
-      const compactedSummary = await this.compactHistoryLogs(batch, nextSummary)
-
-      if (!compactedSummary || !hasHistoryCompactionContent(compactedSummary)) {
-        return null
-      }
-
-      nextSummary = compactedSummary
-      nextSummarySentAt =
-        batch[batch.length - 1]?.sentAt ?? nextSummarySentAt ?? Date.now()
-      nextTail = nextTail.slice(config.compactionBatchSize)
-      if (hadCompactedSummary) {
-        nextNewMessagesSinceCompaction = Math.max(
-          0,
-          nextNewMessagesSinceCompaction - batch.length
-        )
-      }
-      compactedBatches += 1
-      compactedMessages += batch.length
-    }
-
-    if (compactedBatches > 0) {
-      LogHelper.title(this.name)
-      LogHelper.debug(
-        `History compaction advanced: batches=${compactedBatches} absorbed=${compactedMessages} remaining=${nextTail.length}`
-      )
-    }
-
-    return {
-      summary: nextSummary,
-      summarySentAt: nextSummarySentAt,
-      tail: nextTail,
-      newMessagesSinceCompaction: hadCompactedSummary
-        ? nextNewMessagesSinceCompaction
-        : 0
-    }
-  }
-
-  private async prepareHistoryCompactionAfterAnswer(
-    planWidgetId: string,
-    trackedSteps: TrackedPlanStep[]
-  ): Promise<PostTurnMaintenanceTask | null> {
-    const historyConfig = this.getHistoryCompactionConfig()
-    const historyScope = this.getHistoryCompactionScope()
-    const conversationLogs = this.getHistoryEligibleConversationLogs(
-      await CONVERSATION_LOGGER.loadAll()
-    )
-    const currentState = this.loadHistoryCompactionProviderState(historyScope)
-    const synchronizedState = this.synchronizeHistoryCompactionState(
-      conversationLogs,
-      currentState
-    )
-
-    if (synchronizedState.shouldPersist) {
-      this.saveHistoryCompactionProviderState(historyScope, synchronizedState.state)
-    }
-
-    const stateToCompact = this.getStateForPostAnswerCompaction(
-      conversationLogs,
-      synchronizedState.state
-    )
-
-    const shouldCompact = hasHistoryCompactionContent(stateToCompact.summary)
-      ? stateToCompact.newMessagesSinceCompaction >=
-        historyConfig.compactionBatchSize
-      : stateToCompact.tail.length >= historyConfig.historyLimit
-
-    if (!shouldCompact) {
-      return null
-    }
-
-    return async () => {
-      const compactionWidgetSteps = [
-        ...trackedSteps.map((step) => ({ ...step })),
-        {
-          label: 'Compacting history...',
-          status: 'in_progress' as PlanStepStatus
-        }
-      ]
-
-      emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
-
-      const compactedState = await this.rollHistoryCompactionState(
-        stateToCompact,
-        historyConfig
-      )
-
-      if (!compactedState) {
-        emitPlanWidget(trackedSteps, null, planWidgetId, true, null)
-        return
-      }
-
-      this.saveHistoryCompactionProviderState(historyScope, compactedState)
-      compactionWidgetSteps[compactionWidgetSteps.length - 1]!.status = 'completed'
-      emitPlanWidget(compactionWidgetSteps, null, planWidgetId, true, null)
-    }
-  }
-
-  private buildHistoryFromCompactionState(
-    state: AgentHistoryCompactionProviderState
-  ): MessageLog[] {
-    if (!state.summary || !hasHistoryCompactionContent(state.summary)) {
-      return [...state.tail]
-    }
-
-    const summaryMessage: MessageLog = {
-      who: 'leon',
-      sentAt: state.summarySentAt ?? state.tail[0]?.sentAt ?? Date.now(),
-      message: buildCompactedHistoryMessage(state.summary),
-      isAddedToHistory: true
-    }
-
-    return [summaryMessage, ...state.tail]
-  }
-
-  private buildPreparedHistory(history: MessageLog[]): PreparedAgentHistory {
-    return {
-      messageLogs: history
-    }
-  }
-
-  private async compactHistoryLogs(
-    logsToCompact: MessageLog[],
-    previousSummary: string | null
-  ): Promise<string | null> {
-    if (logsToCompact.length === 0) {
-      return null
-    }
-
-    const prompt = formatHistoryForCompaction(previousSummary, logsToCompact)
-    const baseCompletionParams = {
-      dutyType: LLMDuties.ReAct,
-      systemPrompt: AGENT_HISTORY_COMPACTION_SYSTEM_PROMPT,
-      temperature: 0,
-      disableThinking: true,
-      trackProviderErrors: false
-    }
-
-    const maxTokenBudgets = [
-      AGENT_HISTORY_COMPACTION_MAX_TOKENS,
-      AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS
-    ]
-
-    for (const maxTokens of maxTokenBudgets) {
-      try {
-        const result = await LLM_PROVIDER.prompt(prompt, {
-          ...baseCompletionParams,
-          maxTokens
-        })
-
-        const normalized = normalizeHistoryCompactionSummary(result?.output)
-        if (normalized && hasHistoryCompactionContent(normalized)) {
-          return normalized
-        }
-
-        if (maxTokens !== maxTokenBudgets[maxTokenBudgets.length - 1]) {
-          LogHelper.title(this.name)
-          LogHelper.warning(
-            `History compaction returned invalid structured output; retrying with maxTokens=${AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS}`
-          )
-        }
-      } catch (error) {
-        if (maxTokens === maxTokenBudgets[maxTokenBudgets.length - 1]) {
-          LogHelper.title(this.name)
-          LogHelper.warning(
-            `History compaction failed; using raw history instead: ${String(error)}`
-          )
-          return null
-        }
-
-        LogHelper.title(this.name)
-        LogHelper.warning(
-          `History compaction attempt failed; retrying with maxTokens=${AGENT_HISTORY_COMPACTION_RETRY_MAX_TOKENS}: ${String(error)}`
-        )
-      }
-    }
-
-    return null
   }
 
   private getInputAsText(input: string | object | null): string {
@@ -1091,7 +752,93 @@ export class ReActLLMDuty extends LLMDuty {
     return this.safeJSONStringify(input)
   }
 
-  /** Appends trusted integration guidance without changing the shared loop. */
+  /**
+   * Interrupts stale work for owner steering without canceling the conversation turn.
+   */
+  private getExecutionSignal(): AbortSignal | undefined {
+    const signals = [this.signal, this.agentTurnSignal, this.getOwnerMessageSignal?.()]
+      .filter((signal): signal is AbortSignal => Boolean(signal))
+
+    if (signals.length > 1) {
+      return AbortSignal.any(signals)
+    }
+
+    return signals[0]
+  }
+
+  /**
+   * Records user-visible progress before forwarding it to an optional host.
+   */
+  private reportProgressEvent(event: AgentRunProgressEvent): void {
+    // Argument previews and interrupted proposals can end before dispatch.
+    // Give those traces the same registry labels as executed calls.
+    if (
+      event.type === 'tool_call' &&
+      (!event.toolCall.toolkitName || !event.toolCall.toolName)
+    ) {
+      const [toolkitId, toolId, functionName] = event.toolCall.name.split('.')
+
+      if (toolkitId && toolId && functionName) {
+        const display = getToolDisplayContext(toolkitId, toolId, functionName)
+
+        event = {
+          ...event,
+          toolCall: {
+            ...event.toolCall,
+            toolkitName: event.toolCall.toolkitName || display.toolkitName,
+            toolName: event.toolCall.toolName || display.toolName
+          }
+        }
+      }
+    }
+
+    this.responseTraceCollector.record(event)
+    this.scheduleTraceSave()
+    this.onProgressEvent?.(event)
+  }
+
+  /**
+   * Closes previews that were canceled, rejected, or never selected for execution.
+   */
+  private closeStreamedToolCalls(): void {
+    for (const { callable, groupId, input } of this.streamedToolCalls.values()) {
+      const message = 'This proposed tool call was not executed.'
+      this.reportProgressEvent({
+        type: 'tool_call',
+        toolCall: {
+          id: groupId,
+          name: callable.qualifiedName,
+          status: 'error',
+          input,
+          errorMessage: message
+        }
+      })
+      emitToolExecutionOutputToWebApp({
+        ...callable,
+        toolGroupId: groupId,
+        output: {},
+        status: 'error',
+        message
+      })
+    }
+
+    this.streamedToolCalls.clear()
+  }
+
+  private scheduleTraceSave(): void {
+    if (!this.persistResponseTrace || this.traceSaveTimer) {
+      return
+    }
+    // Coalesce streamed tokens instead of rewriting history for every token.
+    this.traceSaveTimer = setTimeout(() => {
+      this.traceSaveTimer = null
+      void this.persistResponseTrace?.()
+    }, TRACE_SAVE_INTERVAL_MS)
+  }
+
+  /**
+   * Appends trusted integration guidance without changing the shared loop.
+   */
   private appendAdditionalInstructions(systemPrompt: string): string {
     if (!this.additionalInstructions) {
       return systemPrompt
@@ -1174,13 +921,14 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private loadValidAgentLoopContinuation(): AgentLoopContinuationState | null {
-    const state = this.getContinuationStateStore().load()
+    const stateStore = ReActLLMDuty.sessionState.getContinuationStore()
+    const state = stateStore.load()
     if (!state) {
       return null
     }
 
     if (!isAgentLoopContinuationStateValid(state)) {
-      this.getContinuationStateStore().save(null)
+      stateStore.save(null)
       return null
     }
 
@@ -1188,7 +936,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private saveAgentLoopContinuation(state: AgentLoopContinuationState): void {
-    this.getContinuationStateStore().save(state)
+    ReActLLMDuty.sessionState.getContinuationStore().save(state)
   }
 
   private consumeAgentLoopContinuation(): AgentLoopContinuationState | null {
@@ -1197,7 +945,7 @@ export class ReActLLMDuty extends LLMDuty {
       return null
     }
 
-    this.getContinuationStateStore().save(null)
+    ReActLLMDuty.sessionState.getContinuationStore().save(null)
     return state
   }
 
@@ -1205,7 +953,9 @@ export class ReActLLMDuty extends LLMDuty {
   // LLM calling helpers
   // ---------------------------------------------------------------------------
 
-  /** Provides the stable context and skill callbacks used by the agent loop. */
+  /**
+   * Provides the stable context and skill callbacks used by the agent loop.
+   */
   private createLLMCaller(): LLMCaller {
     const getActiveAgentSkillContext = (): AgentSkillContext | null =>
       this.activeAgentSkillContext
@@ -1230,46 +980,152 @@ export class ReActLLMDuty extends LLMDuty {
     }
   }
 
+  /**
+   * Preserves native context on pause or summarizes portable context on recovery.
+   */
+  private async prepareContinuation(
+    transcript: AgentToolTranscriptMessage[],
+    checkpointInput?: AgentContinuityCheckpointInput,
+    restoreSourceEvidence = false
+  ): Promise<AgentToolTranscriptMessage[]> {
+    this.signal?.throwIfAborted()
+    if (restoreSourceEvidence) {
+      // Context recovery needs source evidence instead of opaque provider state.
+      transcript = restoreCompactionSources(transcript)
+    }
+
+    return buildAgentContinuationTranscript(transcript, async (history) => {
+      // A failed summary must not cause an auxiliary retry on every tool turn.
+      if (this.continuationSummaryFailed) return null
+      const startedAt = Date.now()
+      try {
+        const result = await LLM_PROVIDER.prompt(history, {
+          ...(this.signal ? { cancellationSignal: this.signal } : {}),
+          dutyType: LLMDuties.ReAct,
+          systemPrompt: AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT,
+          usagePurpose: InferencePurpose.ContextCompaction,
+          temperature: 0,
+          maxTokens: AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
+          timeout: AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
+          maxRetries: 0,
+          remoteProviderErrorRetries: 0,
+          shouldStream: false,
+          disableThinking: true,
+          trackProviderErrors: false,
+          disableContextCompaction: true
+        })
+        this.signal?.throwIfAborted()
+        if (result) {
+          this.observeCompletionMetrics({
+            phase: 'agent',
+            completionStartedAt: startedAt,
+            completedAt: Date.now(),
+            ...result
+          })
+        }
+        const summary = typeof result?.output === 'string' ? result.output.trim() : ''
+        if (!summary || TRUNCATED_COMPLETION_FINISH_REASONS.has(
+          String(result?.finishReason ?? '')
+        )) {
+          throw new Error('Summary was empty or incomplete')
+        }
+        LogHelper.info(
+          `Agent continuation summary completed in ${Date.now() - startedAt}ms`
+        )
+        return summary
+      } catch {
+        this.signal?.throwIfAborted()
+        this.continuationSummaryFailed = true
+        LogHelper.warning('Agent continuation summary unavailable; retaining original context')
+        return null
+      }
+    }, checkpointInput)
+  }
+
   private async callAgentModel(
     transcript: AgentToolTranscriptMessage[],
     systemPrompt: string,
     tools: OpenAITool[],
     options: {
       isRecoveryAttempt: boolean
+      isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
+      isCompletionReview?: boolean
+      useReviewSchema?: boolean
+      requiresToolAction?: boolean
       isContextRecoveryAttempt?: boolean
-      remainingIterations?: number
-    }
+    },
+    checkpointInput?: AgentContinuityCheckpointInput,
+    functionsByToolName?: ReadonlyMap<string, AgentCallableFunction>
   ): Promise<{
     toolCalls?: OpenAIToolCall[]
     textContent?: string
+    reasoning?: string
+    reasoningItems?: ProviderReasoningItem[]
+    compactionContext?: ProviderCompactionContext
     isTruncated?: boolean
   } | null> {
+    const executionSignal = this.getExecutionSignal()
+    executionSignal?.throwIfAborted()
+    if (transcript.some((message) =>
+      message.role === 'assistant' && message.compactionContext
+    )) {
+      const targetTranscript = await LLM_PROVIDER.prepareAgentTranscript(transcript)
+      this.signal?.throwIfAborted()
+      transcript.splice(0, transcript.length, ...targetTranscript)
+    }
+
     const phase: AgentPhase = options.isFinalizationAttempt
       ? 'final_answer'
       : 'agent'
     const activeSystemPrompt = [
       systemPrompt,
-      ...(options.remainingIterations !== undefined
-        ? [buildAgentConvergenceSystemPrompt(options.remainingIterations)]
-        : []),
       ...(options.isFinalizationAttempt
         ? [AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT]
-        : [])
+        : []),
+      ...(options.isCompletionReview ? [AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT] : [])
     ].join('\n\n')
     const providerName = getLLMProviderName()
+    if (providerName === LLMProviders.OpenAI && options.isContextRecoveryAttempt) {
+      this.automaticCompactionFailed = true
+    }
+    const providerManagesContext = providerName === LLMProviders.OpenAI &&
+      !this.automaticCompactionFailed
     const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
       ? resolveAgentContextRecoveryTriggerTokens(providerName)
       : resolveAgentContextCompactionTriggerTokens(providerName)
-    const preparedContext = prepareAgentModelContext({
+    let preparedContext = prepareAgentModelContext({
       transcript,
       systemPrompt: activeSystemPrompt,
       tools,
-      compactionTriggerTokens: contextCompactionTriggerTokens,
+      // OpenAI measures actual request tokens and triggers compaction itself.
+      compactionTriggerTokens: providerManagesContext
+        ? Number.POSITIVE_INFINITY
+        : contextCompactionTriggerTokens,
       forceCompaction:
         options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
     if (
+      !providerManagesContext &&
+      preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
+    ) {
+      const summarized = await this.prepareContinuation(
+        transcript,
+        checkpointInput,
+        true
+      )
+      if (summarized !== transcript) {
+        transcript.splice(0, transcript.length, ...summarized)
+        preparedContext = prepareAgentModelContext({
+          transcript,
+          systemPrompt: activeSystemPrompt,
+          tools,
+          compactionTriggerTokens: contextCompactionTriggerTokens
+        })
+      }
+    }
+    if (
+      !providerManagesContext &&
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
     ) {
       throw new AgentModelProviderError(
@@ -1279,61 +1135,83 @@ export class ReActLLMDuty extends LLMDuty {
     }
     const preparedTranscript = preparedContext.transcript
     const preparedTools = preparedContext.tools
+    const toolChoice = options.isFinalizationAttempt || options.isCompletionReview
+      ? 'none'
+      : options.requiresToolAction ? 'required' : 'auto'
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
+    const agentTarget = CONFIG_STATE.getModelState().getAgentTarget()
     const modelSettings = CONFIG_STATE
       .getModelSettingsState()
-      .getSettings(CONFIG_STATE.getModelState().getAgentTarget())
+      .getSettings(agentTarget)
     const configuredReasoning = modelSettings.reasoning
+    const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
+    // Finalization is still a model request. Keep its configured reasoning:
+    // providers with mandatory reasoning reject a forced reasoning-off retry.
     const reasoningMode =
-      options.isRecoveryAttempt || options.isFinalizationAttempt
-      ? 'off'
-      : configuredReasoning === 'auto'
+      configuredReasoning === 'auto'
         ? inferencePolicy.reasoningMode
         : configuredReasoning === 'none'
           ? 'off'
           : 'on'
-    const reasoningEffort =
-      options.isRecoveryAttempt || options.isFinalizationAttempt ||
-      configuredReasoning === 'auto' || configuredReasoning === 'on'
-        ? undefined
-        : configuredReasoning
-    const reasoningUseDefaultEffort =
-      !options.isRecoveryAttempt &&
-      !options.isFinalizationAttempt &&
-      configuredReasoning === 'on'
+    let reasoningEffort =
+      configuredReasoning === 'auto'
+        ? defaultReasoning.effort
+        : configuredReasoning === 'on' ? undefined : configuredReasoning
+    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = configuredReasoning === 'auto'
+      ? defaultReasoning.source
+      : 'owner'
+    // Auto may recover from reasoning-only exhaustion with less effort.
+    // Never disable mandatory reasoning or override an explicit owner choice.
+    if (options.isOutputRecoveryAttempt && configuredReasoning === 'auto' &&
+      reasoningMode === 'on' && getLLMModelCatalogEntry(
+        providerName, agentTarget.model
+      )?.reasoning.includes('low')) {
+      reasoningEffort = 'low'
+      reasoningEffortSource = 'recovery'
+    }
+    const reasoningUseDefaultEffort = configuredReasoning === 'on'
     const serviceTier = modelSettings.speed === 'fast'
       ? 'priority'
       : modelSettings.speed === 'normal'
         ? 'default'
         : undefined
     const disableThinking = reasoningMode === 'off'
+    const maxOutputTokens = resolveAgentMaxOutputTokens(
+      providerName,
+      preparedContext.estimatedInputTokens
+    )
+    if (options.isOutputRecoveryAttempt) {
+      LogHelper.info(
+        `Retrying truncated agent output with max_tokens=${maxOutputTokens ?? 'provider default'}; reasoning effort=${reasoningEffort ?? 'provider default'}`
+      )
+    }
     const shouldEmitReasoning =
-      reasoningMode !== 'off' && inferencePolicy.emitReasoning
+      !options.isCompletionReview && reasoningMode !== 'off' && inferencePolicy.emitReasoning
 
     const toolNames = preparedTools.map((t) => t.function.name).join(', ')
+    // Each model call starts a new block; its streamed chunks share this ID.
     const reasoningGenerationId = shouldEmitReasoning
-      ? this.getReasoningGenerationId(
-          phase,
-          StringHelper.random(6, { onlyLetters: true })
-        )
+      ? randomUUID()
       : null
 
     this.logTitle(phase)
-    LogHelper.debug(`callAgentModel: tools=[${toolNames}] | choice=auto`)
+    LogHelper.debug(`callAgentModel: tools=[${toolNames}] | choice=${toolChoice}`)
     if (preparedContext.wasCompacted) {
       LogHelper.debug(
-        `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokens} | exchanges=${preparedContext.compactedToolExchangeCount} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
+        `callAgentModel: bounded context prepared | est_tokens=${preparedContext.estimatedInputTokensBeforePreparation}->${preparedContext.estimatedInputTokens} | tools=${tools.length}->${preparedTools.length} | recovery=${options.isRecoveryAttempt} | finalization=${Boolean(options.isFinalizationAttempt)}`
       )
     }
     this.logAgentPromptDispatch({
       prompt: promptForLog,
       systemPrompt: activeSystemPrompt,
       tools: preparedTools,
+      toolChoice,
       phasePolicySummary: formatAgentInferencePolicyForLog({
         ...inferencePolicy,
         reasoningMode,
+        reasoningEffortSource,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         emitReasoning: shouldEmitReasoning
@@ -1345,74 +1223,251 @@ export class ReActLLMDuty extends LLMDuty {
     let completed = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
     let diagnosisTimer: NodeJS.Timeout | null = null
-    let diagnosisRetryTimer: NodeJS.Timeout | null = null
     const toolCallAbortController = new AbortController()
 
-    const delayReason = this.buildLongToolCallReason(
-      promptForLog,
-      activeSystemPrompt,
-      preparedTools
+    const modelResponseStartedAt = Date.now()
+    const modelResponseMaximumDeadlineAt = modelResponseStartedAt + AGENT_MODEL_RESPONSE_MAX_DURATION_MS
+    const contextWindowTokens = resolveModelContextWindowTokens(
+      agentTarget.provider,
+      agentTarget.model
     )
+    // Only the active transcript describes context occupancy; auxiliary summaries
+    // still contribute to turn accounting without replacing this snapshot.
+    this.contextUsage = captureContextUsage({
+      estimatedInputTokens: preparedContext.estimatedInputTokens,
+      contextWindowTokens
+    })
+    const modelStatus: ModelResponseStatus = {
+      contextUsage: this.contextUsage,
+      requestId: randomUUID(),
+      sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
+      startedAt: modelResponseStartedAt,
+      state: ModelResponseState.Waiting,
+      attempt: 1,
+      deadlineAt: modelResponseStartedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    }
+    let modelAttempt = 0
+    let lastAttemptFailureKind: CompletionFailureKind | undefined
+    let lastActivityUpdateAt = 0
+    const responseAbortController = new AbortController()
+    const cancellationSignal = AbortSignal.any([
+      responseAbortController.signal,
+      ...(executionSignal ? [executionSignal] : [])
+    ])
+    // Retries share cancellation and the hard cap, but each gets a usable wait.
+    const abortModelResponse = (): void => {
+      responseAbortController.abort(new AgentModelResponseTimeoutError())
+    }
+    let responseDeadlineTimer = setTimeout(abortModelResponse, AGENT_MODEL_RESPONSE_TIMEOUT_MS)
+    const renewModelResponseDeadline = (
+      timeout = AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    ): void => {
+      if (cancellationSignal.aborted) {
+        return
+      }
+
+      modelStatus.deadlineAt = Math.min(
+        modelResponseMaximumDeadlineAt,
+        Date.now() + Math.max(AGENT_MODEL_RESPONSE_TIMEOUT_MS, timeout)
+      )
+      clearTimeout(responseDeadlineTimer)
+      responseDeadlineTimer = setTimeout(
+        abortModelResponse,
+        Math.max(0, modelStatus.deadlineAt - Date.now())
+      )
+    }
+    // Abort signals may be delivered from another request's context.
+    const emitModelStatus = AsyncResource.bind((
+      state: ModelResponseState
+    ): void => {
+      if (cancellationSignal.aborted && state !== ModelResponseState.Completed) {
+        return
+      }
+
+      modelStatus.state = state
+      SOCKET_SERVER.emitToChatClients('model-response-status', { ...modelStatus }, {
+        sessionId: modelStatus.sessionId
+      })
+    })
+    const clearModelStatus = (): void => {
+      if (modelStatus.state !== ModelResponseState.Completed) {
+        emitModelStatus(ModelResponseState.Completed)
+      }
+    }
+    executionSignal?.addEventListener('abort', clearModelStatus, { once: true })
+    emitModelStatus(ModelResponseState.Waiting)
 
     waitNoticeTimer = setTimeout(() => {
-      if (completed) {
+      if (completed || cancellationSignal.aborted) {
         return
       }
       this.logTitle(phase)
       LogHelper.warning(
         `callAgentModel: pending > ${AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
       )
-      void this.emitProgress(
-        BRAIN.wernicke('react.tool_call.waiting', '', {
-          '{{ reason }}': delayReason
-        })
-      )
     }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
 
     diagnosisTimer = setTimeout(() => {
-      if (completed) {
+      if (completed || cancellationSignal.aborted) {
         return
       }
 
-      void this.runLongToolCallDiagnosis(
+      this.logLongToolCallDiagnosis(
         promptForLog,
         activeSystemPrompt,
-        preparedTools
+        preparedTools,
+        phase,
+        toolChoice
       )
-
-      diagnosisRetryTimer = setTimeout(() => {
-        if (completed || toolCallAbortController.signal.aborted) {
-          return
-        }
-
-        const abortReason: LLMPromptAbortReason = {
-          shouldRetry: true,
-          retryStrategy: 'timeout',
-          source: 'agent_tool_call_diagnosis',
-          delayMs: AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS
-        }
-
-        this.logTitle(phase)
-        LogHelper.warning(
-          `callAgentModel: diagnosis grace period exceeded (${AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS}ms); canceling in-flight request and retrying`
-        )
-
-        toolCallAbortController.abort(abortReason)
-      }, AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS)
     }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
 
     try {
+      // Reviews must neither expose their text nor replace the proposed answer.
+      // A subsequent operational call removes any ending rejected by review.
+      if (!options.isCompletionReview) {
+        this.answerStream.discard()
+      }
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         systemPrompt: activeSystemPrompt,
+        ...(options.isCompletionReview && options.useReviewSchema !== false
+          ? { data: AGENT_COMPLETION_REVIEW_SCHEMA }
+          : {}),
         temperature: AGENT_TEMPERATURE,
         timeout: AGENT_INFERENCE_TIMEOUT_MS,
         maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
-        maxTokens: resolveAgentMaxOutputTokens(
-          providerName,
-          preparedContext.estimatedInputTokens
-        ),
+        maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
+        onAttempt: (timing): void => {
+          this.responseTraceCollector.recordInference({ ...timing, phase })
+          this.scheduleTraceSave()
+          if (timing.outcome !== 'started') {
+            lastAttemptFailureKind = timing.failureKind
+          }
+          if (timing.outcome === 'started') {
+            renewModelResponseDeadline(timing.inferenceTimeoutMs)
+            modelAttempt += 1
+            modelStatus.attempt = modelAttempt
+            modelStatus.lastActivityAt = null
+            emitModelStatus(ModelResponseState.Waiting)
+          } else if (timing.outcome === 'completed') {
+            clearModelStatus()
+          } else {
+            modelStatus.retryReason = timing.failureKind
+            emitModelStatus(ModelResponseState.Retrying)
+          }
+        },
+        onStreamEvent: (event): void => {
+          if (cancellationSignal.aborted) {
+            return
+          }
+
+          if (event.type === 'finish') {
+            // Provider generation is done; local artifact work has its own lifecycle.
+            clearTimeout(responseDeadlineTimer)
+          } else if (
+            event.type === 'tool-input-delta' || event.type === 'tool-call-delta' ||
+            event.type === 'tool-call' || event.type === 'tool-result' ||
+            event.type === 'file'
+          ) {
+            renewModelResponseDeadline()
+          }
+          if (event.type === 'stream-open' && !options.isCompletionReview) {
+            // A retry replaces any unfinished previews from its predecessor.
+            this.closeStreamedToolCalls()
+          }
+
+          if (modelStatus.state === ModelResponseState.Completed) {
+            return
+          }
+
+          modelStatus.lastActivityAt = Date.now()
+          if (event.type === 'stream-open' || event.type === 'reasoning-end') {
+            emitModelStatus(ModelResponseState.Connected)
+          } else if (event.type === 'reasoning-start') {
+            emitModelStatus(ModelResponseState.Reasoning)
+          } else if (
+            event.type === 'finish' || (!options.isCompletionReview && (
+              event.type === 'tool-input-start' || event.type === 'tool-input-delta' ||
+              event.type === 'tool-call-delta' || event.type === 'tool-call'
+            ))
+          ) {
+            clearModelStatus()
+          } else if (Date.now() - lastActivityUpdateAt >= MODEL_ACTIVITY_UPDATE_INTERVAL_MS) {
+            lastActivityUpdateAt = Date.now()
+            emitModelStatus(modelStatus.state)
+          }
+        },
+        onToken: (token: unknown): void => {
+          if (cancellationSignal.aborted || typeof token !== 'string') {
+            return
+          }
+
+          if (token.length > 0) {
+            renewModelResponseDeadline()
+          }
+
+          if (!options.isCompletionReview) {
+            if (token.trim()) {
+              clearModelStatus()
+            }
+
+            this.answerStream.push(token)
+          }
+        },
+        onReasoningToken: (reasoningChunk: string): void => {
+          if (cancellationSignal.aborted) {
+            return
+          }
+
+          if (reasoningChunk.length > 0) {
+            renewModelResponseDeadline()
+          }
+
+          if (shouldEmitReasoning && reasoningGenerationId) {
+            if (reasoningChunk) {
+              this.firstOutputAt ??= Date.now()
+            }
+
+            this.emitReasoningToken(reasoningChunk, reasoningGenerationId, phase)
+          }
+        },
+        ...(!options.isCompletionReview
+          ? {
+              onToolCall: (call): void => {
+                clearModelStatus()
+                const callable = functionsByToolName?.get(call.function.name)
+                if (!callable) {
+                  return
+                }
+
+                const previous = this.streamedToolCalls.get(call.id)
+                const input = call.function.arguments
+                if (previous?.input === input) {
+                  return
+                }
+
+                const groupId = previous?.groupId || `agent_${StringHelper.random(12)}`
+                this.streamedToolCalls.set(call.id, { callable, groupId, input })
+                this.firstOutputAt ??= Date.now()
+                this.reportProgressEvent({
+                  type: 'tool_call',
+                  toolCall: {
+                    id: groupId,
+                    name: callable.qualifiedName,
+                    status: 'preparing',
+                    input
+                  }
+                })
+                emitToolExecutionInputToWebApp({
+                  ...callable,
+                  toolGroupId: groupId,
+                  toolInput: input,
+                  status: 'preparing'
+                })
+              }
+            }
+          : {}),
         promptCacheKey: AGENT_PROMPT_CACHE_KEY,
         ...(inferencePolicy.textVerbosity
           ? { textVerbosity: inferencePolicy.textVerbosity }
@@ -1420,48 +1475,64 @@ export class ReActLLMDuty extends LLMDuty {
         ...(shouldEmitReasoning && inferencePolicy.reasoningSummary
           ? { reasoningSummary: inferencePolicy.reasoningSummary }
           : {}),
-        ...(shouldEmitReasoning && reasoningGenerationId
-          ? {
-              onReasoningToken: (reasoningChunk: string): void => {
-                this.emitReasoningToken(
-                  reasoningChunk,
-                  reasoningGenerationId,
-                  phase
-                )
-              }
-            }
-          : {}),
         reasoningMode,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(reasoningUseDefaultEffort ? { reasoningUseDefaultEffort: true } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),
+        disableContextCompaction: this.automaticCompactionFailed,
         tools: preparedTools,
-        toolChoice: 'auto',
-        signal: toolCallAbortController.signal
+        toolChoice,
+        signal: toolCallAbortController.signal,
+        cancellationSignal
       })
+      if (completionResult) {
+        this.contextUsage = captureContextUsage({
+          // Agent prompts include system instructions. A zero count from an
+          // adapter means usage is unavailable, rather than an empty prompt.
+          usedInputTokens: completionResult.usedInputTokens || undefined,
+          estimatedInputTokens: preparedContext.estimatedInputTokens,
+          contextWindowTokens
+        })
+        modelStatus.contextUsage = this.contextUsage
+        emitModelStatus(ModelResponseState.Completed)
+      }
+
+      if (!completionResult && lastAttemptFailureKind === CompletionFailureKind.Timeout) {
+        throw new AgentModelResponseTimeoutError()
+      }
+    } catch (error) {
+      if (error instanceof AgentModelResponseTimeoutError) {
+        // Preserve the checkpoint without another request to the unavailable model.
+        this.continuationSummaryFailed = true
+        this.answerStream.discard()
+      }
+
+      throw error
     } finally {
       completed = true
+      clearTimeout(responseDeadlineTimer)
+      executionSignal?.removeEventListener('abort', clearModelStatus)
+      clearModelStatus()
       if (waitNoticeTimer) {
         clearTimeout(waitNoticeTimer)
       }
       if (diagnosisTimer) {
         clearTimeout(diagnosisTimer)
       }
-      if (diagnosisRetryTimer) {
-        clearTimeout(diagnosisRetryTimer)
-      }
     }
 
+    executionSignal?.throwIfAborted()
     if (!completionResult) {
       LogHelper.debug('callAgentModel: no completion result returned')
       const providerError = LLM_PROVIDER.consumeLastProviderErrorMessage()
       if (providerError) {
         throw new AgentModelProviderError(
           providerError,
-          !options.isContextRecoveryAttempt &&
-            preparedContext.estimatedInputTokens >=
+          !options.isContextRecoveryAttempt && (
+            providerManagesContext || preparedContext.estimatedInputTokens >=
               resolveAgentContextRecoveryTriggerTokens(providerName)
+          )
         )
       }
       return null
@@ -1472,7 +1543,7 @@ export class ReActLLMDuty extends LLMDuty {
       completionResult as unknown as { toolCalls?: OpenAIToolCall[] }
     ).toolCalls
     const observedPhase: AgentPhase =
-      !toolCalls || toolCalls.length === 0 ? 'final_answer' : phase
+      !options.isCompletionReview && (!toolCalls || toolCalls.length === 0) ? 'final_answer' : phase
     this.observeCompletionMetrics({
       phase: observedPhase,
       completionStartedAt,
@@ -1480,10 +1551,12 @@ export class ReActLLMDuty extends LLMDuty {
       output: completionResult.output,
       reasoning: completionResult.reasoning,
       usedInputTokens: completionResult.usedInputTokens,
+      accounting: completionResult.accounting,
       usedOutputTokens: completionResult.usedOutputTokens,
       providerDecodeDurationMs: completionResult.providerDecodeDurationMs,
       providerTokensPerSecond: completionResult.providerTokensPerSecond,
-      generationDurationMs: completionResult.generationDurationMs
+      generationDurationMs: completionResult.generationDurationMs,
+      firstTokenAt: completionResult.firstTokenAt
     })
 
     if (toolCalls && toolCalls.length > 0) {
@@ -1519,6 +1592,15 @@ export class ReActLLMDuty extends LLMDuty {
       return {
         toolCalls: normalizedToolCalls,
         textContent,
+        ...(completionResult.compactionContext
+          ? { compactionContext: completionResult.compactionContext }
+          : {}),
+        ...(completionResult.reasoningItems?.length
+          ? { reasoningItems: completionResult.reasoningItems }
+          : {}),
+        ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
+          ? { reasoning: completionResult.reasoning }
+          : {}),
         ...(completionResult.finishReason !== undefined
           ? {
               isTruncated: this.isTruncatedFinishReason(
@@ -1529,16 +1611,35 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
 
-    const textContent =
+    let textContent =
       typeof completionResult.output === 'string'
         ? completionResult.output
         : ''
+
+    // JSON-mode providers return a parsed verdict; the loop validates its text.
+    if (
+      options.isCompletionReview &&
+      completionResult.output &&
+      typeof completionResult.output === 'object'
+    ) {
+      textContent = JSON.stringify(completionResult.output)
+    }
+
     this.logTitle(phase)
     LogHelper.debug(
       `callAgentModel: final text response received (${textContent.length} chars)`
     )
     return {
       textContent,
+      ...(completionResult.compactionContext
+        ? { compactionContext: completionResult.compactionContext }
+        : {}),
+      ...(completionResult.reasoningItems?.length
+        ? { reasoningItems: completionResult.reasoningItems }
+        : {}),
+      ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
+        ? { reasoning: completionResult.reasoning }
+        : {}),
       ...(completionResult.finishReason !== undefined
         ? {
             isTruncated: this.isTruncatedFinishReason(
@@ -1555,7 +1656,16 @@ export class ReActLLMDuty extends LLMDuty {
 
   private safeJSONStringify(value: unknown): string {
     try {
-      return JSON.stringify(value)
+      // Opaque replay data belongs in the provider request, not diagnostic prose.
+      return JSON.stringify(value, (key, content) => {
+        if (key === 'sourceTranscript') {
+          return undefined
+        }
+
+        return key === 'encryptedContent' || key === 'encrypted_content'
+          ? '[provider context retained]'
+          : content
+      })
     } catch {
       return String(value)
     }
@@ -1630,6 +1740,7 @@ export class ReActLLMDuty extends LLMDuty {
     systemPrompt: string
     prompt: string
     tools: OpenAITool[]
+    toolChoice: 'auto' | 'none' | 'required'
     phasePolicySummary?: string
     shouldStream?: boolean
   }): void {
@@ -1651,7 +1762,7 @@ export class ReActLLMDuty extends LLMDuty {
           ? [`policy=${params.phasePolicySummary}`]
           : []),
         `tool_count=${params.tools.length}`,
-        'tool_choice=auto',
+        `tool_choice=${params.toolChoice}`,
         ''
       ]
       const sectionLines = [
@@ -1689,6 +1800,7 @@ export class ReActLLMDuty extends LLMDuty {
     systemPrompt: string
     phasePolicySummary?: string
     tools: OpenAITool[]
+    toolChoice: 'auto' | 'none' | 'required'
     shouldStream?: boolean
   }): void {
     const promptTokens = this.estimateTokensFromText(params.prompt)
@@ -1704,12 +1816,13 @@ export class ReActLLMDuty extends LLMDuty {
         params.shouldStream === true ? ' | stream=true' : ''
       }${
         params.phasePolicySummary ? ` | ${params.phasePolicySummary}` : ''
-      } | tools=${params.tools.length} | tool_choice=auto`
+      } | tools=${params.tools.length} | tool_choice=${params.toolChoice}`
     )
     this.writeAgentPromptLog({
       systemPrompt: params.systemPrompt,
       prompt: params.prompt,
       tools: params.tools,
+      toolChoice: params.toolChoice,
       ...(params.phasePolicySummary !== undefined
         ? { phasePolicySummary: params.phasePolicySummary }
         : {}),
@@ -1731,6 +1844,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private observeCompletionMetrics(params: {
+    accounting?: CompletionAccounting | undefined
     phase: AgentPhase
     completionStartedAt: number
     completedAt: number
@@ -1747,6 +1861,7 @@ export class ReActLLMDuty extends LLMDuty {
       providerName: getLLMProviderName(),
       accumulator: {
         completionCount: this.completionCount,
+        usageAccounting: this.usageAccounting,
         totalInputTokens: this.totalInputTokens,
         totalOutputTokens: this.totalOutputTokens,
         totalVisibleOutputTokens: this.totalVisibleOutputTokens,
@@ -1761,6 +1876,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: params.output,
       reasoning: params.reasoning,
       usedInputTokens: params.usedInputTokens,
+      accounting: params.accounting,
       usedOutputTokens: params.usedOutputTokens,
       generationDurationMs: params.generationDurationMs,
       providerDecodeDurationMs: params.providerDecodeDurationMs,
@@ -1769,6 +1885,7 @@ export class ReActLLMDuty extends LLMDuty {
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
     this.completionCount = observedMetrics.accumulator.completionCount
+    this.usageAccounting = observedMetrics.accumulator.usageAccounting
     this.totalInputTokens = observedMetrics.accumulator.totalInputTokens
     this.totalOutputTokens = observedMetrics.accumulator.totalOutputTokens
     this.totalVisibleOutputTokens =
@@ -1800,69 +1917,51 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.debug('Prompt reasoning [tools]: none')
   }
 
-  private buildLongToolCallReason(
+  /**
+   * Keeps pending-request diagnostics in server logs rather than owner messages.
+   */
+  private logLongToolCallDiagnosis(
     prompt: string,
     systemPrompt: string,
-    tools: OpenAITool[]
-  ): string {
-    const estimatedPromptTokens =
-      this.estimateTokensFromText(prompt) +
-      this.estimateTokensFromText(systemPrompt) +
-      this.estimateTokensFromText(JSON.stringify(tools))
-
-    if (estimatedPromptTokens > 4_500) {
-      return BRAIN.wernicke('react.tool_call.reason.large_prompt', '', {
-        '{{ estimated_tokens }}': String(estimatedPromptTokens)
-      })
-    }
-
-    if (tools.length > 1) {
-      return BRAIN.wernicke('react.tool_call.reason.multi_tools', '', {
-        '{{ tool_count }}': String(tools.length)
-      })
-    }
-
-    return BRAIN.wernicke('react.tool_call.reason.provider_latency')
-  }
-
-  private async runLongToolCallDiagnosis(
-    prompt: string,
-    systemPrompt: string,
-    tools: OpenAITool[]
-  ): Promise<void> {
+    tools: OpenAITool[],
+    phase: AgentPhase,
+    toolChoice: string
+  ): void {
     const promptTokens =
       this.estimateTokensFromText(prompt) +
       this.estimateTokensFromText(systemPrompt)
     const toolSchemaTokens = this.estimateTokensFromText(JSON.stringify(tools))
     const totalEstimatedTokens = promptTokens + toolSchemaTokens
 
-    const diagnosisMessage = BRAIN.wernicke('react.tool_call.diagnosis', '', {
-      '{{ provider }}': getLLMProviderName(),
-      '{{ tool_choice }}': 'auto',
-      '{{ tool_count }}': String(tools.length),
-      '{{ total_tokens }}': String(totalEstimatedTokens),
-      '{{ prompt_tokens }}': String(promptTokens),
-      '{{ tool_tokens }}': String(toolSchemaTokens),
-      '{{ history_tokens }}': '0'
-    })
-
     this.logTitle('execution')
     LogHelper.warning(
-      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): ${diagnosisMessage}`
+      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): provider=${getLLMProviderName()}, phase=${phase}, tool choice=${toolChoice}, tools=${tools.length}, approximate input tokens=${totalEstimatedTokens} (prompt=${promptTokens}, tool schemas=${toolSchemaTokens}).`
     )
-
-    await this.emitProgress(diagnosisMessage)
   }
 
-  private async emitProgress(message: string): Promise<void> {
+  private async emitProgress(
+    message: string,
+    generationId: string | null = null
+  ): Promise<void> {
     if (!message) {
       return
     }
 
+    const id = `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`
+    const createdAt = Date.now()
+
+    // Hosts receive the same non-final message as the built-in chat client.
+    this.reportProgressEvent({
+      type: 'progress_message',
+      message: { id, content: message, createdAt }
+    })
     try {
       SOCKET_SERVER.emitAnswerToChatClients({
-        id: `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`,
+        id,
+        messageId: id,
+        sentAt: createdAt,
         answer: message,
+        generationId,
         fallbackText: message,
         historyMode: 'system_widget'
       })
@@ -1883,9 +1982,9 @@ export class ReActLLMDuty extends LLMDuty {
 
     const normalizedOutput = StringHelper.normalizeUserFacingText(output)
 
-    if (normalizedOutput?.trim()) {
-      this.emitSyntheticTokenStream(normalizedOutput)
-    }
+    // The normal answer event settles the active bubble with accepted text,
+    // including review edits or runtime-generated endings, without replaying tokens.
+    this.answerStream.finish()
 
     this.logTitle('final_answer')
     LogHelper.success('Duty executed')
@@ -1895,6 +1994,8 @@ export class ReActLLMDuty extends LLMDuty {
     )
 
     const llmMetrics = deriveLLMMetrics({
+      contextUsage: this.contextUsage,
+      usageAccounting: this.usageAccounting,
       completionCount: this.completionCount,
       providerName: getLLMProviderName(),
       normalizedOutput,
@@ -1904,9 +2005,15 @@ export class ReActLLMDuty extends LLMDuty {
       totalOutputChars: this.totalOutputChars,
       totalGenerationDurationMs: this.totalGenerationDurationMs,
       turnDurationMs: Math.max(Date.now() - this.executionStartedAt, 0),
+      turnTtftMs: this.firstOutputAt === null
+        ? undefined
+        : Math.max(this.firstOutputAt - this.executionStartedAt, 0),
       phaseMetrics: this.phaseMetrics,
       finalAnswerMetrics: this.finalAnswerMetrics,
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
+    })
+    const agentResponseTrace = this.responseTraceCollector.snapshot({
+      ...llmMetrics
     })
 
     return {
@@ -1916,31 +2023,22 @@ export class ReActLLMDuty extends LLMDuty {
       output: normalizedOutput,
       data: {
         hasExplicitMemoryWrite: this.hasExplicitMemoryWrite,
+        hasOwnerMessages: this.hasOwnerMessages,
         finalIntent: this.finalResponseIntent,
         llmMetrics,
+        agentResponseTrace,
         executionHistory: this.lastExecutionHistory.map((item) => ({
           function: item.function,
           status: item.status,
           observation: item.observation,
+          startedAt: item.startedAt,
+          completedAt: item.completedAt,
+          durationMs: item.durationMs,
           stepLabel: item.stepLabel,
           requestedToolInput: item.requestedToolInput
         }))
       }
     } as unknown as LLMDutyResult
-  }
-
-  private getReasoningGenerationId(
-    phase: AgentPhase,
-    fallbackGenerationId?: string | null
-  ): string | null {
-    const baseGenerationId =
-      this.reasoningGenerationId || fallbackGenerationId || null
-
-    if (!baseGenerationId) {
-      return null
-    }
-
-    return `${baseGenerationId}_${phase}`
   }
 
   private emitReasoningToken(
@@ -1952,25 +2050,13 @@ export class ReActLLMDuty extends LLMDuty {
       return
     }
 
-    const chunks = token.match(/(\s+|[^\s]+)/g) || [token]
-    for (const chunk of chunks) {
-      SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {
-        token: chunk,
-        generationId,
-        phase
-      })
-    }
-  }
-
-  private emitSyntheticTokenStream(output: string): void {
-    const generationId = StringHelper.random(6, { onlyLetters: true })
-    const chunks = output.match(/(\s+|[^\s]+)/g) || [output]
-
-    for (const token of chunks) {
-      SOCKET_SERVER.emitToChatClients('llm-token', {
-        token,
-        generationId
-      })
-    }
+    this.responseTraceCollector.recordReasoning(generationId, token, phase)
+    this.scheduleTraceSave()
+    // Preserve provider chunks; word-level events overwhelm long-running chat UIs.
+    SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {
+      token,
+      generationId,
+      phase
+    })
   }
 }

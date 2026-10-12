@@ -3,7 +3,7 @@ import path from 'node:path'
 import dotenv from 'dotenv'
 import { defineConfig } from 'vitest/config'
 
-import { PROFILE_DOT_ENV_PATH } from './server/src/leon-roots'
+import { PROFILE_DOT_ENV_PATH } from './server/src/leon-roots.ts'
 
 const ROOT_DIR = path.resolve()
 

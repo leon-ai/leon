@@ -2,7 +2,11 @@ import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { LLMAnswerMetrics, ShortLanguageCode } from '@/types'
+import type {
+  AgentResponseTrace,
+  LLMAnswerMetrics,
+  ShortLanguageCode
+} from '@/types'
 import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
 import type { NLUProcessResult } from '@/core/nlp/types'
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
@@ -36,7 +40,9 @@ type QueuedAnswer =
       speech: string
       text?: string
       llmMetrics?: LLMAnswerMetrics
+      agentResponseTrace?: AgentResponseTrace
       shouldSkipParaphrase?: boolean
+      responseRoute?: 'controlled' | 'react' | 'pulse'
     }
 
 interface QueuedSuggestions {
@@ -210,6 +216,16 @@ export default class Brain {
         answer && typeof answer === 'object' && 'llmMetrics' in answer
           ? answer.llmMetrics
           : undefined
+      const agentResponseTrace =
+        answer && typeof answer === 'object' && 'agentResponseTrace' in answer
+          ? answer.agentResponseTrace
+          : undefined
+      // Autonomous answers carry their own route rather than inheriting the
+      // last owner turn's paraphrasing and reflection behavior.
+      const responseRoute =
+        answer && typeof answer === 'object' && 'responseRoute' in answer
+          ? answer.responseRoute || NLU.currentResponseRoute
+          : NLU.currentResponseRoute
       const shouldSkipParaphrase =
         answer &&
         typeof answer === 'object' &&
@@ -230,7 +246,7 @@ export default class Brain {
          * and it will mislead the conversation)
          */
         if (
-          NLU.currentResponseRoute !== 'react' &&
+          responseRoute === 'controlled' &&
           !hasLoopConfig &&
           !hasSlotsConfig
         ) {
@@ -312,15 +328,16 @@ export default class Brain {
           const sentAt = Date.now()
 
           SOCKET_SERVER.emitAnswerToChatClients(
-            llmMetrics
+            llmMetrics || agentResponseTrace
               ? {
                   answer: finalTextAnswer,
-                  llmMetrics
+                  ...(llmMetrics ? { llmMetrics } : {}),
+                  ...(agentResponseTrace ? { agentResponseTrace } : {})
                 }
               : finalTextAnswer
           )
 
-          if (NLU.currentResponseRoute !== 'react') {
+          if (responseRoute === 'controlled') {
             POST_TURN_MAINTENANCE_QUEUE.enqueue(
               'controlled self-model reflection',
               () => SELF_MODEL_MANAGER.observeTurn({
@@ -337,7 +354,8 @@ export default class Brain {
             who: 'leon',
             message: finalTextAnswer,
             isAddedToHistory: true,
-            ...(llmMetrics ? { llmMetrics } : {})
+            ...(llmMetrics ? { llmMetrics } : {}),
+            ...(agentResponseTrace ? { agentResponseTrace } : {})
           })
           POST_TURN_MAINTENANCE_QUEUE.enqueue(
             'session title generation',

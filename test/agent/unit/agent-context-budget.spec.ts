@@ -24,6 +24,17 @@ function createToolCall(id: string): OpenAIToolCall {
   }
 }
 
+function createComputerUseToolCall(id: string): OpenAIToolCall {
+  return {
+    id,
+    type: 'function',
+    function: {
+      name: 'computer_use__cua__get_window_state',
+      arguments: JSON.stringify({ pid: 42, window_id: 7 })
+    }
+  }
+}
+
 function appendToolExchange(
   transcript: AgentToolTranscriptMessage[],
   id: string,
@@ -45,6 +56,188 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
+  it('budgets native context tokens without counting ciphertext or source snapshots', () => {
+    const context = {
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
+      output: [{ type: 'compaction', id: 'cmp', encrypted_content: 'x'.repeat(100_000) }],
+      estimatedTokens: 500,
+      sourceTranscript: [{ role: 'user' as const, content: 'Evidence '.repeat(100_000) }]
+    }
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'assistant', content: 'Generated response', compactionContext: context,
+      reasoningItems: [{ provider: LLMProviders.OpenAI, id: 'rs', text: '', encryptedContent: 'x'.repeat(100_000) }]
+    }]
+    const prepared = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 1_000,
+      forceCompaction: true
+    })
+
+    expect(prepared.estimatedInputTokens).toBeGreaterThanOrEqual(500)
+    expect(prepared.estimatedInputTokens).toBeLessThan(1_000)
+    expect(prepared.transcript[0]).toEqual(transcript[0])
+  })
+
+  it('bounds older successful UI evidence only when the full artifact is available', () => {
+    const transcript: AgentToolTranscriptMessage[] = []
+    for (let index = 0; index < 12; index += 1) {
+      transcript.push({ role: 'tool', toolCallId: String(index),
+        toolName: 'computer_use__cua__get_window_state',
+        content: JSON.stringify({ status: index === 1 ? 'error' : 'success',
+          ...(index !== 2 ? { output_log_path: `/logs/${index}.json` } : {}),
+          data: { output: { elements: 'Old screen '.repeat(400) } } }) })
+    }
+    const original = JSON.stringify(transcript)
+    const result = prepareAgentModelContext({ transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 96_000 })
+    expect(result.transcript[0]!.content.length).toBeLessThan(1_500)
+    expect(result.transcript[0]!.content).toContain('/logs/0.json')
+    expect(result.transcript[1]).toEqual(transcript[1])
+    expect(result.transcript[2]).toEqual(transcript[2])
+    expect(result.transcript.slice(-8)).toEqual(transcript.slice(-8))
+    expect(JSON.stringify(transcript)).toBe(original)
+    expect(result.estimatedInputTokens).toBeLessThan(result.estimatedInputTokensBeforePreparation)
+  })
+  it.each([
+    'computer_use__cua__get_window_state',
+    'browser_use__cli__screenshot',
+    'file_system__file__readImage',
+    'file_system__file__readPdf'
+  ])('keeps only the two most recent %s image results', (toolName) => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Operate the app.' }
+    ]
+    for (let index = 1; index <= 4; index += 1) {
+      transcript.push({
+        role: 'tool',
+        toolCallId: `cua-${index}`,
+        toolName,
+        content: `Capture ${index}`,
+        files: [
+          {
+            dataBase64: 'x'.repeat(100_000),
+            mediaType: 'image/png'
+          }
+        ]
+      })
+    }
+
+    const context = prepareAgentModelContext({
+      transcript,
+      systemPrompt: 'Use tools.',
+      tools: [],
+      compactionTriggerTokens: 10_000
+    })
+    const toolMessages = context.transcript.filter(
+      (message) => message.role === 'tool'
+    )
+
+    expect(toolMessages[0]).not.toHaveProperty('files')
+    expect(toolMessages[1]).not.toHaveProperty('files')
+    expect(toolMessages[2]).toHaveProperty('files')
+    expect(toolMessages[3]).toHaveProperty('files')
+    expect(context.wasCompacted).toBe(false)
+    expect(context.estimatedInputTokens).toBeLessThan(10_000)
+  })
+
+  it('preserves a complete parallel inspection batch and reloadable older evidence', () => {
+    const image = { dataBase64: 'x'.repeat(100_000), mediaType: 'image/png' }
+    const document = { dataBase64: 'document', mediaType: 'application/pdf' }
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Inspect these documents.', files: [image] }
+    ]
+
+    appendToolExchange(transcript, 'older', JSON.stringify({
+      status: 'success',
+      data: { path: '/tmp/older.pdf', figure_count: 3 }
+    }))
+    const olderResult = transcript.at(-1)!
+    if (olderResult.role === 'tool') {
+      olderResult.files = [image, document]
+    }
+
+    const calls = ['first', 'second', 'third'].map(createToolCall)
+    transcript.push({ role: 'assistant', content: '', toolCalls: calls })
+    for (const call of calls) {
+      transcript.push({
+        role: 'tool',
+        toolCallId: call.id,
+        toolName: call.function.name,
+        content: JSON.stringify({ path: `/tmp/${call.id}.pdf` }),
+        files: [image, image]
+      })
+    }
+    appendToolExchange(transcript, 'save', 'Verified counts saved.')
+
+    const original = structuredClone(transcript)
+    const context = prepareAgentModelContext({
+      transcript,
+      systemPrompt: '',
+      tools: [],
+      compactionTriggerTokens: 96_000
+    })
+
+    expect(context.transcript[0]).toEqual(original[0])
+    expect(context.transcript[2]).toEqual({
+      ...original[2],
+      files: [document]
+    })
+    expect(context.transcript.slice(3)).toEqual(original.slice(3))
+    expect(transcript).toEqual(original)
+  })
+
+  it('preserves older computer-use evidence below the context budget', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Operate the app.' }
+    ]
+    for (let index = 1; index <= 7; index += 1) {
+      const toolCall = createComputerUseToolCall(`cua-${index}`)
+      transcript.push(
+        { role: 'assistant', content: '', toolCalls: [toolCall] },
+        {
+          role: 'tool',
+          toolCallId: toolCall.id,
+          toolName: toolCall.function.name,
+          content: JSON.stringify({
+            status: 'success',
+            data: `capture ${index} `.repeat(200)
+          })
+        }
+      )
+    }
+
+    const context = prepareAgentModelContext({
+      transcript,
+      systemPrompt: 'Use tools.',
+      tools: [],
+      compactionTriggerTokens: 96_000
+    })
+
+    expect(context.wasCompacted).toBe(false)
+    expect(context.transcript).toEqual(transcript)
+  })
+
+  it('exposes pressure to semantic continuity without clipping evidence on recovery', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Download the remaining documents.' }
+    ]
+    for (let index = 0; index < 20; index += 1) {
+      appendToolExchange(transcript, String(index), JSON.stringify({
+        status: index === 0 ? 'error' : 'success',
+        data: { output: {
+          elements: 'Captured controls. '.repeat(300),
+          document_id: `document-${index}`,
+          ...(index === 0 ? { error_code: 'browser_consent_required' } : {})
+        } }
+      }))
+    }
+    const context = prepareAgentModelContext({
+      transcript, systemPrompt: 'Use tools.', tools: [],
+      compactionTriggerTokens: 2_000,
+      forceCompaction: true
+    })
+    expect(context.estimatedInputTokens).toBeGreaterThan(2_000)
+    expect(context.transcript).toEqual(transcript)
+  })
+
   it('uses 75% of the shared local context window', () => {
     expect(
       resolveAgentContextCompactionTriggerTokens(LLMProviders.LlamaCPP)
@@ -106,206 +299,6 @@ describe('agent context budget', () => {
     ).toBeUndefined()
   })
 
-  it('progressively compacts old completed exchanges until the prompt fits', () => {
-    const transcript: AgentToolTranscriptMessage[] = [
-      { role: 'user', content: 'Inspect everything.' }
-    ]
-    for (let index = 1; index <= 7; index += 1) {
-      appendToolExchange(
-        transcript,
-        `call-${index}`,
-        JSON.stringify({
-          status: 'success',
-          message: `Inspection ${index} completed.`,
-          data: 'result '.repeat(400)
-        })
-      )
-    }
-
-    const context = prepareAgentModelContext({
-      transcript,
-      systemPrompt: 'Use tools.',
-      tools: [],
-      compactionTriggerTokens: 1_600
-    })
-
-    expect(context.compactedToolExchangeCount).toBeGreaterThan(0)
-    expect(context.estimatedInputTokens).toBeLessThanOrEqual(1_600)
-    expect(context.transcript).toContainEqual(
-      expect.objectContaining({
-        role: 'assistant',
-        content: expect.stringContaining(
-          'earlier_completed_tool_exchange_compacted'
-        )
-      })
-    )
-    expect(context.transcript).toContainEqual(
-      expect.objectContaining({ role: 'tool', toolCallId: 'call-7' })
-    )
-  })
-
-  it('preserves failure details and artifact paths in compacted exchanges', () => {
-    const transcript: AgentToolTranscriptMessage[] = [
-      { role: 'user', content: 'Inspect the files.' }
-    ]
-    appendToolExchange(
-      transcript,
-      'old-call',
-      JSON.stringify({
-        status: 'error',
-        message: 'The inspection command failed.',
-        output_log_path: '/tmp/tool-artifacts/old-call.log',
-        observed_tool_failure: true,
-        data: 'failure details '.repeat(300)
-      })
-    )
-    appendToolExchange(transcript, 'recent-call-1', 'Recent result one.')
-    appendToolExchange(transcript, 'recent-call-2', 'Recent result two.')
-
-    const context = prepareAgentModelContext({
-      transcript,
-      systemPrompt: 'Use tools.',
-      tools: [],
-      compactionTriggerTokens: 1,
-      forceCompaction: true
-    })
-    const compactedMessage = context.transcript.find(
-      (message) =>
-        message.role === 'assistant' &&
-        message.content.includes('earlier_completed_tool_exchange_compacted')
-    )
-
-    expect(compactedMessage?.content).toContain('test__shell__run')
-    expect(compactedMessage?.content).toContain('failed_tools')
-    expect(compactedMessage?.content).toContain(
-      '/tmp/tool-artifacts/old-call.log'
-    )
-    expect(context.transcript).not.toContainEqual(
-      expect.objectContaining({ role: 'tool', toolCallId: 'old-call' })
-    )
-  })
-
-  it('bounds a compacted exchange containing parallel tool calls', () => {
-    const oldCalls = Array.from({ length: 6 }, (_, index) =>
-      createToolCall(`old-${index + 1}`)
-    )
-    const transcript: AgentToolTranscriptMessage[] = [
-      { role: 'user', content: 'Inspect every source.' },
-      {
-        role: 'assistant',
-        content: 'Checking the sources.',
-        toolCalls: oldCalls
-      },
-      ...oldCalls.map((call, index) => ({
-        role: 'tool' as const,
-        toolCallId: call.id,
-        toolName: call.function.name,
-        content: JSON.stringify({
-          status: index === 5 ? 'error' : 'success',
-          message: `Source ${index + 1} checked.`,
-          output_log_path: `/tmp/tool-artifacts/source-${index + 1}.log`,
-          data: 'result '.repeat(300)
-        })
-      }))
-    ]
-    appendToolExchange(transcript, 'recent-call-1', 'Recent result one.')
-    appendToolExchange(transcript, 'recent-call-2', 'Recent result two.')
-
-    const context = prepareAgentModelContext({
-      transcript,
-      systemPrompt: 'Use tools.',
-      tools: [],
-      compactionTriggerTokens: 1,
-      forceCompaction: true
-    })
-    const compactedMessage = context.transcript.find(
-      (message) =>
-        message.role === 'assistant' &&
-        message.content.includes('earlier_completed_tool_exchange_compacted')
-    )
-
-    expect(compactedMessage?.content.length).toBeLessThanOrEqual(1_200)
-    expect(compactedMessage?.content).toContain(
-      '/tmp/tool-artifacts/source-6.log'
-    )
-    expect(compactedMessage?.content).toContain('failed_tools')
-  })
-
-  it('compacts oversized recent parallel exchanges until the target fits', () => {
-    const transcript: AgentToolTranscriptMessage[] = [
-      { role: 'user', content: 'Inspect every source.' }
-    ]
-    for (let exchangeIndex = 1; exchangeIndex <= 2; exchangeIndex += 1) {
-      const calls = Array.from({ length: 20 }, (_, index) =>
-        createToolCall(`batch-${exchangeIndex}-${index}`)
-      )
-      transcript.push(
-        { role: 'assistant', content: '', toolCalls: calls },
-        ...calls.map((call) => ({
-          role: 'tool' as const,
-          toolCallId: call.id,
-          toolName: call.function.name,
-          content: JSON.stringify({
-            status: 'success',
-            message: `Completed ${call.id}.`,
-            data: 'result '.repeat(200)
-          })
-        }))
-      )
-    }
-
-    const context = prepareAgentModelContext({
-      transcript,
-      systemPrompt: 'Use tools.',
-      tools: [],
-      compactionTriggerTokens: 2_000,
-      forceCompaction: true
-    })
-
-    expect(context.estimatedInputTokens).toBeLessThanOrEqual(2_000)
-    expect(context.compactedToolExchangeCount).toBe(2)
-    expect(context.transcript.some((message) => message.role === 'tool')).toBe(
-      false
-    )
-  })
-
-  it('merges accumulated compacted exchanges into one bounded history record', () => {
-    const transcript: AgentToolTranscriptMessage[] = [
-      { role: 'user', content: 'Inspect all sources.' }
-    ]
-    for (let index = 1; index <= 12; index += 1) {
-      appendToolExchange(
-        transcript,
-        `call-${index}`,
-        JSON.stringify({
-          status: 'success',
-          message: `Source ${index} checked.`,
-          output_log_path: `/tmp/tool-artifacts/source-${index}.log`,
-          data: 'result '.repeat(400)
-        })
-      )
-    }
-
-    const context = prepareAgentModelContext({
-      transcript,
-      systemPrompt: 'Use tools.',
-      tools: [],
-      compactionTriggerTokens: 2_500
-    })
-    const compactedMessages = context.transcript.filter(
-      (message) =>
-        message.role === 'assistant' &&
-        message.content.includes('earlier_completed_tool_exchange_compacted')
-    )
-
-    expect(context.estimatedInputTokens).toBeLessThanOrEqual(2_500)
-    expect(compactedMessages).toHaveLength(1)
-    expect(compactedMessages[0]?.content).toContain('merged_exchange_count')
-    expect(compactedMessages[0]?.content).toContain(
-      '/tmp/tool-artifacts/source-1.log'
-    )
-  })
-
   it('reports an irreducibly oversized prompt without altering conversation messages', () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'large request '.repeat(1_000) }
@@ -318,7 +311,6 @@ describe('agent context budget', () => {
       compactionTriggerTokens: 100
     })
 
-    expect(context.compactedToolExchangeCount).toBe(0)
     expect(context.estimatedInputTokens).toBeGreaterThan(100)
     expect(context.transcript).toEqual(transcript)
   })

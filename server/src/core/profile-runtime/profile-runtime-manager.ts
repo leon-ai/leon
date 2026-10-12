@@ -16,7 +16,9 @@ export interface ProfileRuntimeSummary {
 class ProfileRuntimeManager {
   private readonly runtimes = new Map<string, ProfileRuntimeEntry>()
 
-  /** Lazily create a service once for the active profile. */
+  /**
+   * Lazily create a service once for the active profile.
+   */
   public getService<T extends object>(
     serviceName: string,
     factory: () => T
@@ -46,7 +48,9 @@ class ProfileRuntimeManager {
     }))
   }
 
-  /** Ensure asynchronous profile services initialize only once under concurrency. */
+  /**
+   * Ensure asynchronous profile services initialize only once under concurrency.
+   */
   public async ensureInitialized(initializer: () => Promise<void>): Promise<void> {
     const runtime = this.getRuntime(getActiveProfileName())
 
@@ -83,7 +87,9 @@ class ProfileRuntimeManager {
 
 export const PROFILE_RUNTIME_MANAGER = new ProfileRuntimeManager()
 
-/** Expose a familiar singleton API backed by one lazy instance per profile. */
+/**
+ * Expose a familiar singleton API backed by one lazy instance per profile.
+ */
 export function createProfileServiceProxy<T extends object>(
   serviceName: string,
   factory: () => T,

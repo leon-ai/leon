@@ -1,10 +1,20 @@
 import os
+import uuid
+import json
+from urllib.request import Request, urlopen
+import base64
 import re
 import shlex
+import codecs
+import io
+import signal
+from queue import Empty, Queue
+from threading import Thread
 from abc import ABC, abstractmethod
-from typing import Callable, Dict, Optional, Union, List, Any
+from typing import Callable, Dict, Optional, Union, List, Any, cast
 from pypdl import Pypdl
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote
+from .tool_runtime_types import ToolExecutionContext, ToolModelFile
 from .toolkit_config import ToolkitConfig
 from .leon import leon
 from .utils import (
@@ -21,6 +31,7 @@ from ..constants import (
     LEON_TOOLKITS_PATH,
     NVIDIA_LIBS_PATH,
     PROFILE_TOOLS_PATH,
+    LEON_PROFILE_PATH,
     PYTORCH_TORCH_PATH,
 )
 import subprocess
@@ -47,6 +58,8 @@ NVIDIA_LIBRARY_FOLDERS = [
 
 COMMAND_OUTPUT_PROGRESS_INTERVAL_SECONDS = 2.0
 COMMAND_OUTPUT_MAX_CHARS = 4_000
+COMMAND_OUTPUT_CHUNK_BYTES = 4_096
+COMMAND_READER_CLEANUP_SECONDS = 1.0
 
 
 # Command execution options
@@ -68,15 +81,132 @@ class ExecuteCommandOptions:
         self.skip_binary_download = skip_binary_download
 
 
+class ConnectionRequiredError(Exception):
+    """Signals rejected account authorization without exposing provider bodies."""
+
+
 class BaseTool(ABC):
     """Base class for Python tools"""
 
     def __init__(self):
         """Initialize the tool with default settings"""
+        self.execution_context: ToolExecutionContext | None = None
+        self._model_files: list[ToolModelFile] = []
         self.cli_progress = True
         self.settings: Dict[str, Any] = {}
         self.required_settings: List[str] = []
         self.missing_settings: Optional[Dict[str, Any]] = None
+
+    def prepare_execution(self, context: ToolExecutionContext) -> None:
+        """Reset per-call evidence when a host prepares this tool for execution."""
+        self.execution_context = context
+        self._model_files.clear()
+
+    def create_artifact(
+        self, file_path: str, mime_type: str, filename: str | None = None
+    ) -> dict[str, Any]:
+        """Copy a deliverable into session storage; return it in the result artifacts array."""
+        session_id = (
+            self.execution_context.conversation_session_id
+            if self.execution_context else None
+        )
+
+        if not session_id:
+            raise ValueError("Artifacts require a conversation session.")
+
+        directory = os.path.join(
+            LEON_PROFILE_PATH,
+            "sessions",
+            quote(session_id, safe="~()*!.'-"),
+            "artifacts",
+            "outputs",
+            str(uuid.uuid4()),
+        )
+
+        os.makedirs(directory, exist_ok=False)
+        target = os.path.join(directory, os.path.basename(filename or file_path))
+
+        shutil.copyfile(file_path, target)
+
+        return {
+            "path": target,
+            "filename": filename or os.path.basename(file_path),
+            "mime_type": mime_type,
+            "presentation": "attachment",
+        }
+
+    def request_leon(self, endpoint: str, body: Any = None) -> Any:
+        """Call Core with host-supplied profile credentials, never model arguments."""
+        service = (
+            self.execution_context.leon_service if self.execution_context else None
+        )
+
+        if not service:
+            raise ValueError("This operation requires a Leon server connection.")
+
+        request = Request(
+            service["baseURL"] + endpoint,
+            data=json.dumps(body).encode() if body is not None else None,
+            headers={
+                "Content-Type": "application/json",
+                "x-leon-profile-token": service["token"],
+            },
+        )
+
+        with urlopen(request, timeout=600) as response:
+            return json.load(response)
+
+    def get_connection_credentials(self, provider: str) -> dict[str, Any] | None:
+        """Get credentials for a provider declared in this tool's manifest."""
+        if self.execution_context is None or self.execution_context.connections is None:
+            return None
+
+        return self.execution_context.connections.get(provider)
+
+    def require_connection_credentials(self) -> dict[str, Any]:
+        """Validate connection credentials using the mandatory-settings check."""
+        config = ToolkitConfig.load(self.toolkit, self.tool_name)
+        connection = config.get("connection")
+
+        if not connection:
+            raise ValueError("This tool does not declare a connection.")
+
+        credentials = (
+            self.get_connection_credentials(f"{self.toolkit}.{self.tool_name}") or {}
+        )
+
+        self._check_required_settings(
+            self.tool_name, credentials, connection["required_settings"]
+        )
+        if self.missing_settings:
+            missing = ", ".join(self.missing_settings["missing"])
+
+            raise ValueError(
+                f"Connect {config['name']} using the connection widget in chat before using this tool. Missing: {missing}."
+            )
+
+        return credentials
+
+    async def validate_connection(self) -> dict[str, str]:
+        """Check account access before Core persists onboarding credentials."""
+        raise NotImplementedError("This tool does not implement connection validation.")
+
+    def _attach_model_files(self, files: list[ToolModelFile]) -> None:
+        """Attach already encoded evidence without an extra filesystem roundtrip."""
+        self._model_files.extend(files)
+
+    def _attach_model_file(self, file_path: str, media_type: str) -> None:
+        """Attach a file without embedding its bytes in ordinary observations."""
+        with open(file_path, "rb") as evidence:
+            self._model_files.append({
+                "dataBase64": base64.b64encode(evidence.read()).decode("ascii"),
+                "mediaType": media_type,
+                "filename": os.path.basename(file_path),
+            })
+
+    def get_model_files(self) -> list[ToolModelFile]:
+        """Read attachments after a standard tool method has completed."""
+        return self._model_files
 
     @property
     @abstractmethod
@@ -112,14 +242,26 @@ class BaseTool(ABC):
             PROFILE_TOOLS_PATH, self.toolkit, resolved_tool_name, "settings.json"
         )
 
-    def _check_required_settings(self, tool_name: Optional[str] = None) -> None:
-        if not self.required_settings:
+    def _check_required_settings(
+        self,
+        tool_name: Optional[str] = None,
+        settings: Optional[Dict[str, Any]] = None,
+        required_settings: Optional[List[str]] = None,
+    ) -> None:
+        settings = self.settings if settings is None else settings
+        required_settings = (
+            self.required_settings if required_settings is None else required_settings
+        )
+
+        if not required_settings:
             self.missing_settings = None
             return
 
         missing: List[str] = []
-        for key in self.required_settings:
-            value = self.settings.get(key)
+
+        for key in required_settings:
+            value = settings.get(key)
+
             if value is None:
                 missing.append(key)
                 continue
@@ -284,8 +426,10 @@ class BaseTool(ABC):
         try:
             start_time = time.time()
 
+            # Non-interactive commands receive EOF instead of reading worker input.
             result = subprocess.run(
                 command_string,
+                stdin=subprocess.DEVNULL,
                 capture_output=True,
                 text=True,
                 shell=True,
@@ -388,36 +532,102 @@ class BaseTool(ABC):
                 pending_output = ""
                 last_output_reported_at = time.time()
 
+            # Match the synchronous runner: no input is supplied by this API.
             process = subprocess.Popen(
                 [binary_path] + args,
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
                 cwd=exec_options.get("cwd") if exec_options else None,
                 env=self._get_command_env(),
+                start_new_session=not is_windows(),
             )
 
-            # Read output in real time
-            while True:
-                stdout_line = process.stdout.readline() if process.stdout else ""
-                stderr_line = process.stderr.readline() if process.stderr else ""
+            output_queue: Queue[tuple[str | Exception | None, bool]] = Queue()
+            timeout = exec_options.get("timeout") if exec_options else None
+            deadline = time.monotonic() + timeout if timeout else None
 
-                if stdout_line:
-                    output_buffer += stdout_line
-                    append_output_delta(stdout_line)
-                    if on_output:
-                        on_output(stdout_line, False)
-                    if on_progress:
-                        on_progress({"status": "running"})
+            def read_stream(stream: io.TextIOWrapper, is_error: bool) -> None:
+                # Separate readers prevent either pipe from filling while the
+                # other is idle. read1 also delivers prompts without a newline.
+                decoder = io.IncrementalNewlineDecoder(
+                    codecs.getincrementaldecoder(stream.encoding)(errors=stream.errors),
+                    translate=True,
+                )
+                try:
+                    while chunk := stream.buffer.read1(COMMAND_OUTPUT_CHUNK_BYTES):
+                        output = decoder.decode(chunk)
+                        if output:
+                            output_queue.put((output, is_error))
+                    output = decoder.decode(b"", final=True)
+                    if output:
+                        output_queue.put((output, is_error))
+                except Exception as error:
+                    output_queue.put((error, is_error))
+                finally:
+                    stream.close()
+                    output_queue.put((None, is_error))
 
-                if stderr_line:
-                    output_buffer += stderr_line
-                    append_output_delta(stderr_line)
-                    if on_output:
-                        on_output(stderr_line, True)
+            def record_output(output: str, is_error: bool) -> None:
+                nonlocal output_buffer
+                output_buffer += output
+                append_output_delta(output)
+                if on_output:
+                    on_output(output, is_error)
+                if on_progress and not is_error:
+                    on_progress({"status": "running"})
 
-                if process.poll() is not None:
-                    break
+            def remaining_time() -> Optional[float]:
+                if deadline is None:
+                    return None
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired(command_string, timeout)
+                return remaining
+
+            readers = [
+                Thread(target=read_stream, args=(stream, is_error), daemon=True)
+                for stream, is_error in [(process.stdout, False), (process.stderr, True)]
+                if stream is not None
+            ]
+            for reader in readers:
+                reader.start()
+
+            try:
+                open_streams = len(readers)
+                while open_streams:
+                    try:
+                        output, is_error = output_queue.get(timeout=remaining_time())
+                    except Empty:
+                        raise subprocess.TimeoutExpired(command_string, timeout) from None
+                    if output is None:
+                        open_streams -= 1
+                    elif isinstance(output, Exception):
+                        raise output
+                    else:
+                        record_output(output, is_error)
+                # EOF can precede process exit if the command closes its pipes.
+                process.wait(timeout=remaining_time())
+            finally:
+                if open_streams or process.poll() is None:
+                    try:
+                        # Shell descendants can otherwise keep the pipes open
+                        # after the shell itself exits or reaches its deadline.
+                        if is_windows():
+                            process.kill()
+                        else:
+                            os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+                for reader in readers:
+                    reader.join(timeout=COMMAND_READER_CLEANUP_SECONDS)
+                # Retain output already read when a timeout interrupts the loop.
+                while not output_queue.empty():
+                    output, is_error = output_queue.get_nowait()
+                    if isinstance(output, str):
+                        record_output(output, is_error)
 
             execution_time = int((time.time() - start_time) * 1000)
             flush_output_delta()
@@ -454,6 +664,14 @@ class BaseTool(ABC):
                     f"Command failed with exit code {process.returncode}: {output_buffer}"
                 )
 
+        except subprocess.TimeoutExpired as e:
+            flush_output_delta()
+            self.report(
+                "bridges.tools.command_timeout",
+                {"command": command_string, "timeout": f"{e.timeout}s"},
+                tool_group_id,
+            )
+            raise Exception(f"Command timed out after {e.timeout}s") from e
         except Exception as e:
             if "flush_output_delta" in locals():
                 flush_output_delta()
@@ -630,7 +848,6 @@ class BaseTool(ABC):
         config = ToolkitConfig.load(self.toolkit, tool_config_name)
         binary_url = ToolkitConfig.get_binary_url(config)
 
-        self.report("bridges.tools.checking_binary", {"binary_name": binary_name})
         if not binary_url:
             self.report("bridges.tools.no_binary_url", {"binary_name": binary_name})
             raise Exception(f"No download URL found for binary '{binary_name}'")
@@ -653,6 +870,14 @@ class BaseTool(ABC):
         )
 
         bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
+        binary_path = os.path.join(bins_path, executable)
+        binary_exists = os.path.exists(binary_path)
+
+        # Reusing an executable needs no preparation or repeated permission changes.
+        if binary_exists and (is_windows() or os.access(binary_path, os.X_OK)):
+            return binary_path
+
+        self.report("bridges.tools.checking_binary", {"binary_name": binary_name})
 
         # Ensure toolkit bins directory exists
         if not os.path.exists(bins_path):
@@ -661,15 +886,10 @@ class BaseTool(ABC):
             )
             os.makedirs(bins_path, exist_ok=True)
 
-        binary_path = os.path.join(bins_path, executable)
-
         # Ensure binary is available before returning path
-        if not os.path.exists(binary_path):
+        if not binary_exists:
             self._download_binary_on_demand(binary_name, binary_url, executable)
-
-        # Force chmod again in case it has been downloaded but somehow failed
-        # so it could not chmod correctly earlier
-        if not is_windows():
+        elif not is_windows():
             self.report(
                 "bridges.tools.applying_permissions", {"binary_name": binary_name}
             )
@@ -689,7 +909,6 @@ class BaseTool(ABC):
         Returns:
             The path to the resource directory
         """
-        from urllib.parse import urlparse
 
         # Get tool name without "Tool" suffix for config lookup
         tool_config_name = self.tool_name.lower().replace("tool", "")
@@ -788,7 +1007,7 @@ class BaseTool(ABC):
                 # Verify the file was downloaded correctly
                 if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
                     raise Exception(
-                        f"Downloaded file is empty or was not created properly"
+                        "Downloaded file is empty or was not created properly"
                     )
 
                 self.report(
@@ -834,7 +1053,6 @@ class BaseTool(ABC):
         Returns:
             True if all files exist and are not empty, False otherwise
         """
-        from urllib.parse import urlparse
 
         for resource_url in resource_urls:
             relative_path = self._get_resource_relative_path(resource_url)
@@ -936,32 +1154,45 @@ class BaseTool(ABC):
     ) -> None:
         """Download binary on-demand if not found"""
 
+        bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
+        os.makedirs(bins_path, exist_ok=True)
+        staging_path = tempfile.mkdtemp(prefix=".download-", dir=bins_path)
+
         try:
-            bins_path = os.path.join(LEON_TOOLKITS_PATH, self.toolkit, "assets")
             binary_path = os.path.join(bins_path, executable)
+            staged_binary_path = os.path.join(staging_path, executable)
 
             self.report("bridges.tools.binary_not_found", {"binary_name": binary_name})
 
-            self._download_binary(binary_url, binary_path)
+            # Publish only a complete executable, never an in-progress download.
+            self._download_binary(binary_url, staged_binary_path, binary_name)
 
             self.report("bridges.tools.binary_downloaded", {"binary_name": binary_name})
-
-            # Delete older versions of this binary
-            self._delete_older_binary_versions(bins_path, executable)
 
             # Make binary executable (Unix systems)
             if not is_windows():
                 self.report(
                     "bridges.tools.making_executable", {"binary_name": binary_name}
                 )
-                os.chmod(binary_path, 0o755)
+                os.chmod(staged_binary_path, 0o755)
 
             # Remove quarantine attribute on macOS to prevent Gatekeeper blocking
             if is_macos():
                 self.report(
                     "bridges.tools.removing_quarantine", {"binary_name": binary_name}
                 )
-                self._remove_quarantine_attribute(binary_path)
+                self._remove_quarantine_attribute(staged_binary_path)
+
+            if not os.path.exists(binary_path):
+                try:
+                    os.replace(staged_binary_path, binary_path)
+                except OSError:
+                    # Windows may reject replacement once another worker has
+                    # published and started using the same executable.
+                    if not os.path.exists(binary_path):
+                        raise
+
+            self._delete_older_binary_versions(bins_path, executable)
 
         except Exception as e:
             self.report(
@@ -969,6 +1200,8 @@ class BaseTool(ABC):
                 {"binary_name": binary_name, "error": str(e)},
             )
             raise Exception(f"Failed to download binary '{binary_name}': {str(e)}")
+        finally:
+            shutil.rmtree(staging_path, ignore_errors=True)
 
     def _remove_quarantine_attribute(self, file_path: str) -> None:
         """Remove macOS quarantine attribute to prevent Gatekeeper blocking"""
@@ -1013,7 +1246,7 @@ class BaseTool(ABC):
             or basename.endswith(".tgz")
         )
 
-    def _download_binary(self, url: str, output_path: str) -> None:
+    def _download_binary(self, url: str, output_path: str, binary_name: str) -> None:
         """Download binary from URL using pypdl (faster parallel downloader)
         If the downloaded file is an archive, it will be extracted automatically"""
 
@@ -1059,7 +1292,7 @@ class BaseTool(ABC):
             # Verify the file was downloaded correctly
             if not os.path.exists(download_path) or os.path.getsize(download_path) == 0:
                 raise Exception(
-                    f"Downloaded binary is empty or was not created properly"
+                    "Downloaded binary is empty or was not created properly"
                 )
 
             # If it's an archive, extract it
@@ -1075,34 +1308,30 @@ class BaseTool(ABC):
                 # Try extracting without strip first to see the structure
                 extract_archive(download_path, temp_extract_path)
 
-                # Find the binary in the extracted directory (recursively if needed)
-                def find_binary_file(dir_path):
-                    """Find the first file in the directory tree"""
-                    try:
-                        entries = os.listdir(dir_path)
-
-                        # First, look for files in the current directory
-                        for entry in entries:
-                            full_path = os.path.join(dir_path, entry)
-                            if os.path.isfile(full_path):
-                                return full_path
-
-                        # If no files found, look in subdirectories (one level deep)
-                        for entry in entries:
-                            full_path = os.path.join(dir_path, entry)
-                            if os.path.isdir(full_path):
-                                found_file = find_binary_file(full_path)
-                                if found_file:
-                                    return found_file
-                    except Exception:
-                        pass
-
-                    return None
-
-                binary_file_path = find_binary_file(temp_extract_path)
+                # Release archives may contain documentation before the executable.
+                expected_name = (
+                    f"{binary_name}.exe"
+                    if is_windows() and not binary_name.endswith(".exe")
+                    else binary_name
+                )
+                files = [
+                    os.path.join(root, name)
+                    for root, _, names in os.walk(temp_extract_path)
+                    for name in names
+                    if os.path.isfile(os.path.join(root, name))
+                    and not os.path.islink(os.path.join(root, name))
+                ]
+                matches = [file for file in files if os.path.basename(file) == expected_name]
+                binary_file_path = (
+                    matches[0]
+                    if len(matches) == 1
+                    else files[0] if not matches and len(files) == 1 else None
+                )
 
                 if not binary_file_path:
-                    raise Exception("Archive extraction resulted in no files")
+                    raise Exception(
+                        f"Archive does not contain an unambiguous {expected_name} executable"
+                    )
 
                 # Move the binary to the final output path
                 import shutil

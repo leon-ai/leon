@@ -1,0 +1,25 @@
+<template>
+  <link rel="stylesheet" href="assets/theme.css">
+  <section id="verify-content" data-composition-id="verify" data-width="__WIDTH__" data-height="__HEIGHT__" data-duration="3">
+    <div class="scene-content">
+      <div class="eyebrow">02 / VERIFY</div>
+      <h1>Evidence supports the result.</h1>
+      <p>Show the observed outcome before making a claim.</p>
+      <div class="verification-track"><div class="verification-progress"></div></div>
+    </div>
+  </section>
+  <script>
+    window.__timelines = window.__timelines || {};
+    document.fonts.ready.then(() => {
+      const timeline = gsap.timeline({ paused: true });
+
+      timeline.fromTo('.verification-progress', { scaleX: 0 }, {
+        scaleX: 1,
+        duration: 1.4,
+        ease: 'power1.inOut'
+      }, 0.6);
+      timeline.to({}, { duration: 1 }, 2);
+      window.__timelines.verify = timeline;
+    });
+  </script>
+</template>

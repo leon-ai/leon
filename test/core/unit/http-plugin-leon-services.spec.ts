@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  connectionRegistry: {
+    getConnectionTools: vi.fn(),
+    getConnectionTool: vi.fn()
+  },
   activeProfile: 'startup-profile',
   activeSessionId: 'active-session',
   nextSessionId: 0,
   sessions: new Map<string, Set<string>>(),
   agentDutyParams: [] as Array<Record<string, unknown>>,
-  controlledDutyParams: [] as Array<Record<string, unknown>>,
+  executeAgent: vi.fn(),
+  controlledPrompt: vi.fn(),
   controlledDutyOutputs: [] as Array<Array<Record<string, unknown>>>,
   agentDutyResult: {
     output: 'Acknowledged.',
@@ -44,6 +49,8 @@ const mocks = vi.hoisted(() => ({
     sentAt: number
     messageId?: string
     llmMetrics?: Record<string, unknown>
+    widget?: Record<string, unknown>
+    isAddedToHistory?: boolean
   }>
 }))
 
@@ -59,6 +66,7 @@ function getProfileSessions(): Set<string> {
 }
 
 vi.mock('@/core', () => ({
+  TOOLKIT_REGISTRY: mocks.connectionRegistry,
   BRAIN: {
     isMuted: false,
     runSkillAction: vi.fn(async (nluProcessResult: Record<string, unknown>) => {
@@ -71,23 +79,25 @@ vi.mock('@/core', () => ({
     })
   },
   CONVERSATION_LOGGER: {
-    load: vi.fn(async (params?: {
-      sessionId?: string
-      nbOfLogsToLoad?: number
-    }) => mocks.persistedMessages
-      .filter((message) =>
-        message.profileId === mocks.activeProfile &&
-        message.sessionId === (params?.sessionId || mocks.activeSessionId)
-      )
-      .slice(-(params?.nbOfLogsToLoad || mocks.persistedMessages.length))
-      .map((message) => ({
-        who: message.who,
-        message: message.message,
-        sentAt: message.sentAt,
-        isAddedToHistory: true,
-        ...(message.messageId ? { messageId: message.messageId } : {}),
-        ...(message.llmMetrics ? { llmMetrics: message.llmMetrics } : {})
-      }))),
+    load: vi.fn(
+      async (params?: { sessionId?: string, nbOfLogsToLoad?: number }) =>
+        mocks.persistedMessages
+          .filter(
+            (message) =>
+              message.profileId === mocks.activeProfile &&
+              message.sessionId === (params?.sessionId || mocks.activeSessionId)
+          )
+          .slice(-(params?.nbOfLogsToLoad || mocks.persistedMessages.length))
+          .map((message) => ({
+            who: message.who,
+            message: message.message,
+            sentAt: message.sentAt,
+            isAddedToHistory: message.isAddedToHistory ?? true,
+            ...(message.widget ? { widget: message.widget } : {}),
+            ...(message.messageId ? { messageId: message.messageId } : {}),
+            ...(message.llmMetrics ? { llmMetrics: message.llmMetrics } : {})
+          }))
+    ),
     upsert: vi.fn(
       async (
         record: {
@@ -95,6 +105,8 @@ vi.mock('@/core', () => ({
           message: string
           messageId?: string
           llmMetrics?: Record<string, unknown>
+          widget?: Record<string, unknown>
+          isAddedToHistory?: boolean
         },
         params: { sessionId: string }
       ) => {
@@ -104,6 +116,8 @@ vi.mock('@/core', () => ({
           who: record.who,
           message: record.message,
           sentAt: mocks.persistedMessages.length + 1,
+          ...(record.widget ? { widget: record.widget } : {}),
+          ...(record.isAddedToHistory === false ? { isAddedToHistory: false } : {}),
           ...(record.messageId ? { messageId: record.messageId } : {}),
           ...(record.llmMetrics ? { llmMetrics: record.llmMetrics } : {})
         })
@@ -111,8 +125,10 @@ vi.mock('@/core', () => ({
     )
   },
   LLM_MANAGER: {
-    isLLMEnabled: true
+    isLLMEnabled: true,
+    coreLLMDuties: { 'action-calling': { temperature: 0 } }
   },
+  LLM_PROVIDER: { prompt: mocks.controlledPrompt },
   NLU: {
     get nluProcessResult(): Record<string, unknown> {
       return mocks.nluProcessResult
@@ -207,21 +223,24 @@ vi.mock('@/core/session-manager', () => ({
   }
 }))
 
-vi.mock('@/core/llm-manager/llm-duties/action-calling-llm-duty', () => ({
-  ActionCallingLLMDuty: class {
-    constructor(params: Record<string, unknown>) {
-      mocks.controlledDutyParams.push(params)
-    }
-
-    async init(): Promise<void> {}
-
-    async execute(): Promise<Record<string, unknown>> {
-      return {
-        output: JSON.stringify(mocks.controlledDutyOutputs.shift() || [
-          { status: 'not_found' }
-        ])
+vi.mock('@/helpers/skill-domain-helper', () => ({
+  SkillDomainHelper: {
+    getNewSkillConfig: vi.fn(async () => ({
+      actions: {
+        start_timer: {
+          type: 'logic',
+          description: 'Start a timer.',
+          parameters: {
+            duration_minutes: { type: 'number', description: 'Duration.' }
+          }
+        },
+        fallback_to_agent: {
+          type: 'logic',
+          description: 'Continue in agent mode.',
+          parameters: {}
+        }
       }
-    }
+    }))
   }
 }))
 
@@ -262,6 +281,7 @@ vi.mock('@/core/llm-manager/llm-duties/react-llm-duty', () => ({
     async init(): Promise<void> {}
 
     async execute(): Promise<Record<string, unknown>> {
+      await mocks.executeAgent()
       return structuredClone(mocks.agentDutyResult)
     }
   }
@@ -271,9 +291,32 @@ import {
   appendConversationMessage,
   getConversationHistory,
   listConversationSessions,
+  publishConversationEvent,
   runAgent,
-  runControlledSkill
+  runControlledSkill,
+  subscribeAgentEvents
 } from '@/core/http-server/http-plugins/leon-services'
+import { getConnectionCatalog } from '@/core/connections/connection-catalog'
+
+it('overrides only declared setup display values without mutating tool defaults', async () => {
+  const tool = {
+    toolkit_id: 'test', tool_id: 'connection', name: 'Test',
+    connection: { methods: { api_key: {
+      settings: { access_token: null },
+      setup: { instructions: ['Connect your account.'], values: { 'App name': 'Leon AI' } }
+    } } }
+  }
+  mocks.connectionRegistry.getConnectionTools.mockReturnValue([tool])
+  mocks.connectionRegistry.getConnectionTool.mockReturnValue(tool)
+
+  const overridden = (await getConnectionCatalog({
+    origin: 'http://localhost', apiVersion: 'v1',
+    setup_values: { 'App name': 'Example Assistant', access_token: 'ignored' }
+  }))[0]!.methods[0]!
+  expect(overridden.setup?.values).toEqual({ 'App name': 'Example Assistant' })
+  expect(overridden.settings).toEqual({ access_token: null })
+  expect((await getConnectionCatalog())[0]!.methods[0]!.setup?.values).toEqual({ 'App name': 'Leon AI' })
+})
 
 describe('HTTP plugin Leon services', () => {
   beforeEach(() => {
@@ -282,8 +325,10 @@ describe('HTTP plugin Leon services', () => {
     mocks.nextSessionId = 0
     mocks.sessions.clear()
     mocks.agentDutyParams.length = 0
-    mocks.controlledDutyParams.length = 0
     mocks.controlledDutyOutputs.length = 0
+    mocks.controlledPrompt.mockReset().mockImplementation(async () => ({
+      output: JSON.stringify(mocks.controlledDutyOutputs.shift() || [{ status: 'not_found' }])
+    }))
     mocks.agentDutyResult = {
       output: 'Acknowledged.',
       data: {
@@ -348,6 +393,62 @@ describe('HTTP plugin Leon services', () => {
     ])
   })
 
+  it('cancels controlled inference before action execution, history and completion', async () => {
+    const controller = new AbortController()
+    const events: Array<{ type: string }> = []
+    const unsubscribe = await subscribeAgentEvents(
+      { profile_id: 'owner-cancellation' },
+      (event) => {
+        events.push(event)
+      }
+    )
+    let finish!: (result: Record<string, unknown>) => void
+    let entered!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    mocks.controlledPrompt.mockImplementationOnce(async (_prompt, params) => {
+      expect(params.cancellationSignal).toBe(controller.signal)
+      entered()
+      return new Promise((resolve) => {
+        finish = resolve
+      })
+    })
+    const reason = new Error('Caller disconnected')
+    let settled = false
+    const pending = runControlledSkill({
+      profile_id: 'owner-cancellation',
+      query: 'Start a timer for 15 minutes.',
+      skill_name: 'timer_skill',
+      create_session: true,
+      signal: controller.signal
+    }).catch((error) => {
+      settled = true
+      return error
+    })
+
+    try {
+      await started
+      controller.abort(reason)
+      await Promise.resolve()
+      expect(settled).toBe(false)
+      finish({
+        output: JSON.stringify({
+          status: 'success',
+          name: 'start_timer',
+          arguments: { duration_minutes: 15 }
+        })
+      })
+      expect(await pending).toBe(reason)
+      expect(mocks.skillActions).toHaveLength(0)
+      expect(mocks.persistedMessages).toHaveLength(0)
+      expect(events.map((event) => event.type)).not.toContain('final_answer')
+      expect(events.map((event) => event.type)).not.toContain('tool_call')
+    } finally {
+      unsubscribe()
+    }
+  })
+
   it('leaves an explicit fallback action uncommitted for agent mode', async () => {
     mocks.controlledDutyOutputs.push([
       {
@@ -390,6 +491,22 @@ describe('HTTP plugin Leon services', () => {
         onProgressEvent: expect.any(Function)
       }
     ])
+  })
+
+  it('rejects canceled HTTP turns without persisting a final answer', async () => {
+    const controller = new AbortController()
+    const reason = new Error('Owner canceled the turn')
+    mocks.executeAgent.mockImplementationOnce(async () => controller.abort(reason))
+    await expect(runAgent({
+      query: 'Check the weather.', profile_id: 'owner-a',
+      create_session: true, signal: controller.signal
+    })).rejects.toBe(reason)
+    expect(mocks.agentDutyParams[0]?.['signal']).toBe(controller.signal)
+    expect(mocks.persistedMessages).toHaveLength(1)
+    expect(mocks.maintenanceTasks).toHaveLength(0)
+
+    await expect(runAgent({ query: 'Must not start', signal: controller.signal })).rejects.toBe(reason)
+    expect(mocks.agentDutyParams).toHaveLength(1)
   })
 
   it('persists coherent turns inside the requested profile and session', async () => {
@@ -458,6 +575,9 @@ describe('HTTP plugin Leon services', () => {
         executionHistory: [
           {
             function: 'structured_knowledge.memory.write',
+            toolCallTitle: 'Remember your city',
+            toolkitName: 'Structured Knowledge',
+            toolName: 'Memory',
             status: 'success',
             observation
           }
@@ -465,10 +585,16 @@ describe('HTTP plugin Leon services', () => {
       }
     }
 
-    await runAgent({
+    const turn = await runAgent({
       profile_id: 'owner-a',
       query: 'I live in Shenzhen. Remember that.',
       create_session: true
+    })
+
+    expect(turn.response_trace.tool_calls[0]?.tool_call_title).toBe('Remember your city')
+    expect(turn.response_trace.tool_calls[0]).toMatchObject({
+      toolkit_name: 'Structured Knowledge',
+      tool_name: 'Memory'
     })
 
     expect(mocks.maintenanceTasks.map(({ label }) => label)).toEqual([
@@ -540,6 +666,125 @@ describe('HTTP plugin Leon services', () => {
     })
   })
 
+  it('streams agent commentary and includes it in the final trace', async () => {
+    const inferences = [{
+      attemptId: 'attempt', startedAt: 1_000, provider: 'openai', duty: 'react',
+      phase: 'agent', transport: 'http', outcome: 'completed', elapsedMs: 900,
+      inferenceTimeoutMs: 120_000, streamIdleTimeoutMs: 30_000, lastEvent: 'finish'
+    }]
+    mocks.agentDutyResult = {
+      output: 'Done.',
+      data: {
+        agentResponseTrace: {
+          inferences, planSteps: [], toolCalls: [{
+            id: 'tool-1', name: 'system_utilities.tool_executions.read',
+            toolkitName: 'System Utilities', toolName: 'Tool Executions',
+            preparationStartedAt: 1_600, startedAt: 2_000, status: 'success',
+            commandOutput: 'First line\nSecond line\n', lastOutputAt: 2_500,
+            progressMessage: 'Receiving command output...'
+          }]
+        }
+      }
+    }
+    mocks.executeAgent.mockImplementationOnce(async () => {
+      const onProgress = mocks.agentDutyParams.at(-1)?.['onProgressEvent'] as (
+        event: Record<string, unknown>
+      ) => void
+      onProgress({
+        type: 'progress_message',
+        message: { id: 'progress-1', content: 'Inspecting the issue.', createdAt: 1_000 }
+      })
+      onProgress({
+        type: 'tool_call',
+        toolCall: {
+          id: 'tool-1', name: 'system_utilities.tool_executions.read',
+          status: 'running', commandOutput: 'First line\nSecond line\n',
+          lastOutputAt: 2_500, progressMessage: 'Receiving command output...'
+        }
+      })
+      onProgress({
+        type: 'tool_call',
+        toolCall: {
+          id: 'tool-1',
+          name: 'system_utilities.tool_executions.read',
+          toolkitName: 'System Utilities',
+          toolName: 'Tool Executions',
+          status: 'success'
+        }
+      })
+    })
+    const turn = await runAgent({
+      profile_id: 'progress-owner', query: 'Investigate this issue.', create_session: true, request_id: 'turn-1'
+    })
+    const events: Array<Record<string, unknown>> = []
+    const unsubscribe = await subscribeAgentEvents(
+      { profile_id: 'progress-owner', session_id: turn.session_id || '' },
+      (event) => events.push(event)
+    )
+    unsubscribe()
+    const progress = { id: 'progress-1', content: 'Inspecting the issue.', created_at: 1_000 }
+    expect(events.find((event) => event['type'] === 'progress_message')).toMatchObject({
+      turn_id: 'turn-1', response_id: 'turn-1', data: { message: progress }
+    })
+    expect(turn.response_trace.progress_messages).toEqual([progress])
+    expect(turn.response_trace.inferences).toEqual(inferences)
+    expect(turn.response_trace.tool_calls[0]).toMatchObject({
+      preparation_started_at: 1_600, started_at: 2_000,
+      command_output: 'First line\nSecond line\n', last_output_at: 2_500,
+      progress_message: 'Receiving command output...'
+    })
+    const toolCall = {
+      toolkit_name: 'System Utilities',
+      tool_name: 'Tool Executions'
+    }
+    expect(turn.response_trace.tool_calls[0]).toMatchObject(toolCall)
+    expect(events.filter((event) => event['type'] === 'tool_call').at(-1)).toMatchObject({
+      data: { tool_call: {
+        ...toolCall, command_output: 'First line\nSecond line\n', last_output_at: 2_500,
+        progress_message: 'Receiving command output...'
+      } }
+    })
+    expect(events.filter((event) => event['type'] === 'final_answer')).toHaveLength(1)
+  })
+
+  it('publishes trusted progress with Leon-owned sequence correlation', async () => {
+    const turn = await runAgent({
+      profile_id: 'owner-a',
+      query: 'Complete this in the background.',
+      create_session: true,
+      request_id: 'turn-1'
+    })
+    const events: Array<Record<string, unknown>> = []
+    const unsubscribe = await subscribeAgentEvents(
+      {
+        profile_id: 'owner-a',
+        session_id: turn.session_id || ''
+      },
+      (event) => events.push(event)
+    )
+
+    const published = await publishConversationEvent({
+      profile_id: 'owner-a',
+      session_id: turn.session_id || '',
+      turn_id: 'turn-1',
+      response_id: 'background:job-1',
+      type: 'reasoning_summary',
+      data: { summary: 'Inspecting the active application' }
+    })
+    unsubscribe()
+
+    expect(events.at(-1)).toEqual(published)
+    expect(published).toMatchObject({
+      profile_id: 'owner-a',
+      session_id: turn.session_id,
+      turn_id: 'turn-1',
+      response_id: 'background:job-1',
+      type: 'reasoning_summary',
+      data: { summary: 'Inspecting the active application' }
+    })
+    expect(published.sequence).toBeGreaterThan(0)
+  })
+
   it('rejects an external message for another profile session', async () => {
     const turn = await runAgent({
       profile_id: 'owner-a',
@@ -577,6 +822,43 @@ describe('HTTP plugin Leon services', () => {
         message_count: 2
       }
     ])
+  })
+
+  it('exposes saved widget envelopes to HTTP clients with readable fallback text', async () => {
+    mocks.sessions.set('owner-a', new Set(['widget-session']))
+    const widget = {
+      id: 'connection-widget',
+      widget: 'ConnectionWidget',
+      historyMode: 'system_widget' as const,
+      actionName: '',
+      supportedEvents: [],
+      onFetch: null,
+      fallbackText: 'Connect Spotify',
+      componentTree: {
+        component: 'ConnectionSetup',
+        props: { provider: 'music_audio.spotify' }
+      }
+    }
+
+    await appendConversationMessage({
+      profile_id: 'owner-a',
+      session_id: 'widget-session',
+      role: 'assistant',
+      message: 'Connect Spotify',
+      widget
+    })
+    expect(mocks.persistedMessages[0]?.isAddedToHistory).toBe(false)
+    const result = await getConversationHistory({
+      profile_id: 'owner-a',
+      session_id: 'widget-session'
+    })
+
+    expect(result.messages).toHaveLength(1)
+    expect(result.messages[0]).toMatchObject({
+      content: 'Connect Spotify',
+      widget,
+      message_id: widget.id
+    })
   })
 
   it('reads persisted history without crossing profile sessions', async () => {

@@ -141,14 +141,30 @@ export class BuiltInCommandManager {
         : []),
       ...exactCommand.getAutocompleteItems(autocompleteContext)
     ]
+    const normalizedInput = [
+      `${COMMAND_PREFIX}${parsedInput.command_name}`,
+      ...parsedInput.args
+    ].join(' ').toLowerCase()
+    // Enter submits the selected suggestion. A shorter command must not erase
+    // arguments the owner has already entered.
     const dedupedSuggestions = this.dedupeSuggestions(suggestions)
+      .filter((suggestion) => {
+        const normalizedValue = suggestion.value.trim().toLowerCase()
+          .split(WHITESPACE_PATTERN).join(' ')
+
+        return !normalizedInput.startsWith(`${normalizedValue} `)
+      })
 
     return {
       mode: 'autocomplete',
       session,
-      suggestions: exactCommand.shouldRankAutocompleteItems(autocompleteContext)
-        ? this.rankSuggestions(dedupedSuggestions, parsedInput)
-        : this.sortSuggestionsAlphabetically(dedupedSuggestions),
+      suggestions: exactCommand.shouldPreserveAutocompleteItemOrder(
+        autocompleteContext
+      )
+        ? dedupedSuggestions
+        : exactCommand.shouldRankAutocompleteItems(autocompleteContext)
+          ? this.rankSuggestions(dedupedSuggestions, parsedInput)
+          : this.sortSuggestionsAlphabetically(dedupedSuggestions),
       recent_suggestions: this.getRecentSuggestions()
     }
   }
@@ -239,6 +255,10 @@ export class BuiltInCommandManager {
       .getRequiredParameters()
       .map((parameter) => parameter.name)
 
+    // History records owner intent at submission time, including long-running,
+    // failed, cancelled, and parameter-gathering command executions.
+    this.persistRecentCommandValue(parsedInput.normalized_input)
+
     const executionResult = await command.execute({
       raw_input: parsedInput.normalized_input,
       args: parsedInput.args,
@@ -256,10 +276,6 @@ export class BuiltInCommandManager {
         : executionResult.status === 'error'
           ? 'error'
           : 'completed'
-
-    if (executionResult.status === 'completed') {
-      this.persistRecentCommandValue(parsedInput.normalized_input)
-    }
 
     return {
       mode: 'execute',
@@ -328,10 +344,6 @@ export class BuiltInCommandManager {
         : executionResult.status === 'error'
           ? 'error'
           : 'completed'
-
-    if (executionResult.status === 'completed') {
-      this.persistRecentCommandValue(session.raw_input)
-    }
 
     return {
       mode: 'execute',

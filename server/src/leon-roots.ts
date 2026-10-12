@@ -38,3 +38,14 @@ export const LEON_PROFILE_PATH = path.join(
 )
 export const PROFILE_DOT_ENV_PATH = path.join(LEON_PROFILE_PATH, '.env')
 export const PROFILE_CONFIG_PATH = path.join(LEON_PROFILE_PATH, 'config.yml')
+
+/**
+ * Resolve a tool within its owning toolkit directory.
+ */
+export function resolveToolDirectory(
+  root: string,
+  toolkitId: string,
+  toolId: string
+): string {
+  return path.join(root, toolkitId, toolId)
+}

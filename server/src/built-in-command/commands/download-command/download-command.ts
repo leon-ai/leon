@@ -14,6 +14,7 @@ import { FileHelper } from '@/helpers/file-helper'
 
 const DOWNLOADABLE_ASSET_TYPES = ['model']
 const MODEL_ASSET_TYPE = 'model'
+const MODEL_DOWNLOAD_PARALLEL_STREAMS = 3
 const DOWNLOAD_LOADING_MESSAGE =
   'Download in progress... Check the terminal logs to review the download progress details.'
 
@@ -169,7 +170,11 @@ export class DownloadCommand extends BuiltInCommand {
       const fileName = getModelFileNameFromURL(assetValue)
       destinationPath = path.join(LLM_DIR_PATH, fileName)
 
-      await FileHelper.downloadFile(assetValue, destinationPath)
+      // Parallel ranges keep large GGUF downloads fast while NetworkHelper
+      // resumes each interrupted range independently.
+      await FileHelper.downloadFile(assetValue, destinationPath, {
+        parallelStreams: MODEL_DOWNLOAD_PARALLEL_STREAMS
+      })
     } catch (error) {
       return {
         status: 'error',

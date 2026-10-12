@@ -1,0 +1,273 @@
+import { collectArtifacts } from '@/core/artifacts/artifact-context'
+import type { Artifact } from '@/core/artifacts/artifact-types'
+import { performance } from 'node:perf_hooks'
+import type { AgentResponseTrace } from '@/types'
+
+import { CONVERSATION_LOGGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
+import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
+import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
+import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+
+import type {
+  HTTPPluginAgentEvent,
+  HTTPPluginAgentTrace,
+  HTTPPluginRunAgentInput,
+  HTTPPluginRunAgentResult,
+  HTTPPluginToolCall
+} from '../types'
+import { publishAgentEvent } from './agent-event-channel'
+import { deserializeAgentTrace, serializeAgentTrace } from './agent-trace-serializer'
+import {
+  elapsedMilliseconds,
+  normalizeConversationSession,
+  normalizeOwnerProfileToolExecutions,
+  normalizeToolCalls,
+  resolveSessionId
+} from './normalizers'
+
+/**
+ * Runs one ReAct turn inside the requested profile and conversation session.
+ */
+export async function runAgent(
+  input: HTTPPluginRunAgentInput
+): Promise<HTTPPluginRunAgentResult> {
+  input.signal?.throwIfAborted()
+  const profileName = input.profile_id?.trim() || getActiveProfileName()
+  if (!isValidProfileName(profileName)) {
+    throw new Error(`Invalid Leon profile name "${profileName}".`)
+  }
+
+  return runWithProfileContext({ profileName }, async () => {
+    const totalStartedAt = performance.now()
+    await ensureActiveProfileRuntime()
+    input.signal?.throwIfAborted()
+    const sessionId = resolveSessionId(input)
+    const { query, files } = await prepareOwnerAttachments(input.query.trim(), input.attachments, sessionId)
+    const planSteps = new Map<
+      string,
+      HTTPPluginAgentTrace['plan_steps'][number]
+    >()
+    const planTransitions: NonNullable<
+      HTTPPluginAgentTrace['plan_transitions']
+    > = []
+    const toolCalls = new Map<string, HTTPPluginToolCall>()
+    const progressMessages = new Map<
+      string,
+      NonNullable<HTTPPluginAgentTrace['progress_messages']>[number]
+    >()
+    const toolStartedAt = new Map<string, number>()
+    let actionExecutionMs = 0
+    let reasoningSummary = 'Understanding your request'
+    const requestId = input.request_id || null
+    let turnArtifacts: Artifact[] = []
+    let finalMetrics: Record<string, unknown> | null = null
+    let finalTrace: HTTPPluginAgentTrace = { plan_steps: [], tool_calls: [] }
+    const emit = (
+      type: HTTPPluginAgentEvent['type'],
+      data: Record<string, unknown>
+    ): void => {
+      publishAgentEvent(getActiveProfileName(), {
+        session_id: sessionId,
+        turn_id: requestId,
+        response_id: requestId,
+        type,
+        data
+      })
+    }
+
+    emit('session_changed', {
+      session: normalizeConversationSession(
+        CONVERSATION_SESSION_MANAGER.getSession(sessionId)!
+      ),
+      is_active: true
+    })
+    const result = await CONVERSATION_SESSION_MANAGER.runWithSession(
+      sessionId,
+      async () => {
+        // HTTP turns bypass Brain, so persist both sides here to keep history coherent.
+        await CONVERSATION_LOGGER.upsert(
+          {
+            who: 'owner',
+            message: query,
+            isAddedToHistory: true,
+            ...(input.request_id ? { messageId: input.request_id } : {})
+          },
+          { sessionId }
+        )
+        CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(sessionId, query)
+
+        const duty = new ReActLLMDuty({
+          input: query,
+          ...(files.length ? { files } : {}),
+          ...(input.signal ? { signal: input.signal } : {}),
+          ...(input.additionalInstructions
+            ? { additionalInstructions: input.additionalInstructions }
+            : {}),
+          allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true,
+          onProgressEvent: (event): void => {
+            if (event.type === 'progress_message') {
+              const message = {
+                id: event.message.id,
+                content: event.message.content,
+                created_at: event.message.createdAt
+              }
+              progressMessages.set(message.id, message)
+              emit('progress_message', { message })
+              return
+            }
+            if (event.type === 'reasoning_summary') {
+              reasoningSummary = event.summary
+              emit('reasoning_summary', { summary: event.summary })
+              return
+            }
+            if (event.type === 'plan_step') {
+              const step = {
+                id: event.step.id,
+                label: event.step.label,
+                status: event.step.status
+              }
+              const previousStep = planSteps.get(step.id)
+
+              if (
+                previousStep?.label !== step.label ||
+                previousStep.status !== step.status
+              ) {
+                planTransitions.push({ ...step, changed_at: Date.now() })
+              }
+
+              planSteps.set(step.id, step)
+              emit('plan_step', { step })
+              return
+            }
+
+            const serialized = serializeAgentTrace({
+              planSteps: [], toolCalls: [event.toolCall]
+            }, true).tool_calls[0]!
+            const toolCall: HTTPPluginToolCall = {
+              ...toolCalls.get(event.toolCall.id),
+              ...serialized
+            }
+            if (event.toolCall.status === 'running') {
+              if (!toolStartedAt.has(event.toolCall.id)) {
+                toolStartedAt.set(event.toolCall.id, performance.now())
+              }
+            } else {
+              const startedAt = toolStartedAt.get(event.toolCall.id)
+              if (startedAt !== undefined) {
+                actionExecutionMs += performance.now() - startedAt
+                toolStartedAt.delete(event.toolCall.id)
+              }
+            }
+            toolCalls.set(event.toolCall.id, toolCall)
+            emit('tool_call', { tool_call: toolCall })
+          }
+        })
+
+        await duty.init()
+        input.signal?.throwIfAborted()
+        const collected = await collectArtifacts(() => duty.execute())
+        const dutyResult = collected.value
+
+        turnArtifacts = collected.artifacts
+        input.signal?.throwIfAborted()
+        const output = dutyResult?.output as unknown
+        const data = dutyResult?.data || {}
+        const llmMetrics =
+          data['llmMetrics'] && typeof data['llmMetrics'] === 'object'
+            ? (data['llmMetrics'] as Record<string, unknown>)
+            : null
+        const metrics = {
+          ...(llmMetrics || {}),
+          inference_duration_ms: Number(llmMetrics?.['durationMs'] || 0),
+          router_response_ms: Number(input.router_response_ms || 0),
+          action_execution_ms: Number(actionExecutionMs.toFixed(2)),
+          total_duration_ms: elapsedMilliseconds(totalStartedAt)
+        }
+        finalMetrics = metrics
+
+        for (const toolCall of normalizeToolCalls(dutyResult)) {
+          const existing = [...toolCalls.values()].find(
+            (candidate) => candidate.name === toolCall.name
+          )
+          toolCalls.set(existing?.id || toolCall.id || toolCall.name, {
+            ...existing,
+            ...toolCall
+          })
+        }
+        const durableTrace = data['agentResponseTrace']
+          ? serializeAgentTrace(data['agentResponseTrace'] as AgentResponseTrace, false)
+          : null
+        const trace: HTTPPluginAgentTrace = {
+          ...durableTrace,
+          reasoning_summary: reasoningSummary,
+          ...(progressMessages.size > 0
+            ? { progress_messages: [...progressMessages.values()] }
+            : {}),
+          plan_steps: [...planSteps.values()],
+          ...(planTransitions.length > 0
+            ? { plan_transitions: planTransitions }
+            : {}),
+          tool_calls: durableTrace?.tool_calls || [...toolCalls.values()],
+          metrics
+        }
+        finalTrace = trace
+
+        if (typeof output === 'string' && output.trim()) {
+          const messageId = input.request_id
+            ? `${input.request_id}:leon`
+            : undefined
+          await CONVERSATION_LOGGER.upsert(
+            {
+              who: 'leon',
+              message: output,
+              isAddedToHistory: true,
+              ...(messageId ? { messageId } : {}),
+              agentResponseTrace: (data['agentResponseTrace'] as AgentResponseTrace | undefined) ||
+                deserializeAgentTrace(trace)
+            },
+            { sessionId }
+          )
+          emit('metrics', { metrics })
+          emit('final_answer', {
+            message_id: messageId || '',
+            content: output,
+            response_trace: trace,
+            artifacts: turnArtifacts
+          })
+
+          if (data['hasExplicitMemoryWrite'] === true) {
+            POST_TURN_MAINTENANCE_QUEUE.enqueue('owner profile sync', () =>
+              syncOwnerProfileFromTurn(
+                query,
+                output,
+                normalizeOwnerProfileToolExecutions(dutyResult)
+              ).then(() => undefined)
+            )
+          }
+        }
+
+        return dutyResult
+      }
+    )
+    const data = result?.data || {}
+    const output = result?.output as unknown
+
+    return {
+      answer: typeof output === 'string' ? output : '',
+      tier: 'leon-react',
+      artifacts: turnArtifacts,
+      tool_calls: normalizeToolCalls(result),
+      profile_id: getActiveProfileName(),
+      session_id: sessionId,
+      request_id: input.request_id || null,
+      final_intent:
+        typeof data['finalIntent'] === 'string' ? data['finalIntent'] : null,
+      metrics: finalMetrics || data['llmMetrics'] || null,
+      response_trace: finalTrace
+    }
+  })
+}

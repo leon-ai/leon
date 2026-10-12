@@ -1,5 +1,6 @@
 import setupNVIDIALibs from './setup-nvidia-libs.js'
 import setupPyTorch from './setup-pytorch.js'
+import setupNLTKData from './setup-nltk-data.js'
 import setupTCPServerModels from './setup-tcp-server-models'
 
 /**
@@ -8,6 +9,7 @@ import setupTCPServerModels from './setup-tcp-server-models'
 export default async function setupVoiceResources() {
   await setupNVIDIALibs()
   await setupPyTorch()
+  await setupNLTKData()
   await setupTCPServerModels()
 }
 

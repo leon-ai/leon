@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
 import { SATELLITE_EVENTS } from '@/core/satellite/types'
+import * as artifactTransfer from '@/core/satellite/satellite-artifacts'
 import type { SatelliteToolInvocation } from '@/core/satellite/types'
-import type { ToolExecutionResult } from '@/core/tool-executor'
+import { SATELLITE_CONTEXT_MAX_AGE_MS } from '@/core/satellite/satellite-context'
+import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import {
   getActiveProfileName,
   runWithProfileContext
@@ -30,8 +32,115 @@ const TOOL_RESULT: ToolExecutionResult = {
 }
 
 describe('SatelliteRegistry', () => {
+  it('isolates discovery snapshots by owner, transport and lifetime and rejects arbitrary files', () => {
+    vi.useFakeTimers()
+    const transport = { emit: vi.fn() }
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME, device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    const payload = { files: { 'ACTIVITY.md': '> Device apps' } }
+    SATELLITE_REGISTRY.updateContext('other-owner', DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, payload, { emit: vi.fn() })
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+    for (const files of [{ '../OWNER.md': 'private' }, { 'ACTIVITY.md': 'x'.repeat(32_001) }, { 'ACTIVITY.md': 42 }]) {
+      SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, { files }, transport)
+      expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+    }
+    SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, payload, transport)
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toEqual(payload)
+    expect(SATELLITE_REGISTRY.getContext('other-owner', DEVICE_ID)).toBeNull()
+    vi.advanceTimersByTime(SATELLITE_CONTEXT_MAX_AGE_MS)
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+    SATELLITE_REGISTRY.updateContext(PROFILE_NAME, DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
+    expect(SATELLITE_REGISTRY.getContext(PROFILE_NAME, DEVICE_ID)).toBeNull()
+  })
+
   afterEach(() => {
     SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+
+  it('imports artifacts only for the authenticated invocation and preserves cancellation during import', async () => {
+    const destination = vi.spyOn(artifactTransfer, 'getSatelliteArtifactRoot').mockReturnValue('/server/session/artifacts')
+    let finishImport!: (result: ToolExecutionResult) => void
+    const receive = vi.spyOn(artifactTransfer, 'receiveSatelliteArtifacts').mockImplementation(() =>
+      new Promise((resolve) => { finishImport = resolve }))
+    const transport = { emit: vi.fn() }
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME, device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    const controller = new AbortController()
+    const execution = SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID, conversationSessionId: 'session',
+      toolInput: TOOL_INPUT, signal: controller.signal
+    })
+    const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
+    const payload = { invocationId: invocation.invocationId, result: TOOL_RESULT, artifacts: { root: '/device/artifacts', entries: [] } }
+    SATELLITE_REGISTRY.handleResult('another-owner', DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, { emit: vi.fn() })
+    expect(receive).not.toHaveBeenCalled()
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, transport)
+    expect(destination).toHaveBeenCalledWith(PROFILE_NAME, 'session')
+    expect(receive).toHaveBeenCalledWith('/server/session/artifacts', TOOL_RESULT, payload.artifacts)
+    const rejection = expect(execution).rejects.toThrow('canceled')
+    controller.abort()
+    finishImport(TOOL_RESULT)
+    await rejection
+  })
+
+  it.each(['abort', 'timeout', 'disconnect'] as const)('cancels device work on %s and ignores late results', async (cause) => {
+    vi.useFakeTimers()
+    const transport = { emit: vi.fn() }
+    const controller = new AbortController()
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME,
+      device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    const execution = SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID,
+      toolInput: TOOL_INPUT, signal: controller.signal
+    })
+    const rejection = expect(execution).rejects.toThrow()
+    const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
+    if (cause === 'abort') controller.abort()
+    else if (cause === 'timeout') await vi.advanceTimersByTimeAsync(15 * 60 * 1_000)
+    else SATELLITE_REGISTRY.unregister(PROFILE_NAME, DEVICE_ID)
+
+    expect(transport.emit).toHaveBeenCalledWith(SATELLITE_EVENTS.cancelTool, { invocationId: invocation.invocationId })
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, { invocationId: invocation.invocationId, result: TOOL_RESULT }, transport)
+    await rejection
+  })
+
+  it('does not dispatch aborted work or accept another owner or transport result', async () => {
+    const transport = { emit: vi.fn() }
+    SATELLITE_REGISTRY.register({
+      profileName: PROFILE_NAME,
+      device: { id: DEVICE_ID, name: 'Test', platform: 'linux' },
+      toolkits: [], transport
+    })
+    await expect(SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID, toolInput: TOOL_INPUT,
+      signal: AbortSignal.abort()
+    })).rejects.toThrow()
+    expect(transport.emit).not.toHaveBeenCalled()
+    const execution = SATELLITE_REGISTRY.invokeTool({
+      profileName: PROFILE_NAME, deviceId: DEVICE_ID, toolInput: TOOL_INPUT
+    })
+    const invocation = transport.emit.mock.calls[0]?.[1] as SatelliteToolInvocation
+    const payload = { invocationId: invocation.invocationId, result: TOOL_RESULT }
+    const resolved = vi.fn()
+    void execution.then(resolved)
+    SATELLITE_REGISTRY.handleResult('different-owner', DEVICE_ID, payload, transport)
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, { emit: vi.fn() })
+    await Promise.resolve()
+    expect(resolved).not.toHaveBeenCalled()
+    SATELLITE_REGISTRY.handleResult(PROFILE_NAME, DEVICE_ID, payload, transport)
+    await expect(execution).resolves.toEqual(TOOL_RESULT)
   })
 
   it('routes a tool call to the registered profile device', async () => {

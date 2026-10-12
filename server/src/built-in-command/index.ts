@@ -2,6 +2,7 @@ import { BuiltInCommandManager } from '@/built-in-command/built-in-command-manag
 import { DownloadCommand } from '@/built-in-command/commands/download-command/download-command'
 import { HelpCommand } from '@/built-in-command/commands/help-command/help-command'
 import { ModelCommand } from '@/built-in-command/commands/model-command/model-command'
+import { ConnectionCommand } from '@/built-in-command/commands/connection-command/connection-command'
 import { MoodCommand } from '@/built-in-command/commands/mood-command/mood-command'
 import { OpenCommand } from '@/built-in-command/commands/open-command/open-command'
 import { RestartCommand } from '@/built-in-command/commands/restart-command/restart-command'
@@ -12,6 +13,7 @@ import { StatusCommand } from '@/built-in-command/commands/status-command/status
 import { StopCommand } from '@/built-in-command/commands/stop-command/stop-command'
 import { ToolCommand } from '@/built-in-command/commands/tool-command/tool-command'
 import { VoiceCommand } from '@/built-in-command/commands/voice-command/voice-command'
+import { UsageCommand } from '@/built-in-command/commands/usage-command/usage-command'
 
 const WHITELISTED_BUILT_IN_COMMAND_NAMES = [
   'status',
@@ -21,12 +23,14 @@ const WHITELISTED_BUILT_IN_COMMAND_NAMES = [
   'download',
   'mood',
   'model',
+  'connection',
   'restart',
   'session',
   'skill',
   'stop',
   'tool',
-  'voice'
+  'voice',
+  'usage'
 ]
 
 const BUILT_IN_COMMANDS = [
@@ -36,12 +40,14 @@ const BUILT_IN_COMMANDS = [
   new DownloadCommand(),
   new MoodCommand(),
   new ModelCommand(),
+  new ConnectionCommand(),
   new RestartCommand(),
   new SessionCommand(),
   new SkillCommand(),
   new StopCommand(),
   new ToolCommand(),
   new VoiceCommand(),
+  new UsageCommand(),
   new HelpCommand()
 ]
   .filter((command) =>

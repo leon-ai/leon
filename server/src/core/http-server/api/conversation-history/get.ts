@@ -3,7 +3,7 @@ import { Type } from '@sinclair/typebox'
 import type { Static } from '@sinclair/typebox'
 
 import type { APIOptions } from '@/core/http-server/http-server'
-import { CONVERSATION_LOGGER } from '@/core'
+import { CONVERSATION_LOGGER, TOOLKIT_REGISTRY } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 
@@ -50,20 +50,38 @@ export const getConversationHistory: FastifyPluginAsync<APIOptions> = async (
         const sessionOptions = request.query.session_id
           ? { sessionId: request.query.session_id }
           : {}
-        const rawConversationLogs = nbOfLogsToLoad && nbOfLogsToLoad > 0
-          ? await CONVERSATION_LOGGER.load({
-              nbOfLogsToLoad,
-              ...sessionOptions
-            })
-          : await CONVERSATION_LOGGER.loadAll(sessionOptions)
-        const conversationLogs = rawConversationLogs.filter(
-          (conversationLog) => ConversationHistoryHelper.isAddedToHistory(conversationLog)
+        const rawConversationLogs =
+          nbOfLogsToLoad && nbOfLogsToLoad > 0
+            ? await CONVERSATION_LOGGER.load({
+                nbOfLogsToLoad,
+                ...sessionOptions
+              })
+            : await CONVERSATION_LOGGER.loadAll(sessionOptions)
+        const conversationLogs = rawConversationLogs.filter((conversationLog) =>
+          ConversationHistoryHelper.isVisibleInHistory(conversationLog)
         )
         const history = ConversationHistoryHelper.toHistoryItems(
           conversationLogs,
           {
             supportsWidgets,
-            source: 'conversation_history'
+            source: 'conversation_history',
+            resolveToolIconNames: (qualifiedName) => {
+              const [toolkitId, toolId] = qualifiedName.split('.')
+              if (!toolkitId || !toolId) {
+                return null
+              }
+
+              const resolvedTool = TOOLKIT_REGISTRY.resolveToolById(
+                toolId,
+                toolkitId
+              )
+              return resolvedTool
+                ? {
+                    toolkitIconName: resolvedTool.toolkitIconName,
+                    toolIconName: resolvedTool.toolIconName
+                  }
+                : null
+            }
           }
         )
 

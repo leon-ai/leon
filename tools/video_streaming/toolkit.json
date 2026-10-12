@@ -1,7 +1,7 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Video Streaming",
-  "description": "Tools for video processing and streaming.",
+  "description": "Inspect online video metadata, download media and subtitles, and process video and audio.",
   "icon_name": "video-line",
   "context_files": [
     "GPU_COMPUTE.md",

@@ -8,7 +8,7 @@
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://twitter.com/grenlouis"
+    "url": "https://x.com/grenlouis"
   },
   "binaries": {
     "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/qwen3_tts-v1.0.1/qwen3_tts_1.0.1-linux-x86_64",

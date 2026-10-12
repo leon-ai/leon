@@ -42,7 +42,9 @@ function rejectProfileAuthentication(reply: FastifyReply): void {
   })
 }
 
-/** Resolve the authenticated profile before any profile-owned HTTP API runs. */
+/**
+ * Resolve the authenticated profile before any profile-owned HTTP API runs.
+ */
 export async function authenticateProfileHTTPRequest(
   request: FastifyRequest,
   reply: FastifyReply

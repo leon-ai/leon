@@ -22,6 +22,7 @@ npm-debug.log
 debug.log
 # Keep ignoring a repo-root .env on the safe side.
 .env
+/.eslintcache
 .last-native-node-modules-rebuild
 bridges/nodejs/.last-nodejs-bridge-deps-sync
 bridges/python/src/.last-python-bridge-deps-sync

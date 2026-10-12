@@ -1,3 +1,4 @@
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import type { MessageLog } from '@/types'
 
 const SUMMARY_MAX_CHARS = 900
@@ -100,7 +101,7 @@ export function formatHistoryForCompaction(
 ): string {
   const lines = logs.map((log, index) => {
     const speaker = log.who === 'owner' ? 'Owner' : 'Leon'
-    const message = cleanText(log.message)
+    const message = cleanText(ConversationHistoryHelper.getModelMessage(log))
 
     return `${index + 1}. ${speaker}: ${message}`
   })

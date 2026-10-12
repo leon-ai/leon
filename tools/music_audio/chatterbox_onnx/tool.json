@@ -8,7 +8,7 @@
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://twitter.com/grenlouis"
+    "url": "https://x.com/grenlouis"
   },
   "binaries": {
     "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/chatterbox_onnx-v1.1.2/chatterbox_onnx_1.1.2-linux-x86_64",

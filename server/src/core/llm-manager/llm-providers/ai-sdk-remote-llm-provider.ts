@@ -1,3 +1,9 @@
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
+import type { GeneratedFile } from '@/core/llm-manager/media-generation/media-generation-types'
+import {
+  getActiveConversationSessionId,
+  recordTurnInference
+} from '@/core/session-manager/session-context'
 import type { AxiosResponse } from 'axios'
 import type {
   JSONSchema7,
@@ -9,16 +15,26 @@ import type {
   SharedV4ProviderOptions
 } from '@ai-sdk/provider'
 import { createOpenAI } from '@ai-sdk/openai'
+import { createOpenResponses } from '@ai-sdk/open-responses'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createAnthropic } from '@ai-sdk/anthropic'
+import { createMiniMax } from '@ai-sdk/minimax'
+import { createZai } from '@ai-sdk/zai'
+import { createDeepSeek } from '@ai-sdk/deepseek'
 import { createMoonshotAI } from '@ai-sdk/moonshotai'
-import { createHuggingFace } from '@ai-sdk/huggingface'
 import { createCerebras } from '@ai-sdk/cerebras'
 import { createGroq } from '@ai-sdk/groq'
-import { createWebSocketFetch } from '@vercel/ai-sdk-openai-websocket-fetch'
+import { OpenAIResponsesTransport } from './openai-responses-transport'
+import { CHATGPT_CODEX_BASE_URL } from '../llm-accounts/chatgpt-account-config'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
 import { CONFIG_MANAGER } from '@/config'
+import {
+  createInferenceMetadata,
+  InferenceAuthMode,
+  InferenceCredentialSource
+} from '@/core/llm-manager/inference-metadata'
+import type { LLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import type {
   CompletionParams,
   LLMReasoningEffort,
@@ -27,20 +43,39 @@ import type {
   OpenAITool,
   OpenAIToolCall,
   OpenAIToolChoice,
-  PromptOrChatHistory
+  ProviderReasoningItem,
+  PromptOrChatHistory,
+  ProviderCompactionContext
 } from '@/core/llm-manager/types'
-import { LLMProviders } from '@/core/llm-manager/types'
-import { canDisableLLMModelReasoning } from '@/core/llm-manager/llm-model-catalog'
+import { LLMDuties, LLMProviders } from '@/core/llm-manager/types'
+import {
+  canDisableLLMModelReasoning,
+  getLLMModelCatalogEntry
+} from '@/core/llm-manager/llm-model-catalog'
 import { mergeStreamingChunk } from '@/core/llm-manager/streaming-chunk'
 import { LogHelper } from '@/helpers/log-helper'
+import type { CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { readProviderUsage, recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
+import {
+  replayCompactionWindows,
+  restoreCompactionSources
+} from '@/core/llm-manager/provider-compaction'
+import {
+  CHARS_PER_TOKEN,
+  AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
+  AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
+} from '@/core/llm-manager/llm-duties/react-llm-duty/agent-constants'
 
 type AISDKFlavor =
   | 'openai-responses'
+  | 'open-responses'
   | 'openrouter'
   | 'openai-compatible'
   | 'anthropic'
+  | 'minimax'
+  | 'zai'
+  | 'deepseek'
   | 'moonshotai'
-  | 'huggingface'
   | 'cerebras'
   | 'groq'
 
@@ -50,6 +85,7 @@ interface AISDKProviderOptionsContext {
 }
 
 interface AISDKRemoteProviderConfig {
+  credentials?: Record<string, unknown> | undefined
   name: string
   providerName: string
   apiKeyEnv: string
@@ -58,6 +94,7 @@ interface AISDKRemoteProviderConfig {
   flavor: AISDKFlavor
   requiresApiKey?: boolean
   sendApiKeyAsBearer?: boolean
+  supportsToolResultFiles?: boolean
   headers?: (apiKey: string) => Record<string, string>
   transformRequestBody?: (args: Record<string, unknown>) => Record<string, unknown>
   buildProviderOptions?: (
@@ -67,8 +104,12 @@ interface AISDKRemoteProviderConfig {
 }
 
 interface CallState {
+  files: GeneratedFile[]
+  hostedToolIds: Set<string>
+  accounting?: CompletionAccounting
   text: string
   reasoning: string
+  reasoningItems: Map<string, ProviderReasoningItem>
   toolCallsById: Record<
     string,
     {
@@ -78,10 +119,12 @@ interface CallState {
     }
   >
   toolCallOrder: string[]
-  usedInputTokens: number
-  usedOutputTokens: number
+  usedInputTokens: number | undefined
+  usedOutputTokens: number | undefined
   finishReason?: string
+  compactionOutput?: Record<string, unknown>[]
 }
+
 
 const STRUCTURED_OUTPUT_JSON_INSTRUCTION =
   'Return only valid JSON matching the requested schema.'
@@ -93,16 +136,18 @@ export default class AISDKRemoteLLMProvider {
 
   private readonly config: AISDKRemoteProviderConfig
   private languageModel: LanguageModelV4
-  private openAIWebSocketFetch:
-    | ReturnType<typeof createWebSocketFetch>
-    | undefined
+  private responsesModel: LanguageModelV4 | undefined
+  private openAITransport: OpenAIResponsesTransport | undefined
 
   constructor(
     config: AISDKRemoteProviderConfig
   ) {
     this.config = config
     this.name = config.name
-    this.apiKey = CONFIG_MANAGER.getProviderAPIKey(config.providerName)
+    const apiKey = config.credentials
+      ? config.credentials['api_key'] || config.credentials['access_token']
+      : CONFIG_MANAGER.getProviderAPIKey(config.providerName)
+    this.apiKey = typeof apiKey === 'string' ? apiKey : undefined
     this.model = config.model
 
     LogHelper.title(this.name)
@@ -112,12 +157,74 @@ export default class AISDKRemoteLLMProvider {
     this.languageModel = this.createLanguageModel()
   }
 
+  /**
+   * Resolve the connection URL before a provider applies its endpoint format.
+   */
+  public static resolveBaseURL(
+    provider: Pick<LLMProviderAccountConfig, 'value' | 'baseURL'>,
+    credentials?: Record<string, unknown>
+  ): string {
+    if (credentials) {
+      // Browser-linked accounts use official endpoints. Imported keys stay with
+      // their fellow endpoint and never inherit a previous profile's proxy.
+      if (credentials['auth_kind'] === 'chatgpt') {
+        return CHATGPT_CODEX_BASE_URL
+      }
+      if (credentials['auth_kind'] === LLMProviders.OpenRouter) {
+        return provider.baseURL
+      }
+
+      return String(credentials['base_url'] || provider.baseURL)
+    }
+
+    return CONFIG_MANAGER.getProviderBaseURL(provider.value) || provider.baseURL
+  }
+
   public get modelName(): string {
     return this.model
   }
 
+  /**
+   * Binds opaque context to a model and credential without persisting secrets.
+   */
+  public get compactionBinding(): string {
+    return createInferenceMetadata({
+      provider: this.config.providerName,
+      model: this.model,
+      endpoint: null,
+      authMode: InferenceAuthMode.APIKey,
+      credentialSource: InferenceCredentialSource.AccountBinding,
+      connectionId: JSON.stringify([
+        this.config.providerName,
+        this.model,
+        this.config.baseURL,
+        this.config.credentials?.['account_id'] || this.apiKey,
+        ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
+          ? [
+              this.config.credentials['auth_flow'],
+              this.config.credentials['chatgpt_account_id']
+            ]
+          : [])
+      ])
+    }).connectionRef!
+  }
+
+  /**
+   * Selects replay windows already verified for this connection.
+   */
+  private getCompactionContexts(
+    transcript: AgentToolTranscriptMessage[]
+  ): ProviderCompactionContext[] {
+    return transcript.flatMap((message) =>
+      message.role === 'assistant' &&
+      message.compactionContext?.binding === this.compactionBinding
+        ? [message.compactionContext]
+        : []
+    )
+  }
+
   public dispose(): void {
-    this.openAIWebSocketFetch?.close()
+    this.openAITransport?.close()
   }
 
   protected setBaseURL(baseURL: string): void {
@@ -126,8 +233,9 @@ export default class AISDKRemoteLLMProvider {
     }
 
     this.config.baseURL = baseURL
-    this.openAIWebSocketFetch?.close()
-    this.openAIWebSocketFetch = undefined
+    this.openAITransport?.close()
+    this.openAITransport = undefined
+    this.responsesModel = undefined
     this.languageModel = this.createLanguageModel()
   }
 
@@ -145,12 +253,64 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
-  private createLanguageModel(): LanguageModelV4 {
+  private createLanguageModel(
+    flavor = this.config.flavor,
+    contexts: ProviderCompactionContext[] = [],
+    onStreamEvent?: CompletionParams['onStreamEvent']
+  ): LanguageModelV4 {
     const apiKey = this.apiKey || ''
     const headers = this.config.headers?.(apiKey)
+    const fetch: typeof globalThis.fetch = async (input, init) => {
+      let response: Response
+
+      if (this.config.flavor === 'openai-responses') {
+        if (contexts.length > 0) {
+          const body = JSON.parse(String(init?.body)) as Record<string, unknown>
+          body['input'] = replayCompactionWindows(
+            body['input'] as Record<string, unknown>[],
+            contexts
+          )
+          init = { ...init, body: JSON.stringify(body) }
+        }
+
+        response = await this.getOpenAITransport().fetch(input, init)
+      } else {
+        init?.signal?.throwIfAborted()
+        this.recordInference(input instanceof Request ? input.url : String(input))
+
+        response = await globalThis.fetch(input, init)
+      }
+
+      if (!onStreamEvent || !response.body || !response.ok) {
+        return response
+      }
+
+      // Observe bytes before SDK parsing discards SSE comments and heartbeats.
+      // The observer belongs to this request, never to the shared provider.
+      const body = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
+        transform: (chunk, controller): void => {
+          if (chunk.byteLength > 0 && !init?.signal?.aborted) {
+            onStreamEvent({
+              type: 'transport-activity',
+              transport: this.config.flavor === 'openai-responses' &&
+                this.config.credentials?.['auth_kind'] !== 'chatgpt'
+                ? 'websocket'
+                : 'http'
+            })
+          }
+
+          controller.enqueue(chunk)
+        }
+      }))
+
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      })
+    }
 
     if (this.config.flavor === 'openai-responses') {
-      const fetch = this.getOpenAIWebSocketFetch()
       const provider = createOpenAI({
         apiKey,
         baseURL: this.config.baseURL,
@@ -161,8 +321,21 @@ export default class AISDKRemoteLLMProvider {
       return provider.responses(this.model)
     }
 
+    if (flavor === 'open-responses') {
+      const provider = createOpenResponses({
+        name: this.config.providerName,
+        url: `${this.config.baseURL.replace(/\/+$/, '')}/responses`,
+        apiKey,
+        fetch,
+        ...(headers ? { headers } : {})
+      })
+
+      return provider(this.model)
+    }
+
     if (this.config.flavor === 'openai-compatible') {
       const provider = createOpenAICompatible({
+        fetch,
         name: this.config.providerName,
         baseURL: this.config.baseURL,
         includeUsage: true,
@@ -182,6 +355,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'openrouter') {
       const provider = createOpenRouter({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         compatibility: 'strict',
@@ -195,11 +369,37 @@ export default class AISDKRemoteLLMProvider {
       })
     }
 
-    if (this.config.flavor === 'anthropic') {
-      const provider = createAnthropic({
+    if (this.config.flavor === 'anthropic' || this.config.flavor === 'minimax') {
+      const createProvider = this.config.flavor === 'minimax'
+        ? createMiniMax
+        : createAnthropic
+      const provider = createProvider({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
+      })
+
+      return provider(this.model)
+    }
+
+    if (this.config.flavor === 'zai') {
+      const provider = createZai({
+        fetch,
+        apiKey,
+        baseURL: this.config.baseURL,
+        ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
+      })
+
+      return provider(this.model)
+    }
+
+    if (this.config.flavor === 'deepseek') {
+      const provider = createDeepSeek({
+        fetch,
+        apiKey,
+        baseURL: this.config.baseURL,
+        ...(headers ? { headers } : {})
       })
 
       return provider(this.model)
@@ -207,16 +407,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'moonshotai') {
       const provider = createMoonshotAI({
-        apiKey,
-        baseURL: this.config.baseURL,
-        ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
-      })
-
-      return provider(this.model)
-    }
-
-    if (this.config.flavor === 'huggingface') {
-      const provider = createHuggingFace({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -227,6 +418,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'cerebras') {
       const provider = createCerebras({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -237,6 +429,7 @@ export default class AISDKRemoteLLMProvider {
 
     if (this.config.flavor === 'groq') {
       const provider = createGroq({
+        fetch,
         apiKey,
         baseURL: this.config.baseURL,
         ...(headers && Object.keys(headers).length > 0 ? { headers } : {})
@@ -247,33 +440,94 @@ export default class AISDKRemoteLLMProvider {
 
     throw new Error(`Unsupported AI SDK flavor: ${this.config.flavor}`)
   }
-  private getLanguageModel(): LanguageModelV4 {
+  private getLanguageModel(
+    completionParams: CompletionParams,
+    prompt: PromptOrChatHistory,
+    onStreamEvent?: CompletionParams['onStreamEvent']
+  ): LanguageModelV4 {
+    let flavor = this.config.flavor
+
+    // The dedicated DeepSeek SDK only exposes Chat Completions and downgrades
+    // JSON schemas there. Responses retains Leon's schema-constrained calls.
+    if (this.config.flavor === 'deepseek' && completionParams.data) {
+      flavor = 'open-responses'
+    }
+
+    // Groq Responses supports streaming and tool calls, but has no seed or
+    // hidden-reasoning format. Keep its native SDK for those explicit controls.
+    if (
+      this.config.flavor === 'groq' && completionParams.seed === undefined &&
+      completionParams.disableThinking !== true &&
+      completionParams.reasoningMode !== 'off' &&
+      completionParams.reasoningEffort !== 'none'
+    ) {
+      flavor = 'open-responses'
+    }
+
+    const contexts = Array.isArray(prompt) && this.config.flavor === 'openai-responses'
+      ? this.getCompactionContexts(prompt)
+      : []
+
+    if (contexts.length > 0 || onStreamEvent) {
+      return this.createLanguageModel(flavor, contexts, onStreamEvent)
+    }
+
+    if (flavor === 'open-responses') {
+      this.responsesModel ??= this.createLanguageModel(flavor)
+      return this.responsesModel
+    }
+
     return this.languageModel
   }
 
-  private getOpenAIWebSocketFetch(): ReturnType<typeof createWebSocketFetch> {
-    if (!this.openAIWebSocketFetch) {
-      this.openAIWebSocketFetch = createWebSocketFetch({
-        url: this.toOpenAIResponsesWebSocketURL(this.config.baseURL)
-      })
-    }
+  /**
+   * Lazily creates the shared transport for this provider binding.
+   */
+  private getOpenAITransport(): OpenAIResponsesTransport {
+    this.openAITransport ??= new OpenAIResponsesTransport(
+      this.config.baseURL,
+      this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? String(this.config.credentials['account_id'] || '')
+        : undefined,
+      (endpoint) => {
+        this.recordInference(endpoint)
+      }
+    )
 
-    return this.openAIWebSocketFetch
+    return this.openAITransport
   }
 
-  private toOpenAIResponsesWebSocketURL(baseURL: string): string {
-    const url = new URL(baseURL)
-    const normalizedBasePath = url.pathname.endsWith('/')
-      ? url.pathname
-      : `${url.pathname}/`
+  /**
+   * Attributes dispatched requests to this provider instance's resolved binding.
+   */
+  protected recordInference(
+    endpoint: string,
+    apiKey: string | undefined = this.apiKey
+  ): void {
+    const credentials = this.config.credentials
+    const subscription = this.config.flavor === 'openai-responses' &&
+      credentials?.['auth_kind'] === 'chatgpt'
+    const authMode = subscription
+      ? InferenceAuthMode.ChatGPTOAuth
+      : apiKey
+        ? InferenceAuthMode.APIKey
+        : InferenceAuthMode.None
 
-    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
-    url.pathname = new URL('responses', `http://localhost${normalizedBasePath}`)
-      .pathname
-    url.search = ''
-    url.hash = ''
-
-    return url.toString()
+    recordTurnInference(createInferenceMetadata({
+      provider: this.config.providerName,
+      model: this.modelName,
+      authMode,
+      privateValues: apiKey ? [apiKey] : [],
+      credentialSource: credentials
+        ? InferenceCredentialSource.AccountBinding
+        : authMode === InferenceAuthMode.APIKey
+          ? InferenceCredentialSource.ProfileAPIKey
+          : InferenceCredentialSource.None,
+      ...(credentials?.['account_id']
+        ? { connectionId: String(credentials['account_id']) }
+        : {}),
+      endpoint
+    }))
   }
 
   private toTextPrompt(
@@ -294,7 +548,10 @@ export default class AISDKRemoteLLMProvider {
     if (normalizedSystemPrompt) {
       messages.push({
         role: 'system',
-        content: normalizedSystemPrompt
+        content: normalizedSystemPrompt,
+        ...(completionParams.promptCacheKey && this.config.flavor === 'openrouter'
+          ? { providerOptions: { openrouter: { cacheControl: { type: 'ephemeral' } } } }
+          : {})
       })
     }
 
@@ -310,7 +567,7 @@ export default class AISDKRemoteLLMProvider {
           content: [
             {
               type: 'text',
-              text: message.message
+              text: ConversationHistoryHelper.getModelMessage(message)
             }
           ]
         })
@@ -376,35 +633,172 @@ export default class AISDKRemoteLLMProvider {
   private toAgentToolMessages(
     transcript: AgentToolTranscriptMessage[]
   ): LanguageModelV4Prompt {
-    return transcript.map((message) => {
+    const messages: LanguageModelV4Prompt = []
+    transcript = restoreCompactionSources(transcript, this.compactionBinding)
+    const supported = getLLMModelCatalogEntry(this.config.providerName as LLMProviders, this.model)?.inputMediaTypes
+    // A session can change models. Keep extracted text and source references,
+    // but never replay unsupported binary inputs or claim they were observed.
+    transcript = transcript.map((message) => {
+      if (message.role === 'assistant' || !message.files?.length) return message
+      const files = message.files.filter((file) => supported?.includes(file.mediaType) &&
+        (this.config.credentials?.['auth_kind'] !== 'chatgpt' ||
+          file.mediaType.startsWith('image/') || file.mediaType === 'application/pdf'))
+      if (files.length === message.files.length) return message
+      return { ...message, files, content: `${message.content}\n[Some media inputs were not sent: native support is unavailable or unverified for this model. Use the attached source paths with local document extraction/OCR or transcription tools. OCR/transcription cannot describe non-text visual content.]` }
+    })
+
+    for (let index = 0; index < transcript.length; index += 1) {
+      const message = transcript[index]!
+
       if (message.role === 'user') {
-        return {
+        messages.push({
           role: 'user',
-          content: [{ type: 'text', text: message.content }]
-        }
+          content: [
+            { type: 'text', text: message.content },
+            ...(message.files || []).map((file) => ({
+              type: 'file' as const,
+              data: { type: 'data' as const, data: file.dataBase64 },
+              mediaType: file.mediaType,
+              ...(file.filename ? { filename: file.filename } : {}),
+              ...this.getVisualFileProviderOptions(file.visualDetail)
+            }))
+          ]
+        })
+        continue
       }
 
       if (message.role === 'tool') {
-        return {
-          role: 'tool',
-          content: [
-            {
-              type: 'tool-result',
-              toolCallId: message.toolCallId,
-              toolName: message.toolName,
-              output: {
-                type: 'text',
-                value: message.content
-              }
-            }
-          ]
+        const toolResults: Extract<
+          LanguageModelV4Prompt[number],
+          { role: 'tool' }
+        >['content'] = []
+        const visualEvidence: Extract<
+          LanguageModelV4Prompt[number],
+          { role: 'user' }
+        >['content'] = []
+
+        // Keep every result from a parallel tool-call batch contiguous. Some
+        // provider protocols reject a user message before all results arrive.
+        while (index < transcript.length) {
+          const toolMessage = transcript[index]!
+          if (toolMessage.role !== 'tool') {
+            index -= 1
+            break
+          }
+
+          toolResults.push({
+            type: 'tool-result',
+            toolCallId: toolMessage.toolCallId,
+            toolName: toolMessage.toolName,
+            output: this.config.supportsToolResultFiles && toolMessage.files?.length
+              ? {
+                  type: 'content',
+                  value: [
+                    { type: 'text', text: toolMessage.content },
+                    ...toolMessage.files.map((file) => ({
+                      type: 'file' as const,
+                      data: { type: 'data' as const, data: file.dataBase64 },
+                      mediaType: file.mediaType,
+                      ...(file.filename ? { filename: file.filename } : {}),
+                      ...this.getVisualFileProviderOptions(file.visualDetail)
+                    }))
+                  ]
+                }
+              : { type: 'text', value: toolMessage.content }
+          })
+
+          if (toolMessage.files?.length && !this.config.supportsToolResultFiles) {
+            visualEvidence.push({
+              type: 'text',
+              text: `Visual evidence returned by ${toolMessage.toolName}.`
+            })
+            visualEvidence.push(
+              ...toolMessage.files.map((file) => ({
+                type: 'file' as const,
+                data: {
+                  type: 'data' as const,
+                  data: file.dataBase64
+                },
+                mediaType: file.mediaType,
+                ...(file.filename ? { filename: file.filename } : {}),
+                ...this.getVisualFileProviderOptions(file.visualDetail)
+              }))
+            )
+          }
+
+          index += 1
         }
+
+        messages.push({
+          role: 'tool',
+          content: toolResults
+        })
+        if (visualEvidence.length > 0) {
+          // User-role image parts are the common multimodal input surface.
+          // Tool-result image parts are not preserved by every compatible API.
+          messages.push({ role: 'user', content: visualEvidence })
+        }
+        continue
       }
 
       const content: Extract<
         LanguageModelV4Prompt[number],
         { role: 'assistant' }
       >['content'] = []
+      if (message.compactionContext) {
+        const item = message.compactionContext.output.find(
+          (output) => output['type'] === 'compaction'
+        )!
+
+        content.push({
+          type: 'custom',
+          kind: 'openai.compaction',
+          providerOptions: {
+            openai: {
+              itemId: String(item['id']),
+              encryptedContent: String(item['encrypted_content'])
+            }
+          }
+        })
+        messages.push({ role: 'assistant', content })
+        continue
+      }
+      const reasoningItems = (message.reasoningItems || []).filter(
+        (item) => item.provider === this.config.providerName &&
+          // Old subscription reasoning has no route binding. Preserve source
+          // messages, but don't replay opaque state from token-sharing grants.
+          (item.binding
+            ? item.binding === this.compactionBinding
+            : this.config.credentials?.['auth_kind'] !== 'chatgpt')
+      )
+      for (const item of reasoningItems) {
+        content.push({
+          type: 'reasoning',
+          text: item.text,
+          ...(item.providerOptions
+            ? { providerOptions: item.providerOptions }
+            : item.provider === LLMProviders.OpenAI
+              ? { providerOptions: { openai: {
+                  itemId: item.id,
+                  ...(item.encryptedContent
+                    ? { reasoningEncryptedContent: item.encryptedContent }
+                    : {})
+                } } }
+              : {})
+        })
+      }
+      // Plain-text reasoning must be replayed with tool results on compatible
+      // APIs, including older checkpoints without provider-owned items.
+      if (
+        reasoningItems.length === 0 && message.reasoning &&
+        (this.config.flavor === 'openai-compatible' ||
+          this.config.flavor === 'open-responses' ||
+          this.config.flavor === 'zai' ||
+          this.config.flavor === 'deepseek' ||
+          this.config.flavor === 'moonshotai')
+      ) {
+        content.push({ type: 'reasoning', text: message.reasoning })
+      }
       if (message.content.trim()) {
         content.push({ type: 'text', text: message.content })
       }
@@ -417,11 +811,34 @@ export default class AISDKRemoteLLMProvider {
         })
       }
 
-      return {
+      messages.push({
         role: 'assistant',
         content
+      })
+    }
+
+    return messages
+  }
+
+  private getVisualFileProviderOptions(
+    visualDetail: 'auto' | 'low' | 'high' | undefined
+  ): { providerOptions: SharedV4ProviderOptions } | Record<string, never> {
+    if (
+      !visualDetail ||
+      (this.config.flavor !== 'openai-responses' &&
+        this.config.flavor !== 'open-responses' &&
+        this.config.flavor !== 'deepseek')
+    ) {
+      return {}
+    }
+
+    return {
+      providerOptions: {
+        [this.config.flavor === 'openai-responses' ? 'openai' : this.config.providerName]: {
+          imageDetail: visualDetail
+        }
       }
-    })
+    }
   }
 
   private parseAgentToolInput(input: string): unknown {
@@ -522,6 +939,13 @@ export default class AISDKRemoteLLMProvider {
     reasoningMode: LLMReasoningMode,
     completionParams: CompletionParams
   ): LLMReasoningEffort {
+    if (
+      (reasoningMode === 'off' || completionParams.reasoningEffort === 'none') &&
+      !canDisableLLMModelReasoning(LLMProviders.OpenAI, this.model)
+    ) {
+      return 'low'
+    }
+
     if (completionParams.reasoningEffort) {
       return completionParams.reasoningEffort
     }
@@ -537,6 +961,19 @@ export default class AISDKRemoteLLMProvider {
     completionParams: CompletionParams
   ): Record<string, unknown> {
     return {
+      // Configure storage before SDK serialization so encrypted reasoning is included.
+      store: false,
+      ...(completionParams.dutyType === LLMDuties.ReAct &&
+        !completionParams.disableContextCompaction
+        ? {
+            contextManagement: [
+              {
+                type: 'compaction',
+                compactThreshold: AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS
+              }
+            ]
+          }
+        : {}),
       ...(completionParams.promptCacheKey
         ? { promptCacheKey: completionParams.promptCacheKey }
         : {}),
@@ -577,8 +1014,28 @@ export default class AISDKRemoteLLMProvider {
       const routing = completionParams.serviceTier === 'priority'
         ? { provider: { sort: 'throughput' } }
         : {}
+      const catalogEntry = getLLMModelCatalogEntry(LLMProviders.OpenRouter, this.model)
 
-      if (reasoningMode === 'off') {
+      if (catalogEntry?.reasoning.includes('on')) {
+        const enabled = reasoningMode !== 'off' &&
+          completionParams.reasoningEffort !== 'none'
+        const reasoningBudget = this.getReasoningBudget(completionParams)
+
+        return {
+          openrouter: {
+            ...routing,
+            reasoning: {
+              enabled,
+              ...(!enabled ? { exclude: true } : {}),
+              ...(enabled && typeof reasoningBudget === 'number'
+                ? { max_tokens: reasoningBudget }
+                : {})
+            }
+          }
+        }
+      }
+
+      if (reasoningMode === 'off' || completionParams.reasoningEffort === 'none') {
         const reasoning = canDisableLLMModelReasoning(
           LLMProviders.OpenRouter,
           this.model
@@ -619,13 +1076,16 @@ export default class AISDKRemoteLLMProvider {
       }
 
       const reasoningBudget = this.getReasoningBudget(completionParams)
+      // With no explicit effort, let the provider choose its model default.
       return {
         openrouter: {
           ...routing,
           reasoning: {
             ...(typeof reasoningBudget === 'number'
               ? { max_tokens: reasoningBudget }
-              : { effort: completionParams.reasoningEffort || 'high' })
+              : completionParams.reasoningEffort
+                ? { effort: completionParams.reasoningEffort }
+                : { enabled: true })
           }
         }
       }
@@ -663,39 +1123,20 @@ export default class AISDKRemoteLLMProvider {
       }
 
       if (reasoningMode === 'on') {
-        const reasoningBudget = this.getReasoningBudget(
-          completionParams,
-          1024
-        )
         return {
           moonshotai: {
-            thinking: {
-              type: 'enabled',
-              ...(typeof reasoningBudget === 'number'
-                ? { budgetTokens: reasoningBudget }
-                : {})
-            },
+            thinking: { type: 'enabled' },
             reasoningHistory: 'interleaved'
           }
         }
       }
 
-      // K2's explicit thinking budget starts at 1,024 tokens, so guarded mode
-      // falls back to disabled instead of forcing a large reasoning block.
+      // K2 has no thinking-token budget control. Disable thinking for short
+      // guarded calls rather than sending an unsupported budget parameter.
       return {
         moonshotai: {
           thinking: { type: 'disabled' },
           reasoningHistory: 'disabled'
-        }
-      }
-    }
-
-    if (this.config.flavor === 'huggingface') {
-      return {
-        huggingface: {
-          reasoningEffort:
-            completionParams.reasoningEffort ||
-            (reasoningMode === 'on' ? 'medium' : 'low')
         }
       }
     }
@@ -732,14 +1173,26 @@ export default class AISDKRemoteLLMProvider {
     return {}
   }
 
-  private buildCallOptions(
+  /**
+   * Builds SDK options while allowing provider-specific compatibility policies.
+   */
+  protected buildCallOptions(
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
   ): LanguageModelV4CallOptions {
+    const catalogEntry = getLLMModelCatalogEntry(
+      this.config.providerName as LLMProviders,
+      this.model
+    )
     const shouldOmitTemperature =
+      catalogEntry?.supportsTemperature === false ||
       this.config.shouldOmitTemperature?.(completionParams) === true
     const normalizedSchema = this.normalizeSchema(completionParams.data)
     const options: LanguageModelV4CallOptions = {
+      ...(this.config.flavor === 'openai-responses' &&
+        completionParams.dutyType === LLMDuties.ReAct
+        ? { includeRawChunks: true }
+        : {}),
       prompt: this.toTextPrompt(
         prompt,
         completionParams,
@@ -762,9 +1215,25 @@ export default class AISDKRemoteLLMProvider {
     const tools = this.toTools(completionParams.tools)
     if (tools.length > 0) {
       options.tools = tools
+
+      if (this.config.flavor === 'anthropic' && completionParams.shouldStream) {
+        // Claude can emit long arguments without buffering each JSON value.
+        // MiniMax shares this SDK but does not document the same API option.
+        for (const tool of tools) {
+          tool.providerOptions = { anthropic: { eagerInputStreaming: true } }
+        }
+      }
     }
 
     const toolChoice = this.toToolChoice(completionParams.toolChoice)
+    if (
+      catalogEntry?.supportsForcedToolChoice === false &&
+      (toolChoice?.type === 'required' || toolChoice?.type === 'tool')
+    ) {
+      throw new Error(
+        `${this.model} does not support forced tool selection. Use toolChoice "auto" or "none".`
+      )
+    }
     if (toolChoice) {
       options.toolChoice = toolChoice
     }
@@ -788,6 +1257,15 @@ export default class AISDKRemoteLLMProvider {
 
     if (customProviderOptions) {
       Object.assign(providerOptions, customProviderOptions)
+    } else if (catalogEntry?.reasoning.length === 1) {
+      // Auto-only entries use the provider's reasoning defaults. Do not invent
+      // an effort level for gateways with undocumented model-specific controls.
+      if (
+        this.config.flavor === 'openrouter' &&
+        completionParams.serviceTier === 'priority'
+      ) {
+        providerOptions['openrouter'] = { provider: { sort: 'throughput' } }
+      }
     } else if (managedReasoningMode) {
       Object.assign(
         providerOptions,
@@ -797,11 +1275,14 @@ export default class AISDKRemoteLLMProvider {
       const openAIOptions = this.buildOpenAICommonProviderOptions(
         completionParams
       )
-      if (completionParams.disableThinking === true) {
+      if (
+        completionParams.disableThinking === true ||
+        completionParams.reasoningEffort
+      ) {
         providerOptions['openai'] = {
           ...openAIOptions,
           reasoningEffort: this.getOpenAIReasoningEffort(
-            'off',
+            completionParams.disableThinking === true ? 'off' : 'on',
             completionParams
           )
         }
@@ -819,21 +1300,10 @@ export default class AISDKRemoteLLMProvider {
         : {}
 
       if (completionParams.disableThinking === true) {
-        const reasoning = canDisableLLMModelReasoning(
-          LLMProviders.OpenRouter,
-          this.model
+        Object.assign(
+          providerOptions,
+          this.buildManagedProviderOptions('off', completionParams)
         )
-          ? {
-              enabled: false,
-              effort: 'none',
-              exclude: true
-            }
-          : { effort: 'low' }
-
-        providerOptions['openrouter'] = {
-          ...routing,
-          reasoning
-        }
       } else if (Object.keys(routing).length > 0) {
         providerOptions['openrouter'] = routing
       }
@@ -862,14 +1332,6 @@ export default class AISDKRemoteLLMProvider {
             thinking: { type: 'enabled' },
             reasoningHistory: 'interleaved'
           }
-    } else if (this.config.flavor === 'huggingface') {
-      providerOptions['huggingface'] = completionParams.disableThinking === true
-        ? {
-            reasoningEffort: 'low'
-          }
-        : {
-            reasoningEffort: 'high'
-          }
     } else if (this.config.flavor === 'cerebras') {
       providerOptions['cerebras'] = completionParams.disableThinking === true
         ? {
@@ -890,8 +1352,40 @@ export default class AISDKRemoteLLMProvider {
           }
     }
 
+    // OpenRouter's SDK omits tool_choice when the tool list is empty. Preserve
+    // an explicit text-only request even if the transcript contains tool calls.
+    if (this.config.flavor === 'openrouter' && toolChoice?.type === 'none') {
+      providerOptions['openrouter'] = {
+        ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
+        tool_choice: 'none'
+      }
+    }
+
+    if (this.config.flavor === 'openrouter') {
+      const sessionId = getActiveConversationSessionId()
+      if (sessionId) {
+        // Stable session routing lets gateway providers reuse their prompt cache.
+        providerOptions['openrouter'] = {
+          ...(providerOptions['openrouter'] as Record<string, unknown> | undefined),
+          session_id: sessionId
+        }
+      }
+    }
+
     if (Object.keys(providerOptions).length > 0) {
       options.providerOptions = providerOptions as SharedV4ProviderOptions
+    }
+
+    if (completionParams.promptCacheKey && this.config.providerName === LLMProviders.Anthropic) {
+      // Claude caching is opt-in; the agent already marks requests whose
+      // growing prompt prefix should be reused across iterations.
+      options.providerOptions = {
+        ...options.providerOptions,
+        anthropic: {
+          ...options.providerOptions?.['anthropic'],
+          cacheControl: { type: 'ephemeral' }
+        }
+      }
     }
 
     return options
@@ -908,14 +1402,92 @@ export default class AISDKRemoteLLMProvider {
     }
   }
 
+  /**
+   * Publishes a snapshot for display without executing incomplete arguments.
+   */
+  private emitToolCall(
+    state: CallState,
+    toolCallId: string,
+    completionParams: CompletionParams
+  ): void {
+    const call = state.toolCallsById[toolCallId]!
+
+    if (!state.hostedToolIds.has(toolCallId)) {
+      completionParams.onToolCall?.({
+        id: toolCallId,
+        type: 'function',
+        function: { name: call.functionName, arguments: call.arguments }
+      })
+    }
+  }
+
   private createCallState(): CallState {
     return {
+      files: [],
+      hostedToolIds: new Set(),
       text: '',
       reasoning: '',
+      reasoningItems: new Map(),
       toolCallsById: {},
       toolCallOrder: [],
-      usedInputTokens: 0,
-      usedOutputTokens: 0
+      usedInputTokens: undefined,
+      usedOutputTokens: undefined
+    }
+  }
+
+  /**
+   * Keeps the latest server compaction and all output after it in provider order.
+   */
+  private captureCompactionOutput(state: CallState, output: unknown): void {
+    if (this.config.flavor !== 'openai-responses' || !Array.isArray(output)) {
+      return
+    }
+
+    const index = output.findLastIndex((item) =>
+      item?.type === 'compaction' &&
+      typeof item.id === 'string' &&
+      typeof item.encrypted_content === 'string' && item.encrypted_content
+    )
+    if (index >= 0) {
+      state.compactionOutput = output.slice(index)
+    }
+  }
+
+  /**
+   * Saves provider context alongside flattened source evidence for target changes.
+   */
+  private buildCompactionContext(
+    state: CallState,
+    prompt: PromptOrChatHistory,
+    message: AgentToolTranscriptMessage
+  ): ProviderCompactionContext | undefined {
+    if (!state.compactionOutput || !Array.isArray(prompt)) {
+      return undefined
+    }
+
+    let imageCount = 0
+    const retainedText = JSON.stringify(state.compactionOutput, (key, value) => {
+      if (key === 'image_url') {
+        imageCount += 1
+        return undefined
+      }
+
+      return key === 'encrypted_content' || key === 'file_data'
+        ? undefined
+        : value
+    })
+
+    return {
+      provider: LLMProviders.OpenAI,
+      model: this.model,
+      binding: this.compactionBinding,
+      output: state.compactionOutput,
+      // Usage bounds opaque context without counting ciphertext as ordinary text.
+      estimatedTokens: Math.ceil(
+        (state.usedOutputTokens ?? 0) + retainedText.length / CHARS_PER_TOKEN +
+        imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS
+      ),
+      sourceTranscript: [...restoreCompactionSources(prompt), message]
     }
   }
 
@@ -945,32 +1517,14 @@ export default class AISDKRemoteLLMProvider {
       return
     }
 
-    const usageObject = usage as Record<string, unknown>
-    const readTokenCount = (value: unknown): number | undefined => {
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        return value
-      }
-      if (value && typeof value === 'object') {
-        const objectValue = value as Record<string, unknown>
-        const total = objectValue['total']
-        if (typeof total === 'number' && Number.isFinite(total)) {
-          return total
-        }
-      }
+    const { inputTokens, outputTokens, ...accounting } = readProviderUsage(usage)
 
-      return undefined
-    }
-
-    const inputTokens =
-      readTokenCount(usageObject['inputTokens']) ??
-      readTokenCount(usageObject['input_tokens']) ??
-      readTokenCount(usageObject['promptTokens']) ??
-      readTokenCount(usageObject['prompt_tokens'])
-    const outputTokens =
-      readTokenCount(usageObject['outputTokens']) ??
-      readTokenCount(usageObject['output_tokens']) ??
-      readTokenCount(usageObject['completionTokens']) ??
-      readTokenCount(usageObject['completion_tokens'])
+    state.accounting = { ...state.accounting, ...accounting }
+    recordInferenceUsage({
+      prompt_tokens: inputTokens,
+      completion_tokens: outputTokens,
+      accounting
+    })
 
     if (typeof inputTokens === 'number' && Number.isFinite(inputTokens)) {
       state.usedInputTokens = inputTokens
@@ -1053,7 +1607,8 @@ export default class AISDKRemoteLLMProvider {
   }
 
   private buildOpenAICompatiblePayload(
-    state: CallState
+    state: CallState,
+    prompt: PromptOrChatHistory
   ): Record<string, unknown> {
     const toolCalls: OpenAIToolCall[] = state.toolCallOrder
       .map((toolCallId, index) => {
@@ -1076,6 +1631,16 @@ export default class AISDKRemoteLLMProvider {
           !!toolCall && toolCall.function.name.trim().length > 0
       )
 
+    const compactionContext = this.buildCompactionContext(state, prompt, {
+      role: 'assistant',
+      content: state.text,
+      ...(state.reasoning ? { reasoning: state.reasoning } : {}),
+      ...(state.reasoningItems.size > 0
+        ? { reasoningItems: [...state.reasoningItems.values()] }
+        : {}),
+      ...(toolCalls.length > 0 ? { toolCalls } : {})
+    })
+
     return {
       choices: [
         {
@@ -1084,18 +1649,180 @@ export default class AISDKRemoteLLMProvider {
             : {}),
           message: {
             content: state.text,
-            ...(state.reasoning.trim().length > 0
-              ? { reasoning: state.reasoning.trim() }
+            ...(compactionContext ? { compactionContext } : {}),
+            ...(state.reasoning.length > 0
+              ? { reasoning: state.reasoning }
+              : {}),
+            ...(state.reasoningItems.size > 0
+              ? { reasoningItems: [...state.reasoningItems.values()] }
               : {}),
             ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {})
           }
         }
       ],
       usage: {
+        // Preserve absence rather than turning unreported usage into zero.
         prompt_tokens: state.usedInputTokens,
-        completion_tokens: state.usedOutputTokens
+        completion_tokens: state.usedOutputTokens,
+        accounting: state.accounting ?? {}
       }
     }
+  }
+
+  /**
+   * Retains SDK reasoning metadata, including items with no public summary.
+   */
+  private appendReasoningItem(
+    state: CallState,
+    part: Record<string, unknown>
+  ): void {
+    const metadata = part['providerMetadata'] as SharedV4ProviderOptions | undefined
+    // MiniMax reuses Anthropic's signed reasoning parts and metadata namespace.
+    const namespace = this.config.flavor === 'anthropic' || this.config.flavor === 'minimax'
+      ? 'anthropic'
+      : this.config.flavor === 'openai-responses' ? 'openai' : this.config.providerName
+    const providerData = metadata?.[namespace]
+    const reasoningDetails = providerData?.['reasoning_details']
+    const isReasoning = String(part['type']).startsWith('reasoning')
+
+    if (!isReasoning && !Array.isArray(reasoningDetails)) {
+      return
+    }
+    if (this.config.flavor === 'openrouter') {
+      // The SDK emits complete snapshots, sometimes on a tool call rather
+      // than a reasoning part. Preserve signed/encrypted entries verbatim.
+      if (Array.isArray(reasoningDetails) && reasoningDetails.length > 0) {
+        state.reasoningItems.set('openrouter-reasoning', {
+          provider: LLMProviders.OpenRouter,
+          id: 'openrouter-reasoning',
+          text: '',
+          providerOptions: { openrouter: { reasoning_details: reasoningDetails } }
+        })
+      }
+      return
+    }
+
+    const itemId = providerData?.['itemId'] ?? part['id'] ??
+      (part['type'] === 'reasoning' ? `reasoning-${state.reasoningItems.size}` : 'reasoning-0')
+    if (typeof itemId !== 'string') {
+      return
+    }
+    const item: ProviderReasoningItem = state.reasoningItems.get(itemId) || {
+      provider: this.config.providerName as LLMProviders,
+      id: itemId,
+      text: '',
+      ...(this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? { binding: this.compactionBinding }
+        : {})
+    }
+    const encryptedContent = providerData?.['reasoningEncryptedContent']
+    if (typeof encryptedContent === 'string' && this.config.flavor === 'openai-responses') {
+      item.encryptedContent = encryptedContent
+    } else if (providerData && this.config.flavor !== 'openai-responses') {
+      const previous = item.providerOptions?.[namespace]
+      item.providerOptions = { [namespace]: { ...previous, ...providerData } }
+      if (typeof providerData['signature'] === 'string') {
+        item.providerOptions[namespace]!['signature'] =
+          String(previous?.['signature'] ?? '') + providerData['signature']
+      }
+    }
+    if (part['type'] === 'reasoning-delta' && typeof part['delta'] === 'string') {
+      item.text += part['delta']
+    } else if (part['type'] === 'reasoning' && typeof part['text'] === 'string') {
+      item.text += part['text']
+    }
+
+    state.reasoningItems.set(itemId, item)
+  }
+
+  /**
+   * Retains binary model output and separates provider-executed tools from local calls.
+   */
+  private acceptMediaPart(
+    state: CallState,
+    part: Record<string, unknown>
+  ): boolean {
+    const id = String(part['toolCallId'] || part['id'] || '')
+
+    if (id && part['providerExecuted'] === true) {
+      state.hostedToolIds.add(id)
+      delete state.toolCallsById[id]
+    }
+
+    if (part['type'] === 'file') {
+      const data = part['data']
+      const mediaType = String(
+        part['mediaType'] || part['mimeType'] || 'application/octet-stream'
+      )
+
+      if (typeof data === 'string' || data instanceof Uint8Array) {
+        const extension =
+          (
+            {
+              'image/png': 'png',
+              'image/jpeg': 'jpg',
+              'image/webp': 'webp',
+              'video/mp4': 'mp4',
+              'audio/mpeg': 'mp3',
+              'application/pdf': 'pdf'
+            } as Record<string, string>
+          )[mediaType] || 'bin'
+
+        state.files.push({
+          data: typeof data === 'string' ? Buffer.from(data, 'base64') : data,
+          mime_type: mediaType,
+          filename: `generated-${state.files.length + 1}.${extension}`
+        })
+      }
+
+      return true
+    }
+
+    if (
+      part['type'] === 'tool-result' &&
+      part['toolName'] === 'image_generation'
+    ) {
+      const result = part['result'] as { result?: string } | undefined
+
+      if (result?.result && part['preliminary'] !== true) {
+        state.files.push({
+          data: Buffer.from(result.result, 'base64'),
+          mime_type: 'image/png',
+          filename: `image-${state.files.length + 1}.png`
+        })
+      }
+
+      return true
+    }
+
+    return state.hostedToolIds.has(id)
+  }
+
+  /**
+   * Persists binary parts before reducing the provider response to text/tool metadata.
+   */
+  private async completeMediaOutput(state: CallState): Promise<void> {
+    if (!state.files.length) {
+      return
+    }
+
+    const sessionId = getActiveConversationSessionId()
+
+    if (!sessionId) {
+      throw new Error('Generated model files require a conversation session.')
+    }
+
+    const { persistGeneratedFiles } = await import(
+      '@/core/llm-manager/media-generation/media-generation-service'
+    )
+    const result = await persistGeneratedFiles(
+      sessionId,
+      `${this.config.providerName}:${this.config.model}`,
+      state.files
+    )
+
+    // Keep the agent grounded in what was delivered, even for image-only responses.
+    state.text += `\nGenerated artifacts: ${result.artifacts.map((artifact) => artifact.filename).join(', ')}`
   }
 
   private async runNonStreamingCompletion(
@@ -1104,12 +1831,31 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel()
+    const languageModel = this.getLanguageModel(completionParams, prompt)
     const result = await languageModel.doGenerate(callOptions)
+    this.captureCompactionOutput(
+      state,
+      (result.response?.body as Record<string, unknown> | undefined)?.['output']
+    )
     const content = result.content as Array<Record<string, unknown>>
+
+    completionParams.onStreamEvent?.({
+      type: 'response-metadata',
+      transport: 'http',
+      ...(result.response?.id ? { responseId: result.response.id } : {}),
+      ...(result.response?.headers?.['x-request-id']
+        ? { requestId: result.response.headers['x-request-id'] }
+        : {})
+    })
 
     for (const part of content) {
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+      this.appendReasoningItem(state, part)
+
+      if (this.acceptMediaPart(state, part)) {
+        continue
+      }
+
       if (type === 'text' && typeof part['text'] === 'string') {
         state.text += part['text'] as string
         continue
@@ -1139,13 +1885,19 @@ export default class AISDKRemoteLLMProvider {
     }
 
     this.appendUsageFromUnknown(state, result.usage)
+    this.appendReasoningItem(state, {
+      type: 'finish',
+      providerMetadata: result.providerMetadata
+    })
     this.appendProviderMetadataUsageFromUnknown(state, result.providerMetadata)
     const finishReason = this.readFinishReason(result.finishReason)
     if (finishReason) {
       state.finishReason = finishReason
     }
 
-    return this.buildOpenAICompatiblePayload(state)
+    await this.completeMediaOutput(state)
+
+    return this.buildOpenAICompatiblePayload(state, prompt)
   }
 
   private async runStreamingCompletion(
@@ -1154,16 +1906,63 @@ export default class AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     const state = this.createCallState()
     const callOptions = this.buildCallOptions(prompt, completionParams)
-    const languageModel = this.getLanguageModel()
+    const languageModel = this.getLanguageModel(
+      completionParams,
+      prompt,
+      completionParams.onStreamEvent
+    )
     const result = await languageModel.doStream(callOptions)
+    const outputItems: Record<string, unknown>[] = []
 
-    // Signal streaming as soon as we receive a stream object, even if the
-    // model emits only tool-call deltas and no text tokens.
+    // Clear a previous attempt's provisional text without claiming model output.
     completionParams.onToken?.('')
+    completionParams.onStreamEvent?.({
+      type: 'stream-open',
+      transport: this.config.flavor === 'openai-responses' &&
+        this.config.credentials?.['auth_kind'] !== 'chatgpt'
+        ? 'websocket'
+        : 'http',
+      ...(result.response?.headers?.['x-request-id']
+        ? { requestId: result.response.headers['x-request-id'] }
+        : {})
+    })
 
     for await (const streamPart of result.stream) {
       const part = streamPart as unknown as Record<string, unknown>
       const type = typeof part['type'] === 'string' ? (part['type'] as string) : ''
+
+      if (type === 'raw') {
+        const raw = part['rawValue'] as Record<string, unknown> | undefined
+        if (
+          raw?.['type'] === 'response.output_item.done' &&
+          typeof raw['output_index'] === 'number'
+        ) {
+          outputItems[raw['output_index']] = raw['item'] as Record<string, unknown>
+        }
+        if (raw?.['type'] === 'response.completed') {
+          const response = raw['response'] as Record<string, unknown>
+          this.captureCompactionOutput(state, response['output'])
+        }
+        continue
+      }
+
+      this.appendReasoningItem(state, part)
+
+      completionParams.onStreamEvent?.({
+        type,
+        ...(type === 'response-metadata' && typeof part['id'] === 'string'
+          ? { responseId: part['id'] }
+          : {}),
+        ...(typeof part['toolCallId'] === 'string'
+          ? { toolCallId: part['toolCallId'] }
+          : {}),
+        ...(part['providerExecuted'] === true ? { providerExecuted: true } : {}),
+        ...(part['preliminary'] === true ? { preliminary: true } : {})
+      })
+
+      if (this.acceptMediaPart(state, part)) {
+        continue
+      }
 
       const readString = (...values: unknown[]): string => {
         for (const value of values) {
@@ -1203,7 +2002,11 @@ export default class AISDKRemoteLLMProvider {
         if (!delta) {
           continue
         }
-        const mergedDelta = mergeStreamingChunk(state.reasoning, delta)
+        // SDK delta events are incremental. Overlap removal corrupts repeated
+        // words and whitespace needed for provider reasoning replay.
+        const mergedDelta = type === 'reasoning-delta'
+          ? delta
+          : mergeStreamingChunk(state.reasoning, delta)
         if (!mergedDelta) {
           continue
         }
@@ -1235,6 +2038,7 @@ export default class AISDKRemoteLLMProvider {
         this.ensureToolCall(state, toolCallId)
         state.toolCallsById[toolCallId]!.functionName = toolName
         state.toolCallsById[toolCallId]!.arguments = input
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 
@@ -1250,6 +2054,7 @@ export default class AISDKRemoteLLMProvider {
         if (toolName) {
           state.toolCallsById[toolCallId]!.functionName = toolName
         }
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 
@@ -1266,6 +2071,7 @@ export default class AISDKRemoteLLMProvider {
 
         this.ensureToolCall(state, toolCallId)
         state.toolCallsById[toolCallId]!.arguments += delta
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 
@@ -1287,6 +2093,7 @@ export default class AISDKRemoteLLMProvider {
         if (delta) {
           state.toolCallsById[toolCallId]!.arguments += delta
         }
+        this.emitToolCall(state, toolCallId, completionParams)
         continue
       }
 
@@ -1310,20 +2117,40 @@ export default class AISDKRemoteLLMProvider {
       }
     }
 
-    return this.buildOpenAICompatiblePayload(state)
+    if (!state.compactionOutput) {
+      // Some completed events omit output; item events retain the ordered window.
+      this.captureCompactionOutput(state, outputItems)
+    }
+
+    await this.completeMediaOutput(state)
+
+    return this.buildOpenAICompatiblePayload(state, prompt)
   }
 
-  public runChatCompletion(
+  public async runChatCompletion(
     prompt: PromptOrChatHistory,
     completionParams: CompletionParams
   ): Promise<AxiosResponse> {
+    completionParams.signal?.throwIfAborted()
     this.checkAPIKey()
-
-    return (completionParams.shouldStream === true
-      ? this.runStreamingCompletion(prompt, completionParams)
-      : this.runNonStreamingCompletion(prompt, completionParams)
-    ).then((responseData) => ({
-      data: responseData
-    })) as Promise<AxiosResponse>
+    const abort = (): void => {
+      // The WebSocket fetch adapter stops reading on abort but leaves the
+      // response in flight. Never reuse that socket for the next owner's turn.
+      this.openAITransport?.close()
+    }
+    completionParams.signal?.addEventListener('abort', abort, { once: true })
+    try {
+      const responseData = await (completionParams.shouldStream === true || this.config.credentials?.['auth_kind'] === 'chatgpt'
+        ? this.runStreamingCompletion(prompt, completionParams)
+        : this.runNonStreamingCompletion(prompt, completionParams))
+      completionParams.signal?.throwIfAborted()
+      return { data: responseData } as AxiosResponse
+    } finally {
+      completionParams.signal?.removeEventListener('abort', abort)
+      // Also close a connection that finished opening after cancellation.
+      if (completionParams.signal?.aborted) {
+        this.openAITransport?.close()
+      }
+    }
   }
 }

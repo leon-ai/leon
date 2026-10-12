@@ -6,6 +6,7 @@ import type {
   LeonFeedActivity,
   LeonFeedEntry
 } from '../../data/feed'
+import { ArtifactAttachments } from '../artifact-attachments'
 import { BonusResponse } from '../bonus-response'
 import { FinalAnswer } from '../final-answer'
 import { ProcessGroup } from '../process-group'
@@ -50,6 +51,9 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
   }
 
   const toolsAreActive = activity.toolCalls.some((toolCall) =>
+    toolCall.status === 'preparing' || toolCall.status === 'running'
+  )
+  const toolsAreRunning = activity.toolCalls.some((toolCall) =>
     toolCall.status === 'running'
   )
   const toolCount = activity.toolCalls.length
@@ -60,7 +64,7 @@ function ExecutionActivity({ activity }: ExecutionActivityProps) {
     })}>
       <ProcessGroup
         active={toolsAreActive}
-        activeLabel="Using tools..."
+        activeLabel={toolsAreRunning ? 'Using tools...' : 'Preparing tool calls...'}
         ariaLabel="Leon’s tool usage"
         completedLabel={`Used ${toolCount} ${
           toolCount === 1 ? 'tool' : 'tools'
@@ -109,6 +113,7 @@ export function LeonMessage({ entry }: LeonMessageProps) {
   return (
     <div className="leon-message">
       {entry.activities.map(renderActivity)}
+      <ArtifactAttachments artifacts={entry.artifacts || []} />
       {entry.finalAnswer.trim().length > 0 && (
         <FinalAnswer animationId={`${entry.id}:final-answer`}>
           {entry.finalAnswer}

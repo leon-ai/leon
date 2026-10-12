@@ -37,7 +37,9 @@ export interface NLPJSProcessResult {
     intent: string
     score: number
   }[]
-  /** E.g. "greeting.run" */
+  /**
+   * E.g. "greeting.run"
+   */
   intent: string
   score: number
   domain: NLPDomain
@@ -49,7 +51,9 @@ export interface NLPJSProcessResult {
   answer: string | undefined
   actions: NLPAction[]
   sentiment: {
-    /** Rule of thumb: > 0 = negative; = 0 = neutral; < 0 = positive */
+    /**
+     * Rule of thumb: > 0 = negative; = 0 = neutral; < 0 = positive
+     */
     score: number
     numWords: number
     numHits: number
@@ -398,7 +402,9 @@ export interface CustomEnumEntity<
 > extends CustomEntity<Type, Resolution> {
   levenshtein: number
   option: string
-  /** E.g. "location:country_0"; "location:country_1" */
+  /**
+   * E.g. "location:country_0"; "location:country_1"
+   */
   alias?: string
 }
 type GlobalEntity = CustomEnumEntity

@@ -23,7 +23,9 @@ function normalizeProcessTitleSegment(value: string): string {
   )
 }
 
-/** Build a short, portable process title for one profile-device connection. */
+/**
+ * Build a short, portable process title for one profile-device connection.
+ */
 export function buildSatelliteProcessTitle(
   profileName: string,
   deviceId: string

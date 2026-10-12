@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import { clsx } from 'clsx'
 
 import type { FeedToolCall } from '../../data/feed'
+import { formatToolDuration } from '../../utils/format-tool-duration'
 import { Collapse } from '../collapse'
 import { JsonView } from '../json-view'
 
@@ -43,6 +44,16 @@ function formatFunctionName(functionName: string): string {
 export function ToolCall({ toolCall }: ToolCallProps) {
   const [isExpanded, setIsExpanded] = useState(false)
   const detailsId = useId()
+  const isActive = toolCall.status === 'preparing' || toolCall.status === 'running'
+  const duration = isActive
+    ? ''
+    : formatToolDuration(toolCall.durationMs)
+  const execution = toolCall.output && typeof toolCall.output === 'object' &&
+    !Array.isArray(toolCall.output)
+    ? toolCall.output['execution']
+    : undefined
+  const isBackground = execution && typeof execution === 'object' &&
+    !Array.isArray(execution) && execution['state'] === 'running'
   const technicalTitle = [
     toolCall.toolkitName,
     toolCall.toolName,
@@ -73,12 +84,25 @@ export function ToolCall({ toolCall }: ToolCallProps) {
         aria-controls={detailsId}
         onClick={() => setIsExpanded((isOpen) => !isOpen)}
       >
-        {toolCall.status === 'running' ? (
+        {isActive ? (
           <span className="tool-call-running-content">
             {headingLayer()}
             {headingLayer('tool-call-wave', true)}
           </span>
         ) : headingLayer()}
+        {toolCall.status === 'preparing' && (
+          <span className="tool-call-duration">Preparing call</span>
+        )}
+        {duration && (
+          <span
+            className="tool-call-duration"
+            title={isBackground
+              ? 'Time to return the execution handle; the job is still running.'
+              : 'Execution time, including tool setup and transport.'}
+          >
+            {isBackground ? `${duration} to return` : duration}
+          </span>
+        )}
         <i
           className="tool-call-chevron ri-arrow-right-s-line"
           aria-hidden="true"

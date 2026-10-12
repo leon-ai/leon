@@ -31,7 +31,7 @@ function getAssetFileName() {
 
   if (SystemHelper.isMacOS()) {
     if (CPU_ARCH === CPUArchitectures.X64) {
-      throw new Error('pnpm 11 no longer ships a standalone macOS x64 binary')
+      return 'pnpm-darwin-x64.tar.gz'
     }
 
     if (CPU_ARCH === CPUArchitectures.ARM64) {

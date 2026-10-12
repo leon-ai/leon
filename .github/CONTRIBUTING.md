@@ -194,4 +194,4 @@ npm run start:tcp-server
 
 ## Spread the Word
 
-Use [#LeonAI](<https://twitter.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query>) if you tweet about Leon and/or mention [@grenlouis](https://twitter.com/grenlouis).
+Use [#LeonAI](<https://x.com/search?f=live&q=%23LeonAI%20(from%3Agrenlouis%20OR%20from%3Alouistiti_fr)&src=typed_query>) if you tweet about Leon and/or mention [@grenlouis](https://x.com/grenlouis).

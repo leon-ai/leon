@@ -1,0 +1,30 @@
+<template>
+  <link rel="stylesheet" href="assets/theme.css">
+  <section id="understand-content" data-composition-id="understand" data-width="__WIDTH__" data-height="__HEIGHT__" data-duration="3">
+    <div class="scene-content">
+      <div class="eyebrow">01 / UNDERSTAND</div>
+      <h1>A request becomes an action.</h1>
+      <p>Replace this example with the audience's real problem.</p>
+      <div class="flow">
+        <span class="step">Evidence</span>
+        <div class="handoff"><span class="understand-packet"></span></div>
+        <span class="step">Action</span>
+      </div>
+    </div>
+  </section>
+  <script>
+    window.__timelines = window.__timelines || {};
+    document.fonts.ready.then(() => {
+      const packetDistance = document.querySelector('.handoff').clientWidth - 12;
+      const timeline = gsap.timeline({ paused: true });
+
+      timeline.to('.understand-packet', {
+        x: packetDistance,
+        duration: 1.4,
+        ease: 'power1.inOut'
+      }, 0.6);
+      timeline.to({}, { duration: 1 }, 2);
+      window.__timelines.understand = timeline;
+    });
+  </script>
+</template>

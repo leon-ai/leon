@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
 
 import psList from 'ps-list'
 import kill from 'tree-kill'
@@ -37,6 +38,7 @@ import {
   LLM_PROVIDER,
   LLM_MANAGER,
   TOOLKIT_REGISTRY,
+  TOOL_WORKER_MANAGER,
   CONTEXT_MANAGER,
   PULSE_MANAGER
 } from '@/core'
@@ -49,6 +51,27 @@ import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { PROVIDER_REQUESTS } from '@/core/llm-manager/provider-requests'
+
+const SHUTDOWN_FORCE_TIMEOUT_MS = 5_000
+
+/**
+ * List processes when the host provides the platform process utility.
+ */
+async function listRunningProcesses(): Promise<
+  Awaited<ReturnType<typeof psList>>
+> {
+  try {
+    return await psList()
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+
+    // Minimal containers may omit `ps`; startup must not depend on optional
+    // same-profile process replacement in an otherwise isolated runtime.
+    LogHelper.warning('Process discovery is unavailable; skipping stale process cleanup.')
+    return []
+  }
+}
 
 async function bootstrap(): Promise<void> {
   // Scope process replacement to one profile so separate Leon workers can
@@ -57,7 +80,7 @@ async function bootstrap(): Promise<void> {
   const shouldStartPythonTCPServer = SHOULD_START_PYTHON_TCP_SERVER
 
   // Kill only an existing worker for this profile before starting a new one.
-  const processList = await psList()
+  const processList = await listRunningProcesses()
   processList
     .filter(
       (p) =>
@@ -252,6 +275,7 @@ async function bootstrap(): Promise<void> {
 
     isShuttingDown = true
     LLM_PROVIDER.dispose()
+    PROVIDER_REQUESTS.close()
 
     if (global.pythonTCPServerProcess?.pid) {
       kill(global.pythonTCPServerProcess.pid as number)
@@ -261,9 +285,24 @@ async function bootstrap(): Promise<void> {
       Telemetry.stop()
     }
 
-    setTimeout(() => {
+    const forceExitTimeout = setTimeout(() => {
       process.exit(exitCode)
-    }, 1_000)
+    }, SHUTDOWN_FORCE_TIMEOUT_MS)
+    forceExitTimeout.unref()
+
+    void Promise.all([
+      TOOL_EXECUTION_MANAGER.dispose(),
+      TOOL_WORKER_MANAGER.dispose()
+    ])
+      .catch((error: unknown) => {
+        LogHelper.error(
+          `Tool worker shutdown failed: ${error instanceof Error ? error.message : String(error)}`
+        )
+      })
+      .finally(() => {
+        clearTimeout(forceExitTimeout)
+        process.exit(exitCode)
+      })
   }
 
   setShutdownHandler(shutdown)

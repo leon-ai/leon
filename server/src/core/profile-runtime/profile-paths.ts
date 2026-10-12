@@ -17,10 +17,13 @@ export interface ProfilePaths {
   nativeSkills: string
   agentSkills: string
   tools: string
+  connections: string
   sessions: string
 }
 
-/** Validate a profile name before using it as a filesystem segment. */
+/**
+ * Validate a profile name before using it as a filesystem segment.
+ */
 export function isValidProfileName(profileName: string): boolean {
   const normalizedProfileName = profileName.trim()
 
@@ -34,7 +37,9 @@ export function isValidProfileName(profileName: string): boolean {
   )
 }
 
-/** Resolve every profile-owned path from an explicit or request-scoped profile. */
+/**
+ * Resolve every profile-owned path from an explicit or request-scoped profile.
+ */
 export function getProfilePaths(
   profileName = getActiveProfileName()
 ): ProfilePaths {
@@ -58,6 +63,7 @@ export function getProfilePaths(
     nativeSkills: path.join(skills, 'native'),
     agentSkills: path.join(skills, 'agent'),
     tools: path.join(root, 'tools'),
+    connections: path.join(root, 'connections'),
     sessions: path.join(root, 'sessions')
   }
 }

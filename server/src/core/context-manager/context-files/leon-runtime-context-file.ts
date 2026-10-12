@@ -91,6 +91,8 @@ export class LeonRuntimeContextFile extends ContextFile {
         : []),
       `- Local LLM: ${localLlmName}`,
       '## Managed Binaries',
+      '- In shell tools, invoke node directly (for example: node --version). Leon supplies the managed runtime to the tool environment.',
+      '- Use the resolved executable paths below verbatim if an absolute path is needed; do not derive binary paths from the codebase directory.',
       `- Bin path: ${BIN_PATH}`,
       `- Node.js: ${nodeBinPath} (${this.probeHelper.formatCommandProbe(nodeProbe)})`,
       `- pnpm: ${pnpmBinPath} (${this.probeHelper.formatCommandProbe(pnpmProbe)})`,

@@ -1,0 +1,159 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "lightcraft",
+  "toolkit_id": "media_production",
+  "name": "LightCraft",
+  "description": "Develop RAW and raster photos headlessly, discover adjustment controls, and operate on an explicitly selected photo library.",
+  "icon_name": "color-filter-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-0.2.1-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-0.2.1-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-cli-0.2.1-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-cli-0.2.1-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/lightcraft/releases/download/v0.2.1/lightcraft-0.2.1-windows-x64-portable.zip"
+  },
+  "progressive_guidance": "The CLI downloads automatically from the pinned release archives. Operations run headlessly without opening a window or requiring a generation-provider account. Discover command IDs and params before editing. Ordinary edits stage a source copy and publish new files. Engine commands with explicit paths can still access the local filesystem; use file, script, preference or destructive operations only when explicitly requested. Preserve originals and inspect diagnostics. A successful command is not proof of visual quality: inspect a rendered preview before delivering artwork or video.",
+  "functions": {
+    "commands": {
+      "description": "Discover library, culling, development and export commands and their parameters.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Text to search in the installed command registry."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "controls": {
+      "description": "Discover development slider IDs, accepted ranges and defaults before adjusting photos.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false
+    },
+    "inspect": {
+      "description": "Inspect a selected photo in an ephemeral library without saving edits beside its original.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source file path."
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "inputPath"
+        ]
+      },
+      "deduplicate_calls": false
+    },
+    "develop": {
+      "description": "Develop a source copy and attach the resulting photo, a settings recipe and PNG evidence.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute local source file path."
+          },
+          "controls": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Observed slider IDs mapped to numeric values; discover them with controls."
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "png",
+                  "jpg",
+                  "tif",
+                  "webp",
+                  "avif",
+                  "dng"
+                ],
+                "description": "Defaults to png."
+              },
+              "longEdge": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Output long edge in pixels; defaults to 2048. Zero requests full size."
+              },
+              "settings": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "Partial DevelopSettings JSON discovered from photo.inspect/develop.get and command documentation."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "inputPath"
+        ]
+      },
+      "progressive_guidance": "Use controls for slider ranges and commands for development settings. Ordinary development does not touch a persistent library. The JSON artifact records the requested controls/options, not an editable layered image. Non-DNG RAW colours may use fallback calibration, and unsupported RAW formats may use embedded previews; inspect diagnostics and visual output.",
+      "deduplicate_calls": false
+    },
+    "runLibrary": {
+      "description": "Run discovered engine commands in an explicitly selected existing photo-library directory; changes persist there.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "libraryPath": {
+            "type": "string",
+            "description": "Absolute existing library directory explicitly selected by the owner."
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "An engine command ID observed through commands."
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Parameters discovered from the installed command registry."
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "command"
+              ]
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "libraryPath",
+          "steps"
+        ]
+      },
+      "progressive_guidance": "Use library.info and catalog.query to inspect scope, observed photo IDs and pagination before changes. library.import can import explicitly selected paths; retain originals and choose copy/add instead of move unless requested. Only engine commands are accepted, not raw UI methods. Library metadata and development changes persist; ask before deletions, source/sidecar overwrites or moving owner files. The library must be closed in the GUI; do not bypass its lock. Use develop for delivered photo artifacts.",
+      "deduplicate_calls": false
+    }
+  },
+  "concurrency": "serial"
+}

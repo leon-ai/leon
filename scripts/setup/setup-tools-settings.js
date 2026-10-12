@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import { PROFILE_TOOLS_PATH, TOOLS_PATH } from '@/constants'
+import { resolveToolDirectory } from '@/leon-roots'
 
 import { createSetupStatus } from './setup-status'
 import { mergeMissingSettings } from './settings-merge'
@@ -17,9 +18,8 @@ async function syncToolSettings(toolkitId, toolId, toolPath) {
   const settingsSamplePath = path.join(toolPath, TOOL_SETTINGS_SAMPLE_FILENAME)
 
   if (!fs.existsSync(settingsSamplePath)) {
-    throw new Error(
-      `The "${toolkitId}.${toolId}" tool settings sample does not exist.`
-    )
+    // Tools without configurable defaults still need a sample for setup.
+    await fs.promises.writeFile(settingsSamplePath, '{}\n')
   }
 
   const settingsPath = path.join(
@@ -73,7 +73,7 @@ export default async function setupToolsSettings() {
       const toolkitConfig = readJSONFile(toolkitConfigPath)
 
       for (const toolId of toolkitConfig.tools || []) {
-        const toolPath = path.join(toolkitPath, toolId)
+        const toolPath = resolveToolDirectory(TOOLS_PATH, toolkitId, toolId)
 
         if (!fs.existsSync(path.join(toolPath, 'tool.json'))) {
           continue

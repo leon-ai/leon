@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync, renameSync } from 'node:fs'
+import { createHash, randomUUID } from 'node:crypto'
 import { basename, dirname, extname, join } from 'node:path'
 
 import { Tool, type ProgressCallback } from '@sdk/base-tool'
@@ -20,6 +21,12 @@ const YTDLP_TITLE_TEMPLATE = '%(title)s'
 const YTDLP_PLAYLIST_INDEX_TEMPLATE = '%(playlist_index)s'
 const SUBTITLE_FORMAT = 'srt/best'
 const SUBTITLE_CONVERT_FORMAT = 'srt'
+const TRANSCRIPT_PAGE_CHARS = 16_000
+const TRANSCRIPT_CACHE_MAX_AGE_MS = 86_400_000
+const TRANSCRIPT_METADATA_FIELDS = ['id', 'webpage_url', 'title', 'channel', 'uploader', 'duration'] as const
+const SUBTITLE_BLOCK_SEPARATOR = /\r?\n\s*\r?\n/
+const SUBTITLE_TAG_PATTERN = /<[^>]*>/g
+const SUBTITLE_VOICE_PATTERN = /<v\s+([^>]+)>/g
 const IGNORED_MEDIA_OUTPUT_EXTENSIONS = new Set([
   '.part',
   '.ytdl',
@@ -40,6 +47,23 @@ const SUBTITLE_METADATA_LANGUAGE_FIELDS = [
   'original_language'
 ]
 const IGNORED_SUBTITLE_LANGUAGE_CODES = new Set(['live_chat'])
+const VIDEO_METADATA_FIELDS = [
+  'id', 'webpage_url', 'title', 'description', 'duration', 'chapters',
+  'channel', 'uploader', 'upload_date', 'language', 'availability',
+  'track', 'artist', 'artists', 'album', 'release_date'
+] as const
+
+const CAPTION_METADATA_FIELDS = ['subtitles', 'automatic_captions'] as const
+const METADATA_OUTPUT_FIELDS = [
+  ...new Set([
+    ...VIDEO_METADATA_FIELDS,
+    ...SUBTITLE_METADATA_LANGUAGE_FIELDS,
+    '_type',
+    'playlist',
+    ...CAPTION_METADATA_FIELDS.map((field) => `${field}_languages`)
+  ])
+]
+const METADATA_OUTPUT_TEMPLATE = `%(.{${METADATA_OUTPUT_FIELDS.join(',')}})j`
 
 interface OutputTarget {
   directoryPath: string
@@ -47,7 +71,7 @@ interface OutputTarget {
   predictedFilePath?: string
 }
 
-interface VideoMetadata {
+interface VideoMetadata extends Record<string, unknown> {
   language?: unknown
   language_code?: unknown
   original_language?: unknown
@@ -432,16 +456,77 @@ export default class YtdlpTool extends Tool {
   }
 
   /**
-   * Loads video metadata to select the best available subtitle language.
+   * Loads one video's metadata for inspection or subtitle language selection.
    */
-  private async getVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
+  private async fetchVideoMetadata(videoUrl: string): Promise<VideoMetadata> {
     const output = await this.executeCommand({
       binaryName: 'yt-dlp',
-      args: [...this.getConfigArgs(), videoUrl, '--dump-single-json', '--skip-download'],
+      // Simulation prevents sidecar writes too; bound extraction for playlist-only URLs.
+      // Keep caption language keys, not the large signed URL lists, inside the
+      // subprocess. Filtering after capture can overflow Node's output buffer.
+      args: [
+        ...this.getConfigArgs(),
+        ...CAPTION_METADATA_FIELDS.flatMap((field) => [
+          '--parse-metadata',
+          `%(${field}|)l:%(${field}_languages)s`
+        ]),
+        '--print',
+        METADATA_OUTPUT_TEMPLATE,
+        '--skip-download',
+        '--simulate',
+        '--no-cache-dir',
+        '--no-playlist',
+        '--flat-playlist',
+        '--playlist-end',
+        '1',
+        '--',
+        videoUrl
+      ],
       options: { sync: true }
     })
 
-    return JSON.parse(output.trim()) as VideoMetadata
+    const metadata: unknown = output.trim() ? JSON.parse(output.trim()) : null
+
+    if (
+      !metadata ||
+      typeof metadata !== 'object' ||
+      Array.isArray(metadata) ||
+      ('_type' in metadata && metadata['_type'] !== 'video') ||
+      ('playlist' in metadata && metadata.playlist != null)
+    ) {
+      throw new Error(
+        'Expected metadata for a single video; provide a video URL, not a playlist URL.'
+      )
+    }
+
+    const videoMetadata = metadata as VideoMetadata
+
+    for (const field of CAPTION_METADATA_FIELDS) {
+      const languages = videoMetadata[`${field}_languages`]
+
+      videoMetadata[field] = Object.fromEntries(
+        (typeof languages === 'string'
+          ? languages.split(LANGUAGE_CODE_SEPARATOR)
+          : []
+        )
+          .map((language) => language.trim())
+          .filter(Boolean)
+          .map((language) => [language, []])
+      )
+    }
+
+    return videoMetadata
+  }
+
+  /**
+   * Returns source-provided video metadata without downloading media.
+   */
+  async getVideoMetadata(videoUrl: string): Promise<Record<string, unknown>> {
+    const metadata = await this.fetchVideoMetadata(videoUrl)
+    // Exclude large format lists, request headers and temporary media URLs.
+    return Object.fromEntries(VIDEO_METADATA_FIELDS
+      .filter((field) => metadata[field] != null)
+      .map((field) => [field, metadata[field]]))
   }
 
   /**
@@ -656,9 +741,16 @@ export default class YtdlpTool extends Tool {
     outputPath: string,
     languageCode?: string
   ): Promise<string> {
+    return this.downloadSubtitleWithMetadata(videoUrl, outputPath,
+      await this.fetchVideoMetadata(videoUrl), languageCode)
+  }
+
+  private async downloadSubtitleWithMetadata(
+    videoUrl: string, outputPath: string, metadata: VideoMetadata, languageCode?: string
+  ): Promise<string> {
     try {
       const resolvedLanguageCode = YtdlpTool.selectSubtitleLanguage(
-        await this.getVideoMetadata(videoUrl),
+        metadata,
         languageCode
       )
       const target = YtdlpTool.resolveSubtitleOutputTarget(
@@ -699,6 +791,63 @@ export default class YtdlpTool extends Tool {
       )
     } catch (error: unknown) {
       throw new Error(`Subtitle download failed: ${(error as Error).message}`)
+    }
+  }
+
+  /**
+   * Reads bounded timestamped transcript pages. The profile-local cache lets
+   * subsequent tool workers continue without re-extracting/downloading captions.
+   */
+  async getTranscript(
+    videoUrl: string, languageCode?: string, startCue = 0
+  ): Promise<Record<string, unknown>> {
+    if (!Number.isSafeInteger(startCue) || startCue < 0) {
+      throw new Error('startCue must be a non-negative integer from nextCue.')
+    }
+    const key = createHash('sha256').update(JSON.stringify([videoUrl, languageCode ?? null])).digest('hex')
+    const directory = join(dirname(this.getSettingsPath()), 'transcripts', key)
+    const cachePath = join(directory, 'transcript.json')
+    let transcript: { source: Record<string, unknown>, cues: string[] }
+    if (startCue > 0 && !existsSync(cachePath)) throw new Error('Transcript cache is missing; restart from the first page.')
+    if (existsSync(cachePath) && (startCue > 0 || Date.now() - statSync(cachePath).mtimeMs < TRANSCRIPT_CACHE_MAX_AGE_MS)) {
+      transcript = JSON.parse(readFileSync(cachePath, 'utf8'))
+    } else {
+      const metadata = await this.fetchVideoMetadata(videoUrl)
+      const subtitles = await this.downloadSubtitleWithMetadata(videoUrl, join(directory, 'captions.srt'), metadata, languageCode)
+      const cues = readFileSync(subtitles, 'utf8').split(SUBTITLE_BLOCK_SEPARATOR).flatMap((block) => {
+        const lines = block.trim().split(/\r?\n/)
+        const timing = lines.findIndex((line) => line.includes(' --> '))
+        if (timing < 0) return []
+        const text = lines.slice(timing + 1).join(' ')
+          .replace(SUBTITLE_VOICE_PATTERN, '$1: ').replace(SUBTITLE_TAG_PATTERN, '').trim()
+        return text ? [`[${lines[timing]!.split(' --> ')[0]}] ${text}`] : []
+      })
+      if (!cues.length) throw new Error('No readable subtitle cues were returned.')
+      transcript = {
+        source: Object.fromEntries(TRANSCRIPT_METADATA_FIELDS.filter((field) => metadata[field] != null).map((field) => [field, metadata[field]])),
+        cues
+      }
+      const temporary = `${cachePath}.${randomUUID()}.tmp`
+      writeFileSync(temporary, JSON.stringify(transcript), { mode: 0o600 })
+      renameSync(temporary, cachePath)
+    }
+    if (startCue > transcript.cues.length) throw new Error('startCue exceeds the transcript length.')
+    const page: string[] = []
+    let nextCue = startCue
+    let chars = 0
+    while (nextCue < transcript.cues.length) {
+      const cue = transcript.cues[nextCue]!
+      if (cue.length > TRANSCRIPT_PAGE_CHARS) throw new Error('Subtitle cue exceeds the transcript page limit; inspect the subtitle file instead.')
+      if (chars + cue.length + 1 > TRANSCRIPT_PAGE_CHARS) break
+      page.push(cue)
+      chars += cue.length + 1
+      nextCue++
+    }
+    return {
+      source: transcript.source, videoUrl, startCue,
+      text: page.join('\n'), totalCues: transcript.cues.length,
+      nextCue: nextCue < transcript.cues.length ? nextCue : null,
+      complete: nextCue === transcript.cues.length
     }
   }
 

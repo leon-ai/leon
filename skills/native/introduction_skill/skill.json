@@ -4,7 +4,7 @@
   "icon_name": "user-smile-line",
   "bridge": "python",
   "version": "1.0.0",
-  "description": "Leon introduces himself and remembers basic information about you.",
+  "description": "Leon introduces himself and greets you.",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
@@ -14,20 +14,6 @@
     "introduce_leon": {
       "type": "logic",
       "description": "Introduce Leon and greet the owner."
-    },
-    "remember": {
-      "type": "logic",
-      "description": "Remember the owner's name and birth date.",
-      "parameters": {
-        "owner_name": {
-          "type": "string",
-          "description": "The owner's preferred name."
-        },
-        "owner_birth_date": {
-          "type": "string",
-          "description": "The owner's birth date as an ISO date or precise date string."
-        }
-      }
     }
   }
 }

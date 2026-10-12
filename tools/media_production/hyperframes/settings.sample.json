@@ -1,0 +1,4 @@
+{
+  "timeout_ms": 600000,
+  "workers": 2
+}

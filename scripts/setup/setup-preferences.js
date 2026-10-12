@@ -1,5 +1,6 @@
 import { SetupUI, setupConsola } from './setup-ui'
 import setupRemoteLLM from './setup-remote-llm'
+import setupFellows from './setup-fellows'
 
 /**
  * Ask lightweight setup questions so users can skip optional downloads.
@@ -7,11 +8,11 @@ import setupRemoteLLM from './setup-remote-llm'
 export default async function setupPreferences(
   localAICapability,
   existingLLMChoice,
-  localAISetupState,
-  voiceSetupState
+  localAISetupState
+  // voiceSetupState
 ) {
   const defaultPreferences = {
-    setupLocalAI: localAICapability.canInstallLocalAI,
+    setupLocalAI: false,
     setupVoice: false,
     remoteLLMProvider: '',
     remoteLLMModel: '',
@@ -26,7 +27,7 @@ export default async function setupPreferences(
   ) {
     if (!localAICapability.canInstallLocalAI) {
       SetupUI.info(
-        'This computer is not a good fit for local AI or voice features, so I will set up the essentials.'
+        'This computer is not a good fit for local AI, so I will set up the essentials.'
       )
     }
 
@@ -39,7 +40,7 @@ export default async function setupPreferences(
     existingLLMChoice.targetType !== 'defaultLocal'
   const hasInstalledLocalAI =
     localAISetupState.isInstalled || hasConfiguredLocalAI
-  const hasInstalledVoice = voiceSetupState.isInstalled
+  // const hasInstalledVoice = voiceSetupState.isInstalled
   const hasUsableExistingLLMChoice =
     existingLLMChoice.hasResolvedChoice &&
     (existingLLMChoice.targetType !== 'defaultLocal' || hasInstalledLocalAI)
@@ -58,15 +59,24 @@ export default async function setupPreferences(
     )
   }
 
-  if (hasInstalledVoice) {
-    SetupUI.info('Voice is already installed, so I will keep it updated.')
+  // Voice setup is paused; keep its flow here until it returns.
+  // if (hasInstalledVoice) {
+  //   SetupUI.info('Voice is already installed, so I will keep it updated.')
+  // }
+
+  if (!hasUsableExistingLLMChoice) {
+    const fellowPreferences = await setupFellows()
+
+    if (fellowPreferences) {
+      return { ...defaultPreferences, ...fellowPreferences }
+    }
   }
 
   if (!localAICapability.canInstallLocalAI) {
     if (!hasUsableExistingLLMChoice) {
       return {
         ...defaultPreferences,
-        setupVoice: hasInstalledVoice,
+        // setupVoice: hasInstalledVoice,
         ...(await setupRemoteLLM())
       }
     }
@@ -74,11 +84,13 @@ export default async function setupPreferences(
     return {
       ...defaultPreferences,
       setupLocalAI: hasInstalledLocalAI,
-      setupVoice: hasInstalledVoice
+      // setupVoice: hasInstalledVoice
+      setupVoice: false
     }
   }
 
-  if (!hasInstalledLocalAI || !hasInstalledVoice) {
+  // if (!hasInstalledLocalAI || !hasInstalledVoice) {
+  if (!hasInstalledLocalAI) {
     SetupUI.info(
       'I just have a few quick questions so I can set things up the way you want.'
     )
@@ -88,7 +100,7 @@ export default async function setupPreferences(
     ? true
     : await setupConsola.prompt('Do you want me to set up local AI now?', {
         type: 'confirm',
-        initial: true,
+        initial: false,
         cancel: 'default'
       })
 
@@ -103,18 +115,19 @@ export default async function setupPreferences(
     remoteLLMPreferences = await setupRemoteLLM()
   }
 
-  const setupVoice = hasInstalledVoice
-    ? true
-    : await setupConsola.prompt('Do you want to talk to me with your voice now?', {
-        type: 'confirm',
-        initial: false,
-        cancel: 'default'
-      })
+  // const setupVoice = hasInstalledVoice
+  //   ? true
+  //   : await setupConsola.prompt('Do you want to talk to me with your voice now?', {
+  //       type: 'confirm',
+  //       initial: false,
+  //       cancel: 'default'
+  //     })
 
   const preferences = {
     ...defaultPreferences,
     setupLocalAI,
-    setupVoice,
+    // setupVoice,
+    setupVoice: false,
     ...remoteLLMPreferences
   }
 

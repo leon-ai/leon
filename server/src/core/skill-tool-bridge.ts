@@ -37,7 +37,9 @@ export interface SkillToolResponse {
   result: SkillToolExecutionResult
 }
 
-/** Parse one prefixed JSON bridge message without treating it as skill output. */
+/**
+ * Parse one prefixed JSON bridge message without treating it as skill output.
+ */
 export function parseSkillToolBridgeMessage<T>(
   line: string,
   prefix: string

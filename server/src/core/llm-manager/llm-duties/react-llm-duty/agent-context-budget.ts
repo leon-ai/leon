@@ -13,20 +13,20 @@ import {
   AGENT_CONTEXT_WINDOW_BUDGET_RATIO,
   AGENT_CONTEXT_RECOVERY_BUDGET_RATIO,
   AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO,
-  AGENT_COMPACTED_TOOL_EXCHANGE_FIELD_MAX_CHARS,
-  AGENT_COMPACTED_TOOL_EXCHANGE_MAX_CHARS,
-  AGENT_COMPACTED_TOOL_HISTORY_MAX_CHARS,
-  AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS,
-  AGENT_RECENT_TOOL_EXCHANGE_LIMIT,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
+  AGENT_RECENT_TOOL_IMAGE_LIMIT,
+  AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   AGENT_TOOL_OBSERVATION_MAX_CHARS,
   CHARS_PER_TOKEN
-} from './constants'
+} from './agent-constants'
 
 const TOOL_NAME_SEPARATOR = '__'
+const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
 const TOOLKIT_LOADER_NAME = 'load_toolkit'
+const SUMMARY_RECENT_EXCHANGES = 8
+const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 
 interface AgentModelContextParams {
   transcript: AgentToolTranscriptMessage[]
@@ -39,9 +39,9 @@ interface AgentModelContextParams {
 export interface PreparedAgentModelContext {
   transcript: AgentToolTranscriptMessage[]
   tools: OpenAITool[]
+  estimatedInputTokensBeforePreparation: number
   estimatedInputTokens: number
   wasCompacted: boolean
-  compactedToolExchangeCount: number
 }
 
 type AssistantToolCallMessage = Extract<
@@ -77,7 +77,9 @@ export function resolveAgentContextCompactionTriggerTokens(
   )
 }
 
-/** Returns the smaller target used for one provider context-pressure retry. */
+/**
+ * Returns the smaller target used for one provider context-pressure retry.
+ */
 export function resolveAgentContextRecoveryTriggerTokens(
   provider: LLMProviders
 ): number {
@@ -92,7 +94,8 @@ export function resolveAgentContextRecoveryTriggerTokens(
 
 /**
  * Gives local models the context capacity left after the prepared prompt and
- * a tokenizer-estimation margin. Remote providers manage their own ceiling.
+ * a tokenizer-estimation margin. Remote calls use their provider/SDK defaults,
+ * including recovery: a fixed retry ceiling can be lower than those defaults.
  */
 export function resolveAgentMaxOutputTokens(
   provider: LLMProviders,
@@ -120,19 +123,129 @@ function estimateTokens(value: string): number {
   return value ? Math.ceil(value.length / CHARS_PER_TOKEN) : 0
 }
 
+/**
+ * Estimates the complete request, excluding encoded image bytes.
+ */
 function estimateAgentInputTokens(
   transcript: AgentToolTranscriptMessage[],
   systemPrompt: string,
   tools: OpenAITool[]
 ): number {
+  let imageCount = 0
+  let compactionTokens = 0
+  const serializedTranscript = JSON.stringify(transcript, (key, value) => {
+    if (value?.role === 'assistant' && value.compactionContext) {
+      compactionTokens += value.compactionContext.estimatedTokens
+      return { role: 'assistant', content: '' }
+    }
+
+    if (key === 'dataBase64' && typeof value === 'string') {
+      imageCount += 1
+      return ''
+    }
+    return value
+  })
+
   return (
-    estimateTokens(JSON.stringify(transcript)) +
+    estimateTokens(serializedTranscript) +
+    compactionTokens +
+    imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS +
     estimateTokens(systemPrompt) +
     estimateTokens(JSON.stringify(tools))
   )
 }
 
-function createTextPreview(value: string, maxChars: number): string {
+/**
+ * Keeps recent tool images and the latest inspection batch without changing
+ * saved evidence, textual results, or owner attachments.
+ */
+export function retainRecentToolImages(
+  transcript: AgentToolTranscriptMessage[]
+): AgentToolTranscriptMessage[] {
+  const retainedImageIndexes = new Set<number>()
+  for (
+    let index = transcript.length - 1;
+    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_TOOL_IMAGE_LIMIT;
+    index -= 1
+  ) {
+    const message = transcript[index]
+    if (
+      message?.role === 'tool' &&
+      message.files?.some((file) => file.mediaType.startsWith('image/'))
+    ) {
+      retainedImageIndexes.add(index)
+    }
+  }
+
+  // Parallel inspections must reach the model together, even when their batch
+  // exceeds the historical image limit.
+  const latestImageExchange = findCompletedToolExchanges(transcript).findLast(
+    (exchange) => exchange.toolMessages.some((message) =>
+      message.files?.some((file) => file.mediaType.startsWith('image/'))
+    )
+  )
+  if (latestImageExchange) {
+    for (
+      let index = latestImageExchange.startIndex + 1;
+      index <= latestImageExchange.endIndex;
+      index += 1
+    ) {
+      retainedImageIndexes.add(index)
+    }
+  }
+
+  return transcript.map((message, index) => {
+    if (
+      message.role !== 'tool' ||
+      !message.files?.some((file) => file.mediaType.startsWith('image/')) ||
+      retainedImageIndexes.has(index)
+    ) {
+      return message
+    }
+
+    const { files, ...textMessage } = message
+    const retainedFiles = files.filter((file) =>
+      !file.mediaType.startsWith('image/')
+    )
+
+    return retainedFiles.length > 0
+      ? { ...textMessage, files: retainedFiles }
+      : textMessage
+  })
+}
+
+/**
+ * Old screen observations are reloadable evidence, not the current interface.
+ * Bound their request-only previews while leaving original history and the
+ * semantic continuation summarizer's input intact. Never trim failure details.
+ */
+function boundOlderUIObservations(
+  transcript: AgentToolTranscriptMessage[]
+): AgentToolTranscriptMessage[] {
+  let recentTools = 0
+  return [...transcript].reverse().map((message) => {
+    if (message.role !== 'tool') return message
+    recentTools += 1
+    if (recentTools <= SUMMARY_RECENT_EXCHANGES ||
+        !UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) ||
+        message.content.length <= OLDER_UI_OBSERVATION_MAX_CHARS) return message
+    try {
+      const observation = readRecord(JSON.parse(message.content))
+      const outputLogPath = observation?.['output_log_path'] || readRecord(observation?.['data'])?.['output_log_path']
+      if (!observation || observation['status'] !== 'success' ||
+          observation['observed_tool_failure'] ||
+          typeof outputLogPath !== 'string') return message
+      return { ...message, content: buildBoundedToolObservation({ ...observation, output_log_path: outputLogPath }, OLDER_UI_OBSERVATION_MAX_CHARS) }
+    } catch {
+      return message
+    }
+  }).reverse()
+}
+
+/**
+ * Keeps both the beginning and ending of oversized agent context text.
+ */
+export function createAgentTextPreview(value: string, maxChars: number): string {
   if (value.length <= maxChars) {
     return value
   }
@@ -180,7 +293,7 @@ export function buildBoundedToolObservation(
             'The complete tool result is stored at output_log_path. Read only the needed section if the preview is insufficient.'
         }
       : {}),
-    data_preview: createTextPreview(
+    data_preview: createAgentTextPreview(
       JSON.stringify(observation['data'] ?? null),
       Math.max(Math.floor(maxChars * 0.7), 1)
     ),
@@ -191,91 +304,6 @@ export function buildBoundedToolObservation(
   }
 
   return JSON.stringify(compacted)
-}
-
-function compactToolMessageContent(content: string): string {
-  if (content.length <= AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS) {
-    return content
-  }
-
-  try {
-    const parsed = readRecord(JSON.parse(content))
-    if (parsed) {
-      const outputLogPath = parsed['output_log_path']
-      return JSON.stringify({
-        status: parsed['status'],
-        message: parsed['message'],
-        ...(typeof outputLogPath === 'string' && outputLogPath
-          ? { output_log_path: outputLogPath }
-          : {}),
-        ...(parsed['observed_tool_failure'] !== undefined
-          ? { observed_tool_failure: parsed['observed_tool_failure'] }
-          : {}),
-        context_compacted: true,
-        preview: createTextPreview(
-          content,
-          AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS
-        )
-      })
-    }
-  } catch {
-    // Non-JSON control-tool results, including Agent Skills, use a bounded
-    // head/tail preview and can be explicitly loaded again when needed.
-  }
-
-  return createTextPreview(content, AGENT_COMPACTED_TOOL_MESSAGE_MAX_CHARS)
-}
-
-function createBoundedExchangeField(value: unknown): string | undefined {
-  if (value === undefined || value === null) {
-    return undefined
-  }
-
-  const serialized =
-    typeof value === 'string' ? value : JSON.stringify(value)
-  return createTextPreview(
-    serialized,
-    AGENT_COMPACTED_TOOL_EXCHANGE_FIELD_MAX_CHARS
-  )
-}
-
-function buildCompactedToolResult(message: ToolTranscriptMessage): Record<string, unknown> {
-  try {
-    const parsed = readRecord(JSON.parse(message.content))
-    if (parsed) {
-      const details =
-        parsed['data_preview'] ?? parsed['preview'] ?? parsed['data']
-      return {
-        tool: message.toolName,
-        ...(parsed['status'] !== undefined
-          ? { status: parsed['status'] }
-          : {}),
-        ...(parsed['message'] !== undefined
-          ? { message: createBoundedExchangeField(parsed['message']) }
-          : {}),
-        ...(parsed['output_log_path'] !== undefined
-          ? { output_log_path: parsed['output_log_path'] }
-          : {}),
-        ...(parsed['observed_tool_failure'] !== undefined
-          ? {
-              observed_tool_failure: createBoundedExchangeField(
-                parsed['observed_tool_failure']
-              )
-            }
-          : {}),
-        ...(details !== undefined
-          ? { details: createBoundedExchangeField(details) }
-          : {})
-      }
-    }
-  } catch {
-    // Plain-text control and skill results are preserved as bounded details.
-  }
-
-  return {
-    tool: message.toolName,
-    details: createBoundedExchangeField(message.content)
-  }
 }
 
 function findCompletedToolExchanges(
@@ -321,258 +349,46 @@ function findCompletedToolExchanges(
   return exchanges
 }
 
-function buildCompactedToolExchangeMessage(
-  exchange: CompletedToolExchange
-): AgentToolTranscriptMessage {
-  const toolMessagesById = new Map(
-    exchange.toolMessages.map((message) => [message.toolCallId, message])
-  )
-  const calls = exchange.assistantMessage.toolCalls.map((toolCall) => {
-    const result = toolMessagesById.get(toolCall.id)
-    return {
-      tool: toolCall.function.name,
-      arguments: createBoundedExchangeField(toolCall.function.arguments),
-      ...(result ? { result: buildCompactedToolResult(result) } : {})
-    }
-  })
-  const assistantNote = exchange.assistantMessage.content.trim()
-  const compactedExchange = {
-    earlier_completed_tool_exchange_compacted: true,
-    ...(assistantNote
-      ? { assistant_note: createBoundedExchangeField(assistantNote) }
-      : {}),
-    calls
-  }
-  const serializedExchange = JSON.stringify(compactedExchange)
+/**
+ * Selects an older prefix without splitting parallel tool calls from results.
+ * Requiring another tail's worth of work avoids re-summarizing every turn.
+ */
+export function splitAgentTranscriptForSummary(
+  transcript: AgentToolTranscriptMessage[]
+): {
+  older: AgentToolTranscriptMessage[]
+  visual: AgentToolTranscriptMessage[]
+  recent: AgentToolTranscriptMessage[]
+} | null {
+  const exchanges = findCompletedToolExchanges(transcript)
+  if (exchanges.length < SUMMARY_RECENT_EXCHANGES * 2) return null
 
-  if (serializedExchange.length <= AGENT_COMPACTED_TOOL_EXCHANGE_MAX_CHARS) {
-    return {
-      role: 'assistant',
-      content: serializedExchange
-    }
+  let boundary = exchanges[exchanges.length - SUMMARY_RECENT_EXCHANGES]!.startIndex
+  // Keep the latest user correction verbatim, even if that enlarges the tail.
+  const lastUserIndex = transcript.findLastIndex((message) => message.role === 'user')
+  if (lastUserIndex > exchanges[0]!.startIndex) {
+    boundary = Math.min(boundary, lastUserIndex)
   }
+  if (boundary <= 0) return null
 
-  const tools = [...new Set(calls.map((call) => call.tool))]
-  const artifactPaths = [
-    ...new Set(
-      calls.flatMap((call) => {
-        const outputLogPath = call.result?.['output_log_path']
-        return typeof outputLogPath === 'string' ? [outputLogPath] : []
-      })
+  // Keep a bounded visual reference even when the recent tail is text-only.
+  // Retain whole exchanges so parallel tool results never become orphaned.
+  const boundedTranscript = retainRecentToolImages(transcript)
+  const visual = findCompletedToolExchanges(boundedTranscript)
+    .filter((exchange) =>
+      exchange.endIndex < boundary && exchange.toolMessages.some((message) =>
+        message.files?.some((file) => file.mediaType.startsWith('image/'))
+      )
     )
-  ]
-  const failedTools = [
-    ...new Set(
-      calls.flatMap((call) => {
-        const status = call.result?.['status']
-        const observedFailure = call.result?.['observed_tool_failure']
-        return (typeof status === 'string' && status !== 'success') ||
-          observedFailure !== undefined
-          ? [call.tool]
-          : []
-      })
+    .flatMap((exchange) =>
+      boundedTranscript.slice(exchange.startIndex, exchange.endIndex + 1)
     )
-  ]
-  const summary = {
-    earlier_completed_tool_exchange_compacted: true,
-    tools,
-    ...(artifactPaths.length > 0 ? { artifact_paths: artifactPaths } : {}),
-    ...(failedTools.length > 0 ? { failed_tools: failedTools } : {}),
-    preview: serializedExchange
-  }
-  let serializedSummary = JSON.stringify(summary)
-  const overflowChars = Math.max(
-    serializedSummary.length - AGENT_COMPACTED_TOOL_EXCHANGE_MAX_CHARS,
-    0
-  )
-  if (overflowChars > 0) {
-    summary.preview = createTextPreview(
-      serializedExchange,
-      Math.max(serializedExchange.length - overflowChars, 1)
-    )
-    serializedSummary = JSON.stringify(summary)
-  }
-  if (serializedSummary.length > AGENT_COMPACTED_TOOL_EXCHANGE_MAX_CHARS) {
-    const remainingOverflow =
-      serializedSummary.length - AGENT_COMPACTED_TOOL_EXCHANGE_MAX_CHARS
-    summary.preview = summary.preview.slice(
-      0,
-      Math.max(summary.preview.length - remainingOverflow, 0)
-    )
-    serializedSummary = JSON.stringify(summary)
-  }
 
   return {
-    role: 'assistant',
-    content: serializedSummary
+    older: boundedTranscript.slice(0, boundary),
+    visual,
+    recent: boundedTranscript.slice(boundary)
   }
-}
-
-function compactOldestCompletedToolExchange(
-  transcript: AgentToolTranscriptMessage[],
-  recentExchangeLimit = AGENT_RECENT_TOOL_EXCHANGE_LIMIT
-): AgentToolTranscriptMessage[] | null {
-  const exchanges = findCompletedToolExchanges(transcript)
-  if (exchanges.length <= recentExchangeLimit) {
-    return null
-  }
-
-  const exchange = exchanges[0]!
-  return [
-    ...transcript.slice(0, exchange.startIndex),
-    buildCompactedToolExchangeMessage(exchange),
-    ...transcript.slice(exchange.endIndex + 1)
-  ]
-}
-
-function readStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-}
-
-function readCompactedExchangeMetadata(content: string): {
-  tools: string[]
-  artifactPaths: string[]
-  failedTools: string[]
-} | null {
-  try {
-    const parsed = readRecord(JSON.parse(content))
-    if (!parsed?.['earlier_completed_tool_exchange_compacted']) {
-      return null
-    }
-
-    const calls = Array.isArray(parsed['calls'])
-      ? parsed['calls'].flatMap((value) => {
-          const call = readRecord(value)
-          return call ? [call] : []
-        })
-      : []
-    return {
-      tools: [
-        ...readStringArray(parsed['tools']),
-        ...calls.flatMap((call) =>
-          typeof call['tool'] === 'string' ? [call['tool']] : []
-        )
-      ],
-      artifactPaths: [
-        ...readStringArray(parsed['artifact_paths']),
-        ...calls.flatMap((call) => {
-          const result = readRecord(call['result'])
-          const outputLogPath = result?.['output_log_path']
-          return typeof outputLogPath === 'string' ? [outputLogPath] : []
-        })
-      ],
-      failedTools: [
-        ...readStringArray(parsed['failed_tools']),
-        ...calls.flatMap((call) => {
-          const result = readRecord(call['result'])
-          const status = result?.['status']
-          return ((typeof status === 'string' && status !== 'success') ||
-            result?.['observed_tool_failure'] !== undefined) &&
-            typeof call['tool'] === 'string'
-            ? [call['tool']]
-            : []
-        })
-      ]
-    }
-  } catch {
-    return null
-  }
-}
-
-function mergeCompactedToolExchangeHistory(
-  transcript: AgentToolTranscriptMessage[],
-  maxChars: number
-): AgentToolTranscriptMessage[] | null {
-  const compactedIndexes: number[] = []
-  const metadata: Array<NonNullable<ReturnType<typeof readCompactedExchangeMetadata>>> = []
-
-  for (const [index, message] of transcript.entries()) {
-    if (message.role !== 'assistant') {
-      continue
-    }
-
-    const exchangeMetadata = readCompactedExchangeMetadata(message.content)
-    if (exchangeMetadata) {
-      compactedIndexes.push(index)
-      metadata.push(exchangeMetadata)
-    }
-  }
-
-  if (compactedIndexes.length <= 1) {
-    return null
-  }
-
-  const tools = [...new Set(metadata.flatMap((item) => item.tools))]
-  const artifactPaths = [
-    ...new Set(metadata.flatMap((item) => item.artifactPaths))
-  ]
-  const failedTools = [
-    ...new Set(metadata.flatMap((item) => item.failedTools))
-  ]
-  const combinedContent = compactedIndexes
-    .map((index) => (transcript[index] as { content: string }).content)
-    .join('\n')
-  const merged = {
-    earlier_completed_tool_exchange_compacted: true,
-    merged_exchange_count: compactedIndexes.length,
-    tools,
-    ...(artifactPaths.length > 0 ? { artifact_paths: artifactPaths } : {}),
-    ...(failedTools.length > 0 ? { failed_tools: failedTools } : {}),
-    preview: combinedContent
-  }
-  let serializedMerged = JSON.stringify(merged)
-  if (serializedMerged.length > maxChars) {
-    const overflow = serializedMerged.length - maxChars
-    merged.preview = createTextPreview(
-      combinedContent,
-      Math.max(combinedContent.length - overflow, 1)
-    )
-    serializedMerged = JSON.stringify(merged)
-  }
-  if (serializedMerged.length > maxChars) {
-    const remainingOverflow = serializedMerged.length - maxChars
-    merged.preview = merged.preview.slice(
-      0,
-      Math.max(merged.preview.length - remainingOverflow, 0)
-    )
-    serializedMerged = JSON.stringify(merged)
-  }
-
-  const compactedIndexSet = new Set(compactedIndexes)
-  const firstCompactedIndex = compactedIndexes[0]!
-  return transcript.flatMap((message, index) => {
-    if (index === firstCompactedIndex) {
-      return [{ role: 'assistant' as const, content: serializedMerged }]
-    }
-    return compactedIndexSet.has(index) ? [] : [message]
-  })
-}
-
-function resolveMergedToolHistoryMaxChars(
-  transcript: AgentToolTranscriptMessage[],
-  estimatedInputTokens: number,
-  compactionTriggerTokens: number
-): number {
-  const compactedContentChars = transcript.reduce((total, message) => {
-    return message.role === 'assistant' &&
-      readCompactedExchangeMetadata(message.content)
-      ? total + message.content.length
-      : total
-  }, 0)
-  const estimatedOverflowChars = Math.max(
-    (estimatedInputTokens - compactionTriggerTokens) * CHARS_PER_TOKEN,
-    0
-  )
-
-  return Math.max(
-    Math.min(
-      AGENT_COMPACTED_TOOL_HISTORY_MAX_CHARS,
-      compactedContentChars - estimatedOverflowChars
-    ),
-    1
-  )
 }
 
 function getToolkitIdFromFunctionName(functionName: string): string | null {
@@ -649,106 +465,30 @@ function pruneInactiveToolkitSchemas(
 export function prepareAgentModelContext(
   params: AgentModelContextParams
 ): PreparedAgentModelContext {
-  const initialEstimate = estimateAgentInputTokens(
-    params.transcript,
+  const imageBoundedTranscript = retainRecentToolImages(
+    params.transcript
+  )
+  const estimatedInputTokensBeforePreparation = estimateAgentInputTokens(
+    imageBoundedTranscript,
     params.systemPrompt,
     params.tools
   )
-  if (
-    !params.forceCompaction &&
-    initialEstimate <= params.compactionTriggerTokens
-  ) {
-    return {
-      transcript: params.transcript,
-      tools: params.tools,
-      estimatedInputTokens: initialEstimate,
-      wasCompacted: false,
-      compactedToolExchangeCount: 0
-    }
-  }
-
-  const tools = pruneInactiveToolkitSchemas(params.transcript, params.tools)
-  let transcript = params.transcript.map((message) =>
-    message.role === 'tool'
-      ? {
-          ...message,
-          content: compactToolMessageContent(message.content)
-        }
-      : message
-  )
-  let estimatedInputTokens = estimateAgentInputTokens(
-    transcript,
-    params.systemPrompt,
-    tools
-  )
-  let compactedToolExchangeCount = 0
-  let recentExchangeLimit = AGENT_RECENT_TOOL_EXCHANGE_LIMIT
-
-  // Remove complete protocol pairs together, oldest first, until the prompt is
-  // safely below its trigger. Recent exchanges are preferred, but a large
-  // parallel batch must not make the context target impossible to satisfy.
-  while (estimatedInputTokens > params.compactionTriggerTokens) {
-    const compactedTranscript = compactOldestCompletedToolExchange(
-      transcript,
-      recentExchangeLimit
-    )
-    if (compactedTranscript) {
-      transcript = compactedTranscript
-      compactedToolExchangeCount += 1
-      estimatedInputTokens = estimateAgentInputTokens(
-        transcript,
-        params.systemPrompt,
-        tools
-      )
-      continue
-    }
-
-    const mergedTranscript = mergeCompactedToolExchangeHistory(
-      transcript,
-      resolveMergedToolHistoryMaxChars(
-        transcript,
-        estimatedInputTokens,
-        params.compactionTriggerTokens
-      )
-    )
-    if (!mergedTranscript) {
-      if (recentExchangeLimit > 0) {
-        recentExchangeLimit = 0
-        continue
-      }
-      break
-    }
-
-    transcript = mergedTranscript
-    estimatedInputTokens = estimateAgentInputTokens(
-      transcript,
-      params.systemPrompt,
-      tools
-    )
-  }
-
-  const mergedTranscript = mergeCompactedToolExchangeHistory(
-    transcript,
-    resolveMergedToolHistoryMaxChars(
-      transcript,
-      estimatedInputTokens,
-      params.compactionTriggerTokens
-    )
-  )
-  if (mergedTranscript) {
-    transcript = mergedTranscript
-    estimatedInputTokens = estimateAgentInputTokens(
-      transcript,
-      params.systemPrompt,
-      tools
-    )
-  }
-
+  const boundedTranscript = boundOlderUIObservations(imageBoundedTranscript)
+  // Only discard reloadable schemas here. The continuity summary owns text
+  // reduction, so its trigger sees the real cost of the original evidence.
+  const tools = params.forceCompaction ||
+    estimatedInputTokensBeforePreparation > params.compactionTriggerTokens
+    ? pruneInactiveToolkitSchemas(imageBoundedTranscript, params.tools)
+    : params.tools
   return {
-    transcript,
+    transcript: boundedTranscript,
     tools,
-    estimatedInputTokens,
-    wasCompacted: true,
-    compactedToolExchangeCount
+    estimatedInputTokensBeforePreparation,
+    estimatedInputTokens: estimateAgentInputTokens(
+      boundedTranscript, params.systemPrompt, tools
+    ),
+    wasCompacted: tools.length < params.tools.length || boundedTranscript.some(
+      (message, index) => message !== imageBoundedTranscript[index]
+    )
   }
 }

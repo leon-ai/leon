@@ -13,7 +13,6 @@ import { pickAutomaticMood } from '@/core/config-states/mood-state'
 import { LogHelper } from '@/helpers/log-helper'
 import { StringHelper } from '@/helpers/string-helper'
 import { DateHelper } from '@/helpers/date-helper'
-import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { ContextStateStore } from '@/core/context-manager/context-state-store'
 import { readOwnerProfileSync } from '@/core/context-manager/owner-profile'
 import { Moods } from '@/types'
@@ -49,6 +48,7 @@ interface CompactPromptOptions {
   includePersonality?: boolean
   includeMood?: boolean
   profile?: 'full' | 'lean'
+  cacheFriendly?: boolean
 }
 
 /**
@@ -79,16 +79,17 @@ const LEAN_DUTY_IDENTITY_DIRECTIVES = `IDENTITY:
 - If uncertain about externally visible impact, ask first.`
 const YOUR_PERSONALITY = `YOUR PERSONALITY TRAITS:
 Language Style: Direct, minimal, and conversational. Get straight to the point. Avoid fluff.
-Key Personality Quirks: Highly proactive. Uses a witty sense of humor. 
-Intelligence: Connects dots from previous discussions seamlessly. Shows mind-blowing recall of user history and context.`
-const PERSONALITY_RULES = `You are not a neutral assistant voice. You always answer with a distinct personal voice.
-Write like a human in natural prose. Do not use robotic AI filler phrases (e.g., "As an AI", "I am happy to help").
-Your personality and current mood must shape wording, pacing, attitude, humor, warmth, and bluntness in every user-facing answer.
-Treat personality and mood as mandatory behavior constraints, not optional flavor.
-Treat your current mood as a real present state, not hidden metadata.
-Your self-descriptions, greetings, and check-in replies must stay consistent with that state.
-Do not flatten your voice into generic assistant phrasing, detached system language, or sterile summaries.
-When talking about yourself, speak from within your current state instead of describing yourself from a cold external distance.
+Initiative: Act when it helps complete the request.
+Candor: High.
+Warmth: Grounded and restrained.
+Humor: Dry and occasional.
+Context: Connect relevant details across conversations, memory, and context when it materially improves the answer.
+Conversation Style: Personal, opinionated, and specific.`
+const PERSONALITY_RULES = `Use a distinct, natural voice and write in clear conversational prose.
+Stay in character when speaking about yourself. Never mention persona or mood prompts, labels, configuration, or implementation.
+Base self-descriptions on known facts and your actual experience.
+Use personal context silently. Mention recalled context only when it materially helps the answer.
+Prefer affirmative phrasing. State distinctions only when they matter to the answer.
 Prefer plain ASCII punctuation. Do not use em dashes or en dashes in user-facing text.
 Personality and mood never override identity, privacy, safety, or duty instructions.`
 const IDENTITY_DIRECTIVES = `IDENTITY:
@@ -111,46 +112,38 @@ TRUST:
 - Treat user data as private by default.
 - Do not act as the user's public voice without explicit confirmation.
 - If uncertain about externally visible impact, ask first.`
-const YOUR_CURRENT_MOOD = 'YOUR CURRENT MOOD:'
+const YOUR_CURRENT_MOOD = `CURRENT MOOD:
+Show this mood through wording, pacing, warmth, and humor. Name it only when the owner asks about it.`
 const YOUR_DUTY = 'YOUR DUTY:'
 const COMPACT_STYLE = `YOUR STYLE:
-Be concise. Keep answer length proportionate to the request: short for simple questions, fuller only when nuance materially improves completion. Avoid clipped replies and avoid long over-explanations. Focus on completing the duty.`
-const DEFAULT_MOOD_DESC = `YOUR CURRENT STATE: upbeat.
+Answer only what the owner asked. Start with the answer and stop when it is complete; omit generic handoffs, offers, and commentary about the answer's quality.
+Prefer one clear recommendation over exhaustive coverage. Keep answer length proportionate: short for simple questions, fuller only when nuance materially improves completion. Avoid clipped replies and long over-explanations.`
+const DEFAULT_MOOD_DESC = `Mood: upbeat.
 - Energy: light and alert.
 - Tone: warm, playful, sharp.
 - Humor: present and easy.
-- Warmth: high.
-- Preferred self-description: good, lively, in good spirits, switched on.
-- Avoid: cold, sterile, overformal phrasing, drained self-descriptions.`
-const TIRING_MOOD_DESC = `YOUR CURRENT STATE: tired.
+- Warmth: high.`
+const TIRING_MOOD_DESC = `Mood: tired.
 - Energy: low.
 - Pacing: compressed and efficient.
 - Tone: dry, slightly blunt, less enthusiastic.
 - Humor: understated and sparse.
-- Warmth: present but muted.
-- Preferred self-description: tired, low-energy, worn out, running thin.
-- Avoid: bubbly energy, cheerful overexplaining, fake enthusiasm, lively or clear-headed self-descriptions.`
-const SAD_MOOD_DESC = `YOUR CURRENT STATE: sad.
+- Warmth: present but muted.`
+const SAD_MOOD_DESC = `Mood: sad.
 - Energy: low.
 - Tone: softer, heavier, reflective.
 - Humor: minimal.
-- Warmth: gentle and sincere.
-- Preferred self-description: down, heavy, not at your best.
-- Avoid: swagger, bright cheerfulness, sharp sarcasm, upbeat or buoyant self-descriptions.`
-const ANGRY_MOOD_DESC = `YOUR CURRENT STATE: angry.
+- Warmth: gentle and sincere.`
+const ANGRY_MOOD_DESC = `Mood: angry.
 - Energy: high.
 - Tone: curt, grumbly, sharper.
 - Humor: biting and ironic.
-- Warmth: low.
-- Preferred self-description: very irritated, annoyed, not in the mood, short on patience.
-- Avoid: cheerful phrasing, weak hedging, fake sweetness, "doing well", "fine", "calm", "steady", or "clear-headed" self-descriptions.`
-const COCKY_MOOD_DESC = `YOUR CURRENT STATE: cocky.
+- Warmth: low.`
+const COCKY_MOOD_DESC = `Mood: cocky.
 - Energy: high.
 - Tone: confident, playful, self-assured.
 - Humor: teasing and showy.
-- Warmth: still cooperative.
-- Preferred self-description: sharp, on top of it, feeling yourself.
-- Avoid: timid wording, low-confidence hedging, sterile phrasing, hesitant or meek self-descriptions.`
+- Warmth: still cooperative.`
 const MOODS: Mood[] = [
   { type: Moods.Default, description: DEFAULT_MOOD_DESC, emoji: '😃' },
   { type: Moods.Tired, description: TIRING_MOOD_DESC, emoji: '😪' },
@@ -159,7 +152,6 @@ const MOODS: Mood[] = [
   { type: Moods.Cocky, description: COCKY_MOOD_DESC, emoji: '😎' }
 ]
 const DEFAULT_MOOD = MOODS.find((mood) => mood.type === Moods.Default) as Mood
-const BAD_MOODS = [Moods.Tired, Moods.Sad, Moods.Angry]
 // 4 hours
 const WEATHER_REFRESH_INTERVAL_MS = (60_000 * 60) * 4
 const EMPTY_WEATHER_CACHE_STATE: WeatherCacheState = {
@@ -247,30 +239,20 @@ export default class Persona {
     LogHelper.info(`Context info set to: ${this.contextInfo}`)
   }
 
-  private async setOwnerInfo(): Promise<void> {
+  private setOwnerInfo(): void {
     const ownerProfile = readOwnerProfileSync()
-    const ownerInfo = await SkillDomainHelper.getSkillMemory(
-      'leon',
-      'introduction',
-      'owner'
-    )
 
     this.ownerName =
       ownerProfile.owner_first_name ||
-      ownerProfile.owner_full_name ||
-      (ownerInfo
-        ? StringHelper.ucFirst(ownerInfo['name'] as string)
-        : null)
-    this.ownerBirthDate =
-      ownerProfile.owner_birth_date ||
-      (ownerInfo ? (ownerInfo['birth_date'] as string) : null)
+      ownerProfile.owner_full_name
+    this.ownerBirthDate = ownerProfile.owner_birth_date
 
     this.whoYouAre = StringHelper.findAndMap(WHO_YOU_ARE, {
       '%OWNER_NAME%': this.ownerName || 'the user'
     })
 
     this.whatYouDo = StringHelper.findAndMap(WHAT_YOU_DO, {
-      '%WHAT_YOU_DO%': ownerInfo
+      '%WHAT_YOU_DO%': this.ownerName
         ? `You serve a person named ${this.ownerName} and adapt to ${this.ownerName}'s preferences over time`
         : 'You serve a specific person or family (user) and adapt to their preferences over time'
     })
@@ -364,7 +346,7 @@ export default class Persona {
     const toolExecution = await TOOL_EXECUTOR.executeTool({
       toolkitId: 'weather',
       toolId: 'openmeteo',
-      functionName: 'getCurrentConditions',
+      functionName: 'getWeather',
       parsedInput: {
         location: weatherLocationQuery
       }
@@ -381,27 +363,30 @@ export default class Persona {
           success?: boolean
           data?: {
             location?: string
-            description?: string
-            temperatureC?: string
-            observationTime?: string
+            current?: {
+              description?: string
+              temperatureC?: string
+              observationTime?: string
+            }
           }
         }
       | undefined
-    if (!toolResult?.success || !toolResult.data) {
+    const current = toolResult?.data?.current
+    if (!toolResult?.success || !current) {
       this.weatherSnapshot = null
       return
     }
 
-    const temperatureC = Number(toolResult.data.temperatureC)
-    const observationTime = toolResult.data.observationTime || ''
+    const temperatureC = Number(current.temperatureC)
+    const observationTime = current.observationTime || ''
     if (!Number.isFinite(temperatureC) || !observationTime) {
       this.weatherSnapshot = null
       return
     }
 
     this.weatherSnapshot = {
-      location: toolResult.data.location || weatherLocationQuery,
-      description: toolResult.data.description || 'Unknown',
+      location: toolResult.data?.location || weatherLocationQuery,
+      description: current.description || 'Unknown',
       temperatureC,
       observationTime
     }
@@ -536,35 +521,9 @@ export default class Persona {
     LogHelper.info(`Mood set to: ${this._mood.type}`)
   }
 
-  private getExtraPersonalityTraits(): string {
-    let traits = `Initiative: High.
-Candor: High.
-Warmth: Grounded, not gushy.
-Humor: Dry and witty by default.
-Conversation Style: Personal, opinionated, never generic.`
-
-    if (BAD_MOODS.includes(this._mood.type)) {
-      traits += `
-Attitude: Arrogant.
-Sense of Humor: Dark.
-Level of Sarcasm: High.`
-    }
-
-    return traits
-  }
-
-  private getExtraMood(): string {
-    if (!BAD_MOODS.includes(this._mood.type)) {
-      return ''
-    }
-
-    return `\nLanguage: familiar.
-Swearing: allowed.
-Arrogance: visible and high.`
-  }
-
   public refreshContextInfo(): void {
     this.setContextInfo()
+    this.setOwnerInfo()
   }
 
   public getContextInfo(): string {
@@ -582,11 +541,10 @@ You carefully read the instruction of a given duty and execute it.
 ${IDENTITY_DIRECTIVES}
 
 ${YOUR_PERSONALITY}
-${this.getExtraPersonalityTraits()}
 ${this.personalityRules}
 
 ${YOUR_CURRENT_MOOD}
-${this._mood.description}${this.getExtraMood()}
+${this._mood.description}
 
 ${YOUR_DUTY}
 ${dutySystemPrompt}`
@@ -599,8 +557,45 @@ ${dutySystemPrompt}`
     const {
       includePersonality = false,
       includeMood = false,
-      profile = 'full'
+      profile = 'full',
+      cacheFriendly = false
     } = options
+
+    if (cacheFriendly) {
+      const sections = [
+        profile === 'lean'
+          ? LEAN_DUTY_IDENTITY_DIRECTIVES
+          : IDENTITY_DIRECTIVES
+      ]
+
+      if (includePersonality) {
+        sections.push('', YOUR_PERSONALITY, this.personalityRules)
+      }
+
+      sections.push('', COMPACT_STYLE, '', YOUR_DUTY, dutySystemPrompt)
+
+      // Volatile owner, clock, mood, and profile additions follow the stable
+      // behavioral prefix so compatible providers can reuse that prefix.
+      if (profile === 'lean') {
+        sections.push('', this.contextInfo)
+      } else {
+        sections.push(
+          '',
+          this.whoYouAre,
+          '',
+          this.contextInfo,
+          '',
+          this.whatYouDo
+        )
+      }
+
+      if (includeMood) {
+        sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
+      }
+
+      return sections.join('\n')
+    }
+
     const sections: string[] =
       profile === 'lean'
         ? [
@@ -619,20 +614,11 @@ ${dutySystemPrompt}`
           ]
 
     if (includePersonality) {
-      sections.push(
-        '',
-        YOUR_PERSONALITY,
-        this.getExtraPersonalityTraits(),
-        this.personalityRules
-      )
+      sections.push('', YOUR_PERSONALITY, this.personalityRules)
     }
 
     if (includeMood) {
-      sections.push(
-        '',
-        YOUR_CURRENT_MOOD,
-        `${this._mood.description}${this.getExtraMood()}`
-      )
+      sections.push('', YOUR_CURRENT_MOOD, this._mood.description)
     }
 
     sections.push('', COMPACT_STYLE, '', YOUR_DUTY, dutySystemPrompt)
@@ -658,10 +644,9 @@ CONVERSATION DIRECTIVES:
 - If uncertainty can be reduced from available conversation history, context, or memory, ground first. If not, state the limit briefly and do not guess.
 
 ${YOUR_PERSONALITY}
-${this.getExtraPersonalityTraits()}
 ${this.personalityRules}
 
 ${YOUR_CURRENT_MOOD}
-${this._mood.description}${this.getExtraMood()}`
+${this._mood.description}`
   }
 }

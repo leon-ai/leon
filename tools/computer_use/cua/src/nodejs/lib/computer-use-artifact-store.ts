@@ -1,0 +1,350 @@
+import type { CuaExecutionContext as ToolExecutionContext,
+  ComputerUseImageDimensions,
+  ComputerUseImageTransform,
+  CuaToolResult,
+  PersistedComputerUseImages
+} from './types'
+import { execFile } from 'node:child_process'
+import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs'
+import path from 'node:path'
+import { promisify } from 'node:util'
+
+import ffmpegStatic from 'ffmpeg-static'
+
+import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+
+import {
+  COMPUTER_USE_ARTIFACT_DIRECTORY,
+  COMPUTER_USE_MODEL_IMAGE_LIMIT,
+  COMPUTER_USE_TEXT_PREVIEW_MAX_CHARS,
+  IMAGE_EXTENSION_BY_MIME_TYPE
+} from './constants'
+import { calculateComputerUseModelImageDimensions } from './computer-use-coordinate-mapper'
+import { createComputerUseCoordinateGuide, createComputerUseSetOfMarkPlan } from './computer-use-set-of-mark'
+import { ComputerUseSetOfMarkMode } from './types'
+
+const execFileAsync = promisify(execFile)
+const VISUAL_STATE_ID_LENGTH = 16
+const READING_IMAGE_PIXEL_BUDGET = 1_600_000
+const READING_IMAGE_SCALE = 2
+const READING_CROP_MARGIN_RATIO = 0.1
+
+/**
+ * Persists complete evidence while returning only bounded model attachments.
+ */
+export class ComputerUseArtifactStore {
+  /**
+   * Read the original capture without action markers or the native zoom cap.
+   * This is evidence from the last observation, not a fresh desktop capture.
+   */
+  public async createReadingCrop(
+    input: ToolExecutionContext,
+    region: Record<string, unknown>,
+    transform: ComputerUseImageTransform
+  ): Promise<{
+    width: number
+    height: number
+    source: ComputerUseImageDimensions
+    sourceOffset: { x: number, y: number }
+    artifacts: PersistedComputerUseImages['artifacts']
+    modelFiles: PersistedComputerUseImages['modelFiles']
+  }> {
+    if (!ffmpegStatic || !transform.artifactPath || transform.fromZoom || transform.sourceOffset) {
+      throw new Error('Zoom requires an original window or desktop capture and FFmpeg. Observe the target again.')
+    }
+    let x = Number(region['x1']), y = Number(region['y1'])
+    let width = Number(region['x2']) - x, height = Number(region['y2']) - y
+    if (![x, y, width, height].every(Number.isInteger) || x < 0 || y < 0 ||
+        width <= 0 || height <= 0 || x + width > transform.source.width ||
+        y + height > transform.source.height) {
+      throw new Error('The zoom region must be inside the observed image.')
+    }
+    // Preserve nearby line endings when the selected rectangle is too tight.
+    // Only expand within the source image; never introduce blank border pixels.
+    const marginX = Math.ceil(width * READING_CROP_MARGIN_RATIO)
+    const marginY = Math.ceil(height * READING_CROP_MARGIN_RATIO)
+    const right = Math.min(transform.source.width, x + width + marginX)
+    const bottom = Math.min(transform.source.height, y + height + marginY)
+    x = Math.max(0, x - marginX)
+    y = Math.max(0, y - marginY)
+    width = right - x
+    height = bottom - y
+    const pixels = width * height
+    if (pixels > READING_IMAGE_PIXEL_BUDGET) {
+      throw new Error('Select a smaller reading region so the original text detail can be preserved.')
+    }
+    // Enlarge small text for inspection, but never downsample a reading crop.
+    const scale = Math.min(READING_IMAGE_SCALE, Math.sqrt(READING_IMAGE_PIXEL_BUDGET / pixels))
+    const outputWidth = Math.floor(width * scale), outputHeight = Math.floor(height * scale)
+    const artifactPath = path.join(this.getArtifactDirectory(input), `${Date.now()}-${randomUUID()}-read.png`)
+    await execFileAsync(ffmpegStatic, [
+      '-nostdin', '-hide_banner', '-loglevel', 'error', '-i', transform.artifactPath,
+      '-vf', `crop=${width}:${height}:${x}:${y}:exact=1,scale=${outputWidth}:${outputHeight}:flags=lanczos`,
+      '-frames:v', '1', '-y', artifactPath
+    ])
+    const image = await fs.promises.readFile(artifactPath)
+    return {
+      width: outputWidth,
+      height: outputHeight,
+      source: { width, height },
+      sourceOffset: { x, y },
+      artifacts: [{ path: artifactPath, mime_type: 'image/png', size_bytes: image.byteLength }],
+      modelFiles: [{ dataBase64: image.toString('base64'), mediaType: 'image/png', filename: path.basename(artifactPath), visualDetail: 'high' }]
+    }
+  }
+
+  public async persistCaptureMetadata(
+    images: PersistedComputerUseImages,
+    observation: Record<string, unknown>
+  ): Promise<void> {
+    if (!images.transform) return
+    const artifact = images.artifacts.at(-1)
+    if (typeof artifact?.['path'] !== 'string') return
+    // Bind tutorial targets to the exact image, not a later window snapshot.
+    const metadataPath = `${artifact['path']}.json`
+    const content = JSON.stringify({
+      screenshot_width: images.transform.model.width,
+      screenshot_height: images.transform.model.height,
+      elements: observation['elements'] || []
+    })
+    await fs.promises.writeFile(metadataPath, content)
+    // Metadata is evidence too; Satellite must carry it with the original PNG.
+    images.artifacts.push({
+      path: metadataPath,
+      mime_type: 'application/json',
+      size_bytes: Buffer.byteLength(content)
+    })
+  }
+
+  public getArtifactDirectory(input: ToolExecutionContext): string {
+    const sessionDirectory = encodeURIComponent(
+      input.conversationSessionId || 'unscoped'
+    )
+    return path.join(
+      getProfilePaths(input.profileName).sessions,
+      sessionDirectory,
+      'artifacts',
+      COMPUTER_USE_ARTIFACT_DIRECTORY
+    )
+  }
+
+  public async persistStructuredResult(
+    input: ToolExecutionContext,
+    action: string,
+    result: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const artifactDirectory = this.getArtifactDirectory(input)
+    await fs.promises.mkdir(artifactDirectory, { recursive: true })
+    const artifactPath = path.join(
+      artifactDirectory,
+      `${Date.now()}-${randomUUID()}-${action}.json`
+    )
+    const content = `${JSON.stringify(result, null, 2)}\n`
+    await fs.promises.writeFile(artifactPath, content, 'utf8')
+
+    return {
+      path: artifactPath,
+      mime_type: 'application/json',
+      size_bytes: Buffer.byteLength(content)
+    }
+  }
+
+  public async persistImages(
+    input: ToolExecutionContext,
+    action: string,
+    structuredResult: Record<string, unknown> | null,
+    result: CuaToolResult,
+    setOfMarkMode = ComputerUseSetOfMarkMode.Auto
+  ): Promise<PersistedComputerUseImages> {
+    if (result.images.length === 0) {
+      return {
+        artifacts: [],
+        modelFiles: [],
+        transform: null,
+        setOfMark: [],
+        visualStateId: null
+      }
+    }
+
+    const artifactDirectory = this.getArtifactDirectory(input)
+    await fs.promises.mkdir(artifactDirectory, { recursive: true })
+    const sourceDimensions = this.getCaptureDimensions(action, structuredResult)
+
+    const persistedImages = await Promise.all(
+      result.images.map(async (image, index) => {
+        const extension = IMAGE_EXTENSION_BY_MIME_TYPE[image.mimeType] || 'bin'
+        const artifactPath = path.join(
+          artifactDirectory,
+          `${Date.now()}-${randomUUID()}.${extension}`
+        )
+        const content = Buffer.from(image.dataBase64, 'base64')
+        await fs.promises.writeFile(artifactPath, content)
+        const isLatestImage = index === result.images.length - 1
+        const modelImage =
+          isLatestImage && sourceDimensions
+            ? await this.createModelImage(
+                artifactPath,
+                extension,
+                content,
+                sourceDimensions,
+                action === 'get_window_state' ? structuredResult : null,
+                setOfMarkMode,
+                action === 'zoom'
+              )
+            : {
+                dataBase64: image.dataBase64,
+                dimensions: sourceDimensions,
+                setOfMark: []
+              }
+
+        return {
+          artifact: {
+            path: artifactPath,
+            mime_type: image.mimeType,
+            size_bytes: content.byteLength
+          },
+          modelFile: {
+            dataBase64: modelImage.dataBase64,
+            mediaType: image.mimeType,
+            filename: path.basename(artifactPath),
+            visualDetail: 'high' as const
+          },
+          modelDimensions: modelImage.dimensions,
+          setOfMark: modelImage.setOfMark,
+          visualStateId: createHash('sha256')
+            .update(content)
+            .digest('hex')
+            .slice(0, VISUAL_STATE_ID_LENGTH)
+        }
+      })
+    )
+    const latestImage = persistedImages.at(-1)
+    const transform =
+      sourceDimensions && latestImage?.modelDimensions
+        ? {
+            source: sourceDimensions,
+            model: latestImage.modelDimensions,
+            artifactPath: latestImage.artifact.path,
+            ...(action === 'zoom' ? { fromZoom: true } : {})
+          }
+        : null
+
+    return {
+      artifacts: persistedImages.map(({ artifact }) => artifact),
+      modelFiles: persistedImages
+        .slice(-COMPUTER_USE_MODEL_IMAGE_LIMIT)
+        .map(({ modelFile }) => modelFile),
+      transform,
+      setOfMark: latestImage?.setOfMark || [],
+      visualStateId: latestImage?.visualStateId || null
+    }
+  }
+
+  public buildTextPreview(value: string): string {
+    if (value.length <= COMPUTER_USE_TEXT_PREVIEW_MAX_CHARS) {
+      return value
+    }
+
+    return `${value.slice(0, COMPUTER_USE_TEXT_PREVIEW_MAX_CHARS)}\n...[truncated]`
+  }
+
+  private getCaptureDimensions(
+    action: string,
+    result: Record<string, unknown> | null
+  ): ComputerUseImageDimensions | null {
+    if (action !== 'get_window_state' && action !== 'get_desktop_state' && action !== 'zoom') {
+      return null
+    }
+
+    const width = result?.[action === 'zoom' ? 'width' : 'screenshot_width']
+    const height = result?.[action === 'zoom' ? 'height' : 'screenshot_height']
+    return typeof width === 'number' &&
+      Number.isFinite(width) &&
+      width > 0 &&
+      typeof height === 'number' &&
+      Number.isFinite(height) &&
+      height > 0
+      ? { width, height }
+      : null
+  }
+
+  private async createModelImage(
+    artifactPath: string,
+    extension: string,
+    originalContent: Buffer,
+    sourceDimensions: ComputerUseImageDimensions,
+    structuredResult: Record<string, unknown> | null,
+    setOfMarkMode: ComputerUseSetOfMarkMode,
+    zoomed: boolean
+  ): Promise<{
+    dataBase64: string
+    dimensions: ComputerUseImageDimensions
+    setOfMark: PersistedComputerUseImages['setOfMark']
+  }> {
+    const modelDimensions = calculateComputerUseModelImageDimensions(
+      sourceDimensions
+    )
+    const setOfMark = createComputerUseSetOfMarkPlan(
+      structuredResult,
+      setOfMarkMode,
+      modelDimensions
+    )
+    // Zoom is also used when AX exposes no controls. Give the model actual
+    // pixel references rather than asking it to estimate an unlabelled crop.
+    const coordinateGuide = zoomed ? createComputerUseCoordinateGuide(modelDimensions) : ''
+    const needsResize =
+      modelDimensions.width !== sourceDimensions.width ||
+      modelDimensions.height !== sourceDimensions.height
+    if (
+      !ffmpegStatic ||
+      extension === 'bin' ||
+      (!needsResize && !setOfMark.filter && !coordinateGuide)
+    ) {
+      return {
+        dataBase64: originalContent.toString('base64'),
+        dimensions: sourceDimensions,
+        setOfMark: []
+      }
+    }
+
+    const modelImagePath = `${artifactPath}.model.${extension}`
+    try {
+      const filters = [
+        ...(needsResize
+          ? [`scale=${modelDimensions.width}:${modelDimensions.height}:flags=lanczos`]
+          : []),
+        ...(setOfMark.filter ? [setOfMark.filter] : []),
+        ...(coordinateGuide ? [coordinateGuide] : [])
+      ].join(',')
+      await execFileAsync(ffmpegStatic, [
+        '-nostdin',
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-i',
+        artifactPath,
+        '-vf',
+        filters,
+        '-frames:v',
+        '1',
+        '-y',
+        modelImagePath
+      ])
+      const resizedContent = await fs.promises.readFile(modelImagePath)
+      return {
+        dataBase64: resizedContent.toString('base64'),
+        dimensions: modelDimensions,
+        setOfMark: setOfMark.annotations
+      }
+    } catch {
+      return {
+        dataBase64: originalContent.toString('base64'),
+        dimensions: sourceDimensions,
+        setOfMark: []
+      }
+    } finally {
+      await fs.promises.rm(modelImagePath, { force: true })
+    }
+  }
+}

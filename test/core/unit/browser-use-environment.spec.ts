@@ -1,0 +1,176 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import net from 'node:net'
+
+import { afterEach, expect, it, vi } from 'vitest'
+
+import { ToolkitConfig } from '@sdk/toolkit-config'
+
+import { describeBrowserUseReadinessFailure, prepareBrowserUseEnvironment } from '@@/tools/browser_use/browser-use/src/nodejs/lib/browser-use-environment'
+import { BrowserUseTool } from '@@/tools/browser_use/browser-use/src/nodejs/browser-use-tool'
+
+const directories = new Set<string>()
+
+it('reports a missing CLI interpreter as a setup failure, not browser permission', () => {
+  const failure = describeBrowserUseReadinessFailure({
+    stdout: '',
+    stderr: '',
+    code: 'ENOENT',
+    shortMessage: 'spawn browser-use ENOENT',
+    timedOut: false
+  }, '/profile/bu.log')
+
+  expect(failure.requiresOwnerAction).toBe(false)
+  expect(failure.message).toContain('spawn browser-use ENOENT')
+  expect(failure.message).toContain('Rerun dependency setup')
+  expect(failure.message).not.toContain('undefined')
+})
+
+async function createProfile(): Promise<string> {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-browser-test-'))
+  directories.add(root)
+  const directory = path.join(root, 'a-long-profile-name-'.repeat(8), 'tools', 'browser_use', 'browser-use')
+  await fs.mkdir(directory, { recursive: true })
+  return path.join(directory, 'settings.json')
+}
+
+async function environment(settingsPath: string): Promise<NodeJS.ProcessEnv> {
+  const result = await prepareBrowserUseEnvironment(settingsPath)
+  directories.add(result['BH_RUNTIME_DIR']!)
+  return result
+}
+
+afterEach(async () => {
+  vi.restoreAllMocks()
+  for (const directory of directories) await fs.rm(directory, { recursive: true, force: true })
+  directories.clear()
+})
+
+it('uses stable private IPC per profile without shortening artifact or log paths', async () => {
+  const settings = await createProfile()
+  const first = await environment(settings)
+  expect(await environment(settings)).toEqual(first)
+  expect((await environment(await createProfile()))['BH_RUNTIME_DIR']).not.toBe(first['BH_RUNTIME_DIR'])
+  expect(first['BH_HOME']).toBe(path.join(await fs.realpath(path.dirname(settings)), 'runtime'))
+  expect(first['BH_TMP_DIR']).toBe(path.join(first['BH_HOME']!, 'tmp'))
+  if (process.platform !== 'win32') {
+    expect((await fs.stat(first['BH_RUNTIME_DIR']!)).mode & 0o077).toBe(0)
+    expect(Buffer.byteLength(path.join(first['BH_RUNTIME_DIR']!, 'bu.sock'))).toBeLessThanOrEqual(103)
+  }
+})
+
+it.skipIf(process.platform === 'win32')('binds a real socket even when TMPDIR and profile paths are long', async () => {
+  const settings = await createProfile()
+  vi.spyOn(os, 'tmpdir').mockReturnValue(path.dirname(settings))
+  const env = await environment(settings)
+  const server = net.createServer()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(path.join(env['BH_RUNTIME_DIR']!, 'bu.sock'), resolve)
+    })
+    expect(server.listening).toBe(true)
+  } finally {
+    if (server.listening) await new Promise<void>((resolve) => server.close(() => resolve()))
+  }
+})
+
+it.skipIf(process.platform === 'win32')('refuses a shared directory or symlink instead of repairing it', async () => {
+  const settings = await createProfile()
+  const env = await environment(settings)
+  const runtime = env['BH_RUNTIME_DIR']!
+  await fs.chmod(runtime, 0o755)
+  await expect(prepareBrowserUseEnvironment(settings)).rejects.toThrow('not private')
+  await fs.rmdir(runtime)
+  await fs.symlink(path.dirname(settings), runtime)
+  await expect(prepareBrowserUseEnvironment(settings)).rejects.toThrow('not private')
+})
+
+it.each(['permission-blocked:', 'remote-debugging-setup:'])('preserves upstream authorization handoff %s', (code) => {
+  const failure = describeBrowserUseReadinessFailure({ stdout: '', stderr: `RuntimeError: ${code} approval needed`, exitCode: 1, timedOut: false }, '/profile/bu.log')
+  expect(failure.requiresOwnerAction).toBe(true)
+})
+
+it('preserves browser permission handoff when reconnecting fails before readiness', async () => {
+  const settings = await createProfile()
+  await environment(settings)
+  // Exercise the reconnect path without launching a browser or loading an owner profile.
+  const tool = Object.create(BrowserUseTool.prototype) as {
+    getSettingsPath: () => string
+    resolveBrowserEndpoint: () => Promise<string>
+    command: ReturnType<typeof vi.fn>
+    environment: () => Promise<NodeJS.ProcessEnv>
+  }
+  tool.getSettingsPath = (): string => settings
+  tool.resolveBrowserEndpoint = async (): Promise<string> => 'ws://127.0.0.1:9222'
+  tool.command = vi.fn().mockResolvedValue({
+    stdout: '',
+    stderr: 'CDP WS handshake failed: connection refused',
+    exitCode: 1,
+    timedOut: false
+  })
+
+  await expect(tool.environment()).rejects.toMatchObject({
+    name: 'BrowserSetupRequiredError',
+    setupState: 'connection_unavailable',
+    setup: { settings_url: 'chrome://inspect/#remote-debugging' }
+  })
+  expect(tool.command).toHaveBeenCalledOnce()
+  expect(tool.command.mock.calls[0]?.[0]).toEqual(['--reload'])
+})
+
+it.each(['stdout', 'stderr'] as const)('requests browser setup when a stale CDP endpoint fails in %s', (stream) => {
+  const diagnostic = 'browser-harness: fatal: CDP WS handshake failed: [Errno 111] Connect call failed (\'127.0.0.1\', 9222) -- remote browser WebSocket connection failed.'
+  const failure = describeBrowserUseReadinessFailure({
+    stdout: '', stderr: '', [stream]: diagnostic, exitCode: 1, timedOut: false
+  }, '/profile/bu.log')
+  expect(failure.requiresOwnerAction).toBe(true)
+  expect(failure.message).toContain(diagnostic)
+})
+
+it.each([
+  { stderr: 'fatal: AF_UNIX path too long', timedOut: false },
+  { stderr: 'PermissionError: local directory is not writable', timedOut: false },
+  { stderr: '', timedOut: true }
+])('does not present local CLI failures as browser consent failures: $stderr', ({ stderr, timedOut }) => {
+  const failure = describeBrowserUseReadinessFailure({ stdout: '', stderr, exitCode: 1, timedOut }, '/profile/bu.log')
+  expect(failure.requiresOwnerAction).toBe(false)
+  expect(failure.message).toContain(stderr)
+  expect(failure.message).toContain('/profile/bu.log')
+})
+
+it('persists legacy CLI browser settings and preserves the new tool configuration', async () => {
+  const settingsPath = await createProfile()
+  const legacyPath = path.join(path.dirname(settingsPath), 'legacy-settings.json')
+  await fs.writeFile(legacyPath, '{}')
+
+  const legacySettings = { cdp_endpoint: 'http://127.0.0.1:9222', user_data_dir: '' }
+  let currentSettings = { cdp_endpoint: '', user_data_dir: '' }
+  const loadSettings = vi.spyOn(ToolkitConfig, 'loadToolSettings').mockImplementation(
+    (_toolkit, toolId) => toolId === 'cli' ? legacySettings : currentSettings
+  )
+  const saveSettings = vi.spyOn(ToolkitConfig, 'saveToolSettings').mockImplementation(
+    (_toolkit, _toolId, values) => {
+      currentSettings = { ...currentSettings, ...values }
+    }
+  )
+  const prototype = BrowserUseTool.prototype as unknown as {
+    getSettingsPath: (toolId?: string) => string
+  }
+  vi.spyOn(prototype, 'getSettingsPath').mockReturnValue(legacyPath)
+
+  const tool = new BrowserUseTool()
+  expect(tool.toolName).toBe('browser-use')
+  expect(saveSettings).toHaveBeenCalledWith('browser_use', 'browser-use', legacySettings)
+  expect(currentSettings).toEqual(legacySettings)
+
+  currentSettings = { cdp_endpoint: 'http://127.0.0.1:9333', user_data_dir: '' }
+  loadSettings.mockClear()
+  saveSettings.mockClear()
+  new BrowserUseTool()
+
+  expect(loadSettings).toHaveBeenCalledTimes(1)
+  expect(saveSettings).not.toHaveBeenCalled()
+  expect(currentSettings.cdp_endpoint).toBe('http://127.0.0.1:9333')
+})

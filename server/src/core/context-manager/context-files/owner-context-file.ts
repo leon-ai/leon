@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { ContextFile } from '@/core/context-manager/context-file'
 import {
   buildOwnerDocument,
+  buildOwnerManifest,
   getOwnerContextPath,
   readOwnerProfileSync
 } from '@/core/context-manager/owner-profile'
@@ -23,7 +24,14 @@ export class OwnerContextFile extends ContextFile {
 
     if (fs.existsSync(ownerContextPath)) {
       try {
-        return fs.readFileSync(ownerContextPath, 'utf8').trimEnd()
+        const document = fs.readFileSync(ownerContextPath, 'utf8').trimEnd()
+        const manifest = `> ${buildOwnerManifest(readOwnerProfileSync())}`
+        // Refresh the summary without rewriting the owner's curated document body.
+        const firstLineEnd = document.indexOf('\n')
+        const body = document.startsWith('>')
+          ? (firstLineEnd === -1 ? '' : document.slice(firstLineEnd + 1))
+          : document
+        return `${manifest}\n${body}`
       } catch {
         // Fall back to the derived skeleton below.
       }

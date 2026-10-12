@@ -4,19 +4,24 @@ import Chatbot from './chatbot'
 import VoiceEnergy from './voice-energy'
 import { ASR_DISABLED_MESSAGE, INIT_MESSAGES } from './constants'
 import handleSuggestions from './suggestion-handler.js'
+import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+import { CompletionFailureKind } from '../../../server/src/core/llm-manager/types.ts'
+import {
+  LEON_CLIENT_INTERFACE_EVENTS as LEON_EVENTS,
+  LEON_CLIENT_INTERFACE_PROTOCOL_VERSION,
+  ModelResponseState
+} from '../../../server/src/core/leon-interface/types.ts'
 
-const LEON_CLIENT_INTERFACE_PROTOCOL_VERSION = 1
-const LEON_EVENTS = {
-  init: 'leon:init',
-  utterance: 'leon:utterance',
-  ready: 'leon:ready',
-  answer: 'leon:answer',
-  isTyping: 'leon:is-typing',
-  suggest: 'leon:suggest',
-  llmToken: 'leon:llm-token',
-  llmReasoningToken: 'leon:llm-reasoning-token',
-  ownerUtterance: 'leon:owner-utterance',
-  error: 'leon:error'
+const MODEL_STATUS_INTERVAL_MS = 1_000
+const MODEL_STATUS_LABELS = {
+  [ModelResponseState.Waiting]: 'Waiting for model response',
+  [ModelResponseState.Connected]: 'Waiting for model response (stream connected)',
+  [ModelResponseState.Reasoning]: 'Model is reasoning',
+  [ModelResponseState.Retrying]: 'Retrying model response'
+}
+const MODEL_RETRY_LABELS = {
+  [CompletionFailureKind.Timeout]: 'Previous attempt timed out',
+  [CompletionFailureKind.Provider]: 'Previous attempt failed'
 }
 
 export default class Client {
@@ -35,11 +40,14 @@ export default class Client {
     this._suggestions = []
     this._answerGenerationId = 'xxx'
     this._activeStreamGenerationId = null
+    this._answerStreamText = ''
     this._ttsAudioContext = null
     this._isLeonGeneratingAnswer = false
     this._isVoiceModeEnabled = false
     this._hasSentInitMessages = false
     this._chatbotInitPromise = null
+    this._modelResponseStatus = null
+    this._modelResponseStatusTimer = null
     // this._ttsAudioContextes = {}
   }
 
@@ -81,11 +89,94 @@ export default class Client {
       return
     }
 
+    this.clearModelResponseStatus()
     this.activeSessionId = sessionId
+    this._activeStreamGenerationId = null
+    this._answerGenerationId = 'xxx'
+    this._answerStreamText = ''
     this.chatbot.setSessionId(sessionId)
     this.socket.emit('session-change', sessionId)
     await this.chatbot.loadFeed()
     this.chatbot.scrollDown({ force: true })
+  }
+
+  /**
+   * Render request activity separately from durable conversation messages.
+   */
+  setModelResponseStatus(status) {
+    if (status.sessionId && this.activeSessionId && status.sessionId !== this.activeSessionId) {
+      return
+    }
+
+    if (status.state === ModelResponseState.Completed) {
+      this.clearModelResponseStatus(status.requestId)
+      return
+    }
+
+    if (!MODEL_STATUS_LABELS[status.state]) {
+      return
+    }
+
+    this._modelResponseStatus = status
+    this.chatbot.isTyping('leon', true)
+    this.renderModelResponseStatus()
+
+    if (!this._modelResponseStatusTimer) {
+      this._modelResponseStatusTimer = setInterval(() => {
+        this.renderModelResponseStatus()
+      }, MODEL_STATUS_INTERVAL_MS)
+    }
+  }
+
+  /**
+   * Keep elapsed time advancing while the provider remains silent.
+   */
+  renderModelResponseStatus() {
+    const element = document.querySelector('#model-response-status')
+    const status = this._modelResponseStatus
+    if (!element || !status) {
+      return
+    }
+
+    const now = Date.now()
+    const elapsed = formatToolDuration(Math.max(0, now - status.startedAt))
+    const parts = [MODEL_STATUS_LABELS[status.state]]
+    if (status.attempt) {
+      parts.push(`Attempt ${status.attempt}`)
+    }
+    if (MODEL_RETRY_LABELS[status.retryReason]) {
+      parts.push(MODEL_RETRY_LABELS[status.retryReason])
+    }
+    parts.push(`Elapsed: ${elapsed}`)
+    if (status.lastActivityAt) {
+      parts.push(`Last provider activity: ${formatToolDuration(Math.max(0, now - status.lastActivityAt))} ago`)
+    } else if (status.attempt) {
+      parts.push('No provider activity yet')
+    }
+    if (status.deadlineAt) {
+      parts.push(`Time left: ${formatToolDuration(Math.max(0, status.deadlineAt - now))}`)
+    }
+
+    element.textContent = parts.join(' · ')
+    element.hidden = false
+  }
+
+  /**
+   * Ignore stale completions and release timers when the viewed request ends.
+   */
+  clearModelResponseStatus(requestId) {
+    if (requestId && this._modelResponseStatus?.requestId !== requestId) {
+      return
+    }
+
+    clearInterval(this._modelResponseStatusTimer)
+    this._modelResponseStatusTimer = null
+    this._modelResponseStatus = null
+    const element = document.querySelector('#model-response-status')
+    if (element) {
+      element.hidden = true
+      element.textContent = ''
+    }
   }
 
   async sendInitMessages() {
@@ -184,6 +275,12 @@ export default class Client {
         }
       })
     })
+    this.socket.on('disconnect', () => {
+      this.clearModelResponseStatus()
+    })
+    this.socket.on(LEON_EVENTS.modelResponseStatus, (status) => {
+      this.setModelResponseStatus(status)
+    })
 
     /**
      * Init status listeners
@@ -213,6 +310,26 @@ export default class Client {
 
       // Leon has finished to answer
       this._isLeonGeneratingAnswer = false
+
+      if (data && Array.isArray(data.artifacts) && data.artifacts.length) {
+        if (
+          [...this.chatbot.feed.querySelectorAll('[data-message-id]')].some(
+            (element) => element.dataset.messageId === data.messageId
+          )
+        ) {
+          return
+        }
+
+        this.chatbot.createBubble({
+          who: 'leon',
+          string: data.answer || '',
+          messageId: data.messageId,
+          artifacts: data.artifacts
+        })
+        this.chatbot.scrollDown()
+
+        return
+      }
 
       const isPlanWidget =
         data && typeof data === 'object' && data.widget === 'PlanWidget'
@@ -267,7 +384,9 @@ export default class Client {
        * Otherwise, create a new bubble
        */
       const streamGenerationId =
-        this._activeStreamGenerationId || this._answerGenerationId
+        data && typeof data === 'object' && 'generationId' in data
+          ? data.generationId
+          : this._activeStreamGenerationId || this._answerGenerationId
       const streamedBubbleContainerElement = streamGenerationId
         ? document.querySelector(
             `.bubble-container.leon.${streamGenerationId}`
@@ -276,30 +395,42 @@ export default class Client {
       const isBubbleFromStreaming = Boolean(streamedBubbleContainerElement)
 
       if (isBubbleFromStreaming && streamedBubbleContainerElement) {
-        this.chatbot.saveBubble(
-          'leon',
-          answerText,
-          answerText,
-          null,
-          llmMetrics,
-          data && typeof data === 'object' && typeof data.sentAt === 'number'
-            ? data.sentAt
-            : Date.now()
-        )
-
-        // Slightly delay the update to avoid the stream animation to be interrupted
-        setTimeout(() => {
-          // Update the text of the bubble (quick emoji fix)
-          streamedBubbleContainerElement.querySelector('p.bubble').innerHTML =
-            this.chatbot.formatMessage(answerText)
-          this.chatbot.updateBubbleMetrics(
-            streamedBubbleContainerElement,
+        if (data.historyMode !== 'system_widget') {
+          this.chatbot.saveBubble(
+            'leon',
+            answerText,
+            answerText,
+            null,
             llmMetrics,
             data && typeof data === 'object' && typeof data.sentAt === 'number'
               ? data.sentAt
               : Date.now()
           )
-        }, 2_500)
+        }
+
+        const messageId = data.messageId || data.id
+
+        if (messageId) {
+          streamedBubbleContainerElement.setAttribute(
+            'data-message-id',
+            messageId
+          )
+        }
+
+        // Apply final formatting immediately while the last streamed chunks
+        // finish their own fades; acceptance must not restart or cut them short.
+        this.chatbot.renderStreamedMessage(
+          streamedBubbleContainerElement.querySelector('p.bubble'),
+          answerText,
+          false
+        )
+        this.chatbot.updateBubbleMetrics(
+          streamedBubbleContainerElement,
+          llmMetrics,
+          data && typeof data === 'object' && typeof data.sentAt === 'number'
+            ? data.sentAt
+            : Date.now()
+        )
       } else {
         this.chatbot.createBubble({
           who: 'leon',
@@ -318,10 +449,15 @@ export default class Client {
               : Date.now()
         })
       }
+
       this.chatbot.scrollDown({ force: true })
 
-      this._activeStreamGenerationId = null
-      this._answerGenerationId = 'xxx'
+      // Independent status notices must not consume an in-flight answer.
+      if (streamGenerationId) {
+        this._activeStreamGenerationId = null
+        this._answerGenerationId = 'xxx'
+        this._answerStreamText = ''
+      }
       void this.sessionPanel?.refresh()
     })
 
@@ -338,6 +474,9 @@ export default class Client {
     })
 
     this.socket.on(LEON_EVENTS.isTyping, (data) => {
+      if (data === false) {
+        this.clearModelResponseStatus()
+      }
       this.chatbot.isTyping('leon', data)
     })
 
@@ -361,8 +500,16 @@ export default class Client {
       cb('string-received')
     })
 
-    this.socket.on('widget-send-utterance', (utterance) => {
-      this._input.value = utterance
+    this.socket.on('widget-send-utterance', (message) => {
+      if (
+        typeof message === 'object' &&
+        message.sessionId !== this.activeSessionId
+      ) {
+        return
+      }
+
+      this._input.value =
+        typeof message === 'object' ? message.utterance : message
       this.send('utterance')
     })
 
@@ -371,6 +518,18 @@ export default class Client {
     })
 
     this.socket.on(LEON_EVENTS.llmToken, (data) => {
+      if (data.reset) {
+        document.querySelector(
+          `.bubble-container.leon.${data.generationId}`
+        )?.remove()
+        if (this._activeStreamGenerationId === data.generationId) {
+          this._activeStreamGenerationId = null
+          this._answerGenerationId = 'xxx'
+          this._answerStreamText = ''
+        }
+        return
+      }
+
       if (this._isVoiceModeEnabled) {
         this.voiceEnergy.status = 'processing'
       }
@@ -381,12 +540,15 @@ export default class Client {
       this._answerGenerationId = newGenerationId
       this._activeStreamGenerationId = newGenerationId
       const isSameGeneration = previousGenerationId === newGenerationId
+      this._answerStreamText = isSameGeneration
+        ? this._answerStreamText + data.token
+        : data.token
       let bubbleContainerElement = null
 
       if (!isSameGeneration) {
         bubbleContainerElement = this.chatbot.createBubble({
           who: 'leon',
-          string: data.token,
+          string: '',
           save: false,
           bubbleId: newGenerationId
         })
@@ -396,18 +558,10 @@ export default class Client {
         )
       }
 
-      const bubbleElement = bubbleContainerElement.querySelector('p.bubble')
-
-      // Token is already appened when it's a new generation
-      if (isSameGeneration) {
-        // bubbleElement.textContent += data.token
-
-        const tokenSpan = document.createElement('span')
-        tokenSpan.className = 'llm-token fade-in'
-        tokenSpan.textContent = data.token
-
-        bubbleElement.appendChild(tokenSpan)
-      }
+      this.chatbot.renderStreamedMessage(
+        bubbleContainerElement.querySelector('p.bubble'),
+        this._answerStreamText
+      )
 
       this.chatbot.scrollDown()
     })

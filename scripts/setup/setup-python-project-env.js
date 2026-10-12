@@ -106,7 +106,7 @@ export function getProjectVenvPythonPath(projectPath) {
 /**
  * Check whether a project dependency sync stamp is newer than its manifest.
  */
-async function isSyncCurrent(projectPath, stampFileName) {
+export async function isPythonProjectSyncCurrent(projectPath, stampFileName) {
   const pyprojectPath = path.join(projectPath, PYPROJECT_FILE_NAME)
   const stampPath = path.join(projectPath, stampFileName)
 
@@ -123,7 +123,14 @@ async function isSyncCurrent(projectPath, stampFileName) {
     fs.promises.stat(stampPath)
   ])
 
-  return manifestStat.mtimeMs <= stampStat.mtimeMs
+  // Console-script shebangs contain absolute paths, so moved environments
+  // must be rebuilt even when their Python symlink still resolves.
+  const installedPath = await fs.promises.readFile(stampPath, 'utf8')
+
+  return (
+    installedPath === path.resolve(projectPath) &&
+    manifestStat.mtimeMs <= stampStat.mtimeMs
+  )
 }
 
 /**
@@ -145,7 +152,7 @@ export async function setupPythonProjectEnv({
     return
   }
 
-  if (await isSyncCurrent(projectPath, stampFileName)) {
+  if (await isPythonProjectSyncCurrent(projectPath, stampFileName)) {
     status.succeed(`${name}: up-to-date`)
 
     return
@@ -156,6 +163,7 @@ export async function setupPythonProjectEnv({
 
   const dependencies = await getPyprojectDependencies(projectPath)
 
+  await fs.promises.rm(stampPath, { force: true })
   await fs.promises.rm(venvPath, { recursive: true, force: true })
 
   await execa(UV_RUNTIME_BIN_PATH, [
@@ -175,7 +183,7 @@ export async function setupPythonProjectEnv({
       ], { cwd: projectPath })
   }
 
-  await fs.promises.writeFile(stampPath, `${Date.now()}`)
+  await fs.promises.writeFile(stampPath, path.resolve(projectPath))
 
   status.succeed(`${name}: ready`)
 }

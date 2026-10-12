@@ -1,4 +1,7 @@
+import { formatToolDuration } from '../../../web-app/src/utils/format-tool-duration.ts'
+
 const COMMAND_OUTPUT_MAX_DISPLAY_CHARS = 80_000
+const LIVE_PROGRESS_INTERVAL_MS = 1_000
 const ANSI_ESCAPE_PATTERN =
   // eslint-disable-next-line no-control-regex
   /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))/g
@@ -212,9 +215,14 @@ export default class ToolUIHandler {
     statusChip.className = 'tool-status-chip running'
     statusChip.textContent = 'Running'
 
+    const durationLabel = document.createElement('span')
+    durationLabel.className = 'tool-duration'
+    durationLabel.hidden = true
+
     const expandIcon = document.createElement('i')
     expandIcon.className = 'ri-arrow-down-s-line expand-icon'
 
+    meta.appendChild(durationLabel)
     meta.appendChild(statusChip)
     meta.appendChild(expandIcon)
     toolHeader.appendChild(heading)
@@ -236,8 +244,12 @@ export default class ToolUIHandler {
     )
     const outputPanel = this.createActivityPanel(
       'Result',
-      'What the function returned'
+      'Live output and the final result'
     )
+    const liveProgress = document.createElement('div')
+    liveProgress.className = 'tool-live-progress'
+    liveProgress.hidden = true
+    outputPanel.panel.appendChild(liveProgress)
 
     sections.appendChild(inputPanel.panel)
     sections.appendChild(outputPanel.panel)
@@ -272,6 +284,8 @@ export default class ToolUIHandler {
       title,
       subtitle,
       statusChip,
+      durationLabel,
+      liveProgress,
       inputBody: inputPanel.body,
       outputBody: outputPanel.body,
       rawContent,
@@ -437,11 +451,16 @@ export default class ToolUIHandler {
     }
 
     if (data.toolPhase === 'input') {
-      toolGroupContainer.summary.textContent =
-        data.stepLabel || data.functionName
-          ? `Preparing ${title.toLowerCase()}...`
-          : 'Preparing tool activity...'
-      this.setStatusChip(toolGroupContainer.statusChip, 'running')
+      const isPreparing = data.status === 'preparing'
+
+      toolGroupContainer.summary.textContent = data.progressMessage ||
+        (isPreparing
+          ? `Preparing the call for ${title.toLowerCase()}...`
+          : `Running ${title.toLowerCase()}...`)
+      this.setStatusChip(
+        toolGroupContainer.statusChip,
+        isPreparing ? 'preparing' : 'running'
+      )
 
       const parsedInput = this.parseToolInput(data.toolInput)
       toolGroupContainer.rawInput = parsedInput ?? data.toolInput ?? null
@@ -454,17 +473,41 @@ export default class ToolUIHandler {
       if (!toolGroupContainer.rawOutput) {
         this.renderPlaceholder(
           toolGroupContainer.outputBody,
-          'Waiting for function output...'
+          isPreparing
+            ? 'Generating function input...'
+            : 'Function is running. Output will appear here as it arrives.'
         )
+      }
+
+      if (data.commandOutput) {
+        toolGroupContainer.commandOutputText = this.mergeCommandOutput(
+          '', data.commandOutput
+        )
+        this.renderCommandOutputLog(
+          toolGroupContainer.outputBody, toolGroupContainer.commandOutputText
+        )
+        toolGroupContainer.rawOutput = {
+          output: toolGroupContainer.commandOutputText
+        }
+      }
+
+      if (isPreparing) {
+        this.stopLiveProgress(toolGroupContainer)
+      } else {
+        this.startLiveProgress(toolGroupContainer, data)
       }
     }
 
-    if (data.toolPhase === 'preparation') {
+    if (data.toolPhase === 'preparation' || data.toolPhase === 'progress') {
       const progressMessage = data.message || data.answer || ''
       this.setStatusChip(toolGroupContainer.statusChip, 'running')
+      this.startLiveProgress(toolGroupContainer, data)
 
       if (progressMessage) {
         toolGroupContainer.summary.textContent = progressMessage
+      }
+
+      if (progressMessage && data.toolPhase === 'preparation') {
         toolGroupContainer.preparationLog.push(progressMessage)
         this.renderPreparationLog(
           toolGroupContainer.outputBody,
@@ -481,6 +524,7 @@ export default class ToolUIHandler {
       this.setStatusChip(toolGroupContainer.statusChip, 'running')
 
       if (outputDelta) {
+        toolGroupContainer.lastOutputAt = data.lastOutputAt ?? Date.now()
         toolGroupContainer.summary.textContent = 'Receiving command output...'
         toolGroupContainer.commandOutputText = this.mergeCommandOutput(
           toolGroupContainer.commandOutputText,
@@ -494,9 +538,26 @@ export default class ToolUIHandler {
           output: toolGroupContainer.commandOutputText
         }
       }
+      this.startLiveProgress(toolGroupContainer, data)
     }
 
     if (data.toolPhase === 'output') {
+      const duration = formatToolDuration(data.durationMs)
+      const isBackground = data.output?.execution?.state === 'running'
+      if (data.status === 'running') {
+        this.startLiveProgress(toolGroupContainer, data)
+      } else {
+        this.stopLiveProgress(toolGroupContainer)
+      }
+
+      toolGroupContainer.durationLabel.textContent = isBackground && duration
+        ? `${duration} to return`
+        : duration
+      toolGroupContainer.durationLabel.hidden = !duration
+      toolGroupContainer.durationLabel.title = isBackground
+        ? 'Time to return the execution handle; the job is still running.'
+        : 'Execution time, including tool setup and transport.'
+
       const isError = data.status === 'error'
       const isObserved = data.status === 'observed'
       toolGroupContainer.summary.textContent =
@@ -508,7 +569,7 @@ export default class ToolUIHandler {
             : 'The function completed.')
       this.setStatusChip(
         toolGroupContainer.statusChip,
-        isError ? 'error' : isObserved ? 'observed' : 'success'
+        data.status === 'running' ? 'running' : isError ? 'error' : isObserved ? 'observed' : 'success'
       )
 
       const outputPayload = {
@@ -516,7 +577,13 @@ export default class ToolUIHandler {
         output: data.output
       }
       toolGroupContainer.rawOutput = outputPayload
-      this.renderOutputPreview(toolGroupContainer.outputBody, data)
+      if (toolGroupContainer.commandOutputText) {
+        this.renderCommandOutputLog(
+          toolGroupContainer.outputBody, toolGroupContainer.commandOutputText
+        )
+      } else {
+        this.renderOutputPreview(toolGroupContainer.outputBody, data)
+      }
     }
 
     this.renderRawData(toolGroupContainer)
@@ -524,6 +591,45 @@ export default class ToolUIHandler {
     if (toolGroupContainer.isNew) {
       toolGroupContainer.isNew = false
     }
+  }
+
+  /**
+   * Keep elapsed time visible even when a command produces no output.
+   */
+  startLiveProgress(card, data) {
+    card.startedAt ??= data.startedAt ?? Date.now()
+    card.lastOutputAt ??= data.lastOutputAt
+    card.liveProgress.hidden = false
+    this.updateLiveProgress(card)
+
+    if (!card.progressTimer) {
+      card.progressTimer = setInterval(() => {
+        this.updateLiveProgress(card)
+      }, LIVE_PROGRESS_INTERVAL_MS)
+    }
+  }
+
+  /**
+   * Describe output silence without claiming that the process is stalled.
+   */
+  updateLiveProgress(card) {
+    const now = Date.now()
+    const elapsed = formatToolDuration(Math.max(0, now - card.startedAt))
+    const quiet = formatToolDuration(Math.max(0, now - (card.lastOutputAt ?? card.startedAt)))
+    card.liveProgress.textContent = `Elapsed: ${elapsed} · No new output for ${quiet}`
+    card.durationLabel.textContent = elapsed
+    card.durationLabel.title = 'Elapsed time since tool dispatch.'
+    card.durationLabel.hidden = false
+  }
+
+  /**
+   * Release timers when an activity settles or leaves the conversation.
+   */
+  stopLiveProgress(card) {
+    clearInterval(card.progressTimer)
+    card.progressTimer = null
+    card.liveProgress.hidden = true
+    card.durationLabel.hidden = true
   }
 
   updateAgentSkillActivityCard(activityContainer, data) {
@@ -635,7 +741,10 @@ export default class ToolUIHandler {
     }
 
     let output = currentOutput || ''
-    let replaceCurrentLine = false
+    let replaceCurrentLine = output.endsWith('\r')
+    if (replaceCurrentLine) {
+      output = output.slice(0, -1)
+    }
 
     for (const char of cleanChunk) {
       if (char === '\r') {
@@ -656,6 +765,11 @@ export default class ToolUIHandler {
       }
 
       output += char
+    }
+
+    // A carriage return can arrive at a chunk boundary before its replacement.
+    if (replaceCurrentLine) {
+      output += '\r'
     }
 
     if (output.length <= COMMAND_OUTPUT_MAX_DISPLAY_CHARS) {
@@ -873,7 +987,15 @@ export default class ToolUIHandler {
    * Update the status chip for the activity card.
    */
   setStatusChip(chip, status) {
-    chip.classList.remove('running', 'success', 'error', 'selected', 'observed')
+    chip.classList.remove(
+      'preparing', 'running', 'success', 'error', 'selected', 'observed'
+    )
+
+    if (status === 'preparing') {
+      chip.classList.add('preparing')
+      chip.textContent = 'Preparing'
+      return
+    }
 
     if (status === 'error') {
       chip.classList.add('error')
@@ -913,6 +1035,16 @@ export default class ToolUIHandler {
       .replace(/\s+/g, ' ')
       .trim()
       .replace(/^\w/, (char) => char.toUpperCase())
+  }
+
+  /**
+   * Provide readable toolkit/tool labels when older traces lack display names.
+   */
+  humanizeToolName(value) {
+    return this.humanizeFunctionName(value)
+      .split(' ')
+      .map((word) => this.humanizeFunctionName(word))
+      .join(' ')
   }
 
   /**
@@ -981,9 +1113,87 @@ export default class ToolUIHandler {
   }
 
   /**
+   * Recreates completed activity cards from a persisted agent trace.
+   */
+  replayAgentResponseTrace(trace) {
+    if (!trace || !Array.isArray(trace.toolCalls)) {
+      return
+    }
+
+    for (const toolCall of trace.toolCalls) {
+      if (!toolCall || typeof toolCall.name !== 'string') {
+        continue
+      }
+
+      const nameParts = toolCall.name.split('.')
+      const toolkitName = toolCall.toolkitName ||
+        this.humanizeToolName(nameParts[0] || 'Leon')
+      const toolName = toolCall.toolName ||
+        this.humanizeToolName(nameParts[1] || toolkitName)
+      const functionName = nameParts.at(-1) || toolCall.name
+      const toolGroupId = toolCall.id || `history-${toolCall.name}`
+      const sharedData = {
+        isToolOutput: true,
+        toolDisplayMode: 'activity_card',
+        toolkitName,
+        toolName,
+        functionName,
+        toolGroupId,
+        ...(toolCall.toolCallTitle
+          ? { toolCallTitle: toolCall.toolCallTitle }
+          : {}),
+        ...(toolCall.toolkitIconName
+          ? { toolkitIconName: toolCall.toolkitIconName }
+          : {}),
+        ...(toolCall.toolIconName
+          ? { toolIconName: toolCall.toolIconName }
+          : {}),
+        ...(toolCall.stepLabel ? { stepLabel: toolCall.stepLabel } : {})
+      }
+      const serializedInput =
+        typeof toolCall.input === 'string'
+          ? toolCall.input
+          : JSON.stringify(toolCall.input ?? {})
+
+      this.handleToolOutput({
+        ...sharedData,
+        toolPhase: 'input',
+        status: toolCall.status === 'preparing' ? 'preparing' : 'running',
+        startedAt: toolCall.startedAt,
+        lastOutputAt: toolCall.lastOutputAt,
+        commandOutput: toolCall.commandOutput,
+        progressMessage: toolCall.progressMessage,
+        toolInput: serializedInput,
+        answer: serializedInput
+      })
+      if (toolCall.status === 'preparing' || toolCall.status === 'running') {
+        continue
+      }
+      this.handleToolOutput({
+        ...sharedData,
+        toolPhase: 'output',
+        durationMs: toolCall.durationMs,
+        status: toolCall.status,
+        message:
+          toolCall.errorMessage ||
+          (toolCall.status === 'error'
+            ? 'The function failed.'
+            : 'The function completed.'),
+        output: toolCall.output ?? null,
+        answer: ''
+      })
+    }
+  }
+
+  /**
    * Clear all tool groups.
    */
   clearToolGroups() {
+    for (const card of this.toolGroups.values()) {
+      if (card.mode === 'activity_card') {
+        this.stopLiveProgress(card)
+      }
+    }
     this.toolGroups.clear()
   }
 
@@ -1007,6 +1217,9 @@ export default class ToolUIHandler {
   removeToolGroup(groupId) {
     const toolGroup = this.toolGroups.get(groupId)
     if (toolGroup) {
+      if (toolGroup.mode === 'activity_card') {
+        this.stopLiveProgress(toolGroup)
+      }
       toolGroup.container.remove()
       this.toolGroups.delete(groupId)
     }

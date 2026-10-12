@@ -1,7 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import { SKILLS_PATH } from '@/constants'
 import { DateHelper } from '@/helpers/date-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
@@ -11,18 +10,7 @@ export const getOwnerProfilePath = (): string =>
   path.join(getProfilePaths().context, '.owner-profile.json')
 const getLegacyOwnerProfilePath = (): string =>
   path.join(getProfilePaths().context, 'private', '.owner-profile.json')
-const LEGACY_OWNER_MEMORY_PATH = path.join(
-  SKILLS_PATH,
-  'leon',
-  'introduction',
-  'memory',
-  'owner.json'
-)
-
-export interface LegacyOwnerSeed {
-  name: string
-  birthDate: string
-}
+const OWNER_MANIFEST_MAX_CHARS = 320
 
 export type OwnerProfileSectionKey =
   | 'identity'
@@ -280,8 +268,9 @@ export function readOwnerProfileSync(): OwnerProfile {
   const cacheProfile = readOwnerProfileCacheSync()
   const ownerDocument = readOwnerDocumentSync()
   if (ownerDocument.trim()) {
-    return applyLegacyOwnerSeed(normalizeOwnerProfile({
+    return normalizeOwnerProfile({
       ...parseOwnerDocument(ownerDocument),
+      updatedAt: cacheProfile.updatedAt,
       owner_first_name: cacheProfile.owner_first_name,
       owner_last_name: cacheProfile.owner_last_name,
       owner_full_name: cacheProfile.owner_full_name,
@@ -291,10 +280,10 @@ export function readOwnerProfileSync(): OwnerProfile {
       owner_nationality: cacheProfile.owner_nationality,
       owner_current_company: cacheProfile.owner_current_company,
       owner_current_role: cacheProfile.owner_current_role
-    }))
+    })
   }
 
-  return applyLegacyOwnerSeed(cacheProfile)
+  return cacheProfile
 }
 
 export async function writeOwnerProfile(profile: OwnerProfile): Promise<void> {
@@ -314,61 +303,6 @@ export async function writeOwnerProfile(profile: OwnerProfile): Promise<void> {
   ) {
     await fs.promises.rm(legacyOwnerProfilePath, { force: true })
   }
-}
-
-export function readLegacyOwnerSeedSync(): LegacyOwnerSeed | null {
-  if (!fs.existsSync(LEGACY_OWNER_MEMORY_PATH)) {
-    return null
-  }
-
-  try {
-    const raw = JSON.parse(
-      fs.readFileSync(LEGACY_OWNER_MEMORY_PATH, 'utf8')
-    ) as Record<string, unknown>
-    const name = normalizeLine(raw['name'])
-    const birthDate = normalizeLine(raw['birth_date'])
-    if (!name && !birthDate) {
-      return null
-    }
-
-    return {
-      name,
-      birthDate
-    }
-  } catch {
-    return null
-  }
-}
-
-export function applyLegacyOwnerSeed(profile: OwnerProfile): OwnerProfile {
-  const seed = readLegacyOwnerSeedSync()
-  if (!seed) {
-    return normalizeOwnerProfile(profile)
-  }
-
-  const identity = [...normalizeOwnerProfile(profile).identity]
-  const seededLines = [
-    seed.name ? `Full name: ${seed.name}` : '',
-    seed.birthDate ? `Birth date: ${seed.birthDate}` : ''
-  ].filter((line) => line.length > 0)
-
-  for (const line of seededLines) {
-    const separatorIndex = line.indexOf(':')
-    const fieldLabel =
-      separatorIndex >= 0 ? line.slice(0, separatorIndex + 1) : ''
-    const hasSameField = fieldLabel
-      ? identity.some((existingLine) => existingLine.startsWith(fieldLabel))
-      : false
-
-    if (!identity.includes(line) && !hasSameField) {
-      identity.unshift(line)
-    }
-  }
-
-  return normalizeOwnerProfile({
-    ...profile,
-    identity
-  })
 }
 
 export function getOwnerProfileLineCount(profile: OwnerProfile): number {
@@ -392,18 +326,31 @@ export function getOwnerProfileMissingSectionTitles(
     .map((section) => section.title)
 }
 
+/**
+ * Surface structured identity before optional owner context in the prompt manifest.
+ */
 export function buildOwnerManifest(profile: OwnerProfile): string {
-  const normalizedProfile = applyLegacyOwnerSeed(normalizeOwnerProfile(profile))
-  const workHighlight =
-    [...normalizedProfile.workAndCareer]
-      .reverse()
-      .find((line) => line.length <= 120) ||
-    normalizedProfile.workAndCareer[0] ||
-    ''
+  const normalizedProfile = normalizeOwnerProfile(profile)
+  const ownerName = normalizedProfile.owner_full_name ||
+    [normalizedProfile.owner_first_name, normalizedProfile.owner_last_name]
+      .filter(Boolean).join(' ')
+  const identityHighlights = [
+    ownerName ? `Name: ${ownerName}` : '',
+    normalizedProfile.owner_birth_date
+      ? `Birth date: ${normalizedProfile.owner_birth_date}`
+      : ''
+  ].filter(Boolean)
+  const currentWork = [
+    normalizedProfile.owner_current_role,
+    normalizedProfile.owner_current_company
+  ].filter(Boolean).join(' at ')
+  const workHighlight = currentWork
+    ? `Work: ${currentWork}`
+    : normalizedProfile.workAndCareer[0] || ''
   const highlights = [
-    ...normalizedProfile.identity.slice(0, 1),
+    ...identityHighlights,
+    ...(!ownerName ? normalizedProfile.identity.slice(0, 1) : []),
     ...normalizedProfile.homeAndImportantPlaces.slice(0, 1),
-    ...normalizedProfile.identity.slice(1, 2),
     ...(workHighlight ? [workHighlight] : []),
     ...normalizedProfile.familyAndRelationships.slice(0, 1),
     ...normalizedProfile.background.slice(0, 1),
@@ -414,14 +361,14 @@ export function buildOwnerManifest(profile: OwnerProfile): string {
     return 'Owner profile with identity, location, birth date, work, family, preferences, and important dates.'
   }
 
-  return clipText(
-    `Owner profile with durable identity, location, birth date, work, family, preferences, and important dates. ${highlights.join('; ')}`,
-    320
-  )
+  // Keep known identity intact even when unusually long; omit optional context first.
+  const identitySummary = identityHighlights.join('; ')
+  const summary = clipText([...new Set(highlights)].join('; '), OWNER_MANIFEST_MAX_CHARS)
+  return summary.startsWith(identitySummary) ? summary : identitySummary
 }
 
 export function buildOwnerDocument(profile: OwnerProfile): string {
-  const normalizedProfile = applyLegacyOwnerSeed(normalizeOwnerProfile(profile))
+  const normalizedProfile = normalizeOwnerProfile(profile)
   const filledSections = getOwnerProfileFilledSectionCount(normalizedProfile)
   const missingSections = getOwnerProfileMissingSectionTitles(normalizedProfile)
   const manifest = buildOwnerManifest(normalizedProfile)

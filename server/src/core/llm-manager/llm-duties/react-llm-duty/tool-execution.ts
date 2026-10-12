@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { performance } from 'node:perf_hooks'
 
 import {
   BRAIN,
@@ -11,15 +12,18 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
+import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { LEON_HOME_PATH } from '@/leon-roots'
+import type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
 
-import { DUTY_NAME } from './constants'
+import { DUTY_NAME } from './agent-constants'
 import { buildBoundedToolObservation } from './agent-context-budget'
-import type { AgentRunProgressEvent, ToolExecutionResult } from './types'
+import type { AgentRunProgressEvent, ToolExecutionResult } from './agent-types'
 import {
   extractFinalAnswerFromToolResult,
+  extractOwnerActionHandoffFromToolResult,
   formatFilePath
-} from './utils'
+} from './agent-utils'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -29,6 +33,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>
 }
 
+const COMMAND_OUTPUT_MAX_TRACE_CHARS = 80_000
 const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
   'bridges.tools.creating_bins_directory',
   'bridges.tools.binary_not_found',
@@ -36,15 +41,12 @@ const TOOL_PREPARATION_STARTED_REPORT_KEYS = new Set([
   'bridges.tools.download_progress',
   'bridges.tools.download_progress_with_details',
   'bridges.tools.extracting_archive',
+  'bridges.tools.applying_permissions',
   'bridges.tools.making_executable',
   'bridges.tools.removing_quarantine',
   'bridges.tools.creating_resource_directory',
   'bridges.tools.downloading_resource',
   'bridges.tools.downloading_resource_file'
-])
-const TOOL_PREPARATION_READY_REPORT_KEYS = new Set([
-  'bridges.tools.binary_ready',
-  'bridges.tools.resource_downloaded'
 ])
 const TOOL_PREPARATION_FAILED_REPORT_KEYS = new Set([
   'bridges.tools.no_binary_url',
@@ -53,6 +55,17 @@ const TOOL_PREPARATION_FAILED_REPORT_KEYS = new Set([
   'bridges.tools.download_url_failed',
   'bridges.tools.resource_file_download_failed'
 ])
+const TOOL_PREPARATION_MILESTONE_REPORT_KEYS = new Set([
+  'bridges.tools.binary_not_found',
+  'bridges.tools.downloading_resource_file',
+  'bridges.tools.resource_downloaded',
+  'bridges.tools.download_completed',
+  'bridges.tools.extracting_archive',
+  'bridges.tools.archive_extracted',
+  'bridges.tools.making_executable',
+  'bridges.tools.binary_ready'
+])
+
 function stringifyToolPanelValue(value: unknown): string {
   if (typeof value === 'string') {
     const trimmed = value.trim()
@@ -86,7 +99,10 @@ function createToolGroupId(
   return `agent_${toolkitId}_${toolId}_${functionName}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`
 }
 
-function getToolDisplayContext(
+/**
+ * Resolves the registry labels and icons shared by live cards and saved traces.
+ */
+export function getToolDisplayContext(
   toolkitId: string,
   toolId: string,
   functionName: string
@@ -112,12 +128,16 @@ function getToolDisplayContext(
   }
 }
 
-function emitToolExecutionInputToWebApp(params: {
+/**
+ * Updates the same activity card as arguments arrive and execution begins.
+ */
+export function emitToolExecutionInputToWebApp(params: {
   toolkitId: string
   toolId: string
   functionName: string
   toolInput: string
   toolGroupId: string
+  status?: 'preparing' | 'running'
   toolCallTitle?: string
   stepLabel?: string
 }): void {
@@ -140,6 +160,8 @@ function emitToolExecutionInputToWebApp(params: {
     isToolOutput: true,
     toolDisplayMode: 'activity_card',
     toolPhase: 'input',
+    status: params.status || 'running',
+    ...(params.status !== 'preparing' ? { startedAt: Date.now() } : {}),
     ...displayContext,
     toolGroupId: params.toolGroupId,
     functionName: params.functionName,
@@ -151,12 +173,13 @@ function emitToolExecutionInputToWebApp(params: {
   })
 }
 
-function emitToolPreparationProgressToWebApp(params: {
+function emitToolProgressToWebApp(params: {
   toolkitId: string
   toolId: string
   functionName: string
   toolGroupId: string
   message: string
+  phase: 'preparation' | 'progress'
   toolCallTitle?: string
   stepLabel?: string
 }): void {
@@ -169,7 +192,7 @@ function emitToolPreparationProgressToWebApp(params: {
     answer: message,
     isToolOutput: true,
     toolDisplayMode: 'activity_card',
-    toolPhase: 'preparation',
+    toolPhase: params.phase,
     ...getToolDisplayContext(
       params.toolkitId,
       params.toolId,
@@ -221,26 +244,10 @@ function emitToolExecutionOutputDeltaToWebApp(params: {
   })
 }
 
-function emitToolPreparationOwnerMessage(
-  key: string,
-  toolName: string
-): void {
-  const message = BRAIN.wernicke(key, '', {
-    '{{ tool_name }}': toolName
-  })
-  if (!message) {
-    return
-  }
-
-  void BRAIN.talk(message).catch((error) => {
-    LogHelper.title(`${DUTY_NAME} / execution`)
-    LogHelper.warning(
-      `Failed to emit tool preparation owner message: ${String(error)}`
-    )
-  })
-}
-
-function emitToolExecutionOutputToWebApp(params: {
+/**
+ * Settles an activity card with an execution outcome or an unused preview.
+ */
+export function emitToolExecutionOutputToWebApp(params: {
   toolkitId: string
   toolId: string
   functionName: string
@@ -248,6 +255,7 @@ function emitToolExecutionOutputToWebApp(params: {
   output: Record<string, unknown>
   status: string
   message: string
+  durationMs?: number
   toolCallTitle?: string
   stepLabel?: string
 }): void {
@@ -276,6 +284,7 @@ function emitToolExecutionOutputToWebApp(params: {
     status: params.status,
     message: params.message,
     output: params.output,
+    ...(params.durationMs !== undefined ? { durationMs: params.durationMs } : {}),
     ...(params.toolCallTitle
       ? { toolCallTitle: params.toolCallTitle }
       : {}),
@@ -293,26 +302,30 @@ export async function runToolExecution(
   toolCallTitle?: string,
   onProgressEvent?: (
     event: Extract<AgentRunProgressEvent, { type: 'tool_call' }>['toolCall']
-  ) => void
+  ) => void,
+  signal?: AbortSignal,
+  onPreparationProgress?: (message: string) => Promise<void>,
+  streamedToolGroupId?: string
 ): Promise<ToolExecutionResult> {
+  signal?.throwIfAborted()
   const qualifiedName = `${toolkitId}.${toolId}.${functionName}`
   const requestedToolInput = toolInput
 
   const toolExecutionInput: {
+    signal?: AbortSignal
     toolId: string
     toolkitId: string
     functionName: string
+    retainExecution: boolean
     toolInput: string
     parsedInput?: Record<string, unknown>
-    onProgress?: (progress: {
-      message: string
-      key?: string
-      data?: Record<string, unknown>
-    }) => void
+    onProgress?: (progress: ToolRuntimeProgress) => void
   } = {
+    ...(signal ? { signal } : {}),
     toolId,
     toolkitId,
     functionName,
+    retainExecution: true,
     toolInput
   }
 
@@ -378,7 +391,8 @@ export async function runToolExecution(
         RuntimeHelper.buildManagedRuntimeShellFunctions(),
         '',
         '# LLM-generated shell command starts here.',
-        'set -e',
+        // Preserve Bash semantics: an absent optional program must not abort a scan.
+        // Commands that require fail-fast behavior can explicitly enable set -e.
         command,
         ''
       ].join('\n')
@@ -403,11 +417,25 @@ export async function runToolExecution(
   LogHelper.debug(`Running tool: ${qualifiedName}`)
   LogHelper.debug(`Tool input: ${toolInput}`)
 
-  const toolGroupId = createToolGroupId(toolkitId, toolId, functionName)
+  const toolGroupId = streamedToolGroupId || createToolGroupId(toolkitId, toolId, functionName)
+  const toolDisplayContext = getToolDisplayContext(
+    toolkitId,
+    toolId,
+    functionName
+  )
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
+    toolkitName: toolDisplayContext.toolkitName,
+    toolName: toolDisplayContext.toolName,
+    ...(toolCallTitle ? { toolCallTitle } : {}),
     status: 'running',
+    ...(toolDisplayContext.toolkitIconName
+      ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+      : {}),
+    ...(toolDisplayContext.toolIconName
+      ? { toolIconName: toolDisplayContext.toolIconName }
+      : {}),
     input: requestedToolInput,
     ...(stepLabel ? { stepLabel } : {})
   })
@@ -421,56 +449,173 @@ export async function runToolExecution(
     ...(stepLabel ? { stepLabel } : {})
   })
 
-  const toolDisplayContext = getToolDisplayContext(
-    toolkitId,
-    toolId,
-    functionName
-  )
+  let didObservePreparationStarted = false
   let didNotifyOwnerPreparationStarted = false
-  let didNotifyOwnerPreparationReady = false
   let didObservePreparationFailure = false
+  const reportedPreparationMilestones = new Set<string>()
+  let didFinishToolCall = false
+  let commandOutput = ''
+  let progressStream: ToolRuntimeProgress['stream']
+  let completedStreamProgress: ToolRuntimeProgress | undefined
+
   toolExecutionInput.onProgress = (progress): void => {
+    // Explicit streams belong to retained work; ordinary reports still end
+    // when their call returns so unrelated reports cannot reopen settled cards.
+    if (didFinishToolCall && !progress.stream) {
+      return
+    }
+
+    if (progress.stream) {
+      progressStream = progress.stream
+      if (progress.stream.state !== 'running') {
+        completedStreamProgress = progress
+        const status = progress.stream.state === 'completed' ? 'success' : 'error'
+        const output = progress.data || {}
+        const durationMs = Math.max(0, performance.now() - executionStartedAt)
+        emitToolExecutionOutputToWebApp({
+          toolkitId,
+          toolId,
+          functionName,
+          toolGroupId,
+          output,
+          status,
+          message: progress.message,
+          durationMs,
+          ...(toolCallTitle ? { toolCallTitle } : {}),
+          ...(stepLabel ? { stepLabel } : {})
+        })
+        onProgressEvent?.({
+          id: toolGroupId,
+          name: qualifiedName,
+          toolkitName: toolDisplayContext.toolkitName,
+          toolName: toolDisplayContext.toolName,
+          status,
+          input: requestedToolInput,
+          output,
+          durationMs,
+          commandOutput,
+          progressMessage: progress.message,
+          ...(toolCallTitle ? { toolCallTitle } : {}),
+          ...(stepLabel ? { stepLabel } : {})
+        })
+        return
+      }
+    }
+
+
+    const isOutputDelta = progress.key === 'bridges.tools.command_output_delta'
+    const outputDelta = isOutputDelta
+      ? typeof progress.data?.['output'] === 'string'
+        ? progress.data['output']
+        : progress.message
+      : ''
+    if (outputDelta) {
+      // Keep a bounded tail for reconnects without growing every saved turn.
+      commandOutput = (commandOutput + outputDelta).slice(-COMMAND_OUTPUT_MAX_TRACE_CHARS)
+    }
+
     onProgressEvent?.({
       id: toolGroupId,
       name: qualifiedName,
+      toolkitName: toolDisplayContext.toolkitName,
+      toolName: toolDisplayContext.toolName,
+      ...(toolCallTitle ? { toolCallTitle } : {}),
       status: 'running',
+      ...(toolDisplayContext.toolkitIconName
+        ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+        : {}),
+      ...(toolDisplayContext.toolIconName
+        ? { toolIconName: toolDisplayContext.toolIconName }
+        : {}),
       input: requestedToolInput,
       output: progress.data || progress.message,
+      ...(outputDelta
+        ? { commandOutput, lastOutputAt: Date.now(), progressMessage: 'Receiving command output...' }
+        : { progressMessage: progress.message }),
       ...(stepLabel ? { stepLabel } : {})
     })
-    if (progress.key === 'bridges.tools.command_output_delta') {
-      const output =
-        typeof progress.data?.['output'] === 'string'
-          ? progress.data['output']
-          : progress.message
+    if (isOutputDelta) {
       emitToolExecutionOutputDeltaToWebApp({
         toolkitId,
         toolId,
         functionName,
         toolGroupId,
-        output,
+        output: outputDelta,
         ...(toolCallTitle ? { toolCallTitle } : {}),
         ...(stepLabel ? { stepLabel } : {})
       })
       return
     }
 
-    emitToolPreparationProgressToWebApp({
+    if (!progress.key) {
+      return
+    }
+
+    const isPreparationStart =
+      TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key)
+    const isPreparationFailure =
+      TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)
+
+    if (isPreparationStart) {
+      didObservePreparationStarted = true
+    }
+
+    // Cached binaries also report readiness; only actual setup belongs in
+    // preparation cards and owner-facing preparation announcements.
+    if (
+      !isPreparationStart &&
+      !isPreparationFailure &&
+      !(
+        didObservePreparationStarted &&
+        TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key)
+      )
+    ) {
+      emitToolProgressToWebApp({
+        toolkitId,
+        toolId,
+        functionName,
+        toolGroupId,
+        message: progress.message,
+        phase: 'progress',
+        ...(toolCallTitle ? { toolCallTitle } : {}),
+        ...(stepLabel ? { stepLabel } : {})
+      })
+      return
+    }
+
+    emitToolProgressToWebApp({
       toolkitId,
       toolId,
       functionName,
       toolGroupId,
       message: progress.message,
+      phase: 'preparation',
       ...(toolCallTitle ? { toolCallTitle } : {}),
       ...(stepLabel ? { stepLabel } : {})
     })
 
-    if (!progress.key) {
-      return
+    if (isPreparationFailure) {
+      didObservePreparationFailure = true
     }
 
-    if (TOOL_PREPARATION_FAILED_REPORT_KEYS.has(progress.key)) {
-      didObservePreparationFailure = true
+    // Keep frequent percentages in the live card; surface named preparation
+    // milestones in the conversation without repeating the same report.
+    if (
+      TOOL_PREPARATION_MILESTONE_REPORT_KEYS.has(progress.key) ||
+      isPreparationFailure
+    ) {
+      const milestoneId = JSON.stringify([progress.key, progress.data])
+
+      if (progress.message && !reportedPreparationMilestones.has(milestoneId)) {
+        reportedPreparationMilestones.add(milestoneId)
+        didNotifyOwnerPreparationStarted = true
+        void onPreparationProgress?.(
+          BRAIN.wernicke('react.tool.preparation_progress', '', {
+            '{{ tool_name }}': toolDisplayContext.toolName,
+            '{{ message }}': progress.message
+          })
+        )
+      }
       return
     }
 
@@ -479,33 +624,73 @@ export async function runToolExecution(
       TOOL_PREPARATION_STARTED_REPORT_KEYS.has(progress.key)
     ) {
       didNotifyOwnerPreparationStarted = true
-      emitToolPreparationOwnerMessage(
-        'react.tool.preparing',
-        toolDisplayContext.toolName
+      void onPreparationProgress?.(
+        BRAIN.wernicke('react.tool.preparing', '', {
+          '{{ tool_name }}': toolDisplayContext.toolName
+        })
       )
       return
     }
-
-    if (
-      didNotifyOwnerPreparationStarted &&
-      !didNotifyOwnerPreparationReady &&
-      !didObservePreparationFailure &&
-      TOOL_PREPARATION_READY_REPORT_KEYS.has(progress.key)
-    ) {
-      didNotifyOwnerPreparationReady = true
-      emitToolPreparationOwnerMessage(
-        'react.tool.ready',
-        toolDisplayContext.toolName
-      )
-    }
   }
 
-  const toolExecutionResult =
-    await TOOL_EXECUTOR.executeTool(toolExecutionInput)
+  // Streamed argument previews can appear before execution starts. Measure the
+  // actual dispatch, including preparation, queueing, and Satellite transport.
+  const executionStartedAt = performance.now()
+  let toolExecutionResult: Awaited<ReturnType<typeof TOOL_EXECUTOR.executeTool>>
+
+  try {
+    toolExecutionResult = await TOOL_EXECUTOR.executeTool(toolExecutionInput)
+    signal?.throwIfAborted()
+  } catch (error) {
+    didFinishToolCall = true
+    const durationMs = Math.max(0, performance.now() - executionStartedAt)
+    const message = error instanceof Error ? error.message : String(error)
+
+    emitToolExecutionOutputToWebApp({
+      toolkitId,
+      toolId,
+      functionName,
+      toolGroupId,
+      output: {},
+      status: 'error',
+      message,
+      durationMs,
+      ...(toolCallTitle ? { toolCallTitle } : {}),
+      ...(stepLabel ? { stepLabel } : {})
+    })
+    onProgressEvent?.({
+      id: toolGroupId,
+      name: qualifiedName,
+      toolkitName: toolDisplayContext.toolkitName,
+      toolName: toolDisplayContext.toolName,
+      ...(toolCallTitle ? { toolCallTitle } : {}),
+      status: 'error',
+      durationMs,
+      input: requestedToolInput,
+      errorMessage: message,
+      ...(stepLabel ? { stepLabel } : {})
+    })
+
+    throw error
+  }
+
+  didFinishToolCall = true
+  const durationMs = Math.max(0, performance.now() - executionStartedAt)
+  const modelFiles = toolExecutionResult.data.model_files
+  const observationData: Partial<typeof toolExecutionResult.data> = {
+    ...toolExecutionResult.data
+  }
+  delete observationData.model_files
+  // The assistant tool call already carries its input. Avoid duplicating both
+  // serialized and parsed forms in the bounded observation so useful output
+  // remains inline instead of forcing an artifact-log read.
+  delete observationData.input
+  delete observationData.parsed_input
   const outputLogPath =
     typeof toolExecutionResult.data?.output_log_path === 'string'
       ? toolExecutionResult.data.output_log_path
       : null
+  delete observationData.output_log_path
   const toolOutput = toolExecutionResult.data?.output || {}
   const nestedResult = asRecord(toolOutput['result'])
   const toolOutputSuccess = toolOutput['success']
@@ -543,28 +728,81 @@ export async function runToolExecution(
     `Tool output: ${JSON.stringify(toolExecutionResult.data?.output)}`
   )
 
+  // Individual resources can finish while other downloads are still running.
+  // The successful call is the boundary where all required resources are ready.
+  if (
+    didNotifyOwnerPreparationStarted &&
+    !didObservePreparationFailure &&
+    effectiveStatus === 'success'
+  ) {
+    await onPreparationProgress?.(
+      BRAIN.wernicke('react.tool.ready', '', {
+        '{{ tool_name }}': toolDisplayContext.toolName
+      })
+    )
+  }
+
+  const isStreamRunning = progressStream?.state === 'running'
+  const displayedOutput = progressStream
+    ? { ...(completedStreamProgress?.data || toolOutput), execution: progressStream }
+    : toolOutput
+  const displayedStatus = isStreamRunning
+    ? 'running'
+    : progressStream?.state === 'failed' ? 'error' : effectiveStatus
+  const displayedMessage = isStreamRunning
+    ? 'The command is running. Output will appear as it arrives.'
+    : completedStreamProgress?.message || effectiveMessage
+
   emitToolExecutionOutputToWebApp({
     toolkitId,
     toolId,
     functionName,
     toolGroupId,
-    output: toolExecutionResult.data?.output || {},
-    status: effectiveStatus,
-    message: effectiveMessage,
+    output: displayedOutput,
+    status: displayedStatus,
+    message: displayedMessage,
+    durationMs,
     ...(toolCallTitle ? { toolCallTitle } : {}),
     ...(stepLabel ? { stepLabel } : {})
   })
   onProgressEvent?.({
     id: toolGroupId,
     name: qualifiedName,
-    status: effectiveStatus === 'error' ? 'error' : 'success',
+    toolkitName: toolDisplayContext.toolkitName,
+    toolName: toolDisplayContext.toolName,
+    ...(toolCallTitle ? { toolCallTitle } : {}),
+    status: isStreamRunning ? 'running' : displayedStatus === 'error' ? 'error' : 'success',
+    durationMs,
+    ...(toolDisplayContext.toolkitIconName
+      ? { toolkitIconName: toolDisplayContext.toolkitIconName }
+      : {}),
+    ...(toolDisplayContext.toolIconName
+      ? { toolIconName: toolDisplayContext.toolIconName }
+      : {}),
     input: requestedToolInput,
-    output: toolExecutionResult.data?.output || {},
+    output: displayedOutput,
     ...(stepLabel ? { stepLabel } : {}),
     ...(effectiveStatus === 'error'
       ? { errorMessage: effectiveMessage }
       : {})
   })
+
+  const ownerActionHandoff =
+    extractOwnerActionHandoffFromToolResult(toolExecutionResult)
+  if (ownerActionHandoff) {
+    return {
+      execution: {
+        function: qualifiedName,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
+        status: 'error',
+        observation: ownerActionHandoff.draft,
+        requestedToolInput,
+        ...(stepLabel ? { stepLabel } : {})
+      },
+      handoffSignal: ownerActionHandoff
+    }
+  }
 
   // Check for final_answer in tool result
   const finalAnswer =
@@ -575,14 +813,46 @@ export async function runToolExecution(
     return {
       execution: {
         function: qualifiedName,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
         status: 'success',
         observation: finalAnswer,
         requestedToolInput,
         ...(stepLabel ? { stepLabel } : {})
       },
+      ...(modelFiles ? { modelFiles } : {}),
       handoffSignal: {
         intent: 'answer',
         draft: finalAnswer
+      }
+    }
+  }
+
+  // Let the agent explain tool-owned setup facts and pause through clarification.
+  const requiredConnections = toolOutput['required_connections']
+
+  if (
+    effectiveStatus !== 'success' &&
+    Array.isArray(requiredConnections) &&
+    requiredConnections.length > 0
+  ) {
+    const providers = requiredConnections.filter(
+      (provider): provider is string => typeof provider === 'string'
+    )
+
+    return {
+      execution: {
+        function: qualifiedName,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
+        status: 'error',
+        observation: JSON.stringify({
+          connection_required: true,
+          required_connections: providers,
+          connections: await getConnectionRequirements(providers)
+        }),
+        requestedToolInput,
+        ...(stepLabel ? { stepLabel } : {})
       }
     }
   }
@@ -613,6 +883,8 @@ export async function runToolExecution(
         function: qualifiedName,
         status: 'error',
         observation: `Missing settings: ${missingSettings.join(', ')}`,
+        toolkitName: toolDisplayContext.toolkitName,
+        toolName: toolDisplayContext.toolName,
         requestedToolInput,
         ...(stepLabel ? { stepLabel } : {})
       },
@@ -630,9 +902,13 @@ export async function runToolExecution(
     ...(effectiveStatus !== toolExecutionResult.status
       ? { raw_status: toolExecutionResult.status }
       : {}),
-    ...(outputLogPath ? { output_log_path: outputLogPath } : {}),
+    // Keep one reference so older observations can be bounded without losing
+    // access to source evidence. Historical snapshots are not current UI state.
+    ...(outputLogPath
+      ? { output_log_path: outputLogPath }
+      : {}),
     message: effectiveMessage,
-    data: toolExecutionResult.data,
+    data: observationData,
     ...(hasObservedToolFailure
       ? {
         observed_tool_failure: {
@@ -643,13 +919,23 @@ export async function runToolExecution(
       : {})
   })
 
+  const executionHandle = toolExecutionResult.data?.output['execution'] as
+    | { id?: unknown, state?: unknown }
+    | undefined
+
   return {
     execution: {
       function: qualifiedName,
+      toolkitName: toolDisplayContext.toolkitName,
+      toolName: toolDisplayContext.toolName,
       status: effectiveStatus,
       observation,
       requestedToolInput,
       ...(stepLabel ? { stepLabel } : {})
-    }
+    },
+    ...(typeof executionHandle?.id === 'string' && typeof executionHandle.state === 'string'
+      ? { executionHandle: { id: executionHandle.id, state: executionHandle.state } }
+      : {}),
+    ...(modelFiles ? { modelFiles } : {})
   }
 }

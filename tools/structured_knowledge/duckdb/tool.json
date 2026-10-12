@@ -1,0 +1,93 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "duckdb",
+  "toolkit_id": "structured_knowledge",
+  "name": "DuckDB",
+  "description": "Inspect and analyze local structured files with read-only SQL, including aggregations and joins.",
+  "icon_name": "database-2-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "functions": {
+    "inspect": {
+      "description": "Inspect inferred columns, types and a five-row sample of local data files.",
+      "progressive_guidance": "Use the returned column names and types when building SQL.",
+      "background": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Existing local paths; ~ expands to the owner home."
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "query": {
+      "description": "Run one read-only SELECT or CTE query against named local file sources.",
+      "progressive_guidance": "Prefer SQL aggregation to returning every row. Quote unusual table/column names with double quotes. Returned rows are bounded; truncated=true means the row preview is incomplete. Native large integer/decimal values may be returned as strings to preserve precision.",
+      "background": true,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sources": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Unique SQL table name, e.g. orders."
+                },
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Local CSV, TSV, JSON, JSONL, NDJSON or Parquet file."
+                }
+              },
+              "required": [
+                "name",
+                "path"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sql": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One SELECT, optionally WITH CTEs. Query the declared table names; no writes or multiple statements."
+          }
+        },
+        "required": [
+          "sources",
+          "sql"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-linux-amd64.zip",
+    "linux-aarch64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-linux-arm64.zip",
+    "macosx-x86_64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-osx-amd64.zip",
+    "macosx-arm64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-osx-arm64.zip",
+    "win-amd64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-windows-amd64.zip",
+    "win-arm64": "https://github.com/duckdb/duckdb/releases/download/v1.5.6/duckdb_cli-windows-arm64.zip"
+  },
+  "progressive_guidance": "Supports local CSV, TSV, JSON, JSONL, NDJSON and Parquet. Each call uses an ephemeral in-memory database. Only declared files are accessible; network access, extension loading and writes are unavailable. SELECT validation uses DuckDB’s parser. Memory and row limits come from settings; the execution timeout is built in. Output overflow is an error, never a complete empty result."
+}

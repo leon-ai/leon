@@ -1,7 +1,6 @@
 # Leon setup depends on native/binary packages whose install scripts must run
 dangerouslyAllowAllBuilds: true
 
-# Leon validates and rebuilds native packages for its managed Node.js runtime.
 # Restore package sources instead of trusting machine-global cached build output.
 sideEffectsCache: false
 
@@ -19,3 +18,8 @@ reporter: append-only
 
 # Always run install lifecycle scripts, even when dependencies are up to date
 optimisticRepeatInstall: false
+
+# Leon's postinstall setup also maintains runtimes, skills and tool dependencies.
+# Disable the frozen-lockfile fast path for regular installs so setup can run
+# when those sources change, even if the root dependencies remain unchanged.
+preferFrozenLockfile: false

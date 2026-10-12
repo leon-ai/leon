@@ -1,13 +1,24 @@
 import type { Static } from '@sinclair/typebox'
 import { Type } from '@sinclair/typebox'
 
-import { REMIX_ICON_NAME_PATTERN } from '@/constants'
+import {
+  PROGRESSIVE_GUIDANCE_MAX_LENGTH,
+  REMIX_ICON_NAME_PATTERN
+} from '@/constants'
 
 export const toolkitSchemaObject = Type.Strict(
   Type.Object({
     $schema: Type.String({ minLength: 1 }),
     name: Type.String({ minLength: 1 }),
     description: Type.String({ minLength: 8, maxLength: 256 }),
+    progressive_guidance: Type.Optional(
+      Type.String({
+        minLength: 8,
+        maxLength: PROGRESSIVE_GUIDANCE_MAX_LENGTH,
+        description:
+          'Operational guidance shown to the agent only after this toolkit is loaded.'
+      })
+    ),
     icon_name: Type.String({
       minLength: 1,
       pattern: REMIX_ICON_NAME_PATTERN,

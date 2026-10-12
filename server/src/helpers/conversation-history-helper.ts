@@ -1,5 +1,8 @@
 import type { SkillAnswerConfigSchema } from '@/schemas/skill-schemas'
+import { readUsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { readContextUsage } from '@/core/llm-manager/llm-usage/context-usage'
 import type {
+  AgentResponseTrace,
   ConversationHistoryItem,
   LLMAnswerMetrics,
   ConversationWidgetData,
@@ -8,7 +11,32 @@ import type {
 
 const SYSTEM_WIDGET_HISTORY_MODE = 'system_widget'
 
+interface ToolIconNames {
+  toolkitIconName?: string
+  toolIconName?: string
+}
+
 export class ConversationHistoryHelper {
+  /**
+   * Keeps durable artifact IDs available for follow-up edits after tool logs expire.
+   */
+  public static getModelMessage(
+    message: Pick<MessageLog, 'message' | 'artifacts'>
+  ): string {
+    if (!message.artifacts?.length) {
+      return message.message
+    }
+
+    return `${message.message}\nAttached artifacts: ${JSON.stringify(
+      message.artifacts.map((artifact) => ({
+        artifact_id: artifact.id,
+        session_id: artifact.session_id,
+        filename: artifact.filename,
+        mime_type: artifact.mime_type
+      }))
+    )}`
+  }
+
   private static normalizeMetricNumber(value: unknown): number | null {
     if (typeof value !== 'number' || !Number.isFinite(value)) {
       return null
@@ -67,6 +95,8 @@ export class ConversationHistoryHelper {
     }
 
     const normalizedMetrics: LLMAnswerMetrics = {
+      ...readContextUsage(record),
+      usageAccounting: readUsageAccounting(record['usageAccounting']),
       inputTokens,
       outputTokens,
       totalTokens,
@@ -75,6 +105,7 @@ export class ConversationHistoryHelper {
     }
 
     const optionalNumberKeys = [
+      'completionCount',
       'finalAnswerOutputTokens',
       'finalAnswerDurationMs',
       'finalAnswerTokensPerSecond',
@@ -165,6 +196,18 @@ export class ConversationHistoryHelper {
     return conversationLog.isAddedToHistory === true
   }
 
+  /**
+   * UI history includes durable activity and widgets without adding them to model context.
+   */
+  public static isVisibleInHistory(conversationLog: MessageLog): boolean {
+    return (
+      this.isAddedToHistory(conversationLog) ||
+      Boolean(conversationLog.agentResponseTrace) ||
+      Boolean(conversationLog.artifacts?.length) ||
+      this.isRenderableWidget(conversationLog.widget)
+    )
+  }
+
   public static isSystemWidget(
     widget: ConversationWidgetData | null | undefined
   ): boolean {
@@ -186,6 +229,7 @@ export class ConversationHistoryHelper {
     options: {
       supportsWidgets: boolean
       source?: ConversationHistoryItem['source']
+      resolveToolIconNames?: (qualifiedName: string) => ToolIconNames | null
     }
   ): ConversationHistoryItem[] {
     return conversationLogs.map((conversationLog) => {
@@ -197,8 +241,23 @@ export class ConversationHistoryHelper {
       const llmMetrics = conversationLog.llmMetrics
         ? this.normalizeLLMAnswerMetrics(conversationLog.llmMetrics)
         : null
+      const agentResponseTrace = conversationLog.agentResponseTrace
+        ? this.resolveAgentTraceToolIcons(
+            conversationLog.agentResponseTrace,
+            options.resolveToolIconNames
+          )
+        : null
 
       return {
+        ...('inference' in conversationLog
+          ? { inference: conversationLog.inference }
+          : {}),
+        ...(this.isRenderableWidget(conversationLog.widget)
+          ? { widget: conversationLog.widget }
+          : {}),
+        ...(conversationLog.artifacts?.length
+          ? { artifacts: conversationLog.artifacts }
+          : {}),
         who: conversationLog.who,
         sentAt: conversationLog.sentAt,
         string: bubbleString,
@@ -208,10 +267,31 @@ export class ConversationHistoryHelper {
         ...(conversationLog.messageId
           ? { messageId: conversationLog.messageId }
           : {}),
-        ...(conversationLog.agentResponseTrace
-          ? { agentResponseTrace: conversationLog.agentResponseTrace }
+        ...(agentResponseTrace
+          ? { agentResponseTrace }
           : {})
       }
     })
+  }
+
+  private static resolveAgentTraceToolIcons(
+    trace: AgentResponseTrace,
+    resolveToolIconNames?: (qualifiedName: string) => ToolIconNames | null
+  ): AgentResponseTrace {
+    if (!resolveToolIconNames) {
+      return trace
+    }
+
+    return {
+      ...trace,
+      toolCalls: trace.toolCalls.map((toolCall) => {
+        if (toolCall.toolIconName && toolCall.toolkitIconName) {
+          return toolCall
+        }
+
+        const iconNames = resolveToolIconNames(toolCall.name)
+        return iconNames ? { ...iconNames, ...toolCall } : toolCall
+      })
+    }
   }
 }

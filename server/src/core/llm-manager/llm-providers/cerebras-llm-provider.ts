@@ -1,5 +1,9 @@
+import { LLMProviders } from '@/core/llm-manager/types'
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.Cerebras)
 
 /**
  * @see https://inference-docs.cerebras.ai/api-reference/chat-completions
@@ -7,11 +11,15 @@ import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 export default class CerebrasLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
     super({
-      name: 'Cerebras LLM Provider',
-      providerName: 'cerebras',
-      apiKeyEnv: 'LEON_CEREBRAS_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
-      baseURL: 'https://api.cerebras.ai/v1',
+      baseURL: AISDKRemoteLLMProvider.resolveBaseURL(
+        PROVIDER_CONFIG,
+        target.accountCredentials
+      ),
       flavor: 'cerebras'
     })
   }

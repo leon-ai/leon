@@ -58,6 +58,7 @@ Today, Leon is being built as a more capable assistant that can understand a goa
 - Leon can run in different ways depending on the task: `smart` mode chooses for you, `controlled` mode follows deterministic native skills and actions, and `agent` mode can plan step by step.
 - Leon supports native skills for controlled actions and agent skills for `SKILL.md`-backed workflows.
 - Leon can use real tools to get work done instead of only replying with plain text.
+- Leon includes advanced, progressively loaded computer use that can operate desktop and browser interfaces, verify visual outcomes, and run locally or through Satellite without exposing its full tool surface to unrelated turns.
 - Leon can use context about your environment so answers stay grounded in what is actually happening on your machine and setup.
 - Leon keeps layered memory so it can remember durable preferences, day-to-day context, and recent discussion context.
 - Leon supports both local and remote AI providers, which helps balance privacy, control, and capability.

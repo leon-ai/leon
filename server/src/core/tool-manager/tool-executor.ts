@@ -1,0 +1,1072 @@
+import { readArtifact, registerArtifact } from '@/core/artifacts/artifact-store'
+import { recordArtifacts } from '@/core/artifacts/artifact-context'
+import { readStoredProfileToken } from '@/core/profile-auth'
+import { attachArtifacts } from '@/core/artifacts/artifact-service'
+import type { ArtifactFile } from '@/core/artifacts/artifact-types'
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+
+import { RuntimeHelper } from '@/helpers/runtime-helper'
+
+import { LogHelper } from '@/helpers/log-helper'
+import { GLOBAL_DATA_PATH, API_VERSION } from '@/constants'
+import { LangHelper } from '@/helpers/lang-helper'
+import {
+  TOOLKIT_REGISTRY,
+  TOOL_CALL_LOGGER,
+  CONTEXT_MANAGER,
+  TOOL_WORKER_MANAGER
+} from '@/core'
+import type { GlobalAnswersSchema } from '@/schemas/global-data-schemas'
+import { StringHelper } from '@/helpers/string-helper'
+import { CONFIG_MANAGER } from '@/config'
+import { emitConnectionWidget } from '@/core/connections/connection-widget'
+import { getToolCredentials } from '@/core/connections/connection-catalog'
+import { CONNECTION_STORE } from '@/core/connections/connection-store'
+import { getActiveProfileName } from '@/core/profile-runtime/profile-context'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+import { SATELLITE_REGISTRY } from '@/core/satellite/satellite-registry'
+import { TOOL_EXECUTION_MANAGER } from './tool-execution-manager'
+import type { LongLanguageCode } from '@/types'
+import type {
+  ToolModelFile,
+  ToolRuntimeProgress
+} from '@sdk/tool-runtime-types'
+
+const ABSOLUTE_OR_HOME_PATH_PATTERN = /^(~($|[\\/])|\/|[A-Za-z]:[\\/])/
+const EXPLICIT_RELATIVE_PATH_PATTERN = /^\.\.?([\\/]|$)/
+const CONVENTIONAL_USER_HOME_PARENT_NAMES = new Set(['home', 'users'])
+const TOOL_RUNTIME_LOG_PREFIX = '[LEON_TOOL_LOG]'
+const TOOL_RUNTIME_REPORT_PREFIX = '[LEON_TOOL_REPORT]'
+
+export interface ToolExecutionInput {
+  toolId: string
+  toolkitId?: string
+  functionName?: string
+  toolInput?: string
+  parsedInput?: Record<string, unknown>
+  executionTarget?: 'any' | 'satellite'
+  deferArtifactDelivery?: boolean
+  leonService?: { baseURL: string, token: string }
+  signal?: AbortSignal
+  onProgress?: (progress: ToolRuntimeProgress) => void
+  retainExecution?: boolean
+}
+
+export interface ToolExecutionResult {
+  status: 'success' | 'error' | 'not_available' | 'invalid_input'
+  message: string
+  data: {
+    tool_id: string
+    toolkit_id: string | null
+    function_name: string | null
+    input: string | null
+    parsed_input: Record<string, unknown> | null
+    output_log_path?: string | null
+    output: Record<string, unknown>
+    model_files?: ToolModelFile[]
+  }
+  toolLabel?: string | undefined
+}
+
+export type { ToolRuntimeProgress } from '@sdk/tool-runtime-types'
+
+export default class ToolExecutor {
+  private readonly globalAnswersCache = new Map<
+    string,
+    GlobalAnswersSchema['answers']
+  >()
+
+  private emitToolRuntimeProgress(
+    line: string,
+    onProgress?: (progress: ToolRuntimeProgress) => void
+  ): void {
+    const trimmedLine = line.trim()
+    if (!trimmedLine) {
+      return
+    }
+
+    const toolReport = this.parseToolRuntimeReport(trimmedLine)
+    if (toolReport) {
+      onProgress?.(toolReport)
+      return
+    }
+
+    const toolLog = this.parseToolRuntimeLog(trimmedLine)
+    if (toolLog) {
+      onProgress?.(toolLog)
+    }
+  }
+
+  private logMemoryToolRuntimeMessages(
+    toolkitId: string,
+    toolId: string,
+    runtimeStderr: string
+  ): void {
+    if (
+      toolkitId !== 'structured_knowledge' ||
+      toolId !== 'memory' ||
+      !runtimeStderr
+    ) {
+      return
+    }
+
+    const toolLogLines = runtimeStderr
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith(TOOL_RUNTIME_LOG_PREFIX))
+      .map((line) => line.replace(TOOL_RUNTIME_LOG_PREFIX, '').trim())
+      .filter(Boolean)
+
+    for (const line of toolLogLines) {
+      LogHelper.title('Memory Tool')
+      LogHelper.debug(line)
+    }
+  }
+
+  private parseToolRuntimeLog(line: string): ToolRuntimeProgress | null {
+    if (!line.startsWith(TOOL_RUNTIME_LOG_PREFIX)) {
+      return null
+    }
+
+    const message = line.replace(TOOL_RUNTIME_LOG_PREFIX, '').trim()
+    if (!message) {
+      return null
+    }
+
+    return {
+      source: 'log',
+      message
+    }
+  }
+
+  private parseToolRuntimeReport(line: string): ToolRuntimeProgress | null {
+    if (!line.startsWith(TOOL_RUNTIME_REPORT_PREFIX)) {
+      return null
+    }
+
+    const rawReport = line.replace(TOOL_RUNTIME_REPORT_PREFIX, '').trim()
+    if (!rawReport) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(rawReport) as Record<string, unknown>
+      const key = typeof parsed['key'] === 'string' ? parsed['key'] : ''
+      const data =
+        parsed['data'] &&
+        typeof parsed['data'] === 'object' &&
+        !Array.isArray(parsed['data'])
+          ? (parsed['data'] as Record<string, unknown>)
+          : {}
+
+      return {
+        source: 'report',
+        message: this.resolveToolRuntimeReportMessage(key, data),
+        ...(key ? { key } : {}),
+        data
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private resolveToolRuntimeReportMessage(
+    key: string,
+    data: Record<string, unknown>
+  ): string {
+    if (!key) {
+      return ''
+    }
+
+    const answers = this.getCurrentGlobalAnswers()
+    const fallbackAnswers = this.getGlobalAnswers('en')
+    const answer = answers[key] || fallbackAnswers[key]
+    if (!answer) {
+      return key
+    }
+
+    const selectedAnswer = Array.isArray(answer)
+      ? answer[Math.floor(Math.random() * answer.length)] || key
+      : Object.values(answer)[0] || key
+    const replacements = Object.fromEntries(
+      Object.entries(data).map(([dataKey, value]) => [
+        `{{ ${dataKey} }}`,
+        String(value)
+      ])
+    )
+    if (Object.keys(replacements).length === 0) {
+      return selectedAnswer
+    }
+
+    return StringHelper.findAndMap(selectedAnswer, replacements)
+  }
+
+  private getCurrentGlobalAnswers(): GlobalAnswersSchema['answers'] {
+    try {
+      const configuredLanguage = CONFIG_MANAGER.getConfig().language
+      const lang = configuredLanguage
+        ? LangHelper.getShortCode(configuredLanguage as LongLanguageCode)
+        : 'en'
+      return this.getGlobalAnswers(lang)
+    } catch {
+      return this.getGlobalAnswers('en')
+    }
+  }
+
+  private getGlobalAnswers(lang: string): GlobalAnswersSchema['answers'] {
+    const cachedAnswers = this.globalAnswersCache.get(lang)
+    if (cachedAnswers) {
+      return cachedAnswers
+    }
+
+    const answersPath = path.join(GLOBAL_DATA_PATH, lang, 'answers.json')
+    const answers = JSON.parse(
+      fs.readFileSync(answersPath, 'utf8')
+    ) as GlobalAnswersSchema
+    this.globalAnswersCache.set(lang, answers.answers)
+
+    return answers.answers
+  }
+
+  constructor() {
+    LogHelper.title('Tool Executor')
+    LogHelper.success(`New instance for profile ${getActiveProfileName()}`)
+  }
+
+  /**
+   * Deliver explicitly attached outputs after local execution or Satellite transfer.
+   */
+  public async executeTool(
+    input: ToolExecutionInput
+  ): Promise<ToolExecutionResult> {
+    const sessionId = getActiveConversationSessionId()
+    const functionConfig = input.toolkitId && input.functionName
+      ? TOOLKIT_REGISTRY.getToolFunctions(input.toolkitId, input.toolId)?.[input.functionName]
+      : undefined
+
+    if (input.retainExecution && sessionId && functionConfig?.background === true) {
+      const profileName = getActiveProfileName()
+      const id = TOOL_EXECUTION_MANAGER.start(
+        profileName,
+        sessionId,
+        `${input.toolkitId}.${input.toolId}.${input.functionName}`,
+        (signal, onProgress) => this.executeTool({
+          ...input,
+          retainExecution: false,
+          signal,
+          onProgress: (progress) => {
+            onProgress(progress)
+            input.onProgress?.(progress)
+          }
+        }),
+        input.signal
+      )
+      const snapshot = await TOOL_EXECUTION_MANAGER.wait(profileName, sessionId, id)
+      input.signal?.throwIfAborted()
+
+      if (snapshot.result) {
+        // Keep the handle even for a fast call: later filtering reuses its data.
+        return {
+          ...snapshot.result,
+          data: {
+            ...snapshot.result.data,
+            output: { ...snapshot.result.data.output, execution: snapshot.execution }
+          }
+        }
+      }
+
+      return {
+        status: snapshot.execution.error ? 'error' : 'success',
+        message: snapshot.execution.error || 'Tool execution is still running. Use system_utilities.tool_executions.wait/read with its id; do not restart it or claim completion.',
+        data: {
+          tool_id: input.toolId,
+          toolkit_id: input.toolkitId || null,
+          function_name: input.functionName || null,
+          input: input.toolInput || null,
+          parsed_input: input.parsedInput || null,
+          output: { execution: snapshot.execution }
+        }
+      }
+    }
+
+    const result = await this.executeToolInternal(input)
+
+    if (input.deferArtifactDelivery) {
+      return result
+    }
+
+    const output = result.data.output['result'] as
+      | { artifacts?: Array<ArtifactFile & { id?: string }> }
+      | undefined
+
+    if (
+      result.status === 'success' &&
+      sessionId &&
+      Array.isArray(output?.artifacts)
+    ) {
+      const artifacts = []
+      const artifactPaths = []
+
+      for (const file of output.artifacts) {
+        if (file.id) {
+          // Generation service responses already own durable, attached artifacts.
+          const stored = await readArtifact(sessionId, file.id)
+
+          recordArtifacts([stored.artifact])
+          artifactPaths.push({ id: file.id, path: stored.path })
+          continue
+        }
+
+        if (file.presentation !== 'attachment') {
+          continue
+        }
+
+        const artifact = await registerArtifact({
+          ...file,
+          session_id: sessionId,
+          source: result.toolLabel || input.toolId
+        })
+
+        artifacts.push(artifact)
+        artifactPaths.push({
+          id: artifact.id,
+          path: (await readArtifact(sessionId, artifact.id)).path
+        })
+      }
+
+      if (artifactPaths.length) {
+        result.data.output['artifact_paths'] = artifactPaths
+      }
+
+      if (artifacts.length) {
+        await attachArtifacts(
+          sessionId,
+          artifacts.map((artifact) => artifact.id)
+        )
+        result.data.output['artifacts'] = artifacts
+      }
+    }
+
+    return result
+  }
+
+  private async executeToolInternal(
+    input: ToolExecutionInput
+  ): Promise<ToolExecutionResult> {
+    const { toolId, toolkitId, functionName } = input
+    const resolvedTool = TOOLKIT_REGISTRY.resolveToolById(toolId, toolkitId)
+
+    if (!resolvedTool) {
+      return this.buildResult({
+        status: 'invalid_input',
+        message: toolkitId
+          ? 'Unknown tool_id for selected toolkit.'
+          : 'Unknown or ambiguous tool_id. Select a toolkit first.',
+        input: input.toolInput ?? null,
+        resolvedTool: null
+      })
+    }
+
+    const requiredConnections = TOOLKIT_REGISTRY.getToolConnectionProviders(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
+
+    if (
+      input.executionTarget !== 'satellite' &&
+      !TOOLKIT_REGISTRY.getToolSatelliteDevice(
+        resolvedTool.toolkitId,
+        resolvedTool.toolId
+      ) &&
+      TOOLKIT_REGISTRY.needsToolConnection(
+        resolvedTool.toolkitId,
+        resolvedTool.toolId
+      )
+    ) {
+      // Keep the widget status aligned when an older grant needs new permissions.
+      await Promise.allSettled(
+        requiredConnections.map((provider) =>
+          CONNECTION_STORE.markNeedsAttention(provider)
+        )
+      )
+      requiredConnections.forEach(emitConnectionWidget)
+
+      return this.buildResult({
+        status: 'not_available',
+        message: `Connect ${resolvedTool.toolName} using the connection widget in chat to continue.`,
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        output: { required_connections: requiredConnections }
+      })
+    }
+
+    const availability = TOOLKIT_REGISTRY.getToolAvailability(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
+    if (!availability.available) {
+      const missingSettings = availability.missingSettings
+      const reason =
+        availability.reason ||
+        (missingSettings.length > 0
+          ? `Missing settings: ${missingSettings.join(', ')}`
+          : 'Tool is not available in the current runtime.')
+
+      return this.buildResult({
+        status: 'error',
+        message: reason,
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        output: {
+          ...(missingSettings.length > 0
+            ? { missing_settings: missingSettings }
+            : {}),
+          ...(availability.settingsPath
+            ? { settings_path: availability.settingsPath }
+            : {}),
+          ...(availability.reason ? { unavailable_reason: availability.reason } : {})
+        }
+      })
+    }
+
+    if (!functionName) {
+      return this.buildResult({
+        status: 'invalid_input',
+        message: 'Missing function_name for selected tool.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: null
+      })
+    }
+
+    const satelliteDeviceId = TOOLKIT_REGISTRY.getToolSatelliteDevice(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
+    const declaredConnections = requiredConnections
+
+    if (satelliteDeviceId && declaredConnections.length > 0) {
+      return this.buildResult({
+        status: 'not_available',
+        message: 'Tools using profile connections must run on the Leon server.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        parsedInput: input.parsedInput ?? null,
+        output: { required_execution_target: 'server' }
+      })
+    }
+
+    // Context's SDK tool reads profile files directly. Refresh device provenance
+    // here as well as in prompt context, including after a disconnect.
+    if (resolvedTool.toolkitId === 'structured_knowledge' && resolvedTool.toolId === 'context') {
+      CONTEXT_MANAGER.synchronizeDeviceContext()
+    }
+
+    if (input.executionTarget === 'satellite' && !satelliteDeviceId) {
+      return this.buildResult({
+        status: 'not_available',
+        message: 'No Satellite is connected for this tool.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName: functionName ?? null,
+        parsedInput: input.parsedInput ?? null,
+        output: {}
+      })
+    }
+
+    if (satelliteDeviceId) {
+      try {
+        const { onProgress, signal, ...serializableInput } = input
+
+        return await SATELLITE_REGISTRY.invokeTool({
+          profileName: getActiveProfileName(),
+          deviceId: satelliteDeviceId,
+          conversationSessionId: getActiveConversationSessionId(),
+          toolInput: {
+            ...serializableInput,
+            executionTarget: 'any'
+          },
+          ...(onProgress ? { onProgress } : {}),
+          ...(signal ? { signal } : {})
+        })
+      } catch (error) {
+        return this.buildResult({
+          status: 'error',
+          message: error instanceof Error ? error.message : String(error),
+          input: input.toolInput ?? null,
+          resolvedTool,
+          functionName: functionName ?? null,
+          parsedInput: input.parsedInput ?? null,
+          output: {}
+        })
+      }
+    }
+
+    const functions = TOOLKIT_REGISTRY.getToolFunctions(
+      resolvedTool.toolkitId,
+      resolvedTool.toolId
+    )
+    if (!functions || !functions[functionName]) {
+      return this.buildResult({
+        status: 'invalid_input',
+        message: `Unknown function_name "${functionName}" for selected tool.`,
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName
+      })
+    }
+    const functionConfig = functions[functionName]
+
+    const parsedInput =
+      input.parsedInput || this.parseToolInput(input.toolInput)
+    if (!parsedInput) {
+      return this.buildResult({
+        status: 'invalid_input',
+        message: 'tool_input must be valid JSON.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName,
+        parsedInput: null
+      })
+    }
+
+    // Tools resolve their own filesystem arguments. Other strings may be
+    // literal search text, globs or source code and must remain unchanged.
+    const responseJQ = this.getResponseJQ(functionConfig)
+    let argsArray: unknown[] = []
+    try {
+      argsArray = this.mapArgs(parsedInput, functionConfig.parameters)
+    } catch (error) {
+      return this.buildResult({
+        status: 'invalid_input',
+        message: (error as Error).message,
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName,
+        parsedInput: parsedInput,
+        output: {}
+      })
+    }
+
+    const loadConnections = async (
+      forceRefresh = false
+    ): Promise<Record<string, Record<string, unknown>>> =>
+      Object.fromEntries(
+        await Promise.all(
+          declaredConnections.map(async (provider) => {
+            const credentials = await CONNECTION_STORE.getCredentials(
+              provider,
+              undefined,
+              forceRefresh
+            )
+
+            if (!credentials) {
+              throw new Error('Connection required.')
+            }
+
+            return [provider, getToolCredentials(provider, credentials)]
+          })
+        )
+      )
+    let connections: Record<string, Record<string, unknown>>
+
+    try {
+      connections = await loadConnections()
+    } catch {
+      await Promise.allSettled(
+        declaredConnections.map((provider) =>
+          CONNECTION_STORE.markNeedsAttention(provider)
+        )
+      )
+      declaredConnections.forEach(emitConnectionWidget)
+
+      return this.buildResult({
+        status: 'not_available',
+        message:
+          'This connection needs attention. Use the connection widget in chat to reconnect. If the encryption key is missing, restore the profile key.',
+        input: input.toolInput ?? null,
+        resolvedTool,
+        functionName,
+        parsedInput: parsedInput,
+        output: { required_connections: declaredConnections }
+      })
+    }
+
+    const executeTool = (): ReturnType<typeof TOOL_WORKER_MANAGER.execute> =>
+      TOOL_WORKER_MANAGER.execute(
+        {
+          toolkitId: resolvedTool.toolkitId,
+          toolId: resolvedTool.toolId,
+          functionName,
+          parameters: parsedInput,
+          profileName: getActiveProfileName(),
+          conversationSessionId: getActiveConversationSessionId(),
+          leonService: input.leonService || {
+            baseURL: `${CONFIG_MANAGER.getConfig().server.host}:${CONFIG_MANAGER.getConfig().server.port}/api/${API_VERSION}`,
+            token: `${getActiveProfileName()}:${readStoredProfileToken(getActiveProfileName())}`
+          },
+          ...(Object.keys(connections).length ? { connections } : {}),
+          ...(input.signal ? { signal: input.signal } : {}),
+          ...(input.onProgress ? { onProgress: input.onProgress } : {})
+        },
+        argsArray,
+        (line) => {
+          this.emitToolRuntimeProgress(line, input.onProgress)
+          this.logMemoryToolRuntimeMessages(
+            resolvedTool.toolkitId,
+            resolvedTool.toolId,
+            line
+          )
+        },
+        {
+          concurrency: TOOLKIT_REGISTRY.getToolConcurrency(
+            resolvedTool.toolkitId,
+            resolvedTool.toolId,
+            functionName
+          )
+        }
+      )
+    let runtimeResult = await executeTool()
+
+    if (
+      runtimeResult.output['connection_required'] &&
+      declaredConnections.length
+    ) {
+      // Retry rejected authorization once, including providers without an expiry field.
+      try {
+        connections = await loadConnections(true)
+        runtimeResult = await executeTool()
+      } catch {
+        // Keep the original safe tool error if refresh is unavailable or rejected.
+      }
+
+      if (runtimeResult.output['connection_required']) {
+        await Promise.allSettled(
+          declaredConnections.map((provider) =>
+            CONNECTION_STORE.markNeedsAttention(provider)
+          )
+        )
+        declaredConnections.forEach(emitConnectionWidget)
+        runtimeResult.output['required_connections'] = declaredConnections
+      }
+    }
+
+    let runtimeOutput = runtimeResult.output
+    const toolReportedFailure = runtimeResult.success
+      ? this.getToolReportedFailure(runtimeOutput)
+      : null
+
+    if (runtimeResult.success && responseJQ && !toolReportedFailure) {
+      try {
+        runtimeOutput = await this.applyResponseJQ(runtimeResult.output, responseJQ)
+      } catch (error) {
+        return this.buildResult({
+          status: 'invalid_input',
+          message: `response_jq failed: ${(error as Error).message}`,
+          input: input.toolInput ?? null,
+          resolvedTool,
+          functionName,
+          parsedInput: parsedInput,
+          output: runtimeResult.output
+        })
+      }
+    }
+
+    TOOL_CALL_LOGGER.recordToolCall({
+      toolkitId: resolvedTool.toolkitId,
+      toolId: resolvedTool.toolId,
+      functionName,
+      params: parsedInput
+    })
+
+    return this.buildResult({
+      status:
+        runtimeResult.success && !toolReportedFailure ? 'success' : 'error',
+      message: toolReportedFailure?.message || runtimeResult.message,
+      input: input.toolInput ?? null,
+      resolvedTool,
+      functionName,
+      parsedInput: parsedInput,
+      output: runtimeOutput,
+      ...(runtimeResult.modelFiles
+        ? { modelFiles: runtimeResult.modelFiles }
+        : {})
+    })
+  }
+
+  private async buildResult(params: {
+    status: ToolExecutionResult['status']
+    message: string
+    input: string | null
+    resolvedTool: { toolkitId: string, toolId: string } | null
+    functionName?: string | null
+    parsedInput?: Record<string, unknown> | null
+    output?: Record<string, unknown>
+    modelFiles?: ToolModelFile[]
+  }): Promise<ToolExecutionResult> {
+    const result: ToolExecutionResult = {
+      status: params.status,
+      message: params.message,
+      data: {
+        tool_id: params.resolvedTool?.toolId || '',
+        toolkit_id: params.resolvedTool?.toolkitId || null,
+        function_name: params.functionName ?? null,
+        input: params.input,
+        parsed_input: params.parsedInput ?? null,
+        output: params.output ?? {},
+        ...(params.modelFiles ? { model_files: params.modelFiles } : {})
+      }
+    }
+
+    if (params.resolvedTool) {
+      result.toolLabel = `${params.resolvedTool.toolkitId}.${params.resolvedTool.toolId}`
+    }
+
+    const outputLogPath = await TOOL_CALL_LOGGER.recordToolOutput({
+      toolkitId: result.data.toolkit_id,
+      toolId: result.data.tool_id || params.resolvedTool?.toolId || 'unknown',
+      functionName: result.data.function_name,
+      status: result.status,
+      message: result.message,
+      rawInput: result.data.input,
+      parsedInput: result.data.parsed_input,
+      output: result.data.output
+    })
+
+    if (outputLogPath) {
+      result.data.output_log_path = outputLogPath
+    }
+
+    return result
+  }
+
+  private parseToolInput(toolInput?: string): Record<string, unknown> | null {
+    if (!toolInput) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(toolInput)
+      if (parsed && typeof parsed === 'object') {
+        return parsed as Record<string, unknown>
+      }
+    } catch {
+      return null
+    }
+
+    return null
+  }
+
+  private getResponseJQ(functionConfig: {
+      hooks?: {
+        post_execution?: {
+          response_jq?: string
+        }
+      }
+    }
+  ): string | null {
+    const defaultResponseJQ =
+      typeof functionConfig.hooks?.post_execution?.response_jq === 'string'
+        ? functionConfig.hooks.post_execution.response_jq.trim()
+        : ''
+
+    return defaultResponseJQ || null
+  }
+
+  private getToolReportedFailure(output: Record<string, unknown>): {
+    message: string
+  } | null {
+    const outputSuccess = output['success']
+    const outputError =
+      typeof output['error'] === 'string' ? output['error'].trim() : ''
+
+    if (outputSuccess === false) {
+      return {
+        message: outputError || 'Tool reported a failure.'
+      }
+    }
+
+    const result = output['result']
+    if (!result || typeof result !== 'object' || Array.isArray(result)) {
+      return null
+    }
+
+    const nestedResult = result as Record<string, unknown>
+
+    const nestedSuccess = nestedResult['success']
+    const nestedError =
+      typeof nestedResult['error'] === 'string'
+        ? nestedResult['error'].trim()
+        : ''
+
+    if (nestedSuccess === false) {
+      return {
+        message: nestedError || outputError || 'Tool reported a failure.'
+      }
+    }
+
+    return null
+  }
+
+  private normalizePossibleFilesystemPath(value: string): string {
+    const trimmedValue = value.trim()
+    if (
+      !trimmedValue ||
+      trimmedValue.includes('\n') ||
+      trimmedValue.includes('\r')
+    ) {
+      return value
+    }
+
+    try {
+      const parsedUrl = new URL(trimmedValue)
+      if (parsedUrl.protocol) {
+        return value
+      }
+    } catch {
+      // Not a valid URL, continue.
+    }
+
+    const resolvedPath = this.resolveFilesystemPathCandidate(trimmedValue)
+    return resolvedPath || value
+  }
+
+  private resolveFilesystemPathCandidate(value: string): string | null {
+    return ABSOLUTE_OR_HOME_PATH_PATTERN.test(value) ||
+      EXPLICIT_RELATIVE_PATH_PATTERN.test(value)
+      ? this.correctHomePath(this.resolveAbsoluteLikePath(value))
+      : null
+  }
+
+  private resolveAbsoluteLikePath(value: string): string {
+    if (value === '~') {
+      return os.homedir()
+    }
+
+    if (value.startsWith('~/') || value.startsWith('~\\')) {
+      return path.join(os.homedir(), value.slice(2))
+    }
+
+    if (path.isAbsolute(value)) {
+      return path.normalize(value)
+    }
+
+    return path.resolve(process.cwd(), value)
+  }
+
+  private correctHomePath(candidate: string): string {
+    const currentHome = path.normalize(os.homedir())
+    if (!currentHome || !path.isAbsolute(candidate)) {
+      return candidate
+    }
+
+    const currentHomeParent = path.dirname(currentHome)
+    const currentHomeName = path.basename(currentHome)
+    const currentHomeParentName = path
+      .basename(currentHomeParent)
+      .toLocaleLowerCase()
+    if (
+      !currentHomeParent ||
+      currentHomeParent === currentHome ||
+      !CONVENTIONAL_USER_HOME_PARENT_NAMES.has(currentHomeParentName) ||
+      !candidate.startsWith(`${currentHomeParent}${path.sep}`)
+    ) {
+      return candidate
+    }
+
+    const relativeFromHomeParent = path.relative(currentHomeParent, candidate)
+    const pathParts = relativeFromHomeParent
+      .split(path.sep)
+      .filter(Boolean)
+
+    if (pathParts.length < 2) {
+      return candidate
+    }
+
+    const candidateHomeName = pathParts[0]
+    if (!candidateHomeName || candidateHomeName === currentHomeName) {
+      return candidate
+    }
+
+    return path.normalize(path.join(currentHome, ...pathParts.slice(1)))
+  }
+
+  private async applyResponseJQ(
+    output: Record<string, unknown>,
+    filter: string
+  ): Promise<Record<string, unknown>> {
+    const resolvedInput = await this.resolveResponseJQInput(output)
+    if (resolvedInput === null) {
+      throw new Error(
+        'This tool did not return JSON output, a JSON string, or a JSON file path.'
+      )
+    }
+
+    const projected = await RuntimeHelper.projectJSONValue(filter, resolvedInput.input)
+
+    if (resolvedInput.sourceJsonFilePath) {
+      await fs.promises.writeFile(
+        resolvedInput.sourceJsonFilePath,
+        this.serializeProjectedResultForFile(projected),
+        'utf8'
+      )
+    }
+
+    return {
+      result: projected
+    }
+  }
+
+  private async resolveResponseJQInput(
+    output: Record<string, unknown>
+  ): Promise<{
+    input: unknown
+    sourceJsonFilePath: string | null
+  } | null> {
+    const resultValue = output['result']
+    const resolvedResult = await this.resolveJsonLikeValue(resultValue)
+    if (resolvedResult !== null) {
+      return {
+        input: {
+          ...output,
+          result: resolvedResult.value
+        },
+        sourceJsonFilePath: resolvedResult.sourceJsonFilePath
+      }
+    }
+
+    return {
+      input: output,
+      sourceJsonFilePath: null
+    }
+  }
+
+  private async resolveJsonLikeValue(value: unknown): Promise<{
+    value: unknown
+    sourceJsonFilePath: string | null
+  } | null> {
+    if (value == null) {
+      return null
+    }
+
+    if (Array.isArray(value) || typeof value === 'object') {
+      return {
+        value,
+        sourceJsonFilePath: null
+      }
+    }
+
+    if (typeof value !== 'string') {
+      return null
+    }
+
+    const trimmed = value.trim()
+    if (!trimmed) {
+      return null
+    }
+
+    const inlineJson = this.parseJsonValue(trimmed)
+    if (inlineJson !== null) {
+      return {
+        value: inlineJson,
+        sourceJsonFilePath: null
+      }
+    }
+
+    const filePath = this.normalizePossibleFilesystemPath(trimmed).trim() || trimmed
+
+    try {
+      const stat = await fs.promises.stat(filePath)
+      if (!stat.isFile()) {
+        return null
+      }
+
+      const fileContent = await fs.promises.readFile(filePath, 'utf8')
+      const parsedFileContent = this.parseJsonValue(fileContent)
+      if (parsedFileContent === null) {
+        return null
+      }
+
+      return {
+        value: parsedFileContent,
+        sourceJsonFilePath: filePath
+      }
+    } catch {
+      return null
+    }
+  }
+
+  private serializeProjectedResultForFile(value: unknown): string {
+    if (typeof value === 'string') {
+      return value
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value)
+    }
+
+    return JSON.stringify(value, null, 2)
+  }
+
+  private parseJsonValue(value: string): unknown {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+
+  private mapArgs(
+    argsObject: Record<string, unknown>,
+    parameters?: Record<string, unknown>
+  ): unknown[] {
+    const properties =
+      parameters &&
+      typeof parameters === 'object' &&
+      parameters['properties'] &&
+      typeof parameters['properties'] === 'object'
+        ? (parameters['properties'] as Record<string, unknown>)
+        : null
+
+    if (!properties) {
+      return Object.values(argsObject)
+    }
+
+    const orderedKeys = Object.keys(properties)
+    this.validateRequiredParameters(argsObject, parameters)
+
+    const orderedArgs = orderedKeys.map((key) => argsObject[key])
+    while (orderedArgs.length > 0) {
+      const lastIndex = orderedArgs.length - 1
+      if (orderedArgs[lastIndex] !== undefined) {
+        break
+      }
+      orderedArgs.pop()
+    }
+    return orderedArgs
+  }
+
+  private validateRequiredParameters(
+    argsObject: Record<string, unknown>,
+    parameters?: Record<string, unknown>
+  ): void {
+    const requiredList = Array.isArray(parameters?.['required'])
+      ? (parameters['required'] as string[])
+      : []
+    const missingRequired = requiredList.filter(
+      (key) => argsObject[key] === undefined
+    )
+
+    if (missingRequired.length > 0) {
+      throw new Error(
+        `Missing required tool_input fields: ${missingRequired.join(', ')}`
+      )
+    }
+  }
+
+}

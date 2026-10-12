@@ -39,6 +39,10 @@ const QMD_WRITE_LOCK_RETRY_MS = 250
 const QMD_WRITE_LOCK_TIMEOUT_MS = 60_000
 const QMD_WRITE_LOCK_STALE_MS = 15 * 60 * 1_000
 const QMD_EMBED_SUBPROCESS_TIMEOUT_MS = 15 * 60 * 1_000
+const QMD_EMBED_SHUTDOWN_GRACE_MS = 60_000
+// Let QMD stop between batches and close its store before the hard deadline.
+const QMD_EMBED_MAX_DURATION_MS =
+  QMD_EMBED_SUBPROCESS_TIMEOUT_MS - QMD_EMBED_SHUTDOWN_GRACE_MS
 const QMD_EMBED_SUBPROCESS_MAX_BUFFER = 4 * 1024 * 1024
 
 const execFileAsync = promisify(execFile)
@@ -112,86 +116,39 @@ async function ensureStoreRoot(indexName: string): Promise<void> {
   })
 }
 
-function applyStoreDbPragmas(store: QMDStore): void {
-  const db = store.internal?.db as { exec?: (sql: string) => unknown } | undefined
-  if (!db?.exec) {
-    return
-  }
-
-  try {
-    db.exec('PRAGMA busy_timeout = 5000')
-  } catch {
-    // Ignore optional tuning failures. The store remains usable without this.
-  }
-}
-
 async function storeHasRequiredCollections(
   store: QMDStore,
   collections: QMDCollectionDefinition[]
 ): Promise<boolean> {
-  const requiredCollections = new Set(
-    collections.map((collection) => collection.name).filter(Boolean)
-  )
-  if (requiredCollections.size === 0) {
+  if (collections.length === 0) {
     return true
   }
 
-  const existingCollections = new Set(
-    (await store.listCollections()).map((collection) => collection.name)
+  // Names alone cannot detect profile moves or collection pattern changes.
+  const existingConfigByName = new Map(
+    (await store.listCollections()).map((collection) => [
+      collection.name,
+      {
+        path: path.resolve(collection.pwd),
+        pattern: collection.glob_pattern || DEFAULT_PATTERN
+      }
+    ])
   )
 
-  for (const collectionName of requiredCollections) {
-    if (!existingCollections.has(collectionName)) {
+  for (const collection of collections) {
+    const existingConfig = existingConfigByName.get(collection.name)
+    if (!existingConfig) {
       return false
     }
-  }
 
-  // Validate the persisted QMD collection config too, not only the collection
-  // names. This lets Leon auto-heal when collection roots move, such as the
-  // migration from the codebase `core/memory` folders into `~/.leon/profiles`.
-  const db = store.internal?.db as {
-    prepare?: (sql: string) => {
-      all: () => Array<Record<string, unknown>>
+    const expectedPath = path.resolve(collection.dir)
+    const expectedPattern = collection.pattern || DEFAULT_PATTERN
+    if (
+      existingConfig.path !== expectedPath ||
+      existingConfig.pattern !== expectedPattern
+    ) {
+      return false
     }
-  } | undefined
-  if (!db?.prepare) {
-    return true
-  }
-
-  try {
-    const rows = db
-      .prepare(
-        `SELECT name, path, pattern
-         FROM store_collections`
-      )
-      .all()
-    const existingConfigByName = new Map(
-      rows.map((row) => [
-        String(row['name'] || ''),
-        {
-          path: path.resolve(String(row['path'] || '')),
-          pattern: String(row['pattern'] || DEFAULT_PATTERN)
-        }
-      ])
-    )
-
-    for (const collection of collections) {
-      const existingConfig = existingConfigByName.get(collection.name)
-      if (!existingConfig) {
-        return false
-      }
-
-      const expectedPath = path.resolve(collection.dir)
-      const expectedPattern = collection.pattern || DEFAULT_PATTERN
-      if (
-        existingConfig.path !== expectedPath ||
-        existingConfig.pattern !== expectedPattern
-      ) {
-        return false
-      }
-    }
-  } catch {
-    return false
   }
 
   return true
@@ -298,11 +255,9 @@ async function withQMDWriteLock<T>(
 }
 
 async function openExistingStore(indexName: string): Promise<QMDStore> {
-  const store = await createStore({
+  return createStore({
     dbPath: getQMDDbPath(indexName)
   })
-  applyStoreDbPragmas(store)
-  return store
 }
 
 async function runQMDStoreEmbedInSubprocess(params: {
@@ -322,8 +277,11 @@ async function runQMDStoreEmbedInSubprocess(params: {
       dbPath: getQMDDbPath(params.indexName),
       options:
         typeof params.force === 'boolean'
-          ? { force: params.force }
-          : {}
+          ? {
+              force: params.force,
+              maxDurationMs: QMD_EMBED_MAX_DURATION_MS
+            }
+          : { maxDurationMs: QMD_EMBED_MAX_DURATION_MS }
     }),
     'utf8'
   )
@@ -403,12 +361,10 @@ async function openConfiguredStore(
   indexName: string,
   collections: QMDCollectionDefinition[]
 ): Promise<QMDStore> {
-  const store = await createStore({
+  return createStore({
     dbPath: getQMDDbPath(indexName),
     config: buildStoreConfig(collections)
   })
-  applyStoreDbPragmas(store)
-  return store
 }
 
 function inferCollectionName(

@@ -8,16 +8,30 @@
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
-    "url": "https://twitter.com/grenlouis"
+    "url": "https://x.com/grenlouis"
   },
   "binaries": {
-    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-linux-x86_64",
-    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-linux-aarch64",
-    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-macosx-x86_64",
-    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-macosx-arm64",
-    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_7.0.2/ffmpeg_7.0.2-win-amd64.exe"
+    "linux-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_9.0.1/ffmpeg_9.0.1-linux-x86_64",
+    "linux-aarch64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_9.0.1/ffmpeg_9.0.1-linux-aarch64",
+    "macosx-x86_64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_9.0.1/ffmpeg_9.0.1-macosx-x86_64",
+    "macosx-arm64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_9.0.1/ffmpeg_9.0.1-macosx-arm64",
+    "win-amd64": "https://github.com/leon-ai/leon-binaries/releases/download/ffmpeg_9.0.1/ffmpeg_9.0.1-win-amd64.exe"
   },
   "functions": {
+    "extractFrame": {
+      "description": "Extract one video frame at a timestamp to a local image, bounded to 2048 pixels per dimension, without overwriting an existing file.",
+      "progressive_guidance": "Read the resulting image with the file tool for native vision or local OCR. A frame covers only its timestamp; audio/transcripts are separate evidence. Use ffprobe for duration before sampling.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "videoPath": { "type": "string" },
+          "imagePath": { "type": "string", "description": "New output PNG path." },
+          "atSeconds": { "type": "number", "minimum": 0 }
+        },
+        "required": ["videoPath", "imagePath", "atSeconds"],
+        "additionalProperties": false
+      }
+    },
     "convertVideoFormat": {
       "description": "Convert a video file to a different format.",
       "parameters": {

@@ -1,0 +1,89 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  position: relative;
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #101a2c;
+  color: #f4f7fc;
+  font-family: sans-serif;
+}
+
+.scene,
+.scene-content {
+  position: absolute;
+  inset: 0;
+}
+
+.scene-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8%;
+  background: radial-gradient(ellipse at 95% 0%, #183b43, transparent 65%);
+}
+
+.eyebrow {
+  color: #67e8c4;
+  font-size: clamp(18px, 2.5vw, 36px);
+  letter-spacing: 0.1em;
+}
+
+h1 {
+  font-size: clamp(36px, 7vw, 100px);
+  line-height: 1.1;
+  margin: 5% 0;
+}
+
+p,
+.step {
+  font-size: clamp(24px, 3.5vw, 48px);
+  line-height: 1.4;
+}
+
+p {
+  color: #b4c3d9;
+}
+
+.flow {
+  display: flex;
+  align-items: center;
+  gap: 4%;
+  margin-top: 6%;
+}
+
+.handoff {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  background: #40566d;
+}
+
+.understand-packet {
+  position: absolute;
+  left: 0;
+  top: -5px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #67e8c4;
+}
+
+.verification-track {
+  height: 12px;
+  margin-top: 6%;
+  background: #40566d;
+}
+
+.verification-progress {
+  width: 100%;
+  height: 100%;
+  background: #67e8c4;
+  transform-origin: left;
+}

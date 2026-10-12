@@ -1,3 +1,4 @@
+import type { Artifact } from '@/core/artifacts/artifact-types'
 /**
  * Contain common/shared types that are universal across the project
  * and cannot be placed in the respective core nodes
@@ -13,10 +14,11 @@
  * @see https://www.iso.org/iso-3166-country-codes.html
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const { default: LANG_CONFIGS } = await import('@@/core/langs.json', {
-  with: { type: 'json' }
-})
+import LANG_CONFIGS from '@@/core/langs.json' with { type: 'json' }
+import type { UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import type { ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
+import type { TurnInference } from '@/core/llm-manager/inference-metadata'
+import type { CompletionAttemptTiming } from '@/core/llm-manager/types'
 
 export type Languages = typeof LANG_CONFIGS
 export type LongLanguageCode = keyof Languages
@@ -36,6 +38,14 @@ export enum OSTypes {
 export enum CPUArchitectures {
   X64 = 'x64',
   ARM64 = 'arm64'
+}
+
+/**
+ * Stateless tools accept concurrent calls; shared sessions require ordering.
+ */
+export enum ToolConcurrency {
+  Parallel = 'parallel',
+  Serial = 'serial'
 }
 
 /**
@@ -87,7 +97,8 @@ export interface ConversationWidgetData {
   historyMode: ConversationWidgetHistoryMode
 }
 
-export interface LLMAnswerMetrics {
+export interface LLMAnswerMetrics extends Partial<ContextUsageMetrics> {
+  usageAccounting?: UsageAccounting | undefined
   completionCount?: number
   inputTokens: number
   outputTokens: number
@@ -116,27 +127,56 @@ export interface AgentResponsePlanStep {
   status: 'pending' | 'in_progress' | 'completed' | 'error'
 }
 
+export interface AgentResponsePlanTransition extends AgentResponsePlanStep {
+  changedAt: number
+}
+
 export interface AgentResponseToolCall {
   id: string
+  preparationStartedAt?: number
+  startedAt?: number
+  durationMs?: number
   name: string
-  status: 'running' | 'success' | 'error'
+  toolCallTitle?: string
+  toolkitName?: string
+  toolName?: string
+  status: 'preparing' | 'running' | 'success' | 'error'
+  toolkitIconName?: string
+  toolIconName?: string
   input?: unknown
   output?: unknown
+  commandOutput?: string
+  lastOutputAt?: number
+  progressMessage?: string
   stepLabel?: string
   errorMessage?: string
   skillId?: string
   nativeSkillPath?: string
 }
 
-/** Persisted, user-visible trace for replaying an agent turn. */
+/**
+ * Persisted, user-visible trace for replaying an agent turn.
+ */
 export interface AgentResponseTrace {
+  id?: string
+  inferences?: (CompletionAttemptTiming & { phase: 'agent' | 'final_answer' })[]
+  progressMessages?: { id: string, content: string, createdAt: number }[]
+  reasoning?: {
+    id: string
+    text: string
+    phase: string
+    startedAt: number
+  }[]
   reasoningSummary?: string
   planSteps: AgentResponsePlanStep[]
+  planTransitions?: AgentResponsePlanTransition[]
   toolCalls: AgentResponseToolCall[]
   metrics?: Record<string, unknown>
 }
 
 export interface MessageLog {
+  inference?: TurnInference
+  artifacts?: Artifact[]
   who: 'owner' | 'leon'
   sentAt: number
   message: string
@@ -148,6 +188,9 @@ export interface MessageLog {
 }
 
 export interface ConversationHistoryItem {
+  inference?: TurnInference
+  artifacts?: Artifact[]
+  widget?: ConversationWidgetData
   who: MessageLog['who']
   sentAt: number
   string: string

@@ -6,7 +6,7 @@ import { ParamsHelper } from '@sdk/params-helper'
 import { Settings } from '@sdk/settings'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'
 import OpenRouterTool from '@tools/communication/openrouter'
-import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
+import type { TranscriptionOutput } from '../lib/transcription-schema'
 
 interface VideoSummarizerSettings extends Record<string, unknown> {
   openrouter_model?: string | null

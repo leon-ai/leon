@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
+import type { TranscriptionOutput } from './lib/transcription-schema'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { Network } from '@sdk/network'

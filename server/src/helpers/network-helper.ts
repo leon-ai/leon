@@ -4,10 +4,15 @@ import readline from 'node:readline'
 
 import axios from 'axios'
 
+import { LogHelper } from '@/helpers/log-helper'
+
 const HUGGING_FACE_URL = 'https://huggingface.co'
 const HUGGING_FACE_MIRROR_URL = 'https://hf-mirror.com'
 const PARALLEL_DOWNLOAD_MIN_BYTES = 128 * 1_024 * 1_024
 const PARALLEL_DOWNLOAD_MIN_RANGE_BYTES = 16 * 1_024 * 1_024
+const DOWNLOAD_INACTIVITY_TIMEOUT_MS = 30_000
+const PARALLEL_DOWNLOAD_CHECKPOINT_BYTES = 64 * 1_024 * 1_024
+const PARALLEL_DOWNLOAD_STATE_VERSION = 1
 const DOWNLOAD_PROGRESS_SPINNER_COLOR_START = '\x1b[36m'
 const DOWNLOAD_PROGRESS_SPINNER_COLOR_END = '\x1b[39m'
 const DOWNLOAD_PROGRESS_SPINNER_FRAMES = [
@@ -24,9 +29,12 @@ const DOWNLOAD_PROGRESS_SPINNER_INTERVAL_MS = 80
 const SETUP_DOWNLOAD_PROGRESS_START_EVENT = 'leon:setup-download-progress:start'
 const SETUP_DOWNLOAD_PROGRESS_END_EVENT = 'leon:setup-download-progress:end'
 const MOVE_FALLBACK_ERROR_CODES = new Set(['EXDEV', 'EPERM', 'EBUSY', 'EACCES'])
+// Fetch decodes compressed bodies; keep lengths and resume offsets in file bytes.
+const DOWNLOAD_REQUEST_HEADERS = { 'accept-encoding': 'identity' }
 
 export interface DownloadFileOptions {
   cliProgress?: boolean
+  inactivityTimeoutMs?: number
   onProgress?: (progress: DownloadFileProgress) => void
   parallelStreams?: number
   skipExisting?: boolean
@@ -57,6 +65,19 @@ interface DownloadProbe {
   acceptRanges: boolean
 }
 
+interface ParallelDownloadRange {
+  start: number
+  end: number
+  position: number
+}
+
+interface ParallelDownloadState {
+  version: typeof PARALLEL_DOWNLOAD_STATE_VERSION
+  fileURL: string
+  totalBytes: number
+  ranges: ParallelDownloadRange[]
+}
+
 interface ProgressReporter {
   update: (downloadedBytes: number) => void
   finish: (downloadedBytes: number) => void
@@ -82,6 +103,7 @@ export class NetworkHelper {
   private static readonly DEFAULT_DOWNLOAD_OPTIONS: ResolvedDownloadFileOptions =
     {
       cliProgress: true,
+      inactivityTimeoutMs: DOWNLOAD_INACTIVITY_TIMEOUT_MS,
       parallelStreams: 3,
       skipExisting: false,
       retry: {
@@ -105,6 +127,54 @@ export class NetworkHelper {
     error.name = 'AbortError'
 
     return error
+  }
+
+  private static createInactivityController(
+    parentSignal: AbortSignal | undefined,
+    inactivityTimeoutMs: number
+  ): {
+    signal: AbortSignal
+    refresh: () => void
+    dispose: () => void
+  } {
+    const controller = new AbortController()
+    let timeoutId: NodeJS.Timeout | null = null
+    const abortFromParent = (): void => {
+      controller.abort(parentSignal?.reason)
+    }
+    const refresh = (): void => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+
+      timeoutId = setTimeout(() => {
+        controller.abort(
+          new Error(`Download stalled for ${inactivityTimeoutMs}ms`)
+        )
+      }, inactivityTimeoutMs)
+      timeoutId.unref?.()
+    }
+    const dispose = (): void => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      parentSignal?.removeEventListener('abort', abortFromParent)
+    }
+
+    if (parentSignal?.aborted) {
+      abortFromParent()
+    } else {
+      parentSignal?.addEventListener('abort', abortFromParent, { once: true })
+    }
+    refresh()
+
+    return {
+      signal: controller.signal,
+      refresh,
+      dispose
+    }
   }
 
   private static throwIfAborted(signal?: AbortSignal): void {
@@ -270,6 +340,8 @@ export class NetworkHelper {
     const shouldEmitSetupDownloadProgressEvents = options.cliProgress
     let lastRenderAt = 0
     let didEmitSetupDownloadProgressStart = false
+    let initialDownloadedBytes: number | null = null
+    let transferStartedAt = startedAt
 
     if (options.cliProgress) {
       process.emit(SETUP_DOWNLOAD_PROGRESS_START_EVENT)
@@ -281,8 +353,17 @@ export class NetworkHelper {
     const createProgressSnapshot = (
       downloadedBytes: number
     ): DownloadFileProgress => {
-      const elapsedMs = Math.max(1, Date.now() - startedAt)
-      const bytesPerSecond = downloadedBytes / (elapsedMs / 1_000)
+      if (initialDownloadedBytes === null) {
+        initialDownloadedBytes = downloadedBytes
+        transferStartedAt = Date.now()
+      }
+
+      const elapsedMs = Math.max(1, Date.now() - transferStartedAt)
+      const transferredBytes = Math.max(
+        0,
+        downloadedBytes - initialDownloadedBytes
+      )
+      const bytesPerSecond = transferredBytes / (elapsedMs / 1_000)
       const etaMs =
         typeof totalBytes === 'number' &&
         totalBytes > downloadedBytes &&
@@ -450,6 +531,7 @@ export class NetworkHelper {
       try {
         const headResponse = await fetch(fileURL, {
           method: 'HEAD',
+          headers: DOWNLOAD_REQUEST_HEADERS,
           ...(signal ? { signal } : {})
         })
 
@@ -480,6 +562,7 @@ export class NetworkHelper {
       try {
         const rangeResponse = await fetch(fileURL, {
           headers: {
+            ...DOWNLOAD_REQUEST_HEADERS,
             range: 'bytes=0-0'
           },
           ...(signal ? { signal } : {})
@@ -536,6 +619,7 @@ export class NetworkHelper {
     temporaryPath: string,
     probe: DownloadProbe,
     reporter: ProgressReporter,
+    inactivityTimeoutMs: number,
     signal?: AbortSignal
   ): Promise<number> {
     let startOffset = 0
@@ -562,25 +646,31 @@ export class NetworkHelper {
               range: `bytes=${startOffset}-`
             }
           : undefined
-      const response = await fetch(
-        fileURL,
-        headers
-          ? {
-              headers,
-              ...(signal ? { signal } : {})
-            }
-          : signal
-            ? { signal }
-            : undefined
+      const inactivityController = this.createInactivityController(
+        signal,
+        inactivityTimeoutMs
       )
+      let response: Response
+
+      try {
+        response = await fetch(fileURL, {
+          headers: { ...DOWNLOAD_REQUEST_HEADERS, ...headers },
+          signal: inactivityController.signal
+        })
+      } catch (error) {
+        inactivityController.dispose()
+        throw error
+      }
 
       if (!response.ok) {
+        inactivityController.dispose()
         throw new Error(
           `Failed to download "${fileURL}" (HTTP ${response.status} ${response.statusText})`
         )
       }
 
       if (!response.body) {
+        inactivityController.dispose()
         throw new Error(`Failed to download "${fileURL}": empty response body`)
       }
 
@@ -591,6 +681,7 @@ export class NetworkHelper {
         startOffset = 0
         reporter.update(0)
         await response.body.cancel().catch(() => {})
+        inactivityController.dispose()
         continue
       }
 
@@ -617,6 +708,7 @@ export class NetworkHelper {
 
           const chunk = Buffer.from(value)
           await fileHandle.write(chunk, 0, chunk.length, writePosition)
+          inactivityController.refresh()
           writePosition += chunk.length
           downloadedBytes += chunk.length
           reporter.update(downloadedBytes)
@@ -639,7 +731,91 @@ export class NetworkHelper {
       } finally {
         await reader.cancel().catch(() => {})
         await fileHandle.close()
+        inactivityController.dispose()
       }
+    }
+  }
+
+  private static getParallelDownloadStatePath(temporaryPath: string): string {
+    return `${temporaryPath}.state.json`
+  }
+
+  private static readParallelDownloadState(
+    statePath: string,
+    fileURL: string,
+    totalBytes: number
+  ): ParallelDownloadState | null {
+    if (!fs.existsSync(statePath)) {
+      return null
+    }
+
+    try {
+      const state = JSON.parse(
+        fs.readFileSync(statePath, 'utf8')
+      ) as ParallelDownloadState
+      const hasValidRanges =
+        Array.isArray(state.ranges) &&
+        state.ranges.every(
+          (range) =>
+            Number.isInteger(range.start) &&
+            Number.isInteger(range.end) &&
+            Number.isInteger(range.position) &&
+            range.start >= 0 &&
+            range.end >= range.start &&
+            range.end < totalBytes &&
+            range.position >= range.start &&
+            range.position <= range.end + 1
+        )
+
+      if (
+        state.version !== PARALLEL_DOWNLOAD_STATE_VERSION ||
+        state.fileURL !== fileURL ||
+        state.totalBytes !== totalBytes ||
+        !hasValidRanges
+      ) {
+        return null
+      }
+
+      return state
+    } catch {
+      return null
+    }
+  }
+
+  private static persistParallelDownloadState(
+    statePath: string,
+    state: ParallelDownloadState
+  ): void {
+    const nextStatePath = `${statePath}.next`
+
+    fs.writeFileSync(nextStatePath, JSON.stringify(state), 'utf8')
+    fs.renameSync(nextStatePath, statePath)
+  }
+
+  private static createParallelDownloadState(
+    fileURL: string,
+    totalBytes: number,
+    initialDownloadedBytes: number,
+    parallelStreams: number
+  ): ParallelDownloadState {
+    const remainingBytes = totalBytes - initialDownloadedBytes
+    const partCount = this.getParallelPartCount(
+      remainingBytes,
+      parallelStreams
+    )
+    const ranges = this.splitByteRanges(remainingBytes, partCount).map(
+      (range): ParallelDownloadRange => ({
+        start: range.start + initialDownloadedBytes,
+        end: range.end + initialDownloadedBytes,
+        position: range.start + initialDownloadedBytes
+      })
+    )
+
+    return {
+      version: PARALLEL_DOWNLOAD_STATE_VERSION,
+      fileURL,
+      totalBytes,
+      ranges
     }
   }
 
@@ -649,69 +825,199 @@ export class NetworkHelper {
     totalBytes: number,
     parallelStreams: number,
     reporter: ProgressReporter,
+    retryOptions: RetryOptions,
+    inactivityTimeoutMs: number,
     signal?: AbortSignal
   ): Promise<number> {
-    const partCount = this.getParallelPartCount(totalBytes, parallelStreams)
-    const ranges = this.splitByteRanges(totalBytes, partCount)
-    const fileHandle = await fs.promises.open(temporaryPath, 'w')
-    let downloadedBytes = 0
+    const statePath = this.getParallelDownloadStatePath(temporaryPath)
+    const hadStateFile = fs.existsSync(statePath)
+    let state = this.readParallelDownloadState(
+      statePath,
+      fileURL,
+      totalBytes
+    )
+    let initialDownloadedBytes = 0
 
-    reporter.update(0)
+    if (state && !fs.existsSync(temporaryPath)) {
+      state = null
+    }
 
-    try {
-      await Promise.all(
-        ranges.map(async (range) => {
-          this.throwIfAborted(signal)
-          const response = await fetch(fileURL, {
-            headers: {
-              range: `bytes=${range.start}-${range.end}`
-            },
-            ...(signal ? { signal } : {})
-          })
+    if (!state && hadStateFile) {
+      await Promise.all([
+        fs.promises.rm(statePath, { force: true }),
+        fs.promises.rm(temporaryPath, { force: true })
+      ])
+    }
 
-          if (response.status !== 206) {
-            throw new Error(
-              `Server does not support ranged download for "${fileURL}".`
-            )
-          }
+    if (!state && fs.existsSync(temporaryPath)) {
+      const temporaryStat = await fs.promises.stat(temporaryPath)
 
-          if (!response.body) {
-            throw new Error(`Failed to download "${fileURL}": empty response body`)
-          }
+      if (temporaryStat.isFile() && temporaryStat.size < totalBytes) {
+        initialDownloadedBytes = temporaryStat.size
+      } else {
+        await fs.promises.rm(temporaryPath, { force: true })
+      }
+    }
 
-          const reader = response.body.getReader()
-          let writePosition = range.start
+    if (!state) {
+      state = this.createParallelDownloadState(
+        fileURL,
+        totalBytes,
+        initialDownloadedBytes,
+        parallelStreams
+      )
+      this.persistParallelDownloadState(statePath, state)
+    }
+
+    const ranges = state.ranges
+    const downloadedRangeBytes = ranges.reduce(
+      (total, range) => total + (range.position - range.start),
+      0
+    )
+    const totalRangeBytes = ranges.reduce(
+      (total, range) => total + (range.end - range.start + 1),
+      0
+    )
+    initialDownloadedBytes = totalBytes - totalRangeBytes
+    const fileHandle = await fs.promises.open(
+      temporaryPath,
+      fs.existsSync(temporaryPath) ? 'r+' : 'w'
+    )
+    let downloadedBytes = initialDownloadedBytes + downloadedRangeBytes
+    const rangeAbortController = new AbortController()
+    const abortRanges = (): void => {
+      rangeAbortController.abort(signal?.reason)
+    }
+
+    if (signal?.aborted) {
+      abortRanges()
+    } else {
+      signal?.addEventListener('abort', abortRanges, { once: true })
+    }
+
+    reporter.update(downloadedBytes)
+
+    const rangeTasks = ranges
+      .filter((range) => range.position <= range.end)
+      .map(async (range) => {
+        let writePosition = range.position
+        let nextCheckpointAt =
+          writePosition + PARALLEL_DOWNLOAD_CHECKPOINT_BYTES
+        let consecutiveNoProgressFailures = 0
+
+        while (writePosition <= range.end) {
+          const requestStartPosition = writePosition
+          const inactivityController = this.createInactivityController(
+            rangeAbortController.signal,
+            inactivityTimeoutMs
+          )
 
           try {
-            while (true) {
-              this.throwIfAborted(signal)
-              const { done, value } = await reader.read()
+            this.throwIfAborted(rangeAbortController.signal)
+            const response = await fetch(fileURL, {
+              headers: {
+                ...DOWNLOAD_REQUEST_HEADERS,
+                range: `bytes=${writePosition}-${range.end}`
+              },
+              signal: inactivityController.signal
+            })
 
-              if (done) {
-                break
-              }
-
-              if (!value || value.byteLength === 0) {
-                continue
-              }
-
-              const chunk = Buffer.from(value)
-              await fileHandle.write(chunk, 0, chunk.length, writePosition)
-              writePosition += chunk.length
-              downloadedBytes += chunk.length
-              reporter.update(downloadedBytes)
+            if (response.status !== 206) {
+              throw new Error(
+                `Server does not support ranged download for "${fileURL}".`
+              )
             }
-          } finally {
-            await reader.cancel().catch(() => {})
-          }
 
-          if (writePosition !== range.end + 1) {
-            throw new Error(
-              `Incomplete ranged download for "${fileURL}" on bytes ${range.start}-${range.end}.`
+            if (!response.body) {
+              throw new Error(
+                `Failed to download "${fileURL}": empty response body`
+              )
+            }
+
+            const reader = response.body.getReader()
+
+            try {
+              while (true) {
+                this.throwIfAborted(rangeAbortController.signal)
+                const { done, value } = await reader.read()
+
+                if (done) {
+                  break
+                }
+
+                if (!value || value.byteLength === 0) {
+                  continue
+                }
+
+                const chunk = Buffer.from(value)
+                await fileHandle.write(chunk, 0, chunk.length, writePosition)
+                inactivityController.refresh()
+                writePosition += chunk.length
+                range.position = writePosition
+                downloadedBytes += chunk.length
+                reporter.update(downloadedBytes)
+
+                if (writePosition >= nextCheckpointAt) {
+                  this.persistParallelDownloadState(statePath, state)
+                  nextCheckpointAt =
+                    writePosition + PARALLEL_DOWNLOAD_CHECKPOINT_BYTES
+                }
+              }
+            } finally {
+              await reader.cancel().catch(() => {})
+            }
+
+            if (writePosition !== range.end + 1) {
+              throw new Error(
+                `Incomplete ranged download for "${fileURL}" on bytes ${range.start}-${range.end}.`
+              )
+            }
+
+            this.persistParallelDownloadState(statePath, state)
+            return
+          } catch (error) {
+            range.position = writePosition
+            this.persistParallelDownloadState(statePath, state)
+
+            if (
+              this.isAbortError(error) ||
+              rangeAbortController.signal.aborted
+            ) {
+              throw error
+            }
+
+            const madeProgress = writePosition > requestStartPosition
+            consecutiveNoProgressFailures = madeProgress
+              ? 0
+              : consecutiveNoProgressFailures + 1
+
+            if (consecutiveNoProgressFailures > retryOptions.retries) {
+              throw error
+            }
+
+            if (!madeProgress) {
+              LogHelper.warning(
+                `Download connection made no progress; retrying (${consecutiveNoProgressFailures}/${retryOptions.retries}): ${String(error)}`
+              )
+            }
+            await this.sleep(
+              this.getRetryDelay(
+                Math.max(1, consecutiveNoProgressFailures),
+                retryOptions
+              )
             )
+          } finally {
+            inactivityController.dispose()
           }
-        })
-      )
+        }
+
+        throw new Error(
+          `Failed to download range ${range.start}-${range.end}.`
+        )
+      })
+
+    try {
+      await Promise.all(rangeTasks)
 
       if (downloadedBytes !== totalBytes) {
         throw new Error(
@@ -722,7 +1028,13 @@ export class NetworkHelper {
       await fileHandle.sync()
 
       return downloadedBytes
+    } catch (error) {
+      rangeAbortController.abort(error)
+      await Promise.allSettled(rangeTasks)
+      this.persistParallelDownloadState(statePath, state)
+      throw error
     } finally {
+      signal?.removeEventListener('abort', abortRanges)
       await fileHandle.close()
     }
   }
@@ -734,6 +1046,7 @@ export class NetworkHelper {
   ): Promise<void> {
     const retryOptions = options.retry
     const temporaryPath = `${destinationPath}.download`
+    const parallelStatePath = this.getParallelDownloadStatePath(temporaryPath)
     const legacyTemporaryPath = `${destinationPath}.ipull`
     const abortController = new AbortController()
     const { signal } = abortController
@@ -751,8 +1064,6 @@ export class NetworkHelper {
           finish: () => {},
           fail: () => {}
         }
-        let shouldCleanupTemporaryFile = false
-
         try {
           this.throwIfAborted(signal)
           const probe = await this.probeRemoteFile(
@@ -766,17 +1077,12 @@ export class NetworkHelper {
             probe.totalBytes >= PARALLEL_DOWNLOAD_MIN_BYTES &&
             options.parallelStreams > 1
 
-          shouldCleanupTemporaryFile = useParallelDownload
-
           await Promise.all([
             fs.promises.mkdir(path.dirname(destinationPath), {
               recursive: true
             }),
             fs.promises.rm(destinationPath, { force: true }),
-            fs.promises.rm(legacyTemporaryPath, { force: true }),
-            ...(useParallelDownload
-              ? [fs.promises.rm(temporaryPath, { force: true })]
-              : [])
+            fs.promises.rm(legacyTemporaryPath, { force: true })
           ])
 
           reporter = this.createProgressReporter(
@@ -792,6 +1098,8 @@ export class NetworkHelper {
                 probe.totalBytes as number,
                 options.parallelStreams,
                 reporter,
+                retryOptions,
+                options.inactivityTimeoutMs,
                 signal
               )
             : await this.downloadSequential(
@@ -799,12 +1107,14 @@ export class NetworkHelper {
                 temporaryPath,
                 probe,
                 reporter,
+                options.inactivityTimeoutMs,
                 signal
               )
 
           this.throwIfAborted(signal)
           await this.movePath(temporaryPath, destinationPath)
           await this.ensureDownloadedFilePath(destinationPath)
+          await fs.promises.rm(parallelStatePath, { force: true })
           reporter.finish(downloadedBytes)
 
           return
@@ -813,10 +1123,6 @@ export class NetworkHelper {
 
           await fs.promises.rm(destinationPath, { force: true })
 
-          if (shouldCleanupTemporaryFile) {
-            await fs.promises.rm(temporaryPath, { force: true })
-          }
-
           if (this.isAbortError(error) || signal.aborted) {
             throw this.createAbortError()
           }
@@ -824,6 +1130,10 @@ export class NetworkHelper {
           if (attempt === retryOptions.retries) {
             throw error
           }
+
+          LogHelper.warning(
+            `Download attempt ${attempt + 1} failed; retrying: ${String(error)}`
+          )
 
           await this.sleep(this.getRetryDelay(attempt + 1, retryOptions))
         }
