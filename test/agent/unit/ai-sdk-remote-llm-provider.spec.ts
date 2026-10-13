@@ -969,6 +969,120 @@ describe('AISDKRemoteLLMProvider', () => {
     provider.dispose()
   })
 
+  it.each([false, true])('finishes terminal responses on open connections and retains usage (subscription=%s)', async (subscription) => {
+    if (subscription) {
+      vi.spyOn(globalThis, 'fetch').mockImplementation(websocketMocks.fetch)
+      accountMocks.getCredentials.mockResolvedValue({
+        auth_kind: 'chatgpt', auth_flow: 'codex',
+        access_token: 'fixture-token', chatgpt_account_id: 'workspace'
+      })
+    }
+
+    const item = {
+      type: 'message', id: 'msg_done', role: 'assistant', status: 'completed',
+      content: [{ type: 'output_text', text: 'Ready 👋', annotations: [] }]
+    }
+    const response = {
+      id: 'resp_done', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
+      output: [item], usage: {
+        input_tokens: 100, output_tokens: 10, total_tokens: 110,
+        input_tokens_details: { cached_tokens: 80 }
+      }
+    }
+    const events = [
+      { type: 'response.created', response: { ...response, status: 'in_progress', output: [] } },
+      { type: 'response.output_item.added', output_index: 0, item: { ...item, content: [] } },
+      { type: 'response.output_text.delta', item_id: item.id, output_index: 0, content_index: 0, delta: 'Ready 👋' },
+      { type: 'response.output_item.done', output_index: 0, item },
+      { type: 'response.completed', response }
+    ]
+    const bytes = new TextEncoder().encode(events.map((event) =>
+      `event: ${event.type}\r\ndata: ${JSON.stringify(event)}\r\n\r\n`
+    ).join(''))
+    const cancel = vi.fn()
+    websocketMocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(controller): void {
+        // Network chunks can split JSON, UTF-8 characters and SSE delimiters.
+        for (let offset = 0; offset < bytes.length; offset += 7) {
+          controller.enqueue(bytes.slice(offset, offset + 7))
+        }
+      },
+      cancel
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model: response.model,
+      ...(subscription ? { accountCredentials: {
+        auth_kind: 'chatgpt', auth_flow: 'codex', access_token: 'fixture-token',
+        chatgpt_account_id: 'workspace', account_id: 'openai.test'
+      } } : {})
+    })
+    const onStreamEvent = vi.fn()
+
+    try {
+      const result = normalizeCompletionResultForOpenAICompatibleProvider(
+        await provider.runChatCompletion('Report the result.', {
+          ...createCompletionParams(null), shouldStream: true, onStreamEvent
+        })
+      )
+
+      expect(result.rawResult).toBe('Ready 👋')
+      expect(result.usedInputTokens).toBe(100)
+      expect(result.usedOutputTokens).toBe(10)
+      expect(result.accounting?.cachedInputTokens).toBe(80)
+      expect(onStreamEvent).toHaveBeenCalledWith({ type: 'finish' })
+      await vi.waitFor(() => expect(cancel).toHaveBeenCalledOnce())
+    } finally {
+      provider.dispose()
+    }
+  }, 2_000)
+
+  it('keeps text-end provisional until terminal completion arrives', async () => {
+    let controller!: ReadableStreamDefaultController<Uint8Array>
+    websocketMocks.fetch.mockResolvedValueOnce(new Response(new ReadableStream({
+      start(streamController): void {
+        controller = streamController
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    const provider = new OpenAILLMProvider({
+      ...TARGET, provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol'
+    })
+    const item = {
+      type: 'message', id: 'msg_pending', role: 'assistant', status: 'completed',
+      content: [{ type: 'output_text', text: 'Provisional.', annotations: [] }]
+    }
+    const response = {
+      id: 'resp_pending', created_at: 1, model: 'gpt-6.1-sol', status: 'completed',
+      output: [item], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 }
+    }
+    const onStreamEvent = vi.fn()
+    let settled = false
+    const pending = provider.runChatCompletion('Report.', {
+      ...createCompletionParams(null), shouldStream: true, onStreamEvent
+    }).finally(() => {
+      settled = true
+    })
+    const send = (event: Record<string, unknown>): void => {
+      controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify(event)}\n\n`))
+    }
+
+    try {
+      send({ type: 'response.created', response: { ...response, status: 'in_progress', output: [] } })
+      send({ type: 'response.output_item.added', output_index: 0, item: { ...item, content: [] } })
+      send({ type: 'response.output_text.delta', item_id: item.id, output_index: 0, content_index: 0, delta: 'Provisional.' })
+      send({ type: 'response.output_item.done', output_index: 0, item })
+      await vi.waitFor(() => expect(onStreamEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'text-end' })
+      ))
+      expect(settled).toBe(false)
+      expect(onStreamEvent).not.toHaveBeenCalledWith({ type: 'finish' })
+
+      send({ type: 'response.completed', response })
+      expect((await pending).data.choices[0].message.content).toBe('Provisional.')
+    } finally {
+      provider.dispose()
+    }
+  }, 2_000)
+
   it('finishes an incomplete websocket response even when the adapter leaves it open', async () => {
     const response = {
       id: 'resp_limited', created_at: 1, model: 'gpt-6.1-sol', status: 'incomplete',

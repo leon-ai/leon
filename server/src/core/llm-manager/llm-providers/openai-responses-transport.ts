@@ -19,10 +19,14 @@ const CHATGPT_UNSUPPORTED_FIELDS = [
   'user',
   'previous_response_id'
 ]
-const OPENAI_UNCLOSED_TERMINAL_EVENTS = new Set([
+const OPENAI_TERMINAL_EVENTS = new Set([
+  'response.completed',
   'response.failed',
-  'response.incomplete'
+  'response.incomplete',
+  'error'
 ])
+const SSE_EVENT_BOUNDARY = /\r\n\r\n|\n\n|\r\r/
+const SSE_LINE_BOUNDARY = /\r\n|\r|\n/
 
 /**
  * Shares authenticated Responses transport between inference and auxiliary requests.
@@ -45,9 +49,11 @@ export class OpenAIResponsesTransport {
     input: Parameters<typeof globalThis.fetch>[0],
     init?: RequestInit
   ): Promise<Response> {
-    return this.accountId
+    const response = await (this.accountId
       ? this.fetchChatGPT(input, init)
-      : this.fetchOpenAI(input, init)
+      : this.fetchOpenAI(input, init))
+
+    return this.finishResponseStream(response)
   }
 
   /**
@@ -142,34 +148,7 @@ export class OpenAIResponsesTransport {
         })
       }
 
-      if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
-        return response
-      }
-
-      // The adapter emits one SSE chunk per WebSocket message, but leaves
-      // failed/incomplete responses open. Forward their usage before closing.
-      const decoder = new TextDecoder()
-      const body = response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({
-        transform: (chunk, controller): void => {
-          controller.enqueue(chunk)
-          const line = decoder.decode(chunk).trim()
-          if (!line.startsWith('data: ') || line === 'data: [DONE]') {
-            return
-          }
-          let event: Record<string, unknown>
-          try {
-            event = JSON.parse(line.slice('data: '.length)) as Record<string, unknown>
-          } catch {
-            return
-          }
-          if (OPENAI_UNCLOSED_TERMINAL_EVENTS.has(String(event['type']))) {
-            this.close()
-            controller.terminate()
-          }
-        }
-      }))
-
-      return new Response(body, { status: response.status, headers: response.headers })
+      return response
     } catch (error) {
       // A rejected handshake or canceled opening must not leave reusable state.
       transport.close()
@@ -178,6 +157,67 @@ export class OpenAIResponsesTransport {
       }
       throw error
     }
+  }
+
+  /**
+   * Let the SDK flush terminal usage without waiting for a remote connection to close.
+   */
+  private finishResponseStream(response: Response): Response {
+    if (!response.body || !response.headers.get('content-type')?.includes('text/event-stream')) {
+      return response
+    }
+
+    let pending = ''
+    const body = response.body
+      .pipeThrough(new TextDecoderStream())
+      .pipeThrough(new TransformStream<string, string>({
+        transform: (chunk, controller): void => {
+          pending += chunk
+          let boundary = SSE_EVENT_BOUNDARY.exec(pending)
+
+          while (boundary) {
+            const end = boundary.index + boundary[0].length
+            const frame = pending.slice(0, end)
+            pending = pending.slice(end)
+            controller.enqueue(frame)
+
+            const data = frame.split(SSE_LINE_BOUNDARY)
+              .filter((line) => line.startsWith('data:'))
+              .map((line) => line.slice('data:'.length).trimStart())
+              .join('\n')
+            let event: Record<string, unknown> | undefined
+
+            try {
+              event = JSON.parse(data) as Record<string, unknown>
+            } catch {
+              // Leave protocol validation and provider errors to the SDK.
+            }
+
+            if (event && OPENAI_TERMINAL_EVENTS.has(String(event['type']))) {
+              if (event['type'] !== 'response.completed') {
+                this.close()
+              }
+
+              controller.terminate()
+              return
+            }
+
+            boundary = SSE_EVENT_BOUNDARY.exec(pending)
+          }
+        },
+        flush(controller): void {
+          if (pending) {
+            controller.enqueue(pending)
+          }
+        }
+      }))
+      .pipeThrough(new TextEncoderStream())
+
+    return new Response(body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers
+    })
   }
 
   private getOpenAIWebSocketFetch(): ReturnType<typeof createWebSocketFetch> {
