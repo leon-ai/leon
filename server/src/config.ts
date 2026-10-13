@@ -140,9 +140,13 @@ const DEFAULT_CONFIG: LeonConfig = {
         }
       },
       aimlapi: {
-        base_url: 'https://api.aimlapi.com/v1',
+        base_url: getRequiredLLMProviderAccountConfig(
+          LLMProviders.AIMLAPI
+        ).baseURL,
         api_key: {
-          env: 'LEON_AIMLAPI_API_KEY'
+          env: getRequiredLLMProviderAccountConfig(
+            LLMProviders.AIMLAPI
+          ).apiKeyEnv
         }
       },
       openai: {
