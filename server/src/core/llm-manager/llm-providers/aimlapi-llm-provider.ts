@@ -1,9 +1,10 @@
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
-import { CONFIG_MANAGER } from '@/config'
+import { LLMProviders } from '@/core/llm-manager/types'
 
-const DEFAULT_BASE_URL = 'https://api.aimlapi.com/v1'
-const OFFICIAL_API_HOSTNAME = 'api.aimlapi.com'
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.AIMLAPI)
+const OFFICIAL_API_HOSTNAME = new URL(PROVIDER_CONFIG.baseURL).hostname
 
 /**
  * Attribution sent with AI/ML API requests. `HTTP-Referer` and `X-Title`
@@ -17,10 +18,6 @@ const AIMLAPI_ATTRIBUTION_HEADERS: Readonly<Record<string, string>> =
     'X-AIMLAPI-Source': 'agent/leon',
     'X-AIMLAPI-Partner-ID': 'part_lcAMsJBHJpF6eW4JFtT3pJfW'
   })
-
-function resolveBaseURL(): string {
-  return CONFIG_MANAGER.getProviderBaseURL('aimlapi') || DEFAULT_BASE_URL
-}
 
 /**
  * The Base URL is user-configurable, so attribution is scoped to the official
@@ -64,12 +61,16 @@ export function buildAIMLAPIHeaders(baseURL: string): Record<string, string> {
  */
 export default class AIMLAPILLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
-    const baseURL = resolveBaseURL()
+    const baseURL = AISDKRemoteLLMProvider.resolveBaseURL(
+      PROVIDER_CONFIG,
+      target.accountCredentials
+    )
 
     super({
-      name: 'AI/ML API LLM Provider',
-      providerName: 'aimlapi',
-      apiKeyEnv: 'LEON_AIMLAPI_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
       baseURL,
       flavor: 'openai-compatible',
