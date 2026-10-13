@@ -27,6 +27,8 @@ import {
 import { LogHelper } from '@/helpers/log-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { LOCAL_LLM_CONTEXT_WINDOW_TOKENS } from '@/core/llm-manager/model-context-windows'
+import { readCompletionAccounting, type CompletionAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { recordInferenceUsage } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
 
 const DEFAULT_LLAMACPP_BASE_URL =
@@ -391,11 +393,16 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   private buildDirectRequestConfig(
     completionParams: CompletionParams
   ): Record<string, unknown> {
+    completionParams.signal?.throwIfAborted()
+    const apiKey = CONFIG_MANAGER.getProviderAPIKey('llamacpp')
+
+    this.recordInference(LlamaCPPLLMProvider.getChatCompletionsURL(), apiKey || undefined)
+
     return {
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${
-          CONFIG_MANAGER.getProviderAPIKey('llamacpp') || 'Bearer no-key'
+          apiKey || 'Bearer no-key'
         }`
       },
       ...(typeof completionParams.timeout === 'number'
@@ -411,8 +418,10 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
   ): Promise<Record<string, unknown>> {
     let text = ''
     let reasoning = ''
-    let promptTokens = 0
-    let completionTokens = 0
+    let promptTokens: number | undefined
+    let hasPromptUsage = false
+    let completionTokens: number | undefined
+    let accounting: CompletionAccounting = {}
     let predictedPerSecond = 0
     let predictedMs = 0
     let finishReason = ''
@@ -426,8 +435,10 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
           ? (chunk['usage'] as Record<string, unknown>)
           : null
       if (usage) {
+        accounting = { ...accounting, ...readCompletionAccounting(usage) }
         if (typeof usage['prompt_tokens'] === 'number') {
           promptTokens = usage['prompt_tokens'] as number
+          hasPromptUsage = true
         }
         if (typeof usage['completion_tokens'] === 'number') {
           completionTokens = usage['completion_tokens'] as number
@@ -440,8 +451,10 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
           : null
 
       if (timings) {
-        if (typeof timings['prompt_n'] === 'number') {
-          promptTokens = timings['prompt_n'] as number
+        // Timing counts exclude cached tokens; usage already contains the total.
+        if (!hasPromptUsage && typeof timings['prompt_n'] === 'number') {
+          promptTokens = timings['prompt_n'] +
+            (typeof timings['cache_n'] === 'number' ? timings['cache_n'] : 0)
         }
         if (typeof timings['predicted_n'] === 'number') {
           completionTokens = timings['predicted_n'] as number
@@ -453,6 +466,12 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
           predictedMs = timings['predicted_ms'] as number
         }
       }
+
+      recordInferenceUsage({
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        accounting
+      })
 
       const choices = Array.isArray(chunk['choices'])
         ? (chunk['choices'] as Array<Record<string, unknown>>)
@@ -576,7 +595,8 @@ export default class LlamaCPPLLMProvider extends AISDKRemoteLLMProvider {
           ],
           usage: {
             prompt_tokens: promptTokens,
-            completion_tokens: completionTokens
+            completion_tokens: completionTokens,
+            accounting
           },
           ...((predictedMs > 0 || predictedPerSecond > 0 ||
             (firstStreamBlockAt !== null && lastStreamBlockAt !== null))

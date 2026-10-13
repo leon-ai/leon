@@ -33,6 +33,11 @@ export enum ComputerUseTextInputMode {
   Replace = 'replace'
 }
 
+export enum ComputerUseTextInputMethod {
+  Type = 'type',
+  Paste = 'paste'
+}
+
 export enum ComputerUseInteractionMode {
   Background = 'background',
   Visible = 'visible'
@@ -62,7 +67,6 @@ export type PreferredApplicationsResolver = (
 
 export interface ManagedComputerUseRuntime {
   driver: ComputerUseDriver
-  browserInspectionAllowed: boolean
   sessionAwareActions: Set<string>
   foregroundCapableActions: Set<string>
   zoomCapableActions: Set<string>
@@ -82,10 +86,18 @@ export interface ComputerUseImageDimensions {
 export interface ComputerUseImageTransform {
   source: ComputerUseImageDimensions
   model: ComputerUseImageDimensions
+  artifactPath?: string
+  // Local desktop crops map back to the full desktop without native zoom state.
+  sourceOffset?: { x: number, y: number }
   /**
    * Cua owns padded crop offsets; supported input must use its zoom mapping.
    */
   fromZoom?: boolean
+}
+
+export enum ComputerUseZoomPurpose {
+  Act = 'act',
+  Read = 'read'
 }
 
 export interface PersistedComputerUseImages {

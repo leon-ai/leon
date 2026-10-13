@@ -3,6 +3,7 @@ import type {
 } from 'node-llama-cpp'
 
 import type { MessageLog } from '@/types'
+import type { SharedV4ProviderOptions } from '@ai-sdk/provider'
 
 export enum LLMDuties {
   Inference = 'inference',
@@ -17,6 +18,15 @@ export enum LLMDuties {
   IntentFallback = 'intent-fallback',
   RAG = 'rag',
   NLUParaphraser = 'nlu-paraphraser'*/
+}
+
+export enum InferencePurpose {
+  SessionTitle = 'session-title',
+  Memory = 'memory',
+  OwnerProfile = 'owner-profile',
+  SelfModel = 'self-model',
+  Pulse = 'pulse',
+  ContextCompaction = 'context-compaction'
 }
 
 export enum LLMProviders {
@@ -47,19 +57,55 @@ export enum SlotFillingStatus {
 }
 
 /**
- * Canonical message format used by the agent loop. Tool calls and results
- * stay in their protocol roles instead of being rewritten into
- * a phase prompt before every inference.
+ * Encoded evidence carried by owner messages or tool results.
+ */
+export interface AgentModelFile {
+  dataBase64: string
+  mediaType: string
+  filename?: string
+  visualDetail?: 'auto' | 'low' | 'high'
+}
+
+/**
+ * Provider-owned reasoning state retained for tool-call replay, never displayed.
+ */
+export interface ProviderReasoningItem {
+  provider: LLMProviders
+  id: string
+  text: string
+  encryptedContent?: string
+  binding?: string
+  providerOptions?: SharedV4ProviderOptions
+}
+
+/**
+ * Canonical provider window plus recoverable evidence for provider changes.
+ */
+export interface ProviderCompactionContext {
+  provider: LLMProviders
+  model: string
+  binding: string
+  output: Record<string, unknown>[]
+  estimatedTokens: number
+  sourceTranscript: AgentToolTranscriptMessage[]
+}
+
+/**
+ * Canonical agent transcript. Preserve tool protocol roles and attachments
+ * instead of rewriting each exchange into a text-only phase prompt.
  */
 export type AgentToolTranscriptMessage =
   | {
       role: 'user'
       content: string
+      files?: AgentModelFile[]
     }
   | {
       role: 'assistant'
       content: string
       reasoning?: string
+      reasoningItems?: ProviderReasoningItem[]
+      compactionContext?: ProviderCompactionContext
       toolCalls?: OpenAIToolCall[]
     }
   | {
@@ -67,12 +113,7 @@ export type AgentToolTranscriptMessage =
       toolCallId: string
       toolName: string
       content: string
-      files?: Array<{
-        dataBase64: string
-        mediaType: string
-        filename?: string
-        visualDetail?: 'auto' | 'low' | 'high'
-      }>
+      files?: AgentModelFile[]
     }
 
 export type PromptOrChatHistory = string | AgentToolTranscriptMessage[]
@@ -133,20 +174,88 @@ export interface LLMPromptAbortReason {
   delayMs: number
 }
 
+/**
+ * Transport and protocol progress without prompt content or credentials.
+ */
+export interface CompletionStreamEvent {
+  type: string
+  transport?: 'http' | 'websocket'
+  requestId?: string
+  responseId?: string
+  toolCallId?: string
+  providerExecuted?: boolean
+  preliminary?: boolean
+}
+
+export enum CompletionFailureKind {
+  Timeout = 'timeout',
+  Provider = 'provider'
+}
+
+/**
+ * Attempt timings distinguish transport waits, generation and retries without prompt content.
+ */
+export interface CompletionAttemptTiming {
+  attemptId: string
+  startedAt: number
+  provider: LLMProviders
+  model?: string | undefined
+  duty: LLMDuties
+  reasoningEffort?: LLMReasoningEffort | undefined
+  serviceTier?: LLMServiceTier | undefined
+  transport: 'http' | 'websocket' | 'local'
+  outcome: string
+  failureKind?: CompletionFailureKind | undefined
+  connectionErrorCode?: string | undefined
+  requestId?: string | undefined
+  responseId?: string | undefined
+  elapsedMs: number
+  inferenceTimeoutMs: number
+  streamIdleTimeoutMs: number
+  generationStartMs?: number | undefined
+  streamOpenMs?: number | undefined
+  firstEventMs?: number | undefined
+  firstTokenMs?: number | undefined
+  firstToolInputMs?: number | undefined
+  lastEvent: string
+  idleMs?: number | undefined
+  transportIdleMs?: number | undefined
+  outputIdleMs?: number | undefined
+}
+
 export interface CompletionParams {
   dutyType: LLMDuties
+  usagePurpose?: InferencePurpose
   systemPrompt: string
   maxTokens?: number | undefined
   thoughtTokensBudget?: number | undefined
   temperature?: number | undefined
   seed?: number | undefined
   timeout?: number
+  /**
+   * Maximum silence after output starts; independent of initial inference.
+   */
+  streamIdleTimeout?: number
   signal?: AbortSignal
+  /**
+   * Cancels the whole request, including retries after an attempt-level abort.
+   */
+  cancellationSignal?: AbortSignal
   maxRetries?: number
   data?: Record<string, unknown> | null
   history?: MessageLog[]
   onToken?: (tokens: Token[] | string) => void
   onReasoningToken?: (reasoningChunk: string) => void
+  onStreamEvent?: (event: CompletionStreamEvent) => void
+  /**
+   * Reports dispatch and terminal timings for every attempt, including retries.
+   */
+  onAttempt?: (timing: CompletionAttemptTiming) => void
+  /**
+   * Provisional function arguments for display while the model is generating.
+   * Execute only the completed tool calls returned by the completion.
+   */
+  onToolCall?: (toolCall: OpenAIToolCall) => void
   shouldStream?: boolean
   /**
    * Optional provider hint to disable thinking/reasoning for a request.
@@ -183,6 +292,10 @@ export interface CompletionParams {
    * state. Useful for background/auxiliary inferences.
    */
   trackProviderErrors?: boolean
+  /**
+   * Disables automatic provider compaction during portable context recovery.
+   */
+  disableContextCompaction?: boolean
   /**
    * Internal retry budget for remote provider failures handled by the central
    * LLM provider wrapper.

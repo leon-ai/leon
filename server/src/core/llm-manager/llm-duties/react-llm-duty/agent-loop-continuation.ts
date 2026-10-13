@@ -1,11 +1,12 @@
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
 
-import type { ExecutionRecord, TrackedPlanStep } from './types'
+import type { ExecutionRecord, TrackedPlanStep } from './agent-types'
 import {
   createAgentTextPreview,
+  retainRecentToolImages,
   splitAgentTranscriptForSummary
 } from './agent-context-budget'
-import { parseToolCallArguments } from './utils'
+import { parseToolCallArguments } from './agent-utils'
 
 const AGENT_CONTINUATION_VERSION = 5
 const AGENT_CONTINUATION_TTL_MS = 30 * 60 * 1_000
@@ -26,6 +27,8 @@ export interface AgentLoopContinuationState {
   trackedSteps: TrackedPlanStep[]
   executionHistory: ExecutionRecord[]
   loadedToolkitIds: string[]
+  loadedFunctionNames?: string[]
+  loadedToolNames?: string[]
   transcript: AgentToolTranscriptMessage[]
   activeSkillId: string | null
 }
@@ -35,6 +38,8 @@ export interface AgentContinuityCheckpointInput {
   trackedSteps: TrackedPlanStep[]
   executionHistory: ExecutionRecord[]
   loadedToolkitIds: Iterable<string>
+  loadedFunctionNames?: Iterable<string>
+  loadedToolNames?: Iterable<string>
   activeSkillId: string | null
   clarificationQuestion?: string
 }
@@ -164,6 +169,10 @@ export function buildAgentContinuityCheckpoint(
       recent: recentExecutions
     },
     loaded_toolkits: [...params.loadedToolkitIds],
+    ...(params.loadedToolNames ? { loaded_tools: [...params.loadedToolNames] } : {}),
+    ...(params.loadedFunctionNames
+      ? { loaded_functions: [...params.loadedFunctionNames] }
+      : {}),
     active_skill_id: params.activeSkillId,
     artifact_paths: getArtifactPaths(params.executionHistory),
     ...(params.clarificationQuestion
@@ -205,13 +214,20 @@ export async function buildAgentContinuationTranscript(
   const checkpoint = checkpointInput
     ? buildAgentContinuityCheckpoint(checkpointInput)
     : null
+  if (rawTranscript.some((message) =>
+    message.role === 'assistant' && message.compactionContext
+  )) {
+    // A pause persists the native window without trying to summarize ciphertext.
+    return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
+  }
+
   const parts = splitAgentTranscriptForSummary(rawTranscript)
   if (!parts) return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
 
-  // The model needs the textual evidence, not historical image bytes.
+  // The summary needs textual evidence, not image bytes or opaque replay data.
   // Full tool observations remain in the execution history and artifact logs.
   const history = JSON.stringify(parts.older, (key, value) =>
-    key === 'dataBase64' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
   )
   const summary = await summarize(history)
   if (!summary?.trim() && !checkpoint) {
@@ -237,7 +253,7 @@ export async function buildAgentContinuationTranscript(
   ]
   // Compare text sizes consistently; retained images already have a fixed cap.
   const replacementText = JSON.stringify(replacement, (key, value) =>
-    key === 'dataBase64' ? undefined : value
+    key === 'dataBase64' || key === 'encryptedContent' ? undefined : value
   )
   if (replacementText.length >= history.length) {
     return checkpoint ? [...rawTranscript, checkpoint] : rawTranscript
@@ -264,8 +280,12 @@ export function createAgentLoopContinuationState(
     trackedSteps: structuredClone(params.trackedSteps),
     executionHistory: structuredClone(params.executionHistory),
     loadedToolkitIds,
+    ...(params.loadedToolNames ? { loadedToolNames: [...params.loadedToolNames] } : {}),
+    ...(params.loadedFunctionNames
+      ? { loadedFunctionNames: [...params.loadedFunctionNames] }
+      : {}),
     activeSkillId: params.activeSkillId,
-    transcript: structuredClone(params.transcript)
+    transcript: structuredClone(retainRecentToolImages(params.transcript))
   }
 }
 
@@ -286,6 +306,12 @@ export function isAgentLoopContinuationStateValid(
     Array.isArray(state.executionHistory) &&
     Array.isArray(state.loadedToolkitIds) &&
     state.loadedToolkitIds.every((toolkitId) => typeof toolkitId === 'string') &&
+    (state.loadedToolNames === undefined ||
+      (Array.isArray(state.loadedToolNames) &&
+        state.loadedToolNames.every((name) => typeof name === 'string'))) &&
+    (state.loadedFunctionNames === undefined ||
+      (Array.isArray(state.loadedFunctionNames) &&
+        state.loadedFunctionNames.every((name) => typeof name === 'string'))) &&
     (state.activeSkillId === null || typeof state.activeSkillId === 'string') &&
     Array.isArray(state.transcript) &&
     state.transcript.length > 0

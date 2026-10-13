@@ -7,8 +7,10 @@ import type { MessageLog } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import {
   LLMDuties,
+  InferencePurpose,
   LLMProviders,
-  type CompletionParams
+  type CompletionParams,
+  type AgentToolTranscriptMessage
 } from '@/core/llm-manager/types'
 import {
   getActiveConversationSessionId,
@@ -70,6 +72,12 @@ interface SessionUpdateInput {
   title?: string
   isPinned?: boolean
   modelTarget?: string | null
+}
+
+interface PendingAgentMessage {
+  prepare: () => Promise<AgentToolTranscriptMessage>
+  resolve: (consumed: boolean) => void
+  reject: (error: unknown) => void
 }
 
 function now(): number {
@@ -183,6 +191,101 @@ export class ConversationSessionManager {
   public readonly events = new EventEmitter()
   private index: ConversationSessionIndex | null = null
   private readonly sessionQueues = new Map<string, Promise<void>>()
+  private readonly agentMessageQueues = new Map<string, {
+    pending: PendingAgentMessage[]
+    controller: AbortController
+  }>()
+
+  /**
+   * Interrupts stale execution so the active agent can apply owner messages.
+   * Explicit cancellation also ends retained executions from the same turn.
+   * Unconsumed messages return to ordinary session processing when the run ends.
+   */
+  public openAgentTurn(sessionId: string): {
+    signal: AbortSignal
+    drainOwnerMessages: () => Promise<AgentToolTranscriptMessage[]>
+    getOwnerMessageSignal: () => AbortSignal
+    cancelExecutions: () => void
+    close: () => void
+  } {
+    if (this.agentMessageQueues.has(sessionId)) {
+      throw new Error('An agent turn is already active in this session.')
+    }
+
+    const pending: PendingAgentMessage[] = []
+    const turn = { pending, controller: new AbortController() }
+    const executionController = new AbortController()
+    this.agentMessageQueues.set(sessionId, turn)
+
+    return {
+      signal: executionController.signal,
+      // Retained executions may outlive the message revision that started them.
+      cancelExecutions: (): void => {
+        executionController.abort(new Error('Task canceled by the owner.'))
+      },
+      getOwnerMessageSignal: (): AbortSignal => turn.controller.signal,
+      drainOwnerMessages: async (): Promise<AgentToolTranscriptMessage[]> => {
+        const messages: AgentToolTranscriptMessage[] = []
+
+        while (pending.length > 0) {
+          const entry = pending.shift()!
+
+          try {
+            messages.push(await entry.prepare())
+            entry.resolve(true)
+          } catch (error) {
+            // Invalid incoming messages fail their sender without ending the agent.
+            entry.reject(error)
+          }
+        }
+
+        // Each reassessment gets a fresh signal after all queued input is applied.
+        if (turn.controller.signal.aborted) {
+          turn.controller = new AbortController()
+        }
+
+        return messages
+      },
+      close: (): void => {
+        if (this.agentMessageQueues.get(sessionId) !== turn) {
+          return
+        }
+
+        this.agentMessageQueues.delete(sessionId)
+
+        for (const entry of pending.splice(0)) {
+          entry.resolve(false)
+        }
+      }
+    }
+  }
+
+  /**
+   * Queues a message for the current agent, or leaves it to normal turn routing.
+   */
+  public queueAgentMessage(
+    sessionId: string,
+    prepare: () => Promise<AgentToolTranscriptMessage>
+  ): Promise<boolean> | null {
+    const turn = this.agentMessageQueues.get(sessionId)
+
+    if (!turn) {
+      return null
+    }
+
+    return new Promise((resolve, reject) => {
+      turn.pending.push({ prepare, resolve, reject })
+      // Stop stale inference and running tools before choosing the next action.
+      turn.controller.abort(new Error('New owner instructions require reassessment.'))
+    })
+  }
+
+  /**
+   * Keeps live typing active while follow-up messages join an agent turn.
+   */
+  public isAgentTurnActive(sessionId: string): boolean {
+    return this.agentMessageQueues.has(sessionId)
+  }
 
   public ensureReady(): ConversationSessionIndex {
     if (this.index) {
@@ -442,6 +545,7 @@ export class ConversationSessionManager {
     const titleResult = await this.runWithSession(sessionId, () =>
       LLM_PROVIDER.prompt(message, {
         dutyType: LLMDuties.Inference,
+        usagePurpose: InferencePurpose.SessionTitle,
         systemPrompt: SESSION_TITLE_SYSTEM_PROMPT,
         maxTokens: SESSION_TITLE_MAX_TOKENS,
         timeout: SESSION_TITLE_TIMEOUT_MS,

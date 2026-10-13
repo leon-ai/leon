@@ -10,6 +10,18 @@ export function serializeAgentTrace(
   includeDeveloperProvenance: boolean
 ): HTTPPluginAgentTrace {
   return {
+    ...(trace.inferences
+      ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
+      : {}),
+    ...(trace.progressMessages
+      ? {
+          progress_messages: trace.progressMessages.map((message) => ({
+            id: message.id,
+            content: message.content,
+            created_at: message.createdAt
+          }))
+        }
+      : {}),
     ...(trace.reasoningSummary
       ? { reasoning_summary: trace.reasoningSummary }
       : {}),
@@ -27,7 +39,17 @@ export function serializeAgentTrace(
     tool_calls: trace.toolCalls.map((toolCall) => ({
       id: toolCall.id,
       name: toolCall.name,
+      ...(toolCall.toolkitName ? { toolkit_name: toolCall.toolkitName } : {}),
+      ...(toolCall.toolName ? { tool_name: toolCall.toolName } : {}),
+      ...(toolCall.toolCallTitle
+        ? { tool_call_title: toolCall.toolCallTitle }
+        : {}),
       status: toolCall.status,
+      ...(toolCall.preparationStartedAt !== undefined
+        ? { preparation_started_at: toolCall.preparationStartedAt }
+        : {}),
+      ...(toolCall.startedAt !== undefined ? { started_at: toolCall.startedAt } : {}),
+      ...(toolCall.durationMs !== undefined ? { duration_ms: toolCall.durationMs } : {}),
       ...(toolCall.toolkitIconName
         ? { toolkit_icon_name: toolCall.toolkitIconName }
         : {}),
@@ -36,6 +58,9 @@ export function serializeAgentTrace(
         : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
+      ...(toolCall.commandOutput !== undefined ? { command_output: toolCall.commandOutput } : {}),
+      ...(toolCall.lastOutputAt !== undefined ? { last_output_at: toolCall.lastOutputAt } : {}),
+      ...(toolCall.progressMessage ? { progress_message: toolCall.progressMessage } : {}),
       ...(toolCall.stepLabel ? { step_label: toolCall.stepLabel } : {}),
       ...(toolCall.errorMessage
         ? { error_message: toolCall.errorMessage }
@@ -56,6 +81,18 @@ export function deserializeAgentTrace(
   trace: HTTPPluginAgentTrace
 ): AgentResponseTrace {
   return {
+    ...(trace.inferences
+      ? { inferences: trace.inferences.map((timing) => ({ ...timing })) }
+      : {}),
+    ...(trace.progress_messages
+      ? {
+          progressMessages: trace.progress_messages.map((message) => ({
+            id: message.id,
+            content: message.content,
+            createdAt: message.created_at
+          }))
+        }
+      : {}),
     reasoningSummary: trace.reasoning_summary || '',
     planSteps: trace.plan_steps.map((step) => ({ ...step })),
     ...(trace.plan_transitions
@@ -71,7 +108,17 @@ export function deserializeAgentTrace(
     toolCalls: trace.tool_calls.map((toolCall) => ({
       id: toolCall.id || toolCall.name,
       name: toolCall.name,
+      ...(toolCall.toolkit_name ? { toolkitName: toolCall.toolkit_name } : {}),
+      ...(toolCall.tool_name ? { toolName: toolCall.tool_name } : {}),
+      ...(toolCall.tool_call_title
+        ? { toolCallTitle: toolCall.tool_call_title }
+        : {}),
       status: toolCall.status,
+      ...(toolCall.preparation_started_at !== undefined
+        ? { preparationStartedAt: toolCall.preparation_started_at }
+        : {}),
+      ...(toolCall.started_at !== undefined ? { startedAt: toolCall.started_at } : {}),
+      ...(toolCall.duration_ms !== undefined ? { durationMs: toolCall.duration_ms } : {}),
       ...(toolCall.toolkit_icon_name
         ? { toolkitIconName: toolCall.toolkit_icon_name }
         : {}),
@@ -80,6 +127,9 @@ export function deserializeAgentTrace(
         : {}),
       ...(toolCall.input !== undefined ? { input: toolCall.input } : {}),
       ...(toolCall.output !== undefined ? { output: toolCall.output } : {}),
+      ...(toolCall.command_output !== undefined ? { commandOutput: toolCall.command_output } : {}),
+      ...(toolCall.last_output_at !== undefined ? { lastOutputAt: toolCall.last_output_at } : {}),
+      ...(toolCall.progress_message ? { progressMessage: toolCall.progress_message } : {}),
       ...(toolCall.step_label ? { stepLabel: toolCall.step_label } : {}),
       ...(toolCall.error_message
         ? { errorMessage: toolCall.error_message }

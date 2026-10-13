@@ -1,7 +1,7 @@
 {
   "$schema": "../../schemas/toolkit-schemas/toolkit.json",
   "name": "Structured Knowledge",
-  "description": "Tools for structured knowledge and facts.",
+  "description": "Tools for structured data, knowledge, and facts.",
   "icon_name": "database-2-line",
   "context_files": [
     "LEON.md",
@@ -10,6 +10,7 @@
   "tools": [
     "memory",
     "context",
-    "sessions"
+    "sessions",
+    "duckdb"
   ]
 }

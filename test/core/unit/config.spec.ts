@@ -82,6 +82,27 @@ describe('ConfigManager', () => {
     })
   })
 
+  it('removes optional entries without replacing unrelated configuration', async () => {
+    const configManager = await loadConfigManager()
+
+    await configManager.setValue(['llm', 'model_settings', 'test-model'], {})
+    await configManager.deleteValue(['llm', 'model_settings', 'test-model'])
+    expect(configManager.getConfig().llm.model_settings['test-model']).toBeUndefined()
+    expect(configManager.getConfig().llm.default).toBeNull()
+  })
+
+  it('defaults to agent routing and preserves explicit modes on reload', async () => {
+    const configManager = await loadConfigManager()
+    expect(configManager.getConfig().routing.mode).toBe('agent')
+    expect(process.env['LEON_ROUTING_MODE']).toBe('agent')
+
+    for (const mode of ['smart', 'controlled', 'agent']) {
+      fs.writeFileSync(profilePaths.configPath, YAML.stringify({ routing: { mode } }))
+      expect(configManager.reload().routing.mode).toBe(mode)
+      expect(process.env['LEON_ROUTING_MODE']).toBe(mode)
+    }
+  })
+
   it('defaults an omitted iteration limit and reloads an owner override', async () => {
     fs.writeFileSync(profilePaths.configPath, 'runtime:\n  pulse_enabled: false\n')
     const configManager = await loadConfigManager()
@@ -100,6 +121,15 @@ describe('ConfigManager', () => {
       await expect(loadConfigManager()).rejects.toThrow('runtime.agent_max_iterations')
     }
   )
+
+  it('loads device bindings and rejects empty bindings instead of falling back locally', async () => {
+    const tools = { 'computer_use.cua': 'owner-laptop' }
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({ satellite: { tools } }))
+    const manager = await loadConfigManager()
+    expect(manager.getConfig().satellite?.tools).toEqual(tools)
+    fs.writeFileSync(profilePaths.configPath, YAML.stringify({ satellite: { tools: { 'computer_use.cua': '' } } }))
+    expect(() => manager.reload()).toThrow('satellite.tools')
+  })
 
   it('returns profile config values and syncs runtime env mappings', async () => {
     process.env['LEON_PROFILE_TOKEN'] = 'client-secret'

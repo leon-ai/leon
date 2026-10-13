@@ -1,7 +1,7 @@
-import { pathToFileURL } from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
 
+import Ajv from 'ajv'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -12,9 +12,11 @@ import {
   shouldUseCuaSafeX11Input
 } from '@@/tools/computer_use/cua/src/nodejs/lib/cua-runtime'
 import { createComputerUseSetOfMarkPlan } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-set-of-mark'
-import { createCuaBrowserAuthorizationHost } from '@@/tools/computer_use/cua/src/nodejs/lib/cua/cua-browser-authorization'
-import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
-import { ComputerUseSetOfMarkMode } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
+import CuaTool from '@@/tools/computer_use/cua/src/nodejs/cua-tool'
+import {
+  ComputerUseInteractionMode,
+  ComputerUseSetOfMarkMode
+} from '@@/tools/computer_use/cua/src/nodejs/lib/types'
 import { resolveComputerUseInteractionMode } from '@@/tools/computer_use/cua/src/nodejs/lib/computer-use-settings'
 
 const PROFILE_NAME = 'computer-use-test'
@@ -31,8 +33,10 @@ interface ComputerUseManifest {
   }>
 }
 
+type DriverCall = (action: string, args: string) => Promise<Record<string, unknown>>
+
 interface FakeDriver {
-  callTool: ReturnType<typeof vi.fn>
+  callTool: ReturnType<typeof vi.fn<DriverCall>>
   isAvailable: ReturnType<typeof vi.fn>
   listToolsJson: ReturnType<typeof vi.fn>
   setAgentCursorEnabled: ReturnType<typeof vi.fn>
@@ -42,7 +46,7 @@ interface FakeDriver {
 
 function createDriver(result: Record<string, unknown>): FakeDriver {
   return {
-    callTool: vi.fn().mockResolvedValue(result),
+    callTool: vi.fn<DriverCall>().mockResolvedValue(result),
     isAvailable: vi.fn().mockReturnValue(true),
     listToolsJson: vi.fn().mockResolvedValue(
       JSON.stringify({
@@ -161,6 +165,8 @@ describe('CuaRuntime', () => {
   ])('resolves interaction settings %j to %s', (settings, expected) => {
     expect(resolveComputerUseInteractionMode({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'click', parameters: {},
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'interaction-settings',
       getSettings: () => settings as Record<string, unknown>
     })).toBe(expected)
   })
@@ -300,7 +306,9 @@ describe('CuaRuntime', () => {
     }
   })
 
-  it.each(['insert', 'replace'])('focuses once before typing with mode=%s', async (mode) => {
+  it.each([
+    ['insert', 'type'], ['replace', 'type'], ['insert', 'paste'], ['replace', 'paste']
+  ])('focuses once before text input with mode=%s method=%s', async (mode, method) => {
     const observationResult = {
       text: 'Desktop captured.',
       images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }],
@@ -345,6 +353,7 @@ describe('CuaRuntime', () => {
         y: 0,
         text: 'OpenRouter',
         mode,
+        method,
         capture_after: false
       },
       profileName: PROFILE_NAME,
@@ -355,7 +364,7 @@ describe('CuaRuntime', () => {
       'get_desktop_state',
       'click',
       ...(mode === 'replace' ? ['hotkey'] : []),
-      'type_text'
+      ...(method === 'paste' ? ['clipboard_write', 'hotkey'] : ['type_text'])
     ])
     expect(JSON.parse(driver.callTool.mock.calls[1]![1])).toEqual({
       target: { kind: 'desktop', display_id: 'primary' },
@@ -364,8 +373,13 @@ describe('CuaRuntime', () => {
     })
     expect(JSON.parse(driver.callTool.mock.calls.at(-1)![1])).toEqual({
       target: { kind: 'desktop', display_id: 'primary' },
-      text: 'OpenRouter'
+      ...(method === 'paste'
+        ? { keys: [process.platform === 'darwin' ? 'cmd' : 'ctrl', 'v'] }
+        : { text: 'OpenRouter' })
     })
+    if (method === 'paste') {
+      expect(JSON.parse(driver.callTool.mock.calls.at(-2)![1])).toEqual({ text: 'OpenRouter' })
+    }
 
     if (mode === 'replace') {
       expect(JSON.parse(driver.callTool.mock.calls[2]![1])).toEqual({
@@ -506,8 +520,8 @@ describe('CuaRuntime', () => {
     })
     const provider = new CuaRuntime(
       async () => driver as never,
-      () => 'background',
-      () => ({ music: 'Spotify' })
+      () => ComputerUseInteractionMode.Background,
+      () => ({ music: 'Spotify', coding: 'Codex' })
     )
 
     const result = await provider.execute({
@@ -531,7 +545,8 @@ describe('CuaRuntime', () => {
             { name: 'Brave' }
           ],
           preferred_apps: [
-            { activity: 'music', app_name: 'Spotify', available: true }
+            { activity: 'music', app_name: 'Spotify', found_in_desktop_inventory: true },
+            { activity: 'coding', app_name: 'Codex', found_in_desktop_inventory: false }
           ]
         }
       }
@@ -565,7 +580,9 @@ describe('CuaRuntime', () => {
       degraded: false
     })
     const provider = new CuaRuntime(
-      async () => driver as never
+      async () => driver as never,
+      () => ComputerUseInteractionMode.Background,
+      () => ({ browser: 'Brave' })
     )
 
     const result = await provider.execute({
@@ -590,6 +607,9 @@ describe('CuaRuntime', () => {
           }
         ],
         total_app_count: 2,
+        preferred_apps: [
+          { activity: 'browser', app_name: 'Brave', found_in_desktop_inventory: true }
+        ],
         matched_app_count: 1,
         returned_app_count: 1,
         omitted_app_count: 0
@@ -606,17 +626,17 @@ describe('CuaRuntime', () => {
 
   it('reports structured Cua refusals as tool failures', async () => {
     const driver = createDriver({
-      text: 'Existing-profile access requires authorization.',
+      text: 'Native input requires authorization.',
       images: [],
       structuredJson: JSON.stringify({
         status: 'refused',
         refusal: {
-          code: 'browser_consent_required',
-          message: 'Existing-profile access requires authorization.'
+          code: 'permission_denied',
+          message: 'Native input requires authorization.'
         }
       }),
       rawJson: '{}',
-      errorCode: 'browser_consent_required',
+      errorCode: 'permission_denied',
       isError: false,
       degraded: false
     })
@@ -627,7 +647,7 @@ describe('CuaRuntime', () => {
     const result = await provider.execute({
       toolkitId: 'computer_use',
       toolId: 'cua',
-      functionName: 'browser_prepare',
+      functionName: 'list_windows',
       parameters: {},
       profileName: PROFILE_NAME,
       conversationSessionId: 'session-1'
@@ -635,52 +655,12 @@ describe('CuaRuntime', () => {
 
     expect(result).toMatchObject({
       success: false,
-      message: 'Existing-profile access requires authorization.',
+      message: 'Native input requires authorization.',
       output: {
         success: false,
-        error_code: 'browser_consent_required'
+        error_code: 'permission_denied'
       }
     })
-  })
-
-  it('keeps GUI observation available after DevTools consent is refused', async () => {
-    const driver = createDriver({})
-    driver.callTool.mockImplementation(async (action: string) => ({
-      text: '', images: [], isError: false, degraded: false, rawJson: '{}',
-      structuredJson: JSON.stringify(action === 'get_browser_state'
-        ? { status: 'refused', refusal: {
-            code: 'browser_consent_required',
-            detail: { next_action: 'browser_prepare', reason: 'consumer_profile_endpoint_requires_grant' }
-          } }
-        : { pid: 42, window_id: 7, elements: [] })
-    }))
-    const provider = new CuaRuntime(async () => driver as never)
-    const input = {
-      toolkitId: 'computer_use', toolId: 'cua', profileName: PROFILE_NAME,
-      parameters: { pid: 42, window_id: 7, include_screenshot: false }
-    }
-    const refusal = await provider.execute({ ...input, functionName: 'get_browser_state' })
-    expect(refusal.success).toBe(false)
-    expect(refusal.output['error_code']).toBe('browser_consent_required')
-    expect(refusal.output['result']).toMatchObject({ refusal: {
-      detail: { reason: 'consumer_profile_endpoint_requires_grant' }
-    } })
-    expect(refusal.output['result']).toHaveProperty('refusal.detail.next_action', 'browser_prepare')
-    expect(refusal.output['recovery']).toContain('Direct browser inspection requires owner authorization')
-    expect(refusal.output['recovery']).toContain('use native accessibility and screenshots')
-    expect(refusal.output['recovery']).toContain('Never change this permission yourself')
-    expect(refusal.output['recovery']).toContain('use browser_prepare')
-    expect(driver.callTool).toHaveBeenCalledTimes(1)
-
-    const observation = await provider.execute({ ...input, functionName: 'get_window_state' })
-    expect(observation.success).toBe(true)
-    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual([
-      'get_browser_state', 'start_session', 'get_window_state'
-    ])
-    await provider.dispose()
-    const artifacts = [...(observation.output['artifacts'] as Array<{ path: string }> || []),
-      ...(refusal.output['artifacts'] as Array<{ path: string }> || [])]
-    await Promise.all(artifacts.map((artifact) => fs.promises.rm(artifact.path, { force: true })))
   })
 
   it('reports structured Cua retry escalations as tool failures', async () => {
@@ -766,6 +746,7 @@ describe('CuaRuntime', () => {
       JSON.stringify({
         max_elements: 500,
         max_depth: 32,
+        include_screenshot: true,
         pid: 42,
         window_id: 7,
         session: sessionInput.session
@@ -898,7 +879,8 @@ describe('CuaRuntime', () => {
     const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
-      parameters: {}, profileName: PROFILE_NAME
+      parameters: {}, profileName: PROFILE_NAME,
+      conversationSessionId: 'session-recovery'
     })
     expect(result.success).toBe(false)
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
@@ -907,7 +889,7 @@ describe('CuaRuntime', () => {
     expect(result.output['recovery']).toContain('Automatic session recovery failed')
   })
 
-  it.each(['browser_consent_required', 'cancelled', 'permission_denied'])(
+  it.each(['cancelled', 'permission_denied'])(
     'does not revive sessions on %s', async (code) => {
       const driver = createDriver({
         images: [], text: '', isError: true, errorCode: code,
@@ -916,14 +898,12 @@ describe('CuaRuntime', () => {
       const provider = new CuaRuntime(async () => driver as never)
       const result = await provider.execute({
         toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
-        parameters: {}, profileName: PROFILE_NAME
+        parameters: {}, profileName: PROFILE_NAME,
+        conversationSessionId: 'session-recovery'
       })
       expect(result.success).toBe(false)
       expect(driver.callTool).toHaveBeenCalledTimes(1)
       expect(result.output['error_code']).toBe(code)
-      if (code === 'browser_consent_required') {
-        expect(result.output['recovery']).toContain('owner authorization')
-      }
     }
   )
 
@@ -938,7 +918,8 @@ describe('CuaRuntime', () => {
     const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'list_windows',
-      parameters: {}, profileName: PROFILE_NAME
+      parameters: {}, profileName: PROFILE_NAME,
+      conversationSessionId: 'session-recovery'
     })
     expect(result.success).toBe(false)
     expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual(['list_windows', 'start_session'])
@@ -1014,6 +995,109 @@ describe('CuaRuntime', () => {
         ]
       }
     })
+  })
+
+  it('validates semantic batch targets and captures only their final state', async () => {
+    const manifest = readComputerUseManifest()
+    const validate = new Ajv().compile(
+      manifest.functions['perform_actions']!.parameters
+    )
+    const parameters = {
+      steps: [14, 15, 24, 14, 15, 30].map((index) => ({
+        action: 'click',
+        parameters: {
+          target: { kind: 'window', pid: 42, window_id: 7 },
+          element_token: `s00000001:${index}`
+        }
+      }))
+    }
+
+    // Reproduce the rejected batch from the Calculator run: element selectors
+    // belong beside the target, and the target must identify its kind.
+    expect(validate({
+      steps: [{
+        action: 'click',
+        parameters: {
+          target: { pid: 42, window_id: 7, element_token: 's00000001:14' }
+        }
+      }]
+    })).toBe(false)
+    expect(validate(parameters)).toBe(true)
+
+    const tokenActions = [
+      'click',
+      'scroll',
+      'type_text',
+      'press_key',
+      'hotkey',
+      'set_value'
+    ]
+
+    // Keep model-facing schema validation consistent for every token input.
+    for (const action of tokenActions) {
+      const tokenSchema = (
+        manifest.functions[action]!.parameters['properties'] as Record<string, unknown>
+      )['element_token'] as Record<string, unknown>
+      const validateToken = new Ajv().compile(tokenSchema)
+
+      expect(validateToken('s00000001:14')).toBe(true)
+      expect(validateToken('invented-button')).toBe(false)
+    }
+    expect(validate({
+      steps: [{
+        action: 'click',
+        parameters: {
+          target: { kind: 'window', pid: 42, window_id: 7 },
+          element_token: 'invented-button'
+        }
+      }]
+    })).toBe(false)
+
+    const driver = createDriver({
+      text: '',
+      images: [],
+      structuredJson: '{"effect":"unverifiable"}',
+      isError: false
+    })
+    driver.callTool.mockImplementation(async (action: string) => ({
+      text: '',
+      images: action === 'get_window_state'
+        ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }]
+        : [],
+      structuredJson: '{"effect":"unverifiable"}',
+      isError: false
+    }))
+    const runtime = new CuaRuntime(
+      async () => driver as never,
+      () => ComputerUseInteractionMode.Background
+    )
+    const result = await runtime.execute({
+      toolkitId: 'computer_use',
+      toolId: 'cua',
+      functionName: 'perform_actions',
+      parameters,
+      profileName: PROFILE_NAME,
+      conversationSessionId: 'semantic-button-sequence'
+    })
+
+    expect(result.success).toBe(true)
+    expect(result.output['completed_action_count']).toBe(6)
+    expect(driver.callTool.mock.calls.map(([name]) => name)).toEqual([
+      'start_session',
+      ...parameters.steps.map(() => 'click'),
+      'get_window_state'
+    ])
+    const clicks = driver.callTool.mock.calls.filter(([name]) => name === 'click')
+    expect(clicks.map(([, argumentsJson]) => JSON.parse(argumentsJson)))
+      .toEqual(parameters.steps.map((step) => ({
+        ...step.parameters,
+        session: expect.any(String)
+      })))
+
+    const artifacts = result.output['artifacts'] as Array<{ path: string }>
+    await Promise.all(artifacts.map((artifact) =>
+      fs.promises.rm(artifact.path, { force: true })
+    ))
   })
 
   it('settles between batch actions without an intermediate capture', async () => {
@@ -1130,6 +1214,7 @@ describe('CuaRuntime', () => {
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
+      conversationSessionId: 'batch-actions',
       parameters: { steps: [
         { action: 'type_text', parameters: { pid: 42, window_id: 7, text: 'first' } },
         { action: 'launch_app', parameters: {} }
@@ -1139,45 +1224,111 @@ describe('CuaRuntime', () => {
     expect(driver.callTool).not.toHaveBeenCalled()
   })
 
-  it('preserves batch refusal diagnostics and stops before the next input', async () => {
+  it.each([
+    [
+      'permission_denied',
+      { status: 'refused', refusal: { code: 'permission_denied' } }
+    ],
+    ['delivery_failed', { success: true, effect: 'partial' }],
+    [
+      'delivery_failed',
+      {
+        success: false,
+        effect: 'unverifiable',
+        escalation: { reason: 'delivery_failed' }
+      }
+    ],
+    [
+      'delivery_failed',
+      {
+        code: 'delivery_failed',
+        effect: 'unverifiable',
+        escalation: { reason: 'delivery_failed' }
+      }
+    ]
+  ])('stops before the next input when the driver reports %s', async (code, payload) => {
     const driver = createDriver({ images: [], text: '', isError: false,
-      structuredJson: JSON.stringify({ status: 'refused', refusal: { code: 'browser_consent_required' } }) })
+      structuredJson: JSON.stringify(payload) })
     const provider = new CuaRuntime(async () => driver as never)
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
+      conversationSessionId: 'batch-actions',
       parameters: { steps: [
         { action: 'type_text', parameters: { pid: 42, window_id: 7, text: 'first' } },
         { action: 'press_key', parameters: { pid: 42, window_id: 7, key: 'return' } }
       ] }
     })
     expect(result.output).toMatchObject({ completed_action_count: 0,
-      error_code: 'browser_consent_required', recovery: expect.stringContaining('owner authorization'),
-      steps: [{ action: 'type_text', success: false, error_code: 'browser_consent_required' }] })
+      error_code: code,
+      steps: [{ action: 'type_text', success: false, error_code: code }] })
     expect(driver.callTool).toHaveBeenCalledTimes(1)
   })
 
-  it('returns final capture guidance and uncertain effects from a batch', async () => {
+  it('finishes a batch with one final observation when background typing is unverified', async () => {
     const driver = createDriver({ images: [], text: '', isError: false,
       structuredJson: JSON.stringify({ effect: 'unverifiable' }) })
     driver.callTool.mockImplementation(async (action: string) => ({
       images: action === 'get_window_state'
         ? [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }] : [],
-      text: '', isError: false, structuredJson: JSON.stringify({ effect: 'unverifiable' })
+      text: '', isError: false, structuredJson: JSON.stringify({
+        effect: 'unverifiable',
+        ...(action === 'type_text' ? {
+          delivery: { mode: 'background' },
+          route: 'synthetic_events',
+          escalation: { reason: 'delivery_failed', target: 'foreground' }
+        } : {})
+      })
     }))
-    const provider = new CuaRuntime(async () => driver as never)
+    const provider = new CuaRuntime(
+      async () => driver as never,
+      () => ComputerUseInteractionMode.Background
+    )
     const result = await provider.execute({
       toolkitId: 'computer_use', toolId: 'cua', functionName: 'perform_actions',
       profileName: PROFILE_NAME,
+      conversationSessionId: 'batch-observation',
       parameters: { capture_after: true, steps: [
-        { action: 'press_key', parameters: { pid: 42, window_id: 7, key: 'return' } }
+        {
+          action: 'type_text',
+          parameters: {
+            target: { kind: 'window', pid: 42, window_id: 7 },
+            text: '43*9='
+          }
+        },
+        {
+          action: 'press_key',
+          parameters: {
+            target: { kind: 'window', pid: 42, window_id: 7 },
+            key: 'escape'
+          }
+        }
       ] }
     })
+    expect(result.success).toBe(true)
     expect(result.output).toMatchObject({
+      completed_action_count: 2,
       recovery: expect.stringContaining('does not mean failure'),
       next_step: expect.stringContaining('post-action state'),
-      steps: [{ action: 'press_key', result: { effect: 'unverifiable' }, recovery: expect.any(String) }]
+      steps: [
+        {
+          action: 'type_text',
+          success: true,
+          result: { effect: 'unverifiable' },
+          recovery: expect.stringContaining('does not mean failure')
+        },
+        {
+          action: 'press_key',
+          success: true,
+          result: { effect: 'unverifiable' },
+          recovery: expect.any(String)
+        }
+      ]
     })
+    expect(result.output['error_code']).toBeUndefined()
+    expect(driver.callTool.mock.calls.map(([action]) => action)
+      .filter((action) => action !== 'start_session'))
+      .toEqual(['type_text', 'press_key', 'get_window_state'])
     expect(result.output['recovery']).not.toContain('expose the target')
   })
 
@@ -1404,6 +1555,39 @@ describe('CuaRuntime', () => {
     }
   })
 
+  it.each(['foreground', 'background', 'activation_failed'])('preserves context-menu focus without escalating background input (%s)', async (mode) => {
+    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      if (action === 'bring_to_front' && mode === 'activation_failed') {
+        return { images: [], text: 'Activation unavailable', isError: true }
+      }
+      if (action === 'get_desktop_state') {
+        return { images: [{ dataBase64: 'aW1hZ2U=', mimeType: 'image/png' }], text: '',
+          structuredJson: JSON.stringify({ screenshot_width: 800, screenshot_height: 200 }), isError: false }
+      }
+      return nativeCall(action, args)
+    })
+    const provider = new CuaRuntime(
+      async () => driver as never,
+      () => ComputerUseInteractionMode.Background
+    )
+    try {
+      const result = await provider.execute({
+        toolkitId: 'computer_use', toolId: 'cua', functionName: 'click',
+        parameters: { target: { kind: 'window', pid: 42, window_id: 7 }, element_token: 'element-1',
+          button: 'right', delivery_mode: mode === 'background' ? mode : 'foreground' },
+        profileName: PROFILE_NAME, conversationSessionId: 'menu-focus'
+      })
+      const actions = driver.callTool.mock.calls.map(([action]) => action).filter((action) => action !== 'start_session')
+      expect(actions).toEqual(mode === 'background' ? ['click', 'get_desktop_state']
+        : mode === 'activation_failed' ? ['bring_to_front'] : ['bring_to_front', 'click', 'get_desktop_state'])
+      expect(result.success).toBe(mode !== 'activation_failed')
+    } finally {
+      await provider.dispose()
+    }
+  })
+
   it.each([true, false])('respects foreground delivery with activity overlay enabled=%s', async (enabled) => {
     const driver = createDriver({
       text: 'Clicked.',
@@ -1415,7 +1599,7 @@ describe('CuaRuntime', () => {
     })
     const provider = new CuaRuntime(
       async () => driver as never,
-      () => 'visible',
+      () => ComputerUseInteractionMode.Visible,
       () => ({}),
       () => enabled
     )
@@ -1450,159 +1634,45 @@ describe('CuaRuntime', () => {
     await provider.dispose()
   })
 
-  it('retries a browser query while the navigated page has no nodes', async () => {
-    vi.useFakeTimers()
-    const driver = createDriver({})
-    driver.callTool
-      .mockResolvedValueOnce({
-        text: 'Page is still loading.',
-        images: [],
-        structuredJson: JSON.stringify({
-          refs: [],
-          content_refs: [],
-          snapshot: { total_nodes: 0 }
-        }),
-        rawJson: '{}',
-        isError: false,
-        degraded: false
-      })
-      .mockResolvedValueOnce({
-        text: 'Found one result.',
-        images: [],
-        structuredJson: JSON.stringify({
-          refs: [
-            {
-              ref: 'p1:1',
-              role: 'link',
-              name: 'Tony Ann',
-              actions: ['click']
-            }
-          ],
-          content_refs: [],
-          snapshot: { total_nodes: 42 }
-        }),
-        rawJson: '{}',
-        isError: false,
-        degraded: false
-      })
-    const provider = new CuaRuntime(
-      async () => driver as never
-    )
 
-    try {
-      const execution = provider.execute({
-        toolkitId: 'computer_use',
-        toolId: 'cua',
-        functionName: 'get_browser_state',
-        parameters: { query: 'Tony Ann' },
-        profileName: PROFILE_NAME,
-        conversationSessionId: 'session-1'
-      })
-      await vi.advanceTimersByTimeAsync(500)
-      const result = await execution
+  it.each([
+    'browser_prepare', 'get_browser_state', 'browser_navigate', 'browser_click',
+    'browser_type', 'browser_pointer', 'browser_dialog', 'browser_set_input_files'
+  ])(
+    'rejects removed browser action %s before loading Cua, even with legacy permission', async (functionName) => {
+      const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
+      const factory = vi.fn(async () => driver as never)
+      const provider = new CuaRuntime(factory)
+      const input = {
+        toolkitId: 'computer_use', toolId: 'cua', profileName: PROFILE_NAME,
+        conversationSessionId: 'removed-browser-action',
+        functionName, parameters: {},
+        getSettings: (): Record<string, unknown> => ({
+          browser_inspection: { allow_existing_profile: true }
+        })
+      }
 
-      expect(driver.callTool).toHaveBeenCalledTimes(2)
-      expect(result).toMatchObject({
-        success: true,
-        output: {
-          result: {
-            refs: [{ ref: 'p1:1', name: 'Tony Ann' }]
-          }
-        }
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-})
+      expect(readComputerUseManifest().functions).not.toHaveProperty(functionName)
+      expect(CuaTool.prototype).not.toHaveProperty(functionName)
+      try {
+        expect(await provider.execute(input)).toMatchObject({
+          success: false, message: 'The requested computer-use action is not supported.'
+        })
+        expect(factory).not.toHaveBeenCalled()
 
+        // Batches must not provide an alternate route to a removed function.
+        const batch = await provider.execute({ ...input, functionName: 'perform_actions',
+          parameters: { steps: [{ action: functionName, parameters: {} }] } })
+        expect(batch.success).toBe(false)
+        expect(factory).not.toHaveBeenCalled()
 
-describe('browser inspection authorization', () => {
-  it('allows only the attested existing-profile boundary under an explicit owner grant', async () => {
-    const packageDirectory = path.resolve('tools/computer_use/cua/src/nodejs/node_modules/@trycua/cua-driver')
-    const packageDefinition = JSON.parse(await fs.promises.readFile(path.join(packageDirectory, 'package.json'), 'utf8'))
-    const { DriverAuthorizationAction } = await import(pathToFileURL(path.join(packageDirectory, packageDefinition.exports['.'].import)).href)
-    let allowed = false
-    const host = await createCuaBrowserAuthorizationHost(() => allowed)
-    const request = {
-      schema: 'cua-driver-authorization-request-v1', nonce: 'test', generation: 1n,
-      daemonInstance: 'test', permissionMode: 'standard', adapterId: 'browser_prepare.existing_profile',
-      riskClass: 'r2', publicSession: 'test', transportSession: 'test',
-      resourceJson: JSON.stringify({ pid: 42, window_id: 7, endpoint_owner_pid: 42 }),
-      humanSummary: 'Inspect this browser', expiresUnixMs: BigInt(Date.now() + 60_000), requestDigest: 'digest'
+        // A rejected browser call must not disable native OS-dialog controls.
+        const native = await provider.execute({ ...input, functionName: 'list_windows' })
+        expect(native.success).toBe(true)
+        expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual(['list_windows'])
+      } finally {
+        await provider.dispose()
+      }
     }
-    expect(await host.authorize(request)).toEqual({ action: DriverAuthorizationAction.Deny, requestDigest: 'digest' })
-    allowed = true
-    expect(await host.authorize(request)).toEqual({ action: DriverAuthorizationAction.Allow, requestDigest: 'digest' })
-    for (const override of [
-      { adapterId: 'browser_unbounded_script' }, { permissionMode: 'unrestricted' },
-      { schema: 'unknown' }, { riskClass: 'r3' }, { expiresUnixMs: 0n },
-      { resourceJson: '{broken' },
-      { resourceJson: JSON.stringify({ pid: 42, window_id: 7, endpoint_owner_pid: 99 }) }
-    ]) {
-      expect((await host.authorize({ ...request, ...override })).action).toBe(DriverAuthorizationAction.Deny)
-    }
-    allowed = false
-    expect((await host.authorize(request)).action).toBe(DriverAuthorizationAction.Deny)
-  })
-
-  it('prepares an authorized exact browser once and retries inspection without another model turn', async () => {
-    const settingsPath = path.join(getProfilePaths('browser-setup-test').tools, 'computer_use', 'cua', 'settings.json')
-    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
-    const refused = { images: [], text: '', structuredJson: JSON.stringify({
-      status: 'refused', refusal: { code: 'browser_consent_required' }
-    }), isError: true }
-    const observed = { images: [], text: '', structuredJson: JSON.stringify({ refs: [], content_refs: [] }), isError: false }
-    driver.callTool.mockResolvedValueOnce(refused).mockResolvedValueOnce(observed).mockResolvedValueOnce(observed)
-    const provider = new CuaRuntime(async () => driver as never)
-    try {
-      await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true })
-      await fs.promises.writeFile(settingsPath, JSON.stringify({ browser_inspection: { allow_existing_profile: true } }))
-      const result = await provider.execute({ toolkitId: 'computer_use', toolId: 'cua',
-        profileName: 'browser-setup-test', functionName: 'get_browser_state',
-        parameters: { pid: 42, window_id: 7 }, conversationSessionId: null })
-      expect(result.success).toBe(true)
-      expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual([
-        'get_browser_state', 'browser_prepare', 'get_browser_state'
-      ])
-      expect(JSON.parse(driver.callTool.mock.calls[1]?.[1])).toEqual({
-        pid: 42, window_id: 7, strategy: { kind: 'existing_profile' }
-      })
-      driver.callTool.mockClear().mockResolvedValue(refused)
-      const failure = await provider.execute({ toolkitId: 'computer_use', toolId: 'cua',
-        profileName: 'browser-setup-test', functionName: 'get_browser_state',
-        parameters: { pid: 42, window_id: 7 }, conversationSessionId: null })
-      expect(failure.success).toBe(false)
-      expect(driver.callTool).toHaveBeenCalledTimes(2)
-    } finally {
-      await provider.dispose()
-      await fs.promises.rm(settingsPath, { force: true })
-    }
-  })
-
-  it('revokes existing runtime grants when the owner changes the profile setting', async () => {
-    const settingsPath = path.join(getProfilePaths('browser-permission-test').tools, 'computer_use', 'cua', 'settings.json')
-    const driver = createDriver({ images: [], text: '', structuredJson: '{}', isError: false })
-    const factory = vi.fn(async () => driver as never)
-    const provider = new CuaRuntime(factory)
-    const input = {
-      toolkitId: 'computer_use', toolId: 'cua', profileName: 'browser-permission-test',
-      functionName: 'list_windows', parameters: {}, conversationSessionId: null
-    }
-    try {
-      await provider.execute(input)
-      await fs.promises.mkdir(path.dirname(settingsPath), { recursive: true })
-      await fs.promises.writeFile(settingsPath, JSON.stringify({ browser_inspection: { allow_existing_profile: true } }))
-      await provider.execute(input)
-      expect(factory).toHaveBeenCalledTimes(2)
-      await fs.promises.writeFile(settingsPath, JSON.stringify({ browser_inspection: { allow_existing_profile: false } }))
-      await provider.execute(input)
-      expect(factory).toHaveBeenCalledTimes(3)
-      expect(driver.shutdown).toHaveBeenCalledTimes(2)
-      expect(driver.uniffiDestroy).toHaveBeenCalledTimes(2)
-    } finally {
-      await provider.dispose()
-      await fs.promises.rm(settingsPath, { force: true })
-    }
-  })
+  )
 })

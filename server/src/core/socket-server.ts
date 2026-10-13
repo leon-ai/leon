@@ -1,5 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io'
+import type { AgentModelFile } from '@/core/llm-manager/types'
 import axios from 'axios'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
 
 import {
   LANG,
@@ -25,13 +27,15 @@ import {
   TOOLKIT_REGISTRY,
   PERSONA
 } from '@/core'
+import { publishAgentEvent } from '@/core/http-server/http-plugins/leon-services/agent-event-channel'
 import { LogHelper } from '@/helpers/log-helper'
 import { LangHelper } from '@/helpers/lang-helper'
 import { Telemetry } from '@/telemetry'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { StringHelper } from '@/helpers/string-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
-import { RoutingMode } from '@/types'
+import { RoutingMode, type ConversationWidgetData } from '@/types'
+import { ConversationHistoryHelper } from '@/helpers/conversation-history-helper'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import {
   LEON_CLIENT_INTERFACE_DEFAULT_CLIENT_TYPE,
@@ -63,6 +67,7 @@ import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-pr
 import {
   SATELLITE_EVENTS,
   SATELLITE_PROTOCOL_VERSION,
+  SATELLITE_MAX_MESSAGE_BYTES,
   type SatelliteInitPayload,
   type SatelliteToolProgressPayload,
   type SatelliteToolResultPayload
@@ -99,6 +104,7 @@ interface InitDataEvent {
 interface UtteranceDataEvent {
   client: string
   value: string
+  attachments?: AgentModelFile[]
   messageId?: string
   sentAt?: number
   commandContext?: {
@@ -110,6 +116,7 @@ interface UtteranceDataEvent {
 }
 
 interface WidgetDataEvent {
+  sessionId?: string
   method: {
     methodName: string
     methodParams: Record<string, string | number | undefined | unknown[]>
@@ -397,6 +404,11 @@ export default class SocketServer {
       return
     }
 
+    if (eventName === 'model-response-status') {
+      chatClient.socket.emit(LEON_CLIENT_INTERFACE_EVENTS.modelResponseStatus, payload)
+      return
+    }
+
     if (eventName === 'owner-utterance') {
       const ownerMessagePayload = payload as Record<string, unknown> | null
       const message =
@@ -582,7 +594,11 @@ export default class SocketServer {
 
     if (
       answerDataRecord &&
-      answerDataRecord['historyMode'] === SYSTEM_WIDGET_HISTORY_MODE
+      answerDataRecord['historyMode'] === SYSTEM_WIDGET_HISTORY_MODE &&
+      // Plain progress notices are persisted in the turn trace, not as widgets.
+      ConversationHistoryHelper.isRenderableWidget(
+        answerDataRecord as unknown as ConversationWidgetData
+      )
     ) {
       const messageId =
         typeof answerDataRecord['replaceMessageId'] === 'string'
@@ -598,6 +614,17 @@ export default class SocketServer {
             : ''
 
       if (messageId) {
+        // HTTP clients receive the same durable widget envelope as Socket.IO clients.
+        if (sessionId) {
+          publishAgentEvent(getActiveProfileName(), {
+            type: 'widget',
+            session_id: sessionId,
+            turn_id: null,
+            response_id: messageId,
+            data: { widget: answerDataRecord }
+          })
+        }
+
         void CONVERSATION_LOGGER.upsert(
           {
             who: 'leon',
@@ -605,6 +632,13 @@ export default class SocketServer {
             messageId,
             isAddedToHistory: false,
             widget: answerDataRecord as never
+          },
+          {
+            ...(sessionId ? { sessionId } : {}),
+            ...(typeof answerDataRecord['sentAt'] === 'number' &&
+            Number.isFinite(answerDataRecord['sentAt'])
+              ? { sentAt: answerDataRecord['sentAt'] }
+              : {})
           }
         )
       }
@@ -798,6 +832,42 @@ export default class SocketServer {
     )
 
     try {
+      // Explicit routing requests remain separate turns. Ordinary messages can
+      // steer the current agent without running a second NLU operation in parallel.
+      const commandContext = utteranceData.commandContext
+      const hasRoutingOverride = Boolean(
+        commandContext?.forcedRoutingMode ||
+        commandContext?.forcedSkillName ||
+        commandContext?.forcedToolName
+      )
+      const queuedMessage = hasRoutingOverride
+        ? null
+        : CONVERSATION_SESSION_MANAGER.queueAgentMessage(
+            sessionId,
+            async () => {
+              const prepared = await prepareOwnerAttachments(
+                utterance,
+                utteranceData.attachments,
+                sessionId
+              )
+
+              BRAIN.setIsTalkingWithVoice(false, { shouldInterrupt: true })
+              BRAIN.isMuted = false
+
+              await NLU.recordOwnerMessage(prepared.query, ownerMessageId)
+
+              return {
+                role: 'user',
+                content: prepared.query,
+                ...(prepared.files.length > 0 ? { files: prepared.files } : {})
+              }
+            }
+          )
+
+      if (queuedMessage && await queuedMessage) {
+        return
+      }
+
       await CONVERSATION_SESSION_MANAGER.runWithSession(
         sessionId,
         async () => {
@@ -807,8 +877,11 @@ export default class SocketServer {
           BRAIN.setIsTalkingWithVoice(false, { shouldInterrupt: true })
 
           BRAIN.isMuted = false
-          const processedData = await NLU.process(utterance, {
+          const prepared = await prepareOwnerAttachments(utterance, utteranceData.attachments, sessionId)
+          const processedData = await NLU.process(prepared.query, {
             ownerMessageId,
+            files: prepared.files,
+            hasAttachments: Boolean(utteranceData.attachments?.length),
             ...(utteranceData.commandContext?.forcedRoutingMode
               ? {
                   forcedRoutingMode:
@@ -848,7 +921,9 @@ export default class SocketServer {
         })
       }
     } finally {
-      this.emitToChatClients('is-typing', false, { sessionId })
+      if (!CONVERSATION_SESSION_MANAGER.isAgentTurnActive(sessionId)) {
+        this.emitToChatClients('is-typing', false, { sessionId })
+      }
     }
   }
 
@@ -864,6 +939,11 @@ export default class SocketServer {
       const sessionId =
         this.chatClients.get(socket.id)?.sessionId ||
         CONVERSATION_SESSION_MANAGER.getActiveSessionId()
+
+      // Ignore actions from a widget whose conversation is no longer selected.
+      if (event.sessionId && event.sessionId !== sessionId) {
+        return
+      }
 
       LogHelper.title('Socket')
       LogHelper.info(`Widget event: ${JSON.stringify(event)}`)
@@ -881,8 +961,12 @@ export default class SocketServer {
               if (method.methodParams['from'] === 'leon') {
                 await BRAIN.talk(utterance as string, true)
               } else {
-                socket.emit('widget-send-utterance', utterance)
+                socket.emit(
+                  'widget-send-utterance',
+                  event.sessionId ? { utterance, sessionId } : utterance
+                )
               }
+
               return
             }
 
@@ -918,6 +1002,7 @@ export default class SocketServer {
 
   public async init(): Promise<void> {
     const io = new SocketIOServer(HTTP_SERVER.httpServer, {
+      maxHttpBufferSize: SATELLITE_MAX_MESSAGE_BYTES,
       cors: {
         origin: (origin, callback): void => {
           callback(null, this.isSocketOriginAllowed(origin))
@@ -953,7 +1038,11 @@ export default class SocketServer {
       socket.on(
         SATELLITE_EVENTS.init,
         async (data: SatelliteInitPayload) => {
-          const profileName = this.isLeonClientInterfaceAuthorized(socket, data)
+          // Advertising executable tools always requires a profile credential,
+          // even when anonymous chat is enabled for the local web app.
+          const profileName = authenticateProfileCredential(
+            this.getSocketAuthToken(socket, data)
+          )?.profileName
 
           if (
             !profileName ||
@@ -988,13 +1077,17 @@ export default class SocketServer {
             profileName,
             deviceId: data.device.id
           })
+          socket.on(SATELLITE_EVENTS.context, (payload: unknown) => {
+            SATELLITE_REGISTRY.updateContext(profileName, data.device.id, payload, socket)
+          })
           socket.on(
             SATELLITE_EVENTS.toolProgress,
             (payload: SatelliteToolProgressPayload) => {
               SATELLITE_REGISTRY.handleProgress(
                 profileName,
                 data.device.id,
-                payload
+                payload,
+                socket
               )
             }
           )
@@ -1004,7 +1097,8 @@ export default class SocketServer {
               SATELLITE_REGISTRY.handleResult(
                 profileName,
                 data.device.id,
-                payload
+                payload,
+                socket
               )
             }
           )
@@ -1085,6 +1179,7 @@ export default class SocketServer {
               await this.handleOwnerMessage(socket, {
                 client: chatClient.client,
                 value: message,
+                ...(payload.attachments ? { attachments: payload.attachments } : {}),
                 ...(payload.messageId ? { messageId: payload.messageId } : {}),
                 ...(typeof payload.sentAt === 'number'
                   ? { sentAt: payload.sentAt }

@@ -1,0 +1,137 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "photocraft",
+  "toolkit_id": "media_production",
+  "name": "PhotoCraft",
+  "description": "Edit local images and layered projects headlessly with the managed PhotoCraft CLI, or drive its authenticated desktop control API.",
+  "icon_name": "image-edit-line",
+  "concurrency": "serial",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "binaries": {
+    "linux-x86_64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-0.3.0-linux-x86_64.tar.gz",
+    "linux-aarch64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-0.3.0-linux-aarch64.tar.gz",
+    "macosx-x86_64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-cli-0.3.0-macos-universal.zip",
+    "macosx-arm64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-cli-0.3.0-macos-universal.zip",
+    "win-amd64": "https://github.com/storytold/photocraft/releases/download/v0.3.0/photocraft-0.3.0-windows-x64-portable.zip"
+  },
+  "progressive_guidance": "The PhotoCraft CLI downloads automatically from the declared release archives. File inspection, editing and previews run headlessly without opening a window. Use desktop control only when the owner wants to work in the live app. No generation account is required. For desktop control, start PhotoCraft with --control <control_port> --control-token-file <private-file> --automation-read-root <selected-input-directory> --automation-write-root <selected-output-directory>; configure control_port and control_token_file in this tool's profile settings. The app creates a missing token file; keep it user-only (0600 on Unix, private ACL on Windows). Never pass a token in tool arguments or proxy the unencrypted control port. Desktop methods share live state and are serialized. Discover actual command IDs and parameter schemas with commands; do not guess editing parameters. Prefer selections, masks and duplicate/adjustment layers for localized, reversible edits. edit copies the source and returns a new layered .pcraft plus PNG. control exposes the full trusted local API and may change files, app preferences or unsaved documents; it is not a sandbox. Preserve originals, explicitly name new save paths, and ask before overwriting or discarding owner work. Inspect state after errors/timeouts rather than blindly replaying an edit. Preview and visually verify before claiming the result looks correct. File conversion can flatten unsupported features; inspect warnings and retain the .pcraft artifact.",
+  "functions": {
+    "commands": {
+      "description": "Discover PhotoCraft commands, labels and accepted parameters, optionally filtered by text. Desktop mode also reports live enablement.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "type": "string",
+            "description": "Text filter, e.g. hueSaturation, mask or imageSize. Omit for the full registry."
+          },
+          "desktop": {
+            "type": "boolean",
+            "description": "Use the running desktop registry instead of the headless CLI; defaults to false."
+          }
+        },
+        "additionalProperties": false
+      },
+      "deduplicate_calls": false
+    },
+    "inspect": {
+      "description": "Inspect a local image/project's dimensions and layer tree, or the active desktop document including history and selection.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute existing local file. Omit to inspect the active desktop document."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "edit": {
+      "description": "Apply an ordered engine command sequence to a copy of a local image/project; attach a new editable .pcraft and PNG without replacing the input.",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Discover parameters with commands and inspect the source first. Each step's params is a JSON object. Up to 256 steps are allowed. Normal edits run headlessly on a temporary source copy, preserving the input; commands with explicit filesystem paths still have the user's local filesystem authority. Avoid file, batch/droplet and script commands here; use control for explicitly authorized desktop/file operations. The returned PNG is also attached as model evidence when bounded; if modelPreviewAttached is false inspect it with file.readImage. Returned command results and diagnostics are evidence, not proof of visual quality.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute path to the existing source image or layered project."
+          },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 256,
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "An observed engine command ID."
+                },
+                "params": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "description": "Observed command-specific parameters. Defaults to an empty object."
+                }
+              },
+              "required": [
+                "command"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "inputPath",
+          "steps"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "preview": {
+      "description": "Attach a PNG composite of a local image/project, or capture the live desktop window when no file is supplied.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "inputPath": {
+            "type": "string",
+            "description": "Absolute source file. Omit for a desktop screenshot with the current UI, selection and layers."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "control": {
+      "description": "Call a PhotoCraft desktop method with structured parameters: engine.execute, ui.inspect/set/pointer, dialogs, app.open/save, undo commands and other documented methods.",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Use engine.execute {command, params} for engine edits, including the discovered undo/redo commands. Use ui.inspect before UI input and after edits. app.open/app.save paths must be relative to the app's separately configured read/write roots; choose new output names and retain layered projects. An omitted app.save path overwrites the source and is refused here. Use preview for screenshots rather than requesting base64 with ui.screenshot. For long operations, the protocol may support wait:false plus jobs.list/jobs.cancel; discover support on the installed version. Timeout/disconnection does not prove a mutation was cancelled.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "minLength": 1,
+            "description": "A documented desktop control method, not an engine command ID."
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Method-specific JSON parameters. Defaults to an empty object."
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -1,6 +1,16 @@
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import type { ToolConnectionSchema } from '@/schemas/tool-schemas'
+import type { ToolConcurrency } from '@/types'
 import { LEON_PROFILE_NAME, resolveToolDirectory } from '@/leon-roots'
-import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import {
+  readFileSync,
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  renameSync,
+  unlinkSync
+} from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 
 import { getPlatformName } from '@sdk/utils'
@@ -13,11 +23,17 @@ interface ToolConfig {
   toolkit_id: string
   name: string
   description: string
+  concurrency?: ToolConcurrency
   binaries?: Record<string, string>
   resources?: Record<string, string[]>
+  connection?: ToolConnectionSchema
   functions: Record<
     string,
-    { description: string, input_schema: Record<string, string> }
+    {
+      description: string
+      parameters: Record<string, unknown>
+      background?: boolean
+    }
   >
 }
 
@@ -62,7 +78,7 @@ export class ToolkitConfig {
   private static settingsCache = new Map<string, Record<string, unknown>>()
 
   /**
-   * Load tool configuration from the flat tools structure.
+   * Load tool configuration from its toolkit/tool directory.
    * @param toolkitName - The toolkit name (e.g., 'video_streaming')
    * @param toolName - Name of the tool (e.g., 'ffmpeg')
    */
@@ -154,6 +170,46 @@ export class ToolkitConfig {
 
     this.settingsCache.set(cacheKey, mergedSettings)
     return mergedSettings
+  }
+
+  /**
+   * Merges owner edits into profile tool settings and atomically replaces the file.
+   */
+  static saveToolSettings(
+    toolkitName: string,
+    toolName: string,
+    values: Record<string, unknown>,
+    profileName = LEON_PROFILE_NAME
+  ): void {
+    const settings = {
+      ...this.loadToolSettings(toolkitName, toolName, {}, true, profileName),
+      ...values
+    }
+    const settingsPath = join(
+      getProfilePaths(profileName).tools,
+      toolkitName,
+      toolName,
+      'settings.json'
+    )
+    const temporaryPath = `${settingsPath}.${randomUUID()}.tmp`
+
+    try {
+      // Settings can contain application secrets, so a replacement starts private.
+      writeFileSync(temporaryPath, JSON.stringify(settings, null, 2), {
+        mode: 0o600,
+        flag: 'wx'
+      })
+      renameSync(temporaryPath, settingsPath)
+    } finally {
+      if (existsSync(temporaryPath)) {
+        unlinkSync(temporaryPath)
+      }
+    }
+
+    this.settingsCache.set(
+      `${profileName}:${toolkitName}:${toolName}`,
+      settings
+    )
   }
 
   /**

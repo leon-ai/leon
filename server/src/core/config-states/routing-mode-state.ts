@@ -1,7 +1,7 @@
 import { CONFIG_MANAGER } from '@/config'
 import { RoutingMode } from '@/types'
 
-const DEFAULT_ROUTING_MODE = RoutingMode.Smart
+const DEFAULT_ROUTING_MODE = RoutingMode.Agent
 const SUPPORTED_ROUTING_MODES = Object.values(RoutingMode)
 
 export function normalizeRoutingMode(

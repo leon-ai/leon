@@ -1,8 +1,10 @@
 import fs from 'node:fs'
+import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import * as timers from 'node:timers/promises'
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import ffmpegStatic from 'ffmpeg-static'
 
 import { CuaRuntime } from '@@/tools/computer_use/cua/src/nodejs/lib/cua-runtime'
 import type { ComputerUseDriver } from '@@/tools/computer_use/cua/src/nodejs/lib/types'
@@ -82,6 +84,35 @@ afterEach(async () => {
 })
 
 describe('computer-use observations and capture recovery', () => {
+  it('preserves traversal and snapshot diagnostics while bounding observation work', async () => {
+    const { driver, execute } = createProvider()
+    const diagnostics = {
+      ...WINDOW, snapshot_id: 'current', invalidated_snapshot_ids: ['previous'],
+      truncated: true, truncation_reason: 'timeout', timeout_ms: 5_000,
+      nodes_visited: 17, nodes_pending: 3, walk_elapsed_ms: 5_000,
+      bounds_complete: false, elements_complete: false
+    }
+    driver.callTool.mockResolvedValue({
+      text: '', images: [], isError: false,
+      structuredJson: JSON.stringify({
+        ...diagnostics, elements: [{ element_token: 'current-save', element_index: 1, label: 'Save' }]
+      })
+    })
+    const result = await execute('get_window_state', {
+      ...WINDOW, include_screenshot: false, timeout_ms: 5_000
+    })
+    expect(result.output['result']).toMatchObject(diagnostics)
+    expect((result.output['result'] as { elements: unknown[] }).elements)
+      .toEqual([{ element_token: 'current-save', label: 'Save' }])
+    expect(JSON.parse(driver.callTool.mock.calls[0]![1])).toMatchObject({
+      timeout_ms: 5_000, include_screenshot: false
+    })
+
+    await execute('click', { ...WINDOW, element_token: 'current-save' })
+    const refresh = driver.callTool.mock.calls.findLast(([action]) => action === 'get_window_state')!
+    expect(JSON.parse(refresh[1])).not.toHaveProperty('timeout_ms')
+  })
+
   it('reports invalid window screenshots as failures and preserves their diagnostics', async () => {
     const { driver, execute } = createProvider()
     await execute('get_window_state', WINDOW)
@@ -106,7 +137,7 @@ describe('computer-use observations and capture recovery', () => {
     driver.callTool.mockClear()
     const click = await execute('click', { ...WINDOW, x: 540, y: 66 })
     expect(click.success).toBe(false)
-    expect(click.message).toContain('refresh list_windows')
+    expect(click.message).toContain('use its desktop pixels')
     expect(driver.callTool).not.toHaveBeenCalled()
   })
 
@@ -339,16 +370,152 @@ describe('computer-use observations and capture recovery', () => {
     ])
   })
 
+  it('keeps pixel grounding through filtered accessibility queries', async () => {
+    const { driver, execute } = createProvider()
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      const result = await nativeCall(action, args)
+      if (action === 'get_window_state' && JSON.parse(args).include_screenshot === false) result.images = []
+      return result
+    })
+    await execute('get_window_state', WINDOW)
+    const query = await execute('get_window_state', { ...WINDOW, query: 'link' })
+    expect(query.modelFiles).toHaveLength(1)
+    expect(JSON.parse(driver.callTool.mock.calls.at(-1)![1])).toHaveProperty('include_screenshot', true)
+    expect((await execute('click', { target: { kind: 'window', ...WINDOW }, x: 150, y: 100, button: 'right' })).success).toBe(true)
+
+  })
+
   it('uses window-image axes for zoom selection and native crop mapping for clicks', async () => {
     const { driver, execute, zoom } = createProvider()
-    expect((await zoom()).success).toBe(false)
-    await execute('get_window_state', WINDOW)
+    const desktop = await execute('get_desktop_state', {})
+    expect(desktop.output['result']).toMatchObject({
+      capture_target: DESKTOP,
+      text_extraction_hint: expect.stringContaining('OCR is the fallback after accessibility and copying fail')
+    })
+    const missingWindow = await zoom()
+    expect(missingWindow.success).toBe(false)
+    expect(missingWindow.output).toMatchObject({ zoom_applied: false })
+    expect(missingWindow.modelFiles).toHaveLength(1)
+    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual(['get_desktop_state', 'get_window_state'])
     const result = await zoom()
     expect(result.success).toBe(true)
     expect(result.output['result']).toMatchObject({ screenshot_width: 420, screenshot_height: 280, zoomed: true })
     expect(driver.callTool).toHaveBeenCalledWith('zoom', JSON.stringify({ ...WINDOW, x1: 300, y1: 20, x2: 600, y2: 150 }))
     await execute('click', { ...WINDOW, x: 210, y: 140 })
     expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 210, y: 140, from_zoom: true }))
+  })
+
+  it('allows reading zoom without a Copy attempt and maps subsequent window input', async () => {
+    const { driver, execute } = createProvider()
+    const region = { ...WINDOW, x1: 50, y1: 20, x2: 650, y2: 120, purpose: 'read' }
+    expect((await execute('zoom', region)).success).toBe(false)
+    // A synthetic capture exercises real image processing without opening a window.
+    const source = execFileSync(ffmpegStatic!, [
+      '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=white:s=800x200,format=rgb24',
+      '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'
+    ])
+    const nativeCall = driver.callTool.getMockImplementation()!
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      const result = await nativeCall(action, args)
+      if (action === 'get_window_state') {
+        result.images = [{ dataBase64: source.toString('base64'), mimeType: 'image/png' }]
+      }
+      return result
+    })
+    await execute('get_window_state', WINDOW)
+    expect((await execute('zoom', region, crypto.randomUUID())).success).toBe(false)
+    driver.callTool.mockClear()
+    const result = await execute('zoom', region)
+    expect(result.success).toBe(true)
+    expect(result.output['result']).toMatchObject({
+      purpose: 'read', screenshot_width: 1_420, screenshot_height: 240,
+      coordinate_space: 'attached_model_image', capture_target: { kind: 'window', ...WINDOW }
+    })
+    const image = Buffer.from(result.modelFiles![0]!.dataBase64, 'base64')
+    // The 10% margin is clipped to the source's left edge, not blank-padded.
+    expect(image.readUInt32BE(16)).toBe(1_420)
+    expect(image.readUInt32BE(20)).toBe(240)
+    const pixels = execFileSync(ffmpegStatic!, [
+      '-hide_banner', '-loglevel', 'error', '-i', 'pipe:0', '-frames:v', '1',
+      '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'
+    ], { input: image, maxBuffer: 2_000_000 })
+    expect(pixels.length).toBe(1_420 * 240 * 3)
+    expect(pixels.every((value) => value === 255)).toBe(true)
+    expect(driver.callTool).not.toHaveBeenCalled()
+    expect((await execute('click', { ...WINDOW, x: 710, y: 120, button: 'right' })).success).toBe(true)
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 355, y: 70, button: 'right' }))
+  })
+
+  it.each(['act', 'read'])('maps desktop %s crops back to the full desktop for Copy', async (purpose) => {
+    const { driver, execute } = createProvider()
+    const source = execFileSync(ffmpegStatic!, [
+      '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=white:s=800x200',
+      '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'
+    ])
+    const nativeCall = driver.callTool.getMockImplementation()!
+    let reads = 0
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      const result = await nativeCall(action, args)
+      if (action === 'get_desktop_state') result.images = [{ dataBase64: source.toString('base64'), mimeType: 'image/png' }]
+      if (action === 'clipboard_read') result.structuredJson = JSON.stringify({ text: ++reads === 1 ? 'Previous' : 'Copied source' })
+      return result
+    })
+    const region = { scope: 'desktop', x1: 50, y1: 20, x2: 650, y2: 120 }
+    await execute('get_desktop_state', {})
+    const crop = await execute('zoom', { ...region, purpose })
+    expect(crop.success).toBe(true)
+    expect(crop.output['result']).toMatchObject({ screenshot_width: 1_420, screenshot_height: 240,
+      capture_target: DESKTOP, coordinate_space: 'attached_model_image',
+      coordinate_hint: expect.stringContaining('x=0..1419, y=0..239') })
+    expect((await execute('click', { ...WINDOW, x: 710, y: 120 })).success).toBe(false)
+    const copied = await execute('copy_text', { ...WINDOW, action: 'click', parameters: {
+      target: DESKTOP, x: 710, y: 120, settle_ms: 0
+    } })
+    expect(copied.success).toBe(true)
+    expect(copied.output['result']).toMatchObject({ text: 'Copied source', clipboard_changed: true })
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ target: DESKTOP, x: 355, y: 70 }))
+    expect(driver.callTool.mock.calls.some(([action]) => action === 'zoom')).toBe(false)
+  })
+
+  it('preserves a failed Copy input diagnostic instead of blaming the clipboard', async () => {
+    const { driver, execute, zoom } = createProvider()
+    await execute('get_window_state', WINDOW)
+    await zoom()
+    driver.callTool.mockClear()
+    const failed = await execute('copy_text', { ...WINDOW, action: 'click', parameters: {
+      ...WINDOW, x: 666, y: 187, settle_ms: 0
+    } })
+    expect(failed.success).toBe(false)
+    expect(failed.message).toContain('Coordinate x=666 is outside this screenshot (0..419)')
+    expect(failed.message).not.toContain('clipboard')
+    expect(driver.callTool.mock.calls.map(([action]) => action)).toEqual(['clipboard_read'])
+    // The failed call did not consume the crop; retry its actual pixel center.
+    expect((await execute('click', { ...WINDOW, x: 210, y: 140 })).success).toBe(true)
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 210, y: 140, from_zoom: true }))
+  })
+
+  it.each([false, true])('verifies Copy against the previous clipboard without replaying input (changed=%s)', async (changed) => {
+    const { driver, execute } = createProvider()
+    const nativeCall = driver.callTool.getMockImplementation()!
+    let reads = 0
+    driver.callTool.mockImplementation(async (action: string, args: string) => {
+      const result = await nativeCall(action, args)
+      if (action === 'clipboard_read') {
+        reads++
+        result.structuredJson = JSON.stringify({ text: reads === 2 && changed ? 'Copied source' : 'Previous clipboard' })
+      }
+      return result
+    })
+    const result = await execute('copy_text', {
+      ...WINDOW, action: 'invoke_menu', parameters: { ...WINDOW, path: ['Copy'], settle_ms: 0 }
+    })
+    expect(result.success).toBe(changed)
+    expect(result.output['result']).toMatchObject({ clipboard_changed: changed })
+    expect(JSON.stringify(result.output)).not.toContain('Previous clipboard')
+    if (changed) expect(result.output['result']).toHaveProperty('text', 'Copied source')
+    expect(driver.callTool.mock.calls.map(([action]) => action))
+      .toEqual(['clipboard_read', 'invoke_menu', 'get_desktop_state', 'clipboard_read'])
   })
 
   it('directs uncertain window coordinates to zoom before acting', async () => {
@@ -365,7 +532,8 @@ describe('computer-use observations and capture recovery', () => {
     const result = await execute('get_window_state', WINDOW)
     expect(result.output['result']).toMatchObject({
       coordinate_space: 'attached_model_image',
-      grounding_hint: expect.stringContaining('call zoom'),
+      hint: expect.stringContaining('the next extraction step is Copy'),
+      grounding_hint: expect.stringContaining('not as the default text-extraction step'),
       coordinate_hint: expect.stringContaining('only this attached image')
     })
     expect(driver.callTool).toHaveBeenCalledTimes(1)
@@ -399,22 +567,34 @@ describe('computer-use observations and capture recovery', () => {
     await execute('get_window_state', WINDOW)
     await zoom()
     expect((await execute('scroll', { ...WINDOW, x: 20, y: 20, direction: 'down' })).success).toBe(false)
-    expect((await zoom()).success).toBe(false)
-    expect(driver.callTool).toHaveBeenCalledTimes(2)
+    const nested = await zoom()
+    expect(nested.success).toBe(false)
+    expect(nested.output).toMatchObject({ zoom_applied: false })
+    expect(driver.callTool).toHaveBeenCalledTimes(3)
     await execute('get_window_state', WINDOW)
     expect((await execute('click', { ...WINDOW, x: 20, y: 20 })).success).toBe(true)
     expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({ ...WINDOW, x: 20, y: 20 }))
   })
 
-  it('invalidates an older conversation crop when a different conversation zooms', async () => {
+  it('keeps zoom mappings in their owning native sessions', async () => {
     const { execute, zoom, driver } = createProvider()
+    vi.spyOn(driver, 'listToolsJson').mockResolvedValue(JSON.stringify({ tools: [
+      { name: 'get_window_state', inputSchema: { properties: { session: {} } } },
+      { name: 'zoom', inputSchema: { properties: { session: {} } } },
+      { name: 'click', inputSchema: { properties: { session: {}, from_zoom: {} } } }
+    ] }))
     const otherSession = crypto.randomUUID()
     await execute('get_window_state', WINDOW)
     await zoom()
     await execute('get_window_state', WINDOW, otherSession)
     await execute('zoom', { ...WINDOW, x1: 50, y1: 30, x2: 350, y2: 150 }, otherSession)
-    expect((await execute('click', { ...WINDOW, x: 20, y: 20 })).success).toBe(false)
-    expect(driver.callTool).toHaveBeenCalledTimes(4)
+    expect((await execute('click', { ...WINDOW, x: 20, y: 20 })).success).toBe(true)
+    const zoomCalls = driver.callTool.mock.calls.filter(([action]) => action === 'zoom')
+    const firstSession = JSON.parse(zoomCalls[0]![1]).session
+    expect(JSON.parse(zoomCalls[1]![1]).session).not.toBe(firstSession)
+    expect(driver.callTool).toHaveBeenCalledWith('click', JSON.stringify({
+      ...WINDOW, x: 20, y: 20, from_zoom: true, session: firstSession
+    }))
   })
 
   it('rejects invalid crop rectangles before calling the driver', async () => {

@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildAgentContinuationTranscript,
   buildAgentContinuityCheckpoint,
+  createAgentLoopContinuationState,
+  isAgentLoopContinuationStateValid,
   type AgentContinuityCheckpointInput
 } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import { prepareAgentModelContext } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-context-budget'
 import type { AgentToolTranscriptMessage } from '@/core/llm-manager/types'
+import { LLMProviders } from '@/core/llm-manager/types'
 
 function createCheckpointInput(): AgentContinuityCheckpointInput {
   return {
@@ -67,6 +71,75 @@ function appendToolExchange(
 }
 
 describe('agent loop continuation', () => {
+  it('saves exact pause evidence and plan state while bounding reloadable tool images', () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+
+    for (let index = 1; index <= 20; index += 1) {
+      appendToolExchange(transcript, index)
+      transcript.at(-1)!.files = [
+        { dataBase64: `page-${index}`, mediaType: 'image/png' }
+      ]
+    }
+
+    const checkpoint = createCheckpointInput()
+    const state = createAgentLoopContinuationState({
+      ...checkpoint,
+      transcript,
+      clarificationQuestion: 'Which registry?',
+      planWidgetId: 'release-plan'
+    })
+    const restored: typeof state = JSON.parse(JSON.stringify(state))
+
+    expect(isAgentLoopContinuationStateValid(restored)).toBe(true)
+    expect(restored.trackedSteps).toEqual(checkpoint.trackedSteps)
+    expect(restored.executionHistory).toEqual(checkpoint.executionHistory)
+    expect(restored.transcript.map((message) => ({ ...message, files: undefined })))
+      .toEqual(transcript.map((message) => ({ ...message, files: undefined })))
+    expect(restored.transcript.filter((message) => message.files))
+      .toEqual(transcript.slice(-4).filter((message) => message.files))
+    expect(transcript.filter((message) => message.files)).toHaveLength(20)
+  })
+
+  it('persists a native window through pauses and restores source for another provider', async () => {
+    const source: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Prepare the release.' }
+    ]
+    for (let index = 1; index <= 16; index += 1) {
+      appendToolExchange(source, index)
+    }
+
+    const context = {
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
+      output: [{ type: 'compaction', id: 'cmp', encrypted_content: 'opaque' }],
+      estimatedTokens: 100,
+      sourceTranscript: source
+    }
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'assistant', content: '', compactionContext: context },
+      { role: 'user', content: 'Publish to the staging registry.' }
+    ]
+    const summarize = vi.fn()
+    const prepared = await buildAgentContinuationTranscript(
+      transcript, summarize, createCheckpointInput()
+    )
+    const state = createAgentLoopContinuationState({
+      ...createCheckpointInput(), transcript: prepared,
+      clarificationQuestion: 'Which registry?', planWidgetId: 'release-plan'
+    })
+    const restored = JSON.parse(JSON.stringify(state))
+
+    expect(summarize).not.toHaveBeenCalled()
+    expect(isAgentLoopContinuationStateValid(restored)).toBe(true)
+    expect(restored.transcript[0].compactionContext).toEqual(context)
+    expect(restoreCompactionSources(prepared, 'connection')[0]).toEqual(transcript[0])
+    expect(restoreCompactionSources(prepared, 'other').slice(0, source.length)).toEqual(source)
+    expect(restoreCompactionSources(prepared, 'other').at(-2)?.content).toBe(
+      'Publish to the staging registry.'
+    )
+  })
+
   it('keeps a short transcript exact and adds deterministic resume state', async () => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Prepare the release.' },
@@ -96,6 +169,17 @@ describe('agent loop continuation', () => {
     for (let index = 1; index <= 16; index += 1) {
       appendToolExchange(transcript, index)
     }
+    for (const message of transcript) {
+      if (message.role === 'assistant') {
+        message.reasoningItems = [{
+          provider: LLMProviders.OpenAI,
+          id: `rs-${message.toolCalls?.[0]?.id}`,
+          text: 'Checking release evidence.',
+          encryptedContent: 'opaque-replay-data'
+        }]
+      }
+    }
+
     const summarize = vi.fn().mockResolvedValue('Older release work completed.')
 
     const result = await buildAgentContinuationTranscript(
@@ -105,6 +189,12 @@ describe('agent loop continuation', () => {
     )
 
     expect(summarize).toHaveBeenCalledOnce()
+    expect(summarize.mock.calls[0]?.[0]).not.toContain('opaque-replay-data')
+    expect(result.find((message) =>
+      message.role === 'assistant' && message.toolCalls?.[0]?.id === 'call-16'
+    )).toEqual(transcript.find((message) =>
+      message.role === 'assistant' && message.toolCalls?.[0]?.id === 'call-16'
+    ))
     expect(result.some((message) =>
       message.role === 'assistant' &&
       message.content.includes('<continuation_summary>')
@@ -146,6 +236,47 @@ describe('agent loop continuation', () => {
     expect(JSON.stringify(result).length).toBeLessThan(
       JSON.stringify(transcript).length
     )
+  })
+
+  it('retains document image exchanges across summaries without orphaning tool results', async () => {
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Inspect the documents and save their metadata.' }
+    ]
+    for (let index = 1; index <= 20; index += 1) {
+      appendToolExchange(transcript, index)
+      if (index <= 3) {
+        const assistant = transcript.at(-2)!
+        const tool = transcript.at(-1)!
+        if (assistant.role === 'assistant' && assistant.toolCalls && tool.role === 'tool') {
+          assistant.toolCalls[0]!.function.name = 'file_system__file__readPdf'
+          tool.toolName = 'file_system__file__readPdf'
+          tool.content = JSON.stringify({ path: `/tmp/document-${index}.pdf` })
+          tool.files = [{ dataBase64: `page-${index}`, mediaType: 'image/png' }]
+        }
+      }
+    }
+
+    const result = await buildAgentContinuationTranscript(
+      transcript,
+      vi.fn().mockResolvedValue('Document metadata extracted and saved.')
+    )
+    const visualResults = result.filter((message) =>
+      message.role === 'tool' && message.files?.length
+    )
+
+    expect(visualResults.map((message) =>
+      message.role === 'tool' ? message.toolCallId : null
+    )).toEqual(['call-2', 'call-3'])
+    for (const message of visualResults) {
+      if (message.role === 'tool') {
+        expect(result.some((candidate) =>
+          candidate.role === 'assistant' && candidate.toolCalls?.some((call) =>
+            call.id === message.toolCallId
+          )
+        )).toBe(true)
+      }
+    }
+    expect(result.slice(-16)).toEqual(transcript.slice(-16))
   })
 
   it('hands exact older outcomes and failures to the summary before reducing text', async () => {

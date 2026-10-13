@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>A request becomes a result</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <script src="assets/gsap.min.js"></script>
+</head>
+<body>
+  <main id="root" data-composition-id="main" data-width="__WIDTH__" data-height="__HEIGHT__" data-duration="6" data-fps="30">
+    <div id="understand-host" class="clip scene" data-composition-id="understand" data-composition-src="compositions/understand.html" data-start="0" data-duration="3" data-track-index="1"></div>
+    <div id="verify-host" class="clip scene" data-composition-id="verify" data-composition-src="compositions/verify.html" data-start="3" data-duration="3" data-track-index="1"></div>
+  </main>
+  <script>
+    window.__timelines = window.__timelines || {};
+    const timeline = gsap.timeline({ paused: true });
+
+    timeline.to({}, { duration: 6 });
+    window.__timelines.main = timeline;
+  </script>
+</body>
+</html>

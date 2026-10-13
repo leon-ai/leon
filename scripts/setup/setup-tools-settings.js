@@ -18,9 +18,8 @@ async function syncToolSettings(toolkitId, toolId, toolPath) {
   const settingsSamplePath = path.join(toolPath, TOOL_SETTINGS_SAMPLE_FILENAME)
 
   if (!fs.existsSync(settingsSamplePath)) {
-    throw new Error(
-      `The "${toolkitId}.${toolId}" tool settings sample does not exist.`
-    )
+    // Tools without configurable defaults still need a sample for setup.
+    await fs.promises.writeFile(settingsSamplePath, '{}\n')
   }
 
   const settingsPath = path.join(

@@ -2,6 +2,7 @@ import type { ToolExecutionContext } from './tool-runtime-types'
 import fs from 'node:fs'
 import path from 'node:path'
 import os from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { spawn, execSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
@@ -14,6 +15,7 @@ import {
   LEON_TOOLKITS_PATH,
   NVIDIA_LIBS_PATH,
   PROFILE_TOOLS_PATH,
+  PROFILE_SESSIONS_PATH,
   PYTORCH_TORCH_PATH
 } from '@bridge/constants'
 import { ToolkitConfig } from '@sdk/toolkit-config'
@@ -68,6 +70,11 @@ export interface ExecuteCommandOptions {
   skipBinaryDownload?: boolean
 }
 
+/**
+ * Signals rejected account authorization without exposing a provider response body.
+ */
+export class ConnectionRequiredError extends Error {}
+
 export abstract class Tool {
   protected executionContext: ToolExecutionContext | null = null
 
@@ -77,6 +84,49 @@ export abstract class Tool {
   public async prepareExecution(context: ToolExecutionContext): Promise<void> {
     this.executionContext = context
     this.modelFiles.length = 0
+  }
+
+  /**
+   * Gets credentials for a provider declared in this tool's manifest.
+   */
+  protected getConnectionCredentials(
+    provider: string
+  ): Record<string, unknown> | null {
+    return this.executionContext?.connections?.[provider] || null
+  }
+
+  /**
+   * Validates encrypted connection credentials with the ordinary mandatory-settings check.
+   */
+  protected requireConnectionCredentials(): Record<string, unknown> {
+    const config = ToolkitConfig.load(this.toolkit, this.toolName)
+
+    if (!config.connection) {
+      throw new Error('This tool does not declare a connection.')
+    }
+
+    const credentials =
+      this.getConnectionCredentials(`${this.toolkit}.${this.toolName}`) || {}
+
+    this.checkRequiredSettings(
+      this.toolName,
+      credentials,
+      config.connection.required_settings
+    )
+    if (this.missingSettings) {
+      throw new Error(
+        `Connect ${config.name} using the connection widget in chat before using this tool. Missing: ${this.missingSettings.missing.join(', ')}.`
+      )
+    }
+
+    return credentials
+  }
+
+  /**
+   * Checks account access before Core persists credentials supplied during onboarding.
+   */
+  public async validateConnection(): Promise<{ account_label?: string }> {
+    throw new Error('This tool does not implement connection validation.')
   }
 
   /**
@@ -104,6 +154,82 @@ export abstract class Tool {
    */
   public getModelFiles(): ToolModelFile[] {
     return this.modelFiles
+  }
+
+  /**
+   * Marks a completed file for delivery. Return it in the result's artifacts array.
+   * Copying into session storage also allows Satellite to transfer the file.
+   */
+  protected async createArtifact(
+    filePath: string,
+    mimeType: string,
+    filename = path.basename(filePath)
+  ): Promise<{
+    path: string
+    filename: string
+    mime_type: string
+    presentation: 'attachment'
+  }> {
+    const sessionId = this.executionContext?.conversationSessionId
+
+    if (!sessionId) {
+      throw new Error('Artifacts require a conversation session.')
+    }
+
+    const directory = path.join(
+      PROFILE_SESSIONS_PATH,
+      encodeURIComponent(sessionId),
+      'artifacts',
+      'outputs',
+      randomUUID()
+    )
+
+    await fs.promises.mkdir(directory, { recursive: true })
+    const target = path.join(directory, path.basename(filename))
+
+    await fs.promises.copyFile(filePath, target, fs.constants.COPYFILE_EXCL)
+
+    return {
+      path: target,
+      filename,
+      mime_type: mimeType,
+      presentation: 'attachment'
+    }
+  }
+
+  /**
+   * Calls the authenticated Core service with host-supplied profile credentials.
+   */
+  protected async requestLeon<T>(endpoint: string, body?: unknown): Promise<T> {
+    const service = this.executionContext?.leonService
+
+    if (!service) {
+      throw new Error('This operation requires a Leon server connection.')
+    }
+
+    const response = await fetch(`${service.baseURL}${endpoint}`, {
+      method: body === undefined ? 'GET' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-leon-profile-token': service.token
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(this.executionContext?.signal
+        ? { signal: this.executionContext.signal }
+        : {})
+    })
+
+    if (!response.ok) {
+      const error = (await response.json().catch(() => null)) as {
+        message?: string
+      } | null
+
+      throw new Error(
+        error?.message || `Leon service request failed (${response.status}).`
+      )
+    }
+
+    return (await response.json()) as T
   }
 
   private static isToolRuntime: boolean = ((): boolean => {
@@ -192,14 +318,19 @@ export abstract class Tool {
   /**
    * Check required settings and store missing ones
    */
-  protected checkRequiredSettings(toolName?: string): void {
-    if (this.requiredSettings.length === 0) {
+  protected checkRequiredSettings(
+    toolName?: string,
+    settings = this.settings,
+    requiredSettings = this.requiredSettings
+  ): void {
+    if (requiredSettings.length === 0) {
       this.missingSettings = null
       return
     }
 
-    const missing = this.requiredSettings.filter((key) => {
-      const value = this.settings[key]
+    const missing = requiredSettings.filter((key) => {
+      const value = settings[key]
+
       if (value === undefined || value === null) return true
       if (typeof value === 'string' && value.trim() === '') return true
       return false
@@ -467,9 +598,11 @@ export abstract class Tool {
         timeoutHandle = null
       }
 
+      // No input is supplied here; EOF keeps commands from waiting on an open pipe.
       const childProcess = spawn(binaryPath, args, {
         cwd: execOptions.cwd,
         env,
+        stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true
       })
 
@@ -644,10 +777,6 @@ export abstract class Tool {
     const config = ToolkitConfig.load(this.toolkit, toolConfigName)
     const binaryUrl = ToolkitConfig.getBinaryUrl(config)
 
-    await this.report('bridges.tools.checking_binary', {
-      binary_name: binaryName
-    })
-
     if (!binaryUrl) {
       await this.report('bridges.tools.no_binary_url', {
         binary_name: binaryName
@@ -674,6 +803,26 @@ export abstract class Tool {
         : actualFilename
 
     const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
+    const binaryPath = path.join(binsPath, executable)
+    const binaryExists = fs.existsSync(binaryPath)
+
+    // Reusing an executable needs no preparation or repeated permission changes.
+    if (binaryExists) {
+      if (isWindows()) {
+        return binaryPath
+      }
+
+      try {
+        fs.accessSync(binaryPath, fs.constants.X_OK)
+        return binaryPath
+      } catch {
+        // Repair permissions below if an earlier download left them incomplete.
+      }
+    }
+
+    await this.report('bridges.tools.checking_binary', {
+      binary_name: binaryName
+    })
 
     // Ensure toolkit bins directory exists
     if (!fs.existsSync(binsPath)) {
@@ -683,18 +832,10 @@ export abstract class Tool {
       fs.mkdirSync(binsPath, { recursive: true })
     }
 
-    const binaryPath = path.join(binsPath, executable)
-
     // Ensure binary is available before returning path
-    if (!fs.existsSync(binaryPath)) {
+    if (!binaryExists) {
       await this.downloadBinaryOnDemand(binaryName, binaryUrl, executable)
-    }
-
-    /**
-     * Force chmod again in case it has been downloaded but somehow failed
-     * so it could not chmod correctly earlier
-     */
-    if (!isWindows()) {
+    } else if (!isWindows()) {
       await this.report('bridges.tools.applying_permissions', {
         binary_name: binaryName
       })
@@ -1192,35 +1333,51 @@ export abstract class Tool {
     binaryUrl: string,
     executable: string
   ): Promise<void> {
+    const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
+    const stagingPath = path.join(binsPath, `.download-${randomUUID()}`)
+
     try {
-      const binsPath = path.join(LEON_TOOLKITS_PATH, this.toolkit, 'assets')
       const binaryPath = path.join(binsPath, executable)
+      const stagedBinaryPath = path.join(stagingPath, executable)
+      fs.mkdirSync(stagingPath, { recursive: true })
 
       await this.report('bridges.tools.binary_not_found', {
         binary_name: binaryName
       })
 
-      await this.downloadBinary(binaryUrl, binaryPath)
+      // Publish only a complete executable. Parallel workers must never observe
+      // an archive download or extraction in progress as an installed binary.
+      await this.downloadBinary(binaryUrl, stagedBinaryPath, binaryName)
 
       await this.report('bridges.tools.binary_downloaded', {
         binary_name: binaryName
       })
-
-      // Delete older versions of this binary
-      await this.deleteOlderBinaryVersions(binsPath, executable)
 
       // Make binary executable (Unix systems)
       if (!isWindows()) {
         await this.report('bridges.tools.making_executable', {
           binary_name: binaryName
         })
-        fs.chmodSync(binaryPath, 0o755)
+        fs.chmodSync(stagedBinaryPath, 0o755)
       }
 
       // Remove quarantine attribute on macOS to prevent Gatekeeper blocking
       if (isMacOS()) {
-        await this.removeQuarantineAttribute(binaryPath)
+        await this.removeQuarantineAttribute(stagedBinaryPath)
       }
+
+      if (!fs.existsSync(binaryPath)) {
+        try {
+          fs.renameSync(stagedBinaryPath, binaryPath)
+        } catch (error) {
+          // Windows can reject a rename when another worker published first.
+          if (!fs.existsSync(binaryPath)) {
+            throw error
+          }
+        }
+      }
+
+      await this.deleteOlderBinaryVersions(binsPath, executable)
     } catch (error) {
       await this.report('bridges.tools.download_failed', {
         binary_name: binaryName,
@@ -1229,6 +1386,8 @@ export abstract class Tool {
       throw new Error(
         `Failed to download binary '${binaryName}': ${(error as Error).message}`
       )
+    } finally {
+      fs.rmSync(stagingPath, { recursive: true, force: true })
     }
   }
 
@@ -1252,7 +1411,11 @@ export abstract class Tool {
    * Download binary from URL using the core download helper.
    * If the downloaded file is an archive, it will be extracted automatically
    */
-  private async downloadBinary(url: string, outputPath: string): Promise<void> {
+  private async downloadBinary(
+    url: string,
+    outputPath: string,
+    binaryName: string
+  ): Promise<void> {
     try {
       await this.report('bridges.tools.downloading_from_url')
 
@@ -1297,37 +1460,35 @@ export abstract class Tool {
         await extractArchive(downloadPath, tempExtractPath)
 
         // Find the binary in the extracted directory (recursively if needed)
-        let binaryFilePath: string | null = null
+        const files: string[] = []
+        const expectedName = isWindows() && !binaryName.endsWith('.exe')
+          ? `${binaryName}.exe`
+          : binaryName
 
-        const findBinaryFile = (dir: string): string | null => {
+        const collectFiles = (dir: string): void => {
           const entries = fs.readdirSync(dir, { withFileTypes: true })
 
-          // First, look for files in the current directory
           for (const entry of entries) {
             const fullPath = path.join(dir, entry.name)
             if (entry.isFile()) {
-              return fullPath
+              files.push(fullPath)
+            } else if (entry.isDirectory()) {
+              collectFiles(fullPath)
             }
           }
 
-          // If no files found, look in subdirectories (one level deep)
-          for (const entry of entries) {
-            const fullPath = path.join(dir, entry.name)
-            if (entry.isDirectory()) {
-              const foundFile = findBinaryFile(fullPath)
-              if (foundFile) {
-                return foundFile
-              }
-            }
-          }
-
-          return null
         }
 
-        binaryFilePath = findBinaryFile(tempExtractPath)
+        collectFiles(tempExtractPath)
+        // Release archives may contain documentation before the executable.
+        // Preserve single-file archives whose executable has a versioned name.
+        const matches = files.filter((file) => path.basename(file) === expectedName)
+        const binaryFilePath = matches.length === 1
+          ? matches[0]
+          : matches.length === 0 && files.length === 1 ? files[0] : undefined
 
         if (!binaryFilePath) {
-          throw new Error('Archive extraction resulted in no files')
+          throw new Error(`Archive does not contain an unambiguous ${expectedName} executable`)
         }
 
         // Move the binary to the final output path

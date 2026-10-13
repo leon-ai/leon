@@ -79,6 +79,7 @@
   white-space: nowrap
   color: currentColor
 
+.tool-call-preparing,
 .tool-call-running
   --tool-call-title-color: var(--color-text)
 
@@ -97,6 +98,13 @@
   mask-repeat: no-repeat
   mask-size: var(--tool-call-highlight-width) 100%
   animation: tool-call-title-wave var(--activity-animation-duration) linear infinite
+
+.tool-call-duration
+  flex: 0 0 auto
+  color: var(--color-text-secondary)
+  font-size: var(--font-size-xs)
+  font-variant-numeric: tabular-nums
+  white-space: nowrap
 
 .tool-call-chevron
   position: relative

@@ -192,6 +192,13 @@
   flex-shrink: 0;
 }
 
+.tool-duration {
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .tool-status-chip {
   display: inline-flex;
   align-items: center;
@@ -206,6 +213,7 @@
   text-transform: uppercase;
 }
 
+.tool-status-chip.preparing,
 .tool-status-chip.running {
   color: #9fd2ff;
   background-color: rgba(28, 117, 219, 0.14);
@@ -285,6 +293,13 @@
 .tool-panel-body {
   padding: 12px 14px 14px;
   min-height: 72px;
+}
+
+.tool-live-progress {
+  padding: 0 14px 14px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .tool-output-summary {

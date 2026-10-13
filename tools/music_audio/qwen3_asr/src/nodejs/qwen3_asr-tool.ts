@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
+import type { TranscriptionOutput } from './lib/transcription-schema'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { NVIDIA_LIBS_PATH, PYTORCH_TORCH_PATH } from '@bridge/constants'

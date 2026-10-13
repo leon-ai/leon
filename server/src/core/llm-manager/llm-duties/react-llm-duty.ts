@@ -1,5 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import type { CompletionAccounting, UsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { captureContextUsage, type ContextUsageMetrics } from '@/core/llm-manager/llm-usage/context-usage'
+import { resolveModelContextWindowTokens } from '@/core/llm-manager/model-context-windows'
+import { randomUUID } from 'node:crypto'
+import { AsyncResource } from 'node:async_hooks'
+import { ModelResponseState, type ModelResponseStatus } from '@/core/leon-interface/types'
 
 import {
   DEFAULT_INIT_PARAMS,
@@ -16,7 +22,7 @@ import {
   TOOLKIT_REGISTRY,
   CONTEXT_MANAGER,
   SELF_MODEL_MANAGER,
-  BRAIN,
+  CONVERSATION_LOGGER,
   SOCKET_SERVER,
   TOOL_CALL_LOGGER,
   POST_TURN_MAINTENANCE_QUEUE
@@ -24,18 +30,28 @@ import {
 import {
   LLMDuties,
   LLMProviders,
-  type LLMPromptAbortReason,
+  InferencePurpose,
+  CompletionFailureKind,
   type AgentToolTranscriptMessage,
   type OpenAITool,
-  type OpenAIToolCall
+  type OpenAIToolCall,
+  type ProviderReasoningItem,
+  type ProviderCompactionContext
 } from '@/core/llm-manager/types'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { getLLMModelCatalogEntry, getLLMModelDefaultReasoning } from '@/core/llm-manager/llm-model-catalog'
 import { SkillDomainHelper } from '@/helpers/skill-domain-helper'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { getConnectionRequirements } from '@/core/connections/connection-catalog'
 import { CONFIG_MANAGER } from '@/config'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import { getActiveConversationSessionId } from '@/core/session-manager/session-context'
+
+const TRACE_SAVE_INTERVAL_MS = 1_000
+const MODEL_ACTIVITY_UPDATE_INTERVAL_MS = 1_000
 
 function getLLMProviderName(): LLMProviders {
-  const provider = CONFIG_STATE.getModelState().getAgentProvider()
+  const provider = CONFIG_STATE.getModelState().getAgentTarget().provider
 
   if (!provider) {
     throw new Error('The agent LLM provider is disabled.')
@@ -47,17 +63,18 @@ function getLLMProviderName(): LLMProviders {
 import {
   AGENT_TEMPERATURE,
   AGENT_INFERENCE_TIMEOUT_MS,
+  AGENT_MODEL_RESPONSE_TIMEOUT_MS,
+  AGENT_MODEL_RESPONSE_MAX_DURATION_MS,
   AGENT_TIMEOUT_MAX_RETRIES,
   CHARS_PER_TOKEN,
   AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS,
   AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS,
-  AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS,
   AGENT_MAX_ITERATIONS,
   AGENT_FINISHING_ITERATIONS,
   AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
   AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
   AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT
-} from './react-llm-duty/constants'
+} from './react-llm-duty/agent-constants'
 import type {
   ReactLLMDutyParams,
   ExecutionRecord,
@@ -66,26 +83,38 @@ import type {
   AgentPhase,
   AgentSkillContext,
   AgentRunProgressEvent
-} from './react-llm-duty/types'
+} from './react-llm-duty/agent-types'
+import { AGENT_PLAN_GUIDANCE } from './react-llm-duty/agent-plan'
 import { widgetId, emitPlanWidget } from './react-llm-duty/plan-widget'
 import { AgentAnswerStream } from './react-llm-duty/agent-answer-stream'
 import {
   getAgentInferencePolicy,
-  formatAgentInferencePolicyForLog
+  formatAgentInferencePolicyForLog,
+  type AgentInferencePolicy
 } from './react-llm-duty/agent-policy'
-import { runToolExecution } from './react-llm-duty/tool-execution'
+import { parseToolCallArguments } from './react-llm-duty/agent-utils'
+import {
+  runToolExecution,
+  getToolDisplayContext,
+  emitToolExecutionInputToWebApp,
+  emitToolExecutionOutputToWebApp
+} from './react-llm-duty/tool-execution'
 import {
   AGENT_LIMIT_FINALIZATION_SYSTEM_PROMPT,
   AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT,
+  AGENT_COMPLETION_REVIEW_SCHEMA,
   AGENT_SYSTEM_PROMPT,
   AgentModelProviderError,
+  AgentModelResponseTimeoutError,
   buildAgentProgressiveGuidanceSystemPrompt,
+  buildAgentConnectionGuidance,
   buildAgentToolCatalog,
   buildAgentTranscriptHistory,
   evaluateAgentToolkitPreloadCost,
   findHighConfidenceAgentToolkitId,
   runAgentLoop
 } from './react-llm-duty/agent-loop'
+import type { AgentCallableFunction } from './react-llm-duty/agent-loop'
 import { buildToolkitContextSection } from './react-llm-duty/agent-helpers'
 import {
   type AccumulatedLLMMetricsState,
@@ -93,7 +122,7 @@ import {
   type RawPhaseMetrics,
   deriveLLMMetrics,
   observeCompletionMetrics
-} from './react-llm-duty/metrics'
+} from './react-llm-duty/agent-metrics'
 import {
   createAgentLoopContinuationState,
   buildAgentContinuationTranscript,
@@ -101,6 +130,7 @@ import {
   type AgentContinuityCheckpointInput,
   type AgentLoopContinuationState
 } from './react-llm-duty/agent-loop-continuation'
+import { restoreCompactionSources } from '@/core/llm-manager/provider-compaction'
 import {
   prepareAgentModelContext,
   resolveAgentContextCompactionTriggerTokens,
@@ -155,7 +185,10 @@ export class ReActLLMDuty extends LLMDuty {
   protected input: LLMDutyParams['input'] = null
   private completionCount = 0
   private continuationSummaryFailed = false
+  private automaticCompactionFailed = false
   private totalInputTokens = 0
+  private contextUsage: ContextUsageMetrics | undefined
+  private usageAccounting: UsageAccounting | undefined
   private totalOutputTokens = 0
   private totalVisibleOutputTokens = 0
   private totalOutputChars = 0
@@ -167,19 +200,34 @@ export class ReActLLMDuty extends LLMDuty {
   private finalAnswerMetrics: FinalAnswerMetricsSnapshot | null = null
 
   private executionStartedAt = 0
+  private firstOutputAt: number | null = null
+  private readonly streamedToolCalls = new Map<string, {
+    callable: AgentCallableFunction
+    groupId: string
+    input: string
+  }>()
   private hasExplicitMemoryWrite = false
-  private reasoningGenerationId: string | null = null
+  private hasOwnerMessages = false
   private hasFinalizedAnswer = false
   private readonly answerStream = new AgentAnswerStream((payload) => {
+    if (payload.token) {
+      this.firstOutputAt ??= Date.now()
+    }
     SOCKET_SERVER.emitToChatClients('llm-token', payload)
   })
   private finalResponseIntent: FinalResponseSignal['intent'] = 'answer'
   private lastExecutionHistory: ExecutionRecord[] = []
   private readonly responseTraceCollector = new AgentResponseTraceCollector()
+  private traceSaveTimer: ReturnType<typeof setTimeout> | null = null
+  private persistResponseTrace: (() => Promise<void>) | null = null
   private activeAgentSkillContext: AgentSkillContext | null
   private activeForcedToolName: string | null
   private allowDirectAnswerHandoff: boolean
   private readonly additionalInstructions: string
+  private readonly signal: AbortSignal | undefined
+  private getOwnerMessageSignal: (() => AbortSignal) | undefined
+  private agentTurnSignal: AbortSignal | undefined
+  private readonly files: ReactLLMDutyParams['files']
   private readonly onProgressEvent:
     ((event: AgentRunProgressEvent) => void) | undefined
 
@@ -194,6 +242,8 @@ export class ReActLLMDuty extends LLMDuty {
     }
 
     this.input = params.input
+    this.files = params.files
+    this.signal = params.signal
     this.activeAgentSkillContext = params.agentSkill || null
     this.activeForcedToolName = params.forcedToolName || null
     this.allowDirectAnswerHandoff = params.allowDirectAnswerHandoff === true
@@ -211,6 +261,7 @@ export class ReActLLMDuty extends LLMDuty {
   public async init(
     params: LLMDutyInitParams = DEFAULT_INIT_PARAMS
   ): Promise<void> {
+    this.signal?.throwIfAborted()
     if (!TOOLKIT_REGISTRY.isLoaded) {
       await TOOLKIT_REGISTRY.load()
     }
@@ -221,13 +272,18 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   public async execute(): Promise<LLMDutyResult | null> {
+    this.signal?.throwIfAborted()
     LogHelper.title(this.name)
     LogHelper.info('Executing...')
 
     this.executionStartedAt = Date.now()
+    this.firstOutputAt = null
     this.completionCount = 0
     this.continuationSummaryFailed = false
+    this.automaticCompactionFailed = false
     this.totalInputTokens = 0
+    this.contextUsage = undefined
+    this.usageAccounting = undefined
     this.totalOutputTokens = 0
     this.totalVisibleOutputTokens = 0
     this.totalOutputChars = 0
@@ -238,15 +294,35 @@ export class ReActLLMDuty extends LLMDuty {
     }
     this.finalAnswerMetrics = null
     this.hasExplicitMemoryWrite = false
-    this.reasoningGenerationId = StringHelper.random(6, { onlyLetters: true })
+    this.hasOwnerMessages = false
     this.hasFinalizedAnswer = false
     this.finalResponseIntent = 'answer'
     this.lastExecutionHistory = []
-    this.responseTraceCollector.reset()
+    const traceId = randomUUID()
+    this.responseTraceCollector.reset(traceId)
+    // Capture the session and profile-bound writer before any deferred saves.
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    const upsert = CONVERSATION_LOGGER.upsert
+    this.persistResponseTrace = (): Promise<void> => upsert({
+      who: 'leon',
+      message: '',
+      messageId: traceId,
+      isAddedToHistory: false,
+      agentResponseTrace: this.responseTraceCollector.snapshot({})
+    }, { sessionId })
     this.reportProgressEvent({
       type: 'reasoning_summary',
       summary: 'Understanding your request'
     })
+
+    // Background duties without a bound conversation must not consume messages
+    // addressed to the profile's currently selected chat session.
+    const activeSessionId = getActiveConversationSessionId()
+    const agentTurn = activeSessionId
+      ? CONVERSATION_SESSION_MANAGER.openAgentTurn(activeSessionId)
+      : null
+    this.getOwnerMessageSignal = agentTurn?.getOwnerMessageSignal
+    this.agentTurnSignal = agentTurn?.signal
 
     try {
       const { messageLogs: history } =
@@ -319,7 +395,9 @@ export class ReActLLMDuty extends LLMDuty {
       let catalog = buildAgentToolCatalog(
         this.activeForcedToolName,
         continuation?.loadedToolkitIds,
-        progressiveToolkitLoading
+        progressiveToolkitLoading,
+        continuation?.loadedFunctionNames,
+        continuation?.loadedToolNames
       )
 
       let preloadedToolkitContext = ''
@@ -331,7 +409,7 @@ export class ReActLLMDuty extends LLMDuty {
         )
         const candidateToolkitContext = [
           `<preloaded_toolkit toolkit_id="${matchedToolkitId}">`,
-          'Its function schemas are already available. Use them directly.',
+          'Use available function schemas directly. For functions still listed in load_toolkit, select their schemas before constructing calls.',
           buildToolkitContextSection(caller, matchedToolkitId),
           '</preloaded_toolkit>'
         ].join('\n')
@@ -380,19 +458,48 @@ export class ReActLLMDuty extends LLMDuty {
       const transcript = continuation
         ? structuredClone(continuation.transcript)
         : buildAgentTranscriptHistory(history, ownerInput)
+
       if (continuation) {
+        // Refresh setup facts after owner interaction without putting credentials in the transcript.
+        const connectionProviders = continuation.executionHistory.flatMap(
+          (execution) => {
+            const observation = parseToolCallArguments(execution.observation)
+            const providers = observation?.['required_connections']
+
+            return observation?.['connection_required'] === true &&
+              Array.isArray(providers)
+              ? providers.filter(
+                  (provider): provider is string => typeof provider === 'string'
+                )
+              : []
+          }
+        )
+        const connectionContext =
+          connectionProviders.length > 0
+            ? [
+                '<current_connection_context>',
+                JSON.stringify(await getConnectionRequirements(connectionProviders)),
+                '</current_connection_context>'
+              ].join('\n')
+            : ''
+
         transcript.push({
           role: 'user',
+          ...(this.files?.length ? { files: this.files } : {}),
           content: [
             '<clarification_response>',
             ownerInput,
-            '</clarification_response>'
-          ].join('\n')
+            '</clarification_response>',
+            connectionContext
+          ]
+            .filter(Boolean)
+            .join('\n')
         })
       } else {
         const agentRequest = await this.buildAgentRequest(caller, originalInput)
         transcript.push({
           role: 'user',
+          ...(this.files?.length ? { files: this.files } : {}),
           content: [agentRequest, preloadedToolkitContext]
             .filter(Boolean)
             .join('\n\n')
@@ -408,6 +515,16 @@ export class ReActLLMDuty extends LLMDuty {
       )
 
       const result = await runAgentLoop({
+        ...(agentTurn ? {
+          drainOwnerMessages: agentTurn.drainOwnerMessages,
+          getOwnerMessageSignal: agentTurn.getOwnerMessageSignal
+        } : {}),
+        onOwnerMessagesApplied: () => {
+          this.hasOwnerMessages = true
+          this.answerStream.discard()
+          this.closeStreamedToolCalls()
+        },
+        ...(this.signal ? { signal: this.signal } : {}),
         transcript,
         catalog,
         maxIterations: CONFIG_MANAGER.getConfig().runtime.agent_max_iterations ?? AGENT_MAX_ITERATIONS,
@@ -418,6 +535,8 @@ export class ReActLLMDuty extends LLMDuty {
             trackedSteps: state.trackedSteps,
             executionHistory: state.executionHistory,
             loadedToolkitIds: catalog.loadedToolkitIds,
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
             activeSkillId: caller.agentSkillContext?.id ?? null
           }),
         ...(continuation
@@ -433,13 +552,25 @@ export class ReActLLMDuty extends LLMDuty {
           const activeSkill = caller.agentSkillContext
           const progressiveGuidance =
             buildAgentProgressiveGuidanceSystemPrompt(catalog)
+
+          // Reviewers need task-specific constraints and evidence, not the acting
+          // agent's persona and general workflow. Keep the clock for relative
+          // dates and preserve trusted integration guidance.
+          const baseSystemPrompt = options.isCompletionReview
+            ? this.appendAdditionalInstructions(PERSONA.getContextInfo())
+            : agentSystemPrompt
           const prompt = [
-            agentSystemPrompt,
+            baseSystemPrompt,
             progressiveGuidance,
+            buildAgentConnectionGuidance(state.executionHistory),
             ...(state.trackedSteps.length ? [
+              AGENT_PLAN_GUIDANCE,
               '<current_plan>',
               JSON.stringify(state.trackedSteps),
               'This is the latest reported plan, not proof of completion. Reconcile it with tool evidence as milestones change; use collection scope, coverage and item outcomes to choose remaining work. Do not reopen verified items or infer missing items in an observed empty range.',
+              ...(options.requiresPlanReconciliation ? [
+                'Several operational turns have passed without an accepted plan update. Compare this plan with existing tool evidence now. Use update_plan to record verified milestones and item outcomes, the actual active step, and unresolved mappings or blockers. Do not infer completion from successful input, repeat completed work, or mark work complete merely to satisfy this reminder. If the same step is genuinely still active, retain it and briefly record why; ask the owner only for missing information or access.'
+              ] : []),
               '</current_plan>'
             ] : []),
             ...(activeSkill
@@ -454,6 +585,7 @@ export class ReActLLMDuty extends LLMDuty {
           ]
             .filter(Boolean)
             .join('\n')
+
           return this.callAgentModel(
             messages,
             prompt,
@@ -464,11 +596,19 @@ export class ReActLLMDuty extends LLMDuty {
               trackedSteps: state.trackedSteps,
               executionHistory: state.executionHistory,
               loadedToolkitIds: catalog.loadedToolkitIds,
+              loadedToolNames: catalog.loadedToolNames,
+              loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
               activeSkillId: caller.agentSkillContext?.id ?? null
-            }
+            },
+            catalog.functionsByToolName
           )
         },
-        executeFunction: async (callable, toolInput, toolCallTitle) => {
+        executeFunction: async (callable, toolInput, toolCallTitle, toolCallId) => {
+          const preview = toolCallId ? this.streamedToolCalls.get(toolCallId) : undefined
+          if (toolCallId) {
+            this.streamedToolCalls.delete(toolCallId)
+          }
+
           const toolResult = await runToolExecution(
             callable.toolkitId,
             callable.toolId,
@@ -491,7 +631,10 @@ export class ReActLLMDuty extends LLMDuty {
                     : {})
                 }
               })
-            }
+            },
+            this.getExecutionSignal(),
+            (message) => this.emitProgress(message),
+            preview?.groupId
           )
 
           return toolResult
@@ -544,13 +687,17 @@ export class ReActLLMDuty extends LLMDuty {
 
       executionHistory.push(...result.executionHistory)
       trackedSteps = result.trackedSteps.map((step) => ({ ...step }))
+      if (result.intent === 'cancelled') {
+        agentTurn?.cancelExecutions()
+      }
+
       this.hasExplicitMemoryWrite = executionHistory.some(
         (execution) =>
           execution.status === 'success' &&
           execution.function === 'structured_knowledge.memory.write'
       )
 
-      if (result.intent !== 'answer') {
+      if (result.intent !== 'answer' && result.intent !== 'cancelled') {
         this.saveAgentLoopContinuation(
           createAgentLoopContinuationState({
             originalInput,
@@ -559,25 +706,37 @@ export class ReActLLMDuty extends LLMDuty {
             trackedSteps,
             executionHistory,
             loadedToolkitIds: catalog.loadedToolkitIds,
-            transcript: await this.prepareContinuation(result.transcript, {
-              originalInput,
-              clarificationQuestion: result.answer,
-              trackedSteps,
-              executionHistory,
-              loadedToolkitIds: catalog.loadedToolkitIds,
-              activeSkillId: caller.agentSkillContext?.id ?? null
-            }),
+            loadedToolNames: catalog.loadedToolNames,
+            loadedFunctionNames: [...catalog.functionsByToolName.values()].map((fn) => fn.qualifiedName),
+            // Persist pause state directly; resumed inference compacts it when needed.
+            transcript: result.transcript,
             activeSkillId: caller.agentSkillContext?.id ?? null
           })
         )
       }
 
+      this.signal?.throwIfAborted()
       return finalize(result.answer, result.intent)
     } catch (error) {
       this.answerStream.discard()
+      this.responseTraceCollector.interrupt()
+      this.signal?.throwIfAborted()
       LogHelper.title(this.name)
       LogHelper.error(`Failed to execute: ${String(error)}`)
       return null
+    } finally {
+      agentTurn?.close()
+      this.getOwnerMessageSignal = undefined
+      this.agentTurnSignal = undefined
+      this.closeStreamedToolCalls()
+
+      if (this.traceSaveTimer) {
+        clearTimeout(this.traceSaveTimer)
+        this.traceSaveTimer = null
+      }
+      // Drain snapshots before the caller persists the final answer, including aborts.
+      await this.persistResponseTrace?.()
+      this.persistResponseTrace = null
     }
   }
 
@@ -594,11 +753,87 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   /**
+   * Interrupts stale work for owner steering without canceling the conversation turn.
+   */
+  private getExecutionSignal(): AbortSignal | undefined {
+    const signals = [this.signal, this.agentTurnSignal, this.getOwnerMessageSignal?.()]
+      .filter((signal): signal is AbortSignal => Boolean(signal))
+
+    if (signals.length > 1) {
+      return AbortSignal.any(signals)
+    }
+
+    return signals[0]
+  }
+
+  /**
    * Records user-visible progress before forwarding it to an optional host.
    */
   private reportProgressEvent(event: AgentRunProgressEvent): void {
+    // Argument previews and interrupted proposals can end before dispatch.
+    // Give those traces the same registry labels as executed calls.
+    if (
+      event.type === 'tool_call' &&
+      (!event.toolCall.toolkitName || !event.toolCall.toolName)
+    ) {
+      const [toolkitId, toolId, functionName] = event.toolCall.name.split('.')
+
+      if (toolkitId && toolId && functionName) {
+        const display = getToolDisplayContext(toolkitId, toolId, functionName)
+
+        event = {
+          ...event,
+          toolCall: {
+            ...event.toolCall,
+            toolkitName: event.toolCall.toolkitName || display.toolkitName,
+            toolName: event.toolCall.toolName || display.toolName
+          }
+        }
+      }
+    }
+
     this.responseTraceCollector.record(event)
+    this.scheduleTraceSave()
     this.onProgressEvent?.(event)
+  }
+
+  /**
+   * Closes previews that were canceled, rejected, or never selected for execution.
+   */
+  private closeStreamedToolCalls(): void {
+    for (const { callable, groupId, input } of this.streamedToolCalls.values()) {
+      const message = 'This proposed tool call was not executed.'
+      this.reportProgressEvent({
+        type: 'tool_call',
+        toolCall: {
+          id: groupId,
+          name: callable.qualifiedName,
+          status: 'error',
+          input,
+          errorMessage: message
+        }
+      })
+      emitToolExecutionOutputToWebApp({
+        ...callable,
+        toolGroupId: groupId,
+        output: {},
+        status: 'error',
+        message
+      })
+    }
+
+    this.streamedToolCalls.clear()
+  }
+
+  private scheduleTraceSave(): void {
+    if (!this.persistResponseTrace || this.traceSaveTimer) {
+      return
+    }
+    // Coalesce streamed tokens instead of rewriting history for every token.
+    this.traceSaveTimer = setTimeout(() => {
+      this.traceSaveTimer = null
+      void this.persistResponseTrace?.()
+    }, TRACE_SAVE_INTERVAL_MS)
   }
 
   /**
@@ -746,20 +981,29 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   /**
-   * Uses the configured agent provider for a private, non-tool summary call.
+   * Preserves native context on pause or summarizes portable context on recovery.
    */
   private async prepareContinuation(
     transcript: AgentToolTranscriptMessage[],
-    checkpointInput?: AgentContinuityCheckpointInput
+    checkpointInput?: AgentContinuityCheckpointInput,
+    restoreSourceEvidence = false
   ): Promise<AgentToolTranscriptMessage[]> {
+    this.signal?.throwIfAborted()
+    if (restoreSourceEvidence) {
+      // Context recovery needs source evidence instead of opaque provider state.
+      transcript = restoreCompactionSources(transcript)
+    }
+
     return buildAgentContinuationTranscript(transcript, async (history) => {
       // A failed summary must not cause an auxiliary retry on every tool turn.
       if (this.continuationSummaryFailed) return null
       const startedAt = Date.now()
       try {
         const result = await LLM_PROVIDER.prompt(history, {
+          ...(this.signal ? { cancellationSignal: this.signal } : {}),
           dutyType: LLMDuties.ReAct,
           systemPrompt: AGENT_CONTINUATION_SUMMARY_SYSTEM_PROMPT,
+          usagePurpose: InferencePurpose.ContextCompaction,
           temperature: 0,
           maxTokens: AGENT_CONTINUATION_SUMMARY_MAX_TOKENS,
           timeout: AGENT_CONTINUATION_SUMMARY_TIMEOUT_MS,
@@ -767,8 +1011,10 @@ export class ReActLLMDuty extends LLMDuty {
           remoteProviderErrorRetries: 0,
           shouldStream: false,
           disableThinking: true,
-          trackProviderErrors: false
+          trackProviderErrors: false,
+          disableContextCompaction: true
         })
+        this.signal?.throwIfAborted()
         if (result) {
           this.observeCompletionMetrics({
             phase: 'agent',
@@ -788,6 +1034,7 @@ export class ReActLLMDuty extends LLMDuty {
         )
         return summary
       } catch {
+        this.signal?.throwIfAborted()
         this.continuationSummaryFailed = true
         LogHelper.warning('Agent continuation summary unavailable; retaining original context')
         return null
@@ -804,16 +1051,30 @@ export class ReActLLMDuty extends LLMDuty {
       isOutputRecoveryAttempt?: boolean
       isFinalizationAttempt?: boolean
       isCompletionReview?: boolean
+      useReviewSchema?: boolean
       requiresToolAction?: boolean
       isContextRecoveryAttempt?: boolean
     },
-    checkpointInput?: AgentContinuityCheckpointInput
+    checkpointInput?: AgentContinuityCheckpointInput,
+    functionsByToolName?: ReadonlyMap<string, AgentCallableFunction>
   ): Promise<{
     toolCalls?: OpenAIToolCall[]
     textContent?: string
     reasoning?: string
+    reasoningItems?: ProviderReasoningItem[]
+    compactionContext?: ProviderCompactionContext
     isTruncated?: boolean
   } | null> {
+    const executionSignal = this.getExecutionSignal()
+    executionSignal?.throwIfAborted()
+    if (transcript.some((message) =>
+      message.role === 'assistant' && message.compactionContext
+    )) {
+      const targetTranscript = await LLM_PROVIDER.prepareAgentTranscript(transcript)
+      this.signal?.throwIfAborted()
+      transcript.splice(0, transcript.length, ...targetTranscript)
+    }
+
     const phase: AgentPhase = options.isFinalizationAttempt
       ? 'final_answer'
       : 'agent'
@@ -825,6 +1086,11 @@ export class ReActLLMDuty extends LLMDuty {
       ...(options.isCompletionReview ? [AGENT_COMPLETION_REVIEW_SYSTEM_PROMPT] : [])
     ].join('\n\n')
     const providerName = getLLMProviderName()
+    if (providerName === LLMProviders.OpenAI && options.isContextRecoveryAttempt) {
+      this.automaticCompactionFailed = true
+    }
+    const providerManagesContext = providerName === LLMProviders.OpenAI &&
+      !this.automaticCompactionFailed
     const contextCompactionTriggerTokens = options.isContextRecoveryAttempt
       ? resolveAgentContextRecoveryTriggerTokens(providerName)
       : resolveAgentContextCompactionTriggerTokens(providerName)
@@ -832,14 +1098,21 @@ export class ReActLLMDuty extends LLMDuty {
       transcript,
       systemPrompt: activeSystemPrompt,
       tools,
-      compactionTriggerTokens: contextCompactionTriggerTokens,
+      // OpenAI measures actual request tokens and triggers compaction itself.
+      compactionTriggerTokens: providerManagesContext
+        ? Number.POSITIVE_INFINITY
+        : contextCompactionTriggerTokens,
       forceCompaction:
         options.isRecoveryAttempt || Boolean(options.isFinalizationAttempt)
     })
-    if (preparedContext.estimatedInputTokens > contextCompactionTriggerTokens) {
+    if (
+      !providerManagesContext &&
+      preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
+    ) {
       const summarized = await this.prepareContinuation(
         transcript,
-        checkpointInput
+        checkpointInput,
+        true
       )
       if (summarized !== transcript) {
         transcript.splice(0, transcript.length, ...summarized)
@@ -852,6 +1125,7 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
     if (
+      !providerManagesContext &&
       preparedContext.estimatedInputTokens > contextCompactionTriggerTokens
     ) {
       throw new AgentModelProviderError(
@@ -867,10 +1141,12 @@ export class ReActLLMDuty extends LLMDuty {
     const promptForLog = this.safeJSONStringify(preparedTranscript)
     const completionStartedAt = Date.now()
     const inferencePolicy = getAgentInferencePolicy()
+    const agentTarget = CONFIG_STATE.getModelState().getAgentTarget()
     const modelSettings = CONFIG_STATE
       .getModelSettingsState()
-      .getSettings(CONFIG_STATE.getModelState().getAgentTarget())
+      .getSettings(agentTarget)
     const configuredReasoning = modelSettings.reasoning
+    const defaultReasoning = getLLMModelDefaultReasoning(agentTarget.provider, agentTarget.model)
     // Finalization is still a model request. Keep its configured reasoning:
     // providers with mandatory reasoning reject a forced reasoning-off retry.
     const reasoningMode =
@@ -879,10 +1155,22 @@ export class ReActLLMDuty extends LLMDuty {
         : configuredReasoning === 'none'
           ? 'off'
           : 'on'
-    const reasoningEffort =
-      configuredReasoning === 'auto' || configuredReasoning === 'on'
-        ? undefined
-        : configuredReasoning
+    let reasoningEffort =
+      configuredReasoning === 'auto'
+        ? defaultReasoning.effort
+        : configuredReasoning === 'on' ? undefined : configuredReasoning
+    let reasoningEffortSource: AgentInferencePolicy['reasoningEffortSource'] = configuredReasoning === 'auto'
+      ? defaultReasoning.source
+      : 'owner'
+    // Auto may recover from reasoning-only exhaustion with less effort.
+    // Never disable mandatory reasoning or override an explicit owner choice.
+    if (options.isOutputRecoveryAttempt && configuredReasoning === 'auto' &&
+      reasoningMode === 'on' && getLLMModelCatalogEntry(
+        providerName, agentTarget.model
+      )?.reasoning.includes('low')) {
+      reasoningEffort = 'low'
+      reasoningEffortSource = 'recovery'
+    }
     const reasoningUseDefaultEffort = configuredReasoning === 'on'
     const serviceTier = modelSettings.speed === 'fast'
       ? 'priority'
@@ -892,23 +1180,20 @@ export class ReActLLMDuty extends LLMDuty {
     const disableThinking = reasoningMode === 'off'
     const maxOutputTokens = resolveAgentMaxOutputTokens(
       providerName,
-      preparedContext.estimatedInputTokens,
-      options.isOutputRecoveryAttempt
+      preparedContext.estimatedInputTokens
     )
     if (options.isOutputRecoveryAttempt) {
       LogHelper.info(
-        `Retrying truncated agent output with max_tokens=${maxOutputTokens}; preserving configured reasoning`
+        `Retrying truncated agent output with max_tokens=${maxOutputTokens ?? 'provider default'}; reasoning effort=${reasoningEffort ?? 'provider default'}`
       )
     }
     const shouldEmitReasoning =
       !options.isCompletionReview && reasoningMode !== 'off' && inferencePolicy.emitReasoning
 
     const toolNames = preparedTools.map((t) => t.function.name).join(', ')
+    // Each model call starts a new block; its streamed chunks share this ID.
     const reasoningGenerationId = shouldEmitReasoning
-      ? this.getReasoningGenerationId(
-          phase,
-          StringHelper.random(6, { onlyLetters: true })
-        )
+      ? randomUUID()
       : null
 
     this.logTitle(phase)
@@ -926,6 +1211,7 @@ export class ReActLLMDuty extends LLMDuty {
       phasePolicySummary: formatAgentInferencePolicyForLog({
         ...inferencePolicy,
         reasoningMode,
+        reasoningEffortSource,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         emitReasoning: shouldEmitReasoning
@@ -937,80 +1223,248 @@ export class ReActLLMDuty extends LLMDuty {
     let completed = false
     let waitNoticeTimer: NodeJS.Timeout | null = null
     let diagnosisTimer: NodeJS.Timeout | null = null
-    let diagnosisRetryTimer: NodeJS.Timeout | null = null
     const toolCallAbortController = new AbortController()
 
-    const delayReason = this.buildLongToolCallReason(
-      promptForLog,
-      activeSystemPrompt,
-      preparedTools
+    const modelResponseStartedAt = Date.now()
+    const modelResponseMaximumDeadlineAt = modelResponseStartedAt + AGENT_MODEL_RESPONSE_MAX_DURATION_MS
+    const contextWindowTokens = resolveModelContextWindowTokens(
+      agentTarget.provider,
+      agentTarget.model
     )
+    // Only the active transcript describes context occupancy; auxiliary summaries
+    // still contribute to turn accounting without replacing this snapshot.
+    this.contextUsage = captureContextUsage({
+      estimatedInputTokens: preparedContext.estimatedInputTokens,
+      contextWindowTokens
+    })
+    const modelStatus: ModelResponseStatus = {
+      contextUsage: this.contextUsage,
+      requestId: randomUUID(),
+      sessionId: CONVERSATION_SESSION_MANAGER.getCurrentSessionId(),
+      startedAt: modelResponseStartedAt,
+      state: ModelResponseState.Waiting,
+      attempt: 1,
+      deadlineAt: modelResponseStartedAt + AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    }
+    let modelAttempt = 0
+    let lastAttemptFailureKind: CompletionFailureKind | undefined
+    let lastActivityUpdateAt = 0
+    const responseAbortController = new AbortController()
+    const cancellationSignal = AbortSignal.any([
+      responseAbortController.signal,
+      ...(executionSignal ? [executionSignal] : [])
+    ])
+    // Retries share cancellation and the hard cap, but each gets a usable wait.
+    const abortModelResponse = (): void => {
+      responseAbortController.abort(new AgentModelResponseTimeoutError())
+    }
+    let responseDeadlineTimer = setTimeout(abortModelResponse, AGENT_MODEL_RESPONSE_TIMEOUT_MS)
+    const renewModelResponseDeadline = (
+      timeout = AGENT_MODEL_RESPONSE_TIMEOUT_MS
+    ): void => {
+      if (cancellationSignal.aborted) {
+        return
+      }
+
+      modelStatus.deadlineAt = Math.min(
+        modelResponseMaximumDeadlineAt,
+        Date.now() + Math.max(AGENT_MODEL_RESPONSE_TIMEOUT_MS, timeout)
+      )
+      clearTimeout(responseDeadlineTimer)
+      responseDeadlineTimer = setTimeout(
+        abortModelResponse,
+        Math.max(0, modelStatus.deadlineAt - Date.now())
+      )
+    }
+    // Abort signals may be delivered from another request's context.
+    const emitModelStatus = AsyncResource.bind((
+      state: ModelResponseState
+    ): void => {
+      if (cancellationSignal.aborted && state !== ModelResponseState.Completed) {
+        return
+      }
+
+      modelStatus.state = state
+      SOCKET_SERVER.emitToChatClients('model-response-status', { ...modelStatus }, {
+        sessionId: modelStatus.sessionId
+      })
+    })
+    const clearModelStatus = (): void => {
+      if (modelStatus.state !== ModelResponseState.Completed) {
+        emitModelStatus(ModelResponseState.Completed)
+      }
+    }
+    executionSignal?.addEventListener('abort', clearModelStatus, { once: true })
+    emitModelStatus(ModelResponseState.Waiting)
 
     waitNoticeTimer = setTimeout(() => {
-      if (completed) {
+      if (completed || cancellationSignal.aborted) {
         return
       }
       this.logTitle(phase)
       LogHelper.warning(
         `callAgentModel: pending > ${AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS}ms`
       )
-      void this.emitProgress(
-        BRAIN.wernicke('react.tool_call.waiting', '', {
-          '{{ reason }}': delayReason
-        })
-      )
     }, AGENT_TOOL_CALL_WAIT_NOTICE_DELAY_MS)
 
     diagnosisTimer = setTimeout(() => {
-      if (completed) {
+      if (completed || cancellationSignal.aborted) {
         return
       }
 
-      void this.runLongToolCallDiagnosis(
+      this.logLongToolCallDiagnosis(
         promptForLog,
         activeSystemPrompt,
-        preparedTools
+        preparedTools,
+        phase,
+        toolChoice
       )
-
-      diagnosisRetryTimer = setTimeout(() => {
-        if (completed || toolCallAbortController.signal.aborted) {
-          return
-        }
-
-        const abortReason: LLMPromptAbortReason = {
-          shouldRetry: true,
-          retryStrategy: 'timeout',
-          source: 'agent_tool_call_diagnosis',
-          delayMs: AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS
-        }
-
-        this.logTitle(phase)
-        LogHelper.warning(
-          `callAgentModel: diagnosis grace period exceeded (${AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS}ms); canceling in-flight request and retrying`
-        )
-
-        toolCallAbortController.abort(abortReason)
-      }, AGENT_TOOL_CALL_DIAGNOSIS_RETRY_DELAY_MS)
     }, AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS)
 
     try {
       // Reviews must neither expose their text nor replace the proposed answer.
-      // A subsequent operational call discards any ending rejected by review.
+      // A subsequent operational call removes any ending rejected by review.
       if (!options.isCompletionReview) {
         this.answerStream.discard()
       }
       completionResult = await LLM_PROVIDER.prompt(preparedTranscript, {
         dutyType: LLMDuties.ReAct,
         systemPrompt: activeSystemPrompt,
+        ...(options.isCompletionReview && options.useReviewSchema !== false
+          ? { data: AGENT_COMPLETION_REVIEW_SCHEMA }
+          : {}),
         temperature: AGENT_TEMPERATURE,
         timeout: AGENT_INFERENCE_TIMEOUT_MS,
         maxRetries: AGENT_TIMEOUT_MAX_RETRIES,
         maxTokens: maxOutputTokens,
         shouldStream: inferencePolicy.streamToProvider,
+        onAttempt: (timing): void => {
+          this.responseTraceCollector.recordInference({ ...timing, phase })
+          this.scheduleTraceSave()
+          if (timing.outcome !== 'started') {
+            lastAttemptFailureKind = timing.failureKind
+          }
+          if (timing.outcome === 'started') {
+            renewModelResponseDeadline(timing.inferenceTimeoutMs)
+            modelAttempt += 1
+            modelStatus.attempt = modelAttempt
+            modelStatus.lastActivityAt = null
+            emitModelStatus(ModelResponseState.Waiting)
+          } else if (timing.outcome === 'completed') {
+            clearModelStatus()
+          } else {
+            modelStatus.retryReason = timing.failureKind
+            emitModelStatus(ModelResponseState.Retrying)
+          }
+        },
+        onStreamEvent: (event): void => {
+          if (cancellationSignal.aborted) {
+            return
+          }
+
+          if (event.type === 'finish') {
+            // Provider generation is done; local artifact work has its own lifecycle.
+            clearTimeout(responseDeadlineTimer)
+          } else if (
+            event.type === 'tool-input-delta' || event.type === 'tool-call-delta' ||
+            event.type === 'tool-call' || event.type === 'tool-result' ||
+            event.type === 'file'
+          ) {
+            renewModelResponseDeadline()
+          }
+          if (event.type === 'stream-open' && !options.isCompletionReview) {
+            // A retry replaces any unfinished previews from its predecessor.
+            this.closeStreamedToolCalls()
+          }
+
+          if (modelStatus.state === ModelResponseState.Completed) {
+            return
+          }
+
+          modelStatus.lastActivityAt = Date.now()
+          if (event.type === 'stream-open' || event.type === 'reasoning-end') {
+            emitModelStatus(ModelResponseState.Connected)
+          } else if (event.type === 'reasoning-start') {
+            emitModelStatus(ModelResponseState.Reasoning)
+          } else if (
+            event.type === 'finish' || (!options.isCompletionReview && (
+              event.type === 'tool-input-start' || event.type === 'tool-input-delta' ||
+              event.type === 'tool-call-delta' || event.type === 'tool-call'
+            ))
+          ) {
+            clearModelStatus()
+          } else if (Date.now() - lastActivityUpdateAt >= MODEL_ACTIVITY_UPDATE_INTERVAL_MS) {
+            lastActivityUpdateAt = Date.now()
+            emitModelStatus(modelStatus.state)
+          }
+        },
+        onToken: (token: unknown): void => {
+          if (cancellationSignal.aborted || typeof token !== 'string') {
+            return
+          }
+
+          if (token.length > 0) {
+            renewModelResponseDeadline()
+          }
+
+          if (!options.isCompletionReview) {
+            if (token.trim()) {
+              clearModelStatus()
+            }
+
+            this.answerStream.push(token)
+          }
+        },
+        onReasoningToken: (reasoningChunk: string): void => {
+          if (cancellationSignal.aborted) {
+            return
+          }
+
+          if (reasoningChunk.length > 0) {
+            renewModelResponseDeadline()
+          }
+
+          if (shouldEmitReasoning && reasoningGenerationId) {
+            if (reasoningChunk) {
+              this.firstOutputAt ??= Date.now()
+            }
+
+            this.emitReasoningToken(reasoningChunk, reasoningGenerationId, phase)
+          }
+        },
         ...(!options.isCompletionReview
           ? {
-              onToken: (token: unknown): void => {
-                if (typeof token === 'string') this.answerStream.push(token)
+              onToolCall: (call): void => {
+                clearModelStatus()
+                const callable = functionsByToolName?.get(call.function.name)
+                if (!callable) {
+                  return
+                }
+
+                const previous = this.streamedToolCalls.get(call.id)
+                const input = call.function.arguments
+                if (previous?.input === input) {
+                  return
+                }
+
+                const groupId = previous?.groupId || `agent_${StringHelper.random(12)}`
+                this.streamedToolCalls.set(call.id, { callable, groupId, input })
+                this.firstOutputAt ??= Date.now()
+                this.reportProgressEvent({
+                  type: 'tool_call',
+                  toolCall: {
+                    id: groupId,
+                    name: callable.qualifiedName,
+                    status: 'preparing',
+                    input
+                  }
+                })
+                emitToolExecutionInputToWebApp({
+                  ...callable,
+                  toolGroupId: groupId,
+                  toolInput: input,
+                  status: 'preparing'
+                })
               }
             }
           : {}),
@@ -1021,48 +1475,64 @@ export class ReActLLMDuty extends LLMDuty {
         ...(shouldEmitReasoning && inferencePolicy.reasoningSummary
           ? { reasoningSummary: inferencePolicy.reasoningSummary }
           : {}),
-        ...(shouldEmitReasoning && reasoningGenerationId
-          ? {
-              onReasoningToken: (reasoningChunk: string): void => {
-                this.emitReasoningToken(
-                  reasoningChunk,
-                  reasoningGenerationId,
-                  phase
-                )
-              }
-            }
-          : {}),
         reasoningMode,
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(reasoningUseDefaultEffort ? { reasoningUseDefaultEffort: true } : {}),
         ...(serviceTier ? { serviceTier } : {}),
         ...(disableThinking ? { disableThinking: true } : {}),
+        disableContextCompaction: this.automaticCompactionFailed,
         tools: preparedTools,
         toolChoice,
-        signal: toolCallAbortController.signal
+        signal: toolCallAbortController.signal,
+        cancellationSignal
       })
+      if (completionResult) {
+        this.contextUsage = captureContextUsage({
+          // Agent prompts include system instructions. A zero count from an
+          // adapter means usage is unavailable, rather than an empty prompt.
+          usedInputTokens: completionResult.usedInputTokens || undefined,
+          estimatedInputTokens: preparedContext.estimatedInputTokens,
+          contextWindowTokens
+        })
+        modelStatus.contextUsage = this.contextUsage
+        emitModelStatus(ModelResponseState.Completed)
+      }
+
+      if (!completionResult && lastAttemptFailureKind === CompletionFailureKind.Timeout) {
+        throw new AgentModelResponseTimeoutError()
+      }
+    } catch (error) {
+      if (error instanceof AgentModelResponseTimeoutError) {
+        // Preserve the checkpoint without another request to the unavailable model.
+        this.continuationSummaryFailed = true
+        this.answerStream.discard()
+      }
+
+      throw error
     } finally {
       completed = true
+      clearTimeout(responseDeadlineTimer)
+      executionSignal?.removeEventListener('abort', clearModelStatus)
+      clearModelStatus()
       if (waitNoticeTimer) {
         clearTimeout(waitNoticeTimer)
       }
       if (diagnosisTimer) {
         clearTimeout(diagnosisTimer)
       }
-      if (diagnosisRetryTimer) {
-        clearTimeout(diagnosisRetryTimer)
-      }
     }
 
+    executionSignal?.throwIfAborted()
     if (!completionResult) {
       LogHelper.debug('callAgentModel: no completion result returned')
       const providerError = LLM_PROVIDER.consumeLastProviderErrorMessage()
       if (providerError) {
         throw new AgentModelProviderError(
           providerError,
-          !options.isContextRecoveryAttempt &&
-            preparedContext.estimatedInputTokens >=
+          !options.isContextRecoveryAttempt && (
+            providerManagesContext || preparedContext.estimatedInputTokens >=
               resolveAgentContextRecoveryTriggerTokens(providerName)
+          )
         )
       }
       return null
@@ -1081,10 +1551,12 @@ export class ReActLLMDuty extends LLMDuty {
       output: completionResult.output,
       reasoning: completionResult.reasoning,
       usedInputTokens: completionResult.usedInputTokens,
+      accounting: completionResult.accounting,
       usedOutputTokens: completionResult.usedOutputTokens,
       providerDecodeDurationMs: completionResult.providerDecodeDurationMs,
       providerTokensPerSecond: completionResult.providerTokensPerSecond,
-      generationDurationMs: completionResult.generationDurationMs
+      generationDurationMs: completionResult.generationDurationMs,
+      firstTokenAt: completionResult.firstTokenAt
     })
 
     if (toolCalls && toolCalls.length > 0) {
@@ -1120,6 +1592,12 @@ export class ReActLLMDuty extends LLMDuty {
       return {
         toolCalls: normalizedToolCalls,
         textContent,
+        ...(completionResult.compactionContext
+          ? { compactionContext: completionResult.compactionContext }
+          : {}),
+        ...(completionResult.reasoningItems?.length
+          ? { reasoningItems: completionResult.reasoningItems }
+          : {}),
         ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
           ? { reasoning: completionResult.reasoning }
           : {}),
@@ -1133,16 +1611,32 @@ export class ReActLLMDuty extends LLMDuty {
       }
     }
 
-    const textContent =
+    let textContent =
       typeof completionResult.output === 'string'
         ? completionResult.output
         : ''
+
+    // JSON-mode providers return a parsed verdict; the loop validates its text.
+    if (
+      options.isCompletionReview &&
+      completionResult.output &&
+      typeof completionResult.output === 'object'
+    ) {
+      textContent = JSON.stringify(completionResult.output)
+    }
+
     this.logTitle(phase)
     LogHelper.debug(
       `callAgentModel: final text response received (${textContent.length} chars)`
     )
     return {
       textContent,
+      ...(completionResult.compactionContext
+        ? { compactionContext: completionResult.compactionContext }
+        : {}),
+      ...(completionResult.reasoningItems?.length
+        ? { reasoningItems: completionResult.reasoningItems }
+        : {}),
       ...(providerName === LLMProviders.DeepSeek && completionResult.reasoning
         ? { reasoning: completionResult.reasoning }
         : {}),
@@ -1162,7 +1656,16 @@ export class ReActLLMDuty extends LLMDuty {
 
   private safeJSONStringify(value: unknown): string {
     try {
-      return JSON.stringify(value)
+      // Opaque replay data belongs in the provider request, not diagnostic prose.
+      return JSON.stringify(value, (key, content) => {
+        if (key === 'sourceTranscript') {
+          return undefined
+        }
+
+        return key === 'encryptedContent' || key === 'encrypted_content'
+          ? '[provider context retained]'
+          : content
+      })
     } catch {
       return String(value)
     }
@@ -1341,6 +1844,7 @@ export class ReActLLMDuty extends LLMDuty {
   }
 
   private observeCompletionMetrics(params: {
+    accounting?: CompletionAccounting | undefined
     phase: AgentPhase
     completionStartedAt: number
     completedAt: number
@@ -1357,6 +1861,7 @@ export class ReActLLMDuty extends LLMDuty {
       providerName: getLLMProviderName(),
       accumulator: {
         completionCount: this.completionCount,
+        usageAccounting: this.usageAccounting,
         totalInputTokens: this.totalInputTokens,
         totalOutputTokens: this.totalOutputTokens,
         totalVisibleOutputTokens: this.totalVisibleOutputTokens,
@@ -1371,6 +1876,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: params.output,
       reasoning: params.reasoning,
       usedInputTokens: params.usedInputTokens,
+      accounting: params.accounting,
       usedOutputTokens: params.usedOutputTokens,
       generationDurationMs: params.generationDurationMs,
       providerDecodeDurationMs: params.providerDecodeDurationMs,
@@ -1379,6 +1885,7 @@ export class ReActLLMDuty extends LLMDuty {
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
     })
     this.completionCount = observedMetrics.accumulator.completionCount
+    this.usageAccounting = observedMetrics.accumulator.usageAccounting
     this.totalInputTokens = observedMetrics.accumulator.totalInputTokens
     this.totalOutputTokens = observedMetrics.accumulator.totalOutputTokens
     this.totalVisibleOutputTokens =
@@ -1410,58 +1917,26 @@ export class ReActLLMDuty extends LLMDuty {
     LogHelper.debug('Prompt reasoning [tools]: none')
   }
 
-  private buildLongToolCallReason(
+  /**
+   * Keeps pending-request diagnostics in server logs rather than owner messages.
+   */
+  private logLongToolCallDiagnosis(
     prompt: string,
     systemPrompt: string,
-    tools: OpenAITool[]
-  ): string {
-    const estimatedPromptTokens =
-      this.estimateTokensFromText(prompt) +
-      this.estimateTokensFromText(systemPrompt) +
-      this.estimateTokensFromText(JSON.stringify(tools))
-
-    if (estimatedPromptTokens > 4_500) {
-      return BRAIN.wernicke('react.tool_call.reason.large_prompt', '', {
-        '{{ estimated_tokens }}': String(estimatedPromptTokens)
-      })
-    }
-
-    if (tools.length > 1) {
-      return BRAIN.wernicke('react.tool_call.reason.multi_tools', '', {
-        '{{ tool_count }}': String(tools.length)
-      })
-    }
-
-    return BRAIN.wernicke('react.tool_call.reason.provider_latency')
-  }
-
-  private async runLongToolCallDiagnosis(
-    prompt: string,
-    systemPrompt: string,
-    tools: OpenAITool[]
-  ): Promise<void> {
+    tools: OpenAITool[],
+    phase: AgentPhase,
+    toolChoice: string
+  ): void {
     const promptTokens =
       this.estimateTokensFromText(prompt) +
       this.estimateTokensFromText(systemPrompt)
     const toolSchemaTokens = this.estimateTokensFromText(JSON.stringify(tools))
     const totalEstimatedTokens = promptTokens + toolSchemaTokens
 
-    const diagnosisMessage = BRAIN.wernicke('react.tool_call.diagnosis', '', {
-      '{{ provider }}': getLLMProviderName(),
-      '{{ tool_choice }}': 'auto',
-      '{{ tool_count }}': String(tools.length),
-      '{{ total_tokens }}': String(totalEstimatedTokens),
-      '{{ prompt_tokens }}': String(promptTokens),
-      '{{ tool_tokens }}': String(toolSchemaTokens),
-      '{{ history_tokens }}': '0'
-    })
-
     this.logTitle('execution')
     LogHelper.warning(
-      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): ${diagnosisMessage}`
+      `Long tool-call diagnosis (> ${AGENT_TOOL_CALL_DIAGNOSIS_DELAY_MS}ms): provider=${getLLMProviderName()}, phase=${phase}, tool choice=${toolChoice}, tools=${tools.length}, approximate input tokens=${totalEstimatedTokens} (prompt=${promptTokens}, tool schemas=${toolSchemaTokens}).`
     )
-
-    await this.emitProgress(diagnosisMessage)
   }
 
   private async emitProgress(
@@ -1472,9 +1947,19 @@ export class ReActLLMDuty extends LLMDuty {
       return
     }
 
+    const id = `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`
+    const createdAt = Date.now()
+
+    // Hosts receive the same non-final message as the built-in chat client.
+    this.reportProgressEvent({
+      type: 'progress_message',
+      message: { id, content: message, createdAt }
+    })
     try {
       SOCKET_SERVER.emitAnswerToChatClients({
-        id: `agent-progress-${StringHelper.random(8, { onlyLetters: true })}`,
+        id,
+        messageId: id,
+        sentAt: createdAt,
         answer: message,
         generationId,
         fallbackText: message,
@@ -1497,8 +1982,8 @@ export class ReActLLMDuty extends LLMDuty {
 
     const normalizedOutput = StringHelper.normalizeUserFacingText(output)
 
-    // The normal answer event finalizes streamed text, including review edits
-    // and runtime-generated endings. Never replay the answer as synthetic tokens.
+    // The normal answer event settles the active bubble with accepted text,
+    // including review edits or runtime-generated endings, without replaying tokens.
     this.answerStream.finish()
 
     this.logTitle('final_answer')
@@ -1509,6 +1994,8 @@ export class ReActLLMDuty extends LLMDuty {
     )
 
     const llmMetrics = deriveLLMMetrics({
+      contextUsage: this.contextUsage,
+      usageAccounting: this.usageAccounting,
       completionCount: this.completionCount,
       providerName: getLLMProviderName(),
       normalizedOutput,
@@ -1518,6 +2005,9 @@ export class ReActLLMDuty extends LLMDuty {
       totalOutputChars: this.totalOutputChars,
       totalGenerationDurationMs: this.totalGenerationDurationMs,
       turnDurationMs: Math.max(Date.now() - this.executionStartedAt, 0),
+      turnTtftMs: this.firstOutputAt === null
+        ? undefined
+        : Math.max(this.firstOutputAt - this.executionStartedAt, 0),
       phaseMetrics: this.phaseMetrics,
       finalAnswerMetrics: this.finalAnswerMetrics,
       estimateTokensFromText: this.estimateTokensFromText.bind(this)
@@ -1533,6 +2023,7 @@ export class ReActLLMDuty extends LLMDuty {
       output: normalizedOutput,
       data: {
         hasExplicitMemoryWrite: this.hasExplicitMemoryWrite,
+        hasOwnerMessages: this.hasOwnerMessages,
         finalIntent: this.finalResponseIntent,
         llmMetrics,
         agentResponseTrace,
@@ -1550,20 +2041,6 @@ export class ReActLLMDuty extends LLMDuty {
     } as unknown as LLMDutyResult
   }
 
-  private getReasoningGenerationId(
-    phase: AgentPhase,
-    fallbackGenerationId?: string | null
-  ): string | null {
-    const baseGenerationId =
-      this.reasoningGenerationId || fallbackGenerationId || null
-
-    if (!baseGenerationId) {
-      return null
-    }
-
-    return `${baseGenerationId}_${phase}`
-  }
-
   private emitReasoningToken(
     token: string,
     generationId: string,
@@ -1573,13 +2050,13 @@ export class ReActLLMDuty extends LLMDuty {
       return
     }
 
-    const chunks = token.match(/(\s+|[^\s]+)/g) || [token]
-    for (const chunk of chunks) {
-      SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {
-        token: chunk,
-        generationId,
-        phase
-      })
-    }
+    this.responseTraceCollector.recordReasoning(generationId, token, phase)
+    this.scheduleTraceSave()
+    // Preserve provider chunks; word-level events overwhelm long-running chat UIs.
+    SOCKET_SERVER.emitToChatClients('llm-reasoning-token', {
+      token,
+      generationId,
+      phase
+    })
   }
 }

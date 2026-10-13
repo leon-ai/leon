@@ -14,19 +14,19 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'openrouter',
     requiredEnv: 'LEON_OPENROUTER_API_KEY',
-    llmTarget: 'openrouter/qwen/qwen3.6-flash',
+    llmTarget: 'openrouter/qwen/qwen3.8-flash',
     reasoning: 'none'
   },
   {
     provider: 'openai',
     requiredEnv: 'LEON_OPENAI_API_KEY',
-    llmTarget: 'openai/gpt-5.6-terra',
+    llmTarget: 'openai/gpt-6-luna',
     reasoning: 'low'
   },
   {
     provider: 'anthropic',
     requiredEnv: 'LEON_ANTHROPIC_API_KEY',
-    llmTarget: 'anthropic/claude-haiku-4-5',
+    llmTarget: 'anthropic/claude-haiku-5-5',
     reasoning: 'none'
   },
   {
@@ -44,7 +44,7 @@ export const PROVIDER_MATRIX = [
   {
     provider: 'zai',
     requiredEnv: 'LEON_ZAI_API_KEY',
-    llmTarget: 'zai/glm-5-turbo',
+    llmTarget: 'zai/glm-5.3-flash',
     reasoning: 'none'
   },
   {

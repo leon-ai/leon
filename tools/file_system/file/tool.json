@@ -1,0 +1,312 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "file",
+  "toolkit_id": "file_system",
+  "concurrency": "serial",
+  "name": "File",
+  "description": "Read PDF text and visuals, prepare searchable document batches, OCR images, and read, write, append or patch local text files.",
+  "icon_name": "file-text-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "resources": {
+    "PaddleOCR-v6-small-det": [
+      "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_det_onnx/resolve/28fe5895c24fd108c19eb3e8479f4ab385fbfc62/inference.onnx"
+    ],
+    "PaddleOCR-v6-small-rec": [
+      "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/b8f84f0b80c529de40b4fbb3544b84fa7233a513/inference.onnx",
+      "https://huggingface.co/PaddlePaddle/PP-OCRv6_small_rec_onnx/resolve/b8f84f0b80c529de40b4fbb3544b84fa7233a513/inference.yml"
+    ],
+    "RapidOCR-text-orientation": [
+      "https://huggingface.co/SWHL/RapidOCR/resolve/1cfba2e90fc938db55889873735088de210cc173/PP-OCRv1/ch_ppocr_mobile_v2.0_cls_infer.onnx"
+    ]
+  },
+  "functions": {
+    "readDocument": {
+      "description": "Extract PDF with LiteParse, or Word, Excel, PowerPoint, OpenDocument, EPUB, RTF and CSV with Xberg, as cached local Markdown.",
+      "progressive_guidance": "Follow nextOffsetChars for full coverage and reuse extracted facts. If requiresPageRead is returned, use readPdf. Embedded images and charts are not interpreted by text conversion.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "options": { "type": "object", "properties": {
+            "offsetChars": { "type": "integer", "minimum": 0 },
+            "maxChars": { "type": "integer", "minimum": 1, "maximum": 40000 }
+          }, "additionalProperties": false }
+        }, "required": ["path"], "additionalProperties": false
+      }
+    },
+    "prepareDocumentSearch": {
+      "description": "Cache document batches as searchable text for ripgrep, with source mappings and coverage.",
+      "progressive_guidance": "For directories, discover files first with ripgrep.listFiles. Prepare selected documents in batches of at most 32, then pass returned paths to ripgrep.search. Map matches back using documents[].sourcePath. Extracted Markdown line numbers are not original-file line numbers. PDF page markers identify boundaries; readPdf confirms page references. OCR is opt-in for bulk preparation. Check failures, missingTextPages and nextPage before claiming full coverage. Prepared text remains in conversation artifacts.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "paths": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "maxItems": 32
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "ocr": {
+                "type": "boolean",
+                "description": "Use existing local OCR for images and empty PDF text layers; default false."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "paths"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "readPdf": {
+      "description": "Read PDF page ranges as text with optional images, page references and continuation cursors.",
+      "progressive_guidance": "Batch page ranges with startPage/pageCount and independent reads in one turn. Start with text; use render for figures, charts or ambiguous tables with a vision model, otherwise state the limitation. OCR cannot interpret charts or recover formatting. Layout coordinates use returned dimensions and units. Follow nextPage/nextOffsetChars for coverage; resume nextLayoutOffset with startPage, pageCount=1 and layoutOffset.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" },
+          "options": {
+            "type": "object",
+            "properties": {
+              "startPage": { "type": "integer", "minimum": 1, "description": "First page (1-based)." },
+              "pageCount": { "type": "integer", "minimum": 1, "maximum": 8, "description": "Maximum pages to read, default 1." },
+              "offsetChars": { "type": "integer", "minimum": 0, "description": "Continue within startPage using the returned nextOffsetChars." },
+              "maxChars": { "type": "integer", "minimum": 1, "maximum": 40000 },
+              "layout": { "type": "boolean", "description": "Include bounded native blocks/table cells or OCR text regions, default false." },
+              "layoutOffset": { "type": "integer", "minimum": 0, "description": "Continue a page's layout using nextLayoutOffset. Independent of text pagination." },
+              "render": { "type": "boolean", "description": "Also attach bounded page images; requires a vision-capable agent model." },
+              "ocr": { "type": "boolean", "description": "Force local OCR even with a partial text layer. Default: OCR only empty text layers. Set false to disable." }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["path"],
+        "additionalProperties": false
+      }
+    },
+    "readImage": {
+      "description": "Read image text with local multilingual OCR, including for text-only models. Models are downloaded on first use and reused. Optionally attach a bounded image for a vision model.",
+      "progressive_guidance": "OCR returns text, not chart data or semantic formatting. Request layout for text regions and confidence; coordinates refer to the returned image dimensions. Follow nextLayoutOffset using layoutOffset. For visual interpretation use ocr=false, render=true with the selected vision-capable model; otherwise state the limitation.",
+      "parameters": {
+        "type": "object",
+        "properties": { "path": { "type": "string" }, "options": {
+          "type": "object", "properties": {
+            "ocr": { "type": "boolean", "description": "Extract text locally, default true." },
+            "render": { "type": "boolean", "description": "Attach visual evidence, default false; requires vision support." },
+            "offsetChars": { "type": "integer", "minimum": 0 },
+            "layout": { "type": "boolean", "description": "Include bounded OCR text regions, default false. Requires OCR." },
+            "layoutOffset": { "type": "integer", "minimum": 0 },
+            "maxChars": { "type": "integer", "minimum": 1, "maximum": 40000 }
+          }, "additionalProperties": false
+        } },
+        "required": ["path"],
+        "additionalProperties": false
+      }
+    },
+    "read": {
+      "description": "Read a local text file. Rejects likely binary files. Use head, tail, or maxChars to limit output when needed.",
+      "progressive_guidance": "Use bounded reads and follow nextOffsetChars when needed. contentHash covers the full file bytes and can be passed as expectedContentHash to patch.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "head": {
+                "type": "number",
+                "description": "Return only the first N lines."
+              },
+              "tail": {
+                "type": "number",
+                "description": "Return only the last N lines."
+              },
+              "maxChars": {
+                "type": "number",
+                "description": "Maximum characters to return."
+              },
+              "offsetChars": {
+                "type": "number",
+                "description": "Character offset to start reading from."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "patch": {
+      "description": "Apply validated targeted text replacements to one existing UTF-8 file and return a bounded replacement diff.",
+      "progressive_guidance": "Read the current file first. Provide exact oldText with enough context to match once. All replacements match the original snapshot and must not overlap. Pass the read contentHash as expectedContentHash when available. Missing, ambiguous or stale matches leave the file unchanged: re-read and correct the patch. Preserve scope and repository instructions. The diff is a preview, not executable unified-diff syntax.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "changes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "properties": {
+                "oldText": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "newText": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "oldText",
+                "newText"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "expectedContentHash": {
+                "type": "string",
+                "minLength": 64,
+                "maxLength": 64
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path",
+          "changes"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "readToolArtifact": {
+      "description": "Read a previous tool output artifact from an outputLogPath listed in previous_tool_artifacts.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "outputLogPath": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "maxChars": {
+                "type": "number"
+              },
+              "offsetChars": {
+                "type": "number"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "outputLogPath"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "write": {
+      "description": "Create or fully replace a local text file; overwrite=true saves original bytes in a unique adjacent backup.",
+      "progressive_guidance": "Verify the returned backupPath against backupContentHash. Full replacement rejects symbolic and hard-link aliases.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "overwrite": {
+                "type": "boolean",
+                "description": "Enable automatic backup and full replacement; default false."
+              },
+              "createParents": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "append": {
+      "description": "Append text content to a local file.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "createParents": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "path",
+          "content"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "attach": {
+      "description": "Attach a completed file to the conversation for preview and download. Use after writing or rendering a deliverable.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "targetPath": {
+            "type": "string"
+          },
+          "mimeType": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "targetPath",
+          "mimeType"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

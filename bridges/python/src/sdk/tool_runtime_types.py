@@ -12,6 +12,13 @@ class ToolModelFile(TypedDict):
     visualDetail: NotRequired[Literal["auto", "low", "high"]]
 
 
+class ToolProgressStream(TypedDict):
+    """Lifetime of progress belonging to retained work."""
+
+    id: str
+    state: Literal["running", "completed", "failed"]
+
+
 class ToolRuntimeProgress(TypedDict):
     """Progress emitted by a tool during execution."""
 
@@ -19,6 +26,7 @@ class ToolRuntimeProgress(TypedDict):
     message: str
     key: NotRequired[str]
     data: NotRequired[dict[str, Any]]
+    stream: NotRequired[ToolProgressStream]
 
 
 @dataclass
@@ -35,6 +43,8 @@ class ToolExecutionContext:
     parameters: dict[str, Any]
     profile_name: str
     conversation_session_id: str | None
+    connections: dict[str, dict[str, Any]] | None = None
+    leon_service: dict[str, str] | None = None
     signal: Event | None = None
     on_progress: Callable[[ToolRuntimeProgress], None] | None = None
 

@@ -6,6 +6,8 @@ import { WidgetWrapper, Flexbox, Loader, Text } from '@aurora'
 
 import renderAuroraComponent from './render-aurora-component'
 import ToolUIHandler from './tool-ui-handler'
+import { expandConversationTimeline } from './conversation-timeline'
+import { renderStreamedMessage } from './streamed-message.js'
 
 const WIDGETS_TO_FETCH = []
 const WIDGETS_FETCH_CACHE = new Map()
@@ -35,6 +37,12 @@ export default class Chatbot {
     this.noBubbleMessage = document.querySelector('#no-bubble')
     this.parsedBubbles = []
     this.reasoningBlocks = new Map()
+    this.pendingReasoningBlocks = new Set()
+    this.pendingStreamedMessages = new Map()
+    this.feedRenderFrame = null
+    this.feedScrollResetFrame = null
+    this.pendingFeedScroll = false
+    this.forceFeedScroll = false
     this.feedAutoScrollEnabled = true
     this.isProgrammaticFeedScroll = false
     this.widgetHydrationPromise = null
@@ -145,6 +153,62 @@ export default class Chatbot {
     this.feedAutoScrollEnabled = this.isElementNearBottom(this.feed)
   }
 
+  /**
+   * Coalesces streaming DOM writes before measuring either scroll container.
+   */
+  scheduleFeedRender() {
+    if (this.feedRenderFrame !== null) return
+
+    this.feedRenderFrame = requestAnimationFrame(() => {
+      this.feedRenderFrame = null
+      const reasoningBlocks = [...this.pendingReasoningBlocks]
+      this.pendingReasoningBlocks.clear()
+
+      for (const block of reasoningBlocks) {
+        this.appendReasoningText(block, block.pendingText)
+        block.pendingText = ''
+      }
+      for (const [element, message] of this.pendingStreamedMessages) {
+        // A rejected draft may have been removed before this frame was painted.
+        if (this.feed.contains(element)) {
+          renderStreamedMessage(element, this.formatMessage(message))
+        }
+      }
+      this.pendingStreamedMessages.clear()
+
+      for (const block of reasoningBlocks) {
+        this.scrollReasoningContentToBottom(block)
+      }
+      if (this.pendingFeedScroll &&
+          (this.forceFeedScroll || this.feedAutoScrollEnabled)) {
+        this.isProgrammaticFeedScroll = true
+        this.feed.scrollTo(0, this.feed.scrollHeight)
+        this.feedScrollResetFrame = requestAnimationFrame(() => {
+          this.feedScrollResetFrame = null
+          this.isProgrammaticFeedScroll = false
+          this.feedAutoScrollEnabled = this.isElementNearBottom(this.feed)
+        })
+      }
+      this.pendingFeedScroll = false
+      this.forceFeedScroll = false
+    })
+  }
+
+  /**
+   * Batches live answer formatting, but settles accepted text immediately.
+   */
+  renderStreamedMessage(element, message, shouldAnimate = true) {
+    if (!shouldAnimate) {
+      // The queued draft must never overwrite an accepted final answer.
+      this.pendingStreamedMessages.delete(element)
+      renderStreamedMessage(element, this.formatMessage(message), false)
+      return
+    }
+
+    this.pendingStreamedMessages.set(element, message)
+    this.scheduleFeedRender()
+  }
+
   scrollDown(options = {}) {
     if (!this.feed) {
       return
@@ -156,13 +220,9 @@ export default class Chatbot {
       return
     }
 
-    this.isProgrammaticFeedScroll = true
-    this.feed.scrollTo(0, this.feed.scrollHeight)
-
-    requestAnimationFrame(() => {
-      this.isProgrammaticFeedScroll = false
-      this.feedAutoScrollEnabled = this.isElementNearBottom(this.feed)
-    })
+    this.pendingFeedScroll = true
+    this.forceFeedScroll ||= force
+    this.scheduleFeedRender()
   }
 
   scrollReasoningContentToBottom(reasoningBlock) {
@@ -182,15 +242,16 @@ export default class Chatbot {
   }
 
   getWidgetPayload(formattedString) {
-    if (
-      typeof formattedString !== 'string' ||
-      !formattedString.includes('"component":"WidgetWrapper"')
-    ) {
+    if (typeof formattedString !== 'string') {
       return null
     }
 
     try {
-      return JSON.parse(formattedString)
+      const payload = JSON.parse(formattedString)
+
+      return payload?.id && payload?.widget && payload?.componentTree
+        ? payload
+        : null
     } catch {
       return null
     }
@@ -269,7 +330,8 @@ export default class Chatbot {
         ? renderAuroraComponent(
             this.socket,
             fetchedWidget.componentTree,
-            fetchedWidget.supportedEvents
+            fetchedWidget.supportedEvents,
+            this.serverURL
           )
         : createElement(WidgetWrapper, {
             children: createElement(Flexbox, {
@@ -327,6 +389,14 @@ export default class Chatbot {
   }
 
   resetFeed() {
+    cancelAnimationFrame(this.feedRenderFrame)
+    cancelAnimationFrame(this.feedScrollResetFrame)
+    this.feedRenderFrame = null
+    this.feedScrollResetFrame = null
+    this.pendingReasoningBlocks.clear()
+    this.pendingStreamedMessages.clear()
+    this.pendingFeedScroll = false
+    this.forceFeedScroll = false
     WIDGETS_TO_FETCH.length = 0
     this.toolUIHandler.clearToolGroups()
     this.feed.innerHTML = ''
@@ -339,6 +409,7 @@ export default class Chatbot {
     this.parsedBubbles = []
     this.reasoningBlocks.clear()
     this.feedAutoScrollEnabled = true
+    this.isProgrammaticFeedScroll = false
   }
 
   async loadFeed() {
@@ -348,22 +419,14 @@ export default class Chatbot {
       ? `&session_id=${encodeURIComponent(this.sessionId)}`
       : ''
 
-    const [historyResponse, systemWidgetsResponse] = await Promise.all([
-      axios.get(
-        `${this.serverURL}/api/v1/conversation-history?supports_widgets=true${sessionQuery}`
-      ),
-      axios.get(
-        `${this.serverURL}/api/v1/system-widgets?supports_widgets=true${sessionQuery}`
-      )
-    ])
+    const historyResponse = await axios.get(
+      `${this.serverURL}/api/v1/conversation-history?supports_widgets=true${sessionQuery}`
+    )
     const history = Array.isArray(historyResponse.data?.history)
       ? historyResponse.data.history
       : []
-    const systemWidgets = Array.isArray(systemWidgetsResponse.data?.widgets)
-      ? systemWidgetsResponse.data.widgets
-      : []
 
-    const timelineItems = [...history, ...systemWidgets]
+    const timelineItems = expandConversationTimeline(history)
       .map((item, index) => ({
         ...item,
         sortIndex: index
@@ -400,10 +463,14 @@ export default class Chatbot {
         continue
       }
 
-      if (bubble.who === 'leon' && bubble.agentResponseTrace) {
-        this.toolUIHandler.replayAgentResponseTrace(
-          bubble.agentResponseTrace
-        )
+      if (bubble.reasoning) {
+        const { id, text, phase } = bubble.reasoning
+        this.createOrUpdateReasoningBlock(id, text, phase)
+        continue
+      }
+      if (bubble.toolCall) {
+        this.toolUIHandler.replayAgentResponseTrace({ toolCalls: [bubble.toolCall] })
+        continue
       }
 
       this.createBubble({
@@ -413,11 +480,77 @@ export default class Chatbot {
         sentAt: bubble.sentAt,
         save: false,
         isCreatingFromLoadingFeed: true,
-        messageId: bubble.messageId
+        messageId: bubble.messageId,
+        artifacts: bubble.artifacts
       })
     }
 
     void this.hydrateFetchedWidgets()
+  }
+
+  /**
+   * Render only server-owned artifact URLs, keeping filenames out of HTML.
+   */
+  renderArtifacts(container, artifacts) {
+    for (const artifact of artifacts || []) {
+      const expected = `/api/v1/artifacts/${encodeURIComponent(artifact.session_id)}/${encodeURIComponent(artifact.id)}`
+
+      if (artifact.url !== expected) {
+        continue
+      }
+
+      const card = document.createElement('div')
+
+      card.className = 'artifact-card'
+      const type = artifact.mime_type
+      const tag = [
+        'image/png',
+        'image/jpeg',
+        'image/webp',
+        'image/gif'
+      ].includes(type)
+        ? 'img'
+        : ['video/mp4', 'video/webm'].includes(type)
+          ? 'video'
+          : ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4'].includes(type)
+            ? 'audio'
+            : null
+
+      if (tag) {
+        const media = document.createElement(tag)
+
+        media.src = artifact.url
+        media.style.maxWidth = '100%'
+        media.style.maxHeight = '480px'
+        if (tag === 'img') {
+          media.alt = artifact.filename
+          media.loading = 'lazy'
+        } else {
+          media.controls = true
+          media.preload = 'metadata'
+        }
+
+        card.appendChild(media)
+      }
+
+      const download = document.createElement('a')
+
+      download.href = `${artifact.url}?download=true`
+      download.download = artifact.filename
+      download.textContent = `${artifact.filename} · ${Math.ceil(artifact.size_bytes / 1_024)} KB · Download`
+      card.appendChild(download)
+      if (type === 'application/pdf') {
+        const preview = document.createElement('a')
+
+        preview.href = artifact.url
+        preview.target = '_blank'
+        preview.rel = 'noopener'
+        preview.textContent = ' Open PDF'
+        card.appendChild(preview)
+      }
+
+      container.appendChild(card)
+    }
   }
 
   createBubble(params) {
@@ -448,8 +581,8 @@ export default class Chatbot {
 
     // Store original string before formatting
     const originalString = string
-    const formattedString = this.formatMessage(string)
-    const widgetPayload = this.getWidgetPayload(formattedString)
+    const widgetPayload = this.getWidgetPayload(string)
+    const formattedString = widgetPayload ? '' : this.formatMessage(string)
     const autoPlanInsertionPoint = this.getPlanWidgetInsertionPoint(widgetPayload)
     const resolvedBeforeElement = beforeElement || autoPlanInsertionPoint
 
@@ -465,6 +598,7 @@ export default class Chatbot {
       this.feed.appendChild(container)
     }
     container.appendChild(bubble)
+    this.renderArtifacts(container, params.artifacts)
 
     if (who === 'leon' && metrics) {
       container.appendChild(this.createMetricsElement(metrics, sentAt))
@@ -482,11 +616,9 @@ export default class Chatbot {
     /**
      * Widget rendering
      */
-    if (
-      formattedString.includes &&
-      formattedString.includes('"component":"WidgetWrapper"')
-    ) {
-      const parsedWidget = widgetPayload || JSON.parse(formattedString)
+    if (widgetPayload) {
+      const parsedWidget = widgetPayload
+
       container.setAttribute('data-widget-id', parsedWidget.id)
 
       /**
@@ -525,14 +657,23 @@ export default class Chatbot {
       const reactNode = renderAuroraComponent(
         this.socket,
         widgetComponentTree,
-        widgetSupportedEvents
+        widgetSupportedEvents,
+        this.serverURL
       )
 
       root.render(reactNode)
     }
 
     if (save) {
-      this.saveBubble(who, originalString, formattedString, messageId, metrics, sentAt)
+      this.saveBubble(
+        who,
+        originalString,
+        formattedString,
+        messageId,
+        metrics,
+        sentAt,
+        params.artifacts
+      )
     }
 
     return container
@@ -585,7 +726,8 @@ export default class Chatbot {
       reasoningBlock = {
         container,
         content,
-        text: '',
+        pendingText: '',
+        textNode: null,
         isAutoScrollEnabled: true,
         isProgrammaticScroll: false
       }
@@ -603,11 +745,32 @@ export default class Chatbot {
       this.reasoningBlocks.set(generationId, reasoningBlock)
     }
 
-    reasoningBlock.text += token
-    reasoningBlock.content.textContent = reasoningBlock.text
-    this.scrollReasoningContentToBottom(reasoningBlock)
+    reasoningBlock.pendingText += token
+    this.pendingReasoningBlocks.add(reasoningBlock)
+    this.scheduleFeedRender()
 
     return reasoningBlock.container
+  }
+
+  /**
+   * Preserves completed lines so appending text does not lay out the whole trace.
+   */
+  appendReasoningText(block, text) {
+    const lines = text.split('\n')
+    for (const [index, line] of lines.entries()) {
+      if (!block.textNode) {
+        const element = document.createElement('div')
+        block.textNode = document.createTextNode('')
+        element.appendChild(block.textNode)
+        block.content.appendChild(element)
+      }
+      block.textNode.appendData(line)
+      if (index < lines.length - 1) {
+        // Keep literal newlines for copying and empty lines under pre-wrap.
+        block.textNode.appendData('\n')
+        block.textNode = null
+      }
+    }
   }
 
   handleToolOutput(data) {
@@ -638,7 +801,8 @@ export default class Chatbot {
     string,
     messageId,
     metrics = null,
-    sentAt = null
+    sentAt = null,
+    artifacts = []
   ) {
     if (!this.noBubbleMessage.classList.contains('hide')) {
       this.noBubbleMessage.classList.add('hide')
@@ -655,14 +819,14 @@ export default class Chatbot {
       string,
       originalString,
       messageId,
-      llmMetrics: metrics
+      llmMetrics: metrics,
+      artifacts
     })
     this.scrollDown()
   }
 
   formatMessage(message) {
-    const isWidget =
-      message.includes && message.includes('"component":"WidgetWrapper"')
+    const isWidget = this.getWidgetPayload(message)
 
     if (typeof message === 'string' && !isWidget) {
       message = escapeHTML(message)
@@ -806,6 +970,40 @@ export default class Chatbot {
     )
     const tokenFormatter = new Intl.NumberFormat()
     const timestampMarkup = this.formatTimestampMarkup(sentAt)
+    let contextMarkup = ''
+
+    if (Number.isFinite(metrics.contextUsedTokens)) {
+      const estimateLabel = metrics.contextUsageEstimated ? '~' : ''
+      const usedTokens = tokenFormatter.format(metrics.contextUsedTokens)
+      const hasContextWindow = Number.isFinite(metrics.contextWindowTokens) &&
+        metrics.contextWindowTokens > 0 && Number.isFinite(metrics.contextUsagePercent)
+      const contextLabel = hasContextWindow
+        ? `${estimateLabel}${metrics.contextUsagePercent.toFixed(1)}% context`
+        : `${estimateLabel}${usedTokens} context tok`
+      const contextTitle = hasContextWindow
+        ? `Latest model request: ${estimateLabel}${usedTokens} / ${tokenFormatter.format(metrics.contextWindowTokens)} input tokens`
+        : `Latest model request: ${estimateLabel}${usedTokens} input tokens; context capacity unknown`
+
+      contextMarkup = `
+        <span class="bubble-metric-item" title="${contextTitle}">
+          <i class="ri-database-2-line" aria-hidden="true"></i>
+          <span>${contextLabel}</span>
+        </span>
+      `.trim()
+    }
+
+    const accounting = metrics.usageAccounting
+    const calls = Number(metrics.completionCount || 0)
+    const accountingLabels = []
+    if (accounting?.cacheReadCompletionCount > 0 && Number.isFinite(accounting.cachedInputTokens)) {
+      const coverage = accounting.cacheReadCompletionCount === calls && inputTokens > 0
+        ? `${(100 * accounting.cachedInputTokens / inputTokens).toFixed(1)}%`
+        : 'partial'
+      accountingLabels.push(`${tokenFormatter.format(accounting.cachedInputTokens)} cached (${coverage})`)
+    }
+    const accountingMarkup = accountingLabels.map((label) =>
+      `<span class="bubble-metric-item" title="Observed agent model calls only">${label}</span>`
+    ).join('')
 
     return `
       <span class="bubble-metric-item">
@@ -821,6 +1019,8 @@ export default class Chatbot {
         <span>${tokensPerSecond.toFixed(2)} t/s</span>
       </span>
       ${timestampMarkup}
+      ${contextMarkup}
+      ${accountingMarkup}
     `.trim()
   }
 

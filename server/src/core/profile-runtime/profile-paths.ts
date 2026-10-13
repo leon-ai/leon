@@ -17,6 +17,7 @@ export interface ProfilePaths {
   nativeSkills: string
   agentSkills: string
   tools: string
+  connections: string
   sessions: string
 }
 
@@ -62,6 +63,7 @@ export function getProfilePaths(
     nativeSkills: path.join(skills, 'native'),
     agentSkills: path.join(skills, 'agent'),
     tools: path.join(root, 'tools'),
+    connections: path.join(root, 'connections'),
     sessions: path.join(root, 'sessions')
   }
 }

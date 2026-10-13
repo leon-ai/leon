@@ -4,7 +4,7 @@ from typing import Optional
 
 from bridges.python.src.sdk.base_tool import BaseTool, ExecuteCommandOptions
 from bridges.python.src.sdk.toolkit_config import ToolkitConfig
-from tools.music_audio.transcription_schema import TranscriptionOutput, TranscriptionSegment
+from .lib.transcription_schema import TranscriptionOutput, TranscriptionSegment
 
 MODEL_NAME = "faster-whisper-large-v3"
 DEFAULT_SETTINGS = {}

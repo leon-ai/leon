@@ -1,10 +1,12 @@
+import type { Artifact } from '../../../server/src/core/artifacts/artifact-types'
+
 export type FeedPlanStepStatus =
   | 'pending'
   | 'in_progress'
   | 'completed'
   | 'error'
 
-export type FeedToolCallStatus = 'running' | 'success' | 'error'
+export type FeedToolCallStatus = 'preparing' | 'running' | 'success' | 'error'
 
 export type JsonValue =
   | string
@@ -22,6 +24,7 @@ export interface FeedToolCall {
   toolIconName: string
   functionName: string
   status: FeedToolCallStatus
+  durationMs?: number
   input: JsonValue
   output?: JsonValue
 }
@@ -74,6 +77,7 @@ export interface OwnerFeedEntry {
 }
 
 export interface LeonFeedEntry {
+  artifacts?: Artifact[]
   id: string
   role: 'leon'
   activities: LeonFeedActivity[]

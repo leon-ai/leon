@@ -9,6 +9,10 @@ import type {
 } from '@/types'
 import { LogHelper } from '@/helpers/log-helper'
 import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
+import {
+  getActiveConversationSessionId,
+  getActiveTurnInference
+} from '@/core/session-manager/session-context'
 
 interface ConversationLoggerSettings {
   loggerName: string
@@ -26,6 +30,7 @@ interface LoadParams {
 interface UpsertParams {
   replaceMessageId?: string | null
   refreshSentAt?: boolean
+  sentAt?: number
   sessionId?: string
 }
 
@@ -118,9 +123,15 @@ export class ConversationLogger {
       let llmMetricsPlaceholder: string | null = null
       let agentTracePlaceholder: string | null = null
       const preparedConversationLog: MessageLog = {
+        ...('inference' in conversationLog
+          ? { inference: conversationLog.inference }
+          : {}),
         who: conversationLog.who,
         sentAt: conversationLog.sentAt,
         message: conversationLog.message,
+        ...(conversationLog.artifacts?.length
+          ? { artifacts: conversationLog.artifacts }
+          : {}),
         isAddedToHistory: conversationLog.isAddedToHistory,
         ...(conversationLog.messageId
           ? { messageId: conversationLog.messageId }
@@ -209,15 +220,30 @@ export class ConversationLogger {
     newRecord: Omit<MessageLog, 'sentAt'>,
     params?: UpsertParams
   ): Promise<void> {
+    // Capture the caller's turn before the serialized writer awaits other sessions.
+    const inference = getActiveTurnInference()
+
+    if (
+      newRecord.who === 'leon' &&
+      !('inference' in newRecord) &&
+      inference !== undefined &&
+      (!params?.sessionId || params.sessionId === getActiveConversationSessionId())
+    ) {
+      newRecord = { ...newRecord, inference }
+    }
+
     await this.enqueue(async () => {
       try {
         const conversationLogs = await this.getAllLogs(params?.sessionId)
         const targetMessageId =
-          params?.replaceMessageId || newRecord.messageId || null
+          params?.replaceMessageId || newRecord.messageId || newRecord.agentResponseTrace?.id || null
 
         if (targetMessageId) {
           const existingConversationLogIndex = conversationLogs.findIndex(
-            (conversationLog) => conversationLog.messageId === targetMessageId
+            (conversationLog) => conversationLog.messageId === targetMessageId || (
+              newRecord.agentResponseTrace?.id !== undefined &&
+              conversationLog.agentResponseTrace?.id === newRecord.agentResponseTrace.id
+            )
           )
 
           if (existingConversationLogIndex !== -1) {
@@ -229,16 +255,21 @@ export class ConversationLogger {
                 ...existingConversationLog,
                 ...newRecord,
                 messageId: targetMessageId,
-                sentAt: params?.refreshSentAt
-                  ? Date.now()
-                  : existingConversationLog.sentAt
+                // Keep replay order aligned with the time an update was displayed.
+                sentAt: params?.sentAt ?? (
+                  params?.refreshSentAt || (
+                    !existingConversationLog.isAddedToHistory && newRecord.isAddedToHistory
+                  )
+                    ? Date.now()
+                    : existingConversationLog.sentAt
+                )
               }
             }
           } else {
             conversationLogs.push({
               ...newRecord,
               messageId: targetMessageId,
-              sentAt: Date.now()
+              sentAt: params?.sentAt ?? Date.now()
             })
           }
         } else {
@@ -248,7 +279,7 @@ export class ConversationLogger {
 
           conversationLogs.push({
             ...newRecord,
-            sentAt: Date.now()
+            sentAt: params?.sentAt ?? Date.now()
           })
         }
 

@@ -8,7 +8,6 @@ import {
   COMPUTER_USE_APP_QUERY_PARAMETER,
   COMPUTER_USE_APP_RESULT_LIMIT,
   COMPUTER_USE_APP_WINDOW_LIMIT,
-  COMPUTER_USE_BROWSER_REF_LIMIT,
   COMPUTER_USE_WINDOW_RESULT_LIMIT
 } from './constants'
 import { asRecord, hasText } from './utils'
@@ -35,13 +34,6 @@ export class ComputerUseResultCompactor {
     if (action === 'get_window_state' && Array.isArray(result['elements'])) {
       return this.compactWindowState(input, result)
     }
-    if (
-      action === 'get_browser_state' &&
-      (Array.isArray(result['refs']) || Array.isArray(result['content_refs']))
-    ) {
-      return this.compactBrowserResult(result)
-    }
-
     return { result, changed: false }
   }
 
@@ -67,6 +59,21 @@ export class ComputerUseResultCompactor {
     }
 
     const escalation = asRecord(result['escalation'])
+    // Background typing can request escalation merely because its effect is
+    // unverified. Keep the batch running unless delivery actually failed or
+    // was partial; its final observation verifies the intended effect.
+    if (
+      result['effect'] === 'partial' ||
+      (escalation?.['reason'] === 'delivery_failed' &&
+        (result['effect'] !== 'unverifiable' ||
+          result['success'] === false ||
+          result['status'] === 'error'))
+    ) {
+      return {
+        code: 'delivery_failed',
+        message: 'Input delivery failed or was partial; inspect the resulting state before retrying.'
+      }
+    }
     if (
       !hasText(result['code']) ||
       (!escalation &&
@@ -168,7 +175,6 @@ export class ComputerUseResultCompactor {
     for (const element of candidates) {
       const compact = Object.fromEntries(
         Object.entries(element).filter(([key, value]) => {
-          if (key === 'element_index') return !hasText(element['element_token'])
           if (key === 'value') return value !== element['label']
           if (key === 'enabled') return value === false
           if (key === 'selected' || key === 'focused') return value === true
@@ -188,10 +194,12 @@ export class ComputerUseResultCompactor {
     const omitted = allElements.length - elements.length
     const metadata = Object.fromEntries(
       Object.entries(result).filter(([key]) =>
-        ['pid', 'window_id', 'snapshot_id', 'window_bounds', 'screenshot_width',
+        ['pid', 'window_id', 'snapshot_id', 'invalidated_snapshot_ids', 'window_bounds', 'screenshot_width',
           'screenshot_height', 'screenshot_scale', 'screenshot_frame_valid', 'screenshot_error',
           'elements_complete', 'total_element_count', 'background_input',
-          'capture_coverage', 'degraded', 'effect', 'escalation', 'off_space'].includes(key)
+          'capture_coverage', 'degraded', 'effect', 'escalation', 'off_space',
+          'truncated', 'truncation_reason', 'nodes_visited', 'nodes_pending',
+          'bounds_complete', 'walk_elapsed_ms', 'timeout_ms'].includes(key)
       )
     )
     if (!metadata['window_bounds'] && windowFrame) {
@@ -248,7 +256,12 @@ export class ComputerUseResultCompactor {
         )
       : candidates
     const preferredApplications = this.preferredApplicationsResolver(input)
-    const availablePreferredActivities = new Set<string>()
+    // Query filtering must not make another saved app look absent from inventory.
+    const inventoriedPreferredActivities = new Set(
+      candidates.flatMap((app) =>
+        this.getPreferredActivities(app, preferredApplications)
+      )
+    )
     const seenApps = new Set<string>()
     const uniqueApps = matchingCandidates
       .map((app) => {
@@ -256,9 +269,6 @@ export class ComputerUseResultCompactor {
           app,
           preferredApplications
         )
-        for (const activity of preferredFor) {
-          availablePreferredActivities.add(activity)
-        }
         return preferredFor.length > 0
           ? { ...app, preferred_for: preferredFor }
           : app
@@ -287,7 +297,7 @@ export class ComputerUseResultCompactor {
       ([activity, appName]) => ({
         activity,
         app_name: appName,
-        available: availablePreferredActivities.has(activity)
+        found_in_desktop_inventory: inventoriedPreferredActivities.has(activity)
       })
     )
 
@@ -346,62 +356,5 @@ export class ComputerUseResultCompactor {
       ([activity, appName]) =>
         appIdentities.includes(appName.toLocaleLowerCase()) ? [activity] : []
     )
-  }
-
-  private compactBrowserResult(
-    result: Record<string, unknown>
-  ): CompactedComputerUseResult {
-    const refs = Array.isArray(result['refs']) ? result['refs'] : []
-    const contentRefs = Array.isArray(result['content_refs'])
-      ? result['content_refs']
-      : []
-    const compactedRefs = this.compactBrowserReferences(refs)
-    const compactedContentRefs = this.compactBrowserReferences(contentRefs)
-    const outline = result['outline']
-    const hasOutline = typeof outline === 'string' && outline.length > 0
-
-    const browserState = { ...result }
-    delete browserState['refs']
-    delete browserState['content_refs']
-    delete browserState['outline']
-
-    return {
-      result: {
-        ...browserState,
-        refs: compactedRefs,
-        content_refs: compactedContentRefs,
-        omitted_ref_count: refs.length - compactedRefs.length,
-        omitted_content_ref_count:
-          contentRefs.length - compactedContentRefs.length
-      },
-      changed:
-        hasOutline ||
-        compactedRefs.length !== refs.length ||
-        compactedContentRefs.length !== contentRefs.length
-    }
-  }
-
-  private compactBrowserReferences(
-    values: unknown[]
-  ): Record<string, unknown>[] {
-    return values
-      .map(asRecord)
-      .filter((reference): reference is Record<string, unknown> => {
-        if (!reference || !hasText(reference['ref'])) {
-          return false
-        }
-        return hasText(reference['name']) || hasText(reference['value'])
-      })
-      .slice(0, COMPUTER_USE_BROWSER_REF_LIMIT)
-      .map((reference) => ({
-        ref: reference['ref'],
-        role: reference['role'],
-        name: reference['name'],
-        value: reference['value'],
-        actions: reference['actions'],
-        states: reference['states'],
-        visibility: reference['visibility'],
-        frame: reference['frame']
-      }))
   }
 }

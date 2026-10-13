@@ -1,6 +1,10 @@
+import { LLMProviders } from '@/core/llm-manager/types'
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type { CompletionParams, LLMReasoningMode } from '@/core/llm-manager/types'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.DeepSeek)
 
 /**
  * DeepSeek enables thinking by default; explicit off and guarded calls keep
@@ -17,40 +21,39 @@ function isThinkingDisabled(
 }
 
 /**
- * Uses the existing compatible adapter for streaming, tool calls, and JSON.
- * @see https://api-docs.deepseek.com/guides/thinking_mode/
+ * Uses the native SDK, retaining Responses for schema-constrained completions.
+ * @see https://api-docs.deepseek.com/guides/responses_api/
  */
 export default class DeepSeekLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
     super({
-      name: 'DeepSeek LLM Provider',
-      providerName: 'deepseek',
-      apiKeyEnv: 'LEON_DEEPSEEK_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
-      baseURL: 'https://api.deepseek.com/v1',
-      flavor: 'openai-compatible',
+      baseURL: AISDKRemoteLLMProvider.resolveBaseURL(
+        PROVIDER_CONFIG,
+        target.accountCredentials
+      ),
+      flavor: 'deepseek',
+      supportsToolResultFiles: true,
       shouldOmitTemperature: (params) => !isThinkingDisabled(params),
       buildProviderOptions: ({ completionParams, reasoningMode }) => {
         const disabled = isThinkingDisabled(completionParams, reasoningMode)
         return {
           deepseek: {
-            thinking: { type: disabled ? 'disabled' : 'enabled' },
-            ...(!disabled && completionParams.reasoningEffort
-              ? { reasoningEffort: completionParams.reasoningEffort }
-              : {})
+            ...(completionParams.data
+              ? { reasoningEffort: disabled ? 'none' : completionParams.reasoningEffort || 'high' }
+              : {
+                  thinking: { type: disabled ? 'disabled' : 'enabled' },
+                  ...(!disabled
+                    ? { reasoningEffort: completionParams.reasoningEffort || 'high' }
+                    : {})
+                })
           }
         }
-      },
-      transformRequestBody: (body) => ({
-        ...body,
-        // Runtime checkpoints and history from non-thinking calls have no
-        // reasoning. DeepSeek still requires the field on assistant messages.
-        messages: (body['messages'] as Array<Record<string, unknown>>).map(
-          (message) => message['role'] === 'assistant'
-            ? { ...message, reasoning_content: message['reasoning_content'] ?? '' }
-            : message
-        )
-      })
+      }
     })
   }
 }

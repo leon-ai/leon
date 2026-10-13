@@ -1,3 +1,5 @@
+import { API_VERSION } from '@/constants'
+import { uploadSatelliteDeliverables } from '@/core/satellite/satellite-deliverables'
 import os from 'node:os'
 
 import { io } from 'socket.io-client'
@@ -5,13 +7,17 @@ import { io } from 'socket.io-client'
 import {
   TOOLKIT_REGISTRY,
   TOOL_EXECUTOR,
+  CONTEXT_MANAGER,
   TOOL_WORKER_MANAGER
 } from '@/core'
 import {
   SATELLITE_EVENTS,
   SATELLITE_PROTOCOL_VERSION,
+  SATELLITE_MAX_MESSAGE_BYTES,
   type SatelliteErrorPayload,
   type SatelliteToolInvocation,
+  type SatelliteToolCancellation,
+  type SatelliteArtifactBundle,
   type SatelliteToolResultPayload
 } from '@/core/satellite/types'
 import {
@@ -22,13 +28,16 @@ import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { runWithConversationSession } from '@/core/session-manager/session-context'
 import { LEON_PROFILE_NAME } from '@/leon-roots'
 import { LogHelper } from '@/helpers/log-helper'
-import type { ToolExecutionResult } from '@/core/tool-executor'
+import type { ToolExecutionResult } from '@/core/tool-manager/tool-executor'
 import { buildSatelliteProcessTitle } from '@/core/satellite/satellite-process-title'
+import { collectSatelliteArtifacts, getSatelliteArtifactRoot } from '@/core/satellite/satellite-artifacts'
+import { SATELLITE_CONTEXT_REFRESH_MS } from '@/core/satellite/satellite-context'
 
 const REMOTE_URL_ARGUMENT = '--url'
 const PROFILE_TOKEN_ARGUMENT = '--token'
 const DEVICE_ID_ARGUMENT = '--device-id'
 const DEFAULT_SATELLITE_NAME = 'Leon Satellite'
+const activeInvocations = new Map<string, AbortController>()
 
 function buildSatelliteToolError(
   invocation: SatelliteToolInvocation,
@@ -112,6 +121,35 @@ async function startSatellite(): Promise<void> {
     reconnection: true
   })
 
+  let refreshingContext = false
+  const publishContext = async (): Promise<void> => {
+    if (!socket.connected || refreshingContext) return
+    refreshingContext = true
+    const connectionId = socket.id
+    try {
+      await runWithProfileContext({ profileName: credential.profileName }, async () => {
+        const filenames = TOOLKIT_REGISTRY.getSatelliteManifest()
+          .flatMap((toolkit) => toolkit.context_files || [])
+        const snapshot = await CONTEXT_MANAGER.getDeviceDiscoverySnapshot(filenames)
+        if (socket.connected && socket.id === connectionId) socket.emit(SATELLITE_EVENTS.context, snapshot)
+      })
+    } catch (error) {
+      LogHelper.warning(`Device discovery context unavailable: ${String(error)}`)
+    } finally {
+      refreshingContext = false
+    }
+  }
+  const contextTimer = setInterval(() => void publishContext(), SATELLITE_CONTEXT_REFRESH_MS)
+  contextTimer.unref()
+
+  socket.on(SATELLITE_EVENTS.cancelTool, ({ invocationId }: SatelliteToolCancellation) => {
+    activeInvocations.get(invocationId)?.abort()
+  })
+  socket.on('disconnect', () => {
+    // A reconnect must not resume desktop work whose caller has disconnected.
+    for (const controller of activeInvocations.values()) controller.abort()
+  })
+
   socket.on('connect', () => {
     void runWithProfileContext(
       { profileName: credential.profileName },
@@ -131,6 +169,7 @@ async function startSatellite(): Promise<void> {
   })
 
   socket.on(SATELLITE_EVENTS.ready, () => {
+    void publishContext()
     LogHelper.title('Satellite')
     LogHelper.success(
       `Connected device ${deviceId} to profile ${credential.profileName}`
@@ -140,7 +179,11 @@ async function startSatellite(): Promise<void> {
   socket.on(
     SATELLITE_EVENTS.invokeTool,
     async (invocation: SatelliteToolInvocation) => {
+      if (activeInvocations.has(invocation.invocationId)) return
+      const controller = new AbortController()
+      activeInvocations.set(invocation.invocationId, controller)
       let result: ToolExecutionResult
+      let artifacts: SatelliteArtifactBundle | undefined
 
       try {
         result = await runWithProfileContext(
@@ -149,8 +192,15 @@ async function startSatellite(): Promise<void> {
             const execute = (): Promise<ToolExecutionResult> =>
               TOOL_EXECUTOR.executeTool({
                 ...invocation.input,
+                deferArtifactDelivery: true,
+                leonService: {
+                  baseURL: `${remoteURL.replace(/\/$/, '')}/api/${API_VERSION}`,
+                  token: credential.value
+                },
+                signal: controller.signal,
                 onProgress: (progress) => {
-                  socket.emit(SATELLITE_EVENTS.toolProgress, {
+                  const transport = progress.stream ? socket : socket.volatile
+                  transport.emit(SATELLITE_EVENTS.toolProgress, {
                     invocationId: invocation.invocationId,
                     progress
                   })
@@ -165,16 +215,46 @@ async function startSatellite(): Promise<void> {
               : execute()
           }
         )
+        if (invocation.conversationSessionId && !controller.signal.aborted) {
+          result = await uploadSatelliteDeliverables({
+            result,
+            root: getSatelliteArtifactRoot(
+              credential.profileName,
+              invocation.conversationSessionId
+            ),
+            sessionId: invocation.conversationSessionId,
+            remoteURL,
+            token: credential.value,
+            signal: controller.signal
+          })
+          artifacts = await collectSatelliteArtifacts(
+            getSatelliteArtifactRoot(credential.profileName, invocation.conversationSessionId), result
+          ).catch((error: unknown) => {
+            throw new Error(`Satellite artifact transfer failed; the action may have executed, do not replay it blindly: ${String(error)}`)
+          })
+        }
       } catch (error) {
         result = buildSatelliteToolError(invocation, error)
+      } finally {
+        activeInvocations.delete(invocation.invocationId)
       }
 
       const payload: SatelliteToolResultPayload = {
         invocationId: invocation.invocationId,
-        result
+        result,
+        ...(artifacts ? { artifacts } : {})
       }
 
-      socket.emit(SATELLITE_EVENTS.toolResult, payload)
+      if (Buffer.byteLength(JSON.stringify(payload)) > SATELLITE_MAX_MESSAGE_BYTES) {
+        // Report the limit without dropping the connection or retrying the input.
+        payload.result = buildSatelliteToolError(invocation,
+          new Error('Satellite result exceeds the transport limit. The action may have executed; do not replay it blindly.'))
+        delete payload.artifacts
+      }
+
+      if (socket.connected && !controller.signal.aborted) {
+        socket.emit(SATELLITE_EVENTS.toolResult, payload)
+      }
     }
   )
 
@@ -199,6 +279,7 @@ const shutDown = async (): Promise<void> => {
   }
 
   isShuttingDown = true
+  for (const controller of activeInvocations.values()) controller.abort()
   await TOOL_WORKER_MANAGER.dispose()
   process.exit(0)
 }

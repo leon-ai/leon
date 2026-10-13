@@ -14,19 +14,19 @@ import {
   AGENT_CONTEXT_RECOVERY_BUDGET_RATIO,
   AGENT_LOCAL_CONTEXT_SAFETY_MARGIN_RATIO,
   AGENT_RECENT_TOOLKIT_SCHEMA_LIMIT,
-  AGENT_RECENT_COMPUTER_USE_IMAGE_LIMIT,
+  AGENT_RECENT_TOOL_IMAGE_LIMIT,
   AGENT_MODEL_IMAGE_ESTIMATED_TOKENS,
   AGENT_REMOTE_CONTEXT_COMPACTION_TRIGGER_TOKENS,
   AGENT_REMOTE_CONTEXT_RECOVERY_TRIGGER_TOKENS,
   AGENT_TOOL_OBSERVATION_MAX_CHARS,
-  AGENT_OUTPUT_RECOVERY_MAX_TOKENS,
   CHARS_PER_TOKEN
-} from './constants'
+} from './agent-constants'
 
 const TOOL_NAME_SEPARATOR = '__'
 const UI_TOOLKIT_IDS = ['computer_use', 'browser_use'] as const
 const TOOLKIT_LOADER_NAME = 'load_toolkit'
 const SUMMARY_RECENT_EXCHANGES = 8
+const OLDER_UI_OBSERVATION_MAX_CHARS = 1_500
 
 interface AgentModelContextParams {
   transcript: AgentToolTranscriptMessage[]
@@ -94,16 +94,15 @@ export function resolveAgentContextRecoveryTriggerTokens(
 
 /**
  * Gives local models the context capacity left after the prepared prompt and
- * a tokenizer-estimation margin. Remote calls keep the provider layer's default
- * unless retrying output exhaustion with a bounded larger allowance.
+ * a tokenizer-estimation margin. Remote calls use their provider/SDK defaults,
+ * including recovery: a fixed retry ceiling can be lower than those defaults.
  */
 export function resolveAgentMaxOutputTokens(
   provider: LLMProviders,
-  estimatedInputTokens: number,
-  isOutputRecoveryAttempt = false
+  estimatedInputTokens: number
 ): number | undefined {
   if (!isLocalLLMProvider(provider)) {
-    return isOutputRecoveryAttempt ? AGENT_OUTPUT_RECOVERY_MAX_TOKENS : undefined
+    return undefined
   }
 
   const safetyMarginTokens = Math.floor(
@@ -133,7 +132,13 @@ function estimateAgentInputTokens(
   tools: OpenAITool[]
 ): number {
   let imageCount = 0
+  let compactionTokens = 0
   const serializedTranscript = JSON.stringify(transcript, (key, value) => {
+    if (value?.role === 'assistant' && value.compactionContext) {
+      compactionTokens += value.compactionContext.estimatedTokens
+      return { role: 'assistant', content: '' }
+    }
+
     if (key === 'dataBase64' && typeof value === 'string') {
       imageCount += 1
       return ''
@@ -143,6 +148,7 @@ function estimateAgentInputTokens(
 
   return (
     estimateTokens(serializedTranscript) +
+    compactionTokens +
     imageCount * AGENT_MODEL_IMAGE_ESTIMATED_TOKENS +
     estimateTokens(systemPrompt) +
     estimateTokens(JSON.stringify(tools))
@@ -150,22 +156,39 @@ function estimateAgentInputTokens(
 }
 
 /**
- * Keeps recent browser and desktop screenshots while retaining textual results.
+ * Keeps recent tool images and the latest inspection batch without changing
+ * saved evidence, textual results, or owner attachments.
  */
-function retainRecentComputerUseImages(
+export function retainRecentToolImages(
   transcript: AgentToolTranscriptMessage[]
 ): AgentToolTranscriptMessage[] {
   const retainedImageIndexes = new Set<number>()
   for (
     let index = transcript.length - 1;
-    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_COMPUTER_USE_IMAGE_LIMIT;
+    index >= 0 && retainedImageIndexes.size < AGENT_RECENT_TOOL_IMAGE_LIMIT;
     index -= 1
   ) {
     const message = transcript[index]
     if (
       message?.role === 'tool' &&
-      UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) &&
-      message.files?.length
+      message.files?.some((file) => file.mediaType.startsWith('image/'))
+    ) {
+      retainedImageIndexes.add(index)
+    }
+  }
+
+  // Parallel inspections must reach the model together, even when their batch
+  // exceeds the historical image limit.
+  const latestImageExchange = findCompletedToolExchanges(transcript).findLast(
+    (exchange) => exchange.toolMessages.some((message) =>
+      message.files?.some((file) => file.mediaType.startsWith('image/'))
+    )
+  )
+  if (latestImageExchange) {
+    for (
+      let index = latestImageExchange.startIndex + 1;
+      index <= latestImageExchange.endIndex;
+      index += 1
     ) {
       retainedImageIndexes.add(index)
     }
@@ -174,20 +197,49 @@ function retainRecentComputerUseImages(
   return transcript.map((message, index) => {
     if (
       message.role !== 'tool' ||
-      !UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) ||
-      !message.files?.length ||
+      !message.files?.some((file) => file.mediaType.startsWith('image/')) ||
       retainedImageIndexes.has(index)
     ) {
       return message
     }
 
-    return {
-      role: message.role,
-      toolCallId: message.toolCallId,
-      toolName: message.toolName,
-      content: message.content
-    }
+    const { files, ...textMessage } = message
+    const retainedFiles = files.filter((file) =>
+      !file.mediaType.startsWith('image/')
+    )
+
+    return retainedFiles.length > 0
+      ? { ...textMessage, files: retainedFiles }
+      : textMessage
   })
+}
+
+/**
+ * Old screen observations are reloadable evidence, not the current interface.
+ * Bound their request-only previews while leaving original history and the
+ * semantic continuation summarizer's input intact. Never trim failure details.
+ */
+function boundOlderUIObservations(
+  transcript: AgentToolTranscriptMessage[]
+): AgentToolTranscriptMessage[] {
+  let recentTools = 0
+  return [...transcript].reverse().map((message) => {
+    if (message.role !== 'tool') return message
+    recentTools += 1
+    if (recentTools <= SUMMARY_RECENT_EXCHANGES ||
+        !UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) ||
+        message.content.length <= OLDER_UI_OBSERVATION_MAX_CHARS) return message
+    try {
+      const observation = readRecord(JSON.parse(message.content))
+      const outputLogPath = observation?.['output_log_path'] || readRecord(observation?.['data'])?.['output_log_path']
+      if (!observation || observation['status'] !== 'success' ||
+          observation['observed_tool_failure'] ||
+          typeof outputLogPath !== 'string') return message
+      return { ...message, content: buildBoundedToolObservation({ ...observation, output_log_path: outputLogPath }, OLDER_UI_OBSERVATION_MAX_CHARS) }
+    } catch {
+      return message
+    }
+  }).reverse()
 }
 
 /**
@@ -321,11 +373,11 @@ export function splitAgentTranscriptForSummary(
 
   // Keep a bounded visual reference even when the recent tail is text-only.
   // Retain whole exchanges so parallel tool results never become orphaned.
-  const boundedTranscript = retainRecentComputerUseImages(transcript)
+  const boundedTranscript = retainRecentToolImages(transcript)
   const visual = findCompletedToolExchanges(boundedTranscript)
     .filter((exchange) =>
       exchange.endIndex < boundary && exchange.toolMessages.some((message) =>
-        UI_TOOLKIT_IDS.some((id) => message.toolName.startsWith(`${id}${TOOL_NAME_SEPARATOR}`)) && message.files?.length
+        message.files?.some((file) => file.mediaType.startsWith('image/'))
       )
     )
     .flatMap((exchange) =>
@@ -413,7 +465,7 @@ function pruneInactiveToolkitSchemas(
 export function prepareAgentModelContext(
   params: AgentModelContextParams
 ): PreparedAgentModelContext {
-  const imageBoundedTranscript = retainRecentComputerUseImages(
+  const imageBoundedTranscript = retainRecentToolImages(
     params.transcript
   )
   const estimatedInputTokensBeforePreparation = estimateAgentInputTokens(
@@ -421,6 +473,7 @@ export function prepareAgentModelContext(
     params.systemPrompt,
     params.tools
   )
+  const boundedTranscript = boundOlderUIObservations(imageBoundedTranscript)
   // Only discard reloadable schemas here. The continuity summary owns text
   // reduction, so its trigger sees the real cost of the original evidence.
   const tools = params.forceCompaction ||
@@ -428,12 +481,14 @@ export function prepareAgentModelContext(
     ? pruneInactiveToolkitSchemas(imageBoundedTranscript, params.tools)
     : params.tools
   return {
-    transcript: imageBoundedTranscript,
+    transcript: boundedTranscript,
     tools,
     estimatedInputTokensBeforePreparation,
     estimatedInputTokens: estimateAgentInputTokens(
-      imageBoundedTranscript, params.systemPrompt, tools
+      boundedTranscript, params.systemPrompt, tools
     ),
-    wasCompacted: tools.length < params.tools.length
+    wasCompacted: tools.length < params.tools.length || boundedTranscript.some(
+      (message, index) => message !== imageBoundedTranscript[index]
+    )
   }
 }

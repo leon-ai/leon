@@ -12,8 +12,11 @@ import type {
   ToolExecutionInput,
   ToolExecutionResult,
   ToolRuntimeProgress
-} from '@/core/tool-executor'
+} from '@/core/tool-manager/tool-executor'
 import { runWithProfileContext } from '@/core/profile-runtime/profile-context'
+import { runWithConversationSession } from '@/core/session-manager/session-context'
+import { getSatelliteArtifactRoot, receiveSatelliteArtifacts } from '@/core/satellite/satellite-artifacts'
+import { parseSatelliteContext, SATELLITE_CONTEXT_MAX_AGE_MS, type SatelliteContextSnapshot } from '@/core/satellite/satellite-context'
 
 const SATELLITE_TOOL_TIMEOUT_MS = 15 * 60 * 1_000
 
@@ -26,6 +29,7 @@ export interface SatelliteConnection {
   device: SatelliteDescriptor
   toolkits: SatelliteToolkitDefinition[]
   transport: SatelliteTransport
+  context?: { receivedAt: number, snapshot: SatelliteContextSnapshot }
 }
 
 interface PendingInvocation {
@@ -35,13 +39,40 @@ interface PendingInvocation {
   reject: (error: Error) => void
   onProgress?: (progress: ToolRuntimeProgress) => void
   timeout: NodeJS.Timeout
+  transport: SatelliteTransport
+  removeAbortListener: () => void
+  conversationSessionId?: string
+  receivingResult?: boolean
+  returned?: boolean
+  streams: Set<string>
 }
 
 class SatelliteRegistry {
   private readonly connections = new Map<string, SatelliteConnection>()
   private readonly pendingInvocations = new Map<string, PendingInvocation>()
 
+  /**
+   * Context inherits the authenticated socket's owner and device, never payload IDs.
+   */
+  public updateContext(profileName: string, deviceId: string, payload: unknown, transport: SatelliteTransport): void {
+    const connection = this.getConnection(profileName, deviceId)
+    if (!connection || connection.transport !== transport) return
+    const snapshot = parseSatelliteContext(payload)
+    if (snapshot) connection.context = { receivedAt: Date.now(), snapshot }
+  }
+
+  /**
+   * Missing, expired and disconnected snapshots stay unavailable, not server-local.
+   */
+  public getContext(profileName: string, deviceId: string): SatelliteContextSnapshot | null {
+    const context = this.getConnection(profileName, deviceId)?.context
+    return context && Date.now() - context.receivedAt < SATELLITE_CONTEXT_MAX_AGE_MS
+      ? context.snapshot : null
+  }
+
   public register(input: SatelliteConnection): void {
+    // Reconnection does not transfer in-flight native actions to a new process.
+    this.unregister(input.profileName, input.device.id)
     this.connections.set(
       this.getConnectionKey(input.profileName, input.device.id),
       input
@@ -71,9 +102,7 @@ class SatelliteRegistry {
         continue
       }
 
-      clearTimeout(pending.timeout)
-      pending.reject(new Error(`Satellite "${deviceId}" disconnected.`))
-      this.pendingInvocations.delete(invocationId)
+      this.cancelInvocation(invocationId, new Error(`Satellite "${deviceId}" disconnected.`))
     }
 
     return true
@@ -95,7 +124,9 @@ class SatelliteRegistry {
     conversationSessionId?: string | null
     toolInput: ToolExecutionInput
     onProgress?: (progress: ToolRuntimeProgress) => void
+    signal?: AbortSignal
   }): Promise<ToolExecutionResult> {
+    input.signal?.throwIfAborted()
     const connection = this.getConnection(input.profileName, input.deviceId)
 
     if (!connection) {
@@ -112,12 +143,12 @@ class SatelliteRegistry {
     }
 
     return new Promise<ToolExecutionResult>((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingInvocations.delete(invocationId)
-        reject(
-          new Error(`Satellite tool call timed out on "${input.deviceId}".`)
-        )
-      }, SATELLITE_TOOL_TIMEOUT_MS)
+      const timeout = setTimeout(() => this.cancelInvocation(invocationId,
+        new Error(`Satellite tool call timed out on "${input.deviceId}".`)
+      ), SATELLITE_TOOL_TIMEOUT_MS)
+      const onAbort = (): void => this.cancelInvocation(invocationId,
+        new Error('Satellite tool call canceled; already-delivered input may have executed.')
+      )
 
       timeout.unref?.()
       this.pendingInvocations.set(invocationId, {
@@ -125,57 +156,126 @@ class SatelliteRegistry {
         deviceId: input.deviceId,
         resolve,
         reject,
+        streams: new Set(),
         ...(input.onProgress ? { onProgress: input.onProgress } : {}),
-        timeout
+        timeout,
+        transport: connection.transport,
+        ...(input.conversationSessionId ? { conversationSessionId: input.conversationSessionId } : {}),
+        removeAbortListener: () => input.signal?.removeEventListener('abort', onAbort)
       })
-      connection.transport.emit(SATELLITE_EVENTS.invokeTool, invocation)
+      input.signal?.addEventListener('abort', onAbort, { once: true })
+      try {
+        connection.transport.emit(SATELLITE_EVENTS.invokeTool, invocation)
+      } catch (error) {
+        this.cancelInvocation(invocationId, error instanceof Error ? error : new Error(String(error)))
+      }
     })
   }
 
   public handleProgress(
     profileName: string,
     deviceId: string,
-    payload: SatelliteToolProgressPayload
+    payload: SatelliteToolProgressPayload,
+    transport?: SatelliteTransport
   ): void {
     const pending = this.pendingInvocations.get(payload.invocationId)
 
     if (
       !pending ||
       pending.profileName !== profileName ||
-      pending.deviceId !== deviceId
+      pending.deviceId !== deviceId ||
+      (transport && pending.transport !== transport)
     ) {
       return
     }
 
-    // Socket events run outside the invocation's request scope. Restore the
-    // profile so downstream progress stays isolated to the correct owner.
+    if (payload.progress.stream) {
+      const { id, state } = payload.progress.stream
+      if (state === 'running') {
+        pending.streams.add(id)
+      } else {
+        pending.streams.delete(id)
+      }
+    }
+
+    // Retained progress must keep both its profile and conversation owner.
     runWithProfileContext({ profileName: pending.profileName }, () => {
-      pending.onProgress?.(payload.progress)
+      runWithConversationSession({ sessionId: pending.conversationSessionId || '' }, () => {
+        pending.onProgress?.(payload.progress)
+      })
     })
+    if (pending.returned && pending.streams.size === 0) {
+      this.pendingInvocations.delete(payload.invocationId)
+    }
   }
 
   public handleResult(
     profileName: string,
     deviceId: string,
-    payload: SatelliteToolResultPayload
+    payload: SatelliteToolResultPayload,
+    transport?: SatelliteTransport
   ): void {
     const pending = this.pendingInvocations.get(payload.invocationId)
 
     if (
       !pending ||
+      pending.receivingResult ||
       pending.profileName !== profileName ||
-      pending.deviceId !== deviceId
+      pending.deviceId !== deviceId ||
+      (transport && pending.transport !== transport)
     ) {
       return
     }
 
-    clearTimeout(pending.timeout)
-    this.pendingInvocations.delete(payload.invocationId)
-    pending.resolve(payload.result)
+    pending.receivingResult = true
+    const receive = async (): Promise<ToolExecutionResult> => {
+      if (!payload.artifacts) return payload.result
+      if (!pending.conversationSessionId) throw new Error('Satellite artifacts require a conversation session.')
+      return receiveSatelliteArtifacts(
+        getSatelliteArtifactRoot(pending.profileName, pending.conversationSessionId),
+        payload.result, payload.artifacts
+      )
+    }
+    void receive().then((result) => {
+      // Cancellation or replacement can win while files are being saved.
+      if (this.pendingInvocations.get(payload.invocationId) !== pending) return
+      clearTimeout(pending.timeout)
+      pending.removeAbortListener()
+      pending.returned = true
+      if (pending.streams.size === 0) {
+        this.pendingInvocations.delete(payload.invocationId)
+      }
+      pending.resolve(result)
+    }).catch((error: unknown) => {
+      this.cancelInvocation(payload.invocationId, new Error(
+        `Satellite artifact transfer failed; the action may have executed, do not replay it blindly: ${String(error)}`
+      ))
+    })
   }
 
   private getConnectionKey(profileName: string, deviceId: string): string {
     return `${profileName}:${deviceId}`
+  }
+
+  private cancelInvocation(invocationId: string, error: Error): void {
+    const pending = this.pendingInvocations.get(invocationId)
+    if (!pending) return
+    this.pendingInvocations.delete(invocationId)
+    clearTimeout(pending.timeout)
+    pending.removeAbortListener()
+    for (const id of pending.streams) {
+      runWithProfileContext({ profileName: pending.profileName }, () => {
+        runWithConversationSession({ sessionId: pending.conversationSessionId || '' }, () => {
+          pending.onProgress?.({ source: 'log', message: error.message, stream: { id, state: 'failed' } })
+        })
+      })
+    }
+    try {
+      pending.transport.emit(SATELLITE_EVENTS.cancelTool, { invocationId })
+    } catch {
+      // The disconnected device also aborts its workers; local rejection must complete.
+    }
+    pending.reject(error)
   }
 }
 

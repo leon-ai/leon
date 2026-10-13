@@ -11,7 +11,7 @@ server:
 
 routing:
   # Routing mode: smart | controlled | agent
-  mode: smart
+  mode: agent
 
 llm:
   # Use null to leave the global LLM target unset.
@@ -115,6 +115,13 @@ context:
   # Context files to disable. Use ["*"] to disable all context files, including
   # context files added by future Leon versions.
   disabled_files: []
+
+# Bind remote tools explicitly to an authenticated Satellite device ID.
+# Bound tools stay unavailable while that device is offline; no local fallback.
+# satellite:
+#   tools:
+#     computer_use.cua: my-laptop
+#     browser_use.browser-use: my-laptop
 
 availability:
   skills:

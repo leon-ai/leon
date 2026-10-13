@@ -1,0 +1,215 @@
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+
+import { afterEach, expect, it, vi } from 'vitest'
+
+import { DocumentReader } from '@@/tools/file_system/file/src/nodejs/lib/document-reader'
+import { LocalOcr } from '@@/tools/file_system/file/src/nodejs/lib/local-ocr'
+import { prepareDocumentSearch } from '@@/tools/file_system/file/src/nodejs/lib/document-search'
+import { UrlReader } from '@@/tools/search_web/crawlberg/src/nodejs/lib/url-reader'
+import { sliceLayout } from '@@/tools/file_system/file/src/nodejs/lib/document-layout'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
+import { LEON_TOOLKITS_PATH } from '@bridge/constants'
+
+const profile = vi.hoisted(() => ({ sessions: '' }))
+vi.mock('@/constants', () => ({ OWNER_ATTACHMENT_MAX_BYTES: 8 * 1_024 * 1_024 }))
+vi.mock('@/core/profile-runtime/profile-paths', () => ({ getProfilePaths: (): typeof profile => profile }))
+
+let directory: string | undefined
+let reader: DocumentReader
+
+// Prepared through FileTool.getResourcePath, not RapidOCR's private cache.
+const resolveOcrResources = async (): Promise<string[]> => [
+  'PaddleOCR-v6-small-det', 'PaddleOCR-v6-small-rec', 'RapidOCR-text-orientation'
+].map((resource) => path.join(LEON_TOOLKITS_PATH, 'file_system', 'assets', resource))
+
+afterEach(async () => {
+  await reader?.dispose()
+  if (directory) await fs.rm(directory, { recursive: true, force: true })
+})
+
+// A self-contained PDF fixture keeps this check offline and free of owner data.
+function pdf(text: string, fontSize = 18): string {
+  const stream = `BT /F1 ${fontSize} Tf 30 100 Td (${text}) Tj ET`
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 160] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`
+  ]
+  let result = '%PDF-1.4\n'
+  const offsets = [0]
+  for (const [index, object] of objects.entries()) {
+    offsets.push(result.length)
+    result += `${index + 1} 0 obj\n${object}\nendobj\n`
+  }
+  const xref = result.length
+  result += `xref\n0 6\n0000000000 65535 f \n${offsets.slice(1).map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}`
+  return `${result}trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+}
+
+it('extracts, caches, invalidates and renders PDF evidence without a model call', async () => {
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-document-'))
+  const file = path.join(directory, 'sample.pdf')
+  await fs.writeFile(file, pdf('Document total: 123.45'))
+  reader = new DocumentReader(undefined, resolveOcrResources)
+  const first = await reader.readPdf(file, { render: true, layout: true })
+  expect(first.data).toMatchObject({ totalPages: 1, nextPage: null,
+    pages: [{ page: 1, text: expect.stringContaining('Document total: 123.45'), cached: false }] })
+  expect(first.files[0]?.mediaType).toBe('image/png')
+  expect(first.data['pages']).toMatchObject([{ layout: { width: 300, height: 160, units: 'points',
+    blocks: expect.arrayContaining([expect.objectContaining({ bbox: expect.any(Object) })]), nextLayoutOffset: null } }])
+  expect(Buffer.from(first.files[0]!.dataBase64, 'base64').subarray(1, 4).toString()).toBe('PNG')
+  expect((await reader.readPdf(file)).data['pages']).toMatchObject([{ cached: true }])
+  await fs.writeFile(file, pdf('Corrected total: 678.90'))
+  expect((await reader.readPdf(file)).data['pages']).toMatchObject([{ text: expect.stringContaining('Corrected total: 678.90'), cached: false }])
+  await expect(reader.readPdf(file, { startPage: 2 })).rejects.toThrow('1 pages')
+  const imagePath = path.join(directory, 'page.png')
+  await fs.writeFile(imagePath, Buffer.from(first.files[0]!.dataBase64, 'base64'))
+  const started = performance.now()
+  expect((await reader.readImage(imagePath)).data).toMatchObject({ width: 900, height: 480, text: expect.stringContaining('123.45') })
+  const cold = performance.now() - started
+  const warmStarted = performance.now()
+  expect((await reader.readImage(imagePath, { layout: true })).data).toMatchObject({ text: expect.stringContaining('123.45'),
+    layout: { width: 900, height: 480, units: 'pixels', blocks: expect.arrayContaining([
+      expect.objectContaining({ text: expect.stringContaining('123.45'), confidence: expect.any(Number), polygon: expect.any(Array) })]) } })
+  const visualOnly = await reader.readImage(imagePath, { ocr: false, render: true })
+  expect(visualOnly.data).not.toHaveProperty('text')
+  expect(visualOnly.files).toHaveLength(1)
+  const layout = { width: 300, height: 160, units: 'points' as const, blocks: [
+    { kind: 'paragraph' as const, text: 'x'.repeat(25_000) },
+    { kind: 'table' as const, header: [{ text: 'Column', bbox: { x: 10, y: 10, width: 50, height: 20 } }], rows: [[{ text: 'y'.repeat(25_000) }]] }
+  ] }
+  expect(sliceLayout(layout)).toMatchObject({ totalBlocks: 2, nextLayoutOffset: 1 })
+  expect(sliceLayout(layout, 1)).toMatchObject({ blocks: [layout.blocks[1]], nextLayoutOffset: null })
+  expect(sliceLayout({ ...layout, blocks: [{ kind: 'paragraph', text: 'x'.repeat(50_000) }] }))
+    .toMatchObject({ blocks: [{ omitted: expect.any(String) }], nextLayoutOffset: null })
+  expect(() => sliceLayout(layout, -1)).toThrow('layoutOffset')
+  console.info(`Local OCR: cold=${Math.round(cold)}ms cached=${Math.round(performance.now() - warmStarted)}ms`)
+  profile.sessions = directory
+  const prepared = await prepareOwnerAttachments('Read both.', [
+    { filename: '../../source.pdf', mediaType: 'application/pdf', dataBase64: (await fs.readFile(file)).toString('base64') },
+    first.files[0]!
+  ], 'session')
+  expect(prepared.files).toEqual(first.files)
+  expect(prepared.query).not.toContain(first.files[0]!.dataBase64)
+  expect(await fs.readdir(path.join(directory, 'session', 'attachments'))).toHaveLength(2)
+  await expect(prepareOwnerAttachments('Read.', [{ dataBase64: '!', mediaType: 'image/png' }], 'session')).rejects.toThrow('Invalid attachment')
+  await fs.writeFile(file, pdf(''))
+  expect(await reader.readDocument(file)).toMatchObject({ needsOcr: true, requiresPageRead: true, pages: [1] })
+  expect((await reader.readPdf(file, { ocr: false })).data['pages']).toMatchObject([{ textLayerEmpty: true }])
+  expect((await reader.readPdf(file, { layout: true })).data['pages']).toMatchObject([
+    { text: '', method: 'local_ocr', layout: { width: 900, height: 480, blocks: [], nextLayoutOffset: null } }
+  ])
+  const csv = path.join(directory, 'sample.csv')
+  await fs.writeFile(csv, 'Item,Amount\nTravel,123.45\n')
+  const document = await reader.readDocument(csv, { maxChars: 10 })
+  expect(document).toMatchObject({ format: 'markdown', nextOffsetChars: 10 })
+  expect(await reader.readDocument(csv, { offsetChars: 10 })).toMatchObject({ cached: true, text: expect.stringContaining('123.45') })
+})
+
+it('serializes local OCR responses, recovers after bad input and releases its worker', async () => {
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-ocr-worker-'))
+  const file = path.join(directory, 'sample.pdf')
+  await fs.writeFile(file, pdf('Serialized total: 123.45'))
+  reader = new DocumentReader()
+  const { files } = await reader.readPdf(file, { render: true })
+  const image = Buffer.from(files[0]!.dataBase64, 'base64')
+  const ocr = new LocalOcr(resolveOcrResources)
+  try {
+    await expect(ocr.recognize(Buffer.from('not an image'))).rejects.toThrow()
+    // Two concurrent callers must receive separate responses, not share listeners.
+    const results = await Promise.all([ocr.recognize(image), ocr.recognize(image)])
+    expect(results).toMatchObject([
+      { text: expect.stringContaining('123.45') }, { text: expect.stringContaining('123.45') }
+    ])
+  } finally { await ocr.dispose() }
+  await expect(ocr.recognize(Buffer.alloc(0))).rejects.toThrow('disposed')
+})
+
+it('reuses prepared document text, invalidates changed inputs and reports missing PDF text', async () => {
+  directory = await fs.mkdtemp(path.join(os.tmpdir(), 'leon-document-search-'))
+  reader = new DocumentReader(async () => ({ text: 'Recognized invoice 42' }))
+
+  const csv = path.join(directory, 'table.csv')
+  const scan = path.join(directory, 'scan.pdf')
+  const missing = path.join(directory, 'missing.docx')
+  const output = path.join(directory, 'search')
+
+  await fs.writeFile(csv, 'Item,Amount\nTravel,123.45\n')
+  await fs.writeFile(scan, pdf(''))
+
+  const first = await prepareDocumentSearch(reader, [csv, scan, missing], output)
+  const documents = first['documents'] as { sourcePath: string, textPath: string }[]
+
+  expect(first).toMatchObject({
+    complete: false,
+    cachedDocuments: 0,
+    failures: [{ sourcePath: missing }],
+    documents: [
+      { sourcePath: csv },
+      { sourcePath: scan, missingTextPages: [1], nextPage: null }
+    ]
+  })
+  expect(await fs.readFile(documents[0]!.textPath, 'utf8')).toContain('Travel')
+  expect(await prepareDocumentSearch(reader, [csv, scan], output)).toMatchObject({
+    cachedDocuments: 2,
+    paths: first['paths']
+  })
+
+  const recognized = await prepareDocumentSearch(reader, [scan], output, true)
+  const recognizedPaths = recognized['paths'] as string[]
+
+  expect(recognized).toMatchObject({
+    complete: true,
+    documents: [{ missingTextPages: [], extractedPages: 1 }]
+  })
+  expect(await fs.readFile(recognizedPaths[0]!, 'utf8')).toContain('Recognized invoice 42')
+
+  await fs.writeFile(csv, 'Item,Amount\nChanged,678.90\n')
+
+  const changed = await prepareDocumentSearch(reader, [csv], output)
+  const changedPaths = changed['paths'] as string[]
+
+  expect(changed).toMatchObject({ complete: true, cachedDocuments: 0 })
+  expect(changedPaths[0]).not.toBe(documents[0]!.textPath)
+  expect(await fs.readFile(changedPaths[0]!, 'utf8')).toContain('Changed')
+})
+
+it('paginates one URL snapshot, refreshes explicitly and rejects unsafe URL forms', async () => {
+  const extract = vi.fn()
+    .mockResolvedValueOnce({
+      results: [{ content: 'First snapshot', mimeType: 'text/html' }],
+      crawlFinalUrls: ['https://example.com/final']
+    })
+    .mockResolvedValueOnce({ results: [{ content: 'Changed snapshot' }] })
+  const urls = new UrlReader(extract)
+
+  expect(await urls.read('https://example.com/page#section', { maxChars: 5 })).toMatchObject({
+    text: 'First',
+    nextOffsetChars: 5,
+    cached: false,
+    finalUrl: 'https://example.com/final',
+    content_kind: 'extracted_text'
+  })
+  expect(await urls.read('https://example.com/page', { offsetChars: 5 })).toMatchObject({
+    text: ' snapshot',
+    cached: true,
+    nextOffsetChars: null
+  })
+  expect(extract).toHaveBeenCalledTimes(1)
+  expect(await urls.read('https://example.com/page', { refresh: true })).toMatchObject({
+    text: 'Changed snapshot',
+    cached: false
+  })
+
+  await expect(urls.read('file:///etc/passwd')).rejects.toThrow('HTTP(S)')
+  await expect(urls.read('https://user:password@example.com/')).rejects.toThrow('credentials')
+  await expect(urls.read('https://example.com/page', { offsetChars: 1, refresh: true })).rejects.toThrow('Refresh')
+
+  urls.dispose()
+  await expect(urls.read('https://example.com/page', { offsetChars: 1 })).rejects.toThrow('no longer cached')
+  expect(extract).toHaveBeenCalledTimes(2)
+})

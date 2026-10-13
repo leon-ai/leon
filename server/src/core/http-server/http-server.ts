@@ -1,3 +1,6 @@
+import { mediaGenerationPlugin } from '@/core/http-server/api/media-generation'
+import { toolExecutionsPlugin } from '@/core/http-server/api/tool-executions'
+import { artifactsPlugin } from '@/core/http-server/api/artifacts'
 import fs from 'node:fs'
 import path, { join } from 'node:path'
 import { spawn } from 'node:child_process'
@@ -11,6 +14,7 @@ import {
   LEON_VERSION,
   LEON_NODE_ENV,
   IS_TELEMETRY_ENABLED,
+  OWNER_ATTACHMENT_BODY_LIMIT,
   TMP_PATH
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
@@ -28,6 +32,7 @@ import { sessionsPlugin } from '@/core/http-server/api/sessions'
 import { openPathPlugin } from '@/core/http-server/api/open-path'
 import { fileSystemListPlugin } from '@/core/http-server/api/file-system-list'
 import { extensionFilesPlugin } from '@/core/http-server/api/extension-files'
+import { connectionsPlugin } from '@/core/http-server/api/connections'
 import {
   authenticateProfileHTTPRequest,
   profileAuthRoutes
@@ -47,7 +52,7 @@ export interface APIOptions {
 export default class HTTPServer {
   private static instance: HTTPServer
 
-  private fastify = Fastify()
+  private fastify = Fastify({ bodyLimit: OWNER_ATTACHMENT_BODY_LIMIT })
 
   public httpServer = this.fastify.server
 
@@ -180,8 +185,15 @@ export default class HTTPServer {
     this.fastify.addHook('onRequest', async (request, reply) => {
       const requestPath = request.url.split('?')[0] || ''
       const authPath = `/api/${API_VERSION}/profile-auth`
+      const connectionOAuthCallbackPath = `/api/${API_VERSION}/connections/oauth/callback`
+      const connectionCompletePath = `/api/${API_VERSION}/connections/complete`
 
-      if (!requestPath.startsWith(`/api/${API_VERSION}/`) || requestPath === authPath) {
+      if (
+        !requestPath.startsWith(`/api/${API_VERSION}/`) ||
+        requestPath === authPath ||
+        requestPath === connectionCompletePath ||
+        requestPath === connectionOAuthCallbackPath
+      ) {
         return
       }
 
@@ -197,10 +209,14 @@ export default class HTTPServer {
     this.fastify.register(sessionsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(infoPlugin, { apiVersion: API_VERSION })
     this.fastify.register(commandPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(mediaGenerationPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(toolExecutionsPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(artifactsPlugin, { apiVersion: API_VERSION })
     this.fastify.register(inferencePlugin, { apiVersion: API_VERSION })
     this.fastify.register(openPathPlugin, { apiVersion: API_VERSION })
     this.fastify.register(fileSystemListPlugin, { apiVersion: API_VERSION })
     this.fastify.register(extensionFilesPlugin, { apiVersion: API_VERSION })
+    this.fastify.register(connectionsPlugin, { apiVersion: API_VERSION })
     await registerHTTPPlugins(this.fastify, { apiVersion: API_VERSION })
 
     try {

@@ -18,6 +18,7 @@ import {
   IS_GITHUB_ACTIONS
 } from '@/constants'
 import { LogHelper } from '@/helpers/log-helper'
+import { ensureConnectionEncryptionKey } from '@/core/connections/connection-store'
 import { NetworkHelper } from '@/helpers/network-helper'
 
 import buildApp from '../app/build-app'
@@ -32,11 +33,12 @@ import { CONFIG_MANAGER } from '@/config'
 import setupCore from './setup-core'
 import setupNode from './setup-node'
 import setupPNPM from './setup-pnpm'
-import setupNativeNodeModules from './setup-native-node-modules'
 import setupPython from './setup-python'
 import setupUV from './setup-uv'
+import setupJQ from './setup-jq'
 import setupNodejsBridgeEnv from './setup-nodejs-bridge-env'
 import setupPythonBridgeEnv from './setup-python-bridge-env'
+import setupMigrations from './setup-migrations'
 import setupToolsDependencies from './setup-tools-dependencies'
 import setupToolsSettings from './setup-tools-settings'
 import setupSkills from './setup-skills/setup-skills'
@@ -46,11 +48,11 @@ import setupNinja from './setup-ninja'
 import setupLlamaCPP from './setup-llama-cpp'
 import setupLocalLLM from './setup-local-llm'
 import setupQMDLLM from './setup-qmd-llm'
-import setupVoiceResources from './setup-voice-resources.js'
+// import setupVoiceResources from './setup-voice-resources.js'
 import inspectLocalAICapability from './local-ai-capability'
 import {
-  inspectLocalAISetupState,
-  inspectVoiceSetupState
+  inspectLocalAISetupState
+  // inspectVoiceSetupState
 } from './inspect-setup-state'
 import postSetup from './post-setup'
 import { printSetupBanner } from './setup-banner'
@@ -147,6 +149,9 @@ async function resolveExistingLLMChoice() {
 
 async function syncLLMSetupChoice(preferences) {
   CONFIG_MANAGER.reload()
+  if (preferences.fellowAccount) {
+    return
+  }
   const llmConfig = CONFIG_MANAGER.getConfig().llm
   const leonLLM = getOptionalLLMTarget(llmConfig.default)
   const leonWorkflowLLM = getOptionalLLMTarget(llmConfig.workflow)
@@ -207,9 +212,9 @@ async function syncLLMSetupChoice(preferences) {
     isInstalled: false,
     label: ''
   }
-  let voiceSetupState = {
-    isInstalled: false
-  }
+  // let voiceSetupState = {
+  //   isInstalled: false
+  // }
   const getExitCodeFromSignal = (signal) => (signal === 'SIGINT' ? 130 : 143)
 
   // Clean up process signal listeners when setup exits normally or with an error.
@@ -267,15 +272,15 @@ async function syncLLMSetupChoice(preferences) {
       const existingLLMChoice = await resolveExistingLLMChoice()
       currentStep = 'inspectLocalAISetupState'
       localAISetupState = inspectLocalAISetupState()
-      currentStep = 'inspectVoiceSetupState'
-      voiceSetupState = inspectVoiceSetupState()
+      // currentStep = 'inspectVoiceSetupState'
+      // voiceSetupState = inspectVoiceSetupState()
 
       currentStep = 'setupPreferences'
       preferences = await setupPreferences(
         localAICapability,
         existingLLMChoice,
-        localAISetupState,
-        voiceSetupState
+        localAISetupState
+        // voiceSetupState
       )
     }
 
@@ -299,8 +304,6 @@ async function syncLLMSetupChoice(preferences) {
       await setupNode()
       currentStep = 'setupPNPM'
       await setupPNPM()
-      currentStep = 'setupNativeNodeModules'
-      await setupNativeNodeModules()
       currentStep = 'setupPython'
       await setupPython()
       currentStep = 'setupUV'
@@ -310,6 +313,11 @@ async function syncLLMSetupChoice(preferences) {
         'Skipping portable Node.js, pnpm, Python and uv setup because it is running in CI'
       )
     }
+
+    // Core queries retained results even in CI, where portable runtimes are skipped.
+    currentStep = 'setupJQ'
+    await setupJQ()
+
     currentStep = 'setupNodejsBridgeEnv'
     await setupNodejsBridgeEnv()
     currentStep = 'setupPythonBridgeEnv'
@@ -322,6 +330,8 @@ async function syncLLMSetupChoice(preferences) {
         'Skipping Python TCP server setup because it is running in CI'
       )
     }
+    currentStep = 'setupMigrations'
+    await setupMigrations()
     currentStep = 'setupToolsDependencies'
     await setupToolsDependencies()
     currentStep = 'setupToolsSettings'
@@ -354,12 +364,13 @@ async function syncLLMSetupChoice(preferences) {
         SetupUI.info('I will skip local AI because this computer does not support it.')
       }
 
-      if (preferences.setupVoice) {
-        currentStep = 'setupVoiceResources'
-        await setupVoiceResources()
-      } else {
-        SetupUI.info('I will skip voice setup for now. You can add it later.')
-      }
+      // Voice setup is paused; retain the installation flow for its return.
+      // if (preferences.setupVoice) {
+      //   currentStep = 'setupVoiceResources'
+      //   await setupVoiceResources()
+      // } else {
+      //   SetupUI.info('I will skip voice setup for now. You can add it later.')
+      // }
     } else {
       // Skip hardware-specific setup in CI where local AI and voice stacks are not needed.
       SetupUI.info(
@@ -367,15 +378,18 @@ async function syncLLMSetupChoice(preferences) {
       )
     }
 
-    if (!preferences.setupVoice) {
-      SetupUI.info('I will skip voice model downloads for now.')
-    }
+    // if (!preferences.setupVoice) {
+    //   SetupUI.info('I will skip voice model downloads for now.')
+    // }
 
     // Finalize generated assets and instance-specific setup metadata.
     SetupUI.section('Finishing Up')
 
     currentStep = 'generateProfileToken'
     await generateProfileToken()
+    currentStep = 'generateConnectionEncryptionKey'
+    await ensureConnectionEncryptionKey()
+    SetupUI.success('Connection encryption key: ready')
     currentStep = 'train'
     await train()
     currentStep = 'setFfprobePermissions'
@@ -415,8 +429,8 @@ async function syncLLMSetupChoice(preferences) {
 
     SetupUI.recap([
       'Setup complete',
-      `Local AI: ${preferences.setupLocalAI ? 'enabled' : 'skipped'}`,
-      `Voice: ${preferences.setupVoice ? 'enabled' : 'skipped'}`
+      `Local AI: ${preferences.setupLocalAI ? 'enabled' : 'skipped'}`
+      // `Voice: ${preferences.setupVoice ? 'enabled' : 'skipped'}`
     ])
     tellSetupCompletionJoke()
     console.log('')

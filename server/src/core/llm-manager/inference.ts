@@ -1,8 +1,9 @@
 import { LLM_PROVIDER } from '@/core'
-import { LLMDuties } from '@/core/llm-manager/types'
+import { LLMDuties, type InferencePurpose } from '@/core/llm-manager/types'
 
 export interface InferenceOptions {
   prompt: string
+  usagePurpose?: InferencePurpose
   systemPrompt?: string
   temperature?: number
   maxTokens?: number
@@ -28,6 +29,7 @@ export async function runInference(
 ): Promise<InferenceResult | null> {
   const completionParams = {
     dutyType: LLMDuties.Inference,
+    ...(options.usagePurpose ? { usagePurpose: options.usagePurpose } : {}),
     systemPrompt: options.systemPrompt ?? '',
     ...(options.temperature !== undefined
       ? { temperature: options.temperature }

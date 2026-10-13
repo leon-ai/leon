@@ -308,8 +308,8 @@
     "bridges.tools.downloading_resource_file": [
       "Downloading {{ file_name }} for {{ resource_name }} from {{ url }} ...",
       "Fetching {{ file_name }} file for {{ resource_name }} ...",
-      "Getting {{ file_name }} from {{ url }} ...",
-      "Downloading resource file {{ file_name }} ...",
+      "Getting {{ file_name }} for {{ resource_name }} from {{ url }} ...",
+      "Downloading resource file {{ file_name }} for {{ resource_name }} ...",
       "Retrieving {{ file_name }} for {{ resource_name }} resource ..."
     ],
     "bridges.tools.resource_file_downloaded": [
@@ -326,23 +326,11 @@
       "{{ file_name }} download failed for {{ resource_name }}: {{ error }}.",
       "Error downloading {{ file_name }} from {{ url }} : {{ error }}."
     ],
-    "react.tool_call.waiting": [
-      "Still working on this step. Please wait because {{ reason }}."
-    ],
-    "react.tool_call.reason.large_prompt": [
-      "the prompt is large (around {{ estimated_tokens }} tokens) and needs more inference time"
-    ],
-    "react.tool_call.reason.multi_tools": [
-      "the model is evaluating {{ tool_count }} tool schemas before deciding"
-    ],
-    "react.tool_call.reason.provider_latency": [
-      "the provider is taking longer than usual to complete this tool-selection call"
-    ],
-    "react.tool_call.diagnosis": [
-      "Still running this step. Quick diagnosis while it continues: provider={{ provider }}, tool choice={{ tool_choice }}, tools={{ tool_count }}, estimated tokens={{ total_tokens }} (prompt={{ prompt_tokens }}, tools={{ tool_tokens }}, history={{ history_tokens }}). Slowdowns usually come from provider queueing or large context."
-    ],
     "react.tool.preparing": [
       "Preparing the {{ tool_name }} tool..."
+    ],
+    "react.tool.preparation_progress": [
+      "{{ tool_name }}: {{ message }}"
     ],
     "react.tool.ready": [
       "{{ tool_name }} is ready to be used."

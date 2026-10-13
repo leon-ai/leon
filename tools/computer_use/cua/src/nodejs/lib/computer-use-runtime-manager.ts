@@ -12,7 +12,6 @@ import path from 'node:path'
 
 import { LogHelper } from '@/helpers/log-helper'
 
-import { resolveComputerUseBrowserInspection } from './computer-use-settings'
 import { ComputerUseArtifactStore } from './computer-use-artifact-store'
 import { COMPUTER_USE_SCREEN_CAPTURE_ACTIONS, CUA_FOREGROUND_DELIVERY_MODE } from './constants'
 import { asRecord, hasCuaError } from './utils'
@@ -37,21 +36,8 @@ export class ComputerUseRuntimeManager {
     input: ToolExecutionContext
   ): Promise<ManagedComputerUseRuntime> {
     const { profileName } = input
-    const browserInspectionAllowed = resolveComputerUseBrowserInspection(input)
     const existingRuntime = this.runtimes.get(profileName)
-    if (existingRuntime) {
-      const runtime = await existingRuntime
-      if (runtime.browserInspectionAllowed === browserInspectionAllowed) return runtime
-      // Recreate the runtime when the owner changes permission. Native grants
-      // already issued to the old runtime must not outlive revocation.
-      this.runtimes.delete(profileName)
-      try {
-        await this.hideActivityOverlays(runtime)
-        await runtime.driver.shutdown()
-      } finally {
-        runtime.driver.uniffiDestroy()
-      }
-    }
+    if (existingRuntime) return existingRuntime
 
     // Keep native loading lazy so Leon starts on unsupported hosts.
     const runtimePromise = this.driverFactory(input).then(async (driver) => {
@@ -63,7 +49,6 @@ export class ComputerUseRuntimeManager {
 
       return {
         driver,
-        browserInspectionAllowed,
         initializedSessions: new Set<string>(),
         activityOverlaySessions: new Set<string>(),
         ...(await this.getActionCapabilities(driver))
@@ -169,17 +154,12 @@ export class ComputerUseRuntimeManager {
         return { ...predicate, element: { ...normalized, selector } }
       })
     }
-    const hasElement = typeof managedParameters['element_index'] === 'number' ||
-        (typeof managedParameters['element_token'] === 'string' &&
-          managedParameters['element_token'].length > 0)
+    const hasElement = typeof managedParameters['element_token'] === 'string' &&
+      managedParameters['element_token'].length > 0
     if (['click', 'type_text', 'press_key', 'hotkey', 'scroll'].includes(action)) {
       const hasPixels = managedParameters['x'] != null || managedParameters['y'] != null
       if (hasElement && hasPixels) {
-        throw new Error('Choose one target: a current element token/index OR screenshot pixels, not both.')
-      }
-      if (managedParameters['element_token'] === '' &&
-          managedParameters['element_index'] != null) {
-        throw new Error('An empty element token with an index is ambiguous. Supply only the intended current selector.')
+        throw new Error('Choose one target: a current element token or screenshot pixels.')
       }
     }
     const target = asRecord(managedParameters['target'])
@@ -233,7 +213,7 @@ export class ComputerUseRuntimeManager {
       // Accept duplicate representations only when they identify the same
       // desktop; never silently reinterpret window coordinates as global input.
       if ((managedParameters['scope'] != null && managedParameters['scope'] !== 'desktop') ||
-          ['pid', 'window_id', 'element_index', 'snapshot_id'].some((key) =>
+          ['pid', 'window_id'].some((key) =>
             managedParameters[key] != null || target[key] != null) || hasElement) {
         throw new Error('A desktop target cannot include window scope, identifiers, or element selectors.')
       }
@@ -244,25 +224,8 @@ export class ComputerUseRuntimeManager {
       delete managedParameters['scope']
       delete managedParameters['display_id']
     }
-    if (action === 'browser_prepare') {
-      const strategy = asRecord(managedParameters['strategy'])
-      if (strategy?.['kind'] === 'existing_profile') {
-        const profile = asRecord(managedParameters['profile'])
-        // These optional defaults must not select the incompatible isolated
-        // launch route when an existing-profile strategy was requested.
-        if (managedParameters['allow_launch'] === false) {
-          delete managedParameters['allow_launch']
-        }
-        if (profile?.['mode'] === 'isolated_new' && !profile['name']) {
-          delete managedParameters['profile']
-        }
-        if (managedParameters['allow_launch'] != null || managedParameters['profile'] != null) {
-          throw new Error('Choose either strategy=existing_profile with pid/window_id, or an isolated profile with allow_launch=true; do not combine them.')
-        }
-      }
-    }
-    for (const key of ['element_token', 'snapshot_id', 'target_id', 'tab_id', 'scope_ref', 'continuation']) {
-      if (managedParameters[key] === '') delete managedParameters[key]
+    if (managedParameters['element_token'] === '') {
+      delete managedParameters['element_token']
     }
     if (action === 'clipboard_write' && typeof managedParameters['text'] === 'string') {
       for (const key of ['file_path', 'image_path']) {

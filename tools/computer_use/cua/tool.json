@@ -3,9 +3,9 @@
   "tool_id": "cua",
   "toolkit_id": "computer_use",
   "name": "Cua",
-  "description": "Observe and operate graphical desktop applications and browser interfaces through Cua Driver.",
-  "progressive_guidance": "Prefer browser_use for websites; if unavailable or missing the needed interface, use get_browser_state and browser_* actions. Bind to an observed browser pid/window_id; when setup is required, use browser_prepare with strategy.kind=existing_profile (the host enforces owner permission), then inspect again. Reuse the returned target_id/tab_id and current page refs. Read page structure before narrowing with query/scope_ref. Matches or truncated snapshots do not prove complete enumeration: follow pagination, continuation or scroll to the requested boundary. Use screenshots/native accessibility when direct inspection is unsupported, denied or cannot expose the needed control. Do not repeat a failed setup without changed evidence.\nPrefer current semantic handles or observed menu paths. If only pixels are available, locate the control and label in the latest matching image. Before an uncertain or small-target click, zoom its surrounding window region, inspect the crop, then act using crop pixels with the same pid/window_id. Never batch zoom with its dependent action or reuse earlier coordinates. If accessibility exposes only the outer frame, retry the tree at most once for a missing control. Inspect unfamiliar editor help before trying shortcuts.\nVisible interaction mode forces foreground input; Cua validates and activates the target and restores focus. Use bring_to_front only for persistent focus or an exposed desktop target. Background support depends on the target: XTest-only input requires foreground. Remember background_unavailable; retry foreground only when permitted.\nUse perform_actions for predictable steps without intermediate visual decisions, with at most one pixel-targeted click. Within one field, combine click, select-all and type_text; repeated typing reuses focus. Prefer type_text mode=replace to replace a field, then inspect the final observation. Do not batch different spatial fields. For uncertain input or timeouts, inspect the post-action capture before retrying: input may have landed. Input actions and batches return a final observation by default; reuse it. For page/dialog navigation, set settle_ms before capture (on the last batch step). Set capture_after=false only when no observation is needed. For a blank or loading destination, use get_window_state/get_desktop_state with settle_ms, or verify_state when an expected semantic condition is known; wait and observe rather than replaying navigation; inspect newly opened apps/dialogs before restoring the previous window. Dispatch success is not proof of the intended effect. If a dialog owns focus, complete it using its own target or fresh desktop pixels before returning to the parent; changing to background delivery does not resolve a modal. An unchanged refresh does not justify repeating blocked input. For downloads, finish the save flow, then verify the final file against its expected identity. A temporary file is pending browser work: do not rename it to manufacture completion. Reuse already verified files and reconcile the full requested collection with the source list.\nFor forms, identify the field label and meaning before editing. Verify the resulting value, units, dependent totals, and attachment presence as applicable before claiming completion. Do not confuse an adjustment/offset with an expense or infer a reimbursement recipient from the invoice vendor. Finish independent fields, but ask for information or choices unresolved by the request or tools before editing dependent fields; preserve any no-submit constraint.\nElement tokens require the latest get_window_state snapshot and matching pid/window_id; never reuse logged or superseded tokens. element_index also requires snapshot_id. Window targets use kind, pid, window_id; desktop targets use kind, display_id and fresh desktop-image pixels, never window coordinates.\nControls offer actions: play starts playback; pause stops it. If current state is ambiguous, compare fresh observations over time. A track title or stationary progress position does not prove active playback.",
-  "icon_name": "computer-line",
+  "description": "Observe and operate native desktop applications, windows, and OS dialogs through Cua Driver. Use browser_use for websites.",
+  "progressive_guidance": "Extract exact text in this order: accessibility text, the source app's Copy action with copy_text, then OCR only if neither works. After locating the source, inspect accessibility or its context menu before transcribing links. Empty accessibility is not a failed Copy attempt; zoom can help target Copy but is not the first text-extraction step.\nUse current observations: window images establish window pixels; desktop/menu images establish desktop pixels. Pass attached-image pixels directly, including zoom crops; Leon maps them. Use only element_token from the latest matching window snapshot; a newer read replaces its tokens. Application menu-bar entries may appear in a window tree but are outside that window; use invoke_menu with an exact observed menu path rather than clicking their window tokens.\nRespect the configured interaction mode. Visible mode forces foreground input; background support depends on the target. Remember background_unavailable and retry foreground only when permitted. Input returns a final observation by default: reuse it, and inspect uncertain delivery before retrying. Dispatch success is not proof of the intended effect. Resolve a modal using its own target before returning to the parent.\nResolve item identity before changing a collection; do not add/remove candidates merely to inspect them. Preserve verified outcomes and update the existing plan at verified milestones. Identify field meaning before editing and verify resulting values; ask about unresolved choices and preserve no-submit constraints. Playback controls must be verified against actual playback state, not a title or stationary progress position.\nUse perform_actions for predictable inputs on already observed controls, including semantic button sequences and keyboard input. Load its schema before building the sequence. Keep element_token beside target (or pid/window_id), never inside target; target uses kind=window with pid/window_id or kind=desktop with display_id.",
+  "icon_name": "cursor-line",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
@@ -14,6 +14,7 @@
   "functions": {
     "list_apps": {
       "description": "List installed desktop applications and configured preferred_apps. Use it to choose a launch target when the owner did not name one.",
+      "progressive_guidance": "preferred_apps includes saved choices even when query filters the app list. found_in_desktop_inventory=false means no desktop entry matched, not that the app is absent: for a terminal-hosted app, consult ACTIVITY.md process ancestry and inspect the host's correct idle session. The terminal is its host, not a replacement for the selected app. Running time is not proof of preference. Remote context must describe the target device, not the server. Save a new preference only with owner confirmation.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -104,12 +105,13 @@
     },
     "health_report": {
       "description": "Diagnose driver, permissions, accessibility, and screenshot capabilities after a concrete failure. Read the reported checks and remediation hints; do not run routinely before healthy actions.",
+      "progressive_guidance": "On macOS, follow the reported permission hints for the app or executable macOS attributes Leon's embedded driver to. Granting permissions to standalone CuaDriver does not verify Leon's capture readiness.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "include": {
-        "description": "Omit on the first diagnostic call to run all checks. To filter later, copy exact checks[].name values from a previous report; do not invent category names. Wins over skip.",
+            "description": "Omit on the first diagnostic call to run all checks. To filter later, copy exact checks[].name values from a previous report; do not invent category names. Wins over skip.",
             "items": {
               "type": "string"
             },
@@ -132,12 +134,13 @@
     },
     "get_window_state": {
       "description": "Inspect one native window and return its interface tree plus a screenshot. Use this for visible appearance, colors, or controls after list_windows.",
+      "progressive_guidance": "Use the returned accessibility text before Copy or OCR. If only the outer frame is exposed, retry the tree at most once for a missing control. Reuse the latest post-action observation; additions/removals can shift controls. For a loading destination, set settle_ms and observe rather than repeating navigation. Inspect newly opened windows/dialogs before restoring the previous window.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "include_screenshot": {
-            "description": "Default true \u2014 returns a grounding screenshot alongside the tree. Set false to skip the grab and return tree only (the cheap path for re-indexing before an element ax action).",
+            "description": "Default true — returns a grounding screenshot alongside the tree. Set false to skip the grab and return tree only (the cheap path for re-indexing before an element ax action).",
             "type": "boolean"
           },
           "max_depth": {
@@ -166,6 +169,16 @@
             "type": "integer",
             "minimum": 0,
             "maximum": 2000
+          },
+          "include_accessibility_tree": {
+            "description": "Default true. Set false for a screenshot-only observation when accessibility text is unnecessary. At least one of include_accessibility_tree/include_screenshot must be true.",
+            "type": "boolean"
+          },
+          "timeout_ms": {
+            "description": "Wall-clock budget for the accessibility walk. Omit to let the driver give cold Linux windows a larger initial budget. Increase only for a missing control when truncation_reason indicates a timeout; query filters results without reducing traversal cost.",
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000
           }
         },
         "required": [
@@ -180,13 +193,14 @@
       }
     },
     "zoom": {
-      "description": "Before an uncertain pixel action, inspect its region in the latest full-window screenshot. Read the returned crop before acting; use crop pixels with the same pid/window_id. Get a full-window screenshot before other pixel actions or another zoom.",
+      "description": "Enlarge a region of the latest screenshot for precise targeting or reading after accessibility and Copy fail. Returns a crop with mapped input coordinates.",
+      "progressive_guidance": "Match the latest screenshot: scope=desktop for desktop/menu images, otherwise supply its pid/window_id. Inspect the crop before acting with its pixels and capture_target; never calculate offsets or convert them back to desktop/window coordinates, including inside copy_text. Never batch zoom with a dependent click. Observe the full target before another zoom. Reading zoom follows accessibility and an actual Copy attempt; targeting zoom can help locate a small Copy control.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "pid": {
-            "description": "Target pid \u2014 required for from_zoom click/type translation.",
+            "description": "Process owning the observed window. Omit for desktop zoom.",
             "type": "integer"
           },
           "window_id": {
@@ -194,24 +208,40 @@
           },
           "x1": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
           },
           "x2": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
           },
           "y1": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
           },
           "y2": {
             "type": "number",
-            "description": "Rectangle coordinate in the latest full-window image attached by Leon, before any zoom."
+            "description": "Rectangle coordinate in the latest full desktop or window image, matching scope."
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "act",
+              "read"
+            ],
+            "default": "act",
+            "description": "act: crop for controls. read: clean PNG crop for reading, enlarged up to 2x. Both support input in crop pixels with the returned capture_target. Neither is a fresh capture."
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "window",
+              "desktop"
+            ],
+            "default": "window",
+            "description": "Match the observed image: desktop for get_desktop_state or a context-menu screenshot (omit pid/window_id), window for get_window_state (supply pid/window_id)."
           }
         },
         "required": [
-          "pid",
-          "window_id",
           "x1",
           "y1",
           "x2",
@@ -226,6 +256,7 @@
     },
     "verify_state": {
       "description": "Deterministically verify a concrete task postcondition after an action. Do not call this merely to confirm that an unrelated target window still exists.",
+      "progressive_guidance": "Verify a concrete expected semantic condition after an action. For loading or blank destinations without a known condition, observe with get_window_state/get_desktop_state and settle_ms instead; do not replay navigation.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -462,7 +493,8 @@
       }
     },
     "get_desktop_state": {
-      "description": "Capture the visible desktop without an accessibility-tree walk. Use it for controls outside one window, multi-window context, or recovery after an ineffective window action.",
+      "description": "Capture the visible desktop without an accessibility-tree walk. Use for current context, controls outside one window, or recovery after ineffective window actions.",
+      "progressive_guidance": "Use for visible context and controls outside one window, or recovery after ineffective window capture/input. For exact text or URLs, next inspect accessibility or the source's Copy action rather than transcribing the screenshot. A desktop capture establishes desktop coordinates, not window coordinates.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -552,7 +584,8 @@
       }
     },
     "move_cursor": {
-      "description": "Move the real desktop pointer to reveal a hover menu or tooltip without clicking. Requires a visible, unobscured target grounded in the latest desktop screenshot and permission for foreground interaction. Use capture_after=true to inspect the hover result.",
+      "description": "Move the desktop pointer to reveal a hover menu or tooltip without clicking.",
+      "progressive_guidance": "Use a visible, unobscured target from the latest desktop screenshot and only when foreground interaction is permitted. Set capture_after=true to inspect the revealed tooltip/menu.",
       "deduplicate_calls": false,
       "parameters": {
         "type": "object",
@@ -608,13 +641,14 @@
       }
     },
     "launch_app": {
-      "description": "Launch a chosen desktop application by name, bundle ID, or path. Use the matching launch_path from list_apps when available. URLs use the OS default handler independently, so put a destination URL in additional_arguments when the exact application matters.",
+      "description": "Launch the chosen desktop application by name, bundle ID, or path.",
+      "progressive_guidance": "Continue in a relevant existing window before launching. Use the observed launch_path from list_apps when available. URLs use the OS default handler independently; put the URL in additional_arguments when the selected app matters. Inspect the new window before acting.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
           "additional_arguments": {
-            "description": "Extra command-line arguments passed to the exact launched process. Put a browser destination URL here instead of urls when browser identity matters. On Linux, include --force-renderer-accessibility when launching a Chromium browser for browser_prepare/get_browser_state.",
+            "description": "Extra command-line arguments passed to the exact launched application. Use browser_use to navigate webpages in the owner's existing browser session.",
             "items": {
               "type": "string"
             },
@@ -625,7 +659,7 @@
             "type": "string"
           },
           "launch_path": {
-            "description": "Round-trip the `launch_path` returned by `list_apps` \u2014 the Exec= command from the .desktop file with XDG field codes already stripped. Highest precedence on Linux; spawned directly via the system shell.",
+            "description": "Round-trip the `launch_path` returned by `list_apps` — the Exec= command from the .desktop file with XDG field codes already stripped. Highest precedence on Linux; spawned directly via the system shell.",
             "type": "string"
           },
           "name": {
@@ -648,7 +682,8 @@
       }
     },
     "bring_to_front": {
-      "description": "Bring a known window forward when persistent visibility or a grounded desktop interaction is necessary and permitted. Ordinary foreground input already activates its target temporarily.",
+      "description": "Bring a known window forward when persistent visibility or desktop interaction is needed.",
+      "progressive_guidance": "Use only for persistent visibility or an exposed desktop target. Ordinary foreground input already activates its target and normally restores prior focus; foreground right-clicks keep the target in front so the menu remains available.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -672,11 +707,12 @@
       }
     },
     "invoke_menu": {
-      "description": "Invoke an exact observed native application-menu path in one call, rather than clicking each menu level. The driver handles target activation and focus restoration; a separate bring_to_front is unnecessary. Observe the resulting state to verify completion.",
+      "description": "Invoke an observed native application-menu path in one call.",
+      "progressive_guidance": "Use an exact observed application-menu path, including menu-bar entries exposed by get_window_state. On macOS, three periods (...) also match the native ellipsis (…). Those entries are application controls outside the window and cannot be clicked with window tokens. The driver handles activation and restoration; a separate bring_to_front is unnecessary. Inspect the result rather than treating delivery as completion.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
-        "description": "Exact, immediate-child application menu path to resolve and invoke through\nthe operating system's accessibility API. Path labels are matched after\ntrimming surrounding whitespace and otherwise remain case-sensitive.",
+        "description": "Exact, immediate-child application menu path to resolve and invoke through\nthe operating system's accessibility API. Path labels are matched after\ntrimming surrounding whitespace and otherwise remain case-sensitive. On\nmacOS, three periods in a label also match the ellipsis character that\nnative menu titles use (`Save As...` finds `Save As…`).",
         "properties": {
           "path": {
             "items": {
@@ -846,7 +882,8 @@
       }
     },
     "click": {
-      "description": "Click a current semantic element or a control located in the latest matching screenshot. If its pixel center is uncertain, inspect the region with zoom first; do not guess or reuse coordinates from an earlier image.",
+      "description": "Click a current semantic element or a control in the latest matching screenshot.",
+      "progressive_guidance": "Locate the control in the latest matching screenshot or use its current semantic token. After layout changes, re-locate the target instead of reusing old pixels. If a small target is uncertain, inspect a zoom first and pass crop pixels directly. For Copy, use copy_text to verify the clipboard. Inspect an opened context menu before choosing its item. Open dropdowns only for needed choices; retry only when new evidence changes the failure mode.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -867,26 +904,18 @@
           "count": {
             "type": "integer"
           },
-          "cursor_id": {
-            "description": "Optional multi-cursor instance id. Default: 'default'.",
-            "type": "string"
-          },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "modifier": {
             "description": "Modifier keys held during the action: cmd, shift, option/alt, ctrl.",
@@ -904,11 +933,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1097,6 +1121,7 @@
     },
     "drag": {
       "description": "Drag between two screenshot coordinates in one target window.",
+      "progressive_guidance": "On macOS, window-scoped drag requires foreground delivery and an exact window_id; it moves the physical pointer. Background delivery returns background_unavailable without sending input. Respect the configured interaction mode.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -1114,13 +1139,8 @@
             ],
             "type": "string"
           },
-          "cursor_id": {
-            "description": "Optional multi-cursor instance id. Default: 'default'.",
-            "type": "string"
-          },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1356,6 +1376,7 @@
     },
     "scroll": {
       "description": "Scroll a target window or UI element in one direction.",
+      "progressive_guidance": "Survey long content in one direction with page-sized scrolls and capture_after=true. Reuse observations and stop at the end, repeated content, or sufficient evidence; state remaining uncertainty.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -1376,13 +1397,8 @@
             ],
             "type": "string"
           },
-          "cursor_id": {
-            "description": "Optional multi-cursor instance id. Default: 'default'.",
-            "type": "string"
-          },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
@@ -1398,13 +1414,10 @@
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "pid": {
             "type": "integer"
@@ -1415,11 +1428,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1451,11 +1459,11 @@
             "type": "integer"
           },
           "x": {
-            "description": "Window-local screenshot-pixel X of the scroll target. Pass with y and without element_index.",
+            "description": "Window-local screenshot-pixel X of the scroll target. Pass with y and without element_token.",
             "type": "number"
           },
           "y": {
-            "description": "Window-local screenshot-pixel Y of the scroll target. Pass with x and without element_index.",
+            "description": "Window-local screenshot-pixel Y of the scroll target. Pass with x and without element_token.",
             "type": "number"
           },
           "settle_ms": {
@@ -1613,30 +1621,35 @@
     },
     "type_text": {
       "description": "Type into a field; use mode=replace to focus once, select all and replace its value. Inspect the returned observation to verify the result.",
+      "progressive_guidance": "For exact, multilingual or multiline field values, prefer method=paste using Cua's clipboard; it replaces clipboard text. Use mode=replace to focus once and replace the field value. Verify the returned observation before continuing. If input is partial or unchanged, inspect focus before retrying; do not append another copy or create shell clipboard helpers.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "type",
+              "paste"
+            ],
+            "description": "type (default) uses driver typing; paste writes clipboard text and pastes once into the target. Paste replaces the current clipboard contents."
+          },
           "capture_after": {
             "description": "Return a fresh observation after input (default true). For a batch, capture only after its final action.",
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "pid": {
             "type": "integer"
@@ -1647,11 +1660,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1686,7 +1694,7 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X of the field to type into \u2014 the element px action form. Pass x,y (no element_index) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click. For replacement use mode=replace. After a separate focus/select-all sequence, omit x/y to preserve selection.",
+            "description": "Screenshot-pixel X of the field to type into — the element px action form. Pass x,y (no element_token) and the tool pixel-clicks there to establish real renderer focus, then types. Use for Chromium/Electron inputs the AX path can't reach. Read straight off the get_window_state PNG, same convention as click. For replacement use mode=replace. After a separate focus/select-all sequence, omit x/y to preserve selection.",
             "type": "number"
           },
           "y": {
@@ -1867,21 +1875,17 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "key": {
             "description": "Canonical lowercase CUA key name. Use `return` to submit or commit, not `enter`; common names include `tab`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, and `delete`. Letters, digits, and function keys use their lowercase form.",
@@ -1902,11 +1906,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -1938,7 +1937,7 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X \u2014 the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_index.",
+            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the key. Use when the key must go to a Chromium/Electron surface the AX path can't focus. Pass with y, no element_token.",
             "type": "number"
           },
           "y": {
@@ -2101,6 +2100,7 @@
     },
     "hotkey": {
       "description": "Press a key combination in a target window.",
+      "progressive_guidance": "Inspect unfamiliar application/editor shortcut help before acting. Confirm the intended field or control has focus; a selection shortcut on page content may select rows instead of text.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2110,21 +2110,17 @@
             "type": "boolean"
           },
           "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
+            "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
             "enum": [
               "background",
               "foreground"
             ],
             "type": "string"
           },
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "keys": {
             "description": "Canonical lowercase CUA names for modifier(s) plus one non-modifier key, e.g. [\"ctrl\",\"c\"]. Use `return` rather than `enter`.",
@@ -2143,11 +2139,6 @@
               "window",
               "desktop"
             ],
-            "type": "string"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
             "type": "string"
           },
           "target": {
@@ -2179,7 +2170,7 @@
             "type": "integer"
           },
           "x": {
-            "description": "Screenshot-pixel X \u2014 the element px action form: pixel-click there to focus, then send the combo (so e.g. Ctrl+V pastes into that field). Pass with y. Use for Chromium/Electron surfaces the background combo can't reach.",
+            "description": "Screenshot-pixel X — the element px action form: pixel-click there to focus, then send the combo (so e.g. Ctrl+V pastes into that field). Pass with y. Use for Chromium/Electron surfaces the background combo can't reach.",
             "type": "number"
           },
           "y": {
@@ -2341,7 +2332,8 @@
       }
     },
     "perform_actions": {
-      "description": "Run up to eight grounded inputs in order, stopping on failure. Use predictable steps without intervening visual decisions; observe between spatial targets. settle_ms delays the next input, or the final capture on the last step.",
+      "description": "Run up to eight grounded inputs in order with one final observation, stopping on failure. Prefer this to individual calls for predictable button or keyboard sequences.",
+      "progressive_guidance": "Batch predictable steps without intermediate visual decisions. Multiple semantic clicks from the same current window snapshot are allowed when the controls stay valid; the one-click limit applies only to pixel targeting. Keep element_token at the step parameters root, beside pid/window_id or target={kind:\"window\",pid,window_id}. Never nest element_token inside target. Include an explicit target on every keyboard step. Within one field, combine click, select-all and type_text; do not batch different spatial fields or zoom with its dependent click. Set settle_ms only when a transition needs time; place it on the last step before the final observation when possible. Reuse the final observation and inspect uncertain input before retrying.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2366,8 +2358,153 @@
                   "type": "string"
                 },
                 "parameters": {
-                  "additionalProperties": true,
-                  "type": "object"
+                  "additionalProperties": false,
+                  "type": "object",
+                  "description": "Input fields for this step action. For a semantic click use {pid,window_id,element_token}; alternatively use {target:{kind:\"window\",pid,window_id},element_token}. Keyboard steps require target plus text, key, or keys for their action.",
+                  "properties": {
+                    "amount": {
+                      "maximum": 50,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "button": {
+                      "description": "Mouse button. Default: \"left\" (legacy back-compat). X11: routed via ButtonPress/Release with the matching evdev code. Native Wayland: only left-button is supported via the virtual-pointer protocol; right/middle return an error.",
+                      "enum": [
+                        "left",
+                        "right",
+                        "middle"
+                      ],
+                      "type": "string"
+                    },
+                    "by": {
+                      "enum": [
+                        "line",
+                        "page"
+                      ],
+                      "type": "string"
+                    },
+                    "count": {
+                      "type": "integer"
+                    },
+                    "delivery_mode": {
+                      "description": "Omit to follow the configured interaction mode: visible forces foreground; background uses background unless foreground is explicitly requested. Follow returned diagnostics.",
+                      "enum": [
+                        "background",
+                        "foreground"
+                      ],
+                      "type": "string"
+                    },
+                    "direction": {
+                      "enum": [
+                        "up",
+                        "down",
+                        "left",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "element_token": {
+                      "description": "Current semantic element handle from the matching window snapshot. Put it directly in parameters, with pid/window_id or an exact window target.",
+                      "type": "string",
+                      "pattern": "^s[0-9a-f]{8}:[0-9]+$"
+                    },
+                    "key": {
+                      "description": "Canonical lowercase CUA key name. Use `return` to submit or commit, not `enter`; common names include `tab`, `escape`, `space`, `up`, `down`, `left`, `right`, `home`, `end`, `pageup`, `pagedown`, and `delete`. Letters, digits, and function keys use their lowercase form.",
+                      "type": "string"
+                    },
+                    "keys": {
+                      "description": "Canonical lowercase CUA names for modifier(s) plus one non-modifier key, e.g. [\"ctrl\",\"c\"]. Use `return` rather than `enter`.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "minItems": 2,
+                      "type": "array"
+                    },
+                    "method": {
+                      "type": "string",
+                      "enum": [
+                        "type",
+                        "paste"
+                      ],
+                      "description": "type (default) uses driver typing; paste writes clipboard text and pastes once into the target. Paste replaces the current clipboard contents."
+                    },
+                    "mode": {
+                      "type": "string",
+                      "enum": [
+                        "insert",
+                        "replace"
+                      ],
+                      "default": "insert",
+                      "description": "insert types at the caret. replace selects all in the established field before typing; x/y or a current element handle focuses it once. Without a field selector, uses the already focused field."
+                    },
+                    "modifier": {
+                      "description": "Modifier keys held during the action: cmd, shift, option/alt, ctrl.",
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "modifiers": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "pid": {
+                      "type": "integer"
+                    },
+                    "scope": {
+                      "default": "window",
+                      "enum": [
+                        "window",
+                        "desktop"
+                      ],
+                      "type": "string"
+                    },
+                    "settle_ms": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 2000,
+                      "description": "Optional bounded wait after this step. Intermediate steps wait before the next input; the final step waits before observation. Omit for immediate input."
+                    },
+                    "target": {
+                      "additionalProperties": false,
+                      "description": "Exact observed target: {kind:\"window\",pid,window_id} or {kind:\"desktop\",display_id}. Put element_token beside target, never inside it. Omit target when using top-level pid/window_id for semantic clicks.",
+                      "properties": {
+                        "display_id": {
+                          "type": "string"
+                        },
+                        "kind": {
+                          "enum": [
+                            "window",
+                            "desktop"
+                          ],
+                          "type": "string"
+                        },
+                        "pid": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "window_id": {
+                          "minimum": 0,
+                          "type": "integer"
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "window_id": {
+                      "type": "integer"
+                    },
+                    "x": {
+                      "type": "number"
+                    },
+                    "y": {
+                      "type": "number"
+                    }
+                  }
                 }
               },
               "type": "object"
@@ -2389,37 +2526,31 @@
     },
     "set_value": {
       "description": "Set the value of an editable UI element from the latest window state.",
+      "progressive_guidance": "Use a current editable element from get_window_state. Confirm the field's label and meaning, then verify the resulting value, units and dependent totals rather than relying on dispatch success. If Finder returns file_name_needs_rename, use a permitted keyboard rename flow and verify the filename in a fresh folder listing; changing Get Info text alone does not prove the file was renamed.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
         "properties": {
-          "element_index": {
-            "description": "Element index from get_window_state; pass its matching snapshot_id. Prefer element_token.",
-            "type": "integer"
-          },
           "element_token": {
             "description": "Element handle from the latest get_window_state for the same target.",
-            "type": "string"
+            "type": "string",
+            "pattern": "^s[0-9a-f]{8}:[0-9]+$"
           },
           "pid": {
             "type": "integer"
-          },
-          "snapshot_id": {
-            "description": "Snapshot handle required with element_index.",
-            "pattern": "^s[0-9a-f]{8}$",
-            "type": "string"
           },
           "value": {
             "type": "string"
           },
           "window_id": {
-            "description": "Required when element_index is used; optional when element_token is supplied (the token carries it).",
+            "description": "Optional when element_token is supplied (the token carries it).",
             "type": "integer"
           }
         },
         "required": [
           "pid",
-          "value"
+          "value",
+          "element_token"
         ],
         "type": "object"
       },
@@ -2564,8 +2695,51 @@
         "type": "object"
       }
     },
+    "copy_text": {
+      "description": "Invoke an observed Copy action or selection shortcut and check the clipboard for exact source text. Prefer this over separate input and clipboard_read calls.",
+      "progressive_guidance": "Open and inspect a source context menu first if needed. Use an observed Copy/Copy link control or selection shortcut, preferably a current semantic handle or exact menu path. Pixel input targets the Copy row's center in the latest matching screenshot; pass crop pixels directly without conversion. This combines input and clipboard verification: unchanged text is unverified, and changed text still needs comparison with the intended source. Never invoke an unrelated action through copy_text.",
+      "deduplicate_calls": false,
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pid": {
+            "type": "integer",
+            "description": "Process owning the source text."
+          },
+          "window_id": {
+            "type": "integer",
+            "description": "Window owning the source text, even when its Copy menu needs a desktop-targeted click."
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "click",
+              "hotkey",
+              "invoke_menu"
+            ]
+          },
+          "parameters": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "The observed Copy action's normal parameters, including its explicit target and fresh semantic handle or image coordinates. A popup may require a desktop target distinct from the source window."
+          }
+        },
+        "required": [
+          "pid",
+          "window_id",
+          "action",
+          "parameters"
+        ]
+      },
+      "output_schema": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
     "clipboard_read": {
-      "description": "Read the current desktop clipboard.",
+      "description": "Read the current desktop clipboard; this does not prove a preceding Copy action succeeded.",
+      "progressive_guidance": "Prefer copy_text for extracting exact source text. If inspecting the clipboard separately, use include_text=true; reading successfully does not prove a Copy succeeded because the contents may be stale.",
       "deduplicate_calls": false,
       "parameters": {
         "additionalProperties": false,
@@ -2722,821 +2896,6 @@
         "type": "object"
       }
     },
-    "browser_prepare": {
-      "description": "Prepare an owned browser endpoint only when get_browser_state says setup is required. Use it only for a browser process, never an Electron or desktop app.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": false,
-        "properties": {
-          "allow_launch": {
-            "description": "Allow a separate driver-owned isolated Chromium process to be launched (default false).",
-            "type": "boolean"
-          },
-          "pid": {
-            "description": "Browser process id to prepare. Required except for a driver-owned isolated_new/isolated_named launch with allow_launch=true.",
-            "type": "integer"
-          },
-          "profile": {
-            "additionalProperties": false,
-            "description": "Launch profile. Provide mode; name is also required for isolated_named.",
-            "properties": {
-              "mode": {
-                "enum": [
-                  "isolated_new",
-                  "isolated_named"
-                ],
-                "type": "string"
-              },
-              "name": {
-                "description": "Required only for isolated_named; 1-64 path-safe ASCII characters.",
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "strategy": {
-            "additionalProperties": false,
-            "description": "Existing-profile strategy: kind=existing_profile. The host checks the owner browser-inspection setting; tool arguments cannot grant access.",
-            "properties": {
-              "kind": {
-                "enum": [
-                  "existing_profile"
-                ],
-                "type": "string"
-              }
-            },
-            "type": "object"
-          },
-          "window_id": {
-            "description": "Exact native window approval anchor; required for strategy.kind=existing_profile.",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "output_schema": {
-        "type": "object",
-        "additionalProperties": true
-      }
-    },
-    "get_browser_state": {
-      "description": "Inspect page structure and current refs without screenshots by default. Establish scope, then use query/scope_ref for focused reads. Use continuation for truncated snapshots; query matches do not prove full enumeration.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": true,
-        "properties": {
-          "continuation": {
-            "description": "Opaque continuation minted by an earlier semantic_v2 response.",
-            "type": "string"
-          },
-          "include_screenshot": {
-            "default": false,
-            "description": "Capture the exact tab viewport as PNG through CDP without selecting the tab or foregrounding its native window. The request refuses if capture cannot be completed.",
-            "type": "boolean"
-          },
-          "pid": {
-            "description": "Native browser process id (bind mode).",
-            "type": "integer"
-          },
-          "query": {
-            "description": "Read-only semantic match over role, accessible name, and visible text.",
-            "type": "string"
-          },
-          "scope_ref": {
-            "description": "Current semantic/content ref whose subtree should be observed.",
-            "type": "string"
-          },
-          "snapshot_format": {
-            "description": "Versioned snapshot contract. dom_refs_v1 remains the compatibility default.",
-            "enum": [
-              "dom_refs_v1",
-              "semantic_v2"
-            ],
-            "type": "string"
-          },
-          "tab_id": {
-            "description": "Opaque tab id from get_browser_state (session-scoped).",
-            "type": "string"
-          },
-          "target_id": {
-            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
-            "type": "string"
-          },
-          "window_id": {
-            "description": "Native window id owned by pid (bind mode).",
-            "type": "integer"
-          }
-        },
-        "type": "object"
-      },
-      "output_schema": {
-        "type": "object",
-        "additionalProperties": true
-      }
-    },
-    "browser_navigate": {
-      "description": "Navigate one bound browser tab directly to the intended URL. Do not perform an intermediate web search when the destination URL is already known.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": true,
-        "properties": {
-          "tab_id": {
-            "description": "Opaque tab id from get_browser_state (session-scoped).",
-            "type": "string"
-          },
-          "target_id": {
-            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
-            "type": "string"
-          },
-          "url": {
-            "description": "Destination URL (http:, https:, or about:).",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_id",
-          "tab_id",
-          "url"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "type": "object",
-        "additionalProperties": true
-      }
-    },
-    "browser_click": {
-      "description": "Click a semantic reference or coordinates in one bound browser tab.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": true,
-        "properties": {
-          "input_route": {
-            "description": "\"trusted\" (default): Input.dispatchMouseEvent. It refuses rather than foregrounding a standalone browser. \"dom_event\": synthetic full-background DOM click, only when explicitly requested. Dispatch does not prove the control activated; refresh page state and verify the expected postcondition.",
-            "enum": [
-              "trusted",
-              "dom_event"
-            ],
-            "type": "string"
-          },
-          "ref": {
-            "description": "Page element ref in the p<snapshot>:<index> namespace from get_browser_state. Refs are invalidated by navigation and by newer snapshots of the same tab.",
-            "type": "string"
-          },
-          "tab_id": {
-            "description": "Opaque tab id from get_browser_state (session-scoped).",
-            "type": "string"
-          },
-          "target_id": {
-            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
-            "type": "string"
-          },
-          "x": {
-            "description": "Viewport x (CSS px) \u2014 alternative to ref.",
-            "type": "number"
-          },
-          "y": {
-            "description": "Viewport y (CSS px) \u2014 alternative to ref.",
-            "type": "number"
-          }
-        },
-        "required": [
-          "target_id",
-          "tab_id"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "anyOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "delivery": {
-                "additionalProperties": false,
-                "properties": {
-                  "delivered_count": {
-                    "format": "uint32",
-                    "minimum": 0,
-                    "type": [
-                      "integer",
-                      "null"
-                    ]
-                  },
-                  "mode": {
-                    "enum": [
-                      "background",
-                      "foreground",
-                      "not_applicable",
-                      "unknown"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "mode"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "effect": {
-                "enum": [
-                  "confirmed",
-                  "partial",
-                  "unverifiable",
-                  "suspected_noop",
-                  "refused"
-                ],
-                "type": "string"
-              },
-              "escalation": {
-                "additionalProperties": false,
-                "properties": {
-                  "reason": {
-                    "enum": [
-                      "route_unavailable",
-                      "delivery_failed",
-                      "effect_unconfirmed",
-                      "suspected_noop",
-                      "permission_required"
-                    ],
-                    "type": "string"
-                  },
-                  "target": {
-                    "enum": [
-                      "pixel",
-                      "foreground",
-                      "page",
-                      "session"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "target",
-                  "reason"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "evidence": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "kind": {
-                      "enum": [
-                        "value_readback",
-                        "window_change"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "kind"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "array",
-                  "null"
-                ]
-              },
-              "route": {
-                "enum": [
-                  "accessibility",
-                  "synthetic_events",
-                  "global_input",
-                  "system_api",
-                  "dom",
-                  "trusted_input"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "effect",
-              "route"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": true,
-            "anyOf": [
-              {
-                "required": [
-                  "refusal"
-                ]
-              },
-              {
-                "required": [
-                  "status"
-                ]
-              },
-              {
-                "required": [
-                  "code"
-                ]
-              }
-            ],
-            "type": "object"
-          }
-        ],
-        "type": "object"
-      }
-    },
-    "browser_type": {
-      "description": "Type text into a semantic field in one bound browser tab.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": true,
-        "properties": {
-          "mode": {
-            "description": "insert_text (default): bulk Input.insertText. keystrokes: per-character Input.dispatchKeyEvent.",
-            "enum": [
-              "insert_text",
-              "keystrokes"
-            ],
-            "type": "string"
-          },
-          "ref": {
-            "description": "Page element ref in the p<snapshot>:<index> namespace from get_browser_state. Refs are invalidated by navigation and by newer snapshots of the same tab.",
-            "type": "string"
-          },
-          "replace": {
-            "description": "false (default): insert at the caret, appending to whatever the field already holds. true: select the element's whole content first so the text replaces it \u2014 with an empty text this clears the field. Replacement goes through the selection, so beforeinput/input still fire and framework state stays consistent.",
-            "type": "boolean"
-          },
-          "tab_id": {
-            "description": "Opaque tab id from get_browser_state (session-scoped).",
-            "type": "string"
-          },
-          "target_id": {
-            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
-            "type": "string"
-          },
-          "text": {
-            "description": "Text to type.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_id",
-          "tab_id",
-          "ref",
-          "text"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "anyOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "delivery": {
-                "additionalProperties": false,
-                "properties": {
-                  "delivered_count": {
-                    "format": "uint32",
-                    "minimum": 0,
-                    "type": [
-                      "integer",
-                      "null"
-                    ]
-                  },
-                  "mode": {
-                    "enum": [
-                      "background",
-                      "foreground",
-                      "not_applicable",
-                      "unknown"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "mode"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "effect": {
-                "enum": [
-                  "confirmed",
-                  "partial",
-                  "unverifiable",
-                  "suspected_noop",
-                  "refused"
-                ],
-                "type": "string"
-              },
-              "escalation": {
-                "additionalProperties": false,
-                "properties": {
-                  "reason": {
-                    "enum": [
-                      "route_unavailable",
-                      "delivery_failed",
-                      "effect_unconfirmed",
-                      "suspected_noop",
-                      "permission_required"
-                    ],
-                    "type": "string"
-                  },
-                  "target": {
-                    "enum": [
-                      "pixel",
-                      "foreground",
-                      "page",
-                      "session"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "target",
-                  "reason"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "evidence": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "kind": {
-                      "enum": [
-                        "value_readback",
-                        "window_change"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "kind"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "array",
-                  "null"
-                ]
-              },
-              "route": {
-                "enum": [
-                  "accessibility",
-                  "synthetic_events",
-                  "global_input",
-                  "system_api",
-                  "dom",
-                  "trusted_input"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "effect",
-              "route"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": true,
-            "anyOf": [
-              {
-                "required": [
-                  "refusal"
-                ]
-              },
-              {
-                "required": [
-                  "status"
-                ]
-              },
-              {
-                "required": [
-                  "code"
-                ]
-              }
-            ],
-            "type": "object"
-          }
-        ],
-        "type": "object"
-      }
-    },
-    "browser_pointer": {
-      "description": "Hover, right-click, double-click, scroll, or drag in one exactly bound browser tab.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": true,
-        "properties": {
-          "action": {
-            "enum": [
-              "hover",
-              "right_click",
-              "double_click",
-              "scroll",
-              "drag"
-            ],
-            "type": "string"
-          },
-          "delta_x": {
-            "description": "Horizontal scroll delta in CSS pixels.",
-            "type": "number"
-          },
-          "delta_y": {
-            "description": "Vertical scroll delta in CSS pixels.",
-            "type": "number"
-          },
-          "destination_ref": {
-            "description": "Drag destination page ref in the exact same frame.",
-            "type": "string"
-          },
-          "input_route": {
-            "default": "trusted",
-            "enum": [
-              "trusted",
-              "dom_event"
-            ],
-            "type": "string"
-          },
-          "ref": {
-            "description": "Origin page ref. Alternative to x/y.",
-            "type": "string"
-          },
-          "tab_id": {
-            "description": "Opaque tab id minted by get_browser_state.",
-            "type": "string"
-          },
-          "target_id": {
-            "description": "Opaque target id minted by get_browser_state.",
-            "type": "string"
-          },
-          "to_x": {
-            "description": "Drag destination viewport x in CSS pixels.",
-            "type": "number"
-          },
-          "to_y": {
-            "description": "Drag destination viewport y in CSS pixels.",
-            "type": "number"
-          },
-          "x": {
-            "description": "Origin viewport x in CSS pixels.",
-            "type": "number"
-          },
-          "y": {
-            "description": "Origin viewport y in CSS pixels.",
-            "type": "number"
-          }
-        },
-        "required": [
-          "target_id",
-          "tab_id",
-          "action"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "anyOf": [
-          {
-            "additionalProperties": false,
-            "properties": {
-              "delivery": {
-                "additionalProperties": false,
-                "properties": {
-                  "delivered_count": {
-                    "format": "uint32",
-                    "minimum": 0,
-                    "type": [
-                      "integer",
-                      "null"
-                    ]
-                  },
-                  "mode": {
-                    "enum": [
-                      "background",
-                      "foreground",
-                      "not_applicable",
-                      "unknown"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "mode"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "effect": {
-                "enum": [
-                  "confirmed",
-                  "partial",
-                  "unverifiable",
-                  "suspected_noop",
-                  "refused"
-                ],
-                "type": "string"
-              },
-              "escalation": {
-                "additionalProperties": false,
-                "properties": {
-                  "reason": {
-                    "enum": [
-                      "route_unavailable",
-                      "delivery_failed",
-                      "effect_unconfirmed",
-                      "suspected_noop",
-                      "permission_required"
-                    ],
-                    "type": "string"
-                  },
-                  "target": {
-                    "enum": [
-                      "pixel",
-                      "foreground",
-                      "page",
-                      "session"
-                    ],
-                    "type": "string"
-                  }
-                },
-                "required": [
-                  "target",
-                  "reason"
-                ],
-                "type": [
-                  "object",
-                  "null"
-                ]
-              },
-              "evidence": {
-                "items": {
-                  "additionalProperties": false,
-                  "properties": {
-                    "kind": {
-                      "enum": [
-                        "value_readback",
-                        "window_change"
-                      ],
-                      "type": "string"
-                    }
-                  },
-                  "required": [
-                    "kind"
-                  ],
-                  "type": "object"
-                },
-                "type": [
-                  "array",
-                  "null"
-                ]
-              },
-              "route": {
-                "enum": [
-                  "accessibility",
-                  "synthetic_events",
-                  "global_input",
-                  "system_api",
-                  "dom",
-                  "trusted_input"
-                ],
-                "type": "string"
-              }
-            },
-            "required": [
-              "effect",
-              "route"
-            ],
-            "type": "object"
-          },
-          {
-            "additionalProperties": true,
-            "anyOf": [
-              {
-                "required": [
-                  "refusal"
-                ]
-              },
-              {
-                "required": [
-                  "status"
-                ]
-              },
-              {
-                "required": [
-                  "code"
-                ]
-              }
-            ],
-            "type": "object"
-          }
-        ],
-        "type": "object"
-      }
-    },
-    "browser_dialog": {
-      "description": "Inspect, accept, or dismiss a JavaScript dialog in one exactly bound browser tab.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": true,
-        "properties": {
-          "action": {
-            "enum": [
-              "inspect",
-              "accept",
-              "dismiss"
-            ],
-            "type": "string"
-          },
-          "delivery_mode": {
-            "default": "foreground",
-            "description": "Choose background (default) or foreground delivery. Follow the tool guidance and returned diagnostics.",
-            "enum": [
-              "background",
-              "foreground"
-            ],
-            "type": "string"
-          },
-          "dialog_id": {
-            "description": "Opaque current dialog generation returned by action=inspect.",
-            "type": "string"
-          },
-          "prompt_text": {
-            "description": "Sensitive response text, valid only when accepting a prompt dialog.",
-            "type": "string"
-          },
-          "tab_id": {
-            "description": "Opaque tab id from get_browser_state (session-scoped).",
-            "type": "string"
-          },
-          "target_id": {
-            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_id",
-          "tab_id",
-          "action"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "type": "object",
-        "additionalProperties": true
-      }
-    },
-    "browser_set_input_files": {
-      "description": "Assign explicit local files to one semantic browser file input without opening a native picker.",
-      "deduplicate_calls": false,
-      "parameters": {
-        "additionalProperties": true,
-        "properties": {
-          "files": {
-            "items": {
-              "description": "Absolute path to one local regular file.",
-              "type": "string"
-            },
-            "maxItems": 32,
-            "minItems": 1,
-            "type": "array"
-          },
-          "ref": {
-            "description": "Page element ref in the p<snapshot>:<index> namespace from get_browser_state. Refs are invalidated by navigation and by newer snapshots of the same tab.",
-            "type": "string"
-          },
-          "tab_id": {
-            "description": "Opaque tab id from get_browser_state (session-scoped).",
-            "type": "string"
-          },
-          "target_id": {
-            "description": "Opaque browser target id minted by get_browser_state (session-scoped; never a CDP id).",
-            "type": "string"
-          }
-        },
-        "required": [
-          "target_id",
-          "tab_id",
-          "ref",
-          "files"
-        ],
-        "type": "object"
-      },
-      "output_schema": {
-        "type": "object",
-        "additionalProperties": true
-      }
-    },
     "start_recording": {
       "description": "Start a host-managed computer-use recording for the current conversation.",
       "deduplicate_calls": false,
@@ -3546,6 +2905,18 @@
           "record_video": {
             "description": "Capture the main display to <output_dir>/recording.mp4. Default: false. Set to true to also capture the main display to recording.mp4 (otherwise only the per-turn screenshots + JSON are recorded). On macOS this uses native ScreenCaptureKit (no extra TCC prompt, macOS 15.0+); on Windows + Linux it requires ffmpeg on PATH.",
             "type": "boolean"
+          },
+          "include_accessibility_tree": {
+            "description": "Default true. Set false to skip before/after accessibility walks while retaining screenshots and action evidence.",
+            "type": "boolean",
+            "default": true
+          },
+          "state_timeout_ms": {
+            "description": "Time budget for each before/after accessibility walk while recording. Partial trees and timeout diagnostics are retained in the evidence.",
+            "type": "integer",
+            "minimum": 100,
+            "maximum": 120000,
+            "default": 1000
           }
         },
         "type": "object"
@@ -3574,5 +2945,6 @@
       "https://raw.githubusercontent.com/trycua/cua/1b50c02e2d34734f64d2d22f54eb76cc97b4a663/libs/cua-driver/wayland-helper/winrects@cua/metadata.json",
       "https://raw.githubusercontent.com/trycua/cua/1b50c02e2d34734f64d2d22f54eb76cc97b4a663/libs/cua-driver/wayland-helper/winrects@cua/extension.js"
     ]
-  }
+  },
+  "concurrency": "serial"
 }

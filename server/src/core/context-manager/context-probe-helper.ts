@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import os from 'node:os'
+import path from 'node:path'
 import { execFileSync } from 'node:child_process'
 
 import { SystemHelper } from '@/helpers/system-helper'
@@ -88,8 +89,13 @@ interface IpGeolocationRecord {
 
 export type ProcessCpuMetric = 'percent' | 'seconds'
 
+const MAX_PROCESS_ANCESTORS = 8
+
 export interface RunningProcessEntry {
   pid: number
+  parentPid?: number
+  terminal?: string
+  ancestors?: string[]
   name: string
   cpu: number
   cpuMetric: ProcessCpuMetric
@@ -1348,13 +1354,13 @@ console.log(JSON.stringify(results))
       elapsedMode: 'seconds' | 'duration'
     }> = [
       {
-        args: ['-ww', '-eo', 'pid=,%cpu=,rss=,etimes=,comm='],
-        source: 'ps -ww -eo pid=,%cpu=,rss=,etimes=,comm=',
+        args: ['-ww', '-eo', 'pid=,ppid=,tty=,%cpu=,rss=,etimes=,comm='],
+        source: 'ps -ww -eo pid=,ppid=,tty=,%cpu=,rss=,etimes=,comm=',
         elapsedMode: 'seconds'
       },
       {
-        args: ['-ww', '-A', '-o', 'pid=,%cpu=,rss=,etime=,comm='],
-        source: 'ps -ww -A -o pid=,%cpu=,rss=,etime=,comm=',
+        args: ['-ww', '-A', '-o', 'pid=,ppid=,tty=,%cpu=,rss=,etime=,comm='],
+        source: 'ps -ww -A -o pid=,ppid=,tty=,%cpu=,rss=,etime=,comm=',
         elapsedMode: 'duration'
       }
     ]
@@ -1365,12 +1371,27 @@ console.log(JSON.stringify(results))
         continue
       }
 
-      const entries = rawOutput
+      const processes = rawOutput
         .split('\n')
         .map((line) =>
           this.parseUnixProcessLine(line, commandPlan.elapsedMode)
         )
         .filter((entry): entry is RunningProcessEntry => Boolean(entry))
+      const byPid = new Map(processes.map((entry) => [entry.pid, entry]))
+      // Resolve ancestry before limiting the sample: idle terminal parents may
+      // otherwise disappear. Executable names only; never collect arguments.
+      for (const entry of processes) {
+        const ancestors: string[] = []
+        const seen = new Set([entry.pid])
+        let parent = byPid.get(entry.parentPid ?? 0)
+        while (parent && !seen.has(parent.pid) && ancestors.length < MAX_PROCESS_ANCESTORS) {
+          seen.add(parent.pid)
+          ancestors.push(path.basename(parent.name))
+          parent = byPid.get(parent.parentPid ?? 0)
+        }
+        entry.ancestors = ancestors
+      }
+      const entries = processes
         .sort((entryA, entryB) => {
           if (entryA.cpu !== entryB.cpu) {
             return entryB.cpu - entryA.cpu
@@ -1526,17 +1547,17 @@ Get-Process | ForEach-Object {
 
     // Only split the fixed columns so spaces inside executable names survive.
     const matchedLine = normalizedLine.match(
-      /^(\d+)\s+(-?\d+(?:\.\d+)?)\s+(\d+)\s+(\S+)\s+(.+)$/
+      /^(\d+)\s+(\d+)\s+(\S+)\s+(-?\d+(?:\.\d+)?)\s+(\d+)\s+(\S+)\s+(.+)$/
     )
     if (!matchedLine) {
       return null
     }
 
     const pid = Number(matchedLine[1] || 0)
-    const name = matchedLine[5] || ''
-    const cpuPercent = Number(matchedLine[2] || 0)
-    const rssKb = Number(matchedLine[3] || 0)
-    const elapsedValue = matchedLine[4] || '0'
+    const name = matchedLine[7] || ''
+    const cpuPercent = Number(matchedLine[4] || 0)
+    const rssKb = Number(matchedLine[5] || 0)
+    const elapsedValue = matchedLine[6] || '0'
     const runtimeSeconds =
       elapsedMode === 'seconds'
         ? Number(elapsedValue || 0)
@@ -1548,6 +1569,8 @@ Get-Process | ForEach-Object {
 
     return {
       pid,
+      parentPid: Number(matchedLine[2]),
+      ...(matchedLine[3] && !matchedLine[3].includes('?') ? { terminal: matchedLine[3] } : {}),
       name,
       cpu: Number.isFinite(cpuPercent) ? Number(cpuPercent.toFixed(1)) : 0,
       cpuMetric: 'percent',

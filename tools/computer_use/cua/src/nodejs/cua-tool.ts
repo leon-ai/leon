@@ -77,15 +77,42 @@ export default class CuaTool extends Tool {
   /**
    * Execute get window state through the retained Cua runtime.
    */
-  public async get_window_state(include_screenshot?: unknown, max_depth?: unknown, max_elements?: unknown, pid?: unknown, query?: unknown, window_id?: unknown, settle_ms?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('get_window_state', { include_screenshot, max_depth, max_elements, pid, query, window_id, settle_ms })
+  public async get_window_state(
+    include_screenshot?: unknown,
+    max_depth?: unknown,
+    max_elements?: unknown,
+    pid?: unknown,
+    query?: unknown,
+    window_id?: unknown,
+    settle_ms?: unknown,
+    include_accessibility_tree?: unknown,
+    timeout_ms?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('get_window_state', {
+      include_screenshot,
+      max_depth,
+      max_elements,
+      pid,
+      query,
+      window_id,
+      settle_ms,
+      include_accessibility_tree,
+      timeout_ms
+    })
   }
 
   /**
    * Execute zoom through the retained Cua runtime.
    */
-  public async zoom(pid?: unknown, window_id?: unknown, x1?: unknown, x2?: unknown, y1?: unknown, y2?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('zoom', { pid, window_id, x1, x2, y1, y2 })
+  public async zoom(pid?: unknown, window_id?: unknown, x1?: unknown, x2?: unknown, y1?: unknown, y2?: unknown, purpose?: unknown, scope?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('zoom', { pid, window_id, x1, x2, y1, y2, purpose, scope })
+  }
+
+  /**
+   * Invoke an observed Copy control and verify the clipboard in one serialized operation.
+   */
+  public async copy_text(pid?: unknown, window_id?: unknown, action?: unknown, parameters?: unknown): Promise<Record<string, unknown>> {
+    return this.invoke('copy_text', { pid, window_id, action, parameters })
   }
 
   /**
@@ -133,43 +160,209 @@ export default class CuaTool extends Tool {
   /**
    * Execute click through the retained Cua runtime.
    */
-  public async click(capture_after?: unknown, button?: unknown, count?: unknown, cursor_id?: unknown, delivery_mode?: unknown, element_index?: unknown, element_token?: unknown, modifier?: unknown, pid?: unknown, scope?: unknown, snapshot_id?: unknown, target?: unknown, window_id?: unknown, x?: unknown, y?: unknown, settle_ms?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('click', { capture_after, button, count, cursor_id, delivery_mode, element_index, element_token, modifier, pid, scope, snapshot_id, target, window_id, x, y, settle_ms })
+  public async click(
+    capture_after?: unknown,
+    button?: unknown,
+    count?: unknown,
+    delivery_mode?: unknown,
+    element_token?: unknown,
+    modifier?: unknown,
+    pid?: unknown,
+    scope?: unknown,
+    target?: unknown,
+    window_id?: unknown,
+    x?: unknown,
+    y?: unknown,
+    settle_ms?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('click', {
+      capture_after,
+      button,
+      count,
+      delivery_mode,
+      element_token,
+      modifier,
+      pid,
+      scope,
+      target,
+      window_id,
+      x,
+      y,
+      settle_ms
+    })
   }
 
   /**
    * Execute drag through the retained Cua runtime.
    */
-  public async drag(capture_after?: unknown, button?: unknown, cursor_id?: unknown, delivery_mode?: unknown, duration_ms?: unknown, from_x?: unknown, from_y?: unknown, modifier?: unknown, pid?: unknown, scope?: unknown, steps?: unknown, target?: unknown, to_x?: unknown, to_y?: unknown, window_id?: unknown, settle_ms?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('drag', { capture_after, button, cursor_id, delivery_mode, duration_ms, from_x, from_y, modifier, pid, scope, steps, target, to_x, to_y, window_id, settle_ms })
+  public async drag(
+    capture_after?: unknown,
+    button?: unknown,
+    delivery_mode?: unknown,
+    duration_ms?: unknown,
+    from_x?: unknown,
+    from_y?: unknown,
+    modifier?: unknown,
+    pid?: unknown,
+    scope?: unknown,
+    steps?: unknown,
+    target?: unknown,
+    to_x?: unknown,
+    to_y?: unknown,
+    window_id?: unknown,
+    settle_ms?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('drag', {
+      capture_after,
+      button,
+      delivery_mode,
+      duration_ms,
+      from_x,
+      from_y,
+      modifier,
+      pid,
+      scope,
+      steps,
+      target,
+      to_x,
+      to_y,
+      window_id,
+      settle_ms
+    })
   }
 
   /**
    * Execute scroll through the retained Cua runtime.
    */
-  public async scroll(capture_after?: unknown, amount?: unknown, by?: unknown, cursor_id?: unknown, delivery_mode?: unknown, direction?: unknown, element_index?: unknown, element_token?: unknown, pid?: unknown, scope?: unknown, snapshot_id?: unknown, target?: unknown, window_id?: unknown, x?: unknown, y?: unknown, settle_ms?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('scroll', { capture_after, amount, by, cursor_id, delivery_mode, direction, element_index, element_token, pid, scope, snapshot_id, target, window_id, x, y, settle_ms })
+  public async scroll(
+    capture_after?: unknown,
+    amount?: unknown,
+    by?: unknown,
+    delivery_mode?: unknown,
+    direction?: unknown,
+    element_token?: unknown,
+    pid?: unknown,
+    scope?: unknown,
+    target?: unknown,
+    window_id?: unknown,
+    x?: unknown,
+    y?: unknown,
+    settle_ms?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('scroll', {
+      capture_after,
+      amount,
+      by,
+      delivery_mode,
+      direction,
+      element_token,
+      pid,
+      scope,
+      target,
+      window_id,
+      x,
+      y,
+      settle_ms
+    })
   }
 
   /**
    * Execute type text through the retained Cua runtime.
    */
-  public async type_text(capture_after?: unknown, delivery_mode?: unknown, element_index?: unknown, element_token?: unknown, pid?: unknown, scope?: unknown, snapshot_id?: unknown, target?: unknown, text?: unknown, window_id?: unknown, x?: unknown, y?: unknown, settle_ms?: unknown, mode?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('type_text', { capture_after, delivery_mode, element_index, element_token, pid, scope, snapshot_id, target, text, window_id, x, y, settle_ms, mode })
+  public async type_text(
+    capture_after?: unknown,
+    delivery_mode?: unknown,
+    element_token?: unknown,
+    pid?: unknown,
+    scope?: unknown,
+    target?: unknown,
+    text?: unknown,
+    window_id?: unknown,
+    x?: unknown,
+    y?: unknown,
+    settle_ms?: unknown,
+    mode?: unknown,
+    method?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('type_text', {
+      capture_after,
+      delivery_mode,
+      element_token,
+      pid,
+      scope,
+      target,
+      text,
+      window_id,
+      x,
+      y,
+      settle_ms,
+      mode,
+      method
+    })
   }
 
   /**
    * Execute press key through the retained Cua runtime.
    */
-  public async press_key(capture_after?: unknown, delivery_mode?: unknown, element_index?: unknown, element_token?: unknown, key?: unknown, modifiers?: unknown, pid?: unknown, scope?: unknown, snapshot_id?: unknown, target?: unknown, window_id?: unknown, x?: unknown, y?: unknown, settle_ms?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('press_key', { capture_after, delivery_mode, element_index, element_token, key, modifiers, pid, scope, snapshot_id, target, window_id, x, y, settle_ms })
+  public async press_key(
+    capture_after?: unknown,
+    delivery_mode?: unknown,
+    element_token?: unknown,
+    key?: unknown,
+    modifiers?: unknown,
+    pid?: unknown,
+    scope?: unknown,
+    target?: unknown,
+    window_id?: unknown,
+    x?: unknown,
+    y?: unknown,
+    settle_ms?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('press_key', {
+      capture_after,
+      delivery_mode,
+      element_token,
+      key,
+      modifiers,
+      pid,
+      scope,
+      target,
+      window_id,
+      x,
+      y,
+      settle_ms
+    })
   }
 
   /**
    * Execute hotkey through the retained Cua runtime.
    */
-  public async hotkey(capture_after?: unknown, delivery_mode?: unknown, element_index?: unknown, element_token?: unknown, keys?: unknown, pid?: unknown, scope?: unknown, snapshot_id?: unknown, target?: unknown, window_id?: unknown, x?: unknown, y?: unknown, settle_ms?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('hotkey', { capture_after, delivery_mode, element_index, element_token, keys, pid, scope, snapshot_id, target, window_id, x, y, settle_ms })
+  public async hotkey(
+    capture_after?: unknown,
+    delivery_mode?: unknown,
+    element_token?: unknown,
+    keys?: unknown,
+    pid?: unknown,
+    scope?: unknown,
+    target?: unknown,
+    window_id?: unknown,
+    x?: unknown,
+    y?: unknown,
+    settle_ms?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('hotkey', {
+      capture_after,
+      delivery_mode,
+      element_token,
+      keys,
+      pid,
+      scope,
+      target,
+      window_id,
+      x,
+      y,
+      settle_ms
+    })
   }
 
   /**
@@ -182,8 +375,18 @@ export default class CuaTool extends Tool {
   /**
    * Execute set value through the retained Cua runtime.
    */
-  public async set_value(element_index?: unknown, element_token?: unknown, pid?: unknown, snapshot_id?: unknown, value?: unknown, window_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('set_value', { element_index, element_token, pid, snapshot_id, value, window_id })
+  public async set_value(
+    element_token?: unknown,
+    pid?: unknown,
+    value?: unknown,
+    window_id?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('set_value', {
+      element_token,
+      pid,
+      value,
+      window_id
+    })
   }
 
   /**
@@ -201,66 +404,18 @@ export default class CuaTool extends Tool {
   }
 
   /**
-   * Execute browser prepare through the retained Cua runtime.
-   */
-  public async browser_prepare(allow_launch?: unknown, pid?: unknown, profile?: unknown, strategy?: unknown, window_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_prepare', { allow_launch, pid, profile, strategy, window_id })
-  }
-
-  /**
-   * Execute get browser state through the retained Cua runtime.
-   */
-  public async get_browser_state(continuation?: unknown, include_screenshot?: unknown, pid?: unknown, query?: unknown, scope_ref?: unknown, snapshot_format?: unknown, tab_id?: unknown, target_id?: unknown, window_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('get_browser_state', { continuation, include_screenshot, pid, query, scope_ref, snapshot_format, tab_id, target_id, window_id })
-  }
-
-  /**
-   * Execute browser navigate through the retained Cua runtime.
-   */
-  public async browser_navigate(tab_id?: unknown, target_id?: unknown, url?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_navigate', { tab_id, target_id, url })
-  }
-
-  /**
-   * Execute browser click through the retained Cua runtime.
-   */
-  public async browser_click(input_route?: unknown, ref?: unknown, tab_id?: unknown, target_id?: unknown, x?: unknown, y?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_click', { input_route, ref, tab_id, target_id, x, y })
-  }
-
-  /**
-   * Execute browser type through the retained Cua runtime.
-   */
-  public async browser_type(mode?: unknown, ref?: unknown, replace?: unknown, tab_id?: unknown, target_id?: unknown, text?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_type', { mode, ref, replace, tab_id, target_id, text })
-  }
-
-  /**
-   * Execute browser pointer through the retained Cua runtime.
-   */
-  public async browser_pointer(action?: unknown, delta_x?: unknown, delta_y?: unknown, destination_ref?: unknown, input_route?: unknown, ref?: unknown, tab_id?: unknown, target_id?: unknown, to_x?: unknown, to_y?: unknown, x?: unknown, y?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_pointer', { action, delta_x, delta_y, destination_ref, input_route, ref, tab_id, target_id, to_x, to_y, x, y })
-  }
-
-  /**
-   * Execute browser dialog through the retained Cua runtime.
-   */
-  public async browser_dialog(action?: unknown, delivery_mode?: unknown, dialog_id?: unknown, prompt_text?: unknown, tab_id?: unknown, target_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_dialog', { action, delivery_mode, dialog_id, prompt_text, tab_id, target_id })
-  }
-
-  /**
-   * Execute browser set input files through the retained Cua runtime.
-   */
-  public async browser_set_input_files(files?: unknown, ref?: unknown, tab_id?: unknown, target_id?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('browser_set_input_files', { files, ref, tab_id, target_id })
-  }
-
-  /**
    * Execute start recording through the retained Cua runtime.
    */
-  public async start_recording(record_video?: unknown): Promise<Record<string, unknown>> {
-    return this.invoke('start_recording', { record_video })
+  public async start_recording(
+    record_video?: unknown,
+    include_accessibility_tree?: unknown,
+    state_timeout_ms?: unknown
+  ): Promise<Record<string, unknown>> {
+    return this.invoke('start_recording', {
+      record_video,
+      include_accessibility_tree,
+      state_timeout_ms
+    })
   }
 
   /**

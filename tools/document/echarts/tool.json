@@ -1,0 +1,121 @@
+{
+  "$schema": "../../../schemas/tool-schemas/tool.json",
+  "tool_id": "echarts",
+  "toolkit_id": "document",
+  "name": "Apache ECharts",
+  "description": "Render styled Apache ECharts data charts locally as separate downloadable SVG and PNG artifacts, ready for PDF or Word documents.",
+  "icon_name": "pie-chart-line",
+  "author": {
+    "name": "Louis Grenard",
+    "email": "louis@getleon.ai",
+    "url": "https://x.com/grenlouis"
+  },
+  "progressive_guidance": "Create charts with native ECharts JSON options and grounded data. Use one charts entry per requested chart. No provider, browser or account is required. Default styling provides readable light/dark charts; override titles, axes, series and labels through ECharts options. Rendered files are static image artifacts, not interactive session components. Use returned charts paths to embed SVG/PNG assets with typst image/figure or document.create sections.images. Use SVG for sharp PDF figures and PNG for broadly compatible image downloads.",
+  "functions": {
+    "render": {
+      "description": "Render a batch of named charts as separate SVG/PNG artifacts using Apache ECharts.",
+      "deduplicate_calls": false,
+      "progressive_guidance": "Use actual supplied/retrieved values and state their units. Never invent data. For bar/line: set xAxis.type=category with labels, yAxis.type=value and series with type and data. For pie: use series.type=pie with named values. Provide useful title.text, series names and labels; position legends away from titles and pie labels. Native ECharts dataset, grid, axis, label and series options are supported as JSON; formatter strings use ECharts template syntax, not executable functions. Animations are disabled for complete static exports. Image resources are unsupported. Request only the owner-selected formats, or both when SVG for documents and PNG for previews are useful. Inspect PNG or rasterized SVG with file.readImage before delivery; fix clipping, unreadable labels or misleading scales. Each chart-format pair returns its own path and artifact.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "charts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 128,
+                  "description": "Descriptive name mapping the chart to the owner request."
+                },
+                "option": {
+                  "type": "object",
+                  "properties": {
+                    "series": {
+                      "anyOf": [
+                        {
+                          "type": "object"
+                        },
+                        {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "object"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "series"
+                  ],
+                  "additionalProperties": true,
+                  "description": "Native Apache ECharts JSON options: title, dataset or series data, axes, legend, labels and styles. No JavaScript functions or image resources."
+                }
+              },
+              "required": [
+                "name",
+                "option"
+              ],
+              "additionalProperties": false
+            },
+            "minItems": 1,
+            "maxItems": 12
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "formats": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "svg",
+                    "png"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 2,
+                "uniqueItems": true,
+                "description": "Requested image formats; defaults to both. Select only png for PNG image requests."
+              },
+              "theme": {
+                "type": "string",
+                "enum": [
+                  "light",
+                  "dark"
+                ],
+                "description": "Defaults to light."
+              },
+              "width": {
+                "type": "integer",
+                "minimum": 128,
+                "maximum": 2048,
+                "description": "Logical chart width in pixels; profile default is 960."
+              },
+              "height": {
+                "type": "integer",
+                "minimum": 128,
+                "maximum": 2048,
+                "description": "Logical chart height in pixels; profile default is 540."
+              },
+              "pixelRatio": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 2,
+                "description": "PNG resolution multiplier; profile default is 2. SVG remains vector."
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "charts"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

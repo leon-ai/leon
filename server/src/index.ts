@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
+import { TOOL_EXECUTION_MANAGER } from '@/core/tool-manager/tool-execution-manager'
 
 import psList from 'ps-list'
 import kill from 'tree-kill'
@@ -50,6 +51,7 @@ import { LogHelper } from '@/helpers/log-helper'
 import { RuntimeHelper } from '@/helpers/runtime-helper'
 import { SystemHelper } from '@/helpers/system-helper'
 import { CONFIG_STATE } from '@/core/config-states/config-state'
+import { PROVIDER_REQUESTS } from '@/core/llm-manager/provider-requests'
 
 const SHUTDOWN_FORCE_TIMEOUT_MS = 5_000
 
@@ -273,6 +275,7 @@ async function bootstrap(): Promise<void> {
 
     isShuttingDown = true
     LLM_PROVIDER.dispose()
+    PROVIDER_REQUESTS.close()
 
     if (global.pythonTCPServerProcess?.pid) {
       kill(global.pythonTCPServerProcess.pid as number)
@@ -287,7 +290,10 @@ async function bootstrap(): Promise<void> {
     }, SHUTDOWN_FORCE_TIMEOUT_MS)
     forceExitTimeout.unref()
 
-    void TOOL_WORKER_MANAGER.dispose()
+    void Promise.all([
+      TOOL_EXECUTION_MANAGER.dispose(),
+      TOOL_WORKER_MANAGER.dispose()
+    ])
       .catch((error: unknown) => {
         LogHelper.error(
           `Tool worker shutdown failed: ${error instanceof Error ? error.message : String(error)}`

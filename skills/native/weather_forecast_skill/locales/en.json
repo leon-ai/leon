@@ -9,6 +9,9 @@
         ]
       },
       "answers": {
+        "forecast_interval_summary": [
+          "Weather forecast for {{ location }}:\n{{ forecast }}"
+        ],
         "forecast_summary": [
           "Current weather for {{ location }}: {{ description }}, {{ temperature }}, feels like {{ feels_like }}, humidity {{ humidity }}, wind {{ wind }}.",
           "Weather for {{ location }} right now: {{ description }}, {{ temperature }}, feels like {{ feels_like }}, humidity {{ humidity }}, wind {{ wind }}."

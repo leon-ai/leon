@@ -1,27 +1,26 @@
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
+import { LLMProviders } from '@/core/llm-manager/types'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type { CompletionParams, LLMReasoningMode } from '@/core/llm-manager/types'
-import { CONFIG_MANAGER } from '@/config'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.Celeris)
 
 const MAGNUS_MODEL = 'celeris-1-magnus'
 
-function resolveCelerisBaseURL(model: string): string {
-  const configuredURL = CONFIG_MANAGER.getProviderBaseURL('celeris')
-  const defaultURL = `https://inference.celeris.ai/${encodeURIComponent(model)}/v1`
-
-  if (!configuredURL) {
-    return defaultURL
-  }
+function resolveCelerisBaseURL(model: string, configuredURL: string): string {
+  const defaultURL = new URL(PROVIDER_CONFIG.baseURL)
+  const modelPath = `/${encodeURIComponent(model)}/v1`
 
   const url = new URL(configuredURL)
   // Existing profiles contain the celeris-1 URL. Switch the model path on
   // official endpoints (including regional hosts), preserving custom proxies.
   if (
-    (url.hostname === 'inference.celeris.ai' ||
-      url.hostname.endsWith('.inference.celeris.ai')) &&
+    (url.hostname === defaultURL.hostname ||
+      url.hostname.endsWith(`.${defaultURL.hostname}`)) &&
     /^\/celeris-1(?:-magnus)?\/v1\/?$/.test(url.pathname)
   ) {
-    url.pathname = `/${encodeURIComponent(model)}/v1`
+    url.pathname = modelPath
     return url.toString()
   }
 
@@ -72,11 +71,15 @@ function buildCelerisProviderOptions(
 export default class CelerisLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
     super({
-      name: 'Celeris LLM Provider',
-      providerName: 'celeris',
-      apiKeyEnv: 'LEON_CELERIS_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
-      baseURL: resolveCelerisBaseURL(target.model),
+      baseURL: resolveCelerisBaseURL(
+        target.model,
+        AISDKRemoteLLMProvider.resolveBaseURL(PROVIDER_CONFIG, target.accountCredentials)
+      ),
       flavor: 'openai-compatible',
       buildProviderOptions: ({ completionParams, reasoningMode }) =>
         buildCelerisProviderOptions(target.model, completionParams, reasoningMode)

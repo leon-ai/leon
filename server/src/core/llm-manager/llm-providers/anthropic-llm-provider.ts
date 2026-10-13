@@ -1,3 +1,4 @@
+import { getRequiredLLMProviderAccountConfig } from '@/core/llm-manager/llm-provider-account-configs'
 import AISDKRemoteLLMProvider from '@/core/llm-manager/llm-providers/ai-sdk-remote-llm-provider'
 import type { ResolvedLLMTarget } from '@/core/llm-manager/llm-routing'
 import type {
@@ -6,6 +7,8 @@ import type {
 } from '@/core/llm-manager/types'
 import { LLMProviders } from '@/core/llm-manager/types'
 import { canDisableLLMModelReasoning } from '@/core/llm-manager/llm-model-catalog'
+
+const PROVIDER_CONFIG = getRequiredLLMProviderAccountConfig(LLMProviders.Anthropic)
 
 type ClaudeModelFamily = 'fable' | 'mythos' | 'haiku' | 'opus' | 'sonnet'
 
@@ -28,6 +31,11 @@ const CLAUDE_MODEL_FAMILIES: ClaudeModelFamily[] = [
 const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  // Haiku 5.5 rejects manual thinking budgets; older Haiku models still use them.
+  haiku: {
+    major: 5,
+    minor: 5
+  },
   mythos: {
     major: 5,
     minor: 1
@@ -48,6 +56,10 @@ const CLAUDE_ADAPTIVE_THINKING_MINIMUMS: Partial<
 const CLAUDE_SAMPLING_UNSUPPORTED_MINIMUMS: Partial<
   Record<ClaudeModelFamily, { major: number, minor: number }>
 > = {
+  haiku: {
+    major: 5,
+    minor: 5
+  },
   mythos: {
     major: 5,
     minor: 1
@@ -231,11 +243,15 @@ function buildAnthropicProviderOptions(
 export default class AnthropicLLMProvider extends AISDKRemoteLLMProvider {
   constructor(target: ResolvedLLMTarget) {
     super({
-      name: 'Anthropic LLM Provider',
-      providerName: 'anthropic',
-      apiKeyEnv: 'LEON_ANTHROPIC_API_KEY',
+      credentials: target.accountCredentials,
+      name: `${PROVIDER_CONFIG.label} LLM Provider`,
+      providerName: PROVIDER_CONFIG.value,
+      apiKeyEnv: PROVIDER_CONFIG.apiKeyEnv,
       model: target.model,
-      baseURL: 'https://api.anthropic.com/v1',
+      baseURL: AISDKRemoteLLMProvider.resolveBaseURL(
+        PROVIDER_CONFIG,
+        target.accountCredentials
+      ),
       flavor: 'anthropic',
       buildProviderOptions: ({ completionParams, reasoningMode }) =>
         buildAnthropicProviderOptions(

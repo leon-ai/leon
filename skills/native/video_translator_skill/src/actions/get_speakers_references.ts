@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 
 import type { ActionFunction, ActionParams } from '@sdk/types'
-import type { TranscriptionOutput } from '@tools/music_audio/transcription-schema'
+import type { TranscriptionOutput } from '../lib/transcription-schema'
 import { leon } from '@sdk/leon'
 import { ParamsHelper } from '@sdk/params-helper'
 import ToolManager, { isMissingToolSettingsError } from '@sdk/tool-manager'

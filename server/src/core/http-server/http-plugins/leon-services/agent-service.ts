@@ -1,8 +1,12 @@
+import { collectArtifacts } from '@/core/artifacts/artifact-context'
+import type { Artifact } from '@/core/artifacts/artifact-types'
 import { performance } from 'node:perf_hooks'
+import type { AgentResponseTrace } from '@/types'
 
 import { CONVERSATION_LOGGER, POST_TURN_MAINTENANCE_QUEUE } from '@/core'
 import { syncOwnerProfileFromTurn } from '@/core/context-manager/owner-profile-sync'
 import { ReActLLMDuty } from '@/core/llm-manager/llm-duties/react-llm-duty'
+import { prepareOwnerAttachments } from '@/core/owner-attachments'
 import { getActiveProfileName, runWithProfileContext } from '@/core/profile-runtime/profile-context'
 import { ensureActiveProfileRuntime } from '@/core/profile-runtime/initialize-profile-runtime'
 import { isValidProfileName } from '@/core/profile-runtime/profile-paths'
@@ -16,7 +20,7 @@ import type {
   HTTPPluginToolCall
 } from '../types'
 import { publishAgentEvent } from './agent-event-channel'
-import { deserializeAgentTrace } from './agent-trace-serializer'
+import { deserializeAgentTrace, serializeAgentTrace } from './agent-trace-serializer'
 import {
   elapsedMilliseconds,
   normalizeConversationSession,
@@ -31,6 +35,7 @@ import {
 export async function runAgent(
   input: HTTPPluginRunAgentInput
 ): Promise<HTTPPluginRunAgentResult> {
+  input.signal?.throwIfAborted()
   const profileName = input.profile_id?.trim() || getActiveProfileName()
   if (!isValidProfileName(profileName)) {
     throw new Error(`Invalid Leon profile name "${profileName}".`)
@@ -39,8 +44,9 @@ export async function runAgent(
   return runWithProfileContext({ profileName }, async () => {
     const totalStartedAt = performance.now()
     await ensureActiveProfileRuntime()
-    const query = input.query.trim()
+    input.signal?.throwIfAborted()
     const sessionId = resolveSessionId(input)
+    const { query, files } = await prepareOwnerAttachments(input.query.trim(), input.attachments, sessionId)
     const planSteps = new Map<
       string,
       HTTPPluginAgentTrace['plan_steps'][number]
@@ -49,10 +55,15 @@ export async function runAgent(
       HTTPPluginAgentTrace['plan_transitions']
     > = []
     const toolCalls = new Map<string, HTTPPluginToolCall>()
+    const progressMessages = new Map<
+      string,
+      NonNullable<HTTPPluginAgentTrace['progress_messages']>[number]
+    >()
     const toolStartedAt = new Map<string, number>()
     let actionExecutionMs = 0
     let reasoningSummary = 'Understanding your request'
     const requestId = input.request_id || null
+    let turnArtifacts: Artifact[] = []
     let finalMetrics: Record<string, unknown> | null = null
     let finalTrace: HTTPPluginAgentTrace = { plan_steps: [], tool_calls: [] }
     const emit = (
@@ -91,11 +102,23 @@ export async function runAgent(
 
         const duty = new ReActLLMDuty({
           input: query,
+          ...(files.length ? { files } : {}),
+          ...(input.signal ? { signal: input.signal } : {}),
           ...(input.additionalInstructions
             ? { additionalInstructions: input.additionalInstructions }
             : {}),
           allowDirectAnswerHandoff: input.allow_direct_answer_handoff === true,
           onProgressEvent: (event): void => {
+            if (event.type === 'progress_message') {
+              const message = {
+                id: event.message.id,
+                content: event.message.content,
+                created_at: event.message.createdAt
+              }
+              progressMessages.set(message.id, message)
+              emit('progress_message', { message })
+              return
+            }
             if (event.type === 'reasoning_summary') {
               reasoningSummary = event.summary
               emit('reasoning_summary', { summary: event.summary })
@@ -121,34 +144,12 @@ export async function runAgent(
               return
             }
 
+            const serialized = serializeAgentTrace({
+              planSteps: [], toolCalls: [event.toolCall]
+            }, true).tool_calls[0]!
             const toolCall: HTTPPluginToolCall = {
-              id: event.toolCall.id,
-              name: event.toolCall.name,
-              status: event.toolCall.status,
-              ...(event.toolCall.toolkitIconName
-                ? { toolkit_icon_name: event.toolCall.toolkitIconName }
-                : {}),
-              ...(event.toolCall.toolIconName
-                ? { tool_icon_name: event.toolCall.toolIconName }
-                : {}),
-              ...(event.toolCall.input !== undefined
-                ? { input: event.toolCall.input }
-                : {}),
-              ...(event.toolCall.output !== undefined
-                ? { output: event.toolCall.output }
-                : {}),
-              ...(event.toolCall.stepLabel
-                ? { step_label: event.toolCall.stepLabel }
-                : {}),
-              ...(event.toolCall.errorMessage
-                ? { error_message: event.toolCall.errorMessage }
-                : {}),
-              ...(event.toolCall.skillId
-                ? { skill_id: event.toolCall.skillId }
-                : {}),
-              ...(event.toolCall.nativeSkillPath
-                ? { native_skill_path: event.toolCall.nativeSkillPath }
-                : {})
+              ...toolCalls.get(event.toolCall.id),
+              ...serialized
             }
             if (event.toolCall.status === 'running') {
               if (!toolStartedAt.has(event.toolCall.id)) {
@@ -167,7 +168,12 @@ export async function runAgent(
         })
 
         await duty.init()
-        const dutyResult = await duty.execute()
+        input.signal?.throwIfAborted()
+        const collected = await collectArtifacts(() => duty.execute())
+        const dutyResult = collected.value
+
+        turnArtifacts = collected.artifacts
+        input.signal?.throwIfAborted()
         const output = dutyResult?.output as unknown
         const data = dutyResult?.data || {}
         const llmMetrics =
@@ -192,13 +198,20 @@ export async function runAgent(
             ...toolCall
           })
         }
+        const durableTrace = data['agentResponseTrace']
+          ? serializeAgentTrace(data['agentResponseTrace'] as AgentResponseTrace, false)
+          : null
         const trace: HTTPPluginAgentTrace = {
+          ...durableTrace,
           reasoning_summary: reasoningSummary,
+          ...(progressMessages.size > 0
+            ? { progress_messages: [...progressMessages.values()] }
+            : {}),
           plan_steps: [...planSteps.values()],
           ...(planTransitions.length > 0
             ? { plan_transitions: planTransitions }
             : {}),
-          tool_calls: [...toolCalls.values()],
+          tool_calls: durableTrace?.tool_calls || [...toolCalls.values()],
           metrics
         }
         finalTrace = trace
@@ -213,7 +226,8 @@ export async function runAgent(
               message: output,
               isAddedToHistory: true,
               ...(messageId ? { messageId } : {}),
-              agentResponseTrace: deserializeAgentTrace(trace)
+              agentResponseTrace: (data['agentResponseTrace'] as AgentResponseTrace | undefined) ||
+                deserializeAgentTrace(trace)
             },
             { sessionId }
           )
@@ -221,7 +235,8 @@ export async function runAgent(
           emit('final_answer', {
             message_id: messageId || '',
             content: output,
-            response_trace: trace
+            response_trace: trace,
+            artifacts: turnArtifacts
           })
 
           if (data['hasExplicitMemoryWrite'] === true) {
@@ -244,6 +259,7 @@ export async function runAgent(
     return {
       answer: typeof output === 'string' ? output : '',
       tier: 'leon-react',
+      artifacts: turnArtifacts,
       tool_calls: normalizeToolCalls(result),
       profile_id: getActiveProfileName(),
       session_id: sessionId,

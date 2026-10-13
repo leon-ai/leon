@@ -38,9 +38,15 @@ const DEVELOPMENT_ENV = 'development'
 
 export const GITHUB_URL = 'https://github.com/leon-ai/leon'
 export const API_VERSION = 'v1'
+export const TOOL_EXECUTION_WAIT_MS = 10_000
+export const TOOL_EXECUTION_MAX_WAIT_MS = 30_000
 export const WEB_APP_DEV_SERVER_PORT = 5_173
 export const REMIX_ICON_NAME_PATTERN = '^(?!.*-fill$).+$'
 export const PROGRESSIVE_GUIDANCE_MAX_LENGTH = 4_096
+export const OWNER_ATTACHMENT_MAX_BYTES = 8 * 1_024 * 1_024
+// Base64 plus JSON framing for the same bounded payload accepted over sockets.
+export const MAX_GENERATED_ARTIFACT_BYTES = 512 * 1_024 * 1_024
+export const OWNER_ATTACHMENT_BODY_LIMIT = 12 * 1_024 * 1_024
 
 export { LANG_CONFIGS }
 
@@ -78,6 +84,7 @@ export const NODE_INSTALL_PATH = path.join(BIN_PATH, 'node')
 export const PNPM_INSTALL_PATH = path.join(BIN_PATH, 'pnpm')
 export const PYTHON_INSTALL_PATH = path.join(BIN_PATH, 'python')
 export const UV_INSTALL_PATH = path.join(BIN_PATH, 'uv')
+export const JQ_INSTALL_PATH = path.join(BIN_PATH, 'jq')
 export const SKILLS_PATH = path.join(CODEBASE_PATH, 'skills')
 export const NATIVE_SKILLS_PATH = path.join(SKILLS_PATH, 'native')
 export const AGENT_SKILLS_PATH = path.join(SKILLS_PATH, 'agent')
@@ -280,6 +287,11 @@ export const UV_VERSIONS_PATH = path.join(
 export const UV_MANIFEST_PATH = path.join(UV_INSTALL_PATH, 'manifest.json')
 const UV_VERSIONS = JSON.parse(fs.readFileSync(UV_VERSIONS_PATH, 'utf8'))
 export const UV_VERSION = UV_VERSIONS.uv
+
+export const JQ_VERSIONS_PATH = path.join(CODEBASE_BIN_PATH, 'jq', 'versions.json')
+export const JQ_MANIFEST_PATH = path.join(JQ_INSTALL_PATH, 'manifest.json')
+const JQ_VERSIONS = JSON.parse(fs.readFileSync(JQ_VERSIONS_PATH, 'utf8'))
+export const JQ_VERSION = JQ_VERSIONS.jq
 
 /**
  * llama.cpp paths and versions.

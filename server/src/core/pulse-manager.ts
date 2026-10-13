@@ -3,11 +3,18 @@ import path from 'node:path'
 import { createHash } from 'node:crypto'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import type { MessageLog } from '@/types'
+import type { AgentResponseTrace, LLMAnswerMetrics, MessageLog } from '@/types'
+import type Brain from '@/core/brain/brain'
+import type { FinalPhaseIntent } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-types'
+import { AgentSessionState } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-session-state'
+import { isAgentLoopContinuationStateValid } from '@/core/llm-manager/llm-duties/react-llm-duty/agent-loop-continuation'
 import { LEON_PULSE_INTERVAL_MS } from '@/constants'
 import { CONFIG_MANAGER } from '@/config'
 import { runInference } from '@/core/llm-manager/inference'
+import { InferencePurpose } from '@/core/llm-manager/types'
+import { runWithInferencePurpose } from '@/core/llm-manager/llm-usage/usage-context'
 import { getProfilePaths } from '@/core/profile-runtime/profile-paths'
+import { CONVERSATION_SESSION_MANAGER } from '@/core/session-manager'
 import { DateHelper } from '@/helpers/date-helper'
 import { LogHelper } from '@/helpers/log-helper'
 
@@ -247,6 +254,7 @@ function defaultPulseState(isEnabled: boolean): PulseState {
 }
 
 export default class PulseManager {
+  private readonly agentSessionState = new AgentSessionState()
   private state: PulseState | null = null
   private intervalId: NodeJS.Timeout | null = null
   private initialTimerId: NodeJS.Timeout | null = null
@@ -892,6 +900,7 @@ export default class PulseManager {
     ].join('\n')
 
     const result = await runInference({
+      usagePurpose: InferencePurpose.Pulse,
       prompt,
       systemPrompt: [
         'You maintain Leon\'s autonomous pulse queue.',
@@ -1047,6 +1056,40 @@ export default class PulseManager {
     state: PulseState,
     matter: PulseMatter
   ): Promise<void> {
+    // Capture ownership before waiting: changing the selected chat must not move work.
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+
+    await CONVERSATION_SESSION_MANAGER.runWithSession(sessionId, async () => {
+      const core = await this.loadCoreNodes()
+      const conversation = await core.CONVERSATION_LOGGER.load({ nbOfLogsToLoad: 8 })
+      const continuation = this.agentSessionState.getContinuationStore().load()
+
+      // Proactive work must not displace an owner task waiting to resume.
+      if (
+        this.hasRecentOwnerActivity(conversation) ||
+        (continuation && isAgentLoopContinuationStateValid(continuation))
+      ) {
+        this.pushTickRecord(
+          state,
+          'skipped',
+          'Owner activity takes priority over pulse work',
+          matter.id
+        )
+        this.persist()
+        return
+      }
+
+      await this.executeSessionMatter(state, matter)
+    })
+  }
+
+  /**
+   * Runs proactive work in the conversation's ordinary agent and answer lifecycle.
+   */
+  private async executeSessionMatter(
+    state: PulseState,
+    matter: PulseMatter
+  ): Promise<void> {
     matter.status = 'running'
     matter.updatedAt = new Date().toISOString()
     this.persist()
@@ -1061,8 +1104,9 @@ export default class PulseManager {
     ].join('\n')
 
     let output = ''
-    let finalIntent: 'answer' | 'clarification' | 'cancelled' | 'blocked' | 'error' =
-      'answer'
+    let shouldNotifyOwner = matter.notifyOwner
+    let answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace'> = {}
+    let finalIntent: FinalPhaseIntent = 'answer'
     let toolExecutions: Array<{
       functionName: string
       status: 'success' | 'error'
@@ -1075,7 +1119,7 @@ export default class PulseManager {
         input
       })
       await duty.init()
-      const result = await duty.execute()
+      const result = await runWithInferencePurpose(InferencePurpose.Pulse, () => duty.execute())
       output = typeof result?.output === 'string' ? result.output : ''
       const resultData =
         result?.data && typeof result.data === 'object'
@@ -1084,8 +1128,19 @@ export default class PulseManager {
 
       finalIntent =
         typeof resultData['finalIntent'] === 'string'
-          ? (resultData['finalIntent'] as typeof finalIntent)
+          ? (resultData['finalIntent'] as FinalPhaseIntent)
           : 'answer'
+
+      // A direct owner reply requires an answer even when the initiative was quiet.
+      shouldNotifyOwner ||= resultData['hasOwnerMessages'] === true
+      answerMetadata = {
+        ...(resultData['llmMetrics']
+          ? { llmMetrics: resultData['llmMetrics'] as LLMAnswerMetrics }
+          : {}),
+        ...(resultData['agentResponseTrace']
+          ? { agentResponseTrace: resultData['agentResponseTrace'] as AgentResponseTrace }
+          : {})
+      }
       toolExecutions = this.extractToolExecutions(resultData['executionHistory'])
     } catch (error) {
       finalIntent = 'error'
@@ -1101,6 +1156,18 @@ export default class PulseManager {
     if (finalIntent === 'answer') {
       matter.status = 'completed'
       this.upsertSuppressionPolicy(state, matter, 'completed', nowIso)
+      state.lastExecutionAt = nowIso
+    } else if (finalIntent === 'cancelled') {
+      matter.status = 'declined'
+      matter.ownerFeedback = 'decline'
+      matter.ownerFeedbackAt = nowIso
+
+      const policy = this.upsertSuppressionPolicy(state, matter, 'declined', nowIso)
+      policy.declineCount += 1
+      policy.suppressedUntil = toIsoString(
+        nowTs + this.getDeclineCooldownMs(policy.declineCount)
+      )
+      this.applySuppressionToPendingMatters(state, matter.fingerprint, nowIso)
       state.lastExecutionAt = nowIso
     } else {
       matter.status = 'failed'
@@ -1130,8 +1197,8 @@ export default class PulseManager {
       )
     }
 
-    if (output && matter.notifyOwner) {
-      await this.surfacePulseMessage(state, matter, output)
+    if (output && (shouldNotifyOwner || finalIntent === 'cancelled')) {
+      await this.surfacePulseMessage(state, matter, output, answerMetadata)
     }
 
     state.matters = state.matters.filter((entry) => entry.id !== matter.id)
@@ -1141,10 +1208,16 @@ export default class PulseManager {
     )
     this.pushTickRecord(
       state,
-      finalIntent === 'answer' ? 'executed' : 'failed',
+      finalIntent === 'answer'
+        ? 'executed'
+        : finalIntent === 'cancelled'
+          ? 'skipped'
+          : 'failed',
       finalIntent === 'answer'
         ? `Completed pulse matter: ${matter.summary}`
-        : `Pulse matter failed: ${matter.summary}`,
+        : finalIntent === 'cancelled'
+          ? `Pulse matter canceled: ${matter.summary}`
+          : `Pulse matter failed: ${matter.summary}`,
       matter.id
     )
     this.persist()
@@ -1153,15 +1226,19 @@ export default class PulseManager {
   private async surfacePulseMessage(
     state: PulseState,
     matter: PulseMatter,
-    output: string
+    output: string,
+    answerMetadata: Pick<MessageLog, 'llmMetrics' | 'agentResponseTrace'>
   ): Promise<void> {
     const core = await this.loadCoreNodes()
-    core.SOCKET_SERVER.emitAnswerToChatClients(output)
-    await core.CONVERSATION_LOGGER.push({
-      who: 'leon',
-      message: output,
-      isAddedToHistory: true
-    })
+    await core.BRAIN.talk(
+      {
+        text: output,
+        speech: output,
+        responseRoute: 'pulse',
+        ...answerMetadata
+      },
+      true
+    )
 
     const nowIso = new Date().toISOString()
     matter.surfacedAt = nowIso
@@ -1319,6 +1396,7 @@ export default class PulseManager {
     ].join('\n')
 
     const result = await runInference({
+      usagePurpose: InferencePurpose.Pulse,
       prompt,
       systemPrompt: [
         'You classify the owner\'s reaction to Leon\'s recent autonomous pulse action.',
@@ -1410,12 +1488,12 @@ export default class PulseManager {
   }
 
   private async loadCoreNodes(): Promise<{
+    BRAIN: Pick<Brain, 'talk'>
     CONTEXT_MANAGER: {
       getManifest(): string
     }
     CONVERSATION_LOGGER: {
       load(params?: { nbOfLogsToLoad?: number }): Promise<MessageLog[]>
-      push(record: Omit<MessageLog, 'sentAt'>): Promise<void>
     }
     MEMORY_MANAGER: {
       buildPlanningMemoryPack(query: string, tokenBudget?: number): Promise<string>
@@ -1456,12 +1534,6 @@ export default class PulseManager {
     }
     POST_TURN_MAINTENANCE_QUEUE: {
       enqueue(label: string, task: () => Promise<void> | void): void
-    }
-    SOCKET_SERVER: {
-      emitAnswerToChatClients(answerData: unknown): void
-      socket?: {
-        emit(eventName: string, ...args: unknown[]): void
-      } | null
     }
   }> {
     return this.loadModule('index')

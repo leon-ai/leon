@@ -1,12 +1,12 @@
 import { TOOLKIT_REGISTRY } from '@/core'
 import { LogHelper } from '@/helpers/log-helper'
 
-import { CHARS_PER_TOKEN, DUTY_NAME } from './constants'
+import { CHARS_PER_TOKEN, DUTY_NAME } from './agent-constants'
 import type {
   ExecutionRecord,
   LLMCaller
-} from './types'
-import { parseToolCallArguments } from './utils'
+} from './agent-types'
+import { parseToolCallArguments } from './agent-utils'
 
 const TOOLKIT_CONTEXT_SUMMARY_MAX_CHARS = 180
 const ARTIFACT_PATH_INPUT_FIELD = 'outputLogPath'

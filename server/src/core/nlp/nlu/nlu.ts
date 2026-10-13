@@ -1,3 +1,5 @@
+import { readUsageAccounting } from '@/core/llm-manager/llm-usage/usage-accounting'
+import { readContextUsage } from '@/core/llm-manager/llm-usage/context-usage'
 import type {
   NLPSkill,
   NLPUtterance,
@@ -11,6 +13,7 @@ import type {
   SkillAnswerCoreData
 } from '@/core/brain/types'
 import {
+  type AgentModelFile,
   type ActionCallingMissingParamsOutput,
   type ActionCallingOutput,
   ActionCallingStatus,
@@ -766,7 +769,7 @@ export default class NLU {
     }
 
     const runtimeRoutingMode = CONFIG_STATE.getRoutingModeState().getRoutingMode()
-    const mode = String(runtimeRoutingMode || RoutingMode.Smart).toLowerCase()
+    const mode = String(runtimeRoutingMode || RoutingMode.Agent).toLowerCase()
     if (
       mode === RoutingMode.Controlled ||
       mode === RoutingMode.Agent ||
@@ -777,10 +780,10 @@ export default class NLU {
 
     LogHelper.title('NLU')
     LogHelper.warning(
-      `Unknown routing mode "${runtimeRoutingMode}", defaulting to smart`
+      `Unknown routing mode "${runtimeRoutingMode}", defaulting to agent`
     )
 
-    return RoutingMode.Smart
+    return RoutingMode.Agent
   }
 
   private getWorkflowUtterance(
@@ -858,7 +861,8 @@ export default class NLU {
   private async runReAct(
     utterance: NLPUtterance,
     agentSkillName?: NLPSkill,
-    forcedToolName?: string
+    forcedToolName?: string,
+    files?: AgentModelFile[]
   ): Promise<void> {
     LogHelper.title('NLU')
     LogHelper.info('Routing to ReAct...')
@@ -875,6 +879,7 @@ export default class NLU {
 
     const reactDuty = new ReActLLMDuty({
       input: utterance,
+      ...(files?.length ? { files } : {}),
       agentSkill: agentSkillContext,
       ...(forcedToolName ? { forcedToolName } : {})
     })
@@ -943,6 +948,8 @@ export default class NLU {
               ...(llmMetrics
                 ? {
                     llmMetrics: {
+                      ...readContextUsage(llmMetrics),
+                      usageAccounting: readUsageAccounting(llmMetrics['usageAccounting']),
                       completionCount: Number(llmMetrics['completionCount'] || 0),
                       inputTokens: Number(llmMetrics['inputTokens'] || 0),
                       outputTokens: Number(llmMetrics['outputTokens'] || 0),
@@ -1405,6 +1412,30 @@ export default class NLU {
   }
 
   /**
+   * Persists owner input and observes feedback for both routed and active turns.
+   */
+  public async recordOwnerMessage(
+    utterance: NLPUtterance,
+    ownerMessageId?: string
+  ): Promise<void> {
+    await CONVERSATION_LOGGER.push({
+      who: 'owner',
+      message: utterance,
+      isAddedToHistory: true,
+      ...(ownerMessageId ? { messageId: ownerMessageId } : {})
+    })
+
+    const sessionId = CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
+    CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(sessionId, utterance)
+    void PULSE_MANAGER.observeOwnerUtterance(utterance).catch(
+      (error: unknown) => {
+        LogHelper.title('NLU')
+        LogHelper.warning(`Failed to observe pulse owner feedback: ${error}`)
+      }
+    )
+  }
+
+  /**
    * Classify the utterance,
    * pick up the right classification
    * and extract entities
@@ -1413,6 +1444,8 @@ export default class NLU {
     utterance: NLPUtterance,
     options?: {
       ownerMessageId?: string
+      files?: AgentModelFile[]
+      hasAttachments?: boolean
       forcedRoutingMode?: RoutingMode
       forcedSkillName?: NLPSkill
       forcedToolName?: string
@@ -1438,28 +1471,7 @@ export default class NLU {
               options?.forcedToolName
             )
 
-            await CONVERSATION_LOGGER.push({
-              who: 'owner',
-              message: utterance,
-              isAddedToHistory: true,
-              ...(options?.ownerMessageId
-                ? { messageId: options.ownerMessageId }
-                : {})
-            })
-            const currentSessionId =
-              CONVERSATION_SESSION_MANAGER.getCurrentSessionId()
-            CONVERSATION_SESSION_MANAGER.maybeSetFallbackTitle(
-              currentSessionId,
-              utterance
-            )
-            void PULSE_MANAGER.observeOwnerUtterance(utterance).catch(
-              (error: unknown) => {
-                LogHelper.title('NLU')
-                LogHelper.warning(
-                  `Failed to observe pulse owner feedback: ${error}`
-                )
-              }
-            )
+            await this.recordOwnerMessage(utterance, options?.ownerMessageId)
 
             await NLUProcessResultUpdater.update({
               new: {
@@ -1477,7 +1489,7 @@ export default class NLU {
             }
 
             const routingDecision = this.getRoutingDecision(
-              options?.forcedRoutingMode
+              options?.hasAttachments || options?.files?.length ? RoutingMode.Agent : options?.forcedRoutingMode
             )
             const persistedOwnerUtterances =
               routingDecision.route === this.routingRoutes.controlled
@@ -1524,7 +1536,8 @@ export default class NLU {
               await this.runReAct(
                 forcedAgentSkillName ? workflowUtterance : toolUtterance,
                 forcedAgentSkillName,
-                options?.forcedToolName
+                options?.forcedToolName,
+                options?.files
               )
               return resolve(null)
             }

@@ -1,5 +1,5 @@
 import type { Tool } from './sdk/base-tool'
-import type { ToolExecutionContext, ToolRuntimeResult } from './sdk/tool-runtime-types'
+import type { ToolExecutionContext, ToolRuntimeProgress, ToolRuntimeResult } from './sdk/tool-runtime-types'
 
 /**
  * Internal worker retention policy; ordinary SDK tools run once by default.
@@ -19,11 +19,11 @@ export interface ManagedTool extends Tool {
 }
 
 export type ToolWorkerRequest =
-  | { type: 'execute', context: Omit<ToolExecutionContext, 'onProgress' | 'signal'>, args: unknown[] }
+  | { type: 'execute', requestId: string, context: Omit<ToolExecutionContext, 'onProgress' | 'signal'>, args: unknown[] }
   | { type: 'shutdown' }
 
-export interface ToolWorkerResponse {
+export type ToolWorkerResponse = {
   type: 'result'
   lifetime: ToolRuntimeLifetime
   result: ToolRuntimeResult
-}
+} | { type: 'progress', requestId: string, progress: ToolRuntimeProgress }

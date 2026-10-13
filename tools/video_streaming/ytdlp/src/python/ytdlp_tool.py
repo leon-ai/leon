@@ -1,4 +1,6 @@
 import json
+import hashlib
+import uuid
 import os
 import re
 import time
@@ -32,6 +34,12 @@ YTDLP_TITLE_TEMPLATE = "%(title)s"
 YTDLP_PLAYLIST_INDEX_TEMPLATE = "%(playlist_index)s"
 SUBTITLE_FORMAT = "srt/best"
 SUBTITLE_CONVERT_FORMAT = "srt"
+TRANSCRIPT_PAGE_CHARS = 16_000
+TRANSCRIPT_CACHE_MAX_AGE_SECONDS = 86_400
+TRANSCRIPT_METADATA_FIELDS = ["id", "webpage_url", "title", "channel", "uploader", "duration"]
+SUBTITLE_BLOCK_SEPARATOR = re.compile(r"\r?\n\s*\r?\n")
+SUBTITLE_TAG_PATTERN = re.compile(r"<[^>]*>")
+SUBTITLE_VOICE_PATTERN = re.compile(r"<v\s+([^>]+)>")
 IGNORED_MEDIA_OUTPUT_EXTENSIONS = {
     ".part",
     ".ytdl",
@@ -52,6 +60,20 @@ SUBTITLE_METADATA_LANGUAGE_FIELDS = [
     "original_language",
 ]
 IGNORED_SUBTITLE_LANGUAGE_CODES = {"live_chat"}
+VIDEO_METADATA_FIELDS = (
+    "id", "webpage_url", "title", "description", "duration", "chapters",
+    "channel", "uploader", "upload_date", "language", "availability",
+    "track", "artist", "artists", "album", "release_date",
+)
+
+CAPTION_METADATA_FIELDS = ("subtitles", "automatic_captions")
+METADATA_OUTPUT_FIELDS = list(dict.fromkeys([
+    *VIDEO_METADATA_FIELDS,
+    *SUBTITLE_METADATA_LANGUAGE_FIELDS,
+    "_type", "playlist",
+    *(f"{field}_languages" for field in CAPTION_METADATA_FIELDS),
+]))
+METADATA_OUTPUT_TEMPLATE = "%(.{" + ",".join(METADATA_OUTPUT_FIELDS) + "})j"
 
 
 class OutputTarget(TypedDict, total=False):
@@ -435,12 +457,25 @@ class YtdlpTool(BaseTool):
 
     def _get_video_metadata(self, video_url: str) -> VideoMetadata:
         """
-        Load video metadata to select the best available subtitle language.
+        Load one video's metadata for inspection or subtitle language selection.
         """
-        args = self._get_config_args() + [
-            video_url,
-            "--dump-single-json",
+        # Project caption dictionaries to language keys before capturing output;
+        # the signed caption URL lists can span many megabytes.
+        args = self._get_config_args()
+
+        for field in CAPTION_METADATA_FIELDS:
+            args += ["--parse-metadata", f"%({field}|)l:%({field}_languages)s"]
+
+        args += [
+            "--print", METADATA_OUTPUT_TEMPLATE,
             "--skip-download",
+            # Simulation prevents sidecar writes too; bound playlist-only URLs.
+            "--simulate",
+            "--no-cache-dir",
+            "--no-playlist",
+            "--flat-playlist",
+            "--playlist-end", "1",
+            "--", video_url,
         ]
         output = self.execute_command(
             ExecuteCommandOptions(
@@ -448,7 +483,37 @@ class YtdlpTool(BaseTool):
             )
         )
 
-        return json.loads(output.strip())
+        metadata = json.loads(output.strip()) if output.strip() else None
+
+        if (not isinstance(metadata, dict)
+                or metadata.get("_type", "video") != "video"
+                or metadata.get("playlist") is not None):
+            raise ValueError(
+                "Expected metadata for a single video; provide a video URL, not a playlist URL."
+            )
+
+        for field in CAPTION_METADATA_FIELDS:
+            languages = metadata.get(f"{field}_languages")
+            metadata[field] = {
+                language.strip(): []
+                for language in (languages.split(LANGUAGE_CODE_SEPARATOR)
+                                 if isinstance(languages, str) else [])
+                if language.strip()
+            }
+
+        return metadata
+
+    def get_video_metadata(self, video_url: str) -> dict[str, Any]:
+        """
+        Return source-provided video metadata without downloading media.
+        """
+        metadata = self._get_video_metadata(video_url)
+        # Exclude large format lists, request headers and temporary media URLs.
+        return {
+            field: metadata[field]
+            for field in VIDEO_METADATA_FIELDS
+            if metadata.get(field) is not None
+        }
 
     def download_video(self, video_url: str, output_path: str) -> str:
         """
@@ -660,9 +725,18 @@ class YtdlpTool(BaseTool):
         Returns:
             The file path of the downloaded subtitle file.
         """
+        return self._download_subtitle_with_metadata(
+            video_url, output_path, self._get_video_metadata(video_url), language_code
+        )
+
+    def _download_subtitle_with_metadata(
+        self, video_url: str, output_path: str, metadata: VideoMetadata,
+        language_code: Optional[str] = None,
+    ) -> str:
+        """Reuse extraction metadata when retrieving transcript captions."""
         try:
             resolved_language_code = self._select_subtitle_language(
-                self._get_video_metadata(video_url), language_code
+                metadata, language_code
             )
             target = self._resolve_subtitle_output_target(
                 output_path, resolved_language_code
@@ -702,6 +776,73 @@ class YtdlpTool(BaseTool):
 
         except Exception as e:
             raise Exception(f"Subtitle download failed: {str(e)}")
+
+    def get_transcript(
+        self, video_url: str, language_code: Optional[str] = None, start_cue: int = 0
+    ) -> dict[str, Any]:
+        """Read timestamped pages, reusing a profile-local transcript across workers."""
+        if type(start_cue) is not int or start_cue < 0:
+            raise ValueError("startCue must be a non-negative integer from nextCue.")
+        key = hashlib.sha256(json.dumps(
+            [video_url, language_code], separators=(",", ":"), ensure_ascii=False
+        ).encode()).hexdigest()
+        directory = os.path.join(os.path.dirname(self._get_settings_path()), "transcripts", key)
+        cache_path = os.path.join(directory, "transcript.json")
+        if start_cue > 0 and not os.path.isfile(cache_path):
+            raise ValueError("Transcript cache is missing; restart from the first page.")
+        if os.path.isfile(cache_path) and (start_cue > 0 or time.time() - os.path.getmtime(cache_path) < TRANSCRIPT_CACHE_MAX_AGE_SECONDS):
+            with open(cache_path, encoding="utf-8") as cached:
+                transcript = json.load(cached)
+        else:
+            metadata = self._get_video_metadata(video_url)
+            subtitles = self._download_subtitle_with_metadata(
+                video_url, os.path.join(directory, "captions.srt"), metadata, language_code
+            )
+            with open(subtitles, encoding="utf-8") as subtitle_file:
+                blocks = SUBTITLE_BLOCK_SEPARATOR.split(subtitle_file.read())
+            cues = []
+            for block in blocks:
+                lines = block.strip().splitlines()
+                timing = next((i for i, line in enumerate(lines) if " --> " in line), None)
+                if timing is None:
+                    continue
+                text = SUBTITLE_VOICE_PATTERN.sub(r"\1: ", " ".join(lines[timing + 1:]))
+                text = SUBTITLE_TAG_PATTERN.sub("", text).strip()
+                if text:
+                    cues.append(f"[{lines[timing].split(' --> ')[0]}] {text}")
+            if not cues:
+                raise ValueError("No readable subtitle cues were returned.")
+            transcript = {
+                "source": {field: metadata[field] for field in TRANSCRIPT_METADATA_FIELDS if metadata.get(field) is not None},
+                "cues": cues,
+            }
+            temporary = f"{cache_path}.{uuid.uuid4()}.tmp"
+            with open(temporary, "x", encoding="utf-8") as cached:
+                os.chmod(temporary, 0o600)
+                json.dump(transcript, cached, ensure_ascii=False)
+            os.replace(temporary, cache_path)
+        if start_cue > len(transcript["cues"]):
+            raise ValueError("startCue exceeds the transcript length.")
+        page = []
+        next_cue = start_cue
+        chars = 0
+        while next_cue < len(transcript["cues"]):
+            cue = transcript["cues"][next_cue]
+            # Count UTF-16 units to match Node's page boundaries for emoji, etc.
+            length = len(cue.encode("utf-16-le")) // 2
+            if length > TRANSCRIPT_PAGE_CHARS:
+                raise ValueError("Subtitle cue exceeds the transcript page limit; inspect the subtitle file instead.")
+            if chars + length + 1 > TRANSCRIPT_PAGE_CHARS:
+                break
+            page.append(cue)
+            chars += length + 1
+            next_cue += 1
+        complete = next_cue == len(transcript["cues"])
+        return {
+            "source": transcript["source"], "videoUrl": video_url, "startCue": start_cue,
+            "text": "\n".join(page), "totalCues": len(transcript["cues"]),
+            "nextCue": None if complete else next_cue, "complete": complete,
+        }
 
     def download_video_with_thumbnail(self, video_url: str, output_path: str) -> str:
         """

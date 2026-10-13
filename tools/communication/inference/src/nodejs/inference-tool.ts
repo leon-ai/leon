@@ -1,6 +1,5 @@
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
-import { Network } from '@sdk/network'
 
 interface CompletionOptions {
   prompt: string
@@ -32,14 +31,10 @@ interface InferenceResponse {
 export default class InferenceTool extends Tool {
   private static readonly TOOLKIT = 'communication'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
-  private readonly network: Network
 
   constructor() {
     super()
     this.config = ToolkitConfig.load(InferenceTool.TOOLKIT, this.toolName)
-    this.network = new Network({
-      baseURL: `${process.env['LEON_HOST']}:${process.env['LEON_PORT']}/api/v1`
-    })
   }
 
   get toolName(): string {
@@ -55,43 +50,31 @@ export default class InferenceTool extends Tool {
   }
 
   async completion(options: CompletionOptions): Promise<InferenceResponse> {
-    const response = await this.network.request<InferenceResponse>({
-      url: '/inference',
-      method: 'POST',
-      data: {
-        prompt: options.prompt,
-        systemPrompt: options.system_prompt,
-        temperature: options.temperature,
-        maxTokens: options.max_tokens,
-        thoughtTokensBudget: options.thought_tokens_budget,
-        disableThinking: options.disable_thinking,
-        reasoningMode: options.reasoning_mode,
-        trackProviderErrors: options.track_provider_errors
-      }
+    return this.requestLeon<InferenceResponse>('/inference', {
+      prompt: options.prompt,
+      systemPrompt: options.system_prompt,
+      temperature: options.temperature,
+      maxTokens: options.max_tokens,
+      thoughtTokensBudget: options.thought_tokens_budget,
+      disableThinking: options.disable_thinking,
+      reasoningMode: options.reasoning_mode,
+      trackProviderErrors: options.track_provider_errors
     })
-
-    return response.data
   }
 
   async structuredCompletion(
     options: StructuredCompletionOptions
   ): Promise<InferenceResponse> {
-    const response = await this.network.request<InferenceResponse>({
-      url: '/inference',
-      method: 'POST',
-      data: {
-        prompt: options.prompt,
-        systemPrompt: options.system_prompt,
-        temperature: options.temperature,
-        maxTokens: options.max_tokens,
-        thoughtTokensBudget: options.thought_tokens_budget,
-        jsonSchema: options.json_schema,
-        disableThinking: options.disable_thinking,
-        reasoningMode: options.reasoning_mode,
-        trackProviderErrors: options.track_provider_errors
-      }
+    return this.requestLeon<InferenceResponse>('/inference', {
+      prompt: options.prompt,
+      systemPrompt: options.system_prompt,
+      temperature: options.temperature,
+      maxTokens: options.max_tokens,
+      thoughtTokensBudget: options.thought_tokens_budget,
+      jsonSchema: options.json_schema,
+      disableThinking: options.disable_thinking,
+      reasoningMode: options.reasoning_mode,
+      trackProviderErrors: options.track_provider_errors
     })
-
-    return response.data
   }
 }

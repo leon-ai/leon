@@ -13,7 +13,7 @@ import {
   type OwnerProfile,
   writeOwnerProfile
 } from '@/core/context-manager/owner-profile'
-import { LLMDuties } from '@/core/llm-manager/types'
+import { LLMDuties, InferencePurpose } from '@/core/llm-manager/types'
 import { LogHelper } from '@/helpers/log-helper'
 
 const OWNER_DOCUMENT_TOKEN_BUDGET = 2_000
@@ -356,6 +356,7 @@ async function promptForOwnerDocument(
     : prompt
   const completion = await LLM_PROVIDER.prompt(groundedPrompt, {
     dutyType: LLMDuties.Inference,
+    usagePurpose: InferencePurpose.OwnerProfile,
     systemPrompt,
     timeout,
     maxRetries: OWNER_DOCUMENT_MAX_RETRIES,

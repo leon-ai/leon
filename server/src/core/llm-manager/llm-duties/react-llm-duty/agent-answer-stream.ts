@@ -12,12 +12,20 @@ export class AgentAnswerStream {
   ) {}
 
   /**
-   * Forwards provider text immediately; a stream-start marker clears retry text.
+   * Streams provider text immediately; retry markers remove the previous draft.
    */
   public push(token: string): void {
     if (!token) {
       this.discard()
       return
+    }
+
+    // Trim only initial padding; later whitespace belongs to the message.
+    if (!this.generationId) {
+      token = token.trimStart()
+      if (!token) {
+        return
+      }
     }
 
     this.generationId ??= StringHelper.random(6, { onlyLetters: true })
@@ -33,6 +41,7 @@ export class AgentAnswerStream {
   public finish(): string | null {
     const generationId = this.generationId
     this.generationId = null
+
     return generationId
   }
 

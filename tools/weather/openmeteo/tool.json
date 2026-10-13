@@ -3,15 +3,15 @@
   "tool_id": "openmeteo",
   "toolkit_id": "weather",
   "name": "Open-Meteo",
-  "description": "Fetch current weather conditions using Open-Meteo API without an API key.",
+  "description": "Fetch current conditions and daily/hourly forecasts using Open-Meteo without an API key.",
   "author": {
     "name": "Louis Grenard",
     "email": "louis@getleon.ai",
     "url": "https://x.com/grenlouis"
   },
   "functions": {
-    "getCurrentConditions": {
-      "description": "Get current weather conditions or the first hourly observation in a date range for a location.",
+    "getWeather": {
+      "description": "Get current conditions plus today's daily and hourly forecast for a location. Optional dates return the complete forecast for that interval. Includes temperature ranges, rain probabilities and amounts, wind, units, and local timestamps.",
       "parameters": {
         "type": "object",
         "properties": {

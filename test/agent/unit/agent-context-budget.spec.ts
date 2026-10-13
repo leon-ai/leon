@@ -56,7 +56,52 @@ function appendToolExchange(
 }
 
 describe('agent context budget', () => {
-  it.each(['computer_use__cua__get_window_state', 'browser_use__cli__screenshot'])('keeps only the two most recent %s screenshots', (toolName) => {
+  it('budgets native context tokens without counting ciphertext or source snapshots', () => {
+    const context = {
+      provider: LLMProviders.OpenAI, model: 'gpt-6.1-sol', binding: 'connection',
+      output: [{ type: 'compaction', id: 'cmp', encrypted_content: 'x'.repeat(100_000) }],
+      estimatedTokens: 500,
+      sourceTranscript: [{ role: 'user' as const, content: 'Evidence '.repeat(100_000) }]
+    }
+    const transcript: AgentToolTranscriptMessage[] = [{
+      role: 'assistant', content: 'Generated response', compactionContext: context,
+      reasoningItems: [{ provider: LLMProviders.OpenAI, id: 'rs', text: '', encryptedContent: 'x'.repeat(100_000) }]
+    }]
+    const prepared = prepareAgentModelContext({
+      transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 1_000,
+      forceCompaction: true
+    })
+
+    expect(prepared.estimatedInputTokens).toBeGreaterThanOrEqual(500)
+    expect(prepared.estimatedInputTokens).toBeLessThan(1_000)
+    expect(prepared.transcript[0]).toEqual(transcript[0])
+  })
+
+  it('bounds older successful UI evidence only when the full artifact is available', () => {
+    const transcript: AgentToolTranscriptMessage[] = []
+    for (let index = 0; index < 12; index += 1) {
+      transcript.push({ role: 'tool', toolCallId: String(index),
+        toolName: 'computer_use__cua__get_window_state',
+        content: JSON.stringify({ status: index === 1 ? 'error' : 'success',
+          ...(index !== 2 ? { output_log_path: `/logs/${index}.json` } : {}),
+          data: { output: { elements: 'Old screen '.repeat(400) } } }) })
+    }
+    const original = JSON.stringify(transcript)
+    const result = prepareAgentModelContext({ transcript, systemPrompt: '', tools: [], compactionTriggerTokens: 96_000 })
+    expect(result.transcript[0]!.content.length).toBeLessThan(1_500)
+    expect(result.transcript[0]!.content).toContain('/logs/0.json')
+    expect(result.transcript[1]).toEqual(transcript[1])
+    expect(result.transcript[2]).toEqual(transcript[2])
+    expect(result.transcript.slice(-8)).toEqual(transcript.slice(-8))
+    expect(JSON.stringify(transcript)).toBe(original)
+    expect(result.estimatedInputTokens).toBeLessThan(result.estimatedInputTokensBeforePreparation)
+  })
+  it.each([
+    'computer_use__cua__get_window_state',
+    'browser_use__cli__screenshot',
+    'file_system__file__readImage',
+    'file_system__file__readPdf'
+  ])('keeps only the two most recent %s image results', (toolName) => {
     const transcript: AgentToolTranscriptMessage[] = [
       { role: 'user', content: 'Operate the app.' }
     ]
@@ -91,6 +136,52 @@ describe('agent context budget', () => {
     expect(toolMessages[3]).toHaveProperty('files')
     expect(context.wasCompacted).toBe(false)
     expect(context.estimatedInputTokens).toBeLessThan(10_000)
+  })
+
+  it('preserves a complete parallel inspection batch and reloadable older evidence', () => {
+    const image = { dataBase64: 'x'.repeat(100_000), mediaType: 'image/png' }
+    const document = { dataBase64: 'document', mediaType: 'application/pdf' }
+    const transcript: AgentToolTranscriptMessage[] = [
+      { role: 'user', content: 'Inspect these documents.', files: [image] }
+    ]
+
+    appendToolExchange(transcript, 'older', JSON.stringify({
+      status: 'success',
+      data: { path: '/tmp/older.pdf', figure_count: 3 }
+    }))
+    const olderResult = transcript.at(-1)!
+    if (olderResult.role === 'tool') {
+      olderResult.files = [image, document]
+    }
+
+    const calls = ['first', 'second', 'third'].map(createToolCall)
+    transcript.push({ role: 'assistant', content: '', toolCalls: calls })
+    for (const call of calls) {
+      transcript.push({
+        role: 'tool',
+        toolCallId: call.id,
+        toolName: call.function.name,
+        content: JSON.stringify({ path: `/tmp/${call.id}.pdf` }),
+        files: [image, image]
+      })
+    }
+    appendToolExchange(transcript, 'save', 'Verified counts saved.')
+
+    const original = structuredClone(transcript)
+    const context = prepareAgentModelContext({
+      transcript,
+      systemPrompt: '',
+      tools: [],
+      compactionTriggerTokens: 96_000
+    })
+
+    expect(context.transcript[0]).toEqual(original[0])
+    expect(context.transcript[2]).toEqual({
+      ...original[2],
+      files: [document]
+    })
+    expect(context.transcript.slice(3)).toEqual(original.slice(3))
+    expect(transcript).toEqual(original)
   })
 
   it('preserves older computer-use evidence below the context budget', () => {

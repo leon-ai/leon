@@ -4,6 +4,9 @@ import path from 'node:path'
 import { Tool } from '@sdk/base-tool'
 import { ToolkitConfig } from '@sdk/toolkit-config'
 import { isWindows } from '@sdk/utils'
+import { ToolRuntimeLifetime } from '@bridge/tool-runtime-types'
+import { RuntimeHelper } from '@/helpers/runtime-helper'
+import { ShellSessions, type SessionOptions, type SessionReadOptions } from './lib/shell-sessions'
 
 const DEFAULT_SETTINGS: Record<string, unknown> = {}
 const REQUIRED_SETTINGS: string[] = []
@@ -34,8 +37,6 @@ interface ExecuteOptions {
 }
 
 interface ProcessExecutionError extends Error {
-  stdout?: Buffer | string
-  stderr?: Buffer | string
   status?: number
   code?: number | string | null
 }
@@ -109,8 +110,10 @@ const TERMINAL_AUTH_WRAPPERS = new Set<string>([
 ])
 
 export default class ShellTool extends Tool {
+  public readonly runtimeLifetime = ToolRuntimeLifetime.Persistent
   private static readonly TOOLKIT = 'operating_system_control'
   private readonly config: ReturnType<typeof ToolkitConfig.load>
+  private readonly sessions = new ShellSessions()
 
   constructor() {
     super()
@@ -144,7 +147,7 @@ export default class ShellTool extends Tool {
     const { cwd = process.cwd() } = options
     const timeoutMs = ShellTool.getTimeoutMs(options)
     const shellInvocation = ShellTool.getShellInvocation(command)
-    const analyzedCommand = await this.resolveCommandForSafetyAnalysis(command)
+    const analyzedCommand = await this.resolveCommandForSafetyAnalysis(command, cwd)
     const isSafe = await this.isSafeCommand(analyzedCommand)
 
     if (!isSafe) {
@@ -166,6 +169,9 @@ export default class ShellTool extends Tool {
     const attempts: ShellAttempt[] = []
     const attempt = 1
     const attemptStartedAt = Date.now()
+    // The SDK returns combined output; its callback preserves the two streams.
+    let stdout = ''
+    let stderr = ''
 
     try {
       if (requiresVisibleTerminal) {
@@ -201,7 +207,7 @@ export default class ShellTool extends Tool {
         }
       }
 
-      const resultOutput = await super.executeCommand({
+      await super.executeCommand({
         binaryName: shellInvocation.binaryName,
         args: shellInvocation.args,
         options: {
@@ -209,7 +215,11 @@ export default class ShellTool extends Tool {
           cwd,
           timeout: timeoutMs
         },
-        skipBinaryDownload: true
+        skipBinaryDownload: true,
+        onOutput: (output, isError): void => {
+          if (isError) stderr += output
+          else stdout += output
+        }
       })
       attempts.push({
         attempt,
@@ -221,16 +231,16 @@ export default class ShellTool extends Tool {
       return {
         success: true,
         commandSucceeded: true,
-        stdout: resultOutput.trim(),
-        stderr: '',
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
         returncode: 0,
         command,
         attempts
       }
     } catch (error: unknown) {
       const errorMessage = (error as Error).message
-      const processError = ShellTool.readProcessError(error)
-      const timedOut = ShellTool.isTimeoutErrorMessage(errorMessage)
+      const processExitCode = ShellTool.readExitCode(error)
+      const timedOut = processExitCode === -1 && ShellTool.isTimeoutErrorMessage(errorMessage)
       const durationMs = Date.now() - attemptStartedAt
 
       if (timedOut) {
@@ -239,8 +249,8 @@ export default class ShellTool extends Tool {
         return {
           success: false,
           error: timeoutMessage,
-          stdout: '',
-          stderr: timeoutMessage,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
           returncode: -1,
           command,
           attempts: [
@@ -258,70 +268,146 @@ export default class ShellTool extends Tool {
 
       if (
         errorMessage.includes('failed with exit code') ||
-        processError.exitCode !== -1
+        processExitCode !== -1
       ) {
         const exitCodeMatch = errorMessage.match(/exit code (\d+)/)
         const exitCode =
-          processError.exitCode !== -1
-            ? processError.exitCode
+          processExitCode !== -1
+            ? processExitCode
             : exitCodeMatch && exitCodeMatch[1]
               ? parseInt(exitCodeMatch[1], 10)
               : -1
-        const stderrMatch = errorMessage.match(/exit code \d+: ([\s\S]*)$/)
-        const parsedErrorOutput =
-          stderrMatch && stderrMatch[1] ? stderrMatch[1].trim() : errorMessage
-        const stderr =
-          processError.stderr || (processError.stdout ? '' : parsedErrorOutput)
-        const failureOutput = ShellTool.joinOutput([
-          processError.stdout,
-          stderr
-        ]) || errorMessage
+        // A process exit is a command failure, not an error message made from stdout.
+        const failureMessage = requiresVisibleTerminal
+          ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
+          : `Command exited with code ${exitCode}. Output may be incomplete.`
         const attemptResult: ShellAttempt = {
           attempt,
           timeoutMs,
           durationMs,
           status: 'error'
         }
-        attemptResult.error = failureOutput
+        attemptResult.error = failureMessage
         attempts.push(attemptResult)
 
         return {
           success: false,
           commandSucceeded: false,
-          error: requiresVisibleTerminal
-            ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
-            : failureOutput,
-          stdout: processError.stdout,
-          stderr: requiresVisibleTerminal
-            ? `Command failed in the visible terminal with exit code ${exitCode}. Review that terminal for details.`
-            : stderr,
+          error: failureMessage,
+          stdout: stdout.trim(),
+          stderr: stderr.trim(),
           returncode: exitCode,
           command,
           attempts
         }
       }
 
-      const failureOutput = ShellTool.joinOutput([
-        processError.stdout,
-        processError.stderr
-      ]) || errorMessage
       attempts.push({
         attempt,
         timeoutMs,
         durationMs,
         status: 'error',
-        error: failureOutput
+        error: errorMessage
       })
 
       return {
         success: false,
-        error: failureOutput,
-        stdout: processError.stdout,
-        stderr: processError.stderr || errorMessage,
+        error: errorMessage,
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
         returncode: -1,
         command,
         attempts
       }
+    }
+  }
+
+  /**
+   * Start a retained command using the same platform and safety checks as finite calls.
+   */
+  public async startSession(
+    command: string,
+    options: SessionOptions = {}
+  ): Promise<Record<string, unknown>> {
+    return this.sessionCall(async (owner) => {
+      const analyzed = await this.resolveCommandForSafetyAnalysis(command, options.cwd)
+      if (!await this.isSafeCommand(analyzed)) {
+        throw new Error(`Blocked unsafe shell command (${await this.getCommandRiskLevel(analyzed)} risk).`)
+      }
+      if (this.requiresVisibleTerminal(analyzed)) {
+        throw new Error('This command requires owner authentication. Use executeCommand in the visible terminal.')
+      }
+
+      const invocation = ShellTool.getShellInvocation(command)
+      // Session calls do not use Core's finite-command script transport. Install
+      // the same managed runtime functions directly in their shell invocation.
+      const functions = isWindows()
+        ? RuntimeHelper.buildManagedRuntimePowerShellFunctions()
+        : RuntimeHelper.buildManagedRuntimeShellFunctions()
+      const commandIndex = invocation.args.length - 1
+      if (invocation.args[commandIndex - 1] === '-File') {
+        invocation.args[commandIndex - 1] = '-Command'
+        invocation.args[commandIndex] = `${functions}\n& '${command.replaceAll('\'', '\'\'')}'`
+      } else {
+        invocation.args[commandIndex] = `${functions}\n${command}`
+      }
+
+      return this.sessions.start(
+        owner,
+        command,
+        invocation.binaryName,
+        invocation.args,
+        options,
+        this.executionContext?.signal,
+        this.executionContext?.onProgress
+      )
+    })
+  }
+
+  /**
+   * Inspect retained output without waiting for command completion.
+   */
+  public async readSession(
+    sessionId: string,
+    options: SessionReadOptions = {}
+  ): Promise<Record<string, unknown>> {
+    return this.sessionCall((owner) => this.sessions.read(owner, sessionId, options))
+  }
+
+  /**
+   * Send input to the command owned by the active conversation.
+   */
+  public async writeSession(sessionId: string, data: string): Promise<Record<string, unknown>> {
+    return this.sessionCall((owner) => this.sessions.write(owner, sessionId, data))
+  }
+
+  /**
+   * Stop an owned command and its descendants while keeping its final output.
+   */
+  public async stopSession(sessionId: string): Promise<Record<string, unknown>> {
+    return this.sessionCall((owner) => this.sessions.stop(owner, sessionId))
+  }
+
+  /**
+   * Retained command processes must not outlive their worker.
+   */
+  public async dispose(): Promise<void> {
+    await this.sessions.dispose()
+  }
+
+  private async sessionCall(
+    callback: (owner: string) => Record<string, unknown> | Promise<Record<string, unknown>>
+  ): Promise<Record<string, unknown>> {
+    try {
+      const context = this.executionContext
+      if (!context?.conversationSessionId) {
+        throw new Error('Shell sessions require an active conversation.')
+      }
+
+      const owner = JSON.stringify([context.profileName, context.conversationSessionId])
+      return { success: true, data: await callback(owner) }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
     }
   }
 
@@ -390,39 +476,15 @@ export default class ShellTool extends Tool {
     )
   }
 
-  private static readProcessError(error: unknown): {
-    stdout: string
-    stderr: string
-    exitCode: number
-  } {
+  private static readExitCode(error: unknown): number {
     const processError = error as ProcessExecutionError
-    const exitCode =
+    return (
       typeof processError.status === 'number'
         ? processError.status
         : typeof processError.code === 'number'
           ? processError.code
           : -1
-
-    return {
-      stdout: ShellTool.toOutputString(processError.stdout),
-      stderr: ShellTool.toOutputString(processError.stderr),
-      exitCode
-    }
-  }
-
-  private static toOutputString(output?: Buffer | string): string {
-    if (!output) {
-      return ''
-    }
-
-    return output.toString().trim()
-  }
-
-  private static joinOutput(outputs: string[]): string {
-    return outputs
-      .map((output) => output.trim())
-      .filter((output) => output.length > 0)
-      .join('\n')
+    )
   }
 
   async isSafeCommand(command: string): Promise<boolean> {
@@ -534,13 +596,13 @@ export default class ShellTool extends Tool {
     }
   }
 
-  private async resolveCommandForSafetyAnalysis(command: string): Promise<string> {
+  private async resolveCommandForSafetyAnalysis(command: string, cwd = process.cwd()): Promise<string> {
     const trimmedCommand = command.trim()
     if (!trimmedCommand || /\s/.test(trimmedCommand)) {
       return command
     }
 
-    const resolvedPath = path.resolve(trimmedCommand)
+    const resolvedPath = path.resolve(cwd, trimmedCommand)
 
     try {
       const stats = await fs.promises.stat(resolvedPath)

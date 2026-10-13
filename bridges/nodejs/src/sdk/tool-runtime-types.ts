@@ -7,6 +7,10 @@ export interface ToolRuntimeProgress {
   message: string
   key?: string
   data?: Record<string, unknown>
+  /**
+   * Keeps progress attached to its originating call until retained work ends.
+   */
+  stream?: { id: string, state: 'running' | 'completed' | 'failed' }
 }
 
 /**
@@ -19,6 +23,11 @@ export interface ToolExecutionContext {
   parameters: Record<string, unknown>
   profileName: string
   conversationSessionId: string | null
+  /**
+   * Profile-scoped secrets declared by this tool's connection requirements.
+   */
+  connections?: Record<string, Record<string, unknown>>
+  leonService?: { baseURL: string, token: string }
   signal?: AbortSignal
   onProgress?: (progress: ToolRuntimeProgress) => void
 }

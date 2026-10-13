@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from bridges.python.src.sdk.base_tool import BaseTool
 from bridges.python.src.sdk.toolkit_config import ToolkitConfig
 from bridges.python.src.sdk.network import Network
-from tools.music_audio.transcription_schema import TranscriptionOutput, TranscriptionSegment
+from .lib.transcription_schema import TranscriptionOutput, TranscriptionSegment
 
 # Hardcoded default settings for OpenAI audio tool
 OPENAI_AUDIO_API_KEY = None
